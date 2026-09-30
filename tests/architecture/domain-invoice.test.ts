@@ -128,7 +128,6 @@ test("stage invoice creation resolves the agreed claim before issuing externally
         id: "customer_1",
         name: "Owner",
         phone: "0400000000",
-        xeroContactId: "contact_1",
       },
       id: "project_1",
       name: "House project",

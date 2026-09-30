@@ -21,9 +21,7 @@ The rules are simple:
 | Form field | Expected source section(s) |
 | --- | --- |
 | `legalAdministrationSiteAddress` | Tender cover, client/site header, Contract cover page |
-| `legalAdministrationOwnerNames` | Tender cover, client block, signature block |
-| `legalAdministrationOwnerEmails` | Tender cover, client contact block, Contract admin cover |
-| `legalAdministrationOwnerPhones` | Tender cover, client contact block, Contract admin cover |
+| `legalAdministrationOwners` | Contract WHO section (Owner 1, Owner 2, ...), client contact block, signature block. One `{ name, email, phone, address }` record per owner; `address` is the owner's own "of ..." line, not the site. Every field is required before the project is created, and each owner becomes a customer on the project (`ProjectCustomer`). |
 | `legalAdministrationCommencementTrigger` | Tender acceptance / commencement wording, Contract signature conditions |
 | `legalAdministrationSignedDate` | Contract signature page, acceptance execution page |
 | `legalAdministrationPcaInspector` | Tender admin section, contract admin notes, compliance references |

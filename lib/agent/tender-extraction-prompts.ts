@@ -13,7 +13,7 @@ extraction contract:
 - Fill each schema field individually from the most specific source section available.
 - Leave a field blank ("" / null / []) when the value is not explicitly present.
 - Never fabricate, infer, or complete missing data from context.
-- Never emit raw JSON, nested objects, or object-like strings for a field value.
+- Never emit raw JSON, nested objects, or object-like strings for a field value. The one exception is legalAdministrationOwners, which is a list of owner objects as the schema defines.
 - Prefer Tender for scope, inclusions, exclusions, pricing, and acceptance language.
 - Prefer Contract for signed-date, MBA reference, payment timing, and any post-sign legal metadata.
 - If the documents conflict, keep the most document-specific value and leave a short conflict note in the source reasoning, not in the field value.
@@ -87,26 +87,13 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
         logic: "Extract the string between 'SITE ADDRESS:' and 'FINANCE'.",
         importance: "Prevents mobilization to the wrong lot.",
       },
-      legalAdministrationOwnerNames: {
-        label: "Owner Names",
-        source: 'Contract: "WHO" > Owner(s)',
+      legalAdministrationOwners: {
+        label: "Owners",
+        source: 'Contract: "WHO" > Owner(s), and the owner contact block',
         logic:
-          "Extract each named owner (Owner 1, Owner 2, ...) as separate array entries.",
-        importance: "Confirms who is legally party to the contract.",
-      },
-      legalAdministrationOwnerEmails: {
-        label: "Owner Emails",
-        source: 'Contract: "WHO" > Owner(s)',
-        logic: "Extract each owner's email address as a separate array entry.",
-        importance: "Instant access for site-meeting requests and notices.",
-      },
-      legalAdministrationOwnerPhones: {
-        label: "Owner Phones",
-        source: 'Contract: "WHO" > Owner(s)',
-        logic:
-          "Extract each owner's mobile/phone number as a separate array entry.",
+          "One object per named owner (Owner 1, Owner 2, ...) in document order: { name, email, phone, address }. address is the owner's own residential/postal address (the 'of ...' line), never the site address. Put each detail on the owner it is printed against. If a detail is printed once for several owners, give it to the first of them only and leave the others blank. Never shift a detail onto a different owner to fill a gap.",
         importance:
-          "Instant access for site-meeting requests and urgent contact.",
+          "Each owner becomes a customer on the project and a Xero contact: the name on every notice and invoice, and where they are sent.",
       },
       legalAdministrationCommencementTrigger: {
         label: "Commencement Trigger",
@@ -419,14 +406,14 @@ ${EXTRACTION_CONTRACT}
 
 <general_rules>
   <rule>Return only structured output that matches the schema.</rule>
-  <rule>Treat every field as independent. Do not bundle values into paragraphs, tables, arrays of objects, or nested JSON.</rule>
+  <rule>Treat every field as independent. Do not bundle values into paragraphs, tables, arrays of objects, or nested JSON — except legalAdministrationOwners, where each owner is one object holding that owner's own name, email, phone and address.</rule>
   <rule>Use empty string, null, or [] for any value that cannot be verified directly from the documents.</rule>
 
   <rule>Contract Document information takes precedence over Tender Document information for any field that appears in both documents.</rule>
   <rule>Use Tender sections for scope, inclusions, exclusions, allowances, payment schedule, and acceptance language.</rule>
   <rule>Use Contract sections for signature date, contract administration metadata, and any MBA-specific reference information.</rule>
-  <rule>Use Lead Information for any missing site, client, or contact details.</rule>
-  <rule>Lead Information may include a secondary client (secondaryName/secondaryEmail/secondaryPhone) when the lead has a co-owner; record the secondary client in the relevant owner arrays alongside the primary client only when the tender/contract does not state otherwise.</rule>
+  <rule>Use Lead Information for any missing site details.</rule>
+  <rule>Owners come from the tender/contract, never from the Lead Information alone: the person who made the enquiry is not necessarily an owner. Lead Information (including secondaryName/secondaryEmail/secondaryPhone) may fill a missing email or phone on an owner only when the lead's name is that owner's name.</rule>
   <rule>If a field appears in both documents, prefer the signed Contract for post-signature administrative facts and the Tender for scope/legal package content.</rule>
   <rule>If a field is not found, leave it blank rather than fabricating something plausible.</rule>
 </general_rules>
