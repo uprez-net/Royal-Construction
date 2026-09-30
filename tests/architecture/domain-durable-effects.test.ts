@@ -173,7 +173,6 @@ const STAGE_PROJECT = {
     id: "c_1",
     name: "Owner",
     phone: "0400000000",
-    xeroContactId: null,
   },
   id: "p_1",
   name: "12 Example St",

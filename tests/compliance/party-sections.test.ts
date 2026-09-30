@@ -44,6 +44,7 @@ import {
   openAlerts,
   outreachForParty,
   requiresPlanningCertificate,
+  type CertifierEngagementDetail,
 } from "@/types/compliance";
 import { REPO_ROOT } from "../support/repo-root";
 
@@ -250,9 +251,7 @@ const alert = (
 ): TestAlert => ({ id: `${type}:${status}`, type, status });
 
 const withAlerts = (alerts: TestAlert[]) =>
-  ({ alerts }) as unknown as NonNullable<
-    Parameters<typeof requiresPlanningCertificate>[0]
-  >;
+  ({ alerts, documents: [] }) as unknown as CertifierEngagementDetail;
 
 test("a file with no alerts still needs the planning certificate", () => {
   assert.equal(requiresPlanningCertificate(withAlerts([])), true);

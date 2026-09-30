@@ -22,7 +22,11 @@ import {
 } from "@/constants/complianceDocuments";
 import { businessDaysSince } from "@/lib/dates/business-days";
 import { PORTAL_DOWNLOAD_ALERT } from "./portal-certificates";
-import { applicableRequiredDocuments } from "./required-pack";
+import {
+  applicableRequiredDocuments,
+  hasArchitectPlansOnFile,
+  isCoveredOnFile,
+} from "./required-pack";
 import {
   developerApprovalFor,
   externalApplication,
@@ -91,8 +95,8 @@ function isSettled(
 ): boolean {
   return engagement.documents.some(
     (document) =>
-      document.documentType === documentType &&
-      (document.files.length > 0 || isNotRequired(document.status)),
+      document.documentType === documentType
+      && (document.files.length > 0 || isNotRequired(document.status)),
   );
 }
 
@@ -123,9 +127,9 @@ function assessPartyResponse(
   // Nobody was written to, or the client supplied the documents themselves.
   // Neither is a party running late; there is nobody waiting on anybody.
   if (
-    !outreach ||
-    outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED ||
-    !outreach.sentAt
+    !outreach
+    || outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED
+    || !outreach.sentAt
   ) {
     return {
       resolve: {
@@ -314,9 +318,9 @@ export function assessOverdueConditions(
     // -- which is why an application actually lodged keeps its clock running.
     // What stops is chasing a certificate nobody ever ordered.
     const wanted =
-      kind !== ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7 ||
-      requiresPlanningCertificate(engagement) ||
-      Boolean(application?.appliedAt);
+      kind !== ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7
+      || requiresPlanningCertificate(engagement)
+      || Boolean(application?.appliedAt);
 
     /**
      * The download the portal's approval email leaves behind.
@@ -363,10 +367,10 @@ export function assessOverdueConditions(
      * is lost by closing this one.
      */
     if (
-      !wanted ||
-      documentIn ||
-      application?.receivedAt ||
-      application?.approvalNotifiedAt
+      !wanted
+      || documentIn
+      || application?.receivedAt
+      || application?.approvalNotifiedAt
     ) {
       resolve.push({
         type: copy.alertType,
@@ -438,10 +442,7 @@ export function assessOverdueConditions(
   // outreach.
   // -------------------------------------------------------------------
   const architect = outreachForParty(engagement, CompliancePartyType.ARCHITECT);
-  const plansIn = isSettled(
-    engagement,
-    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
-  );
+  const plansIn = hasArchitectPlansOnFile(engagement);
   const heldAt = meetingHeldAt(architect);
 
   if (plansIn || !heldAt) {
@@ -452,9 +453,14 @@ export function assessOverdueConditions(
     // nothing here — the empty architect card is what says so.
     resolve.push({
       type: ComplianceAlertType.ARCHITECT_PLANS_OVERDUE,
-      note: plansIn
-        ? "The preliminary plans are on the file."
-        : "No meeting has been held yet, so nothing is outstanding.",
+      note: !plansIn
+        ? "No meeting has been held yet, so nothing is outstanding."
+        : isCoveredOnFile(
+              engagement,
+              ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+            )
+          ? "The full architectural design is on the file, which covers the preliminary plans."
+          : "The preliminary plans are on the file.",
     });
   } else {
     const elapsed = businessDaysSince(heldAt, now);

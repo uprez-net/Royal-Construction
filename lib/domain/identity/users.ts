@@ -6,6 +6,7 @@ import {
   type UserPrincipal,
   userPrincipal,
 } from "../principal";
+import { canonicalPhone } from "../projects/owners";
 
 // Application-user lookup and the conversion into a principal.
 //
@@ -150,7 +151,13 @@ export async function createUser(
     let customerId: string | null = null;
     if (role === Role.CUSTOMER) {
       const customer = await tx.customer.create({
-        data: { email: input.email, name: input.name, phone: input.phone },
+        data: {
+          email: input.email,
+          name: input.name,
+          // Same form the project owners are stored in, so this customer is
+          // found when a contract later names them.
+          phone: canonicalPhone(input.phone),
+        },
       });
       await tx.user.update({
         data: { customerId: customer.id },
@@ -200,7 +207,11 @@ export async function updateUserByClerkId(
     let customerId: string | null = null;
     if (updates.role === Role.CUSTOMER && !user.customerId) {
       const customer = await tx.customer.create({
-        data: { email: user.email, name: user.name, phone: user.phone },
+        data: {
+          email: user.email,
+          name: user.name,
+          phone: canonicalPhone(user.phone),
+        },
       });
       await tx.user.update({
         data: { customerId: customer.id },

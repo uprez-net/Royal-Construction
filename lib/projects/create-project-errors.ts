@@ -20,6 +20,7 @@ import {
   DomainValidationError,
   isDomainError,
 } from "@/lib/domain/errors";
+import { projectOwnerProblems } from "@/lib/domain/projects/owners";
 import {
   ProjectDateBlockerError,
   type ProjectDateBlocker,
@@ -130,6 +131,7 @@ const FIELD_LABELS: Partial<Record<ProjectFormFieldKey, string>> = {
   legalAdministrationSignedDate: "Signed date",
   legalAdministrationPcaInspector: "PCA inspector",
   legalAdministrationSiteAddress: "Site address",
+  legalAdministrationOwners: "Owners",
   commercialsAndClaimsTotalContractSum: "Total contract sum",
   commercialsAndClaimsDepositValue: "Deposit value",
 };
@@ -285,6 +287,17 @@ export function validateCreateProjectForm({
     errors.push({
       field: "legalAdministrationSignedDate",
       message: `"${signedDate}" is not a date we can read. Use a YYYY-MM-DD or D Month YYYY format.`,
+    });
+  }
+
+  // The rule the server applies, so every owner problem is listed here rather
+  // than coming back from the server one at a time.
+  for (const problem of projectOwnerProblems(
+    extraction.legalAdministrationOwners,
+  )) {
+    errors.push({
+      field: "legalAdministrationOwners",
+      message: problem.message,
     });
   }
 

@@ -77,10 +77,19 @@ export const createProjectWithLeadSchema = z.object({
   address: z.string().trim().min(1, "Site location is required"),
   council: z.string().trim().min(1, "Council is required"),
   siteManagerId: z.string().trim().min(1, "Assign a site manager"),
-  customerName: z.string().trim().nullish(),
-  customerEmail: z.union([emailSchema, z.literal("")]).nullish(),
-  customerPhone: z.string().trim().nullish(),
-  customerAddress: z.string().trim().nullish(),
+  // Shape only: whether the owners are good enough to become customers is
+  // the domain's rule (`lib/domain/projects/owners.ts`), which the wizard has
+  // already run and the command runs again.
+  owners: z
+    .array(
+      z.object({
+        name: z.string().nullish(),
+        email: z.string().nullish(),
+        phone: z.string().nullish(),
+        address: z.string().nullish(),
+      }),
+    )
+    .nullish(),
   // Structural pass-throughs: owned by their own types and written straight
   // through, so they are carried rather than re-described here. Typed as what
   // the writer takes so the parsed payload is what it is handed.
