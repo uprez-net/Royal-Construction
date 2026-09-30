@@ -22,7 +22,11 @@ import {
 } from "@/constants/complianceDocuments";
 import { businessDaysSince } from "@/lib/dates/business-days";
 import { PORTAL_DOWNLOAD_ALERT } from "./portal-certificates";
-import { applicableRequiredDocuments } from "./required-pack";
+import {
+  applicableRequiredDocuments,
+  hasArchitectPlansOnFile,
+  isCoveredOnFile,
+} from "./required-pack";
 import {
   developerApprovalFor,
   externalApplication,
@@ -438,10 +442,7 @@ export function assessOverdueConditions(
   // outreach.
   // -------------------------------------------------------------------
   const architect = outreachForParty(engagement, CompliancePartyType.ARCHITECT);
-  const plansIn = isSettled(
-    engagement,
-    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
-  );
+  const plansIn = hasArchitectPlansOnFile(engagement);
   const heldAt = meetingHeldAt(architect);
 
   if (plansIn || !heldAt) {
@@ -452,9 +453,14 @@ export function assessOverdueConditions(
     // nothing here — the empty architect card is what says so.
     resolve.push({
       type: ComplianceAlertType.ARCHITECT_PLANS_OVERDUE,
-      note: plansIn
-        ? "The preliminary plans are on the file."
-        : "No meeting has been held yet, so nothing is outstanding.",
+      note: !plansIn
+        ? "No meeting has been held yet, so nothing is outstanding."
+        : isCoveredOnFile(
+              engagement,
+              ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+            )
+          ? "The full architectural design is on the file, which covers the preliminary plans."
+          : "The preliminary plans are on the file.",
     });
   } else {
     const elapsed = businessDaysSince(heldAt, now);

@@ -717,6 +717,39 @@ export function isOptionalForOutreach(
 }
 
 /**
+ * Required documents that a later stage of the same drawing stands in for.
+ *
+ * The preliminary plans and the full design are the same building at two
+ * stages, and the full set is everything the preliminary one is and more. A
+ * client who arrives with the design already developed -- or an architect who
+ * skips straight to it -- has no preliminary set to give, and never will. The
+ * pack treated the two as unrelated, so a file holding the full design still
+ * owed a preliminary set nobody was ever going to draw, and the outreach was
+ * refused over it for good.
+ *
+ * Read one way only: the later document covers the earlier one when the earlier
+ * row is empty. A preliminary set that is on the file stays exactly what it is,
+ * and nothing here makes the full design optional -- it is the one doing the
+ * covering.
+ *
+ * Whether a particular file is covered is a question about its rows, which is
+ * `isCoveredOnFile` in lib/domain/compliance/required-pack.ts.
+ */
+const COVERED_BY: Readonly<
+  Partial<Record<ComplianceDocumentType, ComplianceDocumentType>>
+> = {
+  [ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS]:
+    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+};
+
+/** The later document that stands in for this one when it is missing, if any. */
+export function coveringDocumentType(
+  documentType: ComplianceDocumentType,
+): ComplianceDocumentType | null {
+  return COVERED_BY[documentType] ?? null;
+}
+
+/**
  * What the certifier sends back, which is the second half of the classifier's
  * job. Kept separate from the required list because the two are never confused
  * in the UI — these arrive as email attachments, those are collected up front.

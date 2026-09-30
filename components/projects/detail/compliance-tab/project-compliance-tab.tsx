@@ -64,8 +64,10 @@ import {
 import {
   applicableRequiredDocuments,
   canSendRequiredPack,
+  hasArchitectPlansOnFile,
   hasReachedChecklistStage,
   hasSentRequiredPack,
+  isCoveredOnFile,
   isRequiredPackComplete,
   sentToCertifierUrls,
   unsentRequiredDocuments,
@@ -1618,9 +1620,18 @@ export function ProjectComplianceTab({
     // read-only, so the reader can see the certificate on the file — and it is
     // excluded from the counts by the same filter, because what this section's
     // progress measures is the pack going to the certifier.
+    //
+    // A row the full design covers stays too, for the same reason: the reader
+    // should see that the preliminary plans are not needed rather than find
+    // them gone. It is out of the counts by the same filter.
+    const coveredTypes = new Set(
+      section.types.filter((type) => isCoveredOnFile(engagement, type)),
+    );
     const types = orderedFromDa
       ? section.types
-      : section.types.filter((type) => requiredTypesInPlay.has(type));
+      : section.types.filter(
+          (type) => requiredTypesInPlay.has(type) || coveredTypes.has(type),
+        );
     const documents = types.map((type) => documentsByType.get(type));
 
     /**
@@ -1644,6 +1655,7 @@ export function ProjectComplianceTab({
       party: section.party,
       types,
       countedTypes,
+      coveredTypes,
       documents,
       outreach: outreachForParty(engagement, section.party),
       // Only what the outreach actually waits for. The full architectural
@@ -2105,6 +2117,7 @@ export function ProjectComplianceTab({
                 outreach={entry.outreach}
                 types={entry.types}
                 documents={entry.documents}
+                coveredTypes={entry.coveredTypes}
                 blockedReason={blockedReason(entry.party)}
                 isActive={activeSection === entry.party}
                 open={isOpen(entry.party)}
@@ -2134,11 +2147,7 @@ export function ProjectComplianceTab({
                       projectId={project.id}
                       vaultOptions={vaultOptions}
                       outreach={entry.outreach}
-                      hasPreliminaryPlans={Boolean(
-                        documentsByType.get(
-                          ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
-                        )?.files.length,
-                      )}
+                      hasPlans={hasArchitectPlansOnFile(engagement)}
                     />
                   ) : null
                 }

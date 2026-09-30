@@ -6,6 +6,7 @@ import {
 } from "@prisma/client";
 
 import {
+  coveringDocumentType,
   isOptionalForOutreach,
   isRequiredDocumentType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
@@ -67,28 +68,93 @@ export function hasSentCurrentDocument(
   return document.files.every((file) => sent.has(file.url));
 }
 
+function hasFileFor(
+  engagement: Pick<CertifierEngagementDetail, "documents">,
+  documentType: ComplianceDocumentType,
+): boolean {
+  return engagement.documents.some(
+    (document) =>
+      document.documentType === documentType && document.files.length > 0,
+  );
+}
+
+/**
+ * Whether a later document on this file stands in for this one.
+ *
+ * True only when this row is empty and the covering row is not — today, no
+ * preliminary plans and a full architectural design on file. See COVERED_BY in
+ * constants/complianceDocuments.ts for why the one covers the other.
+ *
+ * Off files rather than status, the same evidence `missingOutreachDocuments`
+ * counts with, so the send and the rows cannot disagree about whether the full
+ * design is actually there.
+ */
+export function isCoveredOnFile(
+  engagement: Pick<CertifierEngagementDetail, "documents">,
+  documentType: ComplianceDocumentType,
+): boolean {
+  const covering = coveringDocumentType(documentType);
+  return (
+    covering !== null
+    && !hasFileFor(engagement, documentType)
+    && hasFileFor(engagement, covering)
+  );
+}
+
+/**
+ * Whether the architect's plans are on the file, at either stage.
+ *
+ * What the architect's clocks, the stage header and the client-approval control
+ * mean by "the plans are in". They used to read the preliminary row alone, so a
+ * file holding only the full design showed the architect as still drawing,
+ * raised an overdue alert for a set that was never coming, and never offered
+ * the client-approval control — which left the certifier send shut behind it
+ * for good.
+ */
+export function hasArchitectPlansOnFile(
+  engagement: Pick<CertifierEngagementDetail, "documents">,
+): boolean {
+  return (
+    hasFileFor(
+      engagement,
+      ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+    )
+    || isCoveredOnFile(
+      engagement,
+      ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+    )
+  );
+}
+
 /**
  * The required documents this particular file still has to produce.
  *
- * Normally all six. An open DA_APPROVAL_REQUIRED alert drops the 10.7 planning
- * certificate: once the architect says the proposal needs development approval
- * the job is no longer a CDC, and a certificate ordered to hand to a certifier
- * is not part of the path any more. Asking for it anyway left the pack
- * permanently one document short and the outreach permanently refused.
+ * Normally all six, and two things take one out.
+ *
+ * An open DA_APPROVAL_REQUIRED alert drops the 10.7 planning certificate: once
+ * the architect says the proposal needs development approval the job is no
+ * longer a CDC, and a certificate ordered to hand to a certifier is not part of
+ * the path any more. Asking for it anyway left the pack permanently one
+ * document short and the outreach permanently refused.
+ *
+ * A full architectural design on a file with no preliminary plans drops the
+ * preliminary plans, for the same reason: they are never going to be drawn, and
+ * the full set is everything they would have shown. See `isCoveredOnFile`.
  *
  * Read by everything that counts the pack — the progress pill, the completion
- * prompt, the send, and the server-side guard on the send — so that none of
- * them can hold the file to a document the others have written off.
+ * prompt, the send, the server-side guard on the send, and the line in the
+ * certifier's email naming what is still to come — so that none of them can
+ * hold the file to a document the others have written off.
  */
 export function applicableRequiredDocuments(
-  engagement: Pick<CertifierEngagementDetail, "alerts">,
+  engagement: Pick<CertifierEngagementDetail, "alerts" | "documents">,
 ): readonly RequiredComplianceDocument[] {
-  if (requiresPlanningCertificate(engagement)) {
-    return REQUIRED_COMPLIANCE_DOCUMENTS;
-  }
+  const needsCertificate = requiresPlanningCertificate(engagement);
   return REQUIRED_COMPLIANCE_DOCUMENTS.filter(
     (required) =>
-      required.type !== ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
+      (needsCertificate
+        || required.type !== ComplianceDocumentType.PLANNING_CERTIFICATE_10_7)
+      && !isCoveredOnFile(engagement, required.type),
   );
 }
 
@@ -105,7 +171,7 @@ export function applicableRequiredDocuments(
  * yet".
  */
 export function outreachRequiredDocuments(
-  engagement: Pick<CertifierEngagementDetail, "alerts">,
+  engagement: Pick<CertifierEngagementDetail, "alerts" | "documents">,
 ): readonly RequiredComplianceDocument[] {
   return applicableRequiredDocuments(engagement).filter(
     (required) => !isOptionalForOutreach(required.type),
@@ -123,11 +189,7 @@ export function missingOutreachDocuments(
   engagement: CertifierEngagementDetail,
 ): readonly RequiredComplianceDocument[] {
   return outreachRequiredDocuments(engagement).filter(
-    (required) =>
-      !engagement.documents.some(
-        (document) =>
-          document.documentType === required.type && document.files.length > 0,
-      ),
+    (required) => !hasFileFor(engagement, required.type),
   );
 }
 

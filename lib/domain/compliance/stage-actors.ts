@@ -20,7 +20,10 @@ import {
   isNotRequired,
   WASTE_MANAGEMENT_PLAN_PARTY,
 } from "@/constants/complianceDocuments";
-import { applicableRequiredDocuments } from "./required-pack";
+import {
+  applicableRequiredDocuments,
+  hasArchitectPlansOnFile,
+} from "./required-pack";
 import {
   checklistItemDetail,
   externalApplication,
@@ -207,10 +210,7 @@ function architectActors(
 ): ComplianceStageActor[] {
   const outreach = outreachForParty(engagement, CompliancePartyType.ARCHITECT);
   const revision = outstandingRevision(outreach);
-  const plansIn = isSettled(
-    engagement,
-    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
-  );
+  const plansIn = hasArchitectPlansOnFile(engagement);
 
   // The same reading the sweep takes: an architect who has not sat with the
   // owners has nothing to draw yet, so nobody is waiting on them and the badge

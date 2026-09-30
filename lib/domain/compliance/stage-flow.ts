@@ -26,7 +26,11 @@ import {
   isPortalDownloadAlert,
 } from "./portal-certificates";
 import { businessDaysSince } from "@/lib/dates/business-days";
-import { applicableRequiredDocuments } from "./required-pack";
+import {
+  applicableRequiredDocuments,
+  hasArchitectPlansOnFile,
+  isCoveredOnFile,
+} from "./required-pack";
 import {
   STAGE_ACTORS,
   type ComplianceStageActor,
@@ -529,10 +533,7 @@ function architectStage(
   now: Date,
 ): BuiltStage {
   const outreach = outreachForParty(engagement, CompliancePartyType.ARCHITECT);
-  const plansIn = isSettled(
-    engagement,
-    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
-  );
+  const plansIn = hasArchitectPlansOnFile(engagement);
   const revision = outstandingRevision(outreach);
   const heldAt = meetingHeldAt(outreach);
 
@@ -559,11 +560,17 @@ function architectStage(
       startedAt,
       // The plans landing is what ends the wait, whichever of the three clocks
       // was running: a revision is finished with by a revised set arriving on
-      // the same row.
+      // the same row. Where the full design stands in for a preliminary set
+      // that never came, its arrival is the one that ended it.
       done
         ? {
             at: latestArrival(engagement, [
-              ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+              isCoveredOnFile(
+                engagement,
+                ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+              )
+                ? ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN
+                : ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
             ]),
           }
         : null,
