@@ -75,6 +75,49 @@ const stringArrayField = z.preprocess(
   z.array(z.string()).default([]),
 );
 
+/**
+ * Keeps the entries that are objects. Deliberately does NOT trim or drop blank
+ * rows: the review form re-parses this schema on every keystroke, so trimming
+ * here would eat the space between a first and last name as it is typed, and
+ * dropping blanks would delete the empty row the operator just added. The
+ * domain owner rule (`lib/domain/projects/owners.ts`) trims and ignores blank
+ * rows when the project is created.
+ */
+function toOwnerRows(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as unknown[];
+  }
+
+  return value.filter(
+    (entry) =>
+      typeof entry === "object" && entry !== null && !Array.isArray(entry),
+  );
+}
+
+// One record per owner. This replaced three independent lists (names, emails,
+// phones) that were paired by index, so an owner with no email on the
+// contract shifted every later owner's email onto the wrong person. Every
+// field is required before the project is created (lib/domain/projects/
+// owners.ts); blank here only means "not found in the documents".
+const ownerField = z.object({
+  name: blankStringField.describe(
+    "The owner's full name, or the company name for a company owner, exactly as printed.",
+  ),
+  email: blankStringField.describe(
+    "This owner's own email address, only if printed against this owner. Blank otherwise.",
+  ),
+  phone: blankStringField.describe(
+    "This owner's own mobile or phone number, only if printed against this owner. Blank otherwise.",
+  ),
+  address: blankStringField.describe(
+    "This owner's own residential or postal address (the 'of ...' line against the owner, or a company's registered office), NOT the site address. Blank if not printed.",
+  ),
+});
+
+const ownersField = z.preprocess(toOwnerRows, z.array(ownerField).default([]));
+
+export type ProjectExtractionOwner = z.infer<typeof ownerField>;
+
 export const projectExtractionSections: FieldSection[] = [
   {
     key: "projectOverview",
@@ -86,9 +129,7 @@ export const projectExtractionSections: FieldSection[] = [
     title: "Legal and Administration",
     fields: [
       "legalAdministrationSiteAddress",
-      "legalAdministrationOwnerNames",
-      "legalAdministrationOwnerEmails",
-      "legalAdministrationOwnerPhones",
+      "legalAdministrationOwners",
       "legalAdministrationCommencementTrigger",
       "legalAdministrationSignedDate",
       "legalAdministrationPcaInspector",
@@ -185,14 +226,8 @@ export const projectExtractionSchema = z
     legalAdministrationSiteAddress: blankStringField.describe(
       "Contract 'WHERE' section: the string between 'SITE ADDRESS:' and 'FINANCE'. Prevents mobilization to the wrong lot.",
     ),
-    legalAdministrationOwnerNames: stringArrayField.describe(
-      "Contract 'WHO' section: each named owner (Owner 1, Owner 2, ...) as a separate entry.",
-    ),
-    legalAdministrationOwnerEmails: stringArrayField.describe(
-      "Contract 'WHO' section: each owner's email address as a separate entry.",
-    ),
-    legalAdministrationOwnerPhones: stringArrayField.describe(
-      "Contract 'WHO' section: each owner's mobile/phone number as a separate entry.",
+    legalAdministrationOwners: ownersField.describe(
+      "Contract 'WHO' section: one entry per named owner (Owner 1, Owner 2, ...), in document order, each with that owner's own name, email and phone. Never move a contact detail onto a different owner; leave it blank when it is not printed against this owner.",
     ),
     legalAdministrationCommencementTrigger: blankStringField.describe(
       "Contract Clause 10(a): the 'later of' condition plus list items (i) to (v) that start the build clock.",

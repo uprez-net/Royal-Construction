@@ -528,6 +528,9 @@ model Project {
   buildingType     String   @default("Double Storey 4BR + Study")
   lotSize          Decimal? @db.Decimal(10, 2)
   council          String   @default("Sydney City Council")
+  // The PRIMARY owner: the first owner on the contract, and the one Xero
+  // invoices are addressed to. Every owner, this one included, is also a row
+  // in `customers` (ProjectCustomer at position 0 is always this customer).
   customerId       String
   location         String
   siteManagerId    String?
@@ -538,8 +541,9 @@ model Project {
   requirements     Json?
   // Full owner party set carried over from the offer at handoff (ADR 0003):
   // every owner (individual or company + directors), both addresses, and
-  // per-owner contact. The primary owner is also promoted to the Customer row;
-  // this JSON preserves the co-owners the single Customer can't hold.
+  // per-owner contact. Every owner is also a Customer, linked through
+  // ProjectCustomer; this JSON keeps what a Customer row cannot (company vs
+  // individual, directors, ABN).
   parties          Json?
 
   /// Defaults to DRAFT rather than ACTIVE. A project is created by the handoff
@@ -551,6 +555,7 @@ model Project {
   updatedAt DateTime      @updatedAt
 
   customer            Customer             @relation("CustomerProjects", fields: [customerId], references: [id])
+  customers           ProjectCustomer[]
   siteManager         User?                @relation("SiteManagerProjects", fields: [siteManagerId], references: [id])
   Lead                Lead                 @relation("LeadProject", fields: [leadId], references: [id], onDelete: Cascade)
   milestones          Milestone[]
@@ -568,6 +573,23 @@ model Project {
   @@index([customerId])
   @@index([siteManagerId])
   @@index([status])
+}
+
+/// Every owner of a build. One contract can name several owners, and each is
+/// a Customer in their own right; `position` is the order the contract lists
+/// them in, and position 0 is always `Project.customerId`.
+model ProjectCustomer {
+  projectId  String
+  customerId String
+  position   Int
+  createdAt  DateTime @default(now())
+
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@id([projectId, customerId])
+  @@unique([projectId, position])
+  @@index([customerId])
 }
 
 model Milestone {
@@ -843,11 +865,15 @@ model ActivityLog {
 model Customer {
   id            String  @id @default(uuid())
   name          String
+  // Every owner a project is created with carries all three of email, phone
+  // and address (lib/domain/projects/owners.ts), because they are what the Xero
+  // contact is built from.
   email         String  @unique
   phone         String  @unique
-  // Primary owner's Current Location (residential/postal address). Populated at
-  // project handoff from the offer's owners[] (ADR 0003). Nullable — legacy
-  // customers have none.
+  // The owner's Current Location (residential/postal address), from the
+  // contract or the offer's owners[] (ADR 0003). Required by the owner rule for
+  // every customer a project is created with; nullable only because legacy
+  // customers have none, and a NOT NULL here would need them backfilled first.
   address       String?
   /// The Xero ContactID this customer is billed under. Resolved lazily the
   /// first time a progress claim is raised (match on email, else create), so
@@ -857,7 +883,8 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  projects Project[] @relation("CustomerProjects")
+  projects      Project[]         @relation("CustomerProjects")
+  ownedProjects ProjectCustomer[]
 
   @@index([email])
   @@index([phone])

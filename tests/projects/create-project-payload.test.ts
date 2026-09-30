@@ -96,11 +96,29 @@ test("the structural pass-throughs are carried unchanged", () => {
   const result = createProjectWithLeadSchema.safeParse({
     ...wizardPayload(),
     parties,
-    customerName: null,
-    customerEmail: null,
+    owners: null,
   });
 
   assert.equal(result.success, true);
   if (!result.success) return;
   assert.deepEqual(result.data.parties, parties);
+});
+
+test("owners from the offer handoff are carried as the records they are", () => {
+  const owners = [
+    {
+      name: "Jane Owner",
+      email: "jane@example.com",
+      phone: "0400 111 222",
+      address: "1 Home St, Sydney",
+    },
+  ];
+  const result = createProjectWithLeadSchema.safeParse({
+    ...wizardPayload(),
+    owners,
+  });
+
+  assert.equal(result.success, true);
+  if (!result.success) return;
+  assert.deepEqual(result.data.owners, owners);
 });

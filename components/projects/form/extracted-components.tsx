@@ -12,10 +12,16 @@ import {
 import { currency } from "@/utils/formatters";
 import { fieldElementId } from "@/lib/projects/create-project-errors";
 import {
+  PROJECT_OWNERS_FIELD,
+  projectOwnerProblems,
+  type ProjectOwnerField,
+} from "@/lib/domain/projects/owners";
+import {
   createEmptyProjectExtractionData,
   projectExtractionSchema,
   projectExtractionSections,
   type ProjectExtractionData,
+  type ProjectExtractionOwner,
   type ProjectExtractionSectionKey,
 } from "@/types/project-extraction";
 import {
@@ -30,6 +36,7 @@ import {
   X,
   Plus,
   AlertCircle,
+  UserRound,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -82,9 +89,6 @@ const SECTION_META: Record<
 const BOOLEAN_FIELDS = new Set(["commercialsAndClaimsGstIncluded"]);
 
 const ARRAY_FIELDS = new Set([
-  "legalAdministrationOwnerNames",
-  "legalAdministrationOwnerEmails",
-  "legalAdministrationOwnerPhones",
   "commercialsAndClaimsPaymentStages",
   "inclusionsAndExclusionsInclusions",
   "inclusionsAndExclusionsExclusions",
@@ -93,6 +97,10 @@ const ARRAY_FIELDS = new Set([
 // Rendered by its own composite control (below the field grid), not by the
 // generic array/text primitives — a claim schedule needs label + % + $ per row.
 const PAYMENT_STAGES_FIELD = "commercialsAndClaimsPaymentStages";
+
+// Also its own control: one row per owner, name + email + phone together, so
+// an owner's details can never drift onto the next owner's row.
+const OWNERS_FIELD = PROJECT_OWNERS_FIELD;
 
 const CURRENCY_FIELDS = new Set([
   "commercialsAndClaimsTotalContractSum",
@@ -157,16 +165,6 @@ const FIELD_GROUPS: {
   caption: string;
   fields: string[];
 }[] = [
-  {
-    id: "ownerContacts",
-    heading: "Owner Contacts",
-    caption: "Names, emails and phone numbers on file for the owner",
-    fields: [
-      "legalAdministrationOwnerNames",
-      "legalAdministrationOwnerEmails",
-      "legalAdministrationOwnerPhones",
-    ],
-  },
   {
     id: "inclusionsExclusions",
     heading: "Inclusions & Exclusions",
@@ -944,6 +942,193 @@ function PaymentStagesControl({
   );
 }
 
+/* ------------------------------ OwnersControl ----------------------------- */
+/*                                                                            *
+ * One row per owner, in the contract's order. Each owner becomes a customer  *
+ * on the project; the first is the primary, the one invoices go to.          *
+ *                                                                            *
+ * The inputs write straight through: the extraction schema keeps owner rows  *
+ * untrimmed and keeps blank rows (see `toOwnerRows`), so typing is never     *
+ * fought by the per-keystroke re-parse. The owner rule trims and ignores a   *
+ * blank row when the project is created.                                     *
+ *                                                                            *
+ * Row-level messages come from the same rule the server applies              *
+ * (`projectOwnerProblems`), shown once a submit has flagged the owners —     *
+ * not while the first owner is still being typed.                            *
+ *                                                                            */
+
+const OWNER_GRID = "grid grid-cols-1 items-start gap-2 sm:grid-cols-2";
+
+const OWNER_INPUTS: readonly {
+  field: ProjectOwnerField;
+  placeholder: string;
+  type: string;
+}[] = [
+  { field: "name", placeholder: "Full name or company", type: "text" },
+  { field: "email", placeholder: "Email", type: "email" },
+  { field: "phone", placeholder: "Phone", type: "tel" },
+  {
+    field: "address",
+    placeholder: "Owner's own address (not the site)",
+    type: "text",
+  },
+];
+
+function emptyOwner(): ProjectExtractionOwner {
+  return { address: "", email: "", name: "", phone: "" };
+}
+
+function OwnersControl({
+  owners,
+  showProblems,
+  onChange,
+}: {
+  owners: readonly ProjectExtractionOwner[];
+  showProblems: boolean;
+  onChange: (owners: ProjectExtractionOwner[]) => void;
+}): React.JSX.Element {
+  const problems = showProblems ? projectOwnerProblems(owners) : [];
+
+  // Always offer a row to type into, even when nothing was extracted.
+  const rows = owners.length > 0 ? owners : [emptyOwner()];
+
+  const updateAt = (
+    index: number,
+    field: ProjectOwnerField,
+    value: string,
+  ): void =>
+    onChange(
+      rows.map((owner, i) =>
+        i === index ? { ...owner, [field]: value } : owner,
+      ),
+    );
+
+  const removeAt = (index: number): void =>
+    onChange(rows.filter((_, i) => i !== index));
+
+  return (
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Owners
+          </p>
+          <p className="text-xs text-slate-400">
+            Everyone the contract names as an owner. Each becomes a customer on
+            the project and needs a name, email, phone and address. Owner 1 is
+            the primary contact, and the one invoices go to.
+          </p>
+        </div>
+        <Badge
+          variant="outline"
+          className="shrink-0 rounded-full border-slate-200 bg-white px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+        >
+          {owners.length} owner{owners.length === 1 ? "" : "s"}
+        </Badge>
+      </div>
+
+      <div className="space-y-2">
+        {rows.map((owner, index) => (
+          <OwnerRow
+            key={index}
+            index={index}
+            owner={owner}
+            canRemove={rows.length > 1}
+            problemFor={(field) =>
+              problems.find(
+                (problem) => problem.index === index && problem.field === field,
+              )?.message
+            }
+            onChange={(field, value) => updateAt(index, field, value)}
+            onRemove={() => removeAt(index)}
+          />
+        ))}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onChange([...rows, emptyOwner()])}
+        className="flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
+      >
+        <Plus className="h-3 w-3 shrink-0" aria-hidden="true" />
+        Add another owner
+      </button>
+    </div>
+  );
+}
+
+function OwnerRow({
+  index,
+  owner,
+  canRemove,
+  problemFor,
+  onChange,
+  onRemove,
+}: {
+  index: number;
+  owner: ProjectExtractionOwner;
+  canRemove: boolean;
+  problemFor: (field: ProjectOwnerField) => string | undefined;
+  onChange: (field: ProjectOwnerField, value: string) => void;
+  onRemove: () => void;
+}): React.JSX.Element {
+  const label = `Owner ${index + 1}`;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
+          {label}
+          {index === 0 ? (
+            <span className="font-normal normal-case text-slate-400">
+              (primary)
+            </span>
+          ) : null}
+        </p>
+        {canRemove ? (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+            aria-label={`Remove ${label}`}
+          >
+            <X aria-hidden="true" className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </div>
+      <div className={OWNER_GRID}>
+        {OWNER_INPUTS.map(({ field, placeholder, type }) => {
+          const problem = problemFor(field);
+          return (
+            <div key={field} className="space-y-1">
+              <Input
+                aria-label={`${label} ${field}`}
+                aria-invalid={problem ? true : undefined}
+                type={type}
+                value={owner[field]}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  onChange(field, e.target.value)
+                }
+                placeholder={placeholder}
+                className={cn(
+                  "h-9 rounded-lg border-slate-200 bg-white text-sm",
+                  problem && "border-destructive/60",
+                )}
+              />
+              {problem ? (
+                <p className="text-[11px] font-medium leading-snug text-destructive-ink">
+                  {problem}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Single field renderer
 // ---------------------------------------------------------------------------
@@ -1062,7 +1247,7 @@ export function FieldErrorBoundaryShell({
 }
 
 // ---------------------------------------------------------------------------
-// Grouped composite panel (owner contacts / risk allocation)
+// Grouped composite panel (inclusions / exclusions)
 // ---------------------------------------------------------------------------
 
 function FieldGroupPanel({
@@ -1165,9 +1350,12 @@ export function ExtractionSectionCard({
   );
   const standaloneFields = fields.filter(
     (field) =>
-      !groupedFieldsInSection.has(field) && field !== PAYMENT_STAGES_FIELD,
+      !groupedFieldsInSection.has(field)
+      && field !== PAYMENT_STAGES_FIELD
+      && field !== OWNERS_FIELD,
   );
   const hasPaymentStages = fields.includes(PAYMENT_STAGES_FIELD);
+  const hasOwners = fields.includes(OWNERS_FIELD);
 
   return (
     <div
@@ -1234,6 +1422,21 @@ export function ExtractionSectionCard({
           </div>
         ))}
       </div>
+
+      {hasOwners ? (
+        <div className="mt-4">
+          <FieldErrorBoundaryShell
+            field={OWNERS_FIELD}
+            error={errors?.[OWNERS_FIELD]}
+          >
+            <OwnersControl
+              owners={values.legalAdministrationOwners ?? []}
+              showProblems={Boolean(errors?.[OWNERS_FIELD])}
+              onChange={(owners) => onChange(OWNERS_FIELD, owners)}
+            />
+          </FieldErrorBoundaryShell>
+        </div>
+      ) : null}
 
       {hasPaymentStages ? (
         <div className="mt-4">

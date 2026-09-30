@@ -25,7 +25,8 @@ import {
   parseWorkspaceState,
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
-import { collectOfferSigners } from "@/lib/offer/workspace-model";
+import type { OfferWorkspaceJob } from "@/lib/offer/workspace-model";
+import type { ProjectOwnerInput } from "@/lib/domain/projects/owners";
 import type {
   ProjectRequirementsPayload,
   ProjectSourceDocumentReference,
@@ -321,19 +322,11 @@ export async function createProjectFromOffer(input: {
       // back to the historical "TBC" placeholder when unknown.
       council: job.siteCouncil.trim() || "TBC",
       siteManagerId: actor.id,
-      // Promote the primary owner identity to the Customer so Project screens and
-      // notifications show the legal owner, not the original lead contact (codex
-      // #7). clientNames/Email/Phone are the derived primary-owner projection.
-      customerName: job.clientNames.trim() || null,
-      // Trim before validating — readiness + DocuSign trim, so a valid email with
-      // surrounding whitespace must not fall back to the lead here (PR #124).
-      customerEmail: EMAIL_RE.test(job.clientEmail.trim())
-        ? job.clientEmail.trim()
-        : null,
-      customerPhone: job.clientPhone.trim() || null,
-      // Primary owner's Current Location → Customer.address; the full owner set
-      // → Project.parties (companies, directors, both addresses, contacts).
-      customerAddress: job.currentLocation.trim() || null,
+      // Every owner who signed becomes a customer on the project, so Project
+      // screens, notifications and invoices name the legal owners rather than
+      // the original lead contact (codex #7). The full owner set also goes to
+      // Project.parties (companies, directors, both addresses, contacts).
+      owners: handoffOwners(job),
       parties: JSON.parse(JSON.stringify(job.owners ?? [])),
       extraction,
       sourceDocuments,
@@ -483,6 +476,56 @@ async function ensureExecutedPdf(
   }
 }
 
+// ─── Snapshot → project owners ───
+
+/**
+ * One owner per owner party on the offer, in the offer's order, with the
+ * party's Current Location as the address. An individual is their own
+ * signatory. A company is recorded under its registered name, with the email
+ * and phone of ONE director — the first who has both — so a company is never
+ * given one director's email and another's phone.
+ *
+ * Nothing is defaulted: an owner missing a detail reaches the owner rule
+ * incomplete and the handoff is refused naming them, rather than creating a
+ * customer the office would later invoice at the wrong address.
+ *
+ * An offer saved before owners[] existed is migrated on read, so the list is
+ * not normally empty; if it is, the flat primary projection stands in.
+ */
+function handoffOwners(job: OfferWorkspaceJob): ProjectOwnerInput[] {
+  const owners = job.owners ?? [];
+  if (owners.length === 0) {
+    return [
+      {
+        address: job.currentLocation,
+        email: job.clientEmail,
+        name: job.clientNames,
+        phone: job.clientPhone,
+      },
+    ];
+  }
+
+  const phoneOf = (
+    signatory: OfferWorkspaceJob["owners"][number]["signatories"][number],
+  ) =>
+    // The mobile first: it is the number the office actually rings.
+    signatory.mobile.trim() || signatory.phone.trim();
+
+  return owners.map((owner) => {
+    const contact =
+      owner.signatories.find(
+        (signatory) =>
+          EMAIL_RE.test(signatory.email.trim()) && Boolean(phoneOf(signatory)),
+      ) ?? owner.signatories[0];
+    return {
+      address: owner.currentLocation,
+      email: contact?.email ?? "",
+      name: owner.displayName,
+      phone: contact ? phoneOf(contact) : "",
+    };
+  });
+}
+
 // ─── Snapshot → ProjectRequirementsPayload ───
 
 function buildExtractionPayload(
@@ -499,27 +542,6 @@ function buildExtractionPayload(
   signedExclusions: readonly string[],
 ): ProjectRequirementsPayload {
   const job = snapshot.job;
-  // Owner contacts for the project-extraction legalAdministration block, now
-  // sourced from owners[] (ADR 0003) — every owner's name, and every signer's
-  // email + phone (fixing the owner emails/phones the doc mapping expected but
-  // the old splitOwners path never carried). Falls back to the flat projection.
-  const ownerParties = job.owners ?? [];
-  const signers = collectOfferSigners(ownerParties);
-  const ownerNames = ownerParties
-    .map((owner) => owner.displayName.trim())
-    .filter(Boolean);
-  const ownerEmails = Array.from(
-    new Set(
-      signers
-        .map((signer) => signer.signatory.email.trim())
-        .filter((email) => EMAIL_RE.test(email)),
-    ),
-  );
-  const ownerPhones = Array.from(
-    new Set(
-      signers.map((signer) => signer.signatory.phone.trim()).filter(Boolean),
-    ),
-  );
   // GST and stage amounts to the cent, matching the offer's own GST split and
   // the figures the BC4 contract printed.
   const { gstAmount, paymentStages, depositValue } = buildHandoffCommercials({
@@ -538,21 +560,11 @@ function buildExtractionPayload(
     summary: `Fixed-price build at ${job.siteAddress} per executed Contract (Tender ${reference}). ${job.buildScope.join(". ")}`,
     legalAdministration: {
       siteAddress: job.siteAddress,
-      ownerContacts: {
-        names:
-          ownerNames.length > 0
-            ? ownerNames
-            : job.clientNames
-              ? [job.clientNames]
-              : [],
-        emails:
-          ownerEmails.length > 0
-            ? ownerEmails
-            : EMAIL_RE.test(job.clientEmail)
-              ? [job.clientEmail]
-              : [],
-        phones: ownerPhones,
-      },
+      // Written by the domain from the same owners `handoffOwners` passes,
+      // one entry per owner in every list. The per-signer, de-duplicated
+      // lists built here before did not line up with the names: a company
+      // with two directors gave two emails for one name.
+      ownerContacts: { names: [], emails: [], phones: [] },
       commencementTrigger: "Executed contract + council/CDC approval",
       signedDate: new Date().toISOString().slice(0, 10),
       pcaInspector: null,

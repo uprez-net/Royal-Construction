@@ -108,7 +108,7 @@ export async function createProjectWithLead(
       created.siteManagerId ? [created.siteManagerId] : [],
       createNotification("projectCreated", {
         customerEmail: created.customer.email,
-        customerName: created.customer.name,
+        customerName: created.customers.map((owner) => owner.name).join(" & "),
         customerPhone: created.customer.phone,
         location: created.location,
         projectId: created.projectId,
