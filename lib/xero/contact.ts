@@ -96,9 +96,11 @@ async function findOrCreateContact(
   contact: ProjectBillingContact,
   site: string,
 ): Promise<string> {
+  // `contact.email` is already trimmed and lower-cased by
+  // `projectBillingContact`; Xero's copy is whatever was typed there.
   const sameOwners = (found: Contact | null) =>
     found?.contactID
-    && found.emailAddress?.trim().toLowerCase() === contact.email.toLowerCase();
+    && found.emailAddress?.trim().toLowerCase() === contact.email;
 
   const byName = await findContactByName(context, contact.name);
   if (sameOwners(byName)) return byName!.contactID!;

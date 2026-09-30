@@ -52,6 +52,17 @@ describe("the billing contact", () => {
     });
   });
 
+  test("a legacy customer's details are normalised before they reach Xero", () => {
+    // Customers from before the owner rule were stored as typed.
+    const contact = projectBillingContact([
+      { ...jane, email: " Jane@Example.com ", phone: " 0400111222 " },
+      { ...john, email: "JOHN@example.com " },
+    ]);
+    assert.equal(contact.email, "jane@example.com");
+    assert.equal(contact.phone, "0400111222");
+    assert.equal(contact.contactPersons[0].email, "john@example.com");
+  });
+
   test("a sole owner is the whole contact", () => {
     const contact = projectBillingContact([jane]);
     assert.equal(contact.name, jane.name);
@@ -174,6 +185,32 @@ describe("resolving a project's Xero contact", () => {
         operation: "project.update",
       },
     ]);
+  });
+
+  test("a legacy customer stored with spaces still matches their Xero contact", async () => {
+    const legacyJane = { ...jane, email: " Jane@Example.com " };
+    const recorder = recordingDb({
+      "project.findUnique": {
+        ...projectRow(),
+        customer: legacyJane,
+        customers: [{ customer: legacyJane }, { customer: john }],
+      },
+    });
+    const xero = fakeXero({
+      "Jane Mary Smith & John Smith": {
+        contactID: "their-contact",
+        emailAddress: "jane@example.com",
+      },
+    });
+
+    const id = await resolveProjectXeroContactId(
+      xero.context,
+      "p-1",
+      recorder.db,
+    );
+
+    assert.equal(id, "their-contact");
+    assert.deepEqual(xero.created, []);
   });
 
   test("the same owners' existing contact is reused, not duplicated", async () => {

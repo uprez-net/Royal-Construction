@@ -81,8 +81,19 @@ function splitName(name: string): { firstName: string; lastName: string } {
   };
 }
 
+/** Emails as Xero is sent and compared them: trimmed and lower-cased. */
+function contactEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 /**
  * The billing contact for a project's owners, primary first.
+ *
+ * Every value is normalised here, once, rather than at each use. Owners a
+ * project is created with already are (`requireProjectOwners`), but a project
+ * from before owners were checked reaches this through its legacy customer,
+ * whose email was stored as typed: " Jane@Example.com " would otherwise go to
+ * Xero with the spaces and fail to match the contact Xero already has.
  *
  * Throws on an empty list: every project has at least one owner
  * (`requireProjectOwners`), so an empty list here is a caller that read the
@@ -100,15 +111,18 @@ export function projectBillingContact(
     address: primary.address?.trim() || null,
     contactPersons: coOwners
       .slice(0, XERO_MAX_CONTACT_PERSONS)
-      .map((owner) => ({ ...splitName(owner.name), email: owner.email })),
-    email: primary.email,
+      .map((owner) => ({
+        ...splitName(owner.name),
+        email: contactEmail(owner.email),
+      })),
+    email: contactEmail(primary.email),
     name: billingContactName(owners.map((owner) => owner.name)).slice(
       0,
       XERO_MAX_NAME_LENGTH,
     ),
     omittedOwners: coOwners
       .slice(XERO_MAX_CONTACT_PERSONS)
-      .map((owner) => owner.name),
-    phone: primary.phone,
+      .map((owner) => owner.name.trim()),
+    phone: primary.phone.trim(),
   };
 }
