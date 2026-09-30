@@ -21,6 +21,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  complianceDocumentLabel,
+  coveringDocumentType,
   isOptionalForOutreach,
   REQUIRED_COMPLIANCE_DOCUMENTS,
 } from "@/constants/complianceDocuments";
@@ -42,7 +44,12 @@ import { fetchJson } from "@/utils/fetch";
  * reached and has not resolved yet, so storing it would mean a setState in the
  * effect body purely to say what the cursor already says.
  */
-type DiscoveryState = "waiting" | "found" | "missing" | "optional-missing";
+type DiscoveryState =
+  | "waiting"
+  | "found"
+  | "missing"
+  | "optional-missing"
+  | "covered";
 
 type Row = {
   type: (typeof REQUIRED_COMPLIANCE_DOCUMENTS)[number]["type"];
@@ -57,6 +64,49 @@ type DiscoveryResponse = {
   documentId?: string | null;
   file?: { id: string; name: string; url: string };
 };
+
+function discover(
+  projectId: string,
+  documentType: ComplianceDocumentType,
+  label: string,
+) {
+  return fetchJson<DiscoveryResponse>(
+    `/api/projects/${projectId}/compliance/discover`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ documentType }),
+    },
+    `Could not look for ${label}`,
+  );
+}
+
+/**
+ * Whether the later document that stands in for this one is on the project.
+ *
+ * Asked only once the document itself has not turned up, and through the same
+ * route, so a full design found here is claimed onto its own row exactly as it
+ * would be when the loop reaches it -- which is what the server's send guard
+ * reads when it decides the preliminary plans are covered. A failed probe is
+ * "not covered": the row then asks for an upload, which is the safe answer.
+ */
+async function isCoveredOnProject(
+  projectId: string,
+  documentType: ComplianceDocumentType,
+): Promise<boolean> {
+  const covering = coveringDocumentType(documentType);
+  if (!covering) return false;
+  try {
+    const response = await discover(
+      projectId,
+      covering,
+      complianceDocumentLabel(covering),
+    );
+    return response.data.found;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Walks the required document list, one at a time.
@@ -96,7 +146,13 @@ export function CertifierDiscoveryModal({
   const rowScope = (documentType: ComplianceDocumentType) =>
     complianceScope.document({ documentType });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const pendingUploadRef = useRef<number | null>(null);
+  // Which row the picked file answers, and as what. Usually the row's own type;
+  // the covering type when the admin uploads the full design in place of the
+  // preliminary plans.
+  const pendingUploadRef = useRef<{
+    index: number;
+    documentType: ComplianceDocumentType;
+  } | null>(null);
   const sentRef = useRef(false);
 
   const [rows, setRows] = useState<Row[]>(() =>
@@ -132,15 +188,7 @@ export function CertifierDiscoveryModal({
 
     void (async () => {
       try {
-        const response = await fetchJson<DiscoveryResponse>(
-          `/api/projects/${projectId}/compliance/discover`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ documentType: row.type }),
-          },
-          `Could not look for ${row.label}`,
-        );
+        const response = await discover(projectId, row.type, row.label);
         if (cancelled) return;
 
         if (response.data.found) {
@@ -152,7 +200,14 @@ export function CertifierDiscoveryModal({
         } else if (isOptionalForOutreach(row.type)) {
           setRow(cursor, { state: "optional-missing" });
           setCursor((value) => value + 1);
+        } else if (await isCoveredOnProject(projectId, row.type)) {
+          if (cancelled) return;
+          // No preliminary plans, and a full design that makes them moot. The
+          // loop does not stop for a document the send no longer waits on.
+          setRow(cursor, { state: "covered" });
+          setCursor((value) => value + 1);
         } else {
+          if (cancelled) return;
           setRow(cursor, { state: "missing" });
         }
       } catch (discoveryError) {
@@ -181,18 +236,28 @@ export function CertifierDiscoveryModal({
     };
   }, [open, cursor, rows, projectId, setRow]);
 
-  const handleUpload = async (file: File, index: number) => {
-    const row = rows[index];
+  const handleUpload = async (
+    file: File,
+    index: number,
+    documentType: ComplianceDocumentType,
+  ) => {
     try {
-      const uploaded = await uploadFile(file, rowScope(row.type));
+      const uploaded = await uploadFile(file, rowScope(documentType));
       await dispatch(
         uploadComplianceDocument({
           projectId,
           fileId: uploaded.fileId,
-          documentType: row.type,
+          documentType,
         }),
       ).unwrap();
-      setRow(index, { state: "found", fileName: uploaded.name });
+      // Filed under the covering type, this row is covered rather than found;
+      // the covering row finds the file on its own row when the loop gets there.
+      setRow(
+        index,
+        documentType === rows[index].type
+          ? { state: "found", fileName: uploaded.name }
+          : { state: "covered" },
+      );
       setCursor(index + 1);
     } catch (uploadError) {
       toast.error(
@@ -204,7 +269,10 @@ export function CertifierDiscoveryModal({
   };
 
   const packReady = rows.every(
-    (row) => row.state === "found" || row.state === "optional-missing",
+    (row) =>
+      row.state === "found"
+      || row.state === "optional-missing"
+      || row.state === "covered",
   );
   const isDone = cursor >= REQUIRED_COMPLIANCE_DOCUMENTS.length;
 
@@ -268,7 +336,8 @@ export function CertifierDiscoveryModal({
           <DialogDescription>
             Looking for each document on the project. Missing required items can
             be uploaded here. The full architectural design is included when it
-            is found, but does not hold up the certifier pack.
+            is found, but does not hold up the certifier pack — and where it is
+            on the project, the preliminary plans are not needed.
           </DialogDescription>
         </DialogHeader>
 
@@ -278,9 +347,9 @@ export function CertifierDiscoveryModal({
           className="sr-only"
           onChange={(event) => {
             const file = event.target.files?.[0];
-            const index = pendingUploadRef.current;
-            if (file && index !== null) {
-              void handleUpload(file, index);
+            const pending = pendingUploadRef.current;
+            if (file && pending !== null) {
+              void handleUpload(file, pending.index, pending.documentType);
             }
             pendingUploadRef.current = null;
             event.target.value = "";
@@ -293,6 +362,7 @@ export function CertifierDiscoveryModal({
               row.state === "waiting" && index === cursor && open
                 ? "searching"
                 : row.state;
+            const covering = coveringDocumentType(row.type);
             return (
               <li
                 key={row.type}
@@ -317,7 +387,8 @@ export function CertifierDiscoveryModal({
                       className="size-4 text-warning-ink"
                       aria-hidden="true"
                     />
-                  ) : displayState === "optional-missing" ? (
+                  ) : displayState === "optional-missing"
+                    || displayState === "covered" ? (
                     <CheckCircle2
                       className="size-4 text-muted-foreground"
                       aria-hidden="true"
@@ -344,10 +415,19 @@ export function CertifierDiscoveryModal({
                   ) : displayState === "missing" ? (
                     <span className="text-warning-ink">
                       {row.label} not found, please upload
+                      {covering
+                        ? ` — or the ${complianceDocumentLabel(covering).toLowerCase()}, which covers it`
+                        : ""}
                     </span>
                   ) : displayState === "optional-missing" ? (
                     <span className="text-muted-foreground">
                       {row.label} not found — optional for this send
+                    </span>
+                  ) : displayState === "covered" && covering ? (
+                    <span className="text-muted-foreground">
+                      {row.label} not needed — the{" "}
+                      {complianceDocumentLabel(covering).toLowerCase()} covers
+                      it
                     </span>
                   ) : (
                     <span className="text-muted-foreground/70">
@@ -363,7 +443,10 @@ export function CertifierDiscoveryModal({
                     variant="outline"
                     disabled={isUploading(rowScope(row.type))}
                     onClick={() => {
-                      pendingUploadRef.current = index;
+                      pendingUploadRef.current = {
+                        index,
+                        documentType: row.type,
+                      };
                       fileInputRef.current?.click();
                     }}
                   >
@@ -377,6 +460,34 @@ export function CertifierDiscoveryModal({
                     )}
                     Upload
                     <span className="sr-only"> {row.label}</span>
+                  </Button>
+                ) : null}
+
+                {/* The full design in place of the preliminary plans, for the
+                    job that went straight to it. */}
+                {displayState === "missing" && covering ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={isUploading(rowScope(covering))}
+                    onClick={() => {
+                      pendingUploadRef.current = {
+                        index,
+                        documentType: covering,
+                      };
+                      fileInputRef.current?.click();
+                    }}
+                  >
+                    {isUploading(rowScope(covering)) ? (
+                      <Loader2
+                        className="size-4 animate-spin"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <CloudUpload className="size-4" aria-hidden="true" />
+                    )}
+                    Upload {complianceDocumentLabel(covering).toLowerCase()}
                   </Button>
                 ) : null}
               </li>
@@ -397,10 +508,10 @@ export function CertifierDiscoveryModal({
           <Button
             type="button"
             disabled={
-              !packReady ||
-              !isDone ||
-              isSending ||
-              outreach.status === "pending"
+              !packReady
+              || !isDone
+              || isSending
+              || outreach.status === "pending"
             }
             onClick={() => void handleSend()}
           >

@@ -38,7 +38,8 @@ import { dataTimeFormat, dateFormat } from "@/utils/formatters";
  *   1. Schedule a meeting with the client — until one is booked.
  *   2. Meeting resolution — while one is booked and unresolved.
  *   3. Client approved plans — once the meeting has been held and a set of
- *      preliminary plans is actually on the file.
+ *      plans is actually on the file: the preliminary set, or the full design
+ *      where that is what the architect delivered instead.
  *
  * The third is what opens the send to the certifier, which is why it is not
  * offered before there is something for the client to have looked at.
@@ -47,8 +48,13 @@ import { dataTimeFormat, dateFormat } from "@/utils/formatters";
 type ArchitectWorkflowProps = {
   projectId: string;
   outreach: ComplianceOutreachDetail | undefined;
-  /** Whether a set of preliminary plans is on the file. */
-  hasPreliminaryPlans: boolean;
+  /**
+   * Whether the architect's plans are on the file, at either stage.
+   *
+   * Not the preliminary row alone: a file holding only the full design never
+   * offered the approval control, and the certifier send waits on it.
+   */
+  hasPlans: boolean;
   /**
    * What is on the file already, carried straight through to the two dialogs
    * this card opens.
@@ -63,7 +69,7 @@ type ArchitectWorkflowProps = {
 export function ArchitectWorkflow({
   projectId,
   outreach,
-  hasPreliminaryPlans,
+  hasPlans,
   vaultOptions,
 }: ArchitectWorkflowProps) {
   const dispatch = useAppDispatch();
@@ -100,7 +106,7 @@ export function ArchitectWorkflow({
    * clock stops mattering the moment the thing it was measuring arrives.
    */
   const daysSinceMeeting =
-    heldAt && !hasPreliminaryPlans ? businessDaysSince(new Date(heldAt)) : null;
+    heldAt && !hasPlans ? businessDaysSince(new Date(heldAt)) : null;
 
   return (
     <div className="mt-4 space-y-3 rounded-lg border border-border/70 bg-muted/40 p-3">
@@ -226,7 +232,7 @@ export function ArchitectWorkflow({
             once the opinion is recorded. A revision round still open is the
             client already having answered — the answer was "no", and the next
             move is the architect's. */}
-        {heldAt && hasPreliminaryPlans && !approvedAt && !revision ? (
+        {heldAt && hasPlans && !approvedAt && !revision ? (
           <Button
             type="button"
             size="sm"
@@ -254,7 +260,7 @@ export function ArchitectWorkflow({
           the answer to it lives. The send bar says it too; somebody looking at
           the architect card should not have to scroll to find out that this is
           what is holding it. */}
-      {heldAt && hasPreliminaryPlans && !approvedAt && !revision ? (
+      {heldAt && hasPlans && !approvedAt && !revision ? (
         <p className="text-xs text-muted-foreground">
           The pack cannot go to the certifier until the client has signed off on
           these plans.
