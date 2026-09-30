@@ -133,7 +133,7 @@ export function CertifierDiscoveryModal({
   const outreach = useAppSelector(
     selectComplianceMutation(complianceScope.outreach),
   );
-  const { uploadFile, isUploading } = useComplianceUpload(projectId);
+  const { uploadFile } = useComplianceUpload(projectId);
 
   /**
    * A row's key, matching the scope the upload will file under.
@@ -165,6 +165,21 @@ export function CertifierDiscoveryModal({
   const [cursor, setCursor] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  /**
+   * The upload in flight, from picking the file to the document row landing.
+   *
+   * One for the whole modal rather than the hook's per-scope flag, for two
+   * reasons. A missing row can offer two uploads that share one file input, and
+   * the per-scope flag left the second enabled while the first ran. And that
+   * flag clears when the blob transfer finishes, before the row is written, so
+   * the button came back while the upload was still settling. Two uploads
+   * finishing at different times each advanced the loop, and the later one
+   * could land on a row already done and stall it.
+   */
+  const [activeUpload, setActiveUpload] = useState<{
+    index: number;
+    documentType: ComplianceDocumentType;
+  } | null>(null);
 
   const setRow = useCallback((index: number, patch: Partial<Row>) => {
     setRows((current) =>
@@ -241,6 +256,7 @@ export function CertifierDiscoveryModal({
     index: number,
     documentType: ComplianceDocumentType,
   ) => {
+    setActiveUpload({ index, documentType });
     try {
       const uploaded = await uploadFile(file, rowScope(documentType));
       await dispatch(
@@ -258,15 +274,22 @@ export function CertifierDiscoveryModal({
           ? { state: "found", fileName: uploaded.name }
           : { state: "covered" },
       );
-      setCursor(index + 1);
+      // Forward only. The loop may already be past this row, and moving the
+      // cursor back onto a row that is no longer waiting stalls it.
+      setCursor((value) => Math.max(value, index + 1));
     } catch (uploadError) {
       toast.error(
         uploadError instanceof Error
           ? uploadError.message
           : `Could not upload ${file.name}.`,
       );
+    } finally {
+      setActiveUpload(null);
     }
   };
+
+  const isUploadingAs = (index: number, documentType: ComplianceDocumentType) =>
+    activeUpload?.index === index && activeUpload.documentType === documentType;
 
   const packReady = rows.every(
     (row) =>
@@ -441,7 +464,7 @@ export function CertifierDiscoveryModal({
                     type="button"
                     size="sm"
                     variant="outline"
-                    disabled={isUploading(rowScope(row.type))}
+                    disabled={activeUpload !== null}
                     onClick={() => {
                       pendingUploadRef.current = {
                         index,
@@ -450,7 +473,7 @@ export function CertifierDiscoveryModal({
                       fileInputRef.current?.click();
                     }}
                   >
-                    {isUploading(rowScope(row.type)) ? (
+                    {isUploadingAs(index, row.type) ? (
                       <Loader2
                         className="size-4 animate-spin"
                         aria-hidden="true"
@@ -470,7 +493,7 @@ export function CertifierDiscoveryModal({
                     type="button"
                     size="sm"
                     variant="outline"
-                    disabled={isUploading(rowScope(covering))}
+                    disabled={activeUpload !== null}
                     onClick={() => {
                       pendingUploadRef.current = {
                         index,
@@ -479,7 +502,7 @@ export function CertifierDiscoveryModal({
                       fileInputRef.current?.click();
                     }}
                   >
-                    {isUploading(rowScope(covering)) ? (
+                    {isUploadingAs(index, covering) ? (
                       <Loader2
                         className="size-4 animate-spin"
                         aria-hidden="true"
