@@ -508,10 +508,10 @@ export function CertifierDiscoveryModal({
           <Button
             type="button"
             disabled={
-              !packReady ||
-              !isDone ||
-              isSending ||
-              outreach.status === "pending"
+              !packReady
+              || !isDone
+              || isSending
+              || outreach.status === "pending"
             }
             onClick={() => void handleSend()}
           >

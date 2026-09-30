@@ -163,8 +163,8 @@ function isSettled(
 ): boolean {
   return engagement.documents.some(
     (document) =>
-      document.documentType === documentType &&
-      (document.files.length > 0 || isNotRequired(document.status)),
+      document.documentType === documentType
+      && (document.files.length > 0 || isNotRequired(document.status)),
   );
 }
 
@@ -239,9 +239,9 @@ function councilActors(
     ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7,
   );
   const settled =
-    isSettled(engagement, ComplianceDocumentType.PLANNING_CERTIFICATE_10_7) ||
-    Boolean(application?.receivedAt) ||
-    !requiresPlanningCertificate(engagement);
+    isSettled(engagement, ComplianceDocumentType.PLANNING_CERTIFICATE_10_7)
+    || Boolean(application?.receivedAt)
+    || !requiresPlanningCertificate(engagement);
 
   return [
     actorForParty(
@@ -309,8 +309,8 @@ function developmentApplicationActors(
   for (const row of DA_DOCUMENTS) {
     if (row.source !== "consultant") continue;
     const party =
-      consultantForDocumentType(row.type) ??
-      (row.type === ComplianceDocumentType.WASTE_MANAGEMENT_PLAN
+      consultantForDocumentType(row.type)
+      ?? (row.type === ComplianceDocumentType.WASTE_MANAGEMENT_PLAN
         ? WASTE_MANAGEMENT_PLAN_PARTY
         : null);
     if (!party) continue;
@@ -415,8 +415,8 @@ function checklistActors(
   for (const item of items) {
     const type = checklistItemDetail(item.detail)?.mapsToType ?? null;
     const party = type
-      ? (consultantForDocumentType(type) ??
-        (type === ComplianceDocumentType.WASTE_MANAGEMENT_PLAN
+      ? (consultantForDocumentType(type)
+        ?? (type === ComplianceDocumentType.WASTE_MANAGEMENT_PLAN
           ? WASTE_MANAGEMENT_PLAN_PARTY
           : null))
       : null;

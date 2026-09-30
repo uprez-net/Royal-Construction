@@ -95,8 +95,8 @@ function isSettled(
 ): boolean {
   return engagement.documents.some(
     (document) =>
-      document.documentType === documentType &&
-      (document.files.length > 0 || isNotRequired(document.status)),
+      document.documentType === documentType
+      && (document.files.length > 0 || isNotRequired(document.status)),
   );
 }
 
@@ -127,9 +127,9 @@ function assessPartyResponse(
   // Nobody was written to, or the client supplied the documents themselves.
   // Neither is a party running late; there is nobody waiting on anybody.
   if (
-    !outreach ||
-    outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED ||
-    !outreach.sentAt
+    !outreach
+    || outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED
+    || !outreach.sentAt
   ) {
     return {
       resolve: {
@@ -318,9 +318,9 @@ export function assessOverdueConditions(
     // -- which is why an application actually lodged keeps its clock running.
     // What stops is chasing a certificate nobody ever ordered.
     const wanted =
-      kind !== ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7 ||
-      requiresPlanningCertificate(engagement) ||
-      Boolean(application?.appliedAt);
+      kind !== ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7
+      || requiresPlanningCertificate(engagement)
+      || Boolean(application?.appliedAt);
 
     /**
      * The download the portal's approval email leaves behind.
@@ -367,10 +367,10 @@ export function assessOverdueConditions(
      * is lost by closing this one.
      */
     if (
-      !wanted ||
-      documentIn ||
-      application?.receivedAt ||
-      application?.approvalNotifiedAt
+      !wanted
+      || documentIn
+      || application?.receivedAt
+      || application?.approvalNotifiedAt
     ) {
       resolve.push({
         type: copy.alertType,

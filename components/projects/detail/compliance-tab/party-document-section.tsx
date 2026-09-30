@@ -206,9 +206,9 @@ export function PartyDocumentSection({
    * would unlock the section and hide the button that retries it.
    */
   const isEngaged =
-    outreach !== undefined &&
-    (outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED ||
-      outreach.status !== ComplianceOutreachStatus.NOT_SENT);
+    outreach !== undefined
+    && (outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED
+      || outreach.status !== ComplianceOutreachStatus.NOT_SENT);
 
   // The council has nobody to engage. Its section opens as soon as the surveyor
   // is settled, because ordering a certificate needs the deposited plan and
@@ -285,9 +285,9 @@ export function PartyDocumentSection({
         // a reader coming back to the tab actually wants from this line.
         outreach?.mode === ComplianceOutreachMode.SELF_SUPPLIED
           ? "Supplied by the client."
-          : (outreach?.contactName ??
-            outreach?.contactEmail ??
-            section.description)
+          : (outreach?.contactName
+            ?? outreach?.contactEmail
+            ?? section.description)
       }
       icon={PARTY_ICON[party]}
       progress={progress}
@@ -297,8 +297,8 @@ export function PartyDocumentSection({
       overdue={sectionOverdue}
       locked={locked}
       lockMessage={
-        blockedReason ??
-        (isCouncil
+        blockedReason
+        ?? (isCouncil
           ? undefined
           : outreach
             ? // A row with no mail behind it. Said plainly, because the button

@@ -220,8 +220,8 @@ export function unsentRequiredDocuments(
   const sent = sentToCertifierUrls(engagement);
   return engagement.documents.filter(
     (document) =>
-      isRequiredDocumentType(document.documentType) &&
-      document.files.some((file) => !sent.has(file.url)),
+      isRequiredDocumentType(document.documentType)
+      && document.files.some((file) => !sent.has(file.url)),
   );
 }
 
@@ -236,8 +236,8 @@ export function hasSentRequiredPack(
   engagement: CertifierEngagementDetail,
 ): boolean {
   return (
-    engagement.status !== CertifierEngagementStatus.NOT_STARTED &&
-    engagement.status !== CertifierEngagementStatus.COLLECTING_DOCS
+    engagement.status !== CertifierEngagementStatus.NOT_STARTED
+    && engagement.status !== CertifierEngagementStatus.COLLECTING_DOCS
   );
 }
 
