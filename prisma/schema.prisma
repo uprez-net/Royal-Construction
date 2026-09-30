@@ -545,6 +545,14 @@ model Project {
   // ProjectCustomer; this JSON keeps what a Customer row cannot (company vs
   // individual, directors, ABN).
   parties          Json?
+  /// The Xero ContactID this project's claims are billed to. One contact per
+  /// project, named as the contract names its owners, carrying the primary
+  /// owner's email, phone and address, with every co-owner as a contact person
+  /// on invoice emails (lib/domain/projects/billing-contact.ts). Set just after
+  /// the project is created, or at its first claim if Xero was unreachable
+  /// then. Not unique: a second build for the same owners reuses their
+  /// contact, and projects migrated from the per-customer contact share it.
+  xeroContactId    String?
 
   /// Defaults to DRAFT rather than ACTIVE. A project is created by the handoff
   /// from a won offer, which writes the row, the milestones and the
@@ -875,10 +883,6 @@ model Customer {
   // every customer a project is created with; nullable only because legacy
   // customers have none, and a NOT NULL here would need them backfilled first.
   address       String?
-  /// The Xero ContactID this customer is billed under. Resolved lazily the
-  /// first time a progress claim is raised (match on email, else create), so
-  /// legacy customers carry null until their first invoice.
-  xeroContactId String? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

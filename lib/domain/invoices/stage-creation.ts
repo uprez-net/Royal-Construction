@@ -17,7 +17,6 @@ export type StageInvoiceCustomer = {
   readonly email: string;
   readonly phone: string;
   readonly address: string | null;
-  readonly xeroContactId: string | null;
 };
 
 export type StageInvoiceProject = {

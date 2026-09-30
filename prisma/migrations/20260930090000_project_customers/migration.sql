@@ -27,3 +27,21 @@ ALTER TABLE "ProjectCustomer" ADD CONSTRAINT "ProjectCustomer_customerId_fkey" F
 -- change exists to stop making.
 INSERT INTO "ProjectCustomer" ("projectId", "customerId", "position")
 SELECT "id", "customerId", 0 FROM "Project";
+
+-- The Xero contact moves from the customer to the project: one contact per
+-- build, named as the contract names its owners. Every project first keeps the
+-- contact its primary customer was already billed under, so no claim already
+-- raised in Xero ends up under a second contact.
+-- AlterTable
+ALTER TABLE "Project" ADD COLUMN "xeroContactId" TEXT;
+
+UPDATE "Project" AS p
+SET "xeroContactId" = c."xeroContactId"
+FROM "Customer" AS c
+WHERE c."id" = p."customerId" AND c."xeroContactId" IS NOT NULL;
+
+-- DropIndex
+DROP INDEX "Customer_xeroContactId_key";
+
+-- AlterTable
+ALTER TABLE "Customer" DROP COLUMN "xeroContactId";

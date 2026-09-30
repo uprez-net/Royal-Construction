@@ -15,6 +15,8 @@ import {
 } from "@/lib/domain/projects/creation";
 import type { ProjectInferencePort } from "@/lib/domain/ports/project-inference";
 import { triggerNotification } from "@/lib/notification/novu";
+import { getXeroContext, XeroNotConnectedError } from "@/lib/xero/client";
+import { resolveProjectXeroContactId } from "@/lib/xero/contact";
 import { CACHE_PROFILES } from "@/types/cache";
 import { createNotification } from "@/types/notification";
 import type { ProjectDetail } from "@/types/project";
@@ -25,8 +27,8 @@ import type { ProjectDetail } from "@/types/project";
 // resolution, the requirements payload, the readiness gate, the milestones,
 // the activity entry and moving the lead's files onto the project — is one
 // domain command running in one transaction. This file supplies the three
-// things it cannot have: the AI inference port, the cache tags, and the Novu
-// notification.
+// things it cannot have: the AI inference port, the cache tags, the Novu
+// notification, and the project's Xero contact.
 //
 // `createProject` (the deprecated manual path that deliberately failed by
 // writing `leadId: 0`) is gone. It had no caller, its only effect on a real
@@ -104,6 +106,8 @@ export async function createProjectWithLead(
     revalidateTag("projects", CACHE_PROFILES.MEDIUM);
     revalidateTag(`project-${created.projectId}`, CACHE_PROFILES.MEDIUM);
 
+    await ensureProjectXeroContact(created.projectId);
+
     await triggerNotification(
       created.siteManagerId ? [created.siteManagerId] : [],
       createNotification("projectCreated", {
@@ -119,4 +123,32 @@ export async function createProjectWithLead(
   });
 
   return detail;
+}
+
+/**
+ * Create the project's Xero contact now, while the owners are fresh, so the
+ * bookkeeper sees the contact before the first claim rather than with it.
+ *
+ * After commit and outside the transaction on purpose: a Xero outage must not
+ * roll back a project the office has just reviewed. Nothing is lost when it
+ * fails — the first progress claim resolves the same contact the same way
+ * (`resolveProjectXeroContactId` is idempotent), and a failure there is
+ * reported on the claim, where somebody is looking.
+ */
+async function ensureProjectXeroContact(projectId: string): Promise<void> {
+  try {
+    const context = await getXeroContext();
+    await resolveProjectXeroContactId(context, projectId);
+  } catch (error) {
+    if (error instanceof XeroNotConnectedError) {
+      console.info(
+        `[xero] No organisation connected; the contact for project ${projectId} will be created with its first claim.`,
+      );
+      return;
+    }
+    console.error(
+      `[xero] Could not create the contact for project ${projectId}; its first claim will try again:`,
+      error,
+    );
+  }
 }

@@ -21,7 +21,7 @@ import {
   type XeroContext,
 } from "@/lib/xero/client";
 import { getXeroConfig } from "@/lib/xero/config";
-import { resolveXeroContactId } from "@/lib/xero/contact";
+import { resolveProjectXeroContactId } from "@/lib/xero/contact";
 import { toInvoiceStatus } from "@/lib/xero/invoice-status";
 import { parseXeroDate } from "@/lib/xero/xero-date";
 import {
@@ -183,7 +183,9 @@ export async function createStageInvoice(
       }
       const salesAccountCode = config.salesAccountCode;
       context = await getXeroContext();
-      const contactID = await resolveXeroContactId(context, project.customer);
+      // The project's own contact: every owner on the contract, reached
+      // through the primary (lib/domain/projects/billing-contact.ts).
+      const contactID = await resolveProjectXeroContactId(context, project.id);
       const invoices: Invoices = {
         invoices: [
           {

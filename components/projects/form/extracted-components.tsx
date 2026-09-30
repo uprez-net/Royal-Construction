@@ -1014,9 +1014,9 @@ function OwnersControl({
             Owners
           </p>
           <p className="text-xs text-slate-400">
-            Everyone the contract names as an owner. Each becomes a customer on
-            the project and needs a name, email, phone and address. Owner 1 is
-            the primary contact, and the one invoices go to.
+            Everyone the contract names as an owner, in the contract&apos;s
+            order. Each becomes a customer on the project and needs a name,
+            email, phone and address.
           </p>
         </div>
         <Badge
@@ -1073,17 +1073,33 @@ function OwnerRow({
   onRemove: () => void;
 }): React.JSX.Element {
   const label = `Owner ${index + 1}`;
+  const isPrimary = index === 0;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
+    <div
+      className={cn(
+        "rounded-lg border p-3",
+        isPrimary
+          ? "border-emerald-300 bg-emerald-50"
+          : "border-slate-200 bg-white",
+      )}
+    >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        <p
+          className={cn(
+            "flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide",
+            isPrimary ? "text-emerald-900" : "text-slate-500",
+          )}
+        >
           <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
           {label}
-          {index === 0 ? (
-            <span className="font-normal normal-case text-slate-400">
-              (primary)
-            </span>
+          {isPrimary ? (
+            <Badge
+              variant="outline"
+              className="rounded-full border-emerald-300 bg-white px-2 py-0 text-[10px] font-semibold normal-case tracking-normal text-emerald-800"
+            >
+              Primary owner · Xero contact
+            </Badge>
           ) : null}
         </p>
         {canRemove ? (
@@ -1097,6 +1113,13 @@ function OwnerRow({
           </button>
         ) : null}
       </div>
+      {isPrimary ? (
+        <p className="mb-2 text-xs text-emerald-900/80">
+          The project&apos;s Xero contact is named after every owner, and uses
+          this owner&apos;s email, phone and address. Invoices are sent here;
+          the other owners are copied on invoice emails.
+        </p>
+      ) : null}
       <div className={OWNER_GRID}>
         {OWNER_INPUTS.map(({ field, placeholder, type }) => {
           const problem = problemFor(field);

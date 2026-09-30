@@ -43,7 +43,6 @@ const customerRow = (
   createdAt: new Date(0),
   id,
   updatedAt: new Date(0),
-  xeroContactId: null,
   ...owner,
 });
 
