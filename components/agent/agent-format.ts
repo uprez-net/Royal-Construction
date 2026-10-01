@@ -4,6 +4,7 @@ import {
   SYDNEY_TZ,
   formatIsoForPeople,
   humanizeIsoDatesInText,
+  isValidIsoCalendarDate,
 } from "@/lib/dates/sydney";
 
 /**
@@ -115,6 +116,10 @@ function formatUtcInstant(value: string): string | null {
     )
   )
     return null;
+  // `new Date` rolls an impossible written date forward ("2026-02-30" becomes
+  // 2 March), so the calendar date is checked as written, the same way the
+  // Sydney formatter checks it, and anything else falls back unchanged.
+  if (!isValidIsoCalendarDate(text.slice(0, 10))) return null;
   const date = new Date(text);
   if (Number.isNaN(date.getTime())) return null;
   return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;

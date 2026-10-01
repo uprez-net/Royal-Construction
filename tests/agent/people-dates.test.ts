@@ -132,3 +132,16 @@ test("a field the sender labelled UTC is shown in UTC, not Sydney time", () => {
   );
   assert.equal(formatDisplayField("noteUtc", "not a date"), "not a date");
 });
+
+test("a UTC-labelled field with an impossible written date is not rolled forward", () => {
+  // `new Date("2026-02-30T00:00:00Z")` is 2 March; showing that would invent a
+  // date nobody wrote.
+  assert.equal(
+    formatDisplayField("dueAtUtc", "2026-02-30T00:00:00Z"),
+    formatDisplayValue("2026-02-30T00:00:00Z"),
+  );
+  assert.equal(
+    formatDisplayField("dueAtUtc", "2024-02-29T00:00:00Z"),
+    "2024-02-29 00:00 UTC",
+  );
+});

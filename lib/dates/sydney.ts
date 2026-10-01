@@ -184,7 +184,7 @@ const ISO_DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const ISO_DATE_TIME =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})$/;
 
-function isValidIsoCalendarDate(value: string): boolean {
+export function isValidIsoCalendarDate(value: string): boolean {
   const match = ISO_DATE_ONLY.exec(value);
   if (!match) return false;
   const year = Number(match[1]);

@@ -232,7 +232,9 @@ export async function sendComplianceOutreach(
       alreadySent: true as const,
       attachmentCount: 0,
       outreachId: existing.id,
-      recipient: existing.contactEmail ?? input.contactEmail ?? "",
+      // Who it actually went to. The address asked for this time was not
+      // emailed, so naming it here would report a send that never happened.
+      recipient: existing.contactEmail ?? "",
     };
   }
 
@@ -469,11 +471,17 @@ async function resolveOutreachRecipient(
       "tradieId",
     );
   }
-  const addresses = [tradie.email, ...tradie.additionalEmails].map((address) =>
-    address.trim().toLowerCase(),
-  );
+  const addresses = [tradie.email, ...tradie.additionalEmails]
+    .map((address) => address.trim().toLowerCase())
+    .filter((address) => address.length > 0);
+  if (addresses.length === 0) {
+    throw new DomainValidationError(
+      `${tradie.name} has no email address in the directory. Add one to their directory entry first.`,
+      "contactEmail",
+    );
+  }
   const email = typedEmail ?? addresses[0];
-  if (!email || !addresses.includes(email)) {
+  if (!addresses.includes(email)) {
     throw new DomainValidationError(
       `${typedEmail} is not one of ${tradie.name}'s addresses in the directory.`,
       "contactEmail",

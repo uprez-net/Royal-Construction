@@ -57,6 +57,7 @@ function script(
   documents: readonly unknown[],
   tradie: unknown = basixAssessor,
   sent: unknown[] = [],
+  outreaches: readonly unknown[] = [],
 ) {
   return {
     "certifierEngagement.findUnique": {
@@ -64,7 +65,7 @@ function script(
       documents,
       emails: [],
       id: "engagement_1",
-      outreaches: [],
+      outreaches,
       subjectAddress: "Lot 9028 Sommerville Drive, Catherine Field NSW 2557",
     },
     "complianceOutreach.create": (args: unknown) => {
@@ -308,4 +309,65 @@ test("prepare says why a consultant is blocked and lists who may be engaged", as
     recordingDb(script([basixLine])).db,
   );
   assert.equal(open.available && open.blocked, null);
+});
+
+test("a tradie with no usable address is refused by name, not as 'null'", () => {
+  const recorder = recordingDb(
+    script([basixLine], {
+      ...basixAssessor,
+      additionalEmails: [" "],
+      email: "",
+    }),
+  );
+
+  return assert.rejects(
+    sendComplianceOutreach(
+      adminPrincipal(),
+      basixSend(),
+      recorder.transactionalDb,
+      neverSend,
+    ),
+    (error) =>
+      error instanceof DomainValidationError
+      && error.field === "contactEmail"
+      && error.message
+        === "Basix Assessors Pty Ltd has no email address in the directory. Add one to their directory entry first.",
+  );
+});
+
+test("an outreach already sent reports who it went to, not who was asked for", async () => {
+  // The address requested this time was never emailed.
+  const sentBefore = {
+    contactEmail: "assess@basix.example",
+    deliverables: [],
+    emails: [],
+    id: "outreach_sent",
+    mode: "OUTREACH",
+    party: CompliancePartyType.BASIX_CONSULTANT,
+    status: "SENT",
+  };
+  const result = await sendComplianceOutreach(
+    adminPrincipal(),
+    basixSend({ contactEmail: "office@basix.example" }),
+    recordingDb(script([basixLine], basixAssessor, [], [sentBefore]))
+      .transactionalDb,
+    neverSend,
+  );
+  assert.equal(result.alreadySent, true);
+  assert.equal(result.recipient, "assess@basix.example");
+
+  const noAddress = await sendComplianceOutreach(
+    adminPrincipal(),
+    basixSend({ contactEmail: "office@basix.example" }),
+    recordingDb(
+      script(
+        [basixLine],
+        basixAssessor,
+        [],
+        [{ ...sentBefore, contactEmail: null }],
+      ),
+    ).transactionalDb,
+    neverSend,
+  );
+  assert.equal(noAddress.recipient, "");
 });
