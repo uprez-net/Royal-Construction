@@ -36,9 +36,12 @@ export function defaultComplianceSubjectAddress(project: {
 
 /**
  * Whether an address names a street: a number ("20", "12A", "3/45") followed
- * by a word. A postcode before ", Australia" is not one. A postcode with no
- * comma after it reads as one, which only falls back to the location alone.
+ * by a word. A postcode is not one, with or without a comma before the country
+ * ("NSW 2557, Australia", "NSW 2557 Australia"): the word after it is a state,
+ * territory or country, never a street name.
  */
 function hasStreetNumber(address: string): boolean {
-  return /(?:^|[\s,])\d+[a-z]?(?:[/-]\d+[a-z]?)?\s+[a-z]/i.test(address);
+  return /(?:^|[\s,])\d+[a-z]?(?:[/-]\d+[a-z]?)?\s+(?!(?:australia|au|nsw|vic|qld|act|tas|sa|wa|nt)\b)[a-z]/i.test(
+    address,
+  );
 }

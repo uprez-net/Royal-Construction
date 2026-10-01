@@ -29,6 +29,27 @@ test("a new engagement is filed under the street, not just the suburb", () => {
   ]);
 });
 
+test("a postcode before the country is not mistaken for a street", () => {
+  // Without the comma, "2557 Australia" read as a street number and name, and
+  // the street in the project name was dropped again.
+  for (const location of [
+    "Catherine Field NSW 2557, Australia",
+    "Catherine Field NSW 2557 Australia",
+  ]) {
+    const address = defaultComplianceSubjectAddress({
+      location,
+      name: "Lot 9028 Sommerville Drive",
+    });
+    assert.equal(address, `Lot 9028 Sommerville Drive, ${location}`);
+    assert.deepEqual(siteAddressCore(address), [
+      "lot",
+      "9028",
+      "sommerville",
+      "drive",
+    ]);
+  }
+});
+
 test("an address already carried by one field is not repeated", () => {
   assert.equal(
     defaultComplianceSubjectAddress({
@@ -65,6 +86,15 @@ test("a location that already names the street is used as it is", () => {
     {
       location: "3/45 Example Road, Casula NSW 2170",
       name: "Unit 3 build",
+    },
+    // A street that merely starts with a state's letters is still a street.
+    {
+      location: "12 Victoria St, Wilton NSW 2571 Australia",
+      name: "Victoria St job",
+    },
+    {
+      location: "15 Waratah Ave, Casula NSW 2170",
+      name: "Waratah job",
     },
   ]) {
     const address = defaultComplianceSubjectAddress(project);
