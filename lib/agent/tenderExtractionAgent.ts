@@ -34,9 +34,8 @@ export async function handleTenderExtractionGeneration(
 ): Promise<TenderExtractionChunkResult> {
   try {
     const { output } = await generateText({
-      model: gateway("google/gemini-2.5-flash"),
+      model: gateway("zai/glm-5.3-flash"),
       temperature: 0.015,
-      topK: 30,
       system: TENDER_EXTRACTION_SYSTEM_PROMPT,
       output: Output.object({ schema: projectExtractionSchema }),
       prompt: buildTenderExtractionPrompt(input),

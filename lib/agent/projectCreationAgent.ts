@@ -14,7 +14,7 @@ import { LEAD_INFO_TO_PROJECT_INFERENCE_PROMPT } from "./project-prompt";
 import prisma from "@/lib/prisma";
 import type { OfferFile } from "@/types/offer-content";
 
-const MODEL_NAME = "google/gemini-2.5-flash" as const;
+const MODEL_NAME = "zai/glm-5.3-flash" as const;
 
 const projectSpecsSchema = z.object({
   projectDescription: z
