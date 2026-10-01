@@ -148,7 +148,13 @@ async function createContact(
       {
         name,
         emailAddress: contact.email,
-        phones: [{ phoneType: "DEFAULT" as never, phoneNumber: contact.phone }],
+        ...(contact.phone
+          ? {
+              phones: [
+                { phoneType: "DEFAULT" as never, phoneNumber: contact.phone },
+              ],
+            }
+          : {}),
         ...(contact.address
           ? {
               addresses: [

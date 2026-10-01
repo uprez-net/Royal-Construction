@@ -78,16 +78,34 @@ describe("the owner rule", () => {
     );
   });
 
-  test("every one of name, email, phone and address is required", () => {
+  test("name, email and address are required", () => {
     const problems = projectOwnerProblems([
-      { ...jane, address: "  ", phone: "" },
+      { ...jane, address: "  ", email: "", name: "" },
     ]);
     assert.deepEqual(
       problems.map((problem) => [problem.index, problem.field]),
       [
-        [0, "phone"],
+        [0, "name"],
+        [0, "email"],
         [0, "address"],
       ],
+    );
+  });
+
+  test("an owner with no phone passes: some clients give none", () => {
+    assert.deepEqual(projectOwnerProblems([{ ...jane, phone: "" }]), []);
+    assert.deepEqual(requireProjectOwners([{ ...jane, phone: "  " }]), [
+      { ...jane, phone: "" },
+    ]);
+  });
+
+  test("two owners with no phone are not 'sharing' one", () => {
+    assert.deepEqual(
+      projectOwnerProblems([
+        { ...jane, phone: "" },
+        { ...john, phone: "" },
+      ]),
+      [],
     );
   });
 
@@ -135,11 +153,11 @@ describe("the owner rule", () => {
     assert.equal(canonicalPhone("no digits"), "");
   });
 
-  test("an owner whose phone has no digits needs a phone number", () => {
+  test("a phone with no digits is named, rather than saved as no phone", () => {
     const problems = projectOwnerProblems([{ ...jane, phone: "TBC" }]);
     assert.deepEqual(
-      problems.map((problem) => problem.message),
-      ["Owner 1 needs a phone number."],
+      problems.map((problem) => [problem.field, problem.message]),
+      [["phone", '"TBC" is not a phone number. Leave it blank if Owner 1 has none.']],
     );
   });
 
@@ -283,7 +301,7 @@ describe("the wizard", () => {
       extraction: {
         ...createEmptyProjectExtractionData(),
         legalAdministrationOwners: [
-          { ...jane, phone: "" },
+          { ...jane, address: "" },
           { ...john, name: "" },
         ],
         legalAdministrationSignedDate: "2026-09-01",
@@ -300,8 +318,8 @@ describe("the wizard", () => {
       [
         [
           "legalAdministrationOwners",
-          "Owner 1 needs a phone number.",
-          { field: "phone", index: 0 },
+          "Owner 1 needs an address.",
+          { field: "address", index: 0 },
         ],
         [
           "legalAdministrationOwners",
@@ -517,6 +535,41 @@ describe("resolving owners to customers", () => {
     // Linked as-is: the phone stays the one on file, because the contract's
     // number belongs to another customer and is unique.
     assert.equal(resolved.customer.phone, "0499000000");
+    assert.deepEqual(recorder.writes(), []);
+  });
+
+  test("an owner with no phone is matched on email alone and created with a NULL phone", async () => {
+    const recorder = recordingDb({
+      "customer.create": (args: unknown) =>
+        customerRow("c-new", (args as { data: ProjectOwner }).data),
+      "customer.findFirst": null,
+    });
+
+    const [resolved] = await resolveCustomersForProject(
+      requireProjectOwners([{ ...jane, phone: "" }]),
+      recorder.db,
+    );
+
+    assert.equal(resolved.created, true);
+    assert.equal(resolved.customer.phone, null);
+    // No phone lookup: "" would match nobody, and NULL is not a key.
+    assert.equal(
+      recorder.calls.some((call) => call.operation === "customer.findUnique"),
+      false,
+    );
+  });
+
+  test("a recurring client whose contract has no phone keeps the phone on file", async () => {
+    const existing = customerRow("c-jane", { ...jane, phone: "0400111222" });
+    const recorder = recordingDb({ "customer.findFirst": existing });
+
+    const [resolved] = await resolveCustomersForProject(
+      requireProjectOwners([{ ...jane, phone: "" }]),
+      recorder.db,
+    );
+
+    assert.equal(resolved.customer.id, "c-jane");
+    assert.equal(resolved.customer.phone, "0400111222");
     assert.deepEqual(recorder.writes(), []);
   });
 

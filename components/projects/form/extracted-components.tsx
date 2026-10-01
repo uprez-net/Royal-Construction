@@ -980,7 +980,7 @@ const OWNER_INPUTS: readonly {
 }[] = [
   { field: "name", placeholder: "Full name or company", type: "text" },
   { field: "email", placeholder: "Email", type: "email" },
-  { field: "phone", placeholder: "Phone", type: "tel" },
+  { field: "phone", placeholder: "Phone (optional)", type: "tel" },
   {
     field: "address",
     placeholder: "Owner's own address (not the site)",
@@ -1106,8 +1106,9 @@ function OwnersControl({
           </p>
           <p className="text-xs text-slate-400">
             Everyone the contract names as an owner — never the builder. Each
-            becomes a customer on the project and needs a name, email, phone
-            and address. Drag the grip, or use the arrows, to change the order;
+            becomes a customer on the project and needs a name, email and
+            address; a phone only if they have one. Drag the grip, or use the
+            arrows, to change the order;
             Owner 1 is the primary.
           </p>
         </div>

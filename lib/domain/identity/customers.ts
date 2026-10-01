@@ -155,6 +155,8 @@ export type ResolvedProjectCustomer = {
  * no other customer holds that value. A phone that is on file for somebody
  * else (a spouse's, a shared household line) is left alone rather than moved:
  * the client keeps the number they had, and the other customer keeps theirs.
+ * An owner with no phone is matched on email alone, is created with a NULL
+ * phone, and never clears a phone a linked customer already has.
  *
  * **Refused only where linking would put the wrong person on the project:**
  *
@@ -222,12 +224,16 @@ async function resolveOwnerCustomer(
   const byEmail = await db.customer.findFirst({
     where: { email: { equals: email, mode: Prisma.QueryMode.insensitive } },
   });
-  const byPhone = await db.customer.findUnique({ where: { phone } });
+  // No phone is no lookup: `findUnique({ phone: "" })` would match nobody,
+  // and a missing phone is NULL on the customer, never "".
+  const byPhone = phone
+    ? await db.customer.findUnique({ where: { phone } })
+    : null;
 
   const existing = byEmail ?? byPhone;
   if (!existing) {
     const customer = await db.customer.create({
-      data: { address, email, name, phone },
+      data: { address, email, name, phone: phone || null },
     });
     return { changed: true, created: true, customer };
   }
@@ -256,7 +262,8 @@ async function resolveOwnerCustomer(
   // An email or phone is moved onto this customer only when nobody else holds
   // it: `byEmail`/`byPhone` is that holder, and both columns are unique.
   if (email !== existing.email.toLowerCase() && !byEmail) patch.email = email;
-  if (phone !== existing.phone && !byPhone) patch.phone = phone;
+  // A contract with no phone never clears the one on file.
+  if (phone && phone !== existing.phone && !byPhone) patch.phone = phone;
 
   if (Object.keys(patch).length === 0) {
     return { changed: false, created: false, customer: existing };

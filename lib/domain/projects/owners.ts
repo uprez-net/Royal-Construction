@@ -17,9 +17,10 @@ import { BUILDER_IDENTITY } from "../identity/builder";
 // email attached that email to whichever owner happened to be first — and the
 // customer row was then built from the lead rather than the contract anyway.
 //
-// All four are required, and none is ever stored empty: a customer is what a
-// Xero contact is made from, and an invoice or notice addressed to half a
-// customer is the expensive kind of wrong here.
+// Name, email and address are required: a customer is what a Xero contact is
+// made from, and an invoice or notice addressed to half a customer is the
+// expensive kind of wrong here. The phone is optional — some clients give
+// none — and a missing one is stored as NULL, never as "".
 //
 // Pure and Node-safe: the create-project wizard runs `projectOwnerProblems`
 // before submitting, and `createProjectFromLead` runs `requireProjectOwners`
@@ -35,8 +36,10 @@ export type ProjectOwnerInput = {
 };
 
 /**
- * An owner that has passed the rule: every field present and trimmed, the
- * email lower-cased and the phone in `canonicalPhone` form.
+ * An owner that has passed the rule: name, email and address present and
+ * trimmed, the email lower-cased, and the phone in `canonicalPhone` form —
+ * `""` when the owner has none, so the owner-contact lists stay aligned. Write
+ * it to `Customer.phone` as `phone || null`.
  */
 export type ProjectOwner = {
   readonly name: string;
@@ -58,6 +61,9 @@ export type ProjectOwnerProblem = {
 export const PROJECT_OWNERS_FIELD = "legalAdministrationOwners";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** What every owner must have. The phone is not among them. */
+const REQUIRED_FIELDS = ["name", "email", "address"] as const;
 
 const FIELD_NAMES: Record<ProjectOwnerField, string> = {
   address: "an address",
@@ -299,7 +305,17 @@ export function projectOwnerProblems(
       });
     }
 
-    for (const field of ["name", "email", "phone", "address"] as const) {
+    // Something typed in the phone box that has no digits ("TBC", "n/a") is
+    // not a number. Saying so beats silently saving the owner with none.
+    if (clean(owners[index].phone) && !owner.phone) {
+      problems.push({
+        field: "phone",
+        index,
+        message: `"${clean(owners[index].phone)}" is not a phone number. Leave it blank if ${label} has none.`,
+      });
+    }
+
+    for (const field of REQUIRED_FIELDS) {
       if (!owner[field]) {
         problems.push({
           field,

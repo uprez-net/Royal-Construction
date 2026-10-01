@@ -52,6 +52,11 @@ describe("the billing contact", () => {
     });
   });
 
+  test("a primary owner with no phone gives the contact no phone", () => {
+    assert.equal(projectBillingContact([{ ...jane, phone: null }]).phone, null);
+    assert.equal(projectBillingContact([{ ...jane, phone: "  " }]).phone, null);
+  });
+
   test("a legacy customer's details are normalised before they reach Xero", () => {
     // Customers from before the owner rule were stored as typed.
     const contact = projectBillingContact([
