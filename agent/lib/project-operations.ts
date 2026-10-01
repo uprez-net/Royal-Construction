@@ -15,7 +15,10 @@ import {
   agentResultEnvelopeSchema,
   type AgentResultEnvelope,
 } from "@/agent/lib/result-contracts";
-import { PARTY_LABEL, PARTY_OUTREACH_ATTACHMENTS } from "@/constants/complianceDocuments";
+import {
+  PARTY_LABEL,
+  PARTY_OUTREACH_ATTACHMENTS,
+} from "@/constants/complianceDocuments";
 import { sendOnPartyThread } from "@/lib/compliance/party-mail";
 import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
 import {
@@ -34,6 +37,7 @@ import {
   sendComplianceFollowUp,
   sendComplianceOutreach,
 } from "@/lib/domain/compliance/outreach";
+import { defaultComplianceSubjectAddress } from "@/lib/domain/compliance/subject-address";
 import { isDomainError } from "@/lib/domain/errors";
 import {
   createMilestone as createMilestoneCommand,
@@ -454,11 +458,17 @@ export async function prepareAuthorizedComplianceOutreach(
         body,
         contactEmail: outreach?.contactEmail ?? null,
         contactName: outreach?.contactName ?? null,
-        daysOpen: alert
-          ? prepared.daysOpen
-          : null,
+        daysOpen: alert ? prepared.daysOpen : null,
         lastFollowUpAt: outreach?.lastFollowUpAt?.toISOString() ?? null,
         party,
+        // The only people an opening outreach for this party may go to: send
+        // with one of these tradie ids, never an address typed from elsewhere.
+        directoryContacts: prepared.candidates.map((candidate) => ({
+          additionalEmails: candidate.additionalEmails,
+          email: candidate.email,
+          name: candidate.name,
+          tradieId: candidate.id,
+        })),
         subject: `[${outreach?.refToken ?? "pending"}] ${prepared.subjectAddress}`,
         slaStatus: alert ? "OPEN" : "READY",
       },
@@ -482,19 +492,25 @@ export async function prepareAuthorizedComplianceOutreach(
   });
 }
 
-async function sendComplianceOutreachDirect(input: {
-  body: string;
-  contactEmail: string;
-  contactName?: string;
-  contactPhone?: string;
-  deliverables: {
-    checklistDocumentId?: string;
-    documentType: ComplianceDocumentType;
-  }[];
-  extraAttachmentIds: string[];
-  party: CompliancePartyType;
-  projectId: string;
-}, actor: ProjectActor, idempotencyKey: string) {
+async function sendComplianceOutreachDirect(
+  input: {
+    body: string;
+    contactEmail?: string;
+    contactName?: string;
+    contactPhone?: string;
+    developerKey?: string;
+    tradieId?: string;
+    deliverables: {
+      checklistDocumentId?: string;
+      documentType: ComplianceDocumentType;
+    }[];
+    extraAttachmentIds: string[];
+    party: CompliancePartyType;
+    projectId: string;
+  },
+  actor: ProjectActor,
+  idempotencyKey: string,
+) {
   return sendComplianceOutreach(
     userPrincipal(actor),
     {
@@ -511,9 +527,11 @@ export async function sendAuthorizedComplianceOutreach(
   ctx: ToolContext,
   input: {
     body: string;
-    contactEmail: string;
+    contactEmail?: string;
     contactName?: string;
     contactPhone?: string;
+    developerKey?: string;
+    tradieId?: string;
     deliverables: {
       checklistDocumentId?: string;
       documentType: ComplianceDocumentType;
@@ -536,12 +554,18 @@ export async function sendAuthorizedComplianceOutreach(
     inputSummary: {
       projectId: input.projectId,
       party: input.party,
-      contactEmail: input.contactEmail,
+      contactEmail: input.contactEmail ?? null,
+      tradieId: input.tradieId ?? null,
+      developerKey: input.developerKey ?? null,
       attachmentCount: input.extraAttachmentIds.length,
       deliverableCount: input.deliverables.length,
     },
     execute: async () => {
-      const result = await sendComplianceOutreachDirect(input, actor, ctx.callId);
+      const result = await sendComplianceOutreachDirect(
+        input,
+        actor,
+        ctx.callId,
+      );
       return actionEnvelope({
         entityRef: projectReference(project),
         data: result,
@@ -552,11 +576,15 @@ export async function sendAuthorizedComplianceOutreach(
   });
 }
 
-async function sendComplianceFollowUpDirect(input: {
-  alertId: string;
-  body: string;
-  projectId: string;
-}, actor: ProjectActor, idempotencyKey: string) {
+async function sendComplianceFollowUpDirect(
+  input: {
+    alertId: string;
+    body: string;
+    projectId: string;
+  },
+  actor: ProjectActor,
+  idempotencyKey: string,
+) {
   return sendComplianceFollowUp(
     userPrincipal(actor),
     {
@@ -585,7 +613,11 @@ export async function sendAuthorizedComplianceFollowUp(
     transactional: false,
     inputSummary: { projectId: input.projectId, alertId: input.alertId },
     execute: async () => {
-      const result = await sendComplianceFollowUpDirect(input, actor, ctx.callId);
+      const result = await sendComplianceFollowUpDirect(
+        input,
+        actor,
+        ctx.callId,
+      );
       return actionEnvelope({
         entityRef: projectReference(project),
         data: result,
@@ -626,11 +658,13 @@ export async function startAuthorizedCompliance(
     certifierName?: string;
     certifierPhone?: string;
     projectId: string;
-    subjectAddress: string;
+    subjectAddress?: string;
   },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   const project = await assertProjectAccess(actor, input.projectId);
+  const subjectAddress =
+    input.subjectAddress ?? defaultComplianceSubjectAddress(project);
   return runProjectMutation({
     action: "project.compliance.start",
     actor,
@@ -641,10 +675,14 @@ export async function startAuthorizedCompliance(
     inputSummary: {
       projectId: input.projectId,
       certifierEmail: input.certifierEmail,
+      subjectAddress,
     },
     transactional: false,
     execute: async () => {
-      const result = await startComplianceDirect(input, actor);
+      const result = await startComplianceDirect(
+        { ...input, subjectAddress },
+        actor,
+      );
       return actionEnvelope({
         entityRef: projectReference(project),
         data: result,
@@ -738,11 +776,7 @@ async function setComplianceDocumentRequiredDirect(
   actor: ProjectActor,
   db: ProjectDb = agentDb,
 ) {
-  return setComplianceDocumentNotRequired(
-    userPrincipal(actor),
-    input,
-    db,
-  );
+  return setComplianceDocumentNotRequired(userPrincipal(actor), input, db);
 }
 
 export async function setAuthorizedComplianceDocumentRequired(

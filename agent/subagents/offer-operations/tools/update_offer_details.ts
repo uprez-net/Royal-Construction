@@ -6,7 +6,7 @@ import { updateAuthorizedOfferDetails } from "@/agent/lib/offer-operations";
 
 export default defineTool({
   description:
-    "Update targeted sections of an exact active offer workspace using its current stateVersion. Supports job/site details, floor-area calculator, cost lines, allowances, exclusions, payment schedule, pricing, images, tender gate, and document draft content. Read details first and require owner approval.",
+    "Update targeted sections of an exact active offer workspace using its current stateVersion. Supports job/site details, floor-area calculator, cost lines, allowances, exclusions, payment schedule, pricing, images, tender gate, and document draft content. The client's Offer document prints only draft.exclusionBullets; `exclusions` feed the Tender schedule only. A draft patch replaces each list it names, so send the whole list with existing lines kept. Write client-facing text exactly as the user gave it. Read details first and require owner approval.",
   inputSchema: updateOfferDetailsInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),

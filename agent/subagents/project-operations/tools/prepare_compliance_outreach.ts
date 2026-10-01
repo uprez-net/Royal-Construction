@@ -5,7 +5,7 @@ import { prepareAuthorizedComplianceOutreach } from "@/agent/lib/project-operati
 
 export default defineTool({
   description:
-    "Prepare a reviewable compliance party outreach or SLA-alert follow-up card with recipient, reference subject, body draft, attachment count, open-alert age, and a send action. Do not send until the user reviews and approves.",
+    "Prepare a reviewable compliance party outreach or SLA-alert follow-up card with recipient, reference subject, body draft, attachment count, open-alert age, and a send action. Lists the directoryContacts an opening outreach for that party may go to. Do not send until the user reviews and approves.",
   inputSchema: prepareComplianceOutreachInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   execute(input, ctx) {
