@@ -91,6 +91,35 @@ export function formatDisplayValue(value: unknown): string {
   return String(value);
 }
 
+/**
+ * A result field, formatted with its key in mind.
+ *
+ * Every timestamp is shown in Sydney time, which is right for nearly all of
+ * them — and wrong for a field the sender labelled as UTC: a card read "Due At
+ * Utc · Fri 2 Oct 2026, 10:00 am AEST". A key ending in "Utc" keeps the
+ * instant in UTC and says so.
+ */
+export function formatDisplayField(key: string, value: unknown): string {
+  if (/utc$/i.test(key) && typeof value === "string") {
+    const utc = formatUtcInstant(value);
+    if (utc) return utc;
+  }
+  return formatDisplayValue(value);
+}
+
+function formatUtcInstant(value: string): string | null {
+  const text = value.trim();
+  if (
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})$/.test(
+      text,
+    )
+  )
+    return null;
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+}
+
 /** Free text with any ISO dates in it rewritten in Australian form. */
 export function formatDisplayText(value: string): string {
   return formatIsoForPeople(value) ?? humanizeIsoDatesInText(value);
