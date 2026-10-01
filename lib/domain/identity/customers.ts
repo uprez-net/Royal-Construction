@@ -193,8 +193,18 @@ export async function resolveCustomersForProject(
   return resolved;
 }
 
+/**
+ * A name's words in any script — "李伟" and "José" are words too, not
+ * punctuation to strip. NFC first, so an accent typed as a combining mark and
+ * one typed precomposed compare equal.
+ */
 function nameWords(name: string): string[] {
-  return name.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  return (
+    name
+      .normalize("NFC")
+      .toLowerCase()
+      .match(/[\p{L}\p{M}\p{N}]+/gu) ?? []
+  );
 }
 
 /**

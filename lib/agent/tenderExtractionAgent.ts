@@ -58,8 +58,10 @@ export async function handleTenderExtractionGeneration(
 
     return {
       extraction: { ...extraction, legalAdministrationOwners: owners.owners },
-      message: ["Tender and contract fields extracted successfully.", ...notes]
-        .join(" "),
+      message: [
+        "Tender and contract fields extracted successfully.",
+        ...notes,
+      ].join(" "),
       ok: true,
     };
   } catch (error) {

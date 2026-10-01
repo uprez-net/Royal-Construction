@@ -1108,8 +1108,7 @@ function OwnersControl({
             Everyone the contract names as an owner — never the builder. Each
             becomes a customer on the project and needs a name, email and
             address; a phone only if they have one. Drag the grip, or use the
-            arrows, to change the order;
-            Owner 1 is the primary.
+            arrows, to change the order; Owner 1 is the primary.
           </p>
         </div>
         <Badge

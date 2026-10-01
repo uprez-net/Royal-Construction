@@ -105,7 +105,9 @@ export function parseOwnerFieldPath(
     return { field: null, index: null };
   }
   const field =
-    rawField && rawField in FIELD_NAMES ? (rawField as ProjectOwnerField) : null;
+    rawField && rawField in FIELD_NAMES
+      ? (rawField as ProjectOwnerField)
+      : null;
   return { field, index };
 }
 
@@ -143,6 +145,19 @@ function squash(value: string): string {
 }
 
 /**
+ * The builder's name and nothing else: "Royal Constructions", or with a
+ * "Pty Ltd" after it. Exact, not "contains", so a client whose name merely
+ * includes the builder's is still a client — dropping their row would lose an
+ * owner the contract names.
+ */
+const BUILDER_NAMES = new Set(
+  [BUILDER_IDENTITY.tradingName, BUILDER_IDENTITY.legalName].flatMap((name) => [
+    squash(name),
+    `${squash(name)}ptyltd`,
+  ]),
+);
+
+/**
  * Which of an owner's details are the builder's own: Royal Constructions'
  * name, an address on its email domain, one of its phone numbers, or its
  * office address.
@@ -161,7 +176,7 @@ export function builderDetailsOf(
   const address = squash(clean(owner.address));
 
   const details: ProjectOwnerField[] = [];
-  if (name && name.includes(squash(BUILDER_IDENTITY.tradingName))) {
+  if (BUILDER_NAMES.has(name)) {
     details.push("name");
   }
   if (email.endsWith(`@${BUILDER_IDENTITY.emailDomain}`)) {

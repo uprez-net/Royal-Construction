@@ -157,7 +157,12 @@ describe("the owner rule", () => {
     const problems = projectOwnerProblems([{ ...jane, phone: "TBC" }]);
     assert.deepEqual(
       problems.map((problem) => [problem.field, problem.message]),
-      [["phone", '"TBC" is not a phone number. Leave it blank if Owner 1 has none.']],
+      [
+        [
+          "phone",
+          '"TBC" is not a phone number. Leave it blank if Owner 1 has none.',
+        ],
+      ],
     );
   });
 
@@ -268,6 +273,22 @@ describe("the builder is never an owner", () => {
     assert.equal(result.clearedDetails, 1);
     assert.deepEqual(result.owners, [{ ...jane, phone: "" }, john]);
   });
+
+  test("only the builder's exact name is the builder, with or without Pty Ltd", () => {
+    assert.deepEqual(builderDetailsOf({ name: "Royal Constructions" }), [
+      "name",
+    ]);
+    assert.deepEqual(
+      builderDetailsOf({ name: "Royal Constructions Pty. Ltd." }),
+      ["name"],
+    );
+    // A client whose name contains the builder's is still a client.
+    const client = { ...jane, name: "Royal Constructions Family Trust" };
+    assert.deepEqual(builderDetailsOf(client), []);
+    const result = withoutBuilderDetails([client]);
+    assert.equal(result.droppedRows, 0);
+    assert.deepEqual(result.owners, [client]);
+  });
 });
 
 describe("merging the owners each extraction chunk found", () => {
@@ -276,16 +297,23 @@ describe("merging the owners each extraction chunk found", () => {
   test("the first chunk to name owners decides who they are", () => {
     const fromWhoSection = [jane, john];
     const fromSignaturePage = [{ ...blank, name: "Some Witness" }];
-    assert.deepEqual(
-      mergeExtractedOwners(fromWhoSection, fromSignaturePage),
-      [jane, john],
-    );
+    assert.deepEqual(mergeExtractedOwners(fromWhoSection, fromSignaturePage), [
+      jane,
+      john,
+    ]);
   });
 
   test("a later chunk fills only the details still blank on an owner of the same name", () => {
     const merged = mergeExtractedOwners(
       [{ ...jane, phone: "" }],
-      [{ ...jane, address: "Somewhere else", name: "JANE OWNER", phone: "0400 999 999" }],
+      [
+        {
+          ...jane,
+          address: "Somewhere else",
+          name: "JANE OWNER",
+          phone: "0400 999 999",
+        },
+      ],
     );
     assert.deepEqual(merged, [{ ...jane, phone: "0400 999 999" }]);
   });
@@ -339,9 +367,10 @@ describe("the wizard", () => {
     );
     assert.equal(failure.code, "VALIDATION");
     assert.equal(failure.title, "Owner 2 needs correcting");
-    assert.deepEqual(failure.fieldErrors.map((entry) => entry.owner), [
-      { field: "phone", index: 1 },
-    ]);
+    assert.deepEqual(
+      failure.fieldErrors.map((entry) => entry.owner),
+      [{ field: "phone", index: 1 }],
+    );
     assert.equal(failure.fieldErrors[0].field, "legalAdministrationOwners");
   });
 
@@ -485,6 +514,23 @@ describe("resolving owners to customers", () => {
     assert.equal(resolved.customer.id, "c-jane");
     assert.equal(resolved.created, false);
     assert.equal(resolved.changed, false);
+    assert.deepEqual(recorder.writes(), []);
+  });
+
+  test("a recurring client with a non-Latin name is linked, not refused as a different name", async () => {
+    const owner = { ...jane, name: "李伟" };
+    const existing = customerRow("c-li", { ...owner, phone: "0400111222" });
+    const recorder = recordingDb({
+      "customer.findFirst": existing,
+      "customer.findUnique": existing,
+    });
+
+    const [resolved] = await resolveCustomersForProject(
+      requireProjectOwners([owner]),
+      recorder.db,
+    );
+
+    assert.equal(resolved.customer.id, "c-li");
     assert.deepEqual(recorder.writes(), []);
   });
 
