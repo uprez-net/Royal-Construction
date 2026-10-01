@@ -216,7 +216,11 @@ export function AgentWorkspace({
   const pendingApprovalCount = agent.data.pendingApprovals.length;
 
   // Read once by the initialiser above; cleared here so a later visit does not
-  // restore a message that has since been sent.
+  // restore a message that has since been sent. This is the only place a draft
+  // is cleared: one is written only when this conversation is left, and comes
+  // back through here before anything can be sent. Clearing it again once a
+  // send settles — which can take minutes — would delete a draft typed and
+  // saved by leaving while that send was still running.
   useEffect(() => {
     sessionStorage.removeItem(draftStorageKey(selectedSessionId));
   }, [selectedSessionId]);
@@ -392,7 +396,6 @@ export function AgentWorkspace({
       setForkContext(null);
       setEditingMessageId(null);
       sessionStorage.removeItem("rc-agent-fork-context");
-      sessionStorage.removeItem(draftStorageKey(sessionBefore));
     } catch (error) {
       const failure = classifySendFailure({
         // The thrown wrapper drops Eve's error code; the original is here.
@@ -407,7 +410,6 @@ export function AgentWorkspace({
         setForkContext(null);
         setEditingMessageId(null);
         sessionStorage.removeItem("rc-agent-fork-context");
-        sessionStorage.removeItem(draftStorageKey(sessionBefore));
         setReconnecting(true);
         void agent
           .resume()
