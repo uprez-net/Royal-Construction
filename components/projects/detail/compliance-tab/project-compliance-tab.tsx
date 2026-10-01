@@ -76,6 +76,7 @@ import {
   packSendBlockedReason,
   partyBlockedReason,
 } from "@/lib/domain/compliance/prerequisites";
+import { defaultComplianceSubjectAddress } from "@/lib/domain/compliance/subject-address";
 import {
   isDocumentOverdue,
   overdueComplianceDocuments,
@@ -1446,7 +1447,7 @@ export function ProjectComplianceTab({
                   type: "startCertifierEngagement",
                   payload: {
                     projectId: project.id,
-                    defaultAddress: project.location,
+                    defaultAddress: defaultComplianceSubjectAddress(project),
                   },
                 }),
               )

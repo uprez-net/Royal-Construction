@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { EveMessageInputRequest } from "eve/react";
 import { CircleAlert, MessageCircleQuestion, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,7 @@ export function AgentApproval({
   const fields = (isApproval ? toInputFields(input) : []).filter(
     (field) => !(outreach && OUTREACH_KEYS.has(field.key)),
   );
+  const targetLabels = useApprovalTargetLabels(isApproval ? input : undefined);
   const hasOptions = (request.options?.length ?? 0) > 0;
   const acceptsText = request.allowFreeform === true || !hasOptions;
   const Icon = isApproval
@@ -159,12 +160,21 @@ export function AgentApproval({
                 <dd
                   className={cn(
                     "min-w-0 flex-1 wrap-break-word text-xs",
-                    field.clientFacing
+                    field.clientFacing || targetLabels[field.key]
                       ? "font-semibold text-foreground"
                       : "text-foreground/80",
                   )}
                 >
-                  {field.value}
+                  {targetLabels[field.key] ? (
+                    <>
+                      {targetLabels[field.key]}
+                      <span className="block font-mono text-[10px] font-normal text-muted-foreground">
+                        {field.value}
+                      </span>
+                    </>
+                  ) : (
+                    field.value
+                  )}
                 </dd>
               </div>
             ))}
@@ -338,3 +348,57 @@ function approvalOutreach(input: unknown): AgentOutreachDetails | null {
     subject: null,
   };
 }
+
+/**
+ * Names for the ids an approval carries — "Cut & Fill - Concretor · Lot 9028
+ * Sommerville Dr" rather than a bare milestone UUID.
+ *
+ * Looked up from the database by the signed-in operator's own access, never
+ * taken from the model: a name the model supplied could disagree with the id
+ * the tool will actually act on. An id the operator may not see, or a failed
+ * lookup, leaves the raw id showing as before.
+ */
+function useApprovalTargetLabels(
+  input: unknown,
+): Readonly<Record<string, string>> {
+  // Kept with the ids they describe: a lookup for new ids that is refused or
+  // fails must not leave the previous ids' names beside them.
+  const [resolved, setResolved] = useState<{
+    key: string;
+    labels: Readonly<Record<string, string>>;
+  } | null>(null);
+  const ids =
+    input && typeof input === "object" && !Array.isArray(input)
+      ? Object.fromEntries(
+          Object.entries(input as Record<string, unknown>).filter(
+            ([key, value]) =>
+              /Id$/.test(key)
+              && (typeof value === "string" || typeof value === "number"),
+          ),
+        )
+      : {};
+  const idKey = JSON.stringify(ids);
+
+  useEffect(() => {
+    const targets = JSON.parse(idKey) as Record<string, unknown>;
+    if (Object.keys(targets).length === 0) return;
+    const controller = new AbortController();
+    void fetch("/api/agent/approval-targets", {
+      body: JSON.stringify({ input: targets }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+      signal: controller.signal,
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { labels?: Record<string, string> } | null) => {
+        if (payload?.labels)
+          setResolved({ key: idKey, labels: payload.labels });
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [idKey]);
+
+  return resolved?.key === idKey ? resolved.labels : NO_LABELS;
+}
+
+const NO_LABELS: Readonly<Record<string, string>> = {};

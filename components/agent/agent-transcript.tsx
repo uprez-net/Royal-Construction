@@ -37,6 +37,7 @@ export function AgentTranscript({
   agentStatus,
   archiveError,
   busy,
+  connection,
   data,
   handleMessageScroll,
   messageAnnotations,
@@ -56,6 +57,7 @@ export function AgentTranscript({
   agentStatus: UseEveAgentStatus;
   archiveError: string | null;
   busy: boolean;
+  connection: AgentConnectionState;
   data: AgentTranscriptData;
   handleMessageScroll: (event: React.UIEvent<HTMLDivElement>) => void;
   messageAnnotations: Record<string, AgentAnnotation[]>;
@@ -151,7 +153,7 @@ export function AgentTranscript({
                       ? (pendingMessageAnnotations ?? undefined)
                       : undefined)
                   }
-                  canRespond={!busy}
+                  canRespond={!busy && !connection.sessionClosed}
                   isStreaming={agentStatus === "streaming"}
                   labels={data.labels}
                   message={message}
@@ -186,6 +188,58 @@ export function AgentTranscript({
               <LoaderCircle className="size-3.5 animate-spin" />
               Live response · assembling the next operation step…
             </div>
+          ) : null}
+
+          {connection.reconnecting ? (
+            <div
+              className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+              role="status"
+            >
+              <LoaderCircle className="size-3.5 animate-spin" />
+              Your message was sent. Connecting to the live conversation…
+            </div>
+          ) : null}
+
+          {connection.stalled ? (
+            <Alert>
+              <AlertTitle>No updates for a while</AlertTitle>
+              <AlertDescription className="flex flex-wrap items-center gap-3">
+                <span>
+                  The live connection may have dropped. The agent keeps working
+                  on the server; reconnecting shows where it got to.
+                </span>
+                <Button
+                  onClick={connection.onReload}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  Reconnect
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {connection.sessionClosed ? (
+            <Alert>
+              <AlertTitle>This conversation has ended</AlertTitle>
+              <AlertDescription className="flex flex-wrap items-center gap-3">
+                <span>
+                  It can no longer take new messages, so its history is shown
+                  read-only. Anything still waiting here, including approvals,
+                  does not carry over. A new conversation starts fresh; your
+                  unsent message goes with it, unsent.
+                </span>
+                <Button
+                  onClick={connection.onContinue}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  Continue in a new conversation
+                </Button>
+              </AlertDescription>
+            </Alert>
           ) : null}
 
           {agentError ? (
@@ -298,3 +352,11 @@ function toolTimes(turn: AgentTurn | undefined) {
 }
 
 export type { AgentPendingApproval };
+
+export type AgentConnectionState = {
+  onContinue: () => void;
+  onReload: () => void;
+  reconnecting: boolean;
+  sessionClosed: boolean;
+  stalled: boolean;
+};

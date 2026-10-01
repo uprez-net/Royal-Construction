@@ -66,3 +66,62 @@ test("offer results never expose workspace or document bodies", async () => {
   assert.doesNotMatch(operations, /agreedSnapshot:\s*true/);
   assert.doesNotMatch(operations, /offerFiles:\s*true/);
 });
+
+test("an exclusion change must name the client document it is for", () => {
+  // Staging: "add an exclusion" with no document named was written to the
+  // Tender list without anyone choosing that.
+  const base = {
+    expectedStateVersion: 12,
+    offerId: "123e4567-e89b-42d3-a456-426614174000",
+  };
+  const tenderPatch = {
+    exclusions: [{ label: "Letterbox and house numbering" }],
+  };
+  const offerPatch = {
+    draft: { exclusionBullets: ["Letterbox and house numbering"] },
+  };
+  const parse = (input: Record<string, unknown>) =>
+    updateOfferDetailsInputSchema.safeParse({ ...base, ...input });
+
+  const undeclared = parse({ patch: tenderPatch });
+  assert.equal(undeclared.success, false);
+  assert.deepEqual(undeclared.error?.issues[0]?.path, ["exclusionDocument"]);
+  assert.equal(parse({ patch: offerPatch }).success, false);
+
+  assert.equal(
+    parse({ exclusionDocument: "tender", patch: tenderPatch }).success,
+    true,
+  );
+  assert.equal(
+    parse({ exclusionDocument: "offer", patch: offerPatch }).success,
+    true,
+  );
+  assert.equal(
+    parse({
+      exclusionDocument: "both",
+      patch: { ...tenderPatch, ...offerPatch },
+    }).success,
+    true,
+  );
+
+  // Declared for one document, written to the other's list.
+  assert.equal(
+    parse({ exclusionDocument: "offer", patch: tenderPatch }).success,
+    false,
+  );
+  assert.equal(
+    parse({ exclusionDocument: "tender", patch: offerPatch }).success,
+    false,
+  );
+  assert.equal(
+    parse({ exclusionDocument: "both", patch: tenderPatch }).success,
+    false,
+  );
+
+  // Draft edits that leave the exclusion bullets alone need no declaration.
+  assert.equal(
+    parse({ patch: { draft: { introParagraph: "Thanks for your time." } } })
+      .success,
+    true,
+  );
+});

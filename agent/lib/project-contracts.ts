@@ -60,7 +60,8 @@ export const getComplianceInputSchema = z.object({
 
 export const startComplianceInputSchema = z.object({
   projectId: projectIdSchema,
-  subjectAddress: z.string().trim().min(1).max(500),
+  /** Defaults to the project's name and location; see defaultComplianceSubjectAddress. */
+  subjectAddress: z.string().trim().min(1).max(500).optional(),
   certifierName: z.string().trim().max(200).optional(),
   certifierEmail: z.email().trim().toLowerCase(),
   certifierPhone: z.string().trim().max(80).optional(),
@@ -103,8 +104,16 @@ export const prepareComplianceOutreachInputSchema = z
 export const sendComplianceOutreachInputSchema = z.object({
   projectId: projectIdSchema,
   party: z.enum(compliancePartyValues),
+  /**
+   * The directory tradie being engaged, from prepare_compliance_outreach's
+   * directoryContacts. Required for every party picked from the directory.
+   */
+  tradieId: z.string().uuid().optional(),
+  /** The estate, for the developer party only. */
+  developerKey: z.string().trim().min(1).max(100).optional(),
   contactName: z.string().trim().max(200).optional(),
-  contactEmail: z.email().trim().toLowerCase(),
+  /** One of the chosen tradie's own addresses; defaults to their primary one. */
+  contactEmail: z.email().trim().toLowerCase().optional(),
   contactPhone: z.string().trim().max(80).optional(),
   body: z.string().trim().min(1).max(100_000),
   deliverables: z

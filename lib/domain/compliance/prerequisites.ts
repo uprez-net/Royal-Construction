@@ -8,15 +8,18 @@ import {
 
 import {
   complianceDocumentLabel,
+  CONSULTANT_DELIVERABLES,
   DEVELOPER_APPROVAL_DOCUMENT,
   documentTypesForParty,
   isApprovalParty,
   isConsultantParty,
+  isNotRequired,
   PARTY_LABEL,
   PARTY_PREREQUISITES,
 } from "@/constants/complianceDocuments";
 import { applicableRequiredDocuments } from "./required-pack";
 import {
+  checklistItemDetail,
   hasOpenAlert,
   isPartyEngaged,
   outreachForParty,
@@ -64,9 +67,8 @@ export function isCouncilSettled(
   }
   return engagement.documents.some(
     (document) =>
-      document.documentType ===
-        ComplianceDocumentType.PLANNING_CERTIFICATE_10_7 &&
-      document.files.length > 0,
+      document.documentType === ComplianceDocumentType.PLANNING_CERTIFICATE_10_7
+      && document.files.length > 0,
   );
 }
 
@@ -85,8 +87,8 @@ function outstandingFor(
 
   return documentTypesForParty(party).filter(
     (type) =>
-      inPlay.has(type) &&
-      !engagement.documents.some(
+      inPlay.has(type)
+      && !engagement.documents.some(
         (document) =>
           document.documentType === type && document.files.length > 0,
       ),
@@ -164,8 +166,8 @@ export function developerBlockedReason(
   // this way for the same reason, and these two gates must not disagree.
   const hasReport = engagement.documents.some(
     (document) =>
-      document.documentType === DEVELOPER_APPROVAL_DOCUMENT &&
-      document.files.length > 0,
+      document.documentType === DEVELOPER_APPROVAL_DOCUMENT
+      && document.files.length > 0,
   );
 
   if (!hasReport) {
@@ -240,4 +242,46 @@ export function packSendBlockedReason(
   }
 
   return null;
+}
+
+/**
+ * Why a consultant cannot be engaged on this file, or null.
+ *
+ * `partyBlockedReason` passes every consultant, on the understanding that "the
+ * row offering the control has already established" a checklist line asks for
+ * their work — true on the compliance tab, which only shows the button on such
+ * a row, and true of nothing else. Eve has no row, so a BASIX or structural
+ * outreach could go out on a project whose certifier never asked for one.
+ *
+ * Kept apart from `partyBlockedReason` because that one also gates the tab's
+ * buttons, which already appear only where this holds.
+ *
+ * A consultant may be engaged when a live checklist line asks for something
+ * they produce, by the type the extraction (or its keyword fallback) gave it,
+ * or when the send names one of this file's own live checklist lines — the
+ * tab's "engaged off this row" case, which also covers a line the extraction
+ * could not label.
+ */
+export function consultantNotAskedForReason(
+  engagement: Pick<CertifierEngagementDetail, "documents">,
+  party: CompliancePartyType,
+  namedChecklistIds: readonly string[] = [],
+): string | null {
+  if (!isConsultantParty(party)) return null;
+
+  const produces = new Set(CONSULTANT_DELIVERABLES[party] ?? []);
+  const named = new Set(namedChecklistIds);
+  const asked = engagement.documents.some((document) => {
+    if (document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM)
+      return false;
+    if (isNotRequired(document.status)) return false;
+    if (named.has(document.id)) return true;
+    const asksFor = checklistItemDetail(document.detail)?.mapsToType;
+    return asksFor !== undefined && produces.has(asksFor);
+  });
+  if (asked) return null;
+
+  return `Nothing on this project's certifier checklist asks for the ${PARTY_LABEL[
+    party
+  ].toLowerCase()}'s work, so there is nothing to engage them for. Engage them from the checklist line that needs it.`;
 }

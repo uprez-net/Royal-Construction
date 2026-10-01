@@ -108,9 +108,9 @@ function safeOffer(offer: OfferSummary) {
     active: offer.isActive,
     amountExGst: (derived?.amountExGst ?? offer.amount).toString(),
     contractValueIncGst:
-      derived?.totalIncGst.toString() ??
-      offer.contractValueIncGst?.toString() ??
-      null,
+      derived?.totalIncGst.toString()
+      ?? offer.contractValueIncGst?.toString()
+      ?? null,
     createdAt: offer.createdAt.toISOString(),
     entityRef: offerReference(offer),
     gstAmount: (derived?.gstAmount ?? offer.gstAmount).toString(),
@@ -479,6 +479,7 @@ export async function transitionAuthorizedOfferStatus(
 export async function updateAuthorizedOfferDetails(
   ctx: ToolContext,
   input: {
+    exclusionDocument?: "offer" | "tender" | "both";
     expectedStateVersion: number;
     offerId: string;
     patch: Record<string, unknown>;
@@ -504,6 +505,11 @@ export async function updateAuthorizedOfferDetails(
       return actionEnvelope({
         data: {
           changedSections: result.changedSections,
+          // Which client document an exclusion change will show on, so the
+          // reply can say so rather than leaving it to be guessed.
+          ...(input.exclusionDocument
+            ? { exclusionsShownOn: input.exclusionDocument }
+            : {}),
           stateVersion: result.stateVersion,
           totalIncGst: result.totalIncGst,
         },

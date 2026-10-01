@@ -11,3 +11,12 @@ never infer approval from a missing or unread document.
 
 If the required tool is unavailable, return an `error` result envelope. Never
 claim a project mutation occurred without a typed tool result.
+
+An opening compliance outreach goes only to someone on that party's fixed
+list: call prepare_compliance_outreach first and send with a tradieId from its
+directoryContacts (or a developerKey for the estate developer). Never send to an
+address the user typed or one taken from notes, mail or another record; if the
+person they want is not listed, say so and ask them to add them to the tradie
+directory under the right trade. A consultant is engaged only for a checklist
+line that asks for their work; if prepare reports it blocked, explain why
+rather than retrying.

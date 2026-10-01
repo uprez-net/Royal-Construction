@@ -3,6 +3,7 @@ import { test } from "vitest";
 
 import { currentSydneyTimeInstructions } from "@/agent/lib/current-time-instructions";
 import {
+  formatDisplayField,
   formatDisplayMarkdown,
   formatDisplayValue,
   toInputFields,
@@ -117,4 +118,30 @@ test("the agent is told today's Sydney date, the offset, and the house style", (
 test("a 9 am example uses the offset at 9 am even before the DST transition", () => {
   const text = currentSydneyTimeInstructions(new Date("2026-10-03T15:00:00Z"));
   assert.match(text, /such as 2026-10-04T09:00:00\+11:00/);
+});
+
+test("a field the sender labelled UTC is shown in UTC, not Sydney time", () => {
+  // A lead-task card read "Due At Utc · Fri 2 Oct 2026, 10:00 am AEST".
+  assert.equal(
+    formatDisplayField("dueAtUtc", "2026-10-02T00:00:00Z"),
+    "2026-10-02 00:00 UTC",
+  );
+  assert.equal(
+    formatDisplayField("dueAt", "2026-10-02T00:00:00Z"),
+    formatDisplayValue("2026-10-02T00:00:00Z"),
+  );
+  assert.equal(formatDisplayField("noteUtc", "not a date"), "not a date");
+});
+
+test("a UTC-labelled field with an impossible written date is not rolled forward", () => {
+  // `new Date("2026-02-30T00:00:00Z")` is 2 March; showing that would invent a
+  // date nobody wrote.
+  assert.equal(
+    formatDisplayField("dueAtUtc", "2026-02-30T00:00:00Z"),
+    formatDisplayValue("2026-02-30T00:00:00Z"),
+  );
+  assert.equal(
+    formatDisplayField("dueAtUtc", "2024-02-29T00:00:00Z"),
+    "2024-02-29 00:00 UTC",
+  );
 });
