@@ -6,6 +6,8 @@ import {
   NoOutputGeneratedError,
 } from "ai";
 import { gateway } from "@/lib/model";
+import { BUILDER_IDENTITY } from "@/lib/domain/identity/builder";
+import { withoutBuilderDetails } from "@/lib/domain/projects/owners";
 import {
   projectExtractionSchema,
   type ProjectExtractionData,
@@ -41,9 +43,23 @@ export async function handleTenderExtractionGeneration(
       prompt: buildTenderExtractionPrompt(input),
     });
 
+    const extraction = projectExtractionSchema.parse(output);
+    // The prompt says the builder is never an owner; this is the check that
+    // does not depend on the model having listened.
+    const owners = withoutBuilderDetails(extraction.legalAdministrationOwners);
+    const notes = [
+      owners.droppedRows > 0
+        ? `Left ${BUILDER_IDENTITY.tradingName} out of the owners — it is the builder, not a client.`
+        : "",
+      owners.clearedDetails > 0
+        ? `Cleared ${owners.clearedDetails} builder contact detail${owners.clearedDetails === 1 ? "" : "s"} from the owners; fill in each owner's own.`
+        : "",
+    ].filter(Boolean);
+
     return {
-      extraction: projectExtractionSchema.parse(output),
-      message: "Tender and contract fields extracted successfully.",
+      extraction: { ...extraction, legalAdministrationOwners: owners.owners },
+      message: ["Tender and contract fields extracted successfully.", ...notes]
+        .join(" "),
       ok: true,
     };
   } catch (error) {

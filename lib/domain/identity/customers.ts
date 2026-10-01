@@ -7,7 +7,7 @@ import {
   DomainValidationError,
 } from "../errors";
 import { isInternalPrincipal, type DomainPrincipal } from "../principal";
-import { PROJECT_OWNERS_FIELD, type ProjectOwner } from "../projects/owners";
+import { ownerFieldPath, type ProjectOwner } from "../projects/owners";
 
 // The customer records a project belongs to: finding one, and resolving the
 // ones a new project's owners are.
@@ -170,7 +170,7 @@ export type ResolvedProjectCustomer = {
  * refill the "customers" cache from uncommitted data.
  *
  * @throws {DomainValidationError} One of the ambiguities above, naming the
- * `legalAdministrationOwners` field.
+ * owner's row under `legalAdministrationOwners` (see `ownerFieldPath`).
  */
 export async function resolveCustomersForProject(
   owners: readonly ProjectOwner[],
@@ -179,9 +179,9 @@ export async function resolveCustomersForProject(
   const claimedBy = new Map<string, string>();
   const resolved: ResolvedProjectCustomer[] = [];
 
-  for (const owner of owners) {
-    const result = await resolveOwnerCustomer(owner, claimedBy, db);
-    claimedBy.set(result.customer.id, owner.name);
+  for (const [index, owner] of owners.entries()) {
+    const result = await resolveOwnerCustomer(owner, index, claimedBy, db);
+    claimedBy.set(result.customer.id, `Owner ${index + 1} (${owner.name})`);
     resolved.push(result);
   }
 
@@ -190,10 +190,12 @@ export async function resolveCustomersForProject(
 
 async function resolveOwnerCustomer(
   owner: ProjectOwner,
+  index: number,
   claimedBy: ReadonlyMap<string, string>,
   db: DomainDb,
 ): Promise<ResolvedProjectCustomer> {
   const { address, email, name, phone } = owner;
+  const label = `Owner ${index + 1} (${name})`;
 
   const byEmail = await db.customer.findFirst({
     where: { email: { equals: email, mode: Prisma.QueryMode.insensitive } },
@@ -202,8 +204,8 @@ async function resolveOwnerCustomer(
 
   if (byEmail && byPhone && byEmail.id !== byPhone.id) {
     throw new DomainValidationError(
-      `${name}'s email is on file for one customer and their phone number for a different one. Check both against the contract before creating the project.`,
-      PROJECT_OWNERS_FIELD,
+      `${label}: this email is already on file for one customer and this phone number for a different one. Check both against the contract, or fix the existing customers, before creating the project.`,
+      ownerFieldPath(index, "phone"),
     );
   }
 
@@ -218,8 +220,8 @@ async function resolveOwnerCustomer(
   const earlierOwner = claimedBy.get(existing.id);
   if (earlierOwner !== undefined) {
     throw new DomainValidationError(
-      `${name} and ${earlierOwner} match the same customer on file. Check their emails and phone numbers against the contract.`,
-      PROJECT_OWNERS_FIELD,
+      `${label} and ${earlierOwner} match the same customer on file. Check their emails and phone numbers against the contract.`,
+      ownerFieldPath(index, "email"),
     );
   }
 

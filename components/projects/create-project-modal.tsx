@@ -71,13 +71,16 @@ import {
   fieldDisplayLabel,
   fieldElementId,
   fieldPathToFormField,
+  ownerElementId,
   sectionIndexForField,
   toCreateProjectFailure,
   validateCreateProjectForm,
   type CreateProjectFailure,
   type CreateProjectFieldError,
+  type OwnerErrorTarget,
   type ProjectFormFieldKey,
 } from "@/lib/projects/create-project-errors";
+import { ownerRowsToSubmit } from "@/lib/domain/projects/owners";
 import { useWorkflowStream } from "@/context/WorkFlowStatusContext";
 import type { TenderExtractionResult } from "@/lib/workflow/project";
 import {
@@ -159,6 +162,10 @@ export function CreateProjectModal({
   // checks or the server action, in one shape so the banner, the inline
   // messages and the "jump to field" links all read from a single source.
   const [failure, setFailure] = useState<CreateProjectFailure | null>(null);
+  // Once a submit has found something wrong with the owners, the owner editor
+  // keeps checking every row live as it is edited, rather than going quiet
+  // after the first keystroke clears the submit's messages.
+  const [ownersChecked, setOwnersChecked] = useState(false);
 
   const tenderQueue = useUploadQueue({ maxFiles: 1 });
   const contractQueue = useUploadQueue({ maxFiles: 1 });
@@ -185,6 +192,15 @@ export function CreateProjectModal({
     return map;
   }, [failure]);
 
+  /** Every owner error, row-addressed where the rule named a row. */
+  const ownerErrors = useMemo(
+    () =>
+      (failure?.fieldErrors ?? []).filter(
+        (entry) => entry.field === "legalAdministrationOwners",
+      ),
+    [failure],
+  );
+
   /** Blockers the server reported that no visible field can own. */
   const generalErrors = useMemo(() => {
     if (!failure) return [] as string[];
@@ -210,7 +226,7 @@ export function CreateProjectModal({
    * the next frame. Fields outside the extraction sections (lead, documents)
    * live back on the selection step, so those send the wizard there instead.
    */
-  const goToField = (field: ProjectFormFieldKey) => {
+  const goToField = (field: ProjectFormFieldKey, owner?: OwnerErrorTarget) => {
     if (field === "lead" || field === "documents") {
       setStage("selection");
       return;
@@ -225,13 +241,23 @@ export function CreateProjectModal({
     // browser to lay the new nodes out before we measure them.
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        const element = document.getElementById(fieldElementId(field));
+        // An owner error lands on its own row, and the input on it, rather
+        // than at the top of the owner block.
+        const element =
+          (owner
+            ? (document.getElementById(ownerElementId(owner.index, owner.field))
+              ?? document.getElementById(ownerElementId(owner.index)))
+            : null) ?? document.getElementById(fieldElementId(field));
         if (!element) return;
 
         element.scrollIntoView({ behavior: "smooth", block: "center" });
-        const control = element.querySelector<HTMLElement>(
-          "input, textarea, select, button",
-        );
+        // The target may be the input itself (an owner's email), or a wrapper
+        // whose first input is the one to type into — before any button, so
+        // an owner row focuses its name rather than its drag grip.
+        const control = element.matches("input, textarea, select")
+          ? element
+          : (element.querySelector<HTMLElement>("input, textarea, select")
+            ?? element.querySelector<HTMLElement>("button"));
         control?.focus({ preventScroll: true });
       });
     });
@@ -261,9 +287,16 @@ export function CreateProjectModal({
 
   const failWith = (nextFailure: CreateProjectFailure) => {
     setFailure(nextFailure);
-    const firstField = nextFailure.fieldErrors[0]?.field;
-    if (firstField) {
-      goToField(firstField);
+    if (
+      nextFailure.fieldErrors.some(
+        (entry) => entry.field === "legalAdministrationOwners",
+      )
+    ) {
+      setOwnersChecked(true);
+    }
+    const first = nextFailure.fieldErrors[0];
+    if (first) {
+      goToField(first.field, first.owner);
     }
     toast.error(nextFailure.title, { description: nextFailure.message });
   };
@@ -386,6 +419,7 @@ export function CreateProjectModal({
     setSourceDocuments(null);
     setDateConfirmPrompt(null);
     setFailure(null);
+    setOwnersChecked(false);
     stopListening();
     tenderQueue.resetQueue();
     contractQueue.resetQueue();
@@ -571,7 +605,8 @@ export function CreateProjectModal({
       // safeParse, not parse: a schema throw here used to surface as the same
       // generic "Unable to create project" toast as a server outage, with no
       // indication of which field was wrong.
-      const parsedExtraction = projectExtractionSchema.safeParse(extraction);
+      const parsedExtraction =
+        projectExtractionSchema.safeParse(submittedExtraction());
       if (!parsedExtraction.success) {
         setStage("review");
         failWith(
@@ -649,6 +684,17 @@ export function CreateProjectModal({
     }
   };
 
+  /**
+   * The extraction as it is submitted: blank owner rows left out, so an owner
+   * the server refuses as "Owner 2" is the second row the operator sees.
+   */
+  const submittedExtraction = (): ProjectExtractionData => ({
+    ...extraction,
+    legalAdministrationOwners: ownerRowsToSubmit(
+      extraction.legalAdministrationOwners,
+    ),
+  });
+
   /** Runs every local check and returns the errors in display order. */
   const collectFormErrors = (): CreateProjectFieldError[] =>
     validateCreateProjectForm({
@@ -657,10 +703,23 @@ export function CreateProjectModal({
       hasLocation: Boolean(selectedLocation),
       hasSiteManager: Boolean(selectedSiteManager),
       startDate,
-      extraction,
+      extraction: submittedExtraction(),
     });
 
   const handleSubmit = async () => {
+    // Drop the empty owner rows from the screen too, so the rows the operator
+    // sees are numbered the way every owner message numbers them.
+    const owners = extraction.legalAdministrationOwners;
+    const ownersToSubmit = ownerRowsToSubmit(owners);
+    if (ownersToSubmit.length > 0 && ownersToSubmit.length !== owners.length) {
+      setExtraction((current) => ({
+        ...current,
+        legalAdministrationOwners: ownerRowsToSubmit(
+          current.legalAdministrationOwners,
+        ),
+      }));
+    }
+
     // One pass over every requirement instead of a chain of early-return
     // toasts: the user sees all of the problems at once, each one anchored to
     // the input that owns it, rather than fixing them one round trip at a time.
@@ -1078,6 +1137,8 @@ export function CreateProjectModal({
               fields={currentFields}
               values={extraction}
               errors={fieldErrorMap}
+              ownerErrors={ownerErrors}
+              checkOwners={ownersChecked}
               onChange={(field, value) => {
                 clearFieldError(field as ProjectFormFieldKey);
                 setExtraction((current) =>
@@ -1104,7 +1165,12 @@ export function CreateProjectModal({
               {failure && failure.fieldErrors.length > 0 ? (
                 <button
                   type="button"
-                  onClick={() => goToField(failure.fieldErrors[0].field)}
+                  onClick={() =>
+                    goToField(
+                      failure.fieldErrors[0].field,
+                      failure.fieldErrors[0].owner,
+                    )
+                  }
                   className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-destructive-ink transition hover:bg-destructive-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50"
                 >
                   <AlertCircle className="size-3.5" aria-hidden="true" />
@@ -1273,7 +1339,7 @@ function CreateProjectErrorBanner({
   failure: CreateProjectFailure | null;
   generalErrors: readonly string[];
   isSubmitting: boolean;
-  onGoToField: (field: ProjectFormFieldKey) => void;
+  onGoToField: (field: ProjectFormFieldKey, owner?: OwnerErrorTarget) => void;
   onRetry: () => void;
   onDismiss: () => void;
   onClose: () => void;
@@ -1282,7 +1348,7 @@ function CreateProjectErrorBanner({
     return null;
   }
 
-  const firstField = failure.fieldErrors[0]?.field;
+  const first = failure.fieldErrors[0];
 
   return (
     <div
@@ -1309,7 +1375,7 @@ function CreateProjectErrorBanner({
                 <li key={`${entry.field}-${entry.message}`}>
                   <button
                     type="button"
-                    onClick={() => onGoToField(entry.field)}
+                    onClick={() => onGoToField(entry.field, entry.owner)}
                     className="group flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-destructive-ink transition hover:bg-white/70 focus-visible:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50"
                   >
                     <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-destructive-ink/70" />
@@ -1341,11 +1407,11 @@ function CreateProjectErrorBanner({
           ) : null}
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            {firstField ? (
+            {first ? (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => onGoToField(firstField)}
+                onClick={() => onGoToField(first.field, first.owner)}
               >
                 Go to first issue
               </Button>

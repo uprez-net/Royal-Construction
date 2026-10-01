@@ -5,13 +5,23 @@ import { DomainValidationError } from "@/lib/domain/errors";
 import { resolveCustomersForProject } from "@/lib/domain/identity/customers";
 import { createProjectFromLead } from "@/lib/domain/projects/creation";
 import {
+  builderDetailsOf,
   canonicalPhone,
   ownerContactsFromOwners,
+  ownerFieldPath,
+  ownerRowsToSubmit,
+  parseOwnerFieldPath,
   projectOwnerProblems,
   requireProjectOwners,
+  withoutBuilderDetails,
   type ProjectOwner,
 } from "@/lib/domain/projects/owners";
-import { validateCreateProjectForm } from "@/lib/projects/create-project-errors";
+import {
+  failureFromThrownError,
+  fieldPathToFormField,
+  validateCreateProjectForm,
+} from "@/lib/projects/create-project-errors";
+import { mergeExtractedOwners } from "@/lib/projects/extracted-owners";
 import {
   createEmptyProjectExtractionData,
   projectExtractionSchema,
@@ -133,14 +143,51 @@ describe("the owner rule", () => {
     );
   });
 
-  test("requireProjectOwners throws a refusal naming the owner field", () => {
+  test("requireProjectOwners throws a refusal naming the owner's row and input", () => {
     assert.throws(
-      () => requireProjectOwners([{ ...jane, address: "" }]),
+      () => requireProjectOwners([jane, { ...john, address: "" }]),
       (error: unknown) =>
         error instanceof DomainValidationError
-        && error.field === "legalAdministrationOwners"
-        && /Owner 1 needs an address/.test(error.message),
+        && error.field === "legalAdministrationOwners.1.address"
+        && /Owner 2 needs an address/.test(error.message),
     );
+  });
+
+  test("a refusal about the whole list names the bare owner field", () => {
+    assert.throws(
+      () => requireProjectOwners([]),
+      (error: unknown) =>
+        error instanceof DomainValidationError
+        && error.field === "legalAdministrationOwners",
+    );
+  });
+
+  test("an owner field path round-trips, and other paths are not owner paths", () => {
+    assert.deepEqual(parseOwnerFieldPath(ownerFieldPath(2, "email")), {
+      field: "email",
+      index: 2,
+    });
+    assert.deepEqual(parseOwnerFieldPath(ownerFieldPath(0)), {
+      field: null,
+      index: 0,
+    });
+    assert.deepEqual(parseOwnerFieldPath(ownerFieldPath(null)), {
+      field: null,
+      index: null,
+    });
+    assert.equal(parseOwnerFieldPath("legalAdministration.signedDate"), null);
+    assert.equal(
+      fieldPathToFormField("legalAdministrationOwners.1.phone"),
+      "legalAdministrationOwners",
+    );
+  });
+
+  test("blank rows are not submitted, so the rule and the screen number owners alike", () => {
+    const blank = { address: "", email: "", name: "", phone: "" };
+    assert.deepEqual(ownerRowsToSubmit([blank, jane, blank, john]), [
+      jane,
+      john,
+    ]);
   });
 
   test("the persisted owner contacts line up owner by owner", () => {
@@ -149,6 +196,84 @@ describe("the owner rule", () => {
       names: [jane.name, john.name],
       phones: [jane.phone, john.phone],
     });
+  });
+});
+
+describe("the builder is never an owner", () => {
+  const builderRow = {
+    address: "38/62 Turner Road, Smeaton Grange NSW 2567",
+    email: "info@royalconstructions.com.au",
+    name: "ROYAL CONSTRUCTIONS PTY LTD",
+    phone: "1300 832 355",
+  };
+
+  test("every builder detail is recognised however it is printed", () => {
+    assert.deepEqual(builderDetailsOf(builderRow), [
+      "name",
+      "email",
+      "phone",
+      "address",
+    ]);
+    assert.deepEqual(builderDetailsOf({ phone: "0406-555-565" }), ["phone"]);
+    assert.deepEqual(builderDetailsOf(jane), []);
+  });
+
+  test("a row that is the builder is refused with one message saying so", () => {
+    const problems = projectOwnerProblems([jane, builderRow]);
+    assert.equal(problems.length, 1);
+    assert.equal(problems[0].index, 1);
+    assert.match(problems[0].message, /Owner 2 is the builder/);
+  });
+
+  test("a builder phone or email on a client's row is refused on that input", () => {
+    const problems = projectOwnerProblems([
+      { ...jane, email: "admin@RoyalConstructions.com.au" },
+      { ...john, phone: "0406 555 565" },
+    ]);
+    assert.deepEqual(
+      problems.map((problem) => [problem.index, problem.field]),
+      [
+        [0, "email"],
+        [1, "phone"],
+      ],
+    );
+    assert.match(problems[0].message, /builder's/);
+  });
+
+  test("extraction drops the builder's row and blanks builder details on a client's", () => {
+    const result = withoutBuilderDetails([
+      { ...jane, phone: "1300 832 355" },
+      builderRow,
+      john,
+    ]);
+    assert.equal(result.droppedRows, 1);
+    assert.equal(result.clearedDetails, 1);
+    assert.deepEqual(result.owners, [{ ...jane, phone: "" }, john]);
+  });
+});
+
+describe("merging the owners each extraction chunk found", () => {
+  const blank = { address: "", email: "", name: "", phone: "" };
+
+  test("the first chunk to name owners decides who they are", () => {
+    const fromWhoSection = [jane, john];
+    const fromSignaturePage = [{ ...blank, name: "Some Witness" }];
+    assert.deepEqual(
+      mergeExtractedOwners(fromWhoSection, fromSignaturePage),
+      [jane, john],
+    );
+  });
+
+  test("a later chunk fills only the details still blank on an owner of the same name", () => {
+    const merged = mergeExtractedOwners(
+      [{ ...jane, phone: "" }],
+      [{ ...jane, address: "Somewhere else", name: "JANE OWNER", phone: "0400 999 999" }],
+    );
+    assert.deepEqual(merged, [{ ...jane, phone: "0400 999 999" }]);
+  });
+
+  test("nothing found yet takes the next chunk's owners", () => {
+    assert.deepEqual(mergeExtractedOwners([blank], [jane]), [jane]);
   });
 });
 
@@ -171,12 +296,44 @@ describe("the wizard", () => {
       startDate: "2026-09-10",
     });
     assert.deepEqual(
-      errors.map((error) => [error.field, error.message]),
+      errors.map((error) => [error.field, error.message, error.owner]),
       [
-        ["legalAdministrationOwners", "Owner 1 needs a phone number."],
-        ["legalAdministrationOwners", "Owner 2 needs a name."],
+        [
+          "legalAdministrationOwners",
+          "Owner 1 needs a phone number.",
+          { field: "phone", index: 0 },
+        ],
+        [
+          "legalAdministrationOwners",
+          "Owner 2 needs a name.",
+          { field: "name", index: 1 },
+        ],
       ],
     );
+  });
+
+  test("a server refusal about one owner comes back on that owner's row and input", () => {
+    const failure = failureFromThrownError(
+      new DomainValidationError(
+        "Owner 2 (John Owner): this email is already on file for one customer and this phone number for a different one.",
+        ownerFieldPath(1, "phone"),
+      ),
+    );
+    assert.equal(failure.code, "VALIDATION");
+    assert.equal(failure.title, "Owner 2 needs correcting");
+    assert.deepEqual(failure.fieldErrors.map((entry) => entry.owner), [
+      { field: "phone", index: 1 },
+    ]);
+    assert.equal(failure.fieldErrors[0].field, "legalAdministrationOwners");
+  });
+
+  test("a customer unique-constraint clash is an owner problem, not a project-name one", () => {
+    const failure = failureFromThrownError(
+      new Error(
+        "Invalid `prisma.customer.create()` invocation: Unique constraint failed on the fields: (`email`) P2002",
+      ),
+    );
+    assert.equal(failure.fieldErrors[0].field, "legalAdministrationOwners");
   });
 
   test("the extraction keeps owner rows as typed, so a keystroke is never eaten", () => {
@@ -306,8 +463,10 @@ describe("resolving owners to customers", () => {
       resolveCustomersForProject([jane], recorder.db),
       (error: unknown) =>
         error instanceof DomainValidationError
-        && error.field === "legalAdministrationOwners"
-        && /Jane Owner's email is on file for one customer/.test(error.message),
+        && error.field === "legalAdministrationOwners.0.phone"
+        && /Owner 1 \(Jane Owner\): this email is already on file for one customer/.test(
+          error.message,
+        ),
     );
     assert.deepEqual(recorder.writes(), []);
   });
@@ -329,7 +488,7 @@ describe("resolving owners to customers", () => {
 
     await assert.rejects(
       resolveCustomersForProject([jane, john], recorder.db),
-      /John Owner and Jane Owner match the same customer on file/,
+      /Owner 2 \(John Owner\) and Owner 1 \(Jane Owner\) match the same customer on file/,
     );
   });
 });
@@ -444,7 +603,7 @@ describe("creating a project from a lead", () => {
       ),
       (error: unknown) =>
         error instanceof DomainValidationError
-        && error.field === "legalAdministrationOwners",
+        && error.field === "legalAdministrationOwners.0.address",
     );
     assert.deepEqual(recorder.writes(), []);
   });
