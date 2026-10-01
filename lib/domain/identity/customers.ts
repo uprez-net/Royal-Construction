@@ -140,28 +140,31 @@ export type ResolvedProjectCustomer = {
 };
 
 /**
- * The customers a project's owners are, in the owners' order: an existing
- * record where the email or phone already identifies one, otherwise a new one.
+ * The customers a project's owners are, in the owners' order: the customer
+ * already on file where the email or phone identifies one, otherwise a new one.
  *
- * **An existing customer is patched to match the owner.** The owner rule
- * guarantees name, email, phone and address are all present, so each is
- * written where it differs — the contract is the latest word on who the
- * customer is and how to reach them. Nothing is ever cleared, because nothing
- * the owner carries is empty. Email matching ignores case; values are stored
- * lower-cased.
+ * **A recurring client is linked, not refused.** Clients come back for a
+ * second build, so an owner whose email (or, failing that, phone) is already
+ * on file is that customer: the new project is linked to the existing id.
+ * Email is looked up first, because it is the authoritative identity
+ * (`findCustomerByContact` uses the same order).
  *
- * **Every ambiguity is refused, not resolved by guessing.** The helper this
- * replaced let the email record win when the email and the phone belonged to
- * different customers, and quietly dropped the phone — so the customer ended
- * up with a number that was not the owner's. Here that is a refusal naming
- * the owner, because the office can tell which is right and this cannot:
+ * **What the contract updates on a linked customer.** The contract is the
+ * latest word on the client, so the name's spelling and the address are
+ * written from it, and so is an email or phone that changed — but only when
+ * no other customer holds that value. A phone that is on file for somebody
+ * else (a spouse's, a shared household line) is left alone rather than moved:
+ * the client keeps the number they had, and the other customer keeps theirs.
  *
- *   - the email is on file for one customer and the phone for another;
- *   - the only matching customer is already a different owner of this
- *     project. `requireProjectOwners` refuses two owners sharing a detail and
- *     each patch runs before the next lookup, so this should not be reachable;
- *     it is checked because the alternative is two owners on one customer and
- *     a primary-key collision on `ProjectCustomer` reported as something else.
+ * **Refused only where linking would put the wrong person on the project:**
+ *
+ *   - the matching customer has a different name. Households share a phone or
+ *     an email, and linking John's contract to Jane's record would name Jane
+ *     on John's project and its invoices — and renaming the record would
+ *     rewrite Jane's earlier projects. The office can tell which it is; this
+ *     cannot.
+ *   - the matching customer is already a different owner of this project. One
+ *     customer cannot be two owners (`ProjectCustomer` is keyed on both).
  *
  * A refusal message never carries the other record's details.
  *
@@ -169,7 +172,7 @@ export type ResolvedProjectCustomer = {
  * transaction, and an invalidation fired before commit lets another request
  * refill the "customers" cache from uncommitted data.
  *
- * @throws {DomainValidationError} One of the ambiguities above, naming the
+ * @throws {DomainValidationError} One of the refusals above, naming the
  * owner's row under `legalAdministrationOwners` (see `ownerFieldPath`).
  */
 export async function resolveCustomersForProject(
@@ -188,6 +191,25 @@ export async function resolveCustomersForProject(
   return resolved;
 }
 
+function nameWords(name: string): string[] {
+  return name.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+}
+
+/**
+ * Whether a customer on file and an owner on the contract are plausibly one
+ * person: every word of the shorter name appears in the longer. "Jane" (a
+ * customer made from an enquiry) is "Jane Smith"; "Jane Smith" is
+ * "JANE A. SMITH"; "Jane Smith" is not "John Smith".
+ */
+function sameName(onFile: string, onContract: string): boolean {
+  const a = nameWords(onFile);
+  const b = nameWords(onContract);
+  if (a.length === 0 || b.length === 0) return false;
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  const words = new Set(longer);
+  return shorter.every((word) => words.has(word));
+}
+
 async function resolveOwnerCustomer(
   owner: ProjectOwner,
   index: number,
@@ -202,13 +224,6 @@ async function resolveOwnerCustomer(
   });
   const byPhone = await db.customer.findUnique({ where: { phone } });
 
-  if (byEmail && byPhone && byEmail.id !== byPhone.id) {
-    throw new DomainValidationError(
-      `${label}: this email is already on file for one customer and this phone number for a different one. Check both against the contract, or fix the existing customers, before creating the project.`,
-      ownerFieldPath(index, "phone"),
-    );
-  }
-
   const existing = byEmail ?? byPhone;
   if (!existing) {
     const customer = await db.customer.create({
@@ -217,19 +232,31 @@ async function resolveOwnerCustomer(
     return { changed: true, created: true, customer };
   }
 
+  const matchedOn = byEmail ? "email" : "phone";
+
   const earlierOwner = claimedBy.get(existing.id);
   if (earlierOwner !== undefined) {
     throw new DomainValidationError(
       `${label} and ${earlierOwner} match the same customer on file. Check their emails and phone numbers against the contract.`,
-      ownerFieldPath(index, "email"),
+      ownerFieldPath(index, matchedOn),
+    );
+  }
+
+  if (!sameName(existing.name, name)) {
+    const detail = matchedOn === "email" ? "email" : "phone number";
+    throw new DomainValidationError(
+      `${label}: this ${detail} is already on file for a customer with a different name. If it is the same person, change the name to match the customer on file; if not, use ${name}'s own ${detail}.`,
+      ownerFieldPath(index, matchedOn),
     );
   }
 
   const patch: Prisma.CustomerUpdateInput = {};
   if (name !== existing.name) patch.name = name;
-  if (email !== existing.email.toLowerCase()) patch.email = email;
-  if (phone !== existing.phone) patch.phone = phone;
   if (address !== existing.address) patch.address = address;
+  // An email or phone is moved onto this customer only when nobody else holds
+  // it: `byEmail`/`byPhone` is that holder, and both columns are unique.
+  if (email !== existing.email.toLowerCase() && !byEmail) patch.email = email;
+  if (phone !== existing.phone && !byPhone) patch.phone = phone;
 
   if (Object.keys(patch).length === 0) {
     return { changed: false, created: false, customer: existing };

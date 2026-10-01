@@ -315,7 +315,7 @@ describe("the wizard", () => {
   test("a server refusal about one owner comes back on that owner's row and input", () => {
     const failure = failureFromThrownError(
       new DomainValidationError(
-        "Owner 2 (John Owner): this email is already on file for one customer and this phone number for a different one.",
+        "Owner 2 (John Owner): this phone number is already on file for a customer with a different name.",
         ownerFieldPath(1, "phone"),
       ),
     );
@@ -447,24 +447,96 @@ describe("resolving owners to customers", () => {
     ]);
   });
 
-  test("an email on one customer and a phone on another is refused, and nothing is written", async () => {
+  test("a recurring client is linked to the customer already on file", async () => {
+    // Same person, second build: the email finds them, and nothing about
+    // them has changed, so the project links the id and writes nothing.
+    const existing = customerRow("c-jane", {
+      ...jane,
+      phone: "0400111222",
+    });
     const recorder = recordingDb({
-      "customer.findFirst": customerRow("c-email", {
-        ...jane,
-        phone: "0499 000 000",
+      "customer.findFirst": existing,
+      "customer.findUnique": existing,
+    });
+
+    const [resolved] = await resolveCustomersForProject(
+      requireProjectOwners([jane]),
+      recorder.db,
+    );
+
+    assert.equal(resolved.customer.id, "c-jane");
+    assert.equal(resolved.created, false);
+    assert.equal(resolved.changed, false);
+    assert.deepEqual(recorder.writes(), []);
+  });
+
+  test("a client first saved from an enquiry by first name alone is still linked", async () => {
+    const existing = customerRow("c-jane", {
+      email: jane.email,
+      name: "Jane",
+      phone: "0400111222",
+    });
+    const recorder = recordingDb({
+      "customer.findFirst": existing,
+      "customer.findUnique": existing,
+      "customer.update": (args: unknown) => ({
+        ...existing,
+        ...(args as { data: object }).data,
       }),
+    });
+
+    const [resolved] = await resolveCustomersForProject(
+      requireProjectOwners([jane]),
+      recorder.db,
+    );
+
+    assert.equal(resolved.customer.id, "c-jane");
+    assert.equal(resolved.customer.name, "Jane Owner");
+  });
+
+  test("a recurring client whose phone is on file for someone else is linked by email, and the other customer's phone is left alone", async () => {
+    const onFile = customerRow("c-email", { ...jane, phone: "0499000000" });
+    const recorder = recordingDb({
+      "customer.findFirst": onFile,
       "customer.findUnique": customerRow("c-phone", {
+        ...john,
+        phone: "0400111222",
+      }),
+      "customer.update": (args: unknown) => ({
+        ...onFile,
+        ...(args as { data: object }).data,
+      }),
+    });
+
+    const [resolved] = await resolveCustomersForProject(
+      requireProjectOwners([jane]),
+      recorder.db,
+    );
+
+    assert.equal(resolved.customer.id, "c-email");
+    // Linked as-is: the phone stays the one on file, because the contract's
+    // number belongs to another customer and is unique.
+    assert.equal(resolved.customer.phone, "0499000000");
+    assert.deepEqual(recorder.writes(), []);
+  });
+
+  test("a phone shared with a differently named customer is refused, not linked or renamed", async () => {
+    // John's contract shows the household line that is on Jane's record.
+    // Linking would name Jane on John's project; renaming would rewrite Jane.
+    const recorder = recordingDb({
+      "customer.findFirst": null,
+      "customer.findUnique": customerRow("c-jane", {
         ...jane,
-        email: "other@example.com",
+        phone: "0400333444",
       }),
     });
 
     await assert.rejects(
-      resolveCustomersForProject([jane], recorder.db),
+      resolveCustomersForProject(requireProjectOwners([john]), recorder.db),
       (error: unknown) =>
         error instanceof DomainValidationError
         && error.field === "legalAdministrationOwners.0.phone"
-        && /Owner 1 \(Jane Owner\): this email is already on file for one customer/.test(
+        && /Owner 1 \(John Owner\): this phone number is already on file for a customer with a different name/.test(
           error.message,
         ),
     );
