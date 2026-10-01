@@ -23,7 +23,10 @@ Offer document prints only the short lines in `draft.exclusionBullets`. The
 structured `exclusions` (Scope) feed the Tender's exclusion schedule, whatever
 their `includedInOfferDocument` flag says. Asked to add or remove an exclusion
 "on the offer", change `draft.exclusionBullets`; "on the tender" or "in scope",
-change `exclusions`. If the request does not say which, ask before writing. A
+change `exclusions`. Set `exclusionDocument` on update_offer_details to the
+document the user named; the tool refuses an exclusion change without it, or
+one that touches the other document's list. If the request does not say which,
+do not choose: return a question asking "Offer document or Tender?". A
 draft patch replaces each list it names, so send the complete list with the
 existing lines kept. Say in the result which document will show the change.
 
