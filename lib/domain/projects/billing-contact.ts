@@ -33,7 +33,8 @@ const XERO_MAX_NAME_LENGTH = 255;
 export type BillingOwner = {
   readonly name: string;
   readonly email: string;
-  readonly phone: string;
+  /** Optional: some clients give no phone. */
+  readonly phone: string | null;
   readonly address: string | null;
 };
 
@@ -46,7 +47,8 @@ export type BillingContactPerson = {
 export type ProjectBillingContact = {
   readonly name: string;
   readonly email: string;
-  readonly phone: string;
+  /** `null` when the primary owner has none; Xero gets no phone then. */
+  readonly phone: string | null;
   readonly address: string | null;
   /** Every co-owner, in contract order, up to Xero's limit. */
   readonly contactPersons: readonly BillingContactPerson[];
@@ -123,6 +125,6 @@ export function projectBillingContact(
     omittedOwners: coOwners
       .slice(XERO_MAX_CONTACT_PERSONS)
       .map((owner) => owner.name.trim()),
-    phone: primary.phone.trim(),
+    phone: primary.phone?.trim() || null,
   };
 }

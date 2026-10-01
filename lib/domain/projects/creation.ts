@@ -103,7 +103,8 @@ export type CreatedProjectCustomer = {
   readonly id: string;
   readonly name: string;
   readonly email: string;
-  readonly phone: string;
+  /** `null` when the owner gave no phone. */
+  readonly phone: string | null;
   readonly created: boolean;
 };
 
@@ -502,7 +503,8 @@ export async function createProjectFromLead(
         // Every owner, so the history reads "created for Jane & John Smith"
         // rather than naming only the primary.
         customerName: customers.map((owner) => owner.customer.name).join(" & "),
-        customerPhone: customer.phone,
+        // The log's schema wants a string; the leads' entries say the same.
+        customerPhone: customer.phone ?? "Not specified",
         location: project.location,
         projectId: project.id,
         projectName: project.name,

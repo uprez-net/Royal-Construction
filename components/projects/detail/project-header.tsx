@@ -255,16 +255,20 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
                 <UserRound className="size-3.5" aria-hidden="true" />
                 {project.customer.name}
               </span>
-              <span aria-hidden="true">|</span>
-              <span className="inline-flex items-center gap-1">
-                <Phone className="size-3.5" aria-hidden="true" />
-                <a
-                  href={`tel:${project.customer.phone.replace(/\s+/g, "")}`}
-                  className="rounded-md font-mono tabular-nums text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                >
-                  {project.customer.phone}
-                </a>
-              </span>
+              {project.customer.phone ? (
+                <>
+                  <span aria-hidden="true">|</span>
+                  <span className="inline-flex items-center gap-1">
+                    <Phone className="size-3.5" aria-hidden="true" />
+                    <a
+                      href={`tel:${project.customer.phone.replace(/\s+/g, "")}`}
+                      className="rounded-md font-mono tabular-nums text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    >
+                      {project.customer.phone}
+                    </a>
+                  </span>
+                </>
+              ) : null}
               <span aria-hidden="true">|</span>
               <a
                 href={`mailto:${project.customer.email}`}

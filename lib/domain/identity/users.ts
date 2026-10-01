@@ -155,8 +155,9 @@ export async function createUser(
           email: input.email,
           name: input.name,
           // Same form the project owners are stored in, so this customer is
-          // found when a contract later names them.
-          phone: canonicalPhone(input.phone),
+          // found when a contract later names them. No phone is NULL, not "":
+          // the column is unique, and only NULL can repeat.
+          phone: canonicalPhone(input.phone) || null,
         },
       });
       await tx.user.update({
@@ -210,7 +211,7 @@ export async function updateUserByClerkId(
         data: {
           email: user.email,
           name: user.name,
-          phone: canonicalPhone(user.phone),
+          phone: canonicalPhone(user.phone) || null,
         },
       });
       await tx.user.update({

@@ -873,11 +873,13 @@ model ActivityLog {
 model Customer {
   id            String  @id @default(uuid())
   name          String
-  // Every owner a project is created with carries all three of email, phone
-  // and address (lib/domain/projects/owners.ts), because they are what the Xero
-  // contact is built from.
+  // Every owner a project is created with carries an email and an address
+  // (lib/domain/projects/owners.ts), because they are what the Xero contact is
+  // built from. A phone is optional: some clients give none. Still unique when
+  // present (Postgres lets any number of rows hold NULL under a unique index),
+  // and always stored in `canonicalPhone` form.
   email         String  @unique
-  phone         String  @unique
+  phone         String? @unique
   // The owner's Current Location (residential/postal address), from the
   // contract or the offer's owners[] (ADR 0003). Required by the owner rule for
   // every customer a project is created with; nullable only because legacy
