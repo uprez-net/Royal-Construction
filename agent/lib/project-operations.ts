@@ -37,6 +37,7 @@ import {
   sendComplianceFollowUp,
   sendComplianceOutreach,
 } from "@/lib/domain/compliance/outreach";
+import { defaultComplianceSubjectAddress } from "@/lib/domain/compliance/subject-address";
 import { isDomainError } from "@/lib/domain/errors";
 import {
   createMilestone as createMilestoneCommand,
@@ -657,11 +658,13 @@ export async function startAuthorizedCompliance(
     certifierName?: string;
     certifierPhone?: string;
     projectId: string;
-    subjectAddress: string;
+    subjectAddress?: string;
   },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   const project = await assertProjectAccess(actor, input.projectId);
+  const subjectAddress =
+    input.subjectAddress ?? defaultComplianceSubjectAddress(project);
   return runProjectMutation({
     action: "project.compliance.start",
     actor,
@@ -672,10 +675,14 @@ export async function startAuthorizedCompliance(
     inputSummary: {
       projectId: input.projectId,
       certifierEmail: input.certifierEmail,
+      subjectAddress,
     },
     transactional: false,
     execute: async () => {
-      const result = await startComplianceDirect(input, actor);
+      const result = await startComplianceDirect(
+        { ...input, subjectAddress },
+        actor,
+      );
       return actionEnvelope({
         entityRef: projectReference(project),
         data: result,
