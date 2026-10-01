@@ -6,6 +6,12 @@ import { useEveAgent } from "eve/react";
 import type { MessageStreamEvent } from "eve/client";
 import type { AgentInputResponse } from "@/components/agent/agent-approval";
 import { AgentComposer } from "@/components/agent/agent-composer";
+import {
+  classifySendFailure,
+  draftStorageKey,
+  isStalledTurn,
+  isTerminalSessionStatus,
+} from "@/components/agent/agent-connection";
 import { AgentHeader } from "@/components/agent/agent-header";
 import { AgentHistory } from "@/components/agent/agent-history";
 import { AgentInspector } from "@/components/agent/agent-inspector";
@@ -50,7 +56,9 @@ export function AgentWorkspace({
   selectedSessionId: string | null;
 }) {
   const router = useRouter();
-  const [composer, setComposer] = useState("");
+  // A message left unsent by a reconnect reload or a "continue in a new
+  // conversation" — both are full page loads, so this initialiser runs fresh.
+  const [composer, setComposer] = useState(() => readDraft(selectedSessionId));
   const [sendError, setSendError] = useState<string | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -68,6 +76,19 @@ export function AgentWorkspace({
       : sessionStorage.getItem("rc-agent-fork-context"),
   );
   const [sessions, setSessions] = useState(initialSessions);
+  // An ended Eve session cannot take another turn. Its history is still the
+  // app's to show, so it renders read-only instead of being mounted as live.
+  const [closedAtLoad] = useState(() =>
+    isTerminalSessionStatus(
+      initialSessions.find(
+        (session) => session.eveSessionId === selectedSessionId,
+      )?.status,
+    ),
+  );
+  const [sessionClosed, setSessionClosed] = useState(closedAtLoad);
+  /** Eve accepted the message; the live stream is still being attached. */
+  const [reconnecting, setReconnecting] = useState(false);
+  const [stalled, setStalled] = useState(false);
   // Rails are the wide-screen panes; `sheet` is the narrow-screen drawer. Kept
   // apart so a phone never mounts a drawer just because a rail defaults open.
   const [rails, setRails] = useState({ history: true, inspector: true });
@@ -133,10 +154,13 @@ export function AgentWorkspace({
     // missing. Eve drops any event whose `meta.id` it has already applied, so
     // the overlapping catch-up costs bandwidth, not correctness.
     initialEvents: hydratedEvents,
-    initialSession: selectedSessionId
-      ? { sessionId: selectedSessionId, streamIndex: 0 }
-      : undefined,
+    initialSession:
+      selectedSessionId && !closedAtLoad
+        ? { sessionId: selectedSessionId, streamIndex: 0 }
+        : undefined,
     onEvent: (event) => {
+      setStalled(false);
+      setReconnecting(false);
       // A specialist wake-up is not a message this operator sent, so it must
       // not claim the annotations waiting for their own next message.
       if (event.type !== "message.received" || isTaskNotification(event))
@@ -177,7 +201,7 @@ export function AgentWorkspace({
       },
     }),
     reducer,
-    resume: Boolean(selectedSessionId),
+    resume: Boolean(selectedSessionId) && !closedAtLoad,
   });
 
   const busy =
@@ -187,10 +211,74 @@ export function AgentWorkspace({
   const canSend =
     !busy
     && !uploading
+    && !sessionClosed
     && (composer.trim().length > 0 || attachments.length > 0);
+  const pendingApprovalCount = agent.data.pendingApprovals.length;
+
+  // Read once by the initialiser above; cleared here so a later visit does not
+  // restore a message that has since been sent. This is the only place a draft
+  // is cleared: one is written only when this conversation is left, and comes
+  // back through here before anything can be sent. Clearing it again once a
+  // send settles — which can take minutes — would delete a draft typed and
+  // saved by leaving while that send was still running.
+  useEffect(() => {
+    sessionStorage.removeItem(draftStorageKey(selectedSessionId));
+  }, [selectedSessionId]);
+
+  // Eve's transport retries a dropped stream on its own, so a turn that goes
+  // quiet for long enough has lost its connection for good. `resume()` refuses
+  // while the hook still thinks it is streaming and `cancel()` would stop the
+  // real turn, so the way back is the reload the operator would otherwise
+  // reach for by hand — offered, not forced.
+  const eventCount = agent.events.length;
+  const eventCountRef = useRef(eventCount);
+  useEffect(() => {
+    eventCountRef.current = eventCount;
+  }, [eventCount]);
+  useEffect(() => {
+    if (!busy) return;
+    let seen = eventCountRef.current;
+    let quietSince = Date.now();
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      if (eventCountRef.current !== seen) {
+        seen = eventCountRef.current;
+        quietSince = now;
+      }
+      setStalled(
+        isStalledTurn({
+          busy: true,
+          lastEventAt: quietSince,
+          now,
+          pendingApprovals: pendingApprovalCount,
+        }),
+      );
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [busy, pendingApprovalCount]);
+
+  function reloadConversation() {
+    const sessionId = activeSessionIdRef.current;
+    if (composer.trim())
+      sessionStorage.setItem(draftStorageKey(sessionId), composer);
+    window.location.assign(
+      sessionId ? `/agent/${encodeURIComponent(sessionId)}` : "/agent",
+    );
+  }
+
+  function continueInNewConversation() {
+    // A fresh session with nothing carried over: the old run's approvals and
+    // in-flight work do not continue, and its transcript is not replayed as
+    // an instruction. Only the unsent draft comes along, still unsent.
+    if (composer.trim())
+      sessionStorage.setItem(draftStorageKey(null), composer);
+    // A full load, not a client push: a hidden /agent kept alive by Activity
+    // can still hold an earlier conversation's live session.
+    window.location.assign("/agent");
+  }
   const statusLabel = useMemo(
-    () => agentStatusLabel(agent.status),
-    [agent.status],
+    () => (sessionClosed ? "Ended" : agentStatusLabel(agent.status)),
+    [agent.status, sessionClosed],
   );
   const activeSessionId = agent.session?.sessionId ?? selectedSessionId;
   const activeSessionTitle =
@@ -224,8 +312,14 @@ export function AgentWorkspace({
 
   async function sendMessage(message: string) {
     const text = message.trim() || "Please review the attached file(s).";
-    if ((!message.trim() && attachments.length === 0) || busy || uploading)
+    if (
+      (!message.trim() && attachments.length === 0)
+      || busy
+      || uploading
+      || sessionClosed
+    )
       return;
+    const sessionBefore = activeSessionIdRef.current;
     // The turn carries this exact snapshot. Uploading a 10MB attachment takes
     // long enough for someone to keep typing or drop another file, and clearing
     // the composer wholesale afterwards would throw that away without sending
@@ -303,6 +397,26 @@ export function AgentWorkspace({
       setEditingMessageId(null);
       sessionStorage.removeItem("rc-agent-fork-context");
     } catch (error) {
+      const failure = classifySendFailure({
+        // The thrown wrapper drops Eve's error code; the original is here.
+        error: lastAgentErrorRef.current ?? error,
+        sessionAfter: activeSessionIdRef.current,
+        sessionBefore,
+      });
+      if (failure === "accepted") {
+        // The turn is running. Leave the composer empty and the receipt
+        // bookkeeping in place, so the `message.received` the reattached stream
+        // replays still claims this message's annotations.
+        setForkContext(null);
+        setEditingMessageId(null);
+        sessionStorage.removeItem("rc-agent-fork-context");
+        setReconnecting(true);
+        void agent
+          .resume()
+          .catch(() => undefined)
+          .finally(() => setReconnecting(false));
+        return;
+      }
       if (sent) {
         // Put the unsent request back so it can be retried, unless the
         // operator has already started typing something else.
@@ -324,6 +438,19 @@ export function AgentWorkspace({
       );
       pendingMessageAnnotationsRef.current = null;
       setPendingMessageAnnotations(null);
+      if (failure === "closed") {
+        // Not retried against the same id: Eve never reopens an ended session.
+        // The draft is back in the composer for a new conversation.
+        setSessionClosed(true);
+        setSessions((current) =>
+          current.map((item) =>
+            item.eveSessionId === sessionBefore
+              ? { ...item, status: "COMPLETED" }
+              : item,
+          ),
+        );
+        return;
+      }
       setSendError(
         error instanceof Error
           ? error.message
@@ -437,7 +564,13 @@ export function AgentWorkspace({
       activeSessionTitle={activeSessionTitle}
       initialSessions={initialSessions}
       onArchive={archiveSession}
-      onNavigate={() => setSheet(null)}
+      onNavigate={() => {
+        // Moving to another conversation from the rail must not lose what was
+        // typed here; the initialiser restores it on the way back.
+        if (composer.trim())
+          sessionStorage.setItem(draftStorageKey(activeSessionId), composer);
+        setSheet(null);
+      }}
       sessions={sessions}
     />
   );
@@ -485,10 +618,21 @@ export function AgentWorkspace({
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <AgentTranscript
-              agentError={agent.error ?? null}
+              // An ended session and a stream still attaching each get their
+              // own notice; a generic "could not continue" would contradict it.
+              agentError={
+                sessionClosed || reconnecting ? null : (agent.error ?? null)
+              }
               agentStatus={agent.status}
               archiveError={archiveError}
               busy={busy}
+              connection={{
+                onContinue: continueInNewConversation,
+                onReload: reloadConversation,
+                reconnecting,
+                sessionClosed,
+                stalled: stalled && busy,
+              }}
               data={agent.data}
               handleMessageScroll={handleMessageScroll}
               messageAnnotations={messageAnnotations}
@@ -512,7 +656,7 @@ export function AgentWorkspace({
               canSend={canSend}
               composer={composer}
               composerRef={composerRef}
-              disabled={agent.status === "resuming"}
+              disabled={agent.status === "resuming" || sessionClosed}
               editingMessageId={editingMessageId}
               onCancelEdit={() => {
                 setEditingMessageId(null);
@@ -603,4 +747,9 @@ function agentStatusLabel(status: ReturnType<typeof useEveAgent>["status"]) {
     submitted: "Starting",
   } as const;
   return labels[status];
+}
+
+function readDraft(sessionId: string | null): string {
+  if (typeof window === "undefined") return "";
+  return sessionStorage.getItem(draftStorageKey(sessionId)) ?? "";
 }

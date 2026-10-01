@@ -87,6 +87,9 @@ export function AgentToolCall({
 
   return (
     <article
+      // What the inspector's "Review in the transcript" link and the approval
+      // bar scroll to. Without it both looked for an element that never existed.
+      data-approval-id={request?.requestId}
       className={cn(
         "overflow-hidden rounded-xl border",
         failed
