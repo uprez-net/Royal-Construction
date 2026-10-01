@@ -392,6 +392,7 @@ export function AgentWorkspace({
       setForkContext(null);
       setEditingMessageId(null);
       sessionStorage.removeItem("rc-agent-fork-context");
+      sessionStorage.removeItem(draftStorageKey(sessionBefore));
     } catch (error) {
       const failure = classifySendFailure({
         // The thrown wrapper drops Eve's error code; the original is here.
@@ -406,6 +407,7 @@ export function AgentWorkspace({
         setForkContext(null);
         setEditingMessageId(null);
         sessionStorage.removeItem("rc-agent-fork-context");
+        sessionStorage.removeItem(draftStorageKey(sessionBefore));
         setReconnecting(true);
         void agent
           .resume()
@@ -560,7 +562,13 @@ export function AgentWorkspace({
       activeSessionTitle={activeSessionTitle}
       initialSessions={initialSessions}
       onArchive={archiveSession}
-      onNavigate={() => setSheet(null)}
+      onNavigate={() => {
+        // Moving to another conversation from the rail must not lose what was
+        // typed here; the initialiser restores it on the way back.
+        if (composer.trim())
+          sessionStorage.setItem(draftStorageKey(activeSessionId), composer);
+        setSheet(null);
+      }}
       sessions={sessions}
     />
   );

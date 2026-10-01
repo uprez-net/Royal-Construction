@@ -361,7 +361,12 @@ function approvalOutreach(input: unknown): AgentOutreachDetails | null {
 function useApprovalTargetLabels(
   input: unknown,
 ): Readonly<Record<string, string>> {
-  const [labels, setLabels] = useState<Readonly<Record<string, string>>>({});
+  // Kept with the ids they describe: a lookup for new ids that is refused or
+  // fails must not leave the previous ids' names beside them.
+  const [resolved, setResolved] = useState<{
+    key: string;
+    labels: Readonly<Record<string, string>>;
+  } | null>(null);
   const ids =
     input && typeof input === "object" && !Array.isArray(input)
       ? Object.fromEntries(
@@ -386,11 +391,14 @@ function useApprovalTargetLabels(
     })
       .then((response) => (response.ok ? response.json() : null))
       .then((payload: { labels?: Record<string, string> } | null) => {
-        if (payload?.labels) setLabels(payload.labels);
+        if (payload?.labels)
+          setResolved({ key: idKey, labels: payload.labels });
       })
       .catch(() => undefined);
     return () => controller.abort();
   }, [idKey]);
 
-  return labels;
+  return resolved?.key === idKey ? resolved.labels : NO_LABELS;
 }
+
+const NO_LABELS: Readonly<Record<string, string>> = {};
