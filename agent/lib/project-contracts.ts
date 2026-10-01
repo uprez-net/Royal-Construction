@@ -103,8 +103,16 @@ export const prepareComplianceOutreachInputSchema = z
 export const sendComplianceOutreachInputSchema = z.object({
   projectId: projectIdSchema,
   party: z.enum(compliancePartyValues),
+  /**
+   * The directory tradie being engaged, from prepare_compliance_outreach's
+   * directoryContacts. Required for every party picked from the directory.
+   */
+  tradieId: z.string().uuid().optional(),
+  /** The estate, for the developer party only. */
+  developerKey: z.string().trim().min(1).max(100).optional(),
   contactName: z.string().trim().max(200).optional(),
-  contactEmail: z.email().trim().toLowerCase(),
+  /** One of the chosen tradie's own addresses; defaults to their primary one. */
+  contactEmail: z.email().trim().toLowerCase().optional(),
   contactPhone: z.string().trim().max(80).optional(),
   body: z.string().trim().min(1).max(100_000),
   deliverables: z

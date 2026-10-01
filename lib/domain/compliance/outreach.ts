@@ -13,10 +13,15 @@ import {
   isConsultantParty,
   PARTY_LABEL,
   PARTY_OUTREACH_ATTACHMENTS,
+  PARTY_TRADE_LABEL,
 } from "@/constants/complianceDocuments";
+import { AREA_DEVELOPERS } from "@/constants/complianceDevelopers";
 import { COMPLIANCE_ALERT_PARTY } from "./alert-parties";
 import { buildComplianceFollowUpBody } from "./party-outreach-email";
-import { partyBlockedReason } from "./prerequisites";
+import {
+  consultantNotAskedForReason,
+  partyBlockedReason,
+} from "./prerequisites";
 import { generatePartyRefToken } from "@/lib/graph/party-subject";
 import { certifierEngagementInclude } from "@/types/compliance";
 import { generateEmailChecksum } from "@/utils/generator";
@@ -133,7 +138,9 @@ export async function prepareComplianceOutreach(
     throw new DomainNotFoundError("That SLA alert is not on this project.");
   }
   if (alert && alert.status !== ComplianceAlertStatus.OPEN) {
-    throw new DomainTransitionError("That SLA alert has already been resolved.");
+    throw new DomainTransitionError(
+      "That SLA alert has already been resolved.",
+    );
   }
   const party =
     input.party ?? (alert ? COMPLIANCE_ALERT_PARTY[alert.type] : undefined);
@@ -142,18 +149,30 @@ export async function prepareComplianceOutreach(
   const outreach = engagement.outreaches.find(
     (candidate) => candidate.party === party,
   );
-  const blocked = await partyBlockedReason(engagement, party);
+  const blocked =
+    (await partyBlockedReason(engagement, party))
+    ?? (alert
+      ? null
+      : consultantNotAskedForReason(
+          engagement,
+          party,
+          outreach?.checklistDocumentId ? [outreach.checklistDocumentId] : [],
+        ));
   return {
     available: true as const,
     alert: alert ?? null,
     blocked,
+    candidates: await outreachCandidates(party, db),
     body: outreachDraftBody(engagement.subjectAddress, party, alert?.detail),
     canSend:
       Boolean(outreach?.contactEmail)
       && outreach?.mode !== ComplianceOutreachMode.SELF_SUPPLIED
       && !blocked,
     daysOpen: alert
-      ? Math.max(0, Math.floor((now.getTime() - alert.createdAt.getTime()) / 86_400_000))
+      ? Math.max(
+          0,
+          Math.floor((now.getTime() - alert.createdAt.getTime()) / 86_400_000),
+        )
       : null,
     outreach: outreach ?? null,
     party,
@@ -163,7 +182,13 @@ export async function prepareComplianceOutreach(
 
 export type SendComplianceOutreachInput = {
   readonly body: string;
-  readonly contactEmail: string;
+  /**
+   * Which of the picked contact's addresses to write to. For a directory party
+   * it must be one of that tradie's own addresses, and defaults to the primary
+   * one; for the estate developer it is whatever the operator entered, since
+   * most estates have no address on file.
+   */
+  readonly contactEmail?: string;
   readonly contactName?: string;
   readonly contactPhone?: string;
   readonly tradieId?: string;
@@ -207,9 +232,18 @@ export async function sendComplianceOutreach(
       alreadySent: true as const,
       attachmentCount: 0,
       outreachId: existing.id,
-      recipient: existing.contactEmail ?? input.contactEmail,
+      recipient: existing.contactEmail ?? input.contactEmail ?? "",
     };
   }
+
+  const notAskedFor = consultantNotAskedForReason(engagement, input.party, [
+    ...(input.checklistDocumentId ? [input.checklistDocumentId] : []),
+    ...input.deliverables.flatMap((item) =>
+      item.checklistDocumentId ? [item.checklistDocumentId] : [],
+    ),
+  ]);
+  if (notAskedFor) throw new DomainTransitionError(notAskedFor);
+  const recipient = await resolveOutreachRecipient(input, db);
 
   const ownDocumentIds = new Set(
     engagement.documents.map((document) => document.id),
@@ -222,16 +256,16 @@ export async function sendComplianceOutreach(
       ? await tx.complianceOutreach.update({
           where: { id: existing.id },
           data: {
-            contactEmail: input.contactEmail,
-            contactName: input.contactName ?? null,
-            contactPhone: input.contactPhone ?? null,
-            tradieId: input.tradieId ?? null,
+            contactEmail: recipient.contactEmail,
+            contactName: recipient.contactName,
+            contactPhone: recipient.contactPhone,
+            tradieId: recipient.tradieId,
             checklistDocumentId:
               isConsultantParty(input.party) && input.deliverables.length <= 1
                 ? ownChecklistId(input.checklistDocumentId)
                 : null,
             developerKey: isApprovalParty(input.party)
-              ? input.developerKey ?? null
+              ? (input.developerKey ?? null)
               : null,
           },
         })
@@ -243,16 +277,16 @@ export async function sendComplianceOutreach(
             mode: ComplianceOutreachMode.OUTREACH,
             status: ComplianceOutreachStatus.NOT_SENT,
             graphMailbox: GraphMailbox.ADMIN,
-            contactEmail: input.contactEmail,
-            contactName: input.contactName ?? null,
-            contactPhone: input.contactPhone ?? null,
-            tradieId: input.tradieId ?? null,
+            contactEmail: recipient.contactEmail,
+            contactName: recipient.contactName,
+            contactPhone: recipient.contactPhone,
+            tradieId: recipient.tradieId,
             checklistDocumentId:
               isConsultantParty(input.party) && input.deliverables.length <= 1
                 ? ownChecklistId(input.checklistDocumentId)
                 : null,
             developerKey: isApprovalParty(input.party)
-              ? input.developerKey ?? null
+              ? (input.developerKey ?? null)
               : null,
           },
         });
@@ -282,7 +316,11 @@ export async function sendComplianceOutreach(
           id: { in: [...input.extraAttachmentIds] },
           OR: [
             { projectId: input.projectId },
-            { complianceDocument: { engagement: { projectId: input.projectId } } },
+            {
+              complianceDocument: {
+                engagement: { projectId: input.projectId },
+              },
+            },
           ],
         },
         select: { id: true, filename: true, fileType: true, url: true },
@@ -304,17 +342,20 @@ export async function sendComplianceOutreach(
         outreachId: outreach.id,
         party: input.party,
         projectId: input.projectId,
-        recipient: input.contactEmail,
+        recipient: recipient.contactEmail,
       },
     },
     async () => {
       await send({
-        engagement: { id: engagement.id, subjectAddress: engagement.subjectAddress },
+        engagement: {
+          id: engagement.id,
+          subjectAddress: engagement.subjectAddress,
+        },
         outreach,
         body: input.body,
         attachments,
       });
-      return { outreachId: outreach.id, recipient: input.contactEmail };
+      return { outreachId: outreach.id, recipient: recipient.contactEmail };
     },
   );
   await db.complianceOutreach.updateMany({
@@ -325,7 +366,124 @@ export async function sendComplianceOutreach(
     alreadySent: replayed,
     attachmentCount: attachments.length,
     outreachId: outreach.id,
-    recipient: input.contactEmail,
+    recipient: recipient.contactEmail,
+  };
+}
+
+/**
+ * Who an opening outreach for this party may go to: that party's trade in the
+ * tradie directory, the same list the compliance tab's contact picker offers.
+ * Empty for the developer (picked by estate) and the council (never written to).
+ */
+async function outreachCandidates(party: CompliancePartyType, db: DomainDb) {
+  const trade = PARTY_TRADE_LABEL[party];
+  if (trade === null) return [];
+  return db.tradie.findMany({
+    orderBy: [{ isFavourite: "desc" }, { name: "asc" }],
+    select: { additionalEmails: true, email: true, id: true, name: true },
+    take: 25,
+    where: { trade: { equals: trade, mode: "insensitive" } },
+  });
+}
+
+type OutreachRecipient = {
+  readonly contactEmail: string;
+  readonly contactName: string | null;
+  readonly contactPhone: string | null;
+  readonly tradieId: string | null;
+};
+
+/**
+ * Who an opening outreach goes to, from the fixed list for its party.
+ *
+ * Every directory party is engaged from the one trade it is picked from
+ * (`PARTY_TRADE_LABEL`), which is what the compliance tab's contact picker
+ * offers. The send used to trust whatever address it was handed, so an outreach
+ * could go to anyone at all — the tab never allowed that, and Eve could. Now
+ * the tradie must be on that party's list, and the address must be one of that
+ * tradie's own.
+ *
+ * The estate developer is picked from `AREA_DEVELOPERS` instead. Most estates
+ * have no address on file, so the operator supplies one; what is checked is
+ * that the estate is a known one. The council is never written to from here.
+ */
+async function resolveOutreachRecipient(
+  input: SendComplianceOutreachInput,
+  db: DomainDb,
+): Promise<OutreachRecipient> {
+  const label = PARTY_LABEL[input.party];
+  const trade = PARTY_TRADE_LABEL[input.party];
+  const typedEmail = input.contactEmail?.trim().toLowerCase() || null;
+
+  if (trade === null) {
+    if (!isApprovalParty(input.party)) {
+      throw new DomainTransitionError(`Nothing is sent to ${label} from here.`);
+    }
+    const developer = AREA_DEVELOPERS.find(
+      (candidate) => candidate.key === input.developerKey,
+    );
+    if (!developer) {
+      throw new DomainValidationError(
+        "Choose the estate developer from the developer list.",
+        "developerKey",
+      );
+    }
+    const email = typedEmail ?? developer.contactEmail?.trim().toLowerCase();
+    if (!email) {
+      throw new DomainValidationError(
+        `There is no address on file for ${developer.name}; enter the developer's email.`,
+        "contactEmail",
+      );
+    }
+    return {
+      contactEmail: email,
+      contactName: input.contactName ?? developer.name,
+      contactPhone: input.contactPhone ?? null,
+      tradieId: null,
+    };
+  }
+
+  if (!input.tradieId) {
+    throw new DomainValidationError(
+      `Choose the ${label.toLowerCase()} from the ${trade} list in the tradie directory.`,
+      "tradieId",
+    );
+  }
+  const tradie = await db.tradie.findUnique({
+    select: {
+      additionalEmails: true,
+      email: true,
+      id: true,
+      name: true,
+      phone: true,
+      trade: true,
+    },
+    where: { id: input.tradieId },
+  });
+  if (!tradie) {
+    throw new DomainNotFoundError("That tradie is not in the directory.");
+  }
+  if (tradie.trade.trim().toLowerCase() !== trade.toLowerCase()) {
+    throw new DomainValidationError(
+      `${tradie.name} is listed under ${tradie.trade}, not ${trade}. Choose the ${label.toLowerCase()} from the ${trade} list.`,
+      "tradieId",
+    );
+  }
+  const addresses = [tradie.email, ...tradie.additionalEmails].map((address) =>
+    address.trim().toLowerCase(),
+  );
+  const email = typedEmail ?? addresses[0];
+  if (!email || !addresses.includes(email)) {
+    throw new DomainValidationError(
+      `${typedEmail} is not one of ${tradie.name}'s addresses in the directory.`,
+      "contactEmail",
+    );
+  }
+  return {
+    contactEmail: email,
+    contactName: input.contactName ?? tradie.name,
+    contactPhone: input.contactPhone ?? tradie.phone,
+    tradieId: tradie.id,
   };
 }
 
@@ -343,14 +501,26 @@ export async function sendComplianceFollowUp(
 ) {
   await authorizeComplianceAccess(principal, input.projectId, db);
   const engagement = await requireEngagement(input.projectId, db);
-  const alert = engagement.alerts.find((candidate) => candidate.id === input.alertId);
+  const alert = engagement.alerts.find(
+    (candidate) => candidate.id === input.alertId,
+  );
   if (!alert || alert.status !== ComplianceAlertStatus.OPEN) {
-    throw new DomainTransitionError("That SLA alert is not open on this project.");
+    throw new DomainTransitionError(
+      "That SLA alert is not open on this project.",
+    );
   }
   const party = COMPLIANCE_ALERT_PARTY[alert.type];
-  if (!party) throw new DomainTransitionError("This SLA alert has no party email follow-up.");
-  const outreach = engagement.outreaches.find((candidate) => candidate.party === party);
-  if (!outreach?.contactEmail || outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED) {
+  if (!party)
+    throw new DomainTransitionError(
+      "This SLA alert has no party email follow-up.",
+    );
+  const outreach = engagement.outreaches.find(
+    (candidate) => candidate.party === party,
+  );
+  if (
+    !outreach?.contactEmail
+    || outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED
+  ) {
     throw new DomainTransitionError(
       `No sendable ${PARTY_LABEL[party].toLowerCase()} thread is available.`,
     );
@@ -379,7 +549,10 @@ export async function sendComplianceFollowUp(
     },
     async () => {
       await send({
-        engagement: { id: engagement.id, subjectAddress: engagement.subjectAddress },
+        engagement: {
+          id: engagement.id,
+          subjectAddress: engagement.subjectAddress,
+        },
         outreach,
         body,
         attachments: [],
@@ -436,7 +609,11 @@ export async function sendCompliancePartyReply(
           id: { in: [...input.extraAttachmentIds] },
           OR: [
             { projectId: input.projectId },
-            { complianceDocument: { engagement: { projectId: input.projectId } } },
+            {
+              complianceDocument: {
+                engagement: { projectId: input.projectId },
+              },
+            },
           ],
         },
         select: { id: true, filename: true, url: true },
