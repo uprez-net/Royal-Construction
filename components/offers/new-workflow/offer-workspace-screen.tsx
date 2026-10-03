@@ -52,11 +52,17 @@ import {
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
+import { toast } from "sonner";
+import {
+  attachOfferBoundaryScroll,
+  type ScrollDirection,
+} from "./shell/offer-boundary-scroll";
 import { AreaCalculatorPanel } from "./offer-workspace-area";
 import { CostSchedulePanel } from "./offer-workspace-cost-schedule";
 import { OfferDocumentCanvas } from "./offer-document-canvas";
@@ -453,26 +459,31 @@ export function OfferWorkspaceScreen({
   }, [hydrated, status, tenderGateStatus]);
 
   // A step change replaces the whole pane. Move focus to it and reset its
-  // scroll, but only for changes the user made: a rail click, or a send blocker
+  // scroll, but only for changes the user made: a boundary scroll, a rail click, or a send blocker
   // that selected the step which resolves it (that button unmounts itself in the
   // same commit, which used to drop focus onto <body>). Page load and the
-  // hydration correction above must not steal focus.
+  // hydration correction above must not steal focus. Backward scrolling enters
+  // the previous pane at its bottom; all other navigation starts at the top.
   const paneRef = useRef<HTMLDivElement>(null);
-  const userNavigatedRef = useRef(false);
-  const navigateToStep = useCallback((stepId: OfferStepId) => {
-    userNavigatedRef.current = true;
-    setActiveStepId(stepId);
-  }, []);
+  const userNavigatedRef = useRef<"top" | "bottom" | null>(null);
+  const navigateToStep = useCallback(
+    (stepId: OfferStepId, edge: "top" | "bottom" = "top") => {
+      userNavigatedRef.current = edge;
+      setActiveStepId(stepId);
+    },
+    [],
+  );
   useEffect(() => {
     if (!userNavigatedRef.current) {
       return;
     }
-    userNavigatedRef.current = false;
+    const edge = userNavigatedRef.current;
+    userNavigatedRef.current = null;
     const pane = paneRef.current;
     if (!pane) {
       return;
     }
-    pane.scrollTop = 0;
+    pane.scrollTop = edge === "bottom" ? pane.scrollHeight : 0;
     pane.focus({ preventScroll: true });
   }, [activeStepId]);
 
@@ -599,6 +610,37 @@ export function OfferWorkspaceScreen({
     return states;
   }, [reviewSections, status, tenderGateStatus, phaseUnlocked]);
 
+  const [blockedStepId, setBlockedStepId] = useState<OfferStepId | null>(null);
+  useEffect(() => {
+    if (blockedStepId === null) return;
+    const timer = setTimeout(() => setBlockedStepId(null), 450);
+    return () => clearTimeout(timer);
+  }, [blockedStepId]);
+
+  const handleScrollBoundary = useEffectEvent((direction: ScrollDirection) => {
+    if (awaitingOffer || transitioning || pendingConfirm !== null) return false;
+    const index = OFFER_WORKFLOW_STEPS.findIndex(
+      (step) => step.id === activeStepId,
+    );
+    const adjacent = OFFER_WORKFLOW_STEPS[index + direction];
+    if (!adjacent) return false;
+    if (stepStates[adjacent.id] === "locked") {
+      setBlockedStepId(adjacent.id);
+      toast.warning(`${adjacent.label} is locked`, {
+        id: "offer-step-blocked",
+        description: digests[adjacent.id],
+      });
+    } else {
+      navigateToStep(adjacent.id, direction < 0 ? "bottom" : "top");
+    }
+    return true;
+  });
+  useEffect(() => {
+    const pane = paneRef.current;
+    if (!pane) return;
+    return attachOfferBoundaryScroll(pane, handleScrollBoundary);
+  }, []);
+
   return (
     // One app-height frame: the command bar and the summary strip are fixed
     // rows, the rail and the pane share what is left, and only the pane
@@ -622,6 +664,7 @@ export function OfferWorkspaceScreen({
       <div className="flex min-h-0 flex-1">
         <OfferStepRail
           activeStepId={activeStepId}
+          blockedStepId={blockedStepId}
           collapsed={railCollapsed}
           // Seeded digests read as this offer's progress ("3 allowances", a
           // price) while it is still loading. Blank them until it is here.
@@ -639,7 +682,7 @@ export function OfferWorkspaceScreen({
           aria-labelledby="offer-pane-title"
           aria-busy={transitioning}
           tabIndex={-1}
-          className="@container/pane min-h-0 min-w-0 flex-1 overflow-y-auto px-5 py-5 outline-none"
+          className="@container/pane min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-5 outline-none"
         >
           <div className="space-y-5">
             {awaitingOffer ? (
