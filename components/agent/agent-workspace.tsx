@@ -274,6 +274,7 @@ export function AgentWorkspace({
       sessionStorage.setItem(draftStorageKey(null), composer);
     // A full load, not a client push: a hidden /agent kept alive by Activity
     // can still hold an earlier conversation's live session.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- A fresh conversation must discard Activity-preserved Eve state.
     window.location.assign("/agent");
   }
   const statusLabel = useMemo(

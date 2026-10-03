@@ -9,6 +9,7 @@
 // answers "what does this step say?" without opening it.
 
 import { Check, ChevronLeft, ChevronRight, Lock } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { OfferStepId } from "@/lib/offer/step-digests";
 import {
@@ -20,6 +21,7 @@ export type OfferStepState = "complete" | "incomplete" | "locked";
 
 type OfferStepRailProps = {
   readonly activeStepId: OfferStepId;
+  readonly blockedStepId?: OfferStepId | null;
   readonly collapsed: boolean;
   readonly digests: Readonly<Record<OfferStepId, string>>;
   readonly stepStates: Readonly<Record<OfferStepId, OfferStepState>>;
@@ -29,12 +31,31 @@ type OfferStepRailProps = {
 
 export function OfferStepRail({
   activeStepId,
+  blockedStepId,
   collapsed,
   digests,
   stepStates,
   onSelect,
   onToggleCollapsed,
 }: OfferStepRailProps) {
+  const listRef = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    const list = listRef.current;
+    const row = list?.querySelector<HTMLElement>(
+      `[data-step-id="${blockedStepId ?? activeStepId}"]`,
+    );
+    if (!list || !row) return;
+    // Reveal feedback inside the rail without scrolling the page or the pane.
+    const bounds = list.getBoundingClientRect();
+    const rowBounds = row.getBoundingClientRect();
+    // Rects include the app's CSS zoom; scrollTop uses unscaled layout pixels.
+    const scale = bounds.height / list.offsetHeight || 1;
+    if (rowBounds.top < bounds.top)
+      list.scrollTop += (rowBounds.top - bounds.top) / scale;
+    else if (rowBounds.bottom > bounds.bottom)
+      list.scrollTop += (rowBounds.bottom - bounds.bottom) / scale;
+  }, [activeStepId, blockedStepId]);
+
   return (
     <nav
       aria-label="Offer workflow"
@@ -45,7 +66,7 @@ export function OfferStepRail({
         collapsed ? "w-14" : "w-14 lg:w-60",
       )}
     >
-      <ol className="flex-1 overflow-y-auto py-2">
+      <ol ref={listRef} className="flex-1 overflow-y-auto py-2">
         {OFFER_WORKFLOW_PHASES.map((phase) => {
           const steps = OFFER_WORKFLOW_STEPS.filter(
             (s) => s.phase === phase.id,
@@ -67,9 +88,10 @@ export function OfferStepRail({
               )}
               <ol>
                 {steps.map((step) => (
-                  <li key={step.id}>
+                  <li key={step.id} data-step-id={step.id}>
                     <RailRow
                       active={step.id === activeStepId}
+                      blocked={step.id === blockedStepId}
                       collapsed={collapsed}
                       digest={digests[step.id]}
                       index={OFFER_WORKFLOW_STEPS.indexOf(step) + 1}
@@ -108,6 +130,7 @@ export function OfferStepRail({
 
 function RailRow({
   active,
+  blocked,
   collapsed,
   digest,
   index,
@@ -116,6 +139,7 @@ function RailRow({
   onSelect,
 }: {
   readonly active: boolean;
+  readonly blocked: boolean;
   readonly collapsed: boolean;
   readonly digest: string;
   readonly index: number;
@@ -141,6 +165,8 @@ function RailRow({
         "flex w-full items-center gap-2.5 px-4 py-2 text-left transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50",
         active ? "bg-royal-gold-light/70" : "hover:bg-muted/50",
+        blocked
+          && "bg-warning-light motion-safe:animate-[offer-step-shake_320ms_ease-in-out]",
       )}
     >
       <StepGlyph active={active} index={index} state={state} />
