@@ -12,20 +12,28 @@ export function attachOfferBoundaryScroll(
   pane: HTMLElement,
   onBoundary: (direction: ScrollDirection) => boolean,
 ): () => void {
-  function ownsScroll(target: EventTarget | null): boolean {
+  function ownsScroll(
+    target: EventTarget | null,
+    direction?: ScrollDirection,
+  ): boolean {
     let element = target as HTMLElement | null;
     while (element && element !== pane) {
+      // Hovering a card or input does not give it ownership of scrolling.
+      // A nested editor/list keeps the gesture only while it can actually
+      // scroll in that direction; its exhausted edge can hand off to the pane.
       if (
-        element.matches(
-          'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="listbox"], [role="slider"]',
-        )
+        direction
+        && element.scrollHeight > element.clientHeight + EDGE_TOLERANCE
       ) {
-        return false;
-      }
-      if (element.scrollHeight > element.clientHeight + EDGE_TOLERANCE) {
         const overflow =
           pane.ownerDocument.defaultView?.getComputedStyle(element).overflowY;
-        if (overflow === "auto" || overflow === "scroll") return false;
+        const canScroll =
+          direction < 0
+            ? element.scrollTop > EDGE_TOLERANCE
+            : element.scrollTop + element.clientHeight
+              < element.scrollHeight - EDGE_TOLERANCE;
+        if ((overflow === "auto" || overflow === "scroll") && canScroll)
+          return false;
       }
       element = element.parentElement;
     }
@@ -46,6 +54,7 @@ export function attachOfferBoundaryScroll(
   let wheelDirection: ScrollDirection | null = null;
 
   function onWheel(event: WheelEvent) {
+    const direction: ScrollDirection = event.deltaY < 0 ? -1 : 1;
     if (
       event.defaultPrevented
       || !event.cancelable
@@ -53,7 +62,7 @@ export function attachOfferBoundaryScroll(
       || event.metaKey
       || event.deltaY === 0
       || Math.abs(event.deltaX) > Math.abs(event.deltaY)
-      || !ownsScroll(event.target)
+      || !ownsScroll(event.target, direction)
     )
       return;
 
@@ -72,7 +81,6 @@ export function attachOfferBoundaryScroll(
       return;
     }
 
-    const direction: ScrollDirection = event.deltaY < 0 ? -1 : 1;
     if (!atBoundary(direction)) {
       wheelDistance = 0;
       wheelDirection = null;
@@ -142,7 +150,7 @@ export function attachOfferBoundaryScroll(
     )
       return;
     const direction: ScrollDirection = delta < 0 ? -1 : 1;
-    if (!atBoundary(direction)) {
+    if (!ownsScroll(event.target, direction) || !atBoundary(direction)) {
       touchDistance = 0;
       touchDirection = null;
       return;

@@ -48,8 +48,16 @@ function wheel(
   return event;
 }
 
-function touch(pane: Pane, type: string, y: number, x = 0, count = 1) {
+function touch(
+  pane: Pane,
+  type: string,
+  y: number,
+  x = 0,
+  count = 1,
+  target?: object,
+) {
   const event = new Event(type, { cancelable: true });
+  if (target) Object.defineProperty(event, "target", { value: target });
   Object.assign(event, {
     touches: Array.from({ length: count }, (_, identifier) => ({
       identifier,
@@ -156,22 +164,118 @@ test("zoom, horizontal scrolling and already-handled events remain native", () =
   assert.deepEqual(directions, []);
 });
 
-test("scrolling inside a form control or nested scroll area never changes steps", () => {
+test("wheel navigation works over inputs and descendants of cards", () => {
+  for (const direction of [-1, 1] as const) {
+    for (const input of [false, true]) {
+      const { pane, directions } = fixture();
+      pane.scrollTop = direction > 0 ? 800 : 0;
+      const card = {
+        matches: () => false,
+        parentElement: pane,
+        overflowY: "hidden",
+        scrollHeight: 500,
+        clientHeight: 100,
+        scrollTop: 0,
+      };
+      const child = {
+        matches: () => input,
+        parentElement: card,
+        scrollHeight: 32,
+        clientHeight: 32,
+        scrollTop: 0,
+      };
+      assert.equal(
+        wheel(pane, direction * 100, { target: child }).defaultPrevented,
+        true,
+      );
+      assert.deepEqual(directions, [direction]);
+    }
+  }
+});
+
+test("a nested scroll area or editor keeps wheel input while it can scroll", () => {
   const { pane, directions } = fixture();
   pane.scrollTop = 800;
-  const control = { matches: () => true, parentElement: pane };
   const scroller = {
     matches: () => false,
     parentElement: pane,
     scrollHeight: 500,
     clientHeight: 100,
+    scrollTop: 200,
     overflowY: "auto",
   };
   const child = { matches: () => false, parentElement: scroller };
-  for (const target of [control, scroller, child]) {
+  const editor = { ...scroller, matches: () => true };
+  for (const target of [scroller, child, editor]) {
     assert.equal(wheel(pane, 100, { target }).defaultPrevented, false);
+    pane.scrollTop = 0;
+    assert.equal(wheel(pane, -100, { target }).defaultPrevented, false);
+    pane.scrollTop = 800;
   }
   assert.deepEqual(directions, []);
+});
+
+test("exhausted nested cards and textareas hand their boundary gesture to the pane", () => {
+  for (const direction of [-1, 1] as const) {
+    for (const editor of [false, true]) {
+      const { pane, directions } = fixture();
+      pane.scrollTop = direction > 0 ? 800 : 0;
+      const scroller = {
+        matches: () => editor,
+        parentElement: pane,
+        overflowY: "auto",
+        scrollHeight: 500,
+        clientHeight: 100,
+        scrollTop: direction > 0 ? 400 : 0,
+      };
+      const child = { matches: () => false, parentElement: scroller };
+      assert.equal(
+        wheel(pane, direction * 100, { target: child }).defaultPrevented,
+        true,
+      );
+      assert.deepEqual(directions, [direction]);
+    }
+  }
+});
+
+test("touch navigation works over inputs and waits for nested scrolling to finish", () => {
+  for (const direction of [-1, 1] as const) {
+    const { pane, directions } = fixture();
+    pane.scrollTop = direction > 0 ? 800 : 0;
+    const input = { matches: () => true, parentElement: pane };
+    touch(pane, "touchstart", 200, 0, 1, input);
+    assert.equal(
+      touch(pane, "touchmove", 200 - direction * 100, 0, 1, input)
+        .defaultPrevented,
+      true,
+    );
+    assert.deepEqual(directions, [direction]);
+
+    const nested = fixture();
+    nested.pane.scrollTop = direction > 0 ? 800 : 0;
+    const scroller = {
+      matches: () => false,
+      parentElement: nested.pane,
+      overflowY: "auto",
+      scrollHeight: 500,
+      clientHeight: 100,
+      scrollTop: 200,
+    };
+    touch(nested.pane, "touchstart", 200, 0, 1, scroller);
+    assert.equal(
+      touch(nested.pane, "touchmove", 200 - direction * 100, 0, 1, scroller)
+        .defaultPrevented,
+      false,
+    );
+    assert.deepEqual(nested.directions, []);
+    scroller.scrollTop = direction > 0 ? 400 : 0;
+    assert.equal(
+      touch(nested.pane, "touchmove", 200 - direction * 200, 0, 1, scroller)
+        .defaultPrevented,
+      true,
+    );
+    assert.deepEqual(nested.directions, [direction]);
+  }
 });
 
 test("touch swipes handle one boundary each and suppress the rest of that swipe", () => {
