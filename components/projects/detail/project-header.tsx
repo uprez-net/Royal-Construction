@@ -217,12 +217,13 @@ export function ProjectHeader({
                 </span>
               )}
             </span>
-            <span aria-hidden="true">|</span>
-            <SiteManagerSelector
-              project={project}
-              canAssign={canAssignSiteManager}
-            />
           </div>
+          {/* Its own line: who runs the build is a different kind of fact
+              from the contract dates and certificates above it. */}
+          <SiteManagerSelector
+            project={project}
+            canAssign={canAssignSiteManager}
+          />
           {owners.length > 0 ? (
             <div className="flex flex-col gap-1 pt-1">
               {owners.map((owner, index) => (
