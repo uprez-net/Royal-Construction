@@ -500,8 +500,7 @@ export async function listAuthorizedTradieSchedules(
   );
 }
 
-// lib/domain/tradies/schedules.ts owns the overlap rule; the app had none at
-// all until this phase.
+// lib/domain/tradies/schedules.ts owns the booking rules, shared with the app.
 export async function createAuthorizedTradieSchedule(
   ctx: ToolContext,
   input: {
@@ -516,8 +515,9 @@ export async function createAuthorizedTradieSchedule(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   const db = transaction ?? agentDb;
-  // Project scope, the milestone-belongs-to-project check and the overlap
-  // refusal are all lib/domain/tradies/schedules.ts now, shared with the app.
+  // Project scope, the milestone-belongs-to-project check and the duplicate
+  // booking refusal are all lib/domain/tradies/schedules.ts now, shared with
+  // the app. Overlapping days on different work are allowed.
   let created;
   try {
     created = await createTradieScheduleDomain(

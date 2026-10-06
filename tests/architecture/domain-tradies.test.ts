@@ -72,7 +72,7 @@ test("bulk scheduling authorizes every project inside one transaction", async ()
       return { id, location: `${id} location`, name: id, siteManagerId: null };
     },
     "tradie.findUnique": { id: "t_1" },
-    "tradieSchedule.findMany": [],
+    "tradieSchedule.findFirst": null,
     "tradieSchedule.create": (args: unknown) => ({
       ...(args as { data: Record<string, unknown> }).data,
       id: `schedule_${
@@ -100,7 +100,7 @@ test("bulk scheduling authorizes every project inside one transaction", async ()
   assert.deepEqual(authorizedProjects, ["project_1", "project_2"]);
 });
 
-test("schedule overlap checks and creates use serialisable transactions", () => {
+test("schedule duplicate checks and creates use serialisable transactions", () => {
   const source = read("lib/domain/tradies/schedules.ts");
   assert.ok(
     (source.match(/TransactionIsolationLevel\.Serializable/g)?.length ?? 0)
@@ -956,7 +956,6 @@ test("rescheduling checks the project milestone and uses old values as a stale g
       name: "House",
       siteManagerId: null,
     },
-    "tradieSchedule.findMany": [],
     "tradieSchedule.updateMany": { count: 0 },
   });
 

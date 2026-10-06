@@ -178,7 +178,7 @@ side of the line a capability is on before building against it.
 | `get_leads` | Covered by `search_leads` and `get_lead` |
 | `get_tradies`, `get_all_tradies` | Covered by `search_tradies` and `get_tradie` |
 | `get_tradie_coordination_dashboard` | Covered by `list_schedules` |
-| `create_tradie_schedule` | Covered by `create_schedule`, which has the overlap and milestone-ownership checks the old one lacked |
+| `create_tradie_schedule` | Covered by `create_schedule`, which has the duplicate-booking and milestone-ownership checks the old one lacked |
 | `update_tradie_schedule` | Covered by `transition_schedule` |
 | `create_variation`, `update_variation_status` | **Retired.** Variation rules are not implemented, and the agent says so rather than guessing |
 | `create_lead`, `update_lead`, `delete_lead` | **Not available.** Lead writes have no domain command yet |

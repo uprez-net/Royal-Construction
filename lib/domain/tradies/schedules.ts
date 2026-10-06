@@ -25,23 +25,22 @@ import { currency } from "../../../utils/formatters";
 
 // Booking a tradie onto a project.
 //
-// Two implementations, and this time it was the APP that was missing the
-// rules:
+// What the command refuses, for both callers (the app and Eve):
 //
-//   - No overlap check. lib/data/tradieSchedules.ts#createTradieSchedule wrote
-//     the row unconditionally, so the same tradie could be booked onto two
-//     projects for the same week. Eve refused it. A tradie who cannot show up
-//     to one of two sites is a day of work lost on whichever site loses, and
-//     nothing in the app would have warned anyone.
-//   - No check that the milestone belongs to the project. Both ids arrive from
+//   - The same booking twice. One tradie, one project, one milestone (or none)
+//     can hold one active booking. A second identical row would send the
+//     tradie a second request for work they already have and put the same job
+//     on the project twice. To change the dates, reschedule the booking that
+//     exists.
+//   - A milestone that does not belong to the project. Both ids arrive from
 //     the client, so a booking could be attached to a milestone on somebody
-//     else's project. Eve checked; the app did not.
+//     else's project.
 //
-// Both are kept, and both now apply to both callers. This is a deliberate
-// behaviour change on the app side: a booking that overlaps an existing active
-// one is now refused where it used to be written. If the office genuinely
-// needs to double-book a tradie with a crew across two sites, that wants an
-// explicit override, not a missing check.
+// What it no longer refuses: a tradie booked on overlapping days. The office
+// books one tradie onto two sites, or two milestones, on the same day, and a
+// hard refusal stopped them doing it. The picker shows the days already
+// booked instead (`listTradieBookings`), so the double booking is a decision
+// made with the clash in view rather than one the command makes for them.
 
 export type CreateScheduleInput = {
   readonly tradieId: string;
@@ -56,21 +55,14 @@ export type CreateScheduleInput = {
  * Statuses that no longer hold the tradie's time.
  *
  * A declined booking was never accepted and a completed one is in the past, so
- * neither blocks a new one.
+ * neither counts as booked: neither shows on the picker, and neither stops the
+ * same tradie being booked onto the same milestone again.
  */
 const NON_BLOCKING_STATUSES = [
   TradieScheduleStatus.DECLINED,
   TradieScheduleStatus.COMPLETED,
 ];
 
-/**
- * Refuse a booking that overlaps one this tradie already holds.
- *
- * Half-open by day: a booking that ends on the morning a new one starts does
- * not block it. The candidate set is narrowed in the query by start date and
- * the end date is computed per row, because `durationDays` varies and the
- * database has no end column to compare.
- */
 /** "12 Oct 2026" — schedule dates are stored at UTC midnight. */
 function bookingDay(date: Date): string {
   return new Intl.DateTimeFormat("en-AU", {
@@ -81,48 +73,46 @@ function bookingDay(date: Date): string {
   }).format(date);
 }
 
-export async function assertNoScheduleConflict(
+/**
+ * Refuse a booking this tradie already holds on the same project and milestone.
+ *
+ * "No milestone" is a milestone for this purpose: a second general booking for
+ * the same tradie on the same project is the same booking again. Dates play no
+ * part — moving one is a reschedule, not a second booking.
+ */
+export async function assertNotAlreadyBooked(
   input: {
     tradieId: string;
-    scheduledDate: Date;
-    durationDays: number;
-    /** An existing booking being moved, which must not conflict with itself. */
+    projectId: string;
+    milestoneId: string | null;
+    /** An existing booking being changed, which must not match itself. */
     ignoreScheduleId?: string;
   },
   db: DomainDb,
 ): Promise<void> {
-  const end = new Date(input.scheduledDate);
-  end.setUTCDate(end.getUTCDate() + input.durationDays);
-
-  const candidates = await db.tradieSchedule.findMany({
-    select: { durationDays: true, id: true, scheduledDate: true },
+  const existing = await db.tradieSchedule.findFirst({
+    select: { durationDays: true, scheduledDate: true },
     where: {
       id: input.ignoreScheduleId ? { not: input.ignoreScheduleId } : undefined,
-      scheduledDate: { lt: end },
+      milestoneId: input.milestoneId,
+      projectId: input.projectId,
       status: { notIn: NON_BLOCKING_STATUSES },
       tradieId: input.tradieId,
     },
   });
+  if (!existing) return;
 
-  const conflict = candidates.find((candidate) => {
-    const candidateEnd = new Date(candidate.scheduledDate);
-    candidateEnd.setUTCDate(candidateEnd.getUTCDate() + candidate.durationDays);
-    return candidateEnd > input.scheduledDate;
-  });
-
-  if (conflict) {
-    // The dates, so the operator can pick around them. The day the booking
-    // ends on is its last working day, not the exclusive end used above.
-    const lastDay = new Date(conflict.scheduledDate);
-    lastDay.setUTCDate(lastDay.getUTCDate() + conflict.durationDays - 1);
-    const booked =
-      conflict.durationDays > 1
-        ? `from ${bookingDay(conflict.scheduledDate)} to ${bookingDay(lastDay)}`
-        : `on ${bookingDay(conflict.scheduledDate)}`;
-    throw new DomainTransitionError(
-      `That tradie is already booked ${booked}, which overlaps the requested dates.`,
-    );
-  }
+  // The dates, so the operator can find the booking to reschedule.
+  const lastDay = new Date(existing.scheduledDate);
+  lastDay.setUTCDate(lastDay.getUTCDate() + existing.durationDays - 1);
+  const booked =
+    existing.durationDays > 1
+      ? `from ${bookingDay(existing.scheduledDate)} to ${bookingDay(lastDay)}`
+      : `on ${bookingDay(existing.scheduledDate)}`;
+  const work = input.milestoneId ? "this milestone" : "this project";
+  throw new DomainTransitionError(
+    `That tradie is already booked for ${work} ${booked}. Reschedule that booking instead of adding another.`,
+  );
 }
 
 export type TradieBooking = {
@@ -134,6 +124,8 @@ export type TradieBooking = {
    * whose build it is.
    */
   readonly projectName: string | null;
+  /** Null for no milestone, and when the project is not the caller's. */
+  readonly milestoneId: string | null;
   readonly milestoneName: string | null;
   readonly status: TradieScheduleStatus;
   /** First working day, `YYYY-MM-DD`. */
@@ -148,9 +140,10 @@ const BOOKING_LOOKBACK_DAYS = 366;
 /**
  * The bookings that hold this tradie's time from `from` onwards.
  *
- * The same `NON_BLOCKING_STATUSES` and the same half-open day arithmetic as
- * `assertNoScheduleConflict`, so a day the picker leaves open is a day the
- * booking command accepts, and a day it greys out is one it would refuse.
+ * For the picker to mark, not to refuse: a booked day can still be booked
+ * again. A booking holds `durationDays` days from its first, half-open, and
+ * the same `NON_BLOCKING_STATUSES` as `assertNotAlreadyBooked` decide which
+ * bookings count.
  */
 export async function listTradieBookings(
   principal: DomainPrincipal,
@@ -168,6 +161,7 @@ export async function listTradieBookings(
       durationDays: true,
       id: true,
       milestone: { select: { name: true } },
+      milestoneId: true,
       project: { select: { id: true, name: true, siteManagerId: true } },
       scheduledDate: true,
       status: true,
@@ -190,6 +184,7 @@ export async function listTradieBookings(
       {
         firstDay: row.scheduledDate.toISOString().slice(0, 10),
         lastDay: lastDay.toISOString().slice(0, 10),
+        milestoneId: visible ? row.milestoneId : null,
         milestoneName: visible ? (row.milestone?.name ?? null) : null,
         projectId: row.project.id,
         projectName: visible ? row.project.name : null,
@@ -268,10 +263,10 @@ export async function createTradieSchedule(
       );
     }
 
-    await assertNoScheduleConflict(
+    await assertNotAlreadyBooked(
       {
-        durationDays: input.durationDays,
-        scheduledDate: input.scheduledDate,
+        milestoneId: input.milestoneId ?? null,
+        projectId: project.id,
         tradieId: tradie.id,
       },
       transactionDb,
@@ -311,9 +306,10 @@ export async function createTradieSchedule(
 
 /**
  * Create a batch atomically. The App bulk endpoint used to bypass the single
- * booking command entirely, so it skipped milestone ownership and overlap
- * checks. Running the same command once per row inside one transaction keeps
- * those checks identical and makes a partial bulk booking impossible.
+ * booking command entirely, so it skipped its checks. Running the same command
+ * once per row inside one transaction keeps those checks identical — a batch
+ * that names the same booking twice is refused at its second row — and makes a
+ * partial bulk booking impossible.
  */
 export async function createTradieSchedules(
   principal: DomainPrincipal,
@@ -619,15 +615,22 @@ export async function rescheduleTradieSchedule(
   if (input.milestoneId) {
     await assertMilestoneOnProject(existing.projectId, input.milestoneId, db);
   }
-  await assertNoScheduleConflict(
-    {
-      durationDays,
-      ignoreScheduleId: existing.id,
-      scheduledDate: input.scheduledDate,
-      tradieId: existing.tradieId,
-    },
-    db,
-  );
+  // Moving a booking onto another milestone must not turn it into a copy of
+  // one the tradie already holds there. A date change cannot.
+  if (
+    input.milestoneId !== undefined
+    && input.milestoneId !== existing.milestoneId
+  ) {
+    await assertNotAlreadyBooked(
+      {
+        ignoreScheduleId: existing.id,
+        milestoneId: input.milestoneId,
+        projectId: existing.projectId,
+        tradieId: existing.tradieId,
+      },
+      db,
+    );
+  }
 
   const updatedCount = await db.tradieSchedule.updateMany({
     data: {

@@ -56,9 +56,9 @@ test("incident contracts retain explicit severity and bounded evidence ids", () 
   );
 });
 
-test("tradie operations enforce overlap checks and never expose the MCP adapter", async () => {
+test("tradie operations book through the domain command and never expose the MCP adapter", async () => {
   const source = await readFile("agent/lib/tradie-operations.ts", "utf8");
-  // The overlap rule itself moved to lib/domain/tradies/schedules.ts (issue
+  // The booking rules moved to lib/domain/tradies/schedules.ts (issue
   // #301) so the App booking paths get it too. What this file must still do is
   // reach that command instead of writing a booking of its own.
   assert.match(source, /createTradieSchedule as createTradieScheduleDomain/);
