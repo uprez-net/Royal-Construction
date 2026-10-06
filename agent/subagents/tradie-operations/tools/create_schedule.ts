@@ -10,7 +10,7 @@ import {
 
 export default defineTool({
   description:
-    "Schedule one authorized tradie on a project milestone, rejecting overlapping active bookings, after owner approval.",
+    "Schedule one authorized tradie on a project milestone, after owner approval. The tradie may already be booked on the same days for other work; booking the same tradie onto the same project milestone twice is rejected.",
   inputSchema: createTradieScheduleInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
@@ -21,10 +21,10 @@ export default defineTool({
       input,
       targetType: "tradieSchedule",
       targetIdFromOutput: (output) =>
-        typeof output.data.schedule === "object" &&
-        output.data.schedule !== null &&
-        "id" in output.data.schedule &&
-        typeof output.data.schedule.id === "string"
+        typeof output.data.schedule === "object"
+        && output.data.schedule !== null
+        && "id" in output.data.schedule
+        && typeof output.data.schedule.id === "string"
           ? output.data.schedule.id
           : undefined,
       authorize: (tx) =>

@@ -33,6 +33,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { getTradieBookings } from "@/lib/data/tradieSchedules";
+import { cn } from "@/lib/utils";
 import { bookingsOn, describeBooking } from "./tradie-bookings";
 import { TradeIcon } from "@/components/tradie-management/trade-icon";
 import { Input } from "@/components/ui/input";
@@ -147,8 +148,8 @@ export function TradieScheduleRow({
     failed: boolean;
   } | null>(null);
 
-  // The selected tradie's existing work, so the calendar can grey out the days
-  // they are already booked and say what on. Read through the schedules cache.
+  // The selected tradie's existing work, so the calendar can mark the days they
+  // are already booked and say what on. Read through the schedules cache.
   // Picking a different tradie clears the previous one's bookings at the
   // selection itself, so a stale list never validates the new tradie.
   useEffect(() => {
@@ -185,13 +186,21 @@ export function TradieScheduleRow({
     ) {
       const booked = bookingsOn(bookings, format(props.day.date, "yyyy-MM-dd"));
       if (booked.length === 0) return <CalendarDayButton {...props} />;
-      // A disabled button gets no pointer events, so the tooltip hangs off a
-      // wrapper that does.
+      // Marked, not disabled: the office may book a tradie onto two jobs on
+      // one day, so a booked day stays pickable and just says what is on it.
+      // The tooltip hangs off a wrapper because CalendarDayButton keeps its
+      // own ref.
       return (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="block w-full cursor-not-allowed">
-              <CalendarDayButton {...props} />
+            <span className="block w-full">
+              <CalendarDayButton
+                {...props}
+                className={cn(
+                  props.className,
+                  "bg-warning-light text-warning-ink hover:bg-warning/30",
+                )}
+              />
             </span>
           </TooltipTrigger>
           <TooltipContent side="top" className="flex-col items-start">
@@ -619,15 +628,6 @@ export function TradieScheduleRow({
                         : undefined,
                     })
                   }
-                  disabled={(date) =>
-                    bookingsOn(bookings, format(date, "yyyy-MM-dd")).length > 0
-                  }
-                  modifiers={{
-                    booked: (date) =>
-                      bookingsOn(bookings, format(date, "yyyy-MM-dd")).length
-                      > 0,
-                  }}
-                  modifiersClassNames={{ booked: "line-through" }}
                   components={{ DayButton }}
                 />
               </TooltipProvider>
@@ -643,10 +643,10 @@ export function TradieScheduleRow({
               {bookingsState === "loading"
                 ? "Checking this tradie's bookings…"
                 : bookingsState === "failed"
-                  ? "Couldn't load this tradie's bookings; overlaps are still checked when you schedule."
+                  ? "Couldn't load this tradie's bookings, so booked days aren't marked."
                   : bookings.length === 0
                     ? "No upcoming bookings."
-                    : `${bookings.length} upcoming booking${bookings.length === 1 ? "" : "s"} — those days are greyed out.`}
+                    : `${bookings.length} upcoming booking${bookings.length === 1 ? "" : "s"} — those days are marked in yellow and can still be booked.`}
             </p>
           ) : null}
 

@@ -102,10 +102,9 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
   try {
     const actingUser = await userHasAccessToSchedule(input.projectId);
     // The create itself is lib/domain/tradies/schedules.ts, shared with Eve's
-    // booking tool. Two checks arrive with it that this path never had: the
-    // milestone must belong to the project, and the tradie must not already
-    // hold an overlapping active booking. A double-booked tradie cannot show
-    // up to one of the two sites, and nothing here used to notice.
+    // booking tool: the milestone must belong to the project, and the tradie
+    // must not already hold an active booking on the same project and
+    // milestone. Overlapping days on different work are allowed.
     const created = await createTradieScheduleDomain(
       userPrincipal(actingUser),
       {
@@ -195,10 +194,10 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
  * sent for each created schedule.
  *
  * @param inputs - An array of schedule creation payloads.
- * A domain refusal — an overlapping booking, a milestone on another project,
+ * A domain refusal — the same booking twice, a milestone on another project,
  * no access — is **returned**, not thrown. This is a Server Action, and in
  * production Next replaces a thrown message with an opaque digest, so the
- * office saw "Failed to bulk create tradie schedules." for a double booking the
+ * office saw "Failed to bulk create tradie schedules." for a refusal the
  * domain had already named.
  *
  * @returns The formatted {@link TradieScheduleListItem} objects, or the refusal.
@@ -582,7 +581,7 @@ async function cachedTradieBookings(
   "use cache";
   // Every booking write in the app revalidates this tag. Eve's cannot, so a
   // booking it makes can show as free here for up to the profile's lifetime —
-  // the booking command still refuses the overlap and now says when it is.
+  // only a marker is missing; the booking command still refuses a duplicate.
   cacheTag("tradies-schedules");
   cacheLife(CACHE_PROFILES.SHORT);
 

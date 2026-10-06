@@ -22,7 +22,7 @@ import { getTradieGroupedByCategoryCached } from "@/lib/data/tradie-management";
 import type { ProjectStage } from "@prisma/client";
 import {
   describeBooking,
-  overlappingBookings,
+  existingBooking,
   type TradieBooking,
 } from "./tradie-bookings";
 
@@ -147,19 +147,41 @@ export default function ScheduleTradieModal({
     }
 
     // Caught here rather than by the server so the operator sees which row and
-    // which booking, before anything is sent.
-    if (!errors.scheduledDate && row.scheduledDate && row.bookings) {
-      const [clash] = overlappingBookings(
+    // which booking, before anything is sent. Overlapping days are allowed —
+    // the calendar marks them — but the same booking twice is not.
+    if (!errors.milestoneId && row.bookings) {
+      const duplicate = existingBooking(
         row.bookings,
-        row.scheduledDate,
-        row.durationDays ?? 1,
+        projectId,
+        row.milestoneId,
       );
-      if (clash) {
-        errors.scheduledDate = `Overlaps an existing booking: ${describeBooking(clash)}.`;
+      if (duplicate) {
+        errors.milestoneId = `Already booked for this milestone: ${describeBooking(duplicate)}. Reschedule that booking instead.`;
       }
     }
 
     return errors;
+  }
+
+  /** Every row's errors, plus a row repeating an earlier row's booking. */
+  function validateRows(
+    rows: TradieScheduleInputRow[],
+  ): TradieScheduleRowErrors[] {
+    return rows.map((row, index) => {
+      const errors = validateRow(row);
+      const repeated = rows
+        .slice(0, index)
+        .some(
+          (earlier) =>
+            earlier.tradieId === row.tradieId
+            && earlier.milestoneId === row.milestoneId,
+        );
+      if (!errors.milestoneId && row.tradieId && repeated) {
+        errors.milestoneId =
+          "This tradie is already on this milestone in an earlier row.";
+      }
+      return errors;
+    });
   }
 
   const addRow = () => {
@@ -210,7 +232,7 @@ export default function ScheduleTradieModal({
   const handleSubmit = async () => {
     if (isSubmitting) return;
 
-    const errors = scheduleRows.map(validateRow);
+    const errors = validateRows(scheduleRows);
 
     setRowErrors(errors);
 
