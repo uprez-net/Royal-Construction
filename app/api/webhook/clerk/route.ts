@@ -1,10 +1,20 @@
 import { NextRequest } from "next/server";
 import { verifyWebhook } from "@clerk/nextjs/webhooks";
+import type { UserJSON } from "@clerk/backend";
 import { createUser, deleteUser, updateUser } from "@/lib/data/user";
 import { Role } from "@prisma/client";
 import { updateUserMetadata } from "@/lib/auth";
 import { errorResponse, successResponse } from "@/utils/validators";
 import { randomPhoneNumberGenerator } from "@/utils/generator";
+
+/** The user's primary Clerk phone number, or undefined when there is none. */
+function primaryClerkPhone(user: UserJSON): string | undefined {
+  const numbers = user.phone_numbers ?? [];
+  const primary =
+    numbers.find((number) => number.id === user.primary_phone_number_id)
+    ?? numbers[0];
+  return primary?.phone_number || undefined;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +32,9 @@ export async function POST(request: NextRequest) {
         const { email_addresses, first_name, last_name, id } = evt.data;
 
         const email = email_addresses[0]?.email_address;
-        const phone = randomPhoneNumberGenerator();
+        // `User.phone` is required and unique, and most accounts reach Clerk
+        // with no number, so a placeholder stands in until someone sets one.
+        const phone = primaryClerkPhone(evt.data) ?? randomPhoneNumberGenerator();
         const fullName = [first_name, last_name].filter(Boolean).join(" ");
         const newUser = await createUser(fullName, email, id, phone);
         await updateUserMetadata(id, {
@@ -50,10 +62,18 @@ export async function POST(request: NextRequest) {
         const updatedEmail = updatedEmailAddresses[0]?.email_address;
         const role = (public_metadata?.role as Role) || Role.GUEST;
 
+        // The phone used to be replaced with a fresh random number on every
+        // Clerk update — a role change, a name edit, a new phone set from the
+        // team screen — so whatever the office saved was wiped seconds later.
+        // Only a number Clerk actually holds is copied; otherwise the stored
+        // one is left alone. Same for an empty name.
+        const updatedName = [updatedFirstName, updatedLastName]
+          .filter(Boolean)
+          .join(" ");
         await updateUser(updatedId, {
-          name: `${updatedFirstName} ${updatedLastName}`,
+          name: updatedName || undefined,
           email: updatedEmail,
-          phone: randomPhoneNumberGenerator(),
+          phone: primaryClerkPhone(evt.data),
           role,
         });
 

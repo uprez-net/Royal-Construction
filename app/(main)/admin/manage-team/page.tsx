@@ -8,10 +8,19 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Role } from "@prisma/client";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type FormEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Mail, Users, X } from "lucide-react";
+import { Mail, Pencil, Users, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -55,8 +64,10 @@ export default function TeamManagementPage() {
     setInvitePage,
     handleSendInvite,
     handleUpdateUserRole,
+    handleUpdateUserProfile,
     handleRevokeInvite,
   } = useClerkManagement();
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const onSubmit = async () => {
     startTransition(async () => {
@@ -167,12 +178,141 @@ export default function TeamManagementPage() {
                 handleAction={(arg) =>
                   handleUpdateUserRole(arg.userId, arg.newRole)
                 }
+                onEdit={setEditingUser}
               />
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
+      <EditMemberDialog
+        key={editingUser?.id ?? "closed"}
+        user={editingUser}
+        onClose={() => setEditingUser(null)}
+        onSave={handleUpdateUserProfile}
+      />
     </div>
+  );
+}
+
+function memberName(user: User) {
+  return [user.firstName, user.lastName].filter(Boolean).join(" ");
+}
+
+/** Clerk's primary number, from the serialized user the list holds. */
+function memberPhone(user: User) {
+  return (
+    user.phoneNumbers.find((phone) => phone.id === user.primaryPhoneNumberId)
+      ?.phoneNumber
+    ?? user.phoneNumbers[0]?.phoneNumber
+    ?? ""
+  );
+}
+
+/**
+ * Name and phone only. The email is the sign-in identity, so it is shown but
+ * not editable; changing it is Clerk's verification flow, not a form field.
+ */
+function EditMemberDialog({
+  user,
+  onClose,
+  onSave,
+}: {
+  user: User | null;
+  onClose: () => void;
+  onSave: (
+    userId: string,
+    profile: { name: string; phone: string },
+  ) => Promise<void>;
+}) {
+  const [name, setName] = useState(user ? memberName(user) : "");
+  const [phone, setPhone] = useState(user ? memberPhone(user) : "");
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, startSaving] = useTransition();
+
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) return;
+    setError(null);
+    startSaving(async () => {
+      try {
+        await onSave(user.id, { name, phone });
+        toast.success("Team member updated");
+        onClose();
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to update team member",
+        );
+      }
+    });
+  };
+
+  return (
+    <Dialog
+      open={user !== null}
+      onOpenChange={(open) => {
+        if (!open && !isSaving) onClose();
+      }}
+    >
+      <DialogContent>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <DialogHeader>
+            <DialogTitle>Edit team member</DialogTitle>
+            <DialogDescription>
+              Updates the name and phone number in Clerk and in the app.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="member-email">Email</Label>
+            <Input
+              id="member-email"
+              value={user?.emailAddresses[0]?.emailAddress ?? ""}
+              disabled
+              readOnly
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="member-name">Name</Label>
+            <Input
+              id="member-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoComplete="off"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="member-phone">Phone</Label>
+            <Input
+              id="member-phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="0412 345 678"
+              autoComplete="off"
+              required
+            />
+          </div>
+          {error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSaving}>
+              {isSaving ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -230,7 +370,10 @@ function UserList({
   setQuery,
   onPageChange,
   handleAction,
-}: ListTabProps<User, { userId: string; newRole: Role }>) {
+  onEdit,
+}: ListTabProps<User, { userId: string; newRole: Role }> & {
+  onEdit: (user: User) => void;
+}) {
   const paginationItems = useMemo(() => {
     if (!isLoaded || total === 0 || count === 0) return [1];
     const totalPages = Math.ceil(total / count);
@@ -264,12 +407,13 @@ function UserList({
       </div>
       {/* Data Table  */}
       <DataTable
-        headers={["Name", "Email", "Role", "Actions"]}
+        headers={["Name", "Email", "Phone", "Role", "Actions"]}
         rows={
           isLoaded
             ? items.map((user) => [
-                `${user.firstName} ${user.lastName}`,
+                memberName(user) || "No name",
                 user.emailAddresses[0]?.emailAddress || "No email",
+                memberPhone(user) || "No phone",
                 user.publicMetadata?.role
                   ? RoleLabelRecord[user.publicMetadata?.role as Role]
                   : "No role",
@@ -283,9 +427,19 @@ function UserList({
                       (user.publicMetadata?.role as Role) || undefined
                     }
                   />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onEdit(user)}
+                    aria-label={`Edit ${memberName(user) || "team member"}`}
+                  >
+                    <Pencil className="mr-1 h-4 w-4" />
+                    Edit
+                  </Button>
                 </div>,
               ])
-            : skeletonTableRows(4)
+            : skeletonTableRows(5)
         }
         emptyState={
           <div className="flex flex-col items-center justify-center gap-3">

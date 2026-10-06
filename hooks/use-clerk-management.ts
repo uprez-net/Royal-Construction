@@ -122,6 +122,30 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
     }
   };
 
+  const handleUpdateUserProfile = async (
+    userId: string,
+    profile: { name: string; phone: string },
+  ) => {
+    const res = await fetchJson<{
+      success: boolean;
+      message: string;
+      user: User;
+    }>(
+      "/api/users/profile",
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId, ...profile }),
+      },
+      "Failed to update team member",
+    );
+    setUsers((prev) =>
+      prev.map((user) => (user.id === userId ? res.data.user : user)),
+    );
+  };
+
   useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(() => {
@@ -181,6 +205,7 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
     setInvitePage,
     handleSendInvite,
     handleUpdateUserRole,
+    handleUpdateUserProfile,
     handleRevokeInvite,
   } as const;
 }
