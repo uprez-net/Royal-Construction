@@ -21,10 +21,10 @@ export default defineTool({
       input,
       targetType: "tradieSchedule",
       targetIdFromOutput: (output) =>
-        typeof output.data.schedule === "object" &&
-        output.data.schedule !== null &&
-        "id" in output.data.schedule &&
-        typeof output.data.schedule.id === "string"
+        typeof output.data.schedule === "object"
+        && output.data.schedule !== null
+        && "id" in output.data.schedule
+        && typeof output.data.schedule.id === "string"
           ? output.data.schedule.id
           : undefined,
       authorize: (tx) =>
