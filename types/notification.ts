@@ -341,8 +341,8 @@ export const notificationTemplates: NotificationTemplateFactory = {
         data.rejectedCount > 0 ? `${data.rejectedCount} sent back` : null,
       ]
         .filter(Boolean)
-        .join(", ") ||
-      "The council has come back on the development application",
+        .join(", ")
+      || "The council has come back on the development application",
     url: `/projects/${data.projectId}?activeTab=compliance`,
   }),
 };

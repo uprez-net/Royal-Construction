@@ -34,9 +34,7 @@ import {
 import { userPrincipal, type DomainPrincipal } from "@/lib/domain/principal";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { sendEmail } from "../azureClient";
-import {
-  DeleteScheduleInput,
-} from "@/types/tradie";
+import { DeleteScheduleInput } from "@/types/tradie";
 import { createActivityLogEntry } from "@/types/activityLog";
 import {
   applyTradieScheduleUpdate,
@@ -45,7 +43,6 @@ import {
 import { logAction } from "./actionLog";
 import { scheduleTotalCost } from "@/utils/calculations";
 import { get } from "@vercel/blob";
-
 
 /**
  * Ensures the currently authenticated user is the site manager of the
@@ -155,8 +152,8 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
         scheduleDate: dateFormat.format(schedule.scheduledDate),
         durationDays: schedule.durationDays,
         cost:
-          schedule.quotedPrice ??
-          currency.format(
+          schedule.quotedPrice
+          ?? currency.format(
             scheduleTotalCost(
               parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"),
               schedule.durationDays,
@@ -238,10 +235,13 @@ export async function bulkCreateTradieSchedules(
         milestone: true,
       },
     });
-    const storedById = new Map(stored.map((schedule) => [schedule.id, schedule]));
+    const storedById = new Map(
+      stored.map((schedule) => [schedule.id, schedule]),
+    );
     const schedules = created.map((schedule) => {
       const storedSchedule = storedById.get(schedule.id);
-      if (!storedSchedule) throw new Error("Schedule not found after creation.");
+      if (!storedSchedule)
+        throw new Error("Schedule not found after creation.");
       return storedSchedule;
     });
 
@@ -280,8 +280,8 @@ export async function bulkCreateTradieSchedules(
             scheduleDate: dateFormat.format(schedule.scheduledDate),
             durationDays: schedule.durationDays,
             cost:
-              schedule.quotedPrice ??
-              currency.format(
+              schedule.quotedPrice
+              ?? currency.format(
                 scheduleTotalCost(
                   parseFloat(
                     schedule.tradie.lastQuotedPrice?.toString() ?? "0",
@@ -349,7 +349,10 @@ export async function bulkCreateTradieSchedules(
       }
     });
 
-    return { ok: true, schedules: schedules.map(convertToTradieScheduleListItem) };
+    return {
+      ok: true,
+      schedules: schedules.map(convertToTradieScheduleListItem),
+    };
   } catch (error) {
     const refused = domainActionFailure(error);
     if (refused) return refused;

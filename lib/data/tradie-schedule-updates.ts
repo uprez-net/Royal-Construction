@@ -144,9 +144,10 @@ export async function applyTradieScheduleUpdate(
     });
     if (!schedule) throw new Error("Schedule not found after status update.");
     const declinesPendingApproval =
-      changed.previousStatus === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL &&
+      changed.previousStatus === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL
+      && updates.status === TradieScheduleStatus.DECLINED;
+    const requiresReplacement =
       updates.status === TradieScheduleStatus.DECLINED;
-    const requiresReplacement = updates.status === TradieScheduleStatus.DECLINED;
     after(async () => {
       revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
       revalidateTag("projects", CACHE_PROFILES.MEDIUM);

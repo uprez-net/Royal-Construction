@@ -44,12 +44,7 @@ import {
   TradieScheduleRowErrors,
 } from "./schedule-tradie-modal";
 import { useAppSelector } from "@/lib/store/hooks";
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type ComponentProps,
-} from "react";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { format, parse } from "date-fns";
 import { CollapsibleEmailContent } from "../tradie-tab/collapsible-email-content";

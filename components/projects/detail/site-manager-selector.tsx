@@ -89,7 +89,9 @@ export function SiteManagerSelector({
             labelledById={labelId}
             placeholder="Assign manager..."
             searchValue={search}
-            selectedItem={current ? { id: current.id, name: current.name } : null}
+            selectedItem={
+              current ? { id: current.id, name: current.name } : null
+            }
             items={siteManagers.items}
             loading={saving || siteManagers.loading}
             hasMore={siteManagers.page < siteManagers.totalPages}

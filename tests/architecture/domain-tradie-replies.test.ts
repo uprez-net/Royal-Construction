@@ -44,21 +44,31 @@ async function match(
 }
 
 test("a bare 'yes' with no date matches the tradie's only open booking", async () => {
-  const { result, recorder } = await match([booking("s_1", "2026-10-12", ORION)], {
-    projectLocation: "",
-    scheduleDate: "",
-  });
+  const { result, recorder } = await match(
+    [booking("s_1", "2026-10-12", ORION)],
+    {
+      projectLocation: "",
+      scheduleDate: "",
+    },
+  );
   assert.equal(result.kind, "matched");
   assert.equal(result.kind === "matched" && result.schedule.id, "s_1");
   // Only open bookings are read, and COMPLETED is not one of them.
-  const where = (recorder.calls[0]?.args as { where: { status: { in: string[] } } })
-    .where;
+  const where = (
+    recorder.calls[0]?.args as { where: { status: { in: string[] } } }
+  ).where;
   assert.deepEqual(where.status.in, [...AWAITING_TRADIE_REPLY]);
   assert.ok(!AWAITING_TRADIE_REPLY.includes(TradieScheduleStatus.COMPLETED));
 });
 
 test("an unreadable date is ignored rather than sent to the database", async () => {
-  for (const scheduleDate of ["", "next Tuesday", "12/10/2026", "2026-02-31", null]) {
+  for (const scheduleDate of [
+    "",
+    "next Tuesday",
+    "12/10/2026",
+    "2026-02-31",
+    null,
+  ]) {
     const { result } = await match([booking("s_1", "2026-10-12", ORION)], {
       scheduleDate,
     });
@@ -72,15 +82,23 @@ test("a usable date or address narrows several open bookings", async () => {
     booking("s_2", "2026-10-20", "4 Smith St, Parramatta NSW 2150"),
   ];
   const byDate = await match(open, { scheduleDate: "2026-10-20" });
-  assert.equal(byDate.result.kind === "matched" && byDate.result.schedule.id, "s_2");
+  assert.equal(
+    byDate.result.kind === "matched" && byDate.result.schedule.id,
+    "s_2",
+  );
 
   // An address that is neither site narrows nothing.
-  const elsewhere = await match(open, { projectLocation: "9 Unrelated Ave, Penrith" });
+  const elsewhere = await match(open, {
+    projectLocation: "9 Unrelated Ave, Penrith",
+  });
   assert.equal(elsewhere.result.kind, "ambiguous");
 
-  const byExactAddress = await match(open, { projectLocation: "161 Orion Road, Austral" });
+  const byExactAddress = await match(open, {
+    projectLocation: "161 Orion Road, Austral",
+  });
   assert.equal(
-    byExactAddress.result.kind === "matched" && byExactAddress.result.schedule.id,
+    byExactAddress.result.kind === "matched"
+      && byExactAddress.result.schedule.id,
     "s_1",
   );
 });

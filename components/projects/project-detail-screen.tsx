@@ -46,8 +46,8 @@ export function ProjectDetailScreen({
     insuranceClaimEndDate,
     hbcfInsuranceNumber,
   } =
-    displayedProject.requirements?.legalAdministration ||
-    ({} as ProjectRequirementsHeader);
+    displayedProject.requirements?.legalAdministration
+    || ({} as ProjectRequirementsHeader);
 
   useEffect(() => {
     dispatch(setActiveProject(project));

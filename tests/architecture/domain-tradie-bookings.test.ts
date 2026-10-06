@@ -35,7 +35,11 @@ const ROWS = [
     durationDays: 3,
     id: "s_running",
     milestone: { name: "Framing" },
-    project: { id: "p_mine", name: "Smith residence", siteManagerId: "user_site_manager" },
+    project: {
+      id: "p_mine",
+      name: "Smith residence",
+      siteManagerId: "user_site_manager",
+    },
     scheduledDate: day("2026-10-05"),
     status: TradieScheduleStatus.CONFIRMED,
   },
@@ -43,7 +47,11 @@ const ROWS = [
     durationDays: 2,
     id: "s_finished",
     milestone: null,
-    project: { id: "p_other", name: "Jones build", siteManagerId: "user_other" },
+    project: {
+      id: "p_other",
+      name: "Jones build",
+      siteManagerId: "user_other",
+    },
     scheduledDate: day("2026-10-01"),
     status: TradieScheduleStatus.PENDING,
   },
@@ -51,7 +59,11 @@ const ROWS = [
     durationDays: 1,
     id: "s_later",
     milestone: { name: "Roofing" },
-    project: { id: "p_other", name: "Jones build", siteManagerId: "user_other" },
+    project: {
+      id: "p_other",
+      name: "Jones build",
+      siteManagerId: "user_other",
+    },
     scheduledDate: day("2026-10-20"),
     status: TradieScheduleStatus.PENDING,
   },
@@ -66,13 +78,18 @@ test("a tradie's bookings run from today, inclusive last day, and skip finished 
   );
 
   assert.deepEqual(
-    bookings.map((booking) => [booking.scheduleId, booking.firstDay, booking.lastDay]),
+    bookings.map((booking) => [
+      booking.scheduleId,
+      booking.firstDay,
+      booking.lastDay,
+    ]),
     [
       ["s_running", "2026-10-05", "2026-10-07"],
       ["s_later", "2026-10-20", "2026-10-20"],
     ],
   );
-  const where = (recorder.calls[0]?.args as { where: { status: unknown } }).where;
+  const where = (recorder.calls[0]?.args as { where: { status: unknown } })
+    .where;
   assert.deepEqual(where.status, {
     notIn: [TradieScheduleStatus.DECLINED, TradieScheduleStatus.COMPLETED],
   });

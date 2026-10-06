@@ -34,14 +34,15 @@ export async function POST(request: NextRequest) {
         const email = email_addresses[0]?.email_address;
         // `User.phone` is required and unique, and most accounts reach Clerk
         // with no number, so a placeholder stands in until someone sets one.
-        const phone = primaryClerkPhone(evt.data) ?? randomPhoneNumberGenerator();
+        const phone =
+          primaryClerkPhone(evt.data) ?? randomPhoneNumberGenerator();
         const fullName = [first_name, last_name].filter(Boolean).join(" ");
         const newUser = await createUser(fullName, email, id, phone);
         await updateUserMetadata(id, {
           publicMetadata: {
             role: newUser.role,
-            ...((newUser.customerId && { customerId: newUser.customerId }) ||
-              {}),
+            ...((newUser.customerId && { customerId: newUser.customerId })
+              || {}),
           },
           privateMetadata: {
             applicationUserId: newUser.userId,

@@ -565,8 +565,8 @@ function InviteList({
                   ? RoleLabelRecord[invite.publicMetadata?.role as Role]
                   : "No role",
                 dateFormat.format(new Date(invite.createdAt)),
-                invite.status.charAt(0).toUpperCase() +
-                  invite.status.slice(1).toLowerCase(),
+                invite.status.charAt(0).toUpperCase()
+                  + invite.status.slice(1).toLowerCase(),
                 <div className="flex space-x-2" key={`actions-${invite.id}`}>
                   <Button
                     variant="outline"

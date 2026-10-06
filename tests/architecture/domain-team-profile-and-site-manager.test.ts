@@ -59,7 +59,11 @@ test("a profile edit writes Clerk, then the local name and phone, never the emai
 
   const result = await updateTeamMemberProfile(
     adminPrincipal(),
-    { clerkUserId: MEMBER.clerkId, name: "  Jane   Mary Smith ", phone: "0412 345 678" },
+    {
+      clerkUserId: MEMBER.clerkId,
+      name: "  Jane   Mary Smith ",
+      phone: "0412 345 678",
+    },
     recorder.db,
     port,
   );
