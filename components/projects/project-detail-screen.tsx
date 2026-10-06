@@ -14,7 +14,7 @@ import { ProjectComplianceAlert } from "./detail/project-compliance-alert";
 import { ProjectDetailTabs } from "./detail/project-detail-tabs";
 import { ProjectHeader } from "./detail/project-header";
 import { ProjectStatCards } from "./detail/project-stat-cards";
-import type { Role } from "@prisma/client";
+import { Role } from "@prisma/client";
 
 type ProjectRequirementsHeader = {
   siteAddress?: string | null;
@@ -62,6 +62,7 @@ export function ProjectDetailScreen({
     <div className="space-y-4 pb-4">
       <ProjectHeader
         project={displayedProject}
+        canAssignSiteManager={role === Role.ADMIN}
         key={`header-${siteAddress}-${signedDate}-${pcaInspector}-${insuranceClaimStartDate}-${insuranceClaimEndDate}-${hbcfInsuranceNumber}`}
       />
       <ProjectStatCards role={role} />

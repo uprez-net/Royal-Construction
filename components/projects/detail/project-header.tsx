@@ -18,6 +18,7 @@ import {
   projectStatusConfig,
 } from "@/components/projects/project-status";
 import { HbcfCapacityBadge } from "@/components/projects/detail/hbcf-capacity-badge";
+import { SiteManagerSelector } from "@/components/projects/detail/site-manager-selector";
 import { StatusPill } from "@/components/common/status-pill";
 import type { ProjectDetail } from "@/types/project";
 import { formatDisplayDate, normalizeDateString } from "@/utils/date";
@@ -47,7 +48,14 @@ const NOT_SET = "Not set";
  */
 const LEGAL_SECTION_ID = "legalAdministration";
 
-export function ProjectHeader({ project }: { project: ProjectDetail }) {
+export function ProjectHeader({
+  project,
+  canAssignSiteManager,
+}: {
+  project: ProjectDetail;
+  /** Only an ADMIN may reassign; everyone else sees the name. */
+  canAssignSiteManager: boolean;
+}) {
   const dispatch = useAppDispatch();
   // Back to the chip and page of the list this project was opened from.
   const backToListHref = projectsListHref(useSearchParams().get("list"));
@@ -209,6 +217,11 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
                 </span>
               )}
             </span>
+            <span aria-hidden="true">|</span>
+            <SiteManagerSelector
+              project={project}
+              canAssign={canAssignSiteManager}
+            />
           </div>
           {owners.length > 0 ? (
             <div className="flex flex-col gap-1 pt-1">
