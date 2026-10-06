@@ -18,7 +18,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Check, ChevronsDown, Loader2, Trash2 } from "lucide-react";
+import {
+  CalendarIcon,
+  Check,
+  ChevronsDown,
+  Loader2,
+  Trash2,
+} from "lucide-react";
+import { Calendar, CalendarDayButton } from "@/components/ui/calendar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { getTradieBookings } from "@/lib/data/tradieSchedules";
+import { bookingsOn, describeBooking } from "./tradie-bookings";
 import { TradeIcon } from "@/components/tradie-management/trade-icon";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -29,9 +44,14 @@ import {
   TradieScheduleRowErrors,
 } from "./schedule-tradie-modal";
 import { useAppSelector } from "@/lib/store/hooks";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentProps,
+} from "react";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import { CollapsibleEmailContent } from "../tradie-tab/collapsible-email-content";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { ProjectStage } from "@prisma/client";
@@ -124,6 +144,76 @@ export function TradieScheduleRow({
     () => selectedCategoryTradies.find((tradie) => tradie.id === row.tradieId),
     [selectedCategoryTradies, row.tradieId],
   );
+
+  // Which tradie the last bookings load answered for, so a load still in
+  // flight for a newly picked tradie reads as loading, not as "no bookings".
+  const [bookingsLoad, setBookingsLoad] = useState<{
+    tradieId: string;
+    failed: boolean;
+  } | null>(null);
+
+  // The selected tradie's existing work, so the calendar can grey out the days
+  // they are already booked and say what on. Read through the schedules cache.
+  // Picking a different tradie clears the previous one's bookings at the
+  // selection itself, so a stale list never validates the new tradie.
+  useEffect(() => {
+    if (!row.tradieId) return;
+    const tradieId = row.tradieId;
+    let cancelled = false;
+    getTradieBookings(tradieId)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.ok) onChange(index, { bookings: result.bookings });
+        setBookingsLoad({ tradieId, failed: !result.ok });
+      })
+      .catch(() => {
+        if (!cancelled) setBookingsLoad({ tradieId, failed: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [index, onChange, row.tradieId]);
+
+  const bookingsState: "idle" | "loading" | "failed" = !row.tradieId
+    ? "idle"
+    : bookingsLoad?.tradieId !== row.tradieId
+      ? "loading"
+      : bookingsLoad.failed
+        ? "failed"
+        : "idle";
+
+  const bookings = useMemo(() => row.bookings ?? [], [row.bookings]);
+
+  const DayButton = useMemo(() => {
+    function BookedAwareDayButton(
+      props: ComponentProps<typeof CalendarDayButton>,
+    ) {
+      const booked = bookingsOn(bookings, format(props.day.date, "yyyy-MM-dd"));
+      if (booked.length === 0) return <CalendarDayButton {...props} />;
+      // A disabled button gets no pointer events, so the tooltip hangs off a
+      // wrapper that does.
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="block w-full cursor-not-allowed">
+              <CalendarDayButton {...props} />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="flex-col items-start">
+            <span className="font-medium">Already booked</span>
+            {booked.map((booking) => (
+              <span key={booking.scheduleId}>{describeBooking(booking)}</span>
+            ))}
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+    return BookedAwareDayButton;
+  }, [bookings]);
+
+  const selectedDate = row.scheduledDate
+    ? parse(row.scheduledDate, "yyyy-MM-dd", new Date())
+    : undefined;
 
   const stageToMilestoneMap = useMemo(() => {
     const map: Record<ProjectStage, { id: string; name: string }[]> =
@@ -274,6 +364,7 @@ export function TradieScheduleRow({
                             onChange(index, {
                               tradeCategory: category,
                               tradieId: "",
+                              bookings: undefined,
                             });
                           }}
                         >
@@ -374,6 +465,9 @@ export function TradieScheduleRow({
                         onSelect={() =>
                           onChange(index, {
                             tradieId: tradie.id,
+                            ...(tradie.id === row.tradieId
+                              ? {}
+                              : { bookings: undefined }),
                           })
                         }
                       >
@@ -491,18 +585,75 @@ export function TradieScheduleRow({
             <RequiredMark />
           </Label>
 
-          <Input
-            id={fieldId("date")}
-            type="date"
-            value={row.scheduledDate ?? ""}
-            aria-invalid={Boolean(errors.scheduledDate)}
-            aria-describedby={describedBy("date", errors.scheduledDate)}
-            onChange={(event) =>
-              onChange(index, {
-                scheduledDate: event.target.value,
-              })
-            }
-          />
+          <Popover modal>
+            <PopoverTrigger asChild>
+              <Button
+                id={fieldId("date")}
+                type="button"
+                variant="outline"
+                aria-invalid={Boolean(errors.scheduledDate)}
+                aria-describedby={
+                  [
+                    describedBy("date", errors.scheduledDate),
+                    row.tradieId ? fieldId("date-hint") : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || undefined
+                }
+                className="w-full justify-start font-normal"
+              >
+                <CalendarIcon className="mr-2 size-4" aria-hidden="true" />
+                {selectedDate ? (
+                  format(selectedDate, "dd MMM yyyy")
+                ) : (
+                  <span className="text-muted-foreground">Pick a date</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <TooltipProvider delayDuration={150}>
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  defaultMonth={selectedDate}
+                  captionLayout="dropdown"
+                  onSelect={(date) =>
+                    onChange(index, {
+                      scheduledDate: date
+                        ? format(date, "yyyy-MM-dd")
+                        : undefined,
+                    })
+                  }
+                  disabled={(date) =>
+                    bookingsOn(bookings, format(date, "yyyy-MM-dd")).length > 0
+                  }
+                  modifiers={{
+                    booked: (date) =>
+                      bookingsOn(bookings, format(date, "yyyy-MM-dd")).length
+                      > 0,
+                  }}
+                  modifiersClassNames={{ booked: "line-through" }}
+                  components={{ DayButton }}
+                />
+              </TooltipProvider>
+            </PopoverContent>
+          </Popover>
+
+          {row.tradieId ? (
+            <p
+              id={fieldId("date-hint")}
+              className="text-xs text-muted-foreground"
+              aria-live="polite"
+            >
+              {bookingsState === "loading"
+                ? "Checking this tradie's bookings…"
+                : bookingsState === "failed"
+                  ? "Couldn't load this tradie's bookings; overlaps are still checked when you schedule."
+                  : bookings.length === 0
+                    ? "No upcoming bookings."
+                    : `${bookings.length} upcoming booking${bookings.length === 1 ? "" : "s"} — those days are greyed out.`}
+            </p>
+          ) : null}
 
           <FieldError id={errorId("date")} message={errors.scheduledDate} />
         </div>

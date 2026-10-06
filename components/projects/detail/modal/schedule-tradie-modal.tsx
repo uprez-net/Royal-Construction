@@ -20,6 +20,11 @@ import {
 } from "@/lib/store/slices/tradieManagementSlice";
 import { getTradieGroupedByCategoryCached } from "@/lib/data/tradie-management";
 import type { ProjectStage } from "@prisma/client";
+import {
+  describeBooking,
+  overlappingBookings,
+  type TradieBooking,
+} from "./tradie-bookings";
 
 interface ScheduleTradieModalProps {
   open: boolean;
@@ -36,6 +41,8 @@ export interface TradieScheduleInputRow {
   scheduledDate?: string;
   durationDays?: number;
   requiresQuote?: boolean;
+  /** The selected tradie's existing bookings, once loaded. */
+  bookings?: TradieBooking[];
   emailContent?: {
     subject: string;
     body: string;
@@ -137,6 +144,19 @@ export default function ScheduleTradieModal({
 
     if (row.durationDays === undefined || row.durationDays < 1) {
       errors.durationDays = "Duration must be at least 1 day";
+    }
+
+    // Caught here rather than by the server so the operator sees which row and
+    // which booking, before anything is sent.
+    if (!errors.scheduledDate && row.scheduledDate && row.bookings) {
+      const [clash] = overlappingBookings(
+        row.bookings,
+        row.scheduledDate,
+        row.durationDays ?? 1,
+      );
+      if (clash) {
+        errors.scheduledDate = `Overlaps an existing booking: ${describeBooking(clash)}.`;
+      }
     }
 
     return errors;

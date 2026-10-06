@@ -15,7 +15,7 @@ import type {
   UpdateTradieScheduleInput,
 } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
-import { revalidateTag } from "next/cache";
+import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 import { triggerNotification } from "../notification/novu";
 import { createNotification } from "@/types/notification";
 import { currency, dateFormat } from "@/utils/formatters";
@@ -28,12 +28,18 @@ import { authorizeProject } from "@/lib/domain/access/projects";
 import {
   createTradieSchedule as createTradieScheduleDomain,
   createTradieSchedules as createTradieSchedulesDomain,
+  listTradieBookings,
+  type TradieBooking,
   requestTradieScheduleDeletion as requestTradieScheduleDeletionDomain,
   transitionTradieSchedule as transitionTradieScheduleDomain,
 } from "@/lib/domain/tradies/schedules";
 import { sendTradieScheduleReminder as sendTradieScheduleReminderDomain } from "@/lib/domain/tradies/reminders";
 import { DomainNotFoundError, isDomainError } from "@/lib/domain/errors";
-import { userPrincipal } from "@/lib/domain/principal";
+import {
+  domainActionFailure,
+  type DomainActionFailure,
+} from "@/lib/http/domain-response";
+import { userPrincipal, type DomainPrincipal } from "@/lib/domain/principal";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { sendEmail } from "../azureClient";
 import {
@@ -231,6 +237,8 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
     return result;
   } catch (error) {
     console.error("Error creating tradie schedule:", error);
+    // A refusal keeps its own status and sentence for the route to answer with.
+    if (isDomainError(error)) throw error;
     throw new Error("Failed to create tradie schedule.");
   }
 }
@@ -243,14 +251,20 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
  * sent for each created schedule.
  *
  * @param inputs - An array of schedule creation payloads.
- * @returns An array of formatted {@link TradieScheduleListItem} objects.
- * @throws {Error} If no inputs are provided.
- * @throws {Error} If the user does not have permission to create schedules
- * for the project or if the operation fails.
+ * A domain refusal — an overlapping booking, a milestone on another project,
+ * no access — is **returned**, not thrown. This is a Server Action, and in
+ * production Next replaces a thrown message with an opaque digest, so the
+ * office saw "Failed to bulk create tradie schedules." for a double booking the
+ * domain had already named.
+ *
+ * @returns The formatted {@link TradieScheduleListItem} objects, or the refusal.
+ * @throws {Error} If the operation fails for a reason that is not a refusal.
  */
 export async function bulkCreateTradieSchedules(
   inputs: CreateTradieScheduleInput[],
-) {
+): Promise<
+  { ok: true; schedules: TradieScheduleListItem[] } | DomainActionFailure
+> {
   try {
     if (inputs.length === 0) {
       throw new Error("No inputs provided for bulk creation.");
@@ -388,8 +402,10 @@ export async function bulkCreateTradieSchedules(
       }
     });
 
-    return schedules.map(convertToTradieScheduleListItem);
+    return { ok: true, schedules: schedules.map(convertToTradieScheduleListItem) };
   } catch (error) {
+    const refused = domainActionFailure(error);
+    if (refused) return refused;
     console.error("Error bulk creating tradie schedules:", error);
     throw new Error("Failed to bulk create tradie schedules.");
   }
@@ -864,5 +880,54 @@ export async function sendTradieScheduleReminder({
     }
     console.error("Error sending tradie schedule reminder:", error);
     throw new Error("Failed to send tradie schedule reminder.");
+  }
+}
+
+async function cachedTradieBookings(
+  principal: DomainPrincipal,
+  tradieId: string,
+  fromDay: string,
+) {
+  "use cache";
+  // Every booking write in the app revalidates this tag. Eve's cannot, so a
+  // booking it makes can show as free here for up to the profile's lifetime —
+  // the booking command still refuses the overlap and now says when it is.
+  cacheTag("tradies-schedules");
+  cacheLife(CACHE_PROFILES.SHORT);
+
+  return listTradieBookings(
+    principal,
+    { from: new Date(`${fromDay}T00:00:00.000Z`), tradieId },
+    prisma,
+  );
+}
+
+/**
+ * The bookings holding a tradie's time from today on, for the schedule modal
+ * to grey out those days and say what the tradie is booked on.
+ */
+export async function getTradieBookings(
+  tradieId: string,
+): Promise<
+  | { ok: true; bookings: TradieBooking[] }
+  | DomainActionFailure
+  | { ok: false; error: string }
+> {
+  const access = await requireInternalUser();
+  if (!access.ok) return { ok: false, error: access.error };
+
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const bookings = await cachedTradieBookings(
+      userPrincipal(access.user),
+      tradieId,
+      today,
+    );
+    return { ok: true, bookings };
+  } catch (error) {
+    const refused = domainActionFailure(error);
+    if (refused) return refused;
+    console.error("Error loading tradie bookings:", error);
+    return { ok: false, error: "Could not load this tradie's bookings." };
   }
 }

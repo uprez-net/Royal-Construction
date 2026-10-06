@@ -3,8 +3,10 @@ import {
   getCachedTradies,
 } from "@/lib/data/tradies";
 import { createTradieSchedule } from "@/lib/data/tradieSchedules";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   createTradieScheduleSchema,
+  errorResponse,
   tradieCoordinationListQuerySchema,
   parseBodyWithResponse,
   parseSearchParamsWithResponse,
@@ -16,10 +18,17 @@ export async function POST(request: NextRequest) {
   const body = await parseBodyWithResponse(request, createTradieScheduleSchema);
   if (!body.success) return body.response;
 
-  const data = body.data;
-  const schedule = await createTradieSchedule(data);
-
-  return successResponse(schedule, { status: 201 });
+  try {
+    const schedule = await createTradieSchedule(body.data);
+    return successResponse(schedule, { status: 201 });
+  } catch (error) {
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
+    return errorResponse("Failed to create tradie schedule.", {
+      status: 500,
+      code: "INTERNAL_ERROR",
+    });
+  }
 }
 
 export async function GET(request: Request) {
