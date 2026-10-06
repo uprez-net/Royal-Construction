@@ -3,7 +3,15 @@ import { isLeadMessage } from "@/lib/graph/lead-subject";
 import { getGraphConfig, type GraphMailbox } from "@/lib/graph/config";
 import prisma from "@/lib/prisma";
 import { extractTradieScheduleInfoFromMessage } from "@/lib/graph/tradie-schedule-info-extractor";
-import { updateTradieSchedule } from "@/lib/data/tradieSchedules";
+import { applyTradieScheduleUpdate } from "@/lib/data/tradie-schedule-updates";
+import { getAllAdminUsersIds } from "@/lib/data/user";
+import {
+  AWAITING_TRADIE_REPLY,
+  matchTradieReplyToSchedule,
+  tradieReplyStatus,
+} from "@/lib/domain/tradies/replies";
+import { triggerNotification } from "@/lib/notification/novu";
+import { createNotification } from "@/types/notification";
 import { saveLeadEmailTrail } from "@/lib/graph/save-lead-email-trail";
 import { evaluateEmail } from "@/utils/spam-detector";
 import { recordOfferReply } from "@/lib/domain/offers/replies";
@@ -87,6 +95,31 @@ async function isMessageAlreadyProcessed(messageId: string): Promise<boolean> {
       error,
     );
     return false;
+  }
+}
+
+/**
+ * Tell the admins a tradie's reply was not applied, instead of leaving it in a
+ * log nobody reads. Never throws: the rest of the batch still has to run.
+ */
+async function notifyTradieReplyNeedsReview(
+  tradie: { id: string; name: string },
+  subject: string,
+  reason: string,
+) {
+  console.log(`  Tradie reply needs review (${tradie.id}): ${reason}`);
+  try {
+    await triggerNotification(
+      await getAllAdminUsersIds(),
+      createNotification("tradieReplyNeedsReview", {
+        reason,
+        subject,
+        tradieId: tradie.id,
+        tradieName: tradie.name,
+      }),
+    );
+  } catch (error) {
+    console.error("Could not notify admins about a tradie reply:", error);
   }
 }
 
@@ -710,76 +743,93 @@ async function processNotifications(
             continue;
           }
 
-          // Check if the message is from a tradie and extract tradie schedule info
+          // A tradie answering a booking request. Which booking, and what the
+          // answer moves it to, is lib/domain/tradies/replies.ts; the status
+          // change itself runs as the system, because this webhook has no
+          // signed-in user — `updateTradieSchedule` is the browser's door and
+          // refused every reply here with "User not authenticated".
           if (message.from && (await isTradieMessage(message.from))) {
             const tradie = await prisma.tradie.findUnique({
+              select: { id: true, name: true },
               where: { email: message.from },
             });
-            const tradieSchedules = await prisma.tradieSchedule.findMany({
+            if (!tradie) continue;
+            const subject = message.subject ?? "(no subject)";
+
+            const openBookings = await prisma.tradieSchedule.count({
               where: {
-                tradieId: tradie!.id,
-                status: {
-                  not: {
-                    in: ["DECLINED", "AWAITING_ADMIN_APPROVAL", "CONFIRMED"],
-                  },
-                }, // Only consider non-declined schedules
+                status: { in: [...AWAITING_TRADIE_REPLY] },
+                tradieId: tradie.id,
               },
             });
-            console.log(
-              `  Found ${tradieSchedules.length} existing schedule(s) for tradieId: ${tradie!.id}`,
-            );
-            if (tradieSchedules.length === 0) {
+            if (openBookings === 0) {
               console.log(
-                `  No existing schedules found for tradieId: ${tradie!.id}. Skipping lead extraction.`,
+                `  Tradie ${tradie.id} has no booking awaiting a reply. Skipping.`,
               );
               continue;
             }
-            console.log(
-              `  Message from ${message.from} is identified as a tradie message. Skipping lead extraction.`,
-            );
+
             const tradieInfo = await extractTradieScheduleInfoFromMessage(
               message.subject ?? "",
               content,
             );
             if (!tradieInfo) {
-              console.log(
-                "  No tradie schedule information could be extracted from the message.",
+              await notifyTradieReplyNeedsReview(
+                tradie,
+                subject,
+                "The reply could not be read automatically. Check it and update the booking by hand.",
               );
               continue;
             }
             console.log(`  extractedTradieInfo: ${JSON.stringify(tradieInfo)}`);
-            const schedule = await prisma.tradieSchedule.findFirst({
-              where: {
-                tradieId: tradie!.id,
-                scheduledDate: new Date(tradieInfo.scheduleDate),
-                project: {
-                  location: {
-                    contains: tradieInfo.projectLocation ?? "",
-                    mode: "insensitive",
-                  },
-                },
-              },
-            });
-            if (!schedule) {
+
+            const match = await matchTradieReplyToSchedule(
+              { hints: tradieInfo, tradieId: tradie.id },
+              prisma,
+            );
+            if (match.kind === "none") {
               console.log(
-                `  Tradie schedule already exists for tradieId: ${tradie!.id}, scheduleDate: ${tradieInfo.scheduleDate}, projectLocation: ${tradieInfo.projectLocation}. Skipping duplicate processing.`,
+                `  Tradie ${tradie.id} has no booking awaiting a reply. Skipping.`,
               );
               continue;
             }
-            const status = tradieInfo.scheduleConfirmation
-              ? schedule.status === "PENDING_FINAL_CONFIRMATION"
-                ? "CONFIRMED"
-                : "AWAITING_ADMIN_APPROVAL"
-              : "DECLINED";
-            await updateTradieSchedule(schedule.id, {
-              status,
-              quote: tradieInfo.scheduleQuote ?? undefined,
-              // Without the basis the amount is unreadable: "$950" is a day
-              // rate as often as it is a small job, and the schedule total
-              // and the tradie's last quoted price both hang off which one
-              // it is. FIXED when the tradie named a price and no basis.
-              quoteUnit: tradieInfo.scheduleQuoteBasis ?? undefined,
-            });
+            if (match.kind === "ambiguous") {
+              await notifyTradieReplyNeedsReview(
+                tradie,
+                subject,
+                `The reply did not say which of ${match.candidates.length} open bookings it is about (${match.candidates
+                  .map((candidate) => candidate.project.name)
+                  .join(", ")}). Update the right one by hand.`,
+              );
+              continue;
+            }
+
+            try {
+              await applyTradieScheduleUpdate(
+                systemPrincipal("tradie email reply"),
+                match.schedule.id,
+                {
+                  status: tradieReplyStatus(
+                    match.schedule.status,
+                    tradieInfo.scheduleConfirmation,
+                  ),
+                  quote: tradieInfo.scheduleQuote ?? undefined,
+                  // Without the basis the amount is unreadable: "$950" is a
+                  // day rate as often as it is a small job, and the schedule
+                  // total and the tradie's last quoted price both hang off
+                  // which one it is. FIXED when the tradie named a price and
+                  // no basis.
+                  quoteUnit: tradieInfo.scheduleQuoteBasis ?? undefined,
+                },
+              );
+            } catch (error) {
+              console.error("Failed to apply a tradie reply:", error);
+              await notifyTradieReplyNeedsReview(
+                tradie,
+                subject,
+                `The reply was matched to ${match.schedule.project.name} but the booking could not be updated from ${match.schedule.status}. Update it by hand.`,
+              );
+            }
             continue;
           }
 

@@ -112,6 +112,12 @@ export const notificationTemplates: NotificationTemplateFactory = {
     url: `/projects/${data.projectId}?activeTab=milestones`,
   }),
 
+  tradieReplyNeedsReview: (data) => ({
+    title: `Tradie reply needs review: ${data.tradieName}`,
+    message: `"${data.subject}" — ${data.reason}`,
+    url: `/tradie-management/${data.tradieId}`,
+  }),
+
   tradieScheduleUpdated: (data) => ({
     title: `Tradie Schedule Updated: ${data.projectName}`,
     message: `${data.tradieName}'s schedule is now ${data.status}`,

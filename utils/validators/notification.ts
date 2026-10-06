@@ -73,6 +73,13 @@ export const notificationSchemas = {
     scheduleDate: z.string(),
   }),
 
+  tradieReplyNeedsReview: z.object({
+    tradieId: z.string(),
+    tradieName: z.string(),
+    subject: z.string(),
+    reason: z.string(),
+  }),
+
   tradieScheduleUpdated: z.object({
     projectId: z.string(),
     projectName: z.string(),
