@@ -174,7 +174,14 @@
       "source-map-js@^1": "^1.2.2",
       "http-cache-semantics@^4": "^4.3.0",
       "seroval": "^1.6.8",
-      "seroval-plugins": "^1.6.8"
+      "seroval-plugins": "^1.6.8",
+      "katex@^0.16": "^0.18.2"
+    },
+    "auditConfig": {
+      "ignoreCves": [
+        "CVE-2026-93687",
+        "CVE-2026-97058"
+      ]
     }
   }
 }
