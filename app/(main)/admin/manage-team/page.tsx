@@ -50,6 +50,7 @@ export default function TeamManagementPage() {
     loading,
     error,
     users,
+    phones,
     invites,
     userCount,
     userTotal,
@@ -166,6 +167,7 @@ export default function TeamManagementPage() {
             <TabsContent value="members">
               <UserList
                 items={users}
+                phones={phones}
                 isLoaded={loading === false}
                 page={userPage}
                 count={userCount}
@@ -189,13 +191,15 @@ function memberName(user: User) {
   return [user.firstName, user.lastName].filter(Boolean).join(" ");
 }
 
-/** Clerk's primary number, from the serialized user the list holds. */
-function memberPhone(user: User) {
+/**
+ * The member's phone: the stored one first, then the copy in Clerk's
+ * `publicMetadata.phone` for a member the database has no row for yet.
+ */
+function memberPhone(user: User, phones: Record<string, string>) {
+  const fromMetadata = (user.publicMetadata as { phone?: unknown } | undefined)
+    ?.phone;
   return (
-    user.phoneNumbers.find((phone) => phone.id === user.primaryPhoneNumberId)
-      ?.phoneNumber
-    ?? user.phoneNumbers[0]?.phoneNumber
-    ?? ""
+    phones[user.id] || (typeof fromMetadata === "string" ? fromMetadata : "")
   );
 }
 
@@ -280,8 +284,10 @@ function UserList({
   setQuery,
   onPageChange,
   handleAction,
+  phones,
   onSaveProfile,
 }: ListTabProps<User, { userId: string; newRole: Role }> & {
+  phones: Record<string, string>;
   onSaveProfile: (
     userId: string,
     profile: { name: string; phone: string },
@@ -303,7 +309,7 @@ function UserList({
     setDraft({
       error: null,
       name: memberName(user),
-      phone: formatAuPhone(memberPhone(user)),
+      phone: formatAuPhone(memberPhone(user, phones)),
       userId: user.id,
     });
   };
@@ -372,17 +378,27 @@ function UserList({
       </div>
       {/* Data Table  */}
       <DataTable
-        headers={["Name", "Email", "Phone", "Role", "Actions"]}
+        headers={["Name", "Email", "Phone", "Role"]}
         rows={
           isLoaded
             ? items.map((user) => {
                 const name = memberName(user);
-                const phone = memberPhone(user);
+                const phone = memberPhone(user, phones);
                 const email =
                   user.emailAddresses[0]?.emailAddress || "No email";
-                const role = user.publicMetadata?.role
-                  ? RoleLabelRecord[user.publicMetadata?.role as Role]
-                  : "No role";
+                // One column for the role: the picker shows it and changes it.
+                const roleCell = (
+                  <SelectRole
+                    key={`role-${user.id}`}
+                    fieldName={"role"}
+                    onValueChange={(newRole) =>
+                      newRole && handleAction({ userId: user.id, newRole })
+                    }
+                    selectedRole={
+                      (user.publicMetadata?.role as Role) || undefined
+                    }
+                  />
+                );
 
                 if (draft?.userId === user.id) {
                   const errorId = `member-${user.id}-error`;
@@ -402,73 +418,75 @@ function UserList({
                     />,
                     email,
                     <div key={`phone-${user.id}`} className="space-y-1">
-                      <Input
-                        aria-label="Phone"
-                        aria-invalid={Boolean(draft.error)}
-                        aria-describedby={draft.error ? errorId : undefined}
-                        type="tel"
-                        autoComplete="off"
-                        placeholder="0412 345 678"
-                        value={draft.phone}
-                        disabled={isSaving}
-                        onChange={(e) =>
-                          setDraft({ ...draft, phone: e.target.value })
-                        }
-                        // Tidy what was typed into the AU form on the way out
-                        // of the field; an unrecognised number is left as is
-                        // for the server to explain.
-                        onBlur={() =>
-                          setDraft((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  phone: formatAuPhone(current.phone),
-                                }
-                              : current,
-                          )
-                        }
-                        onKeyDown={onDraftKeyDown}
-                        className="h-8 min-w-36 font-mono tabular-nums"
-                      />
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          aria-label="Phone"
+                          aria-invalid={Boolean(draft.error)}
+                          aria-describedby={draft.error ? errorId : undefined}
+                          type="tel"
+                          autoComplete="off"
+                          placeholder="0412 345 678"
+                          value={draft.phone}
+                          disabled={isSaving}
+                          onChange={(e) =>
+                            setDraft({ ...draft, phone: e.target.value })
+                          }
+                          // Tidy what was typed into the AU form on the way
+                          // out of the field; an unrecognised number is left
+                          // as is for the server to explain.
+                          onBlur={() =>
+                            setDraft((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    phone: formatAuPhone(current.phone),
+                                  }
+                                : current,
+                            )
+                          }
+                          onKeyDown={onDraftKeyDown}
+                          className="h-8 min-w-36 font-mono tabular-nums"
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          className="size-8"
+                          onClick={saveDraft}
+                          disabled={isSaving}
+                          aria-label={`Save ${name || "team member"}`}
+                        >
+                          {isSaving ? (
+                            <Loader2
+                              className="size-4 animate-spin motion-reduce:animate-none"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <Check className="size-4" aria-hidden="true" />
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="size-8"
+                          onClick={cancelEditing}
+                          disabled={isSaving}
+                          aria-label="Cancel editing"
+                        >
+                          <X className="size-4" aria-hidden="true" />
+                        </Button>
+                      </div>
                       {draft.error ? (
                         <p
                           id={errorId}
                           role="alert"
-                          className="max-w-64 text-xs text-destructive"
+                          className="max-w-72 text-xs text-destructive"
                         >
                           {draft.error}
                         </p>
                       ) : null}
                     </div>,
-                    role,
-                    <div className="flex space-x-2" key={`actions-${user.id}`}>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={saveDraft}
-                        disabled={isSaving}
-                      >
-                        {isSaving ? (
-                          <Loader2
-                            className="mr-1 size-4 animate-spin motion-reduce:animate-none"
-                            aria-hidden="true"
-                          />
-                        ) : (
-                          <Check className="mr-1 size-4" aria-hidden="true" />
-                        )}
-                        Save
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={cancelEditing}
-                        disabled={isSaving}
-                      >
-                        <X className="mr-1 size-4" aria-hidden="true" />
-                        Cancel
-                      </Button>
-                    </div>,
+                    roleCell,
                   ];
                 }
 
@@ -497,21 +515,10 @@ function UserList({
                       <span className="text-muted-foreground">Add phone</span>
                     )}
                   </EditableCell>,
-                  role,
-                  <div className="flex space-x-2" key={`actions-${user.id}`}>
-                    <SelectRole
-                      fieldName={"role"}
-                      onValueChange={(newRole) =>
-                        newRole && handleAction({ userId: user.id, newRole })
-                      }
-                      selectedRole={
-                        (user.publicMetadata?.role as Role) || undefined
-                      }
-                    />
-                  </div>,
+                  roleCell,
                 ];
               })
-            : skeletonTableRows(5)
+            : skeletonTableRows(4)
         }
         emptyState={
           <div className="flex flex-col items-center justify-center gap-3">

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { Role } from "@prisma/client";
 import { test } from "vitest";
@@ -14,6 +16,7 @@ import {
   updateTeamMemberProfile,
   type TeamProfilePort,
 } from "@/lib/domain/identity/team";
+import { findPhonesByClerkIds } from "@/lib/domain/identity/users";
 import { assignProjectSiteManager } from "@/lib/domain/projects/commands";
 import {
   adminPrincipal,
@@ -21,6 +24,7 @@ import {
   siteManagerPrincipal,
 } from "./domain-harness";
 import { formatAuPhone } from "@/utils/phone";
+import { REPO_ROOT } from "../support/repo-root";
 
 // Two small admin edits: reassigning a project's site manager from its header,
 // and correcting a team member's name and phone in Clerk and locally.
@@ -253,4 +257,49 @@ test("a team phone reads in AU format and that format saves back unchanged", () 
   for (const stored of ["+61412345678", "+61298765432"]) {
     assert.equal(teamPhoneE164(formatAuPhone(stored)), stored);
   }
+});
+
+test("the team screen's phones come from the database, keyed by Clerk id", async () => {
+  const recorder = recordingDb({
+    "user.findMany": [
+      { clerkId: "clerk_jane", phone: "+61412345678" },
+      { clerkId: "clerk_sam", phone: "+61298765432" },
+    ],
+  });
+  assert.deepEqual(
+    await findPhonesByClerkIds(
+      ["clerk_jane", "clerk_sam", "clerk_jane", ""],
+      recorder.db,
+    ),
+    { clerk_jane: "+61412345678", clerk_sam: "+61298765432" },
+  );
+  assert.deepEqual((recorder.calls[0]?.args as { where: unknown }).where, {
+    clerkId: { in: ["clerk_jane", "clerk_sam"] },
+  });
+  // No ids, no query: `{ in: [] }` means different things to different engines.
+  const empty = recordingDb();
+  assert.deepEqual(await findPhonesByClerkIds([], empty.db), {});
+  assert.deepEqual(empty.calls, []);
+});
+
+test("a team phone goes to Clerk metadata, never to Clerk's phone numbers", () => {
+  const route = readFileSync(
+    join(REPO_ROOT, "app/api/(data)/users/profile/route.ts"),
+    "utf8",
+  );
+  // updateUserMetadata merges; updateUser({ publicMetadata }) would replace
+  // the object and drop the member's role with it.
+  assert.match(
+    route,
+    /updateUserMetadata\([^)]*\{\s*publicMetadata: \{ phone \}/,
+  );
+  assert.doesNotMatch(route, /phoneNumbers\./);
+  assert.doesNotMatch(route, /\.updateUser\([^)]*publicMetadata/);
+
+  const webhook = readFileSync(
+    join(REPO_ROOT, "app/api/webhook/clerk/route.ts"),
+    "utf8",
+  );
+  assert.match(webhook, /public_metadata/);
+  assert.doesNotMatch(webhook, /phone_numbers/);
 });

@@ -17,6 +17,9 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
   const [userTotal, setUserTotal] = useState(0);
   const [inviteTotal, setInviteTotal] = useState(0);
   const [users, setUsers] = useState<User[]>([]);
+  // Stored phones by Clerk id. The team screen reads these first; Clerk's
+  // publicMetadata.phone is only the fallback.
+  const [phones, setPhones] = useState<Record<string, string>>({});
   const [invites, setInvites] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +132,7 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
     const res = await fetchJson<{
       success: boolean;
       message: string;
+      phone: string;
       user: User;
     }>(
       "/api/users/profile",
@@ -144,6 +148,7 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
     setUsers((prev) =>
       prev.map((user) => (user.id === userId ? res.data.user : user)),
     );
+    setPhones((prev) => ({ ...prev, [userId]: res.data.phone }));
   };
 
   useEffect(() => {
@@ -155,6 +160,7 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
       const q = encodeURIComponent(query.trim());
       fetchJson<{
         users: User[];
+        phones?: Record<string, string>;
         invites: Invitation[];
         userTotal: number;
         inviteTotal: number;
@@ -165,8 +171,9 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
         controller.signal,
       )
         .then((res) => {
-          const { users, invites, userTotal, inviteTotal } = res.data;
+          const { users, phones, invites, userTotal, inviteTotal } = res.data;
           setUsers(Array.isArray(users) ? users : []);
+          setPhones(phones ?? {});
           setInvites(Array.isArray(invites) ? invites : []);
           setUserTotal(userTotal);
           setInviteTotal(inviteTotal);
@@ -176,6 +183,7 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
           console.error("useClerkManagement error", err);
           setError(String(err?.message ?? "Unknown error"));
           setUsers([]);
+          setPhones({});
           setInvites([]);
           setUserTotal(0);
           setInviteTotal(0);
@@ -193,6 +201,7 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
     loading,
     error,
     users,
+    phones,
     invites,
     userPage,
     invitePage,

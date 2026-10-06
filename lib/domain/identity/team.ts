@@ -334,7 +334,15 @@ export type TeamMemberProfile = {
   readonly phone: string;
 };
 
-/** Writes the name and phone to Clerk. Throws with Clerk's own message. */
+/**
+ * Writes the name to Clerk and the phone to Clerk's `publicMetadata.phone`.
+ * Throws with Clerk's own message.
+ *
+ * Metadata, not a Clerk phone number: those carry verification, uniqueness
+ * and instance-setting rules that have nothing to do with a contact number
+ * the office reads on screen. The database is the record; the metadata copy
+ * is what the `user.updated` webhook carries back across.
+ */
 export type TeamProfilePort = (input: {
   clerkUserId: string;
   firstName: string;
@@ -343,8 +351,9 @@ export type TeamProfilePort = (input: {
 }) => Promise<void>;
 
 /**
- * The form Clerk accepts a phone number in, which is also the form it is
- * stored in locally so the two never disagree on spacing.
+ * The one stored form of a team phone, E.164, in the database and in Clerk's
+ * metadata alike so the two never disagree on spacing. The screen shows it in
+ * AU format (`utils/phone.ts#formatAuPhone`).
  *
  * An Australian local mobile or landline ("0412 345 678") is read as +61,
  * because that is what everyone here will type. Anything else must already
@@ -369,11 +378,11 @@ export function teamPhoneE164(raw: string): string | null {
  *
  * Order matters. The local uniqueness check runs first so the commonest
  * refusal — the number already belongs to someone — touches nothing. Clerk is
- * written next, and only then the local row, so a Clerk refusal (an invalid
- * number, phone numbers disabled on the instance) leaves both sides as they
- * were and the operator reads Clerk's reason. If the local write then fails,
- * the error surfaces and Clerk's `user.updated` webhook carries the same
- * values across, so the two converge rather than silently disagree.
+ * written next, and only then the local row, so a Clerk refusal leaves both
+ * sides as they were and the operator reads Clerk's reason. If the local
+ * write then fails, the error surfaces and Clerk's `user.updated` webhook
+ * carries the same values across from metadata, so the two converge rather
+ * than silently disagree.
  */
 export async function updateTeamMemberProfile(
   principal: DomainPrincipal,

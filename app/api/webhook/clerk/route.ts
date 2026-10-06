@@ -7,13 +7,16 @@ import { updateUserMetadata } from "@/lib/auth";
 import { errorResponse, successResponse } from "@/utils/validators";
 import { randomPhoneNumberGenerator } from "@/utils/generator";
 
-/** The user's primary Clerk phone number, or undefined when there is none. */
-function primaryClerkPhone(user: UserJSON): string | undefined {
-  const numbers = user.phone_numbers ?? [];
-  const primary =
-    numbers.find((number) => number.id === user.primary_phone_number_id)
-    ?? numbers[0];
-  return primary?.phone_number || undefined;
+/**
+ * The phone the team screen saved into `publicMetadata.phone`, or undefined.
+ *
+ * Team phones are kept in metadata, not as Clerk phone numbers, so this is the
+ * only place a Clerk event carries one.
+ */
+function metadataPhone(user: UserJSON): string | undefined {
+  const phone = (user.public_metadata as { phone?: unknown } | undefined)
+    ?.phone;
+  return typeof phone === "string" && phone.trim() ? phone.trim() : undefined;
 }
 
 export async function POST(request: NextRequest) {
@@ -34,8 +37,7 @@ export async function POST(request: NextRequest) {
         const email = email_addresses[0]?.email_address;
         // `User.phone` is required and unique, and most accounts reach Clerk
         // with no number, so a placeholder stands in until someone sets one.
-        const phone =
-          primaryClerkPhone(evt.data) ?? randomPhoneNumberGenerator();
+        const phone = metadataPhone(evt.data) ?? randomPhoneNumberGenerator();
         const fullName = [first_name, last_name].filter(Boolean).join(" ");
         const newUser = await createUser(fullName, email, id, phone);
         await updateUserMetadata(id, {
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
         await updateUser(updatedId, {
           name: updatedName || undefined,
           email: updatedEmail,
-          phone: primaryClerkPhone(evt.data),
+          phone: metadataPhone(evt.data),
           role,
         });
 

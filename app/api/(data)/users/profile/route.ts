@@ -28,9 +28,8 @@ const updateTeamMemberProfileSchema = z.object({
 });
 
 /**
- * Clerk's own sentence ("phone_number must be a valid phone number in E.164
- * format", "That phone number is taken") rather than the bare status text its
- * error class carries as `message`.
+ * Clerk's own sentence rather than the bare status text its error class
+ * carries as `message`.
  */
 function clerkReason(error: unknown): Error {
   if (isClerkAPIResponseError(error)) {
@@ -41,12 +40,13 @@ function clerkReason(error: unknown): Error {
 }
 
 /**
- * Make `phone` the user's primary Clerk number, then set the name.
+ * Set the name, and keep the phone in `publicMetadata.phone`.
  *
- * Created already verified: the number is a contact detail the office reads
- * on screen, not a sign-in factor, so there is no code to send. Any other
- * number on the account is removed so Clerk shows one, unless it is reserved
- * as a second factor — deleting that would quietly turn off someone's MFA.
+ * `updateUserMetadata` merges, so the `role` (and anything else) already in
+ * public metadata is left alone — `updateUser({ publicMetadata })` would
+ * replace the whole object and drop it. Clerk phone numbers are not used:
+ * their verification and instance rules are for sign-in, not for a contact
+ * number the office reads on screen.
  */
 const writeClerkProfile: TeamProfilePort = async ({
   clerkUserId,
@@ -55,29 +55,10 @@ const writeClerkProfile: TeamProfilePort = async ({
   phone,
 }) => {
   try {
-    const user = await clerkClient.users.getUser(clerkUserId);
-    const existing = user.phoneNumbers.find(
-      (number) => number.phoneNumber === phone,
-    );
-    if (!existing) {
-      await clerkClient.phoneNumbers.createPhoneNumber({
-        phoneNumber: phone,
-        primary: true,
-        userId: clerkUserId,
-        verified: true,
-      });
-    } else if (user.primaryPhoneNumberId !== existing.id) {
-      await clerkClient.phoneNumbers.updatePhoneNumber(existing.id, {
-        primary: true,
-      });
-    }
-    for (const stale of user.phoneNumbers) {
-      if (stale.phoneNumber === phone || stale.reservedForSecondFactor) {
-        continue;
-      }
-      await clerkClient.phoneNumbers.deletePhoneNumber(stale.id);
-    }
     await clerkClient.users.updateUser(clerkUserId, { firstName, lastName });
+    await clerkClient.users.updateUserMetadata(clerkUserId, {
+      publicMetadata: { phone },
+    });
   } catch (error) {
     throw clerkReason(error);
   }
@@ -125,6 +106,7 @@ export async function PATCH(request: NextRequest) {
     const user = await clerkClient.users.getUser(profile.clerkUserId);
     return successResponse({
       message: "Team member updated",
+      phone: profile.phone,
       success: true,
       user,
     });

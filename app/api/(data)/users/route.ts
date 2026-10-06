@@ -3,6 +3,7 @@ import { Role } from "@prisma/client";
 import { requireAdminUser } from "@/lib/auth/require-admin";
 import prisma from "@/lib/prisma";
 import {
+  findPhonesByClerkIds,
   findUserByClerkId,
   findUserById,
 } from "@/lib/domain/identity/users";
@@ -74,8 +75,16 @@ export async function GET(request: NextRequest) {
       query: params.data.q,
     });
 
+    // The phone shown on the team screen is the stored one; Clerk's
+    // publicMetadata.phone is only the fallback for a member with no row.
+    const phones = await findPhonesByClerkIds(
+      users.data.map((user) => user.id),
+      prisma,
+    );
+
     return successResponse({
       users: users.data,
+      phones,
       invites: invites.data,
       userTotal: users.totalCount,
       inviteTotal: invites.totalCount,
