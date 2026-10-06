@@ -12,6 +12,7 @@ import {
 import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 
+import { isDomainError } from "@/lib/domain/errors";
 import { transitionTradieSchedule as transitionTradieScheduleDomain } from "@/lib/domain/tradies/schedules";
 import type { DomainPrincipal } from "@/lib/domain/principal";
 import { createActivityLogEntry } from "@/types/activityLog";
@@ -99,9 +100,10 @@ export const convertToTradieScheduleListItem = (
  * @param updates - The schedule update payload.
  * @returns An object containing the updated schedule and a flag indicating
  * whether a replacement tradie is required.
- * @throws {Error} If the schedule does not exist.
- * @throws {Error} If `principal` may not manage the schedule's project.
- * @throws {Error} If the update operation fails.
+ * @throws {DomainError} Unchanged, when the transition refuses — not allowed
+ * from the current status, or `principal` may not manage the project — so
+ * the caller can show the operator which.
+ * @throws {Error} If the schedule does not exist or the update fails.
  */
 export async function applyTradieScheduleUpdate(
   principal: DomainPrincipal,
@@ -382,6 +384,7 @@ export async function applyTradieScheduleUpdate(
       requiresReplacement,
     };
   } catch (error) {
+    if (isDomainError(error)) throw error;
     console.error("Error updating tradie schedule:", error);
     throw new Error("Failed to update tradie schedule.");
   }

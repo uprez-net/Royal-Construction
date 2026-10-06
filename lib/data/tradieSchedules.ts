@@ -380,15 +380,13 @@ export async function updateTradieSchedule(
     approvalId?: string;
   } = {},
 ) {
-  const existingSchedule = await prisma.tradieSchedule.findUnique({
-    select: { projectId: true },
-    where: { id: scheduleId },
-  });
-  if (!existingSchedule) {
-    throw new Error("Failed to update tradie schedule.");
-  }
   let actingUser: Awaited<ReturnType<typeof userHasAccessToSchedule>>;
   try {
+    const existingSchedule = await prisma.tradieSchedule.findUnique({
+      select: { projectId: true },
+      where: { id: scheduleId },
+    });
+    if (!existingSchedule) throw new Error("Schedule not found");
     actingUser = await userHasAccessToSchedule(existingSchedule.projectId);
   } catch (error) {
     console.error("Error updating tradie schedule:", error);

@@ -380,9 +380,10 @@ export function teamPhoneE164(raw: string): string | null {
  * refusal — the number already belongs to someone — touches nothing. Clerk is
  * written next, and only then the local row, so a Clerk refusal leaves both
  * sides as they were and the operator reads Clerk's reason. If the local
- * write then fails, the error surfaces and Clerk's `user.updated` webhook
- * carries the same values across from metadata, so the two converge rather
- * than silently disagree.
+ * write then fails, Clerk is put back to what the database — the record —
+ * still holds, and the local error surfaces. Leaving Clerk ahead would not
+ * converge on its own: a number lost to the unique constraint would fail the
+ * webhook's copy the same way.
  */
 export async function updateTeamMemberProfile(
   principal: DomainPrincipal,
@@ -448,6 +449,21 @@ export async function updateTeamMemberProfile(
   try {
     await db.user.update({ data: { name, phone }, where: { id: user.id } });
   } catch (error) {
+    const [previousFirstName = "", ...previousRest] = user.name.split(" ");
+    await updateIdentity({
+      clerkUserId: user.clerkId,
+      firstName: previousFirstName,
+      lastName: previousRest.join(" "),
+      phone: user.phone,
+    }).catch((compensationError) => {
+      // Nothing more can be done from here; the operator still gets the
+      // local error below, and the next save from the team screen rewrites
+      // both sides.
+      console.error(
+        "[team] Could not restore Clerk after the local profile write failed",
+        compensationError,
+      );
+    });
     if (error instanceof Error && "code" in error && error.code === "P2002") {
       throw new DomainValidationError(
         "That phone number already belongs to another team member.",

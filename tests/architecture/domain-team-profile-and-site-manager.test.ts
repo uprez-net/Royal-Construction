@@ -9,6 +9,7 @@ import {
   DomainAuthorizationError,
   DomainNotFoundError,
   DomainSideEffectError,
+  DomainStaleVersionError,
   DomainValidationError,
 } from "@/lib/domain/errors";
 import {
@@ -185,9 +186,13 @@ test("reassigning a site manager updates the project and logs who it went to", a
   assert.equal(result.changed, true);
   assert.equal(result.previousSiteManagerId, "user_old");
   const writes = recorder.writes();
+  // Conditional on the manager the decision was read against.
   assert.deepEqual(writes[0], {
-    args: { data: { siteManagerId: "user_new" }, where: { id: PROJECT.id } },
-    operation: "project.update",
+    args: {
+      data: { siteManagerId: "user_new" },
+      where: { id: PROJECT.id, siteManagerId: "user_old" },
+    },
+    operation: "project.updateMany",
   });
   assert.equal(writes[1]?.operation, "activityLog.create");
   assert.match(
@@ -302,4 +307,80 @@ test("a team phone goes to Clerk metadata, never to Clerk's phone numbers", () =
   );
   assert.match(webhook, /public_metadata/);
   assert.doesNotMatch(webhook, /phone_numbers/);
+});
+
+test("a second request that lost the race is refused and logs nothing", async () => {
+  // One person, two requests: a double-click, or a retry after a timeout. The
+  // first moved the project; this one decided against the old manager.
+  const recorder = recordingDb({
+    "project.findUnique": PROJECT,
+    "project.updateMany": { count: 0 },
+    "user.findFirst": {
+      email: "new@example.com",
+      id: "user_new",
+      name: "New Manager",
+      role: Role.SITE_MANAGER,
+    },
+    "user.findUnique": { name: "Old Manager" },
+  });
+  await assert.rejects(
+    assignProjectSiteManager(
+      adminPrincipal(),
+      { projectId: PROJECT.id, siteManagerId: "user_new" },
+      recorder.db,
+    ),
+    DomainStaleVersionError,
+  );
+  assert.ok(!recorder.operations().includes("activityLog.create"));
+});
+
+test("a failed local write puts Clerk back to what the database holds", async () => {
+  const recorder = recordingDb({
+    "user.findFirst": null,
+    "user.findUnique": MEMBER,
+    "user.update": () => {
+      throw Object.assign(new Error("Unique constraint failed"), {
+        code: "P2002",
+      });
+    },
+  });
+  const { port, sent } = recordingPort();
+
+  await assert.rejects(
+    updateTeamMemberProfile(
+      adminPrincipal(),
+      { clerkUserId: MEMBER.clerkId, name: "Jane Smith", phone: "0412345678" },
+      recorder.db,
+      port,
+    ),
+    DomainValidationError,
+  );
+  assert.deepEqual(sent, [
+    {
+      clerkUserId: MEMBER.clerkId,
+      firstName: "Jane",
+      lastName: "Smith",
+      phone: "+61412345678",
+    },
+    // The compensation: the stored name and phone, not the attempted ones.
+    {
+      clerkUserId: MEMBER.clerkId,
+      firstName: "Jane",
+      lastName: "Doe",
+      phone: MEMBER.phone,
+    },
+  ]);
+});
+
+test("a schedule transition refusal reaches the caller unchanged", () => {
+  const updates = readFileSync(
+    join(REPO_ROOT, "lib/data/tradie-schedule-updates.ts"),
+    "utf8",
+  );
+  assert.match(updates, /if \(isDomainError\(error\)\) throw error;/);
+  const route = readFileSync(
+    join(REPO_ROOT, "app/api/(data)/tradie-schedules/[scheduleId]/route.ts"),
+    "utf8",
+  );
+  assert.match(route, /domainErrorResponse\(error\)/);
 });
