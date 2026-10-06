@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "vitest";
 import {
+  assignSiteManagerInputSchema,
   getProjectRequirementsInputSchema,
+  listSiteManagersInputSchema,
   prepareComplianceOutreachInputSchema,
   updateProjectRequirementsInputSchema,
 } from "@/agent/lib/project-contracts";
@@ -75,4 +77,39 @@ test("the outreach body still escapes an alert detail nobody here wrote", async 
   assert.match(outreach, /escapeHtml\(alertDetail\)/);
   assert.match(outreach, /escapeHtml\(subjectAddress\)/);
   assert.match(outreach, /partyBlockedReason/);
+});
+
+test("site manager reassignment takes an id from the lookup and goes through the shared command", async () => {
+  assert.equal(
+    assignSiteManagerInputSchema.safeParse({
+      projectId,
+      siteManagerId: "123e4567-e89b-42d3-a456-426614174001",
+    }).success,
+    true,
+  );
+  // A name is not an id: the specialist must resolve it with
+  // list_site_managers first rather than pass what the user typed.
+  assert.equal(
+    assignSiteManagerInputSchema.safeParse({
+      projectId,
+      siteManagerId: "Jane Doe",
+    }).success,
+    false,
+  );
+  assert.deepEqual(listSiteManagersInputSchema.parse({}), {
+    limit: 10,
+    query: "",
+  });
+
+  const source = await readFile("agent/lib/project-operations.ts", "utf8");
+  // One rule, shared with the project header — not an Eve copy of it.
+  assert.match(source, /assignProjectSiteManager\(/);
+  assert.match(source, /listSiteManagersForDropdown\(/);
+  assert.doesNotMatch(source, /siteManagerId:\s*input\.siteManagerId\s*}/);
+
+  const tool = await readFile(
+    "agent/subagents/project-operations/tools/assign_site_manager.ts",
+    "utf8",
+  );
+  assert.match(tool, /approval: ownerOnlyApproval\(\)/);
 });

@@ -44,6 +44,7 @@ export const READ_TOOLS = {
     "get_compliance",
     "get_project",
     "get_project_requirements",
+    "list_site_managers",
     "prepare_compliance_outreach",
     "search_projects",
   ],
@@ -73,6 +74,7 @@ export const WRITE_TOOLS = {
     "update_offer_details",
   ],
   "project-operations": [
+    "assign_site_manager",
     "create_milestone",
     "resolve_compliance_document",
     "send_compliance_follow_up",

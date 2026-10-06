@@ -16,7 +16,7 @@ export const SPECIALISTS = {
   "offer-operations":
     "Handle authorized offer and revision lookup, full workspace detail review and targeted updates (area, pricing, cost lines, allowances, exclusions, payment schedule, and document draft), lifecycle transitions, recalls, revision creation, contract particulars, activity, signing status, and schedule-list review. Use exact revisions and state versions; document delivery and project handoff remain separate capabilities until their Eve-safe service boundaries are complete.",
   "project-operations":
-    "Handle authorized project overview, the complete versioned requirements payload, compliance engagement/checklist evidence and gates, and milestone reads/writes; then grow into files, schedules, communications, and audit history. Variation operations are intentionally not exposed until their business rules are finalized.",
+    "Handle authorized project overview, the complete versioned requirements payload, compliance engagement/checklist evidence and gates, milestone reads/writes, and site manager assignment; then grow into files, schedules, communications, and audit history. Variation operations are intentionally not exposed until their business rules are finalized.",
   "compliance-operations":
     "Handle authorized compliance stages, documents, provenance, alerts, parties, meetings, follow-up, and readiness blockers.",
   "tradie-operations":

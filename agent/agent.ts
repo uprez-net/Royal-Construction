@@ -15,7 +15,7 @@ const description = [
   "It reads and updates live business records through audited, permission-checked tools:",
   "leads (search, detail, follow-up tasks: create, complete, reopen);",
   "offers and revisions (search, detail, pricing, cost lines, allowances, exclusions, payment schedule, status transitions, new revisions, change requests, contract particulars, activity, signing status, DocuSign recall);",
-  "projects (search, overview, requirements, milestones);",
+  "projects (search, overview, requirements, milestones, site manager assignment);",
   "compliance on a project (engagement status, documents, certifier outreach and follow-up);",
   "tradies (directory, incidents, ratings, price-change and removal requests, site schedules);",
   "and admin (approval queue, offer-content defaults, team membership and invitations, Xero connection).",

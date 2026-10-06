@@ -150,7 +150,8 @@ the supported areas are:
   revision, transition status, recall an envelope.
 - **Projects** — search, read a project with its milestones, schedules, site
   updates, files and customer, create and update milestones, read and update
-  project requirements.
+  project requirements, list assignable site managers and reassign a
+  project's site manager (administrators only).
 - **Compliance** — start an engagement, read it, set a document required,
   resolve a document, prepare and send outreach and follow-ups.
 - **Tradies** — search and read the directory, create and update a tradie,
@@ -185,7 +186,8 @@ side of the line a capability is on before building against it.
 | `add_material` | **Not available** |
 | `upload_file`, `add_milestone_photos` | **Not available.** The agent reads and links existing files; it takes no uploads over MCP |
 | `address_council_lookup` | **Not available** |
-| `get_customer`, `get_site_managers` | **Not available** as standalone lookups. Customer data comes back with the project |
+| `get_site_managers` | Covered by `list_site_managers`; `assign_site_manager` reassigns a project through the same command as the project header |
+| `get_customer` | **Not available** as a standalone lookup. Customer data comes back with the project |
 | `create_project` | Never existed. The old prompt documented it, but no such tool was ever registered |
 
 Anything on the "not available" list is a business decision, not an oversight.
