@@ -20,6 +20,7 @@ import {
   recordingDb,
   siteManagerPrincipal,
 } from "./domain-harness";
+import { formatAuPhone } from "@/utils/phone";
 
 // Two small admin edits: reassigning a project's site manager from its header,
 // and correcting a team member's name and phone in Clerk and locally.
@@ -234,4 +235,22 @@ test("a site manager may not reassign, and nobody may hand a build to a non-assi
     DomainNotFoundError,
   );
   assert.deepEqual(recorder.writes(), []);
+});
+
+test("a team phone reads in AU format and that format saves back unchanged", () => {
+  const cases: [string, string][] = [
+    ["+61412345678", "0412 345 678"],
+    ["+61298765432", "(02) 9876 5432"],
+    ["0412345678", "0412 345 678"],
+    ["+14155550100", "+14155550100"],
+    ["", ""],
+  ];
+  for (const [stored, shown] of cases) {
+    assert.equal(formatAuPhone(stored), shown, stored);
+  }
+  // What the table shows is what the editor is prefilled with, so it has to
+  // be something the domain accepts as the same number.
+  for (const stored of ["+61412345678", "+61298765432"]) {
+    assert.equal(teamPhoneE164(formatAuPhone(stored)), stored);
+  }
 });
