@@ -12,6 +12,12 @@ export const activityLogSchemas = {
     customerPhone: z.string(),
   }),
 
+  siteManagerAssigned: z.object({
+    projectId: z.string(),
+    siteManagerName: z.string(),
+    previousSiteManagerName: z.string().nullable(),
+  }),
+
   tradieScheduleCreated: z.object({
     projectId: z.string(),
     scheduleId: z.string(),

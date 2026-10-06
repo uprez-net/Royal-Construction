@@ -8,12 +8,14 @@ import {
 import type { DomainDb } from "../db";
 import {
   DomainAuthorizationError,
+  DomainError,
   DomainNotFoundError,
   DomainTransitionError,
   DomainValidationError,
 } from "../errors";
 import { attributionUserId, type DomainPrincipal } from "../principal";
-import { authorizeProject } from "../access/projects";
+import { authorizeProject, canManageProject } from "../access/projects";
+import { assertCanReadTradieDirectory } from "../access/tradies";
 import {
   normalizeQuoteBasis,
   parseQuotedAmount,
@@ -69,6 +71,16 @@ const NON_BLOCKING_STATUSES = [
  * the end date is computed per row, because `durationDays` varies and the
  * database has no end column to compare.
  */
+/** "12 Oct 2026" — schedule dates are stored at UTC midnight. */
+function bookingDay(date: Date): string {
+  return new Intl.DateTimeFormat("en-AU", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+    year: "numeric",
+  }).format(date);
+}
+
 export async function assertNoScheduleConflict(
   input: {
     tradieId: string;
@@ -99,10 +111,93 @@ export async function assertNoScheduleConflict(
   });
 
   if (conflict) {
+    // The dates, so the operator can pick around them. The day the booking
+    // ends on is its last working day, not the exclusive end used above.
+    const lastDay = new Date(conflict.scheduledDate);
+    lastDay.setUTCDate(lastDay.getUTCDate() + conflict.durationDays - 1);
+    const booked =
+      conflict.durationDays > 1
+        ? `from ${bookingDay(conflict.scheduledDate)} to ${bookingDay(lastDay)}`
+        : `on ${bookingDay(conflict.scheduledDate)}`;
     throw new DomainTransitionError(
-      "That tradie already has an overlapping active booking in the requested window.",
+      `That tradie is already booked ${booked}, which overlaps the requested dates.`,
     );
   }
+}
+
+export type TradieBooking = {
+  readonly scheduleId: string;
+  readonly projectId: string;
+  /**
+   * Null when the caller may not manage that project: they still learn the
+   * tradie is busy, which is what stops a double booking, without learning
+   * whose build it is.
+   */
+  readonly projectName: string | null;
+  readonly milestoneName: string | null;
+  readonly status: TradieScheduleStatus;
+  /** First working day, `YYYY-MM-DD`. */
+  readonly firstDay: string;
+  /** Last working day, inclusive, `YYYY-MM-DD`. */
+  readonly lastDay: string;
+};
+
+/** How far back a booking can start and still be running today. */
+const BOOKING_LOOKBACK_DAYS = 366;
+
+/**
+ * The bookings that hold this tradie's time from `from` onwards.
+ *
+ * The same `NON_BLOCKING_STATUSES` and the same half-open day arithmetic as
+ * `assertNoScheduleConflict`, so a day the picker leaves open is a day the
+ * booking command accepts, and a day it greys out is one it would refuse.
+ */
+export async function listTradieBookings(
+  principal: DomainPrincipal,
+  input: { readonly tradieId: string; readonly from: Date },
+  db: DomainDb,
+): Promise<TradieBooking[]> {
+  assertCanReadTradieDirectory(principal);
+
+  const earliest = new Date(input.from);
+  earliest.setUTCDate(earliest.getUTCDate() - BOOKING_LOOKBACK_DAYS);
+
+  const rows = await db.tradieSchedule.findMany({
+    orderBy: { scheduledDate: "asc" },
+    select: {
+      durationDays: true,
+      id: true,
+      milestone: { select: { name: true } },
+      project: { select: { id: true, name: true, siteManagerId: true } },
+      scheduledDate: true,
+      status: true,
+    },
+    where: {
+      scheduledDate: { gte: earliest },
+      status: { notIn: NON_BLOCKING_STATUSES },
+      tradieId: input.tradieId,
+    },
+  });
+
+  return rows.flatMap((row) => {
+    const end = new Date(row.scheduledDate);
+    end.setUTCDate(end.getUTCDate() + row.durationDays);
+    if (end <= input.from) return [];
+    const lastDay = new Date(end);
+    lastDay.setUTCDate(lastDay.getUTCDate() - 1);
+    const visible = canManageProject(principal, row.project);
+    return [
+      {
+        firstDay: row.scheduledDate.toISOString().slice(0, 10),
+        lastDay: lastDay.toISOString().slice(0, 10),
+        milestoneName: visible ? (row.milestone?.name ?? null) : null,
+        projectId: row.project.id,
+        projectName: visible ? row.project.name : null,
+        scheduleId: row.id,
+        status: row.status,
+      },
+    ];
+  });
 }
 
 /**
@@ -232,8 +327,19 @@ export async function createTradieSchedules(
   }
   const run = async (transactionDb: DomainDb) => {
     const created: CreatedSchedule[] = [];
-    for (const input of inputs) {
-      created.push(await createTradieSchedule(principal, input, transactionDb));
+    for (const [index, input] of inputs.entries()) {
+      try {
+        created.push(
+          await createTradieSchedule(principal, input, transactionDb),
+        );
+      } catch (error) {
+        // Name the row: "That tradie is already booked…" means nothing on a
+        // form with five tradies on it.
+        if (inputs.length > 1 && error instanceof DomainError) {
+          error.message = `Booking ${index + 1}: ${error.message}`;
+        }
+        throw error;
+      }
     }
     return created;
   };

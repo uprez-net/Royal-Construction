@@ -96,6 +96,17 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
     projectId: data.projectId,
   }),
 
+  siteManagerAssigned: (data) => ({
+    id: uuidv4(),
+    type: "siteManagerAssigned",
+    message: data.previousSiteManagerName
+      ? `Site manager changed from ${data.previousSiteManagerName} to ${data.siteManagerName}`
+      : `${data.siteManagerName} assigned as site manager`,
+    authorId: "system",
+    timestamp: new Date().toISOString(),
+    projectId: data.projectId,
+  }),
+
   tradieScheduleCreated: (data) => ({
     id: uuidv4(),
     type: "tradieScheduleCreated",

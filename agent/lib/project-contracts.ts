@@ -14,6 +14,17 @@ export const searchProjectsInputSchema = z.object({
 
 export const getProjectInputSchema = z.object({ projectId: projectIdSchema });
 
+export const listSiteManagersInputSchema = z.object({
+  query: z.string().trim().max(120).default(""),
+  limit: z.number().int().min(1).max(25).default(10),
+});
+
+export const assignSiteManagerInputSchema = z.object({
+  projectId: projectIdSchema,
+  /** An id from list_site_managers, never one inferred from a name. */
+  siteManagerId: z.string().uuid(),
+});
+
 const requirementSectionKeys = [
   "projectName",
   "projectType",

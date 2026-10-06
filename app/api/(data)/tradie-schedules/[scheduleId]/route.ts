@@ -4,8 +4,10 @@ import {
   requestTradieScheduleDeletion,
   updateTradieSchedule,
 } from "@/lib/data/tradieSchedules";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   deleteTradieScheduleSchema,
+  errorResponse,
   updateTradieScheduleSchema,
   parseRouteParamsWithResponse,
   parseBodyWithResponse,
@@ -31,11 +33,21 @@ export async function PATCH(
   const body = await parseBodyWithResponse(request, updateTradieScheduleSchema);
   if (!body.success) return body.response;
 
-  const result = await updateTradieSchedule(routeParams.data.scheduleId, {
-    status: body.data.status,
-  });
-
-  return successResponse(result);
+  try {
+    const result = await updateTradieSchedule(routeParams.data.scheduleId, {
+      status: body.data.status,
+    });
+    return successResponse(result);
+  } catch (error) {
+    // "Invalid schedule transition from CONFIRMED to PENDING." is what the
+    // operator needs to read; a bare 500 just gets the button pressed again.
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
+    return errorResponse("Failed to update tradie schedule.", {
+      status: 500,
+      code: "INTERNAL_ERROR",
+    });
+  }
 }
 
 /**

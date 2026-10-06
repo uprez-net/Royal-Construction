@@ -1,5 +1,6 @@
 import { fetchJson } from "@/utils/fetch";
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import type { Role } from "@prisma/client";
 
 export interface SiteManagerLookupItem {
   id: string;
@@ -7,6 +8,7 @@ export interface SiteManagerLookupItem {
   email: string;
   phone: string;
   createdAt: string;
+  role?: Role;
 }
 
 export interface SiteManagersState {

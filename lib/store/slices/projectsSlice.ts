@@ -284,9 +284,12 @@ export const createBulkTradieScheduleForProject = createAsyncThunk<
   CreateTradieScheduleInput[]
 >("tradies/createBulkSchedule", async (payload, thunkApi) => {
   try {
-    const data = await bulkCreateTradieSchedules(payload);
+    const result = await bulkCreateTradieSchedules(payload);
+    // A refusal comes back as a value: a thrown Server Action message is a
+    // digest in production.
+    if (!result.ok) return thunkApi.rejectWithValue(result.error);
 
-    return data;
+    return result.schedules;
   } catch (error) {
     return thunkApi.rejectWithValue(
       error instanceof Error

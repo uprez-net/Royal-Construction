@@ -1,12 +1,19 @@
 import { Prisma } from "@prisma/client";
 
+import { createActivityLogEntry } from "@/types/activityLog";
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import { normalizeDateString } from "@/utils/date";
 
-import { authorizeProjectEdit } from "../access/projects";
+import { authorizeProject, authorizeProjectEdit } from "../access/projects";
+import { logActionOrThrow } from "../audit/action-log";
 import type { DomainDb } from "../db";
-import { DomainValidationError } from "../errors";
-import type { DomainPrincipal } from "../principal";
+import { DomainStaleVersionError, DomainValidationError } from "../errors";
+import { requireAssignableSiteManager } from "../identity/site-managers";
+import {
+  attributionUserId,
+  requireAdminPrincipal,
+  type DomainPrincipal,
+} from "../principal";
 
 import {
   collectProjectDateBlockers,
@@ -138,6 +145,91 @@ export async function updateProject(
     projectId: input.projectId,
     warnings: warns.map((warn) => warn.label),
   };
+}
+
+export type AssignProjectSiteManagerResult = {
+  readonly projectId: string;
+  readonly siteManagerId: string;
+  readonly previousSiteManagerId: string | null;
+  /** False when the project already had this site manager; nothing was written. */
+  readonly changed: boolean;
+};
+
+/**
+ * Hand a project to a different site manager.
+ *
+ * ADMIN only, not `canEditProject`: a site manager who may edit a project's
+ * fields may not give the project to someone else — or take one that is not
+ * theirs. The new holder is checked with the same `requireAssignableSiteManager`
+ * project creation uses, so a GUEST or a customer account cannot be handed a
+ * build through this door either.
+ *
+ * The read, the change and its history entry are one transaction, and the
+ * change is conditional on the manager it was decided against. A double-click
+ * or a retry after a timeout — one person, two requests — then finds the
+ * project already moved and is refused, rather than writing the change and
+ * its history row twice.
+ */
+export async function assignProjectSiteManager(
+  principal: DomainPrincipal,
+  input: { readonly projectId: string; readonly siteManagerId: string },
+  db: DomainDb,
+): Promise<AssignProjectSiteManagerResult> {
+  requireAdminPrincipal(principal);
+
+  const run = async (tx: DomainDb): Promise<AssignProjectSiteManagerResult> => {
+    const project = await authorizeProject(principal, input.projectId, tx);
+    const siteManager = await requireAssignableSiteManager(
+      input.siteManagerId,
+      tx,
+    );
+
+    const result = {
+      previousSiteManagerId: project.siteManagerId,
+      projectId: project.id,
+      siteManagerId: siteManager.id,
+    };
+    if (project.siteManagerId === siteManager.id) {
+      return { ...result, changed: false };
+    }
+
+    const previous = project.siteManagerId
+      ? await tx.user.findUnique({
+          select: { name: true },
+          where: { id: project.siteManagerId },
+        })
+      : null;
+
+    const updated = await tx.project.updateMany({
+      data: { siteManagerId: siteManager.id },
+      where: { id: project.id, siteManagerId: project.siteManagerId },
+    });
+    if (updated.count !== 1) {
+      throw new DomainStaleVersionError(
+        "The site manager changed while this was being saved. Refresh and try again.",
+      );
+    }
+    // Throwing, not the forgiving logAction: inside a transaction a failed
+    // insert aborts the commit anyway, and the history row is part of what
+    // this change promises.
+    await logActionOrThrow(
+      {
+        ...createActivityLogEntry("siteManagerAssigned", {
+          previousSiteManagerName: previous?.name ?? null,
+          projectId: project.id,
+          siteManagerName: siteManager.name,
+        }),
+        authorId: attributionUserId(principal),
+      },
+      tx,
+    );
+
+    return { ...result, changed: true };
+  };
+
+  // A caller already inside a transaction (an Eve tool's audited operation)
+  // hands in its own client, which has no `$transaction` of its own.
+  return "$transaction" in db ? db.$transaction(run) : run(db);
 }
 
 /**
