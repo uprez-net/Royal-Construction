@@ -6,7 +6,7 @@ import {
 } from "@prisma/client";
 
 import type { DomainDb } from "../db";
-import { DomainNotFoundError, DomainValidationError } from "../errors";
+import { DomainValidationError } from "../errors";
 import {
   attributionUserId,
   requireAdminPrincipal,
@@ -14,6 +14,7 @@ import {
 } from "../principal";
 import { assertCanReadTradieDirectory } from "../access/tradies";
 import { resolveTradeLabel } from "./trade-types";
+import { requireActiveTradie as requireTradie } from "./lifecycle";
 
 // The tradie directory: who may read it, who may change it, and what has to go
 // through an approval instead of being written directly.
@@ -308,10 +309,4 @@ function requireActorId(principal: DomainPrincipal): string {
     throw new DomainValidationError("This action needs a signed-in user.");
   }
   return userId;
-}
-
-async function requireTradie(tradieId: string, db: DomainDb): Promise<Tradie> {
-  const tradie = await db.tradie.findUnique({ where: { id: tradieId } });
-  if (!tradie) throw new DomainNotFoundError("Tradie not found");
-  return tradie;
 }

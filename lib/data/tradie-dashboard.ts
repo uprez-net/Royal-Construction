@@ -244,7 +244,7 @@ function buildWhere(
     switch (resolved.tab) {
       case "week":
         parts.push(
-          Prisma.sql`ts."scheduledDate" >= ${today} AND ts."scheduledDate" < ${nextWeek}`,
+          Prisma.sql`ts."scheduledDate" >= ${today} AND ts."scheduledDate" < ${nextWeek} AND ts.status <> 'CANCELLED'::"TradieScheduleStatus"`,
         );
         break;
       case "confirmed":
@@ -259,7 +259,7 @@ function buildWhere(
         break;
       case "overdue":
         parts.push(
-          Prisma.sql`ts."scheduledDate" < ${today} AND ts.status <> 'COMPLETED'::"TradieScheduleStatus"`,
+          Prisma.sql`ts."scheduledDate" < ${today} AND ts.status <> ALL(ARRAY['COMPLETED','CANCELLED']::"TradieScheduleStatus"[])`,
         );
         break;
       case "completed":
@@ -286,8 +286,8 @@ function mapScheduleStatus(status: TradieScheduleStatus): {
   label: string;
 } {
   if (
-    status === TradieScheduleStatus.CONFIRMED ||
-    status === TradieScheduleStatus.COMPLETED
+    status === TradieScheduleStatus.CONFIRMED
+    || status === TradieScheduleStatus.COMPLETED
   ) {
     return {
       type: "done",
@@ -296,22 +296,25 @@ function mapScheduleStatus(status: TradieScheduleStatus): {
     };
   }
   if (
-    status === TradieScheduleStatus.DECLINED ||
-    status === TradieScheduleStatus.NO_RESPONSE
+    status === TradieScheduleStatus.CANCELLED
+    || status === TradieScheduleStatus.DECLINED
+    || status === TradieScheduleStatus.NO_RESPONSE
   ) {
     return {
       type: "urgent",
       label:
-        status === TradieScheduleStatus.DECLINED
-          ? "declined"
-          : "had no response",
+        status === TradieScheduleStatus.CANCELLED
+          ? "cancelled"
+          : status === TradieScheduleStatus.DECLINED
+            ? "declined"
+            : "had no response",
     };
   }
   return {
     type: "warn",
     label:
-      status === TradieScheduleStatus.PENDING_RESPONSE ||
-      status === TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
+      status === TradieScheduleStatus.PENDING_RESPONSE
+      || status === TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
         ? "is pending final confirmation"
         : "is pending",
   };
@@ -448,13 +451,13 @@ export async function getTradieCoordinationDashboard(
       prisma.$queryRaw<TradeOptionRow[]>(Prisma.sql`
         SELECT DISTINCT "trade" AS trade_type
         FROM "Tradie"
-        WHERE "trade" IS NOT NULL
+        WHERE "archivedAt" IS NULL AND "trade" IS NOT NULL
         ORDER BY "trade" ASC
       `),
 
       // 4. Total registered tradies
       prisma.$queryRaw<CountRow[]>(Prisma.sql`
-        SELECT COUNT(*)::bigint AS count FROM "Tradie"
+        SELECT COUNT(*)::bigint AS count FROM "Tradie" WHERE "archivedAt" IS NULL
       `),
 
       // 5. Scheduled this week (current)
@@ -467,6 +470,7 @@ export async function getTradieCoordinationDashboard(
         WHERE ${insightsWhere}
           AND ts."scheduledDate" >= ${today}
           AND ts."scheduledDate" <  ${nextWeek}
+          AND ts.status <> 'CANCELLED'::"TradieScheduleStatus"
       `),
 
       // 6. Scheduled previous week
@@ -479,6 +483,7 @@ export async function getTradieCoordinationDashboard(
         WHERE ${insightsWhere}
           AND ts."scheduledDate" >= ${prevWeekStart}
           AND ts."scheduledDate" <  ${today}
+          AND ts.status <> 'CANCELLED'::"TradieScheduleStatus"
       `),
 
       // 7. Pending / no-response count
@@ -524,7 +529,7 @@ export async function getTradieCoordinationDashboard(
         WHERE ${insightsWhere}
           AND ts."scheduledDate" >= ${active14Start}
           AND ts."scheduledDate" <= ${active14End}
-          AND ts.status <> ALL(ARRAY['DECLINED','COMPLETED']::"TradieScheduleStatus"[])
+          AND ts.status <> ALL(ARRAY['DECLINED','COMPLETED','CANCELLED']::"TradieScheduleStatus"[])
       `),
 
       // 11. New tradies in current 30-day window
@@ -566,6 +571,7 @@ export async function getTradieCoordinationDashboard(
           COUNT(*)::bigint AS tab_all,
           COUNT(*) FILTER (
             WHERE ts."scheduledDate" >= ${today} AND ts."scheduledDate" < ${nextWeek}
+              AND ts.status <> 'CANCELLED'::"TradieScheduleStatus"
           )::bigint AS tab_week,
           COUNT(*) FILTER (
             WHERE ts.status = 'CONFIRMED'::"TradieScheduleStatus"
@@ -575,7 +581,7 @@ export async function getTradieCoordinationDashboard(
           )::bigint AS tab_pending,
           COUNT(*) FILTER (
             WHERE ts."scheduledDate" < ${today}
-              AND ts.status <> 'COMPLETED'::"TradieScheduleStatus"
+              AND ts.status <> ALL(ARRAY['COMPLETED','CANCELLED']::"TradieScheduleStatus"[])
           )::bigint AS tab_overdue,
           COUNT(*) FILTER (
             WHERE ts.status = 'COMPLETED'::"TradieScheduleStatus"
@@ -684,7 +690,8 @@ export async function getTradieCoordinationDashboard(
         WHERE ${insightsWhere}
           AND ts."scheduledDate" >= ${today}
           AND ts."scheduledDate" <  ${nextWeek}
-          AND ts.status <> ALL(ARRAY['CONFIRMED','COMPLETED']::"TradieScheduleStatus"[])
+          AND ts.status <> 'CANCELLED'::"TradieScheduleStatus"
+          AND ts.status <> ALL(ARRAY['CONFIRMED','COMPLETED','CANCELLED']::"TradieScheduleStatus"[])
         ORDER BY ts."scheduledDate" ASC
         LIMIT 8
       `),
@@ -783,8 +790,8 @@ export async function getTradieCoordinationDashboard(
       const count = n(row.cnt);
       current.total += count;
       if (
-        row.status === TradieScheduleStatus.CONFIRMED ||
-        row.status === TradieScheduleStatus.COMPLETED
+        row.status === TradieScheduleStatus.CONFIRMED
+        || row.status === TradieScheduleStatus.COMPLETED
       ) {
         current.confirmed += count;
       }

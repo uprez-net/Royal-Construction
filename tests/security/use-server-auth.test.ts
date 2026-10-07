@@ -59,6 +59,8 @@ const CALLER_CHECKS = new Set([
   "generateOfferPrefill",
   "prepareProjectHandoff",
   "commitOfferStatusTransition",
+  // Removal impact is admin-only in the shared domain query.
+  "getTradieRemovalImpact",
 ]);
 
 // auth() alone passes every signed-in user, customers included. An export

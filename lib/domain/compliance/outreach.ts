@@ -384,7 +384,7 @@ async function outreachCandidates(party: CompliancePartyType, db: DomainDb) {
     orderBy: [{ isFavourite: "desc" }, { name: "asc" }],
     select: { additionalEmails: true, email: true, id: true, name: true },
     take: 25,
-    where: { trade: { equals: trade, mode: "insensitive" } },
+    where: { archivedAt: null, trade: { equals: trade, mode: "insensitive" } },
   });
 }
 
@@ -453,6 +453,7 @@ async function resolveOutreachRecipient(
   }
   const tradie = await db.tradie.findUnique({
     select: {
+      archivedAt: true,
       additionalEmails: true,
       email: true,
       id: true,
@@ -462,7 +463,7 @@ async function resolveOutreachRecipient(
     },
     where: { id: input.tradieId },
   });
-  if (!tradie) {
+  if (!tradie || tradie.archivedAt) {
     throw new DomainNotFoundError("That tradie is not in the directory.");
   }
   if (tradie.trade.trim().toLowerCase() !== trade.toLowerCase()) {

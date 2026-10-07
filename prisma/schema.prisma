@@ -73,6 +73,7 @@ enum TradieScheduleStatus {
   NO_RESPONSE
   DECLINED
   COMPLETED
+  CANCELLED
 }
 
 enum MaterialStatus {
@@ -669,6 +670,8 @@ model Tradie {
   lastQuotedPriceUnit TradiePriceUnit @default(HOURLY)
   rating              Decimal?        @db.Decimal(2, 1)
   note                String?         @db.Text
+  /// Removal archives the directory entry; historical bookings keep this identity.
+  archivedAt          DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -686,6 +689,7 @@ model Tradie {
   @@index([trade])
   @@index([email])
   @@index([phone])
+  @@index([archivedAt])
 }
 
 /// A trade in the tradie directory (Admin → Trade types). `Tradie.trade`
@@ -731,13 +735,15 @@ model TradieApproval {
   updationData       Json?
   rejectionReason    String?                  @db.Text
   pendingDeletionKey String?                  @unique
-  requestedBy        String
+  requestedBy        String?
+  /// Authenticated system channel when no staff user raised the request.
+  requestSource      String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   tradie Tradie @relation(fields: [tradieId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
 
   @@index([tradieId])
   @@index([requestedBy])

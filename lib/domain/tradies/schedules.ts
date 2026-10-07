@@ -16,6 +16,7 @@ import {
 import { attributionUserId, type DomainPrincipal } from "../principal";
 import { authorizeProject, canManageProject } from "../access/projects";
 import { assertCanReadTradieDirectory } from "../access/tradies";
+import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
 import {
   normalizeQuoteBasis,
   parseQuotedAmount,
@@ -58,10 +59,7 @@ export type CreateScheduleInput = {
  * neither counts as booked: neither shows on the picker, and neither stops the
  * same tradie being booked onto the same milestone again.
  */
-const NON_BLOCKING_STATUSES = [
-  TradieScheduleStatus.DECLINED,
-  TradieScheduleStatus.COMPLETED,
-];
+const NON_BLOCKING_STATUSES = INACTIVE_SCHEDULE_STATUSES;
 
 /** "12 Oct 2026" — schedule dates are stored at UTC midnight. */
 function bookingDay(date: Date): string {
@@ -249,11 +247,7 @@ export async function createTradieSchedule(
       transactionDb,
     );
 
-    const tradie = await transactionDb.tradie.findUnique({
-      select: { id: true },
-      where: { id: input.tradieId },
-    });
-    if (!tradie) throw new DomainNotFoundError("Tradie not found");
+    const tradie = await requireActiveTradie(input.tradieId, transactionDb);
 
     if (input.milestoneId) {
       await assertMilestoneOnProject(
@@ -391,6 +385,7 @@ const ALLOWED_TRANSITIONS: Record<
     TradieScheduleStatus.DECLINED,
   ],
   [TradieScheduleStatus.COMPLETED]: [],
+  [TradieScheduleStatus.CANCELLED]: [],
 };
 
 type ScheduleQuoteInput = {
@@ -415,6 +410,18 @@ type ScheduleMutationResult = {
 /** Move one booking through the persisted state machine and quote rule. */
 export async function transitionTradieSchedule(
   principal: DomainPrincipal,
+  input: Parameters<typeof applyScheduleTransition>[1],
+  db: DomainDb,
+): Promise<ScheduleMutationResult> {
+  // The booking, quote and approval must commit together. A failed approval
+  // used to leave the booking awaiting an approval that did not exist.
+  return "$transaction" in db
+    ? db.$transaction((tx) => applyScheduleTransition(principal, input, tx))
+    : applyScheduleTransition(principal, input, db);
+}
+
+async function applyScheduleTransition(
+  principal: DomainPrincipal,
   input: {
     scheduleId: string;
     toStatus: TradieScheduleStatus;
@@ -437,6 +444,11 @@ export async function transitionTradieSchedule(
 ): Promise<ScheduleMutationResult> {
   const existing = await findSchedule(input.scheduleId, db);
   await authorizeProject(principal, existing.projectId, db);
+  if (existing.tradie.archivedAt) {
+    throw new DomainTransitionError(
+      "This tradie has been removed from the active directory.",
+    );
+  }
 
   if (
     input.statusAlreadyApplied
@@ -522,7 +534,7 @@ export async function transitionTradieSchedule(
     && input.toStatus === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL
   ) {
     const requesterId = attributionUserId(principal);
-    if (!requesterId) {
+    if (!requesterId && principal.kind !== "system") {
       throw new DomainAuthorizationError(
         "Schedule approval requires a signed-in user.",
       );
@@ -548,6 +560,7 @@ export async function transitionTradieSchedule(
         actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
         reason: `${existing.tradie.name} has confirmed their availability for the scheduled task on ${existing.scheduledDate.toISOString().slice(0, 10)}. Please review and approve the booking.`,
         requestedBy: requesterId,
+        requestSource: principal.kind === "system" ? principal.reason : null,
         tradieId: existing.tradieId,
         updationData: {
           cost,
@@ -600,6 +613,14 @@ export async function rescheduleTradieSchedule(
   const existing = await findSchedule(input.scheduleId, db);
   await authorizeProject(principal, existing.projectId, db);
   const durationDays = input.durationDays ?? existing.durationDays;
+  if (
+    existing.status === TradieScheduleStatus.CANCELLED
+    || existing.tradie.archivedAt
+  ) {
+    throw new DomainTransitionError(
+      "A cancelled booking cannot be rescheduled.",
+    );
+  }
   if (!Number.isInteger(durationDays) || durationDays < 1) {
     throw new DomainValidationError(
       "A schedule must last at least one day.",
@@ -682,6 +703,11 @@ export async function requestTradieScheduleDeletion(
 }> {
   const schedule = await findSchedule(input.scheduleId, db);
   await authorizeProject(principal, schedule.projectId, db);
+  if (schedule.status === TradieScheduleStatus.CANCELLED) {
+    throw new DomainTransitionError(
+      "A cancelled booking is retained as history and cannot be deleted.",
+    );
+  }
   const requesterId = attributionUserId(principal);
   if (!requesterId) {
     throw new DomainAuthorizationError(
@@ -761,6 +787,7 @@ async function findSchedule(scheduleId: string, db: DomainDb) {
       tradie: {
         select: {
           id: true,
+          archivedAt: true,
           lastQuotedPrice: true,
           lastQuotedPriceUnit: true,
           name: true,

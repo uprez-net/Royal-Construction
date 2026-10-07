@@ -806,7 +806,7 @@ async function processNotifications(
 
             try {
               await applyTradieScheduleUpdate(
-                systemPrincipal("tradie email reply"),
+                systemPrincipal("graph:tradie-email-reply"),
                 match.schedule.id,
                 {
                   status: tradieReplyStatus(

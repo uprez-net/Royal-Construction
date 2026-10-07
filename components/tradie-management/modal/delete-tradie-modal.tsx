@@ -18,6 +18,10 @@ import { useState, useTransition } from "react";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { toast } from "sonner";
 import { deleteTradieThunk } from "@/lib/store/slices/tradieManagementSlice";
+import {
+  TradieRemovalImpact,
+  useTradieRemovalImpact,
+} from "./tradie-removal-impact";
 
 interface DeleteTradieModalProps {
   open: boolean;
@@ -33,15 +37,17 @@ export default function DeleteTradieModal({
   const dispatch = useAppDispatch();
   const [isPending, startTransition] = useTransition();
   const [reason, setReason] = useState("");
+  const impact = useTradieRemovalImpact(tradie.id, open);
 
   const handleOpenChange = (open: boolean) => {
-    if (!open) {
+    if (!open && !isPending) {
       onClose();
       setReason("");
     }
   };
 
   const handleSubmit = () => {
+    if (isPending || !impact.isSuccess || impact.isFetching) return;
     if (!reason.trim()) {
       toast.error("Please provide a reason for deletion.");
       return;
@@ -58,9 +64,14 @@ export default function DeleteTradieModal({
 
         toast.success("Deletion request submitted successfully.");
 
-        handleOpenChange(false);
+        onClose();
+        setReason("");
       } catch (error) {
-        toast.error("Error deleting tradie. Please try again.");
+        toast.error(
+          typeof error === "string"
+            ? error
+            : "Error requesting removal. Please try again.",
+        );
 
         console.error("Error deleting tradie:", error);
       }
@@ -77,8 +88,8 @@ export default function DeleteTradieModal({
           </DialogTitle>
 
           <DialogDescription>
-            {tradie.trade} &middot; requesting permanent removal from the active
-            tradie list.
+            {tradie.trade} &middot; requesting removal from the active tradie
+            list.
           </DialogDescription>
         </DialogHeader>
 
@@ -96,13 +107,15 @@ export default function DeleteTradieModal({
                 </h4>
 
                 <p className="text-xs leading-relaxed text-foreground/80">
-                  You are requesting to permanently delete {tradie.name}&apos;s
-                  profile from the active list. This request is submitted for
-                  review and confirmation before any action is taken.
+                  You are requesting to archive {tradie.name}&apos;s profile.
+                  This request is submitted for review and confirmation before
+                  any action is taken.
                 </p>
               </div>
             </div>
           </div>
+
+          <TradieRemovalImpact impact={impact} />
 
           <div className="space-y-2">
             <Label htmlFor="delete-tradie-reason">
@@ -143,7 +156,12 @@ export default function DeleteTradieModal({
             <Button
               variant="destructive"
               onClick={handleSubmit}
-              disabled={isPending || !reason.trim()}
+              disabled={
+                isPending
+                || !reason.trim()
+                || !impact.isSuccess
+                || impact.isFetching
+              }
             >
               {isPending ? (
                 <>

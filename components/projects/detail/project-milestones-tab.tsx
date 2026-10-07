@@ -238,12 +238,13 @@ export function ProjectMilestonesTab({
     const nextWeek = addWeeks(now, 1);
 
     return project.tradieSchedules.filter((schedule) => {
+      if (schedule.status === "CANCELLED") return false;
       const hasAlertStatus = schedule.status === "CONFIRMED";
 
       const targetDate = schedule.milestone?.targetDate;
       const isMilestoneDueSoon =
-        targetDate &&
-        isWithinInterval(new Date(targetDate), {
+        targetDate
+        && isWithinInterval(new Date(targetDate), {
           start: now,
           end: nextWeek,
         });
@@ -527,8 +528,8 @@ export function ProjectMilestonesTab({
                             >
                               <div id={bodyId}>
                                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/70 px-4 py-2 text-xs text-muted-foreground">
-                                  {ledgerStage.isWorkable ||
-                                  ledgerStage.state === "complete" ? (
+                                  {ledgerStage.isWorkable
+                                  || ledgerStage.state === "complete" ? (
                                     <span>
                                       {ledgerStage.state === "complete"
                                         ? `All ${rollup.total} activities done`

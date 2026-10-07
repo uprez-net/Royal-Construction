@@ -32,6 +32,7 @@ function toSafeTradie(
 export async function getTradies(): Promise<SafeTradie[]> {
   try {
     const tradies = await prisma.tradie.findMany({
+      where: { archivedAt: null },
       orderBy: { name: "asc" },
     });
 
@@ -237,7 +238,7 @@ export async function getTradiesForLookup(limit = 20, search = "", trade = "") {
       : search_;
 
     const tradies = await prisma.tradie.findMany({
-      where,
+      where: { ...where, archivedAt: null },
       take: limit,
       orderBy: { name: "asc" },
       select: {
