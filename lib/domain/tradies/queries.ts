@@ -8,7 +8,40 @@ import {
 } from "../access/tradies";
 import type { DomainDb } from "../db";
 import { DomainNotFoundError } from "../errors";
-import { isUserPrincipal, type DomainPrincipal } from "../principal";
+import {
+  isUserPrincipal,
+  requireAdminPrincipal,
+  type DomainPrincipal,
+} from "../principal";
+import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
+
+/** Read fresh at request/review time, including overdue unfinished bookings. */
+export async function getTradieRemovalImpact(
+  principal: DomainPrincipal,
+  tradieId: string,
+  db: DomainDb,
+) {
+  requireAdminPrincipal(principal);
+  await requireActiveTradie(tradieId, db);
+  const schedules = await db.tradieSchedule.findMany({
+    where: { tradieId, status: { notIn: INACTIVE_SCHEDULE_STATUSES } },
+    orderBy: { scheduledDate: "asc" },
+    select: {
+      id: true,
+      status: true,
+      scheduledDate: true,
+      durationDays: true,
+      project: { select: { id: true, name: true } },
+      milestone: { select: { name: true } },
+    },
+  });
+  return {
+    schedules: schedules.map((schedule) => ({
+      ...schedule,
+      scheduledDate: schedule.scheduledDate.toISOString(),
+    })),
+  };
+}
 
 export async function searchTradies(
   principal: DomainPrincipal,
@@ -24,6 +57,7 @@ export async function searchTradies(
   const query = input.query.trim();
   return db.tradie.findMany({
     where: {
+      archivedAt: null,
       trade: input.trade
         ? { equals: input.trade, mode: "insensitive" }
         : undefined,
@@ -121,10 +155,20 @@ export async function listTradieSchedules(
     ...(input.query
       ? {
           OR: [
-            { tradie: { name: { contains: input.query, mode: "insensitive" } } },
-            { tradie: { trade: { contains: input.query, mode: "insensitive" } } },
-            { project: { name: { contains: input.query, mode: "insensitive" } } },
-            { milestone: { name: { contains: input.query, mode: "insensitive" } } },
+            {
+              tradie: { name: { contains: input.query, mode: "insensitive" } },
+            },
+            {
+              tradie: { trade: { contains: input.query, mode: "insensitive" } },
+            },
+            {
+              project: { name: { contains: input.query, mode: "insensitive" } },
+            },
+            {
+              milestone: {
+                name: { contains: input.query, mode: "insensitive" },
+              },
+            },
           ],
         }
       : {}),

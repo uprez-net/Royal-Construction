@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
-import { scheduleTotalCost } from "@/utils/calculations";
+import { tradieScheduleSpend } from "@/lib/domain/tradies/lifecycle";
 
 interface UpdateMilestoneModalProps {
   milestoneId: string;
@@ -115,23 +115,10 @@ export default function UpdateMilestoneModal({
     if (!milestoneSchedules || milestoneSchedules.length === 0) {
       return 0;
     }
-    const totalSpend = milestoneSchedules.reduce((acc, schedule) => {
-      if (schedule.requiresQuote) {
-        return acc + parseFloat(schedule.quotedPrice ?? "0");
-      } else {
-        const lastQuotedPrice = parseFloat(
-          schedule.tradie.lastQuotedPrice ?? "0",
-        );
-        return (
-          acc +
-          scheduleTotalCost(
-            lastQuotedPrice,
-            schedule.durationDays,
-            schedule.tradie.lastQuotedPriceUnit,
-          )
-        );
-      }
-    }, 0);
+    const totalSpend = milestoneSchedules.reduce(
+      (acc, schedule) => acc + tradieScheduleSpend(schedule),
+      0,
+    );
 
     return totalSpend;
   }, [project, milestoneId]);
@@ -147,8 +134,8 @@ export default function UpdateMilestoneModal({
       targetDate: toDateInputValue(milestone?.targetDate),
       startDate: toDateInputValue(milestone?.startDate),
       actualDate:
-        toDateInputValue(milestone?.actualDate) ??
-        (currentStatus === "DONE"
+        toDateInputValue(milestone?.actualDate)
+        ?? (currentStatus === "DONE"
           ? format(new Date(), "yyyy-MM-dd")
           : undefined),
       spend: spend > 0 ? spend : undefined,

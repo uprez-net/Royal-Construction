@@ -97,7 +97,11 @@ test("a tradie's bookings run from today, inclusive last day, and skip finished 
   const where = (recorder.calls[0]?.args as { where: { status: unknown } })
     .where;
   assert.deepEqual(where.status, {
-    notIn: [TradieScheduleStatus.DECLINED, TradieScheduleStatus.COMPLETED],
+    notIn: [
+      TradieScheduleStatus.DECLINED,
+      TradieScheduleStatus.COMPLETED,
+      TradieScheduleStatus.CANCELLED,
+    ],
   });
 });
 
@@ -170,7 +174,11 @@ test("a tradie already booked on those days is booked again for other work", asy
     milestoneId: "m_roofing",
     projectId: "p_mine",
     status: {
-      notIn: [TradieScheduleStatus.DECLINED, TradieScheduleStatus.COMPLETED],
+      notIn: [
+        TradieScheduleStatus.DECLINED,
+        TradieScheduleStatus.COMPLETED,
+        TradieScheduleStatus.CANCELLED,
+      ],
     },
     tradieId: "t_1",
   });

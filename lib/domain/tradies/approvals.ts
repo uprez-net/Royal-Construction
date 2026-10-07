@@ -11,6 +11,7 @@ import {
   DomainValidationError,
 } from "../errors";
 import { requireAdminPrincipal, type DomainPrincipal } from "../principal";
+import { INACTIVE_SCHEDULE_STATUSES } from "./lifecycle";
 
 export async function listTradieApprovals(
   principal: DomainPrincipal,
@@ -181,10 +182,50 @@ export async function resolveTradieApproval(
         }
 
         case TradieApprovalActionType.TRADIE_REMOVAL: {
-          const deleted = await tx.tradie.deleteMany({
-            where: { id: approval.tradieId },
+          const archived = await tx.tradie.updateMany({
+            where: { id: approval.tradieId, archivedAt: null },
+            data: { archivedAt: new Date(), isFavourite: false },
           });
-          affected = { deleted: deleted.count === 1 };
+          if (archived.count !== 1) {
+            throw new DomainTransitionError(
+              "This tradie has already been removed.",
+            );
+          }
+          const bookings = await tx.tradieSchedule.findMany({
+            where: {
+              tradieId: approval.tradieId,
+              status: { notIn: INACTIVE_SCHEDULE_STATUSES },
+            },
+            select: { projectId: true },
+          });
+          const cancelled = await tx.tradieSchedule.updateMany({
+            where: {
+              tradieId: approval.tradieId,
+              status: { notIn: INACTIVE_SCHEDULE_STATUSES },
+            },
+            data: { status: TradieScheduleStatus.CANCELLED },
+          });
+          // These requests can no longer be acted on after removal. Incident
+          // resolution stays available so existing incidents can be closed.
+          await tx.tradieApproval.updateMany({
+            where: {
+              tradieId: approval.tradieId,
+              status: TradieApprovalStatus.PENDING,
+              actionType: { not: TradieApprovalActionType.INCIDENT_RESOLUTION },
+            },
+            data: {
+              status: TradieApprovalStatus.REJECTED,
+              pendingDeletionKey: null,
+              rejectionReason: "Tradie removed from the active directory.",
+            },
+          });
+          affected = {
+            archived: true,
+            cancelledSchedules: cancelled.count,
+            projectIds: [
+              ...new Set(bookings.map((booking) => booking.projectId)),
+            ],
+          };
           break;
         }
 

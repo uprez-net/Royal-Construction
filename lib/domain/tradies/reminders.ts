@@ -4,11 +4,11 @@ import type { DomainDb } from "../db";
 import { DomainNotFoundError, DomainTransitionError } from "../errors";
 import { isInternalPrincipal, type DomainPrincipal } from "../principal";
 import { runOutboxEffectWithOutcome } from "../outbox";
+import { INACTIVE_SCHEDULE_STATUSES } from "./lifecycle";
 
-const NON_ACTIONABLE_STATUSES = new Set<TradieScheduleStatus>([
-  TradieScheduleStatus.DECLINED,
-  TradieScheduleStatus.COMPLETED,
-]);
+const NON_ACTIONABLE_STATUSES = new Set<TradieScheduleStatus>(
+  INACTIVE_SCHEDULE_STATUSES,
+);
 
 export type TradieReminderEmailPort = (input: {
   readonly body: string;
@@ -47,10 +47,21 @@ export async function sendTradieScheduleReminder(
     );
   }
   const schedule = await db.tradieSchedule.findUnique({
-    select: { tradie: { select: { email: true } } },
+    select: {
+      status: true,
+      tradie: { select: { email: true, archivedAt: true } },
+    },
     where: { id: input.scheduleId },
   });
   if (!schedule) throw new DomainNotFoundError("Schedule not found.");
+  if (
+    schedule.status === TradieScheduleStatus.CANCELLED
+    || schedule.tradie.archivedAt
+  ) {
+    throw new DomainTransitionError(
+      "A removed tradie cannot receive booking reminders.",
+    );
+  }
   const to = schedule.tradie.email.trim();
   if (!to) throw new DomainTransitionError("This tradie has no email address.");
 
@@ -119,7 +130,7 @@ export async function markTradieReminderSent(
   }
   if (NON_ACTIONABLE_STATUSES.has(schedule.status)) {
     throw new DomainTransitionError(
-      "A completed or declined schedule cannot receive a reminder.",
+      "A completed, declined or cancelled schedule cannot receive a reminder.",
     );
   }
 

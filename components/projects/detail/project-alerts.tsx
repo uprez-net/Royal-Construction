@@ -333,6 +333,7 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
     const today = startOfDay(now);
 
     return project.tradieSchedules.filter((schedule) => {
+      if (schedule.status === "CANCELLED") return false;
       // Confirmed and still ahead. The row prints `scheduledDate`, so an
       // unbounded status test put a booking from three months ago under a
       // heading that says "Upcoming" with a date in the past beside it — and

@@ -156,7 +156,8 @@ export const deleteTradieThunk = createAsyncThunk<void, DeleteInput>(
   async (input, thunkAPI) => {
     try {
       // Call the server action to delete the tradie
-      await deleteTradie(input);
+      const result = await deleteTradie(input);
+      if (result?.ok === false) return thunkAPI.rejectWithValue(result.error);
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error instanceof Error ? error.message : "Failed to delete tradie",

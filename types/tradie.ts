@@ -230,6 +230,7 @@ export const TRADIE_SCHEDULE_STATE_MACHINE: Record<
     TradieScheduleStatus.DECLINED,
   ],
   [TradieScheduleStatus.COMPLETED]: [],
+  [TradieScheduleStatus.CANCELLED]: [],
   [TradieScheduleStatus.AWAITING_QUOTE]: [
     TradieScheduleStatus.QUOTE_RECEIVED,
     TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,

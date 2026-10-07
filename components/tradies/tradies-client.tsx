@@ -79,6 +79,7 @@ const statusLabelMap: Record<TradieScheduleStatus, string> = {
   NO_RESPONSE: "No Response",
   DECLINED: "Declined",
   COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
   AWAITING_QUOTE: "Awaiting Quote",
   QUOTE_RECEIVED: "Quote Received",
   AWAITING_ADMIN_APPROVAL: "Availability Confirmed · Admin Review",
@@ -95,6 +96,7 @@ const statusToneMap: Record<
   NO_RESPONSE: "danger",
   DECLINED: "danger",
   COMPLETED: "neutral",
+  CANCELLED: "neutral",
   AWAITING_QUOTE: "warning",
   QUOTE_RECEIVED: "warning",
   AWAITING_ADMIN_APPROVAL: "warning",
@@ -292,8 +294,9 @@ export function TradiesClient({
   const handleBulkReminder = async () => {
     const valid = tableRowsSelected.filter(
       (row) =>
-        row.status !== TradieScheduleStatus.CONFIRMED &&
-        row.status !== TradieScheduleStatus.COMPLETED,
+        row.status !== TradieScheduleStatus.CONFIRMED
+        && row.status !== TradieScheduleStatus.COMPLETED
+        && row.status !== TradieScheduleStatus.CANCELLED,
     );
     setBulkLoading("pending");
     await updateScheduleStatuses(
@@ -396,10 +399,11 @@ export function TradiesClient({
         className="flex justify-start gap-1"
         onClick={(event) => event.stopPropagation()}
       >
-        {(row.status === TradieScheduleStatus.PENDING ||
-          row.status === TradieScheduleStatus.NO_RESPONSE ||
-          row.status === TradieScheduleStatus.PENDING_RESPONSE ||
-          row.status === TradieScheduleStatus.PENDING_FINAL_CONFIRMATION) && (
+        {(row.status === TradieScheduleStatus.PENDING
+          || row.status === TradieScheduleStatus.NO_RESPONSE
+          || row.status === TradieScheduleStatus.PENDING_RESPONSE
+          || row.status
+            === TradieScheduleStatus.PENDING_FINAL_CONFIRMATION) && (
           <Button
             size={size}
             variant="ghost"
@@ -411,9 +415,10 @@ export function TradiesClient({
           </Button>
         )}
 
-        {row.status !== TradieScheduleStatus.CONFIRMED &&
-          row.status !== TradieScheduleStatus.AWAITING_ADMIN_APPROVAL &&
-          row.status !== TradieScheduleStatus.COMPLETED && (
+        {row.status !== TradieScheduleStatus.CONFIRMED
+          && row.status !== TradieScheduleStatus.AWAITING_ADMIN_APPROVAL
+          && row.status !== TradieScheduleStatus.COMPLETED
+          && row.status !== TradieScheduleStatus.CANCELLED && (
             <Button
               size={size}
               variant="ghost"
@@ -425,17 +430,18 @@ export function TradiesClient({
             </Button>
           )}
 
-        {row.status !== TradieScheduleStatus.COMPLETED && (
-          <Button
-            size={size}
-            variant="ghost"
-            className={btn}
-            aria-label="Send reminder"
-            onClick={() => void handleRowReminder(row)}
-          >
-            <Mail className="h-4 w-4" />
-          </Button>
-        )}
+        {row.status !== TradieScheduleStatus.COMPLETED
+          && row.status !== TradieScheduleStatus.CANCELLED && (
+            <Button
+              size={size}
+              variant="ghost"
+              className={btn}
+              aria-label="Send reminder"
+              onClick={() => void handleRowReminder(row)}
+            >
+              <Mail className="h-4 w-4" />
+            </Button>
+          )}
         {row.status === TradieScheduleStatus.COMPLETED && (
           <Button
             size={size}
@@ -453,7 +459,10 @@ export function TradiesClient({
           variant="ghost"
           className={btn}
           aria-label="More actions"
-          disabled={row.status === TradieScheduleStatus.COMPLETED}
+          disabled={
+            row.status === TradieScheduleStatus.COMPLETED
+            || row.status === TradieScheduleStatus.CANCELLED
+          }
           onClick={() => void handleUpdateRowStatus(row)}
         >
           <EllipsisVertical className="h-4 w-4" />
@@ -477,9 +486,9 @@ export function TradiesClient({
       key="select-all"
       type="checkbox"
       checked={
-        tradiesState.schedules.length > 0 &&
-        tradiesState.selectedScheduleIds.length ===
-          tradiesState.schedules.length
+        tradiesState.schedules.length > 0
+        && tradiesState.selectedScheduleIds.length
+          === tradiesState.schedules.length
       }
       onChange={(event) => {
         if (event.target.checked) {
@@ -787,12 +796,12 @@ export function TradiesClient({
                   selectedItem={selectedProject}
                   items={tradiesState.projectLookup.items}
                   loading={
-                    tradiesState.projectLookup.loading ||
-                    tradiesState.projectLookup.loadingMore
+                    tradiesState.projectLookup.loading
+                    || tradiesState.projectLookup.loadingMore
                   }
                   hasMore={
-                    tradiesState.projectLookup.page <
-                    tradiesState.projectLookup.totalPages
+                    tradiesState.projectLookup.page
+                    < tradiesState.projectLookup.totalPages
                   }
                   onQueryChange={setProjectSearch}
                   onSelect={(item) => {
@@ -882,17 +891,17 @@ export function TradiesClient({
             </div>
           ) : null}
 
-          {!tradiesState.loading &&
-          !tradiesState.error &&
-          tradiesState.schedules.length === 0 ? (
+          {!tradiesState.loading
+          && !tradiesState.error
+          && tradiesState.schedules.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
               No tradies match your current filters.
             </div>
           ) : null}
 
-          {!tradiesState.loading &&
-          !tradiesState.error &&
-          tradiesState.schedules.length > 0 ? (
+          {!tradiesState.loading
+          && !tradiesState.error
+          && tradiesState.schedules.length > 0 ? (
             <>
               <div className="hidden overflow-x-auto rounded-xl border border-border/70 md:block">
                 <DataTable
@@ -1115,8 +1124,8 @@ export function TradiesClient({
                             );
                           }}
                           aria-disabled={
-                            tradiesState.pagination.page >=
-                            tradiesState.pagination.totalPages
+                            tradiesState.pagination.page
+                            >= tradiesState.pagination.totalPages
                           }
                         />
                       </PaginationItem>

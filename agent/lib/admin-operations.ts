@@ -19,10 +19,7 @@ import {
   listTradieApprovals,
   resolveTradieApproval,
 } from "@/lib/domain/tradies/approvals";
-import {
-  findUserByClerkId,
-  findUserById,
-} from "@/lib/domain/identity/users";
+import { findUserByClerkId, findUserById } from "@/lib/domain/identity/users";
 import {
   AgentAuthorizationError,
   requireCurrentAgentActor,
@@ -133,7 +130,7 @@ export async function listAuthorizedApprovals(
         reason: approval.reason,
         createdAt: approval.createdAt.toISOString(),
         tradie: approval.tradie,
-        requestedBy: approval.user.name,
+        requestedBy: approval.user?.name ?? approval.requestSource ?? "System",
         payload: approval.updationData,
       })),
     },
@@ -164,7 +161,7 @@ export async function getAuthorizedApproval(
         reason: approval.reason,
         rejectionReason: approval.rejectionReason,
         createdAt: approval.createdAt.toISOString(),
-        requestedBy: approval.user.name,
+        requestedBy: approval.user?.name ?? approval.requestSource ?? "System",
         tradie: approval.tradie,
         payload: approval.updationData,
       },
@@ -188,8 +185,7 @@ export async function resolveAuthorizedApproval(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const incidentResolution =
-    input.incidentResolution?.trim() || undefined;
+  const incidentResolution = input.incidentResolution?.trim() || undefined;
   const resolved = await resolveTradieApproval(
     userPrincipal(actor),
     {
@@ -315,8 +311,8 @@ export async function listAuthorizedTeam(
       members: response.data.map((user) => ({
         id: user.id,
         name:
-          [user.firstName, user.lastName].filter(Boolean).join(" ") ||
-          "Unnamed member",
+          [user.firstName, user.lastName].filter(Boolean).join(" ")
+          || "Unnamed member",
         email:
           user.emailAddresses.find(
             (email) => email.id === user.primaryEmailAddressId,

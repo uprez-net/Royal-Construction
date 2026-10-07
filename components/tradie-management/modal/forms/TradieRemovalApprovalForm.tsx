@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  AlertTriangle,
   Building2,
   DollarSign,
   Loader2,
@@ -26,6 +25,10 @@ import { RatingStars } from "@/components/common/rating-stars";
 import { rateCurrency, dataTimeFormat, formatStatus } from "@/utils/formatters";
 import { cn } from "@/lib/utils";
 import { formatQuotedPrice } from "@/utils/calculations";
+import {
+  TradieRemovalImpact,
+  useTradieRemovalImpact,
+} from "../tradie-removal-impact";
 
 interface Props {
   approval: SafeTradieApproval;
@@ -34,10 +37,14 @@ interface Props {
 
 export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
   const mutation = useApprovalMutation(onSuccess);
-  // A permanent deletion should not be one careless click; the operator has to
+  // Removal also cancels unfinished bookings; the operator has to
   // acknowledge the named tradie first.
   const confirmId = useId();
   const [confirmed, setConfirmed] = useState(false);
+  const impact = useTradieRemovalImpact(
+    approval.tradieId,
+    approval.status === "PENDING",
+  );
 
   const submit = (resolution: "approved" | "rejected") => {
     mutation.mutate({
@@ -174,32 +181,9 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
         </div>
 
         {/* Danger Zone */}
-        <div className="rounded-lg bg-destructive-light p-5">
-          <div className="flex gap-3">
-            <AlertTriangle
-              className="size-5 shrink-0 text-destructive-ink"
-              aria-hidden="true"
-            />
-
-            <div>
-              <p className="font-semibold text-destructive-ink">
-                Permanent action
-              </p>
-
-              <p className="mt-2 text-sm text-foreground/80">
-                Approving this request permanently removes{" "}
-                {approval.tradie.name} from the system.
-              </p>
-
-              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-foreground/80">
-                <li>The tradie record is deleted</li>
-                <li>Associated approvals may become inaccessible</li>
-                <li>Historical references may be affected</li>
-                <li>This action cannot be undone</li>
-              </ul>
-            </div>
-          </div>
-        </div>
+        {approval.status === "PENDING" && (
+          <TradieRemovalImpact impact={impact} />
+        )}
 
         <div className="flex items-start gap-3">
           <Checkbox
@@ -210,8 +194,8 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
           />
 
           <Label htmlFor={confirmId} className="text-sm leading-relaxed">
-            I understand this permanently removes {approval.tradie.name} and
-            cannot be undone.
+            I understand this removes {approval.tradie.name} from active use and
+            cancels all unfinished bookings while preserving their history.
           </Label>
         </div>
 
@@ -228,7 +212,12 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
 
             <Button
               variant="destructive"
-              disabled={mutation.isPending || !confirmed}
+              disabled={
+                mutation.isPending
+                || !confirmed
+                || !impact.isSuccess
+                || impact.isFetching
+              }
               onClick={() => submit("approved")}
             >
               {mutation.isPending ? (

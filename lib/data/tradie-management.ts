@@ -33,6 +33,24 @@ import {
 } from "@/lib/domain/tradies/directory";
 import { reportTradieIncident as reportTradieIncidentDomain } from "@/lib/domain/tradies/incidents";
 import { userPrincipal } from "@/lib/domain/principal";
+import { getTradieRemovalImpact } from "@/lib/domain/tradies/queries";
+import { domainActionFailure } from "@/lib/http/domain-response";
+
+export async function fetchTradieRemovalImpact(tradieId: string) {
+  try {
+    const actor = await requireTradieActor();
+    const impact = await getTradieRemovalImpact(
+      userPrincipal(actor),
+      tradieId,
+      prisma,
+    );
+    return { ok: true as const, ...impact };
+  } catch (error) {
+    const failure = domainActionFailure(error);
+    if (failure) return failure;
+    throw error;
+  }
+}
 
 /**
  * The signed-in user behind a tradie Server Action.
@@ -296,6 +314,8 @@ export async function deleteTradie(input: DeleteInput) {
     });
   } catch (error) {
     console.error("Error deleting tradie:", error);
+    const failure = domainActionFailure(error);
+    if (failure) return failure;
     throw new Error("Failed to delete tradie");
   }
 }
@@ -437,6 +457,7 @@ export async function getTradieGroupedByCategory(): Promise<
 > {
   try {
     const tradies = await prisma.tradie.findMany({
+      where: { archivedAt: null },
       include: {
         schedules: {
           select: {
@@ -573,6 +594,7 @@ export async function fetchFilteredTradies(
 ): Promise<TradieRow[]> {
   try {
     const whereClause: Prisma.TradieWhereInput = {
+      archivedAt: null,
       ...(input.search
         ? {
             OR: [
@@ -689,18 +711,19 @@ export async function fetchTradieKPIData(): Promise<TradieKPIData> {
                 (
                     SELECT COUNT(*)
                     FROM "Tradie"
+                    WHERE "archivedAt" IS NULL
                 ) AS registered_tradies,
 
                 (
                     SELECT COUNT(*)
                     FROM "Tradie"
-                    WHERE "createdAt" >= ${currentMonthStart}
+                    WHERE "archivedAt" IS NULL AND "createdAt" >= ${currentMonthStart}
                 ) AS registered_current_month,
 
                 (
                     SELECT COUNT(*)
                     FROM "Tradie"
-                    WHERE "createdAt" >= ${previousMonthStart}
+                    WHERE "archivedAt" IS NULL AND "createdAt" >= ${previousMonthStart}
                     AND "createdAt" < ${currentMonthStart}
                 ) AS registered_previous_month,
 
@@ -727,20 +750,20 @@ export async function fetchTradieKPIData(): Promise<TradieKPIData> {
                 (
                     SELECT COUNT(*)
                     FROM "Tradie"
-                    WHERE "isFavourite" = true
+                    WHERE "archivedAt" IS NULL AND "isFavourite" = true
                 ) AS favourite_tradies,
 
                 (
                     SELECT COUNT(*)
                     FROM "Tradie"
-                    WHERE "isFavourite" = true
+                    WHERE "archivedAt" IS NULL AND "isFavourite" = true
                     AND "createdAt" >= ${currentMonthStart}
                 ) AS favourites_current_month,
 
                 (
                     SELECT COUNT(*)
                     FROM "Tradie"
-                    WHERE "isFavourite" = true
+                    WHERE "archivedAt" IS NULL AND "isFavourite" = true
                     AND "createdAt" >= ${previousMonthStart}
                     AND "createdAt" < ${currentMonthStart}
                 ) AS favourites_previous_month
@@ -858,6 +881,7 @@ export async function toggleTradieFavourite(
 export async function exportTradies() {
   try {
     const tradies = await prisma.tradie.findMany({
+      where: { archivedAt: null },
       include: {
         schedules: {
           select: {

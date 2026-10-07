@@ -104,6 +104,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
       return "success";
     }
 
+    if (status === "CANCELLED") return "neutral";
     if (status === "DECLINED") {
       return "warning";
     }
@@ -128,8 +129,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
 
     // No response and schedule approaching
     if (
-      (status === "NO_RESPONSE" || status === "PENDING_RESPONSE") &&
-      daysUntilScheduled <= 7
+      (status === "NO_RESPONSE" || status === "PENDING_RESPONSE")
+      && daysUntilScheduled <= 7
     ) {
       return "warning";
     }
@@ -168,11 +169,11 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
         ];
       }
 
-      if (tradie.status === "DECLINED") {
+      if (tradie.status === "DECLINED" || tradie.status === "CANCELLED") {
         return [
           {
             schedule: tradie,
-            title: `${tradieName} declined the booking`,
+            title: `${tradieName} ${tradie.status === "CANCELLED" ? "was removed from" : "declined"} the booking`,
             detail: `Arrange a replacement before ${scheduledDate}.`,
             tone: "danger" as const,
           },
@@ -191,8 +192,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
       }
 
       if (
-        tradie.status === "AWAITING_ADMIN_APPROVAL" &&
-        differenceInDays(new Date(tradie.scheduledDate), new Date()) <= 7
+        tradie.status === "AWAITING_ADMIN_APPROVAL"
+        && differenceInDays(new Date(tradie.scheduledDate), new Date()) <= 7
       ) {
         return [
           {
@@ -282,8 +283,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
     // No rate on file is "unknown", not "$0" — and Number(null) is 0, so the
     // nullish check has to come before the finite check.
     if (
-      tradie.tradie.lastQuotedPrice == null ||
-      !Number.isFinite(lastQuotedPrice)
+      tradie.tradie.lastQuotedPrice == null
+      || !Number.isFinite(lastQuotedPrice)
     ) {
       return "—";
     }
@@ -428,36 +429,37 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
               </span>,
 
               <div className="flex gap-1" key={`${tradie.id}-actions`}>
-                {tradie.status !== "COMPLETED" && (
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label={`Send a reminder to ${tradie.tradie.name}`}
-                    className="size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary"
-                    disabled={[
-                      "AWAITING_ADMIN_APPROVAL",
-                      "DECLINED",
-                      "CONFIRMED",
-                    ].includes(tradie.status)}
-                    onClick={(event) => {
-                      // The row itself is a control; without this the row's
-                      // own handler fires too and two modals race.
-                      event.stopPropagation();
-                      dispatch(
-                        openModal({
-                          type: "tradieReminder",
-                          payload: {
-                            schedule: toScheduleListItem(tradie, {
-                              includeQuote: true,
-                            }),
-                          },
-                        }),
-                      );
-                    }}
-                  >
-                    <Bell className="size-3.5" aria-hidden="true" />
-                  </Button>
-                )}
+                {tradie.status !== "COMPLETED"
+                  && tradie.status !== "CANCELLED" && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label={`Send a reminder to ${tradie.tradie.name}`}
+                      className="size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary"
+                      disabled={[
+                        "AWAITING_ADMIN_APPROVAL",
+                        "DECLINED",
+                        "CONFIRMED",
+                      ].includes(tradie.status)}
+                      onClick={(event) => {
+                        // The row itself is a control; without this the row's
+                        // own handler fires too and two modals race.
+                        event.stopPropagation();
+                        dispatch(
+                          openModal({
+                            type: "tradieReminder",
+                            payload: {
+                              schedule: toScheduleListItem(tradie, {
+                                includeQuote: true,
+                              }),
+                            },
+                          }),
+                        );
+                      }}
+                    >
+                      <Bell className="size-3.5" aria-hidden="true" />
+                    </Button>
+                  )}
 
                 <Button
                   variant="outline"
@@ -465,6 +467,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                   aria-label={`Log a call with ${tradie.tradie.name}`}
                   className="size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary"
                   disabled={[
+                    "CANCELLED",
                     "AWAITING_ADMIN_APPROVAL",
                     "DECLINED",
                     "CONFIRMED",
