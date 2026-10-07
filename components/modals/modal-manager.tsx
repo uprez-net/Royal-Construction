@@ -548,11 +548,13 @@ export function ModalManager() {
     case "deleteTradie":
       const deleteTradie = modal.payload as { tradie: TradieRow };
       return (
-        <DeleteTradieModal
-          open
-          onClose={handleClose}
-          tradie={deleteTradie.tradie}
-        />
+        <QueryClientProvider client={queryClient}>
+          <DeleteTradieModal
+            open
+            onClose={handleClose}
+            tradie={deleteTradie.tradie}
+          />
+        </QueryClientProvider>
       );
     case "reportTradie":
       const reportTradie = modal.payload as { tradie: TradieRow };
