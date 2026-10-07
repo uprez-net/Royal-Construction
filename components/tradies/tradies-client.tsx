@@ -283,12 +283,18 @@ export function TradiesClient({
   };
 
   const handleBulkConfirm = async () => {
-    setBulkLoading("confirm");
-    await updateScheduleStatuses(
-      tradiesState.selectedScheduleIds,
-      TradieScheduleStatus.CONFIRMED,
+    const valid = tableRowsSelected.filter(
+      (row) => row.status !== TradieScheduleStatus.CANCELLED,
     );
-    setBulkLoading(null);
+    setBulkLoading("confirm");
+    try {
+      await updateScheduleStatuses(
+        valid.map((row) => row.id),
+        TradieScheduleStatus.CONFIRMED,
+      );
+    } finally {
+      setBulkLoading(null);
+    }
   };
 
   const handleBulkReminder = async () => {

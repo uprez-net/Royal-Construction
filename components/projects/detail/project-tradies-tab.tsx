@@ -15,7 +15,7 @@ import {
   shortDateFormat,
 } from "@/utils/formatters";
 import type { TradieScheduleStatus } from "@prisma/client";
-import { differenceInDays } from "date-fns";
+import { differenceInDays, startOfDay } from "date-fns";
 import { DataTable } from "@/components/common/data-table";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -146,7 +146,14 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
   const getAttentionItems = (
     tradies: typeof project.tradieSchedules,
   ): TradieAttentionItem[] => {
+    const today = startOfDay(new Date());
     return tradies.flatMap<TradieAttentionItem>((tradie) => {
+      if (
+        tradie.status === "CANCELLED"
+        && new Date(tradie.scheduledDate) < today
+      ) {
+        return [];
+      }
       const reminderTone = getReminderTone(
         tradie.reminderSentAt,
         new Date(tradie.scheduledDate),
