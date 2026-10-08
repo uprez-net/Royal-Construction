@@ -51,6 +51,7 @@ import {
   HardHat,
   Check,
   Loader2,
+  Pencil,
 } from "lucide-react";
 import { UploadButton } from "@/components/common/upload-button";
 import { useAppDispatch } from "@/lib/store/hooks";
@@ -60,6 +61,7 @@ import {
 } from "@/lib/store/slices/projectsSlice";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { useParams } from "next/navigation";
+import { format, parse } from "date-fns";
 
 // ---------------------------------------------------------------------------
 // Types & config
@@ -355,6 +357,142 @@ function DateField({
         onChange={(e) => onChange(emptyToNull(e.target.value))}
         className={cn(FIELD_CONTROL_CLASS, "font-mono tabular-nums")}
       />
+    </FieldShell>
+  );
+}
+
+/**
+ * The on-site start date, edited and saved on its own.
+ *
+ * The schedule hangs off this date, so it changes deliberately — Edit, then
+ * Save — instead of riding along with whatever else the overview form holds
+ * unsaved. Saving it alone also means a refusal (a start before the contract
+ * was signed) is reported against this field rather than failing the form.
+ */
+function StartDateField({
+  projectId,
+  value,
+  onSaved,
+}: {
+  projectId: string;
+  value: unknown;
+  onSaved: (project: ProjectDetail) => void;
+}) {
+  const id = useId();
+  const current = toDateInputValue(value);
+  const [editing, setEditing] = useState(false);
+  const [pending, setPending] = useState(current);
+  const [saving, setSaving] = useState(false);
+
+  const startEditing = () => {
+    setPending(current);
+    setEditing(true);
+  };
+
+  const save = async () => {
+    if (saving) return;
+    if (!pending) {
+      toast.error("Pick a start date.");
+      return;
+    }
+    if (pending === current) {
+      setEditing(false);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetchJson<ProjectDetail>(
+        `/api/projects/${projectId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ startDate: pending }),
+        },
+        "Unable to update the start date",
+      );
+      onSaved(response.data);
+      setEditing(false);
+      toast.success("Start date updated");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to update the start date",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <FieldShell label="Start date (on-site)">
+        <div className="flex h-9 items-center justify-between gap-2 rounded-lg border border-border bg-card pl-3 pr-1 text-sm">
+          <span className="font-mono tabular-nums text-foreground">
+            {current
+              ? format(parse(current, "yyyy-MM-dd", new Date()), "d MMM yyyy")
+              : "Not set"}
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-primary"
+            aria-label="Edit start date"
+            onClick={startEditing}
+          >
+            <Pencil className="size-3.5" aria-hidden="true" />
+            Edit
+          </Button>
+        </div>
+      </FieldShell>
+    );
+  }
+
+  return (
+    <FieldShell label="Start date (on-site)" htmlFor={id}>
+      <div className="flex items-center gap-1">
+        <Input
+          id={id}
+          type="date"
+          value={pending}
+          autoFocus
+          disabled={saving}
+          onChange={(e) => setPending(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void save();
+            if (e.key === "Escape" && !saving) setEditing(false);
+          }}
+          className={cn(FIELD_CONTROL_CLASS, "font-mono tabular-nums")}
+        />
+        <Button
+          size="icon"
+          className="size-9 shrink-0"
+          aria-label="Save start date"
+          aria-busy={saving}
+          disabled={saving}
+          onClick={() => void save()}
+        >
+          {saving ? (
+            <Loader2
+              className="size-4 animate-spin motion-reduce:animate-none"
+              aria-hidden="true"
+            />
+          ) : (
+            <Check className="size-4" aria-hidden="true" />
+          )}
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-9 shrink-0"
+          aria-label="Cancel editing start date"
+          disabled={saving}
+          onClick={() => setEditing(false)}
+        >
+          <X className="size-4" aria-hidden="true" />
+        </Button>
+      </div>
     </FieldShell>
   );
 }
@@ -1245,13 +1383,10 @@ export function ProjectOverviewTab({
 }) {
   const params = useParams();
   const dispatch = useAppDispatch();
-  const { startDate, estimatedEndDate } = project;
+  const { estimatedEndDate } = project;
   const initialRequirements = (project.requirements ?? {}) as RequirementsData;
   const [openSection, setOpenSection] = useState<string>();
   const [draft, setDraft] = useState<RequirementsData>(initialRequirements);
-  const [stateStartDate, setStateStartDate] = useState<string | null>(
-    toDateInputValue(startDate),
-  );
   const [stateEstimatedEndDate, setStateEstimatedEndDate] = useState<
     string | null
   >(toDateInputValue(estimatedEndDate));
@@ -1376,7 +1511,7 @@ export function ProjectOverviewTab({
           body: JSON.stringify({
             requirements: payload,
             name: payload.projectName,
-            startDate: stateStartDate,
+            // The start date is saved on its own by `StartDateField`.
             estimatedEndDate: stateEstimatedEndDate,
           }),
         },
@@ -1389,7 +1524,6 @@ export function ProjectOverviewTab({
       // so hand it to the store the header actually reads.
       dispatch(setActiveProject(response.data));
       setDraft((response.data.requirements ?? payload) as RequirementsData);
-      setStateStartDate(toDateInputValue(response.data.startDate));
       setStateEstimatedEndDate(
         toDateInputValue(response.data.estimatedEndDate),
       );
@@ -1531,8 +1665,8 @@ export function ProjectOverviewTab({
     | { names?: string[]; emails?: string[]; phones?: string[] }
     | undefined;
   const hbcfInsuranceNumber =
-    (legalAdministration?.hbcfInsuranceNumber as string | null | undefined) ??
-    null;
+    (legalAdministration?.hbcfInsuranceNumber as string | null | undefined)
+    ?? null;
   const hbcfInsuranceDocument =
     (legalAdministration?.hbcfInsuranceDocument as
       | ProjectSourceDocumentReference
@@ -1648,13 +1782,12 @@ export function ProjectOverviewTab({
                 editDraft((c) => ({ ...c, projectType: v ?? "" }))
               }
             />
-            <DateField
-              label="Start date (on-site)"
-              value={stateStartDate}
-              onChange={(v) => {
-                setStateStartDate(v);
-                setDirty(true);
-              }}
+            <StartDateField
+              projectId={project.id}
+              value={project.startDate}
+              // The header and the milestone tab read the store, not this
+              // tab, so the saved project goes back there.
+              onSaved={(saved) => dispatch(setActiveProject(saved))}
             />
             <DateField
               label="Estimated end date"
@@ -1822,8 +1955,8 @@ export function ProjectOverviewTab({
                     {key === "commercialsAndClaims" ? (
                       <PaymentStagesTable
                         stages={
-                          (sectionData.paymentStages as ProjectPaymentStage[]) ??
-                          []
+                          (sectionData.paymentStages as ProjectPaymentStage[])
+                          ?? []
                         }
                         onChange={updatePaymentStages}
                       />
