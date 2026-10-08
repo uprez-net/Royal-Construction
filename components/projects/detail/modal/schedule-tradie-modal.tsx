@@ -31,12 +31,16 @@ interface ScheduleTradieModalProps {
   onClose: () => void;
   milestones: { id: string; name: string; projectStage: ProjectStage }[];
   projectId: string;
+  /** Preselects the stage on every row, when opened from a stage's header. */
+  initialProjectStage?: ProjectStage;
 }
 
 export interface TradieScheduleInputRow {
   id: string;
   tradeCategory?: string;
   tradieId?: string;
+  /** Narrows the activity picker; not sent — the milestone carries its stage. */
+  projectStage?: ProjectStage;
   milestoneId?: string;
   scheduledDate?: string;
   durationDays?: number;
@@ -60,8 +64,11 @@ export interface TradieScheduleRowErrors {
   emailContent?: string;
 }
 
-const createEmptyRow = (): TradieScheduleInputRow => ({
+const createEmptyRow = (
+  projectStage?: ProjectStage,
+): TradieScheduleInputRow => ({
   id: uuidv4(),
+  projectStage,
   requiresQuote: false,
   durationDays: 1,
 });
@@ -75,12 +82,13 @@ export default function ScheduleTradieModal({
   onClose,
   milestones,
   projectId,
+  initialProjectStage,
 }: ScheduleTradieModalProps) {
   const dispatch = useAppDispatch();
 
-  const [scheduleRows, setScheduleRows] = useState<TradieScheduleInputRow[]>([
-    createEmptyRow(),
-  ]);
+  const [scheduleRows, setScheduleRows] = useState<TradieScheduleInputRow[]>(
+    () => [createEmptyRow(initialProjectStage)],
+  );
   const [rowErrors, setRowErrors] = useState<TradieScheduleRowErrors[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -185,7 +193,7 @@ export default function ScheduleTradieModal({
   }
 
   const addRow = () => {
-    const newRow = createEmptyRow();
+    const newRow = createEmptyRow(initialProjectStage);
     setScheduleRows((prev) => [...prev, newRow]);
   };
 
@@ -224,7 +232,7 @@ export default function ScheduleTradieModal({
   // overlay click — funnels through here so the modal can never reopen holding
   // the previous booking's rows or its stale validation errors.
   const closeAndReset = () => {
-    setScheduleRows([createEmptyRow()]);
+    setScheduleRows([createEmptyRow(initialProjectStage)]);
     setRowErrors([]);
     onClose();
   };

@@ -254,6 +254,8 @@ test("settling a milestone recomputes the project's spend and status", async () 
       targetDate: new Date("2026-02-01"),
     },
     "project.update": { siteManagerId: "u_sm", spent: "12500" },
+    // Settling the milestone settles its bookings; this one holds none.
+    "tradieSchedule.findMany": [],
   });
 
   const outcome = await updateMilestone(

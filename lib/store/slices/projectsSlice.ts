@@ -77,6 +77,11 @@ import {
   type CreateProjectFailure,
 } from "@/lib/projects/create-project-errors";
 import { bulkCreateTradieSchedules } from "@/lib/data/tradieSchedules";
+import { settledBookingStatus } from "@/lib/domain/tradies/lifecycle";
+import {
+  hasWorkStarted,
+  milestoneTargetDate,
+} from "@/lib/domain/projects/milestone-schedule";
 
 type MutationKey =
   | "createProject"
@@ -298,6 +303,33 @@ export const createBulkTradieScheduleForProject = createAsyncThunk<
     );
   }
 });
+
+/** Dismisses tradie follow-up alerts until their bookings change status. */
+export const dismissTradieAlerts = createAsyncThunk<
+  { dismissed: string[] },
+  { projectId: string; scheduleIds: string[] },
+  { rejectValue: string }
+>(
+  "projects/dismissTradieAlerts",
+  async ({ projectId, scheduleIds }, thunkApi) => {
+    try {
+      const response = await fetchJson<{ dismissed: string[] }>(
+        `/api/projects/${projectId}/tradie-alerts/dismiss`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scheduleIds }),
+        },
+        "Unable to dismiss the alerts",
+      );
+      return response.data;
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error ? error.message : "Unable to dismiss the alerts",
+      );
+    }
+  },
+);
 
 export const addProjectMilestone = createAsyncThunk<
   MilestoneWithFilesTradiesUpdates,
@@ -1411,6 +1443,62 @@ const isComplianceThunkRejected = isAnyOf(
   ...complianceThunks.map((thunk) => thunk.rejected),
 );
 
+/**
+ * The store's copy of what `updateMilestone` does when the first activity
+ * starts: the project's start date becomes that day and every activity is
+ * re-dated from it, by the same `milestoneTargetDate` the server used.
+ */
+function startScheduleInStore(project: ProjectDetail, startDate: Date) {
+  if (new Date(project.startDate).getTime() === startDate.getTime()) return;
+
+  project.startDate = startDate;
+  const targetById = new Map<string, Date>();
+  [...project.milestones]
+    .sort((a, b) => a.order - b.order)
+    .forEach((milestone, position) => {
+      milestone.targetDate = milestoneTargetDate(startDate, position);
+      targetById.set(milestone.id, milestone.targetDate);
+    });
+  for (const schedule of project.tradieSchedules) {
+    const targetDate = schedule.milestoneId
+      ? targetById.get(schedule.milestoneId)
+      : undefined;
+    if (schedule.milestone && targetDate) {
+      schedule.milestone.targetDate = targetDate;
+    }
+  }
+}
+
+/**
+ * The store's copy of `settleMilestoneBookings`: bookings on a milestone that
+ * is now done or not required take the status the server just gave them, and
+ * the milestone each booking carries is brought up to date, so the tradie
+ * alerts clear on the update itself rather than on the next reload.
+ */
+function settleBookingsInStore(project: ProjectDetail) {
+  const statusById = new Map(project.milestones.map((m) => [m.id, m.status]));
+  const settlementOf = (milestoneId: string | null) => {
+    const status = milestoneId ? statusById.get(milestoneId) : undefined;
+    return status === "DONE" || status === "NOT_REQUIRED" ? status : null;
+  };
+
+  for (const schedule of project.tradieSchedules) {
+    const settlement = settlementOf(schedule.milestoneId);
+    if (!settlement) continue;
+    if (schedule.milestone) schedule.milestone.status = settlement;
+    schedule.status =
+      settledBookingStatus(schedule.status, settlement) ?? schedule.status;
+  }
+  for (const milestone of project.milestones) {
+    const settlement = settlementOf(milestone.id);
+    if (!settlement) continue;
+    for (const schedule of milestone.tradieSchedules) {
+      schedule.status =
+        settledBookingStatus(schedule.status, settlement) ?? schedule.status;
+    }
+  }
+}
+
 const projectsSlice = createSlice({
   name: "projects",
   initialState,
@@ -1733,6 +1821,8 @@ const projectsSlice = createSlice({
           state.activeProject.tradieSchedules.push({
             id: schedule.id,
             status: schedule.status,
+            alertDismissedStatus: null,
+            alertDismissedAt: null,
             scheduledDate: new Date(schedule.scheduledDate),
             durationDays: schedule.durationDays,
             tradieId: schedule.tradieId,
@@ -1796,6 +1886,8 @@ const projectsSlice = createSlice({
               state.activeProject!.tradieSchedules.push({
                 id: schedule.id,
                 status: schedule.status,
+                alertDismissedStatus: null,
+                alertDismissedAt: null,
                 scheduledDate: new Date(schedule.scheduledDate),
                 durationDays: schedule.durationDays,
                 tradieId: schedule.tradieId,
@@ -1884,6 +1976,10 @@ const projectsSlice = createSlice({
       .addCase(updateProjectMilestoneStatus.fulfilled, (state, action) => {
         state.mutations.updateMilestone = { status: "succeeded", error: null };
         if (state.activeProject?.id === action.payload.projectId) {
+          // Read before the merge below makes this milestone ACTIVE.
+          const startsWork =
+            action.meta.arg.status === "ACTIVE"
+            && !hasWorkStarted(state.activeProject.milestones);
           const milestoneIndex = state.activeProject.milestones.findIndex(
             (m) => m.id === action.meta.arg.milestoneId,
           );
@@ -1997,6 +2093,23 @@ const projectsSlice = createSlice({
               }
             }
           }
+          if (startsWork && action.payload.startDate) {
+            startScheduleInStore(
+              state.activeProject,
+              new Date(action.payload.startDate),
+            );
+          }
+          settleBookingsInStore(state.activeProject);
+        }
+      })
+      .addCase(dismissTradieAlerts.fulfilled, (state, action) => {
+        if (state.activeProject?.id !== action.meta.arg.projectId) return;
+        const dismissed = new Set(action.payload.dismissed);
+        const now = new Date();
+        for (const schedule of state.activeProject.tradieSchedules) {
+          if (!dismissed.has(schedule.id)) continue;
+          schedule.alertDismissedStatus = schedule.status;
+          schedule.alertDismissedAt = now;
         }
       })
       .addCase(updateProjectMilestoneStatus.rejected, (state, action) => {

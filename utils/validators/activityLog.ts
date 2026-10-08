@@ -18,6 +18,13 @@ export const activityLogSchemas = {
     previousSiteManagerName: z.string().nullable(),
   }),
 
+  projectStartDateChanged: z.object({
+    projectId: z.string(),
+    previousStartDate: z.string(),
+    startDate: z.string(),
+    milestonesRescheduled: z.number().int().nonnegative(),
+  }),
+
   tradieScheduleCreated: z.object({
     projectId: z.string(),
     scheduleId: z.string(),

@@ -6,6 +6,7 @@ import { test } from "vitest";
 import {
   type LedgerMilestone,
   type StageState,
+  activeOverdueDays,
   daysLate,
   duenessOf,
   findWorkingStageIndex,
@@ -443,4 +444,51 @@ test("a settled activity is never the next step, at any depth", () => {
   ];
 
   assert.equal(nextActivity(stage)?.activity.name, "Slab pour");
+});
+
+test("an activity started a working week ago and still open is overdue", () => {
+  const started = {
+    status: ACTIVE,
+    startDate: new Date("2026-09-14T09:00:00+10:00"), // Monday
+  };
+
+  assert.equal(
+    activeOverdueDays(started, new Date("2026-09-18T16:00:00+10:00")),
+    null,
+  );
+  assert.equal(
+    activeOverdueDays(started, new Date("2026-09-21T08:00:00+10:00")),
+    5,
+  );
+});
+
+test("a public holiday does not count towards an activity's working week", () => {
+  // Friday before the NSW Labour Day long weekend, read the next Friday.
+  const started = {
+    status: ACTIVE,
+    startDate: new Date("2026-10-02T09:00:00+10:00"),
+  };
+
+  assert.equal(
+    activeOverdueDays(started, new Date("2026-10-09T09:00:00+11:00")),
+    null,
+  );
+});
+
+test("only an in-progress activity with a recorded start can run overdue", () => {
+  const now = new Date("2026-12-01T09:00:00+11:00");
+  const longAgo = new Date("2026-09-01T09:00:00+10:00");
+
+  assert.equal(
+    activeOverdueDays({ status: ACTIVE, startDate: null }, now),
+    null,
+  );
+  assert.equal(
+    activeOverdueDays({ status: PENDING, startDate: longAgo }, now),
+    null,
+  );
+  assert.equal(
+    activeOverdueDays({ status: DONE, startDate: longAgo }, now),
+    null,
+  );
 });

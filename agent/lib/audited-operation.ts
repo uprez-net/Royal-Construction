@@ -200,7 +200,13 @@ export async function runAuditedAgentOperation<T>(params: {
         await finalizeSuccess(tx, prepared, output);
         return output;
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        // A ceiling, not a wait: an operation that rewrites a project's whole
+        // schedule (starting its first milestone) needs more than the default
+        // five seconds on a slow connection.
+        timeout: 30_000,
+      },
     );
   } catch (error) {
     await prisma.$transaction((tx) => finalizeFailure(tx, prepared));

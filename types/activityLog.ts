@@ -107,6 +107,15 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
     projectId: data.projectId,
   }),
 
+  projectStartDateChanged: (data) => ({
+    id: uuidv4(),
+    type: "projectStartDateChanged",
+    message: `Start date moved from ${data.previousStartDate} to ${data.startDate}; ${data.milestonesRescheduled} milestone target dates rescheduled`,
+    authorId: "system",
+    timestamp: new Date().toISOString(),
+    projectId: data.projectId,
+  }),
+
   tradieScheduleCreated: (data) => ({
     id: uuidv4(),
     type: "tradieScheduleCreated",

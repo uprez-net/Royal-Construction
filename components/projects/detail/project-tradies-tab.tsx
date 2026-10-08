@@ -15,9 +15,13 @@ import {
   shortDateFormat,
 } from "@/utils/formatters";
 import type { TradieScheduleStatus } from "@prisma/client";
-import { differenceInDays, startOfDay } from "date-fns";
+import { differenceInDays } from "date-fns";
 import { DataTable } from "@/components/common/data-table";
+import { toast } from "sonner";
+import { sydneyDateOnly } from "@/lib/dates/sydney";
+import { isTradieAlertLive } from "@/lib/domain/tradies/alert-rules";
 import { useAppDispatch } from "@/lib/store/hooks";
+import { dismissTradieAlerts } from "@/lib/store/slices/projectsSlice";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { calculateScheduleTotalCost } from "@/utils/calculations";
 import {
@@ -146,12 +150,11 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
   const getAttentionItems = (
     tradies: typeof project.tradieSchedules,
   ): TradieAttentionItem[] => {
-    const today = startOfDay(new Date());
+    const today = sydneyDateOnly(new Date());
     return tradies.flatMap<TradieAttentionItem>((tradie) => {
-      if (
-        tradie.status === "CANCELLED"
-        && new Date(tradie.scheduledDate) < today
-      ) {
+      // Dismissed, settled with its milestone, replaced, or past its dates:
+      // the follow-up is over, whatever the status below would say.
+      if (!isTradieAlertLive(tradie, tradies, today)) {
         return [];
       }
       const reminderTone = getReminderTone(
@@ -307,6 +310,19 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
     <div className="space-y-4">
       <TradieAttentionCard
         items={attentionItems}
+        onDismiss={async (scheduleIds) => {
+          try {
+            await dispatch(
+              dismissTradieAlerts({ projectId: project.id, scheduleIds }),
+            ).unwrap();
+          } catch (error) {
+            toast.error(
+              typeof error === "string"
+                ? error
+                : "Unable to dismiss the alerts",
+            );
+          }
+        }}
         onReview={(schedule) =>
           dispatch(
             openModal({

@@ -105,9 +105,9 @@ export function ModalManager() {
     projectPayload?.milestones.map((milestone) => ({
       id: milestone.id,
       name: milestone.name,
-    })) ??
-    (modal.payload?.milestones as { id: string; name: string }[]) ??
-    [];
+    }))
+    ?? (modal.payload?.milestones as { id: string; name: string }[])
+    ?? [];
 
   if (!modal.type) {
     return null;
@@ -217,8 +217,8 @@ export function ModalManager() {
         ? projectPayload.milestones
             .filter(
               (m) =>
-                m.status !== MilestoneStatus.DONE &&
-                m.status !== MilestoneStatus.NOT_REQUIRED,
+                m.status !== MilestoneStatus.DONE
+                && m.status !== MilestoneStatus.NOT_REQUIRED,
             )
             .map((m) => ({
               id: m.id,
@@ -237,6 +237,9 @@ export function ModalManager() {
           onClose={handleClose}
           projectId={project.id}
           milestones={milestones}
+          initialProjectStage={
+            modal.payload?.projectStage as ProjectStage | undefined
+          }
         />
       );
     case "logCall": {
@@ -834,8 +837,8 @@ export function ModalManager() {
       // itself says cannot be undone from the screen, and defaulting it to the
       // approval branch is the worst of the two ways to be wrong.
       if (
-        decision !== ComplianceApprovalDecision.APPROVED &&
-        decision !== ComplianceApprovalDecision.REJECTED
+        decision !== ComplianceApprovalDecision.APPROVED
+        && decision !== ComplianceApprovalDecision.REJECTED
       ) {
         return null;
       }

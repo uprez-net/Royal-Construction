@@ -24,6 +24,9 @@ import {
 } from "@/constants/complianceAlerts";
 import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { COMPLIANCE_ALERT_PARTY } from "@/lib/domain/compliance/alert-parties";
+import { sydneyDateOnly } from "@/lib/dates/sydney";
+import { isTradieAlertLive } from "@/lib/domain/tradies/alert-rules";
+import { INACTIVE_SCHEDULE_STATUSES } from "@/lib/domain/tradies/lifecycle";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import {
@@ -331,9 +334,16 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
     // still today's work at two in the afternoon, and dropping it off the list
     // the moment the clock passes it is the opposite of useful.
     const today = startOfDay(now);
+    const siteToday = sydneyDateOnly(now);
 
     return project.tradieSchedules.filter((schedule) => {
-      if (schedule.status === "CANCELLED") return false;
+      // A reminder goes to a tradie who is still coming: not one who declined,
+      // finished or was removed. And not one whose alert is over — settled
+      // with its milestone, past its dates, or dismissed.
+      if (INACTIVE_SCHEDULE_STATUSES.includes(schedule.status)) return false;
+      if (!isTradieAlertLive(schedule, project.tradieSchedules, siteToday)) {
+        return false;
+      }
       // Confirmed and still ahead. The row prints `scheduledDate`, so an
       // unbounded status test put a booking from three months ago under a
       // heading that says "Upcoming" with a date in the past beside it — and

@@ -4,7 +4,7 @@ import { DomainNotFoundError, DomainTransitionError } from "../errors";
 import { scheduleTotalCost } from "../../../utils/calculations";
 
 /** Completed, declined and cancelled bookings no longer reserve work. */
-export const INACTIVE_SCHEDULE_STATUSES = [
+export const INACTIVE_SCHEDULE_STATUSES: TradieScheduleStatus[] = [
   TradieScheduleStatus.DECLINED,
   TradieScheduleStatus.COMPLETED,
   TradieScheduleStatus.CANCELLED,
@@ -40,4 +40,34 @@ export function tradieScheduleSpend(schedule: {
         schedule.durationDays,
         schedule.tradie.lastQuotedPriceUnit,
       );
+}
+
+/** How a milestone was settled, as far as the bookings on it are concerned. */
+export type MilestoneSettlement = "DONE" | "NOT_REQUIRED";
+
+/**
+ * What settling a milestone does to one booking on it; `null` leaves it alone.
+ *
+ * A finished milestone means the approved bookings on it did the work, so they
+ * complete. Anything never approved — still pending, unanswered, waiting on a
+ * quote or on an admin — never will be, so it is cancelled. A milestone waived
+ * as not required cancels every open booking. Bookings already declined,
+ * completed or cancelled are history and stay as they are.
+ *
+ * Pure, so the milestone dialog can price the spend against the statuses the
+ * server is about to write rather than the ones it is about to replace.
+ */
+export function settledBookingStatus(
+  status: TradieScheduleStatus,
+  settlement: MilestoneSettlement,
+): TradieScheduleStatus | null {
+  if (INACTIVE_SCHEDULE_STATUSES.includes(status)) return null;
+
+  const approved =
+    status === TradieScheduleStatus.CONFIRMED
+    || status === TradieScheduleStatus.PENDING_FINAL_CONFIRMATION;
+
+  return settlement === "DONE" && approved
+    ? TradieScheduleStatus.COMPLETED
+    : TradieScheduleStatus.CANCELLED;
 }

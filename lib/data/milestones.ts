@@ -187,19 +187,23 @@ export async function updateMilestone(
 ) {
   const principal = await currentPrincipal();
 
-  const outcome = await prisma.$transaction((tx) =>
-    updateMilestoneCommand(
-      principal,
-      {
-        actualDate: updateData.actualDate,
-        milestoneId,
-        spend: updateData.spend,
-        startDate: updateData.startDate,
-        status: updateData.status,
-        targetDate: updateData.targetDate,
-      },
-      tx,
-    ),
+  // Starting the first activity re-dates every activity on the project, one
+  // row at a time, so the default five-second window is too tight.
+  const outcome = await prisma.$transaction(
+    (tx) =>
+      updateMilestoneCommand(
+        principal,
+        {
+          actualDate: updateData.actualDate,
+          milestoneId,
+          spend: updateData.spend,
+          startDate: updateData.startDate,
+          status: updateData.status,
+          targetDate: updateData.targetDate,
+        },
+        tx,
+      ),
+    { timeout: 30_000 },
   );
 
   after(async () => {
