@@ -40,6 +40,8 @@ import {
   contractClaimTotal,
   resolveStageClaims,
 } from "@/lib/projects/stage-claim";
+import { sydneyDateOnly } from "@/lib/dates/sydney";
+import { isTradieAlertLive } from "@/lib/domain/tradies/alert-rules";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { cn } from "@/lib/utils";
@@ -242,9 +244,14 @@ export function ProjectMilestonesTab({
   const tradieAlerts = useMemo(() => {
     const now = new Date();
     const nextWeek = addWeeks(now, 1);
+    const today = sydneyDateOnly(now);
 
     return project.tradieSchedules.filter((schedule) => {
       if (schedule.status === "CANCELLED") return false;
+      // Settled with its milestone, past its last day, or dismissed.
+      if (!isTradieAlertLive(schedule, project.tradieSchedules, today)) {
+        return false;
+      }
       const hasAlertStatus = schedule.status === "CONFIRMED";
 
       const targetDate = schedule.milestone?.targetDate;

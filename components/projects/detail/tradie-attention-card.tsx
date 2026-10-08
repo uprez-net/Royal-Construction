@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ChevronDown, Clock10, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, Clock10, Loader2, X } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,19 +14,42 @@ export type TradieAttentionItem = {
   tone: "danger" | "warning";
 };
 
+/**
+ * Dismissing is saved against each booking's current status, so it holds
+ * across reloads and for everyone on the shared login, and an alert comes back
+ * on its own once its booking moves on. The card used to forget a dismissal
+ * the moment the page reloaded.
+ */
 export function TradieAttentionCard({
   items,
   onReview,
+  onDismiss,
 }: {
   items: TradieAttentionItem[];
   onReview: (schedule: TradieScheduleWithTradieAndMilestone) => void;
+  onDismiss: (scheduleIds: string[]) => Promise<void>;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
-  const [isDismissed, setIsDismissed] = useState(false);
+  // Which alerts a dismissal is in flight for, so their buttons hold still.
+  const [dismissing, setDismissing] = useState<string[]>([]);
 
-  if (items.length === 0 || isDismissed) {
+  const dismiss = async (scheduleIds: string[]) => {
+    setDismissing((current) => [...current, ...scheduleIds]);
+    try {
+      await onDismiss(scheduleIds);
+    } finally {
+      setDismissing((current) =>
+        current.filter((id) => !scheduleIds.includes(id)),
+      );
+    }
+  };
+
+  if (items.length === 0) {
     return null;
   }
+
+  const allIds = items.map((item) => item.schedule.id);
+  const isDismissingAll = allIds.every((id) => dismissing.includes(id));
 
   return (
     <Card
@@ -76,10 +99,18 @@ export function TradieAttentionCard({
               variant="ghost"
               size="icon"
               className="size-8 rounded-lg text-muted-foreground hover:bg-warning/10 hover:text-foreground"
-              aria-label="Dismiss schedule follow-ups"
-              onClick={() => setIsDismissed(true)}
+              aria-label="Dismiss all schedule follow-ups"
+              disabled={isDismissingAll}
+              onClick={() => void dismiss(allIds)}
             >
-              <X className="size-4" aria-hidden="true" />
+              {isDismissingAll ? (
+                <Loader2
+                  className="size-4 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+              ) : (
+                <X className="size-4" aria-hidden="true" />
+              )}
             </Button>
           </div>
         </div>
@@ -122,6 +153,23 @@ export function TradieAttentionCard({
                   onClick={() => onReview(schedule)}
                 >
                   Review
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 shrink-0 rounded-lg text-muted-foreground hover:bg-warning/10 hover:text-foreground"
+                  aria-label={`Dismiss: ${title}`}
+                  disabled={dismissing.includes(schedule.id)}
+                  onClick={() => void dismiss([schedule.id])}
+                >
+                  {dismissing.includes(schedule.id) ? (
+                    <Loader2
+                      className="size-3.5 animate-spin motion-reduce:animate-none"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <X className="size-3.5" aria-hidden="true" />
+                  )}
                 </Button>
               </div>
             ))}

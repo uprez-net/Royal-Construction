@@ -834,18 +834,22 @@ model Variation {
 }
 
 model TradieSchedule {
-  id             String               @id @default(uuid())
-  tradieId       String
-  projectId      String
-  milestoneId    String?
-  scheduledDate  DateTime
-  durationDays   Int                  @default(1)
-  requiresQuote  Boolean              @default(false)
-  quotedPrice    String?
-  status         TradieScheduleStatus @default(PENDING)
-  reminderSentAt DateTime?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  id                   String                @id @default(uuid())
+  tradieId             String
+  projectId            String
+  milestoneId          String?
+  scheduledDate        DateTime
+  durationDays         Int                   @default(1)
+  requiresQuote        Boolean               @default(false)
+  quotedPrice          String?
+  status               TradieScheduleStatus  @default(PENDING)
+  reminderSentAt       DateTime?
+  /// The status this booking's alert was dismissed at. The alert stays hidden
+  /// while the booking is still in that status and returns once it moves.
+  alertDismissedStatus TradieScheduleStatus?
+  alertDismissedAt     DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
   tradie    Tradie     @relation(fields: [tradieId], references: [id])
   project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)

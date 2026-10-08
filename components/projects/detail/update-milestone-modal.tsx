@@ -41,7 +41,10 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
-import { tradieScheduleSpend } from "@/lib/domain/tradies/lifecycle";
+import {
+  settledBookingStatus,
+  tradieScheduleSpend,
+} from "@/lib/domain/tradies/lifecycle";
 
 interface UpdateMilestoneModalProps {
   milestoneId: string;
@@ -115,8 +118,17 @@ export default function UpdateMilestoneModal({
     if (!milestoneSchedules || milestoneSchedules.length === 0) {
       return 0;
     }
+    // Spend is only entered when completing, and completing settles the
+    // bookings: an unapproved one is cancelled and costs nothing. So price each
+    // booking at the status completion is about to give it, not the one it has.
     const totalSpend = milestoneSchedules.reduce(
-      (acc, schedule) => acc + tradieScheduleSpend(schedule),
+      (acc, schedule) =>
+        acc
+        + tradieScheduleSpend({
+          ...schedule,
+          status:
+            settledBookingStatus(schedule.status, "DONE") ?? schedule.status,
+        }),
       0,
     );
 

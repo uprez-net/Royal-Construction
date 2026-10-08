@@ -24,6 +24,7 @@ import {
 import type { DomainPrincipal } from "../principal";
 
 import { milestoneTargetDate } from "./milestone-schedule";
+import { settleMilestoneBookings } from "../tradies/settlement";
 
 // Milestones: creation, ordering, the status state machine, the parent
 // roll-up, and what settling one means for the project it belongs to.
@@ -262,6 +263,14 @@ export type UpdateMilestoneOutcome = {
    * or a claim already exists.
    */
   readonly stageClaim: DueStageClaim | null;
+  /**
+   * Bookings this update settled: completed or cancelled because the milestone
+   * they were for (or the parent it rolled up) was settled. Empty otherwise.
+   */
+  readonly settledBookings: {
+    readonly completed: readonly string[];
+    readonly cancelled: readonly string[];
+  };
 };
 
 /**
@@ -390,6 +399,7 @@ export async function updateMilestone(
     || input.status === MilestoneStatus.NOT_REQUIRED;
 
   let rolledUpParentId: string | null = null;
+  let rolledUpParentStatus: MilestoneStatus | null = null;
 
   if (updated.parentId) {
     if (settled) {
@@ -416,13 +426,14 @@ export async function updateMilestone(
       ]);
 
       if (outstanding === 0) {
+        rolledUpParentStatus =
+          waived === siblings
+            ? MilestoneStatus.NOT_REQUIRED
+            : MilestoneStatus.DONE;
         await db.milestone.update({
           where: { id: updated.parentId },
           data: {
-            status:
-              waived === siblings
-                ? MilestoneStatus.NOT_REQUIRED
-                : MilestoneStatus.DONE,
+            status: rolledUpParentStatus,
             spend: childrenSpend._sum.spend ?? undefined,
             actualDate,
           },
@@ -478,6 +489,30 @@ export async function updateMilestone(
     ? await resolveDueStageClaim({ milestoneId: updated.id, projectId }, db)
     : null;
 
+  // A settled milestone takes its open bookings with it — and so does a parent
+  // this update rolled up — or they stay "confirmed" and alerting for ever.
+  const settledBookings: { completed: string[]; cancelled: string[] } = {
+    cancelled: [],
+    completed: [],
+  };
+  const settledMilestones: [string, MilestoneStatus][] = settled
+    ? [[updated.id, input.status]]
+    : [];
+  if (rolledUpParentId && rolledUpParentStatus) {
+    settledMilestones.push([rolledUpParentId, rolledUpParentStatus]);
+  }
+  for (const [milestoneId, status] of settledMilestones) {
+    const result = await settleMilestoneBookings(
+      {
+        milestoneId,
+        settlement: status === MilestoneStatus.DONE ? "DONE" : "NOT_REQUIRED",
+      },
+      db,
+    );
+    settledBookings.completed.push(...result.completed);
+    settledBookings.cancelled.push(...result.cancelled);
+  }
+
   return {
     milestone: {
       ...updated,
@@ -488,6 +523,7 @@ export async function updateMilestone(
     projectSpent: project.spent.toString(),
     projectStatus,
     rolledUpParentId,
+    settledBookings,
     siteManagerId: project.siteManagerId,
     stageClaim,
     statusChanged,
