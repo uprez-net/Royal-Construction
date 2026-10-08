@@ -40,6 +40,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import {
+  hasWorkStarted,
+  MILESTONE_SPACING_DAYS,
+} from "@/lib/domain/projects/milestone-schedule";
 import { Calendar } from "@/components/ui/calendar";
 import {
   settledBookingStatus,
@@ -471,6 +475,33 @@ export default function UpdateMilestoneModal({
                 ) : null}
               </div>
             )}
+            {/* The same test the server makes before it moves the project's
+                start date: nothing on the project has started yet. */}
+            {formState.status === "ACTIVE"
+            && milestone?.status === "PENDING"
+            && project
+            && !hasWorkStarted(project.milestones) ? (
+              <div
+                role="note"
+                className="flex items-start gap-2 rounded-[10px] border border-warning/40 bg-warning-light px-3 py-2.5 text-xs leading-relaxed text-warning-ink"
+              >
+                <AlertCircle
+                  className="mt-0.5 size-3.5 shrink-0"
+                  aria-hidden="true"
+                />
+                <p>
+                  This is the first milestone to start. Saving makes{" "}
+                  <span className="font-semibold">
+                    {formState.startDate
+                      ? format(new Date(formState.startDate), "d MMM yyyy")
+                      : "its start date"}
+                  </span>{" "}
+                  the project start date and reschedules every milestone from
+                  it, one every {MILESTONE_SPACING_DAYS} days. The project start
+                  date is locked after that.
+                </p>
+              </div>
+            ) : null}
             {formState.status === "DONE" && (
               <div className="space-y-4 rounded-[14px] border border-border/70 bg-muted/50 p-4">
                 <div className="space-y-1.5">

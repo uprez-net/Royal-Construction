@@ -23,7 +23,15 @@ import {
 } from "../invoices/stage-claim";
 import type { DomainPrincipal } from "../principal";
 
-import { milestoneTargetDate } from "./milestone-schedule";
+import { createActivityLogEntry } from "@/types/activityLog";
+
+import { logActionOrThrow } from "../audit/action-log";
+import { attributionUserId } from "../principal";
+
+import {
+  milestoneTargetDate,
+  STARTED_MILESTONE_STATUSES,
+} from "./milestone-schedule";
 import { settleMilestoneBookings } from "../tradies/settlement";
 
 // Milestones: creation, ordering, the status state machine, the parent
@@ -264,6 +272,12 @@ export type UpdateMilestoneOutcome = {
    */
   readonly stageClaim: DueStageClaim | null;
   /**
+   * The project's new start date, when this update started the first activity
+   * and moved the start (and so every target date) to the day work began.
+   * Null otherwise.
+   */
+  readonly projectStartDate: Date | null;
+  /**
    * Bookings this update settled: completed or cancelled because the milestone
    * they were for (or the parent it rolled up) was settled. Empty otherwise.
    */
@@ -382,6 +396,18 @@ export async function updateMilestone(
   const startDate = toDate(input.startDate, "startDate");
   const actualDate = toDate(input.actualDate, "actualDate");
 
+  // The first activity to start sets the project's start date to the day work
+  // began, and the schedule is re-dated from it — the last time it can be: the
+  // start date is locked from here on (`updateProject`). Counted before this
+  // milestone is written, so it is not counting itself.
+  const startsWork =
+    statusChanged
+    && input.status === MilestoneStatus.ACTIVE
+    && startDate !== undefined
+    && (await db.milestone.count({
+      where: { projectId, status: { in: STARTED_MILESTONE_STATUSES } },
+    })) === 0;
+
   const updated = await db.milestone.update({
     where: { id: input.milestoneId },
     data: {
@@ -476,11 +502,28 @@ export async function updateMilestone(
         ? ProjectStatus.ACTIVE
         : null;
 
+  let projectStartDate: Date | null = null;
+  if (startsWork && startDate) {
+    const { startDate: plannedStart } = await db.project.findUniqueOrThrow({
+      select: { startDate: true },
+      where: { id: projectId },
+    });
+    if (plannedStart.getTime() !== startDate.getTime()) {
+      await rescheduleProjectFromStart(
+        principal,
+        { previousStartDate: plannedStart, projectId, startDate },
+        db,
+      );
+      projectStartDate = startDate;
+    }
+  }
+
   const project = await db.project.update({
     where: { id: projectId },
     data: {
       spent: rootSpend._sum.spend ?? undefined,
       ...(projectStatus ? { status: projectStatus } : {}),
+      ...(projectStartDate ? { startDate: projectStartDate } : {}),
     },
     select: { siteManagerId: true, spent: true },
   });
@@ -521,6 +564,7 @@ export async function updateMilestone(
       spend: updated.spend?.toString(),
     },
     projectSpent: project.spent.toString(),
+    projectStartDate,
     projectStatus,
     rolledUpParentId,
     settledBookings,
@@ -620,6 +664,42 @@ export async function rescheduleMilestonesFromStart(
   }
 
   return { rescheduled: milestones.length };
+}
+
+/**
+ * Move a project's schedule onto a new start date, and put the move on record.
+ *
+ * Re-dates every activity (`rescheduleMilestonesFromStart`) and writes the
+ * history entry. The caller writes `Project.startDate` itself, in the same
+ * transaction: `updateProject` when an operator moves it before work starts,
+ * `updateMilestone` when the first activity starting sets it.
+ */
+export async function rescheduleProjectFromStart(
+  principal: DomainPrincipal,
+  input: {
+    readonly projectId: string;
+    readonly previousStartDate: Date;
+    readonly startDate: Date;
+  },
+  db: DomainDb,
+): Promise<number> {
+  const { rescheduled } = await rescheduleMilestonesFromStart(
+    { projectId: input.projectId, startDate: input.startDate },
+    db,
+  );
+  await logActionOrThrow(
+    {
+      ...createActivityLogEntry("projectStartDateChanged", {
+        milestonesRescheduled: rescheduled,
+        previousStartDate: input.previousStartDate.toISOString().slice(0, 10),
+        projectId: input.projectId,
+        startDate: input.startDate.toISOString().slice(0, 10),
+      }),
+      authorId: attributionUserId(principal),
+    },
+    db,
+  );
+  return rescheduled;
 }
 
 /**

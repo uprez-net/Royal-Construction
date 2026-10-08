@@ -15,7 +15,8 @@ import {
   type DomainPrincipal,
 } from "../principal";
 
-import { rescheduleMilestonesFromStart } from "./milestones";
+import { STARTED_MILESTONE_STATUSES } from "./milestone-schedule";
+import { rescheduleProjectFromStart } from "./milestones";
 import {
   collectProjectDateBlockers,
   partitionBlockers,
@@ -126,6 +127,24 @@ export async function updateProject(
     nextStartDate !== null
     && nextStartDate.getTime() !== existing.startDate.getTime();
 
+  // Once an activity has started, the start date is the day work began — set
+  // by `updateMilestone` — and moving it would re-date a schedule already under
+  // way. Refused for every caller, not just hidden on the Overview tab.
+  if (startDateMoved) {
+    const started = await db.milestone.count({
+      where: {
+        projectId: input.projectId,
+        status: { in: STARTED_MILESTONE_STATUSES },
+      },
+    });
+    if (started > 0) {
+      throw new DomainValidationError(
+        "The start date can't be changed once work has started. It was set to the day the first milestone started.",
+        "startDate",
+      );
+    }
+  }
+
   const writeProjectFields = (tx: DomainDb) =>
     tx.project.update({
       where: { id: input.projectId },
@@ -159,23 +178,15 @@ export async function updateProject(
     // Every activity's target date hangs off the start, so moving it moves
     // the schedule — in this transaction, or the project would show a new
     // start against the old dates.
-    const { rescheduled } = await rescheduleMilestonesFromStart(
-      { projectId: input.projectId, startDate: nextStartDate },
-      tx,
-    );
-    await logActionOrThrow(
+    return rescheduleProjectFromStart(
+      principal,
       {
-        ...createActivityLogEntry("projectStartDateChanged", {
-          milestonesRescheduled: rescheduled,
-          previousStartDate: existing.startDate.toISOString().slice(0, 10),
-          projectId: input.projectId,
-          startDate: nextStartDate.toISOString().slice(0, 10),
-        }),
-        authorId: attributionUserId(principal),
+        previousStartDate: existing.startDate,
+        projectId: input.projectId,
+        startDate: nextStartDate,
       },
       tx,
     );
-    return rescheduled;
   };
 
   // A caller already inside a transaction hands in its own client, which has

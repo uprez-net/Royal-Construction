@@ -2,14 +2,19 @@ import assert from "node:assert/strict";
 
 import { test } from "vitest";
 
-import { ProjectStatus } from "@prisma/client";
+import { MilestoneStatus, ProjectStatus } from "@prisma/client";
 
+import { DomainValidationError } from "@/lib/domain/errors";
 import { updateProject } from "@/lib/domain/projects/commands";
 import {
+  hasWorkStarted,
   MILESTONE_SPACING_DAYS,
   milestoneTargetDate,
 } from "@/lib/domain/projects/milestone-schedule";
-import { createMilestonesFromTemplate } from "@/lib/domain/projects/milestones";
+import {
+  createMilestonesFromTemplate,
+  updateMilestone,
+} from "@/lib/domain/projects/milestones";
 import { ProjectDateBlockerError } from "@/lib/domain/projects/readiness";
 
 import { adminPrincipal, recordingDb } from "./domain-harness";
@@ -38,6 +43,8 @@ function projectDb(
       status: ProjectStatus.ON_TRACK,
     },
     "milestone.findMany": [{ id: "m_a" }, { id: "m_b" }, { id: "m_c" }],
+    // Nothing started yet, so the start date is still a plan.
+    "milestone.count": 0,
     ...extra,
   });
 }
@@ -168,4 +175,151 @@ test("a new project's activities follow the same spacing", async () => {
     );
   });
   assert.equal(rows[0].targetDate.toISOString(), start.toISOString());
+});
+
+/* ----------------------------------------- once work starts, the date is set */
+
+test("work has started once any activity is active or done", () => {
+  const { PENDING, ACTIVE, DONE, NOT_REQUIRED } = MilestoneStatus;
+  assert.equal(
+    hasWorkStarted([{ status: PENDING }, { status: NOT_REQUIRED }]),
+    false,
+  );
+  assert.equal(hasWorkStarted([{ status: PENDING }, { status: ACTIVE }]), true);
+  assert.equal(hasWorkStarted([{ status: DONE }]), true);
+});
+
+test("the start date cannot be moved once work has started", async () => {
+  const recorder = projectDb({ "milestone.count": 1 });
+
+  await assert.rejects(
+    () =>
+      updateProject(
+        adminPrincipal(),
+        { projectId: "p_1", startDate: "2026-06-08" },
+        recorder.db,
+      ),
+    DomainValidationError,
+  );
+  assert.deepEqual(recorder.writes(), []);
+});
+
+test("other project fields can still be saved after work has started", async () => {
+  const recorder = projectDb({ "milestone.count": 1 });
+
+  await updateProject(
+    adminPrincipal(),
+    { name: "Smith residence (revised)", projectId: "p_1" },
+    recorder.db,
+  );
+
+  assert.deepEqual(
+    recorder.writes().map((write) => write.operation),
+    ["project.update"],
+  );
+});
+
+function startingDb(startedAlready: number) {
+  return recordingDb({
+    "milestone.aggregate": { _sum: { spend: null } },
+    "milestone.count": startedAlready,
+    "milestone.findMany": [{ id: "m_a" }, { id: "m_b" }],
+    "milestone.findUnique": { projectId: "p_1" },
+    "milestone.findUniqueOrThrow": {
+      id: "m_a",
+      name: "Peg out survey",
+      parentId: null,
+      projectId: "p_1",
+      status: MilestoneStatus.PENDING,
+    },
+    "milestone.update": {
+      budget: { toString: () => "0" },
+      id: "m_a",
+      name: "Peg out survey",
+      parentId: null,
+      projectId: "p_1",
+      spend: null,
+      status: MilestoneStatus.ACTIVE,
+    },
+    "project.findUnique": {
+      id: "p_1",
+      location: "1 Site St",
+      name: "Smith residence",
+      siteManagerId: null,
+    },
+    "project.findUniqueOrThrow": { startDate: STORED_START },
+    "project.update": { siteManagerId: null, spent: "0" },
+  });
+}
+
+test("starting the first activity sets the start date and re-dates the schedule", async () => {
+  const recorder = startingDb(0);
+
+  const outcome = await updateMilestone(
+    adminPrincipal(),
+    {
+      milestoneId: "m_a",
+      startDate: "2026-06-15",
+      status: MilestoneStatus.ACTIVE,
+    },
+    recorder.db,
+  );
+
+  assert.equal(
+    outcome.projectStartDate?.toISOString().slice(0, 10),
+    "2026-06-15",
+  );
+
+  // The schedule is re-dated from the day work began…
+  const rescheduled = recorder
+    .writes()
+    .filter(
+      (write) =>
+        write.operation === "milestone.update"
+        && "targetDate" in (write.args as { data: object }).data
+        && Object.keys((write.args as { data: object }).data).length === 1,
+    )
+    .map((write) =>
+      (write.args as { data: { targetDate: Date } }).data.targetDate
+        .toISOString()
+        .slice(0, 10),
+    );
+  assert.deepEqual(rescheduled, ["2026-06-15", "2026-06-20"]);
+
+  // …and the project carries it, with the move on record.
+  const projectWrite = recorder
+    .writes()
+    .find((write) => write.operation === "project.update");
+  assert.equal(
+    (
+      projectWrite?.args as { data: { startDate?: Date } }
+    ).data.startDate?.toISOString(),
+    new Date("2026-06-15").toISOString(),
+  );
+  assert.ok(
+    recorder.operations().includes("activityLog.create"),
+    "the start date moved with nothing on record",
+  );
+});
+
+test("starting a later activity leaves the start date and schedule alone", async () => {
+  const recorder = startingDb(1);
+
+  const outcome = await updateMilestone(
+    adminPrincipal(),
+    {
+      milestoneId: "m_a",
+      startDate: "2026-06-15",
+      status: MilestoneStatus.ACTIVE,
+    },
+    recorder.db,
+  );
+
+  assert.equal(outcome.projectStartDate, null);
+  assert.equal(recorder.operations().includes("activityLog.create"), false);
+  assert.equal(
+    recorder.writes().filter((write) => write.operation === "milestone.update")
+      .length,
+    1,
+  );
 });

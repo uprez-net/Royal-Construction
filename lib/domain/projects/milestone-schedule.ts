@@ -1,5 +1,7 @@
 import { addDays } from "date-fns";
 
+import { MilestoneStatus } from "@prisma/client";
+
 // The spacing of a project's activities from its start date.
 //
 // Its own module, with nothing but date arithmetic in it, so the Overview tab
@@ -25,4 +27,29 @@ export const MILESTONE_SPACING_DAYS = 5;
  */
 export function milestoneTargetDate(startDate: Date, position: number): Date {
   return addDays(startDate, position * MILESTONE_SPACING_DAYS);
+}
+
+/**
+ * Statuses that mean work on an activity has begun. A started activity never
+ * returns to pending, so once any activity holds one, work has started on site
+ * for good.
+ */
+export const STARTED_MILESTONE_STATUSES: MilestoneStatus[] = [
+  MilestoneStatus.ACTIVE,
+  MilestoneStatus.DONE,
+];
+
+/**
+ * Whether work has started on site: any activity started or finished.
+ *
+ * From that moment the project's start date is a fact — the day the first
+ * activity started, written there by `updateMilestone` — and no longer a plan
+ * anybody may move.
+ */
+export function hasWorkStarted(
+  milestones: readonly { readonly status: MilestoneStatus }[],
+): boolean {
+  return milestones.some((milestone) =>
+    STARTED_MILESTONE_STATUSES.includes(milestone.status),
+  );
 }

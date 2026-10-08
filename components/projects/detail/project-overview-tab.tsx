@@ -62,6 +62,7 @@ import {
   Check,
   Loader2,
   Pencil,
+  Lock,
 } from "lucide-react";
 import { UploadButton } from "@/components/common/upload-button";
 import { useAppDispatch } from "@/lib/store/hooks";
@@ -73,6 +74,7 @@ import { openModal } from "@/lib/store/slices/uiSlice";
 import { useParams } from "next/navigation";
 import { format, parse } from "date-fns";
 import {
+  hasWorkStarted,
   MILESTONE_SPACING_DAYS,
   milestoneTargetDate,
 } from "@/lib/domain/projects/milestone-schedule";
@@ -388,11 +390,14 @@ function StartDateField({
   projectId,
   value,
   milestoneCount,
+  locked,
   onSaved,
 }: {
   projectId: string;
   value: unknown;
   milestoneCount: number;
+  /** Work has started on site: the date is the day it began, and fixed. */
+  locked: boolean;
   onSaved: (project: ProjectDetail) => void;
 }) {
   const id = useId();
@@ -457,26 +462,62 @@ function StartDateField({
   const pendingDate = pending ? parse(pending, "yyyy-MM-dd", new Date()) : null;
   const displayDate = (date: Date) => format(date, "d MMM yyyy");
 
-  if (!editing) {
+  const hintId = `${id}-hint`;
+  const hint = locked ? (
+    <p id={hintId} className="text-[11px] leading-snug text-muted-foreground">
+      Set to the day the first milestone started. It can&apos;t be changed once
+      work has started.
+    </p>
+  ) : (
+    <p id={hintId} className="text-[11px] leading-snug text-muted-foreground">
+      Changing it reschedules every milestone. It&apos;s set automatically, then
+      locked, when the first milestone starts.
+    </p>
+  );
+
+  if (!editing || locked) {
     return (
       <FieldShell label="Start date (on-site)">
-        <div className="flex h-9 items-center justify-between gap-2 rounded-lg border border-border bg-card pl-3 pr-1 text-sm">
-          <span className="font-mono tabular-nums text-foreground">
+        <div
+          className={cn(
+            "flex h-9 items-center justify-between gap-2 rounded-lg border border-border pl-3 pr-1 text-sm",
+            locked ? "bg-muted" : "bg-card",
+          )}
+          aria-describedby={hintId}
+        >
+          <span
+            className={cn(
+              "font-mono tabular-nums",
+              locked ? "text-muted-foreground" : "text-foreground",
+            )}
+          >
             {current
               ? displayDate(parse(current, "yyyy-MM-dd", new Date()))
               : "Not set"}
           </span>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 text-primary"
-            aria-label="Edit start date"
-            onClick={startEditing}
-          >
-            <Pencil className="size-3.5" aria-hidden="true" />
-            Edit
-          </Button>
+          {locked ? (
+            <span className="mr-2 flex items-center">
+              <Lock
+                className="size-3.5 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span className="sr-only">Locked</span>
+            </span>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-primary"
+              aria-label="Edit start date"
+              aria-describedby={hintId}
+              onClick={startEditing}
+            >
+              <Pencil className="size-3.5" aria-hidden="true" />
+              Edit
+            </Button>
+          )}
         </div>
+        {hint}
       </FieldShell>
     );
   }
@@ -488,6 +529,7 @@ function StartDateField({
           id={id}
           type="date"
           value={pending}
+          aria-describedby={hintId}
           autoFocus
           disabled={saving}
           onChange={(e) => setPending(e.target.value)}
@@ -517,6 +559,7 @@ function StartDateField({
           <X className="size-4" aria-hidden="true" />
         </Button>
       </div>
+      {hint}
 
       <AlertDialog
         open={confirming}
@@ -1875,6 +1918,7 @@ export function ProjectOverviewTab({
               projectId={project.id}
               value={project.startDate}
               milestoneCount={project.milestones.length}
+              locked={hasWorkStarted(project.milestones)}
               // The header and the milestone tab read the store, not this
               // tab, so the saved project goes back there.
               onSaved={(saved) => dispatch(setActiveProject(saved))}

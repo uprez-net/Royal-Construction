@@ -78,6 +78,10 @@ import {
 } from "@/lib/projects/create-project-errors";
 import { bulkCreateTradieSchedules } from "@/lib/data/tradieSchedules";
 import { settledBookingStatus } from "@/lib/domain/tradies/lifecycle";
+import {
+  hasWorkStarted,
+  milestoneTargetDate,
+} from "@/lib/domain/projects/milestone-schedule";
 
 type MutationKey =
   | "createProject"
@@ -1440,6 +1444,32 @@ const isComplianceThunkRejected = isAnyOf(
 );
 
 /**
+ * The store's copy of what `updateMilestone` does when the first activity
+ * starts: the project's start date becomes that day and every activity is
+ * re-dated from it, by the same `milestoneTargetDate` the server used.
+ */
+function startScheduleInStore(project: ProjectDetail, startDate: Date) {
+  if (new Date(project.startDate).getTime() === startDate.getTime()) return;
+
+  project.startDate = startDate;
+  const targetById = new Map<string, Date>();
+  [...project.milestones]
+    .sort((a, b) => a.order - b.order)
+    .forEach((milestone, position) => {
+      milestone.targetDate = milestoneTargetDate(startDate, position);
+      targetById.set(milestone.id, milestone.targetDate);
+    });
+  for (const schedule of project.tradieSchedules) {
+    const targetDate = schedule.milestoneId
+      ? targetById.get(schedule.milestoneId)
+      : undefined;
+    if (schedule.milestone && targetDate) {
+      schedule.milestone.targetDate = targetDate;
+    }
+  }
+}
+
+/**
  * The store's copy of `settleMilestoneBookings`: bookings on a milestone that
  * is now done or not required take the status the server just gave them, and
  * the milestone each booking carries is brought up to date, so the tradie
@@ -1946,6 +1976,10 @@ const projectsSlice = createSlice({
       .addCase(updateProjectMilestoneStatus.fulfilled, (state, action) => {
         state.mutations.updateMilestone = { status: "succeeded", error: null };
         if (state.activeProject?.id === action.payload.projectId) {
+          // Read before the merge below makes this milestone ACTIVE.
+          const startsWork =
+            action.meta.arg.status === "ACTIVE"
+            && !hasWorkStarted(state.activeProject.milestones);
           const milestoneIndex = state.activeProject.milestones.findIndex(
             (m) => m.id === action.meta.arg.milestoneId,
           );
@@ -2058,6 +2092,12 @@ const projectsSlice = createSlice({
                 };
               }
             }
+          }
+          if (startsWork && action.payload.startDate) {
+            startScheduleInStore(
+              state.activeProject,
+              new Date(action.payload.startDate),
+            );
           }
           settleBookingsInStore(state.activeProject);
         }
