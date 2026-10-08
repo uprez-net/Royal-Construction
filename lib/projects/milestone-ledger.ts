@@ -1,5 +1,6 @@
 import { differenceInCalendarDays } from "date-fns";
 
+import { businessDaysSince } from "@/lib/dates/business-days";
 import { MilestoneStatus } from "@prisma/client";
 
 /**
@@ -46,8 +47,8 @@ export interface StageRollup {
 /** A finished activity: done, or waived so it will never be done. */
 export function isSettled(milestone: Pick<LedgerMilestone, "status">): boolean {
   return (
-    milestone.status === MilestoneStatus.DONE ||
-    milestone.status === MilestoneStatus.NOT_REQUIRED
+    milestone.status === MilestoneStatus.DONE
+    || milestone.status === MilestoneStatus.NOT_REQUIRED
   );
 }
 
@@ -112,8 +113,8 @@ export function sortActivities<T extends LedgerMilestone>(
 ): T[] {
   return [...milestones].sort(
     (a, b) =>
-      STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
-      a.targetDate.getTime() - b.targetDate.getTime(),
+      STATUS_RANK[a.status] - STATUS_RANK[b.status]
+      || a.targetDate.getTime() - b.targetDate.getTime(),
   );
 }
 
@@ -163,8 +164,8 @@ export function nextActivity<T extends LedgerMilestone>(
 
   // Active before pending, then soonest due.
   const byUrgency = (a: T, b: T) =>
-    STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
-    a.targetDate.getTime() - b.targetDate.getTime();
+    STATUS_RANK[a.status] - STATUS_RANK[b.status]
+    || a.targetDate.getTime() - b.targetDate.getTime();
 
   const outstanding = [...parentOf.keys()].filter(
     (milestone) => !isSettled(milestone),
@@ -206,6 +207,35 @@ export function duenessOf(targetDate: Date, today: Date): Dueness {
   if (days === 0) return { kind: "today", days };
   if (days <= SOON_WINDOW_DAYS) return { kind: "soon", days };
   return { kind: "scheduled", days };
+}
+
+/** A working week: how long an activity may run once started before it is overdue. */
+export const ACTIVE_OVERDUE_BUSINESS_DAYS = 5;
+
+/**
+ * NSW business days an in-progress activity has been running, once that is a
+ * working week or more; `null` while it is still inside the week, or when it
+ * is not in progress at all.
+ *
+ * Separate from `duenessOf`, which reads the target date. This reads the start:
+ * an activity started on a Monday and still open the following Monday has
+ * stalled on site, whatever its target date says. Business days so a long
+ * weekend does not flag work nobody could have been doing.
+ *
+ * An active activity with no start date (rows from before the start was
+ * recorded) is never flagged — there is nothing to count from, and guessing
+ * would raise an alarm the office cannot clear.
+ */
+export function activeOverdueDays(
+  milestone: { status: MilestoneStatus; startDate: Date | null },
+  now: Date,
+): number | null {
+  if (milestone.status !== MilestoneStatus.ACTIVE || !milestone.startDate) {
+    return null;
+  }
+
+  const elapsed = businessDaysSince(milestone.startDate, now);
+  return elapsed >= ACTIVE_OVERDUE_BUSINESS_DAYS ? elapsed : null;
 }
 
 /**

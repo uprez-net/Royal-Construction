@@ -21,6 +21,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
+  activeOverdueDays,
   daysLate,
   duenessOf,
   isSettled,
@@ -184,6 +185,13 @@ export function MilestoneCard({
   const children = milestone.childrenMilestones;
   const hasChildren = children.length > 0;
   const isNotRequired = milestone.status === MilestoneStatus.NOT_REQUIRED;
+  const runningOverdueDays = activeOverdueDays(
+    {
+      status: milestone.status,
+      startDate: milestone.startDate ? new Date(milestone.startDate) : null,
+    },
+    new Date(),
+  );
 
   // Finished parents open on request; anything still in flight opens by default,
   // because its children are where the work actually is.
@@ -226,6 +234,16 @@ export function MilestoneCard({
             <StatusPill tone={STATUS_TONE[milestone.status]}>
               {formatStatus(milestone.status)}
             </StatusPill>
+
+            {runningOverdueDays !== null ? (
+              <StatusPill tone="danger">
+                Overdue
+                <span className="sr-only">
+                  {" "}
+                  — in progress {runningOverdueDays} business days
+                </span>
+              </StatusPill>
+            ) : null}
 
             {hasChildren ? (
               <span className="text-xs text-muted-foreground">
