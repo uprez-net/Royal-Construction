@@ -17,6 +17,16 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -62,6 +72,10 @@ import {
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { useParams } from "next/navigation";
 import { format, parse } from "date-fns";
+import {
+  MILESTONE_SPACING_DAYS,
+  milestoneTargetDate,
+} from "@/lib/domain/projects/milestone-schedule";
 
 // ---------------------------------------------------------------------------
 // Types & config
@@ -364,24 +378,28 @@ function DateField({
 /**
  * The on-site start date, edited and saved on its own.
  *
- * The schedule hangs off this date, so it changes deliberately — Edit, then
- * Save — instead of riding along with whatever else the overview form holds
- * unsaved. Saving it alone also means a refusal (a start before the contract
- * was signed) is reported against this field rather than failing the form.
+ * Every activity's target date hangs off this one — saving a new start re-dates
+ * the whole schedule (`milestoneTargetDate`) — so it changes deliberately: Edit,
+ * Save, then a confirmation that says what is about to move. It never rides
+ * along with whatever else the overview form holds unsaved, and a refusal (a
+ * start before the contract was signed) is reported against this field.
  */
 function StartDateField({
   projectId,
   value,
+  milestoneCount,
   onSaved,
 }: {
   projectId: string;
   value: unknown;
+  milestoneCount: number;
   onSaved: (project: ProjectDetail) => void;
 }) {
   const id = useId();
   const current = toDateInputValue(value);
   const [editing, setEditing] = useState(false);
   const [pending, setPending] = useState(current);
+  const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const startEditing = () => {
@@ -389,7 +407,7 @@ function StartDateField({
     setEditing(true);
   };
 
-  const save = async () => {
+  const requestSave = () => {
     if (saving) return;
     if (!pending) {
       toast.error("Pick a start date.");
@@ -399,7 +417,11 @@ function StartDateField({
       setEditing(false);
       return;
     }
+    setConfirming(true);
+  };
 
+  const save = async () => {
+    if (saving) return;
     setSaving(true);
     try {
       const response = await fetchJson<ProjectDetail>(
@@ -412,9 +434,16 @@ function StartDateField({
         "Unable to update the start date",
       );
       onSaved(response.data);
+      setConfirming(false);
       setEditing(false);
-      toast.success("Start date updated");
+      toast.success(
+        milestoneCount > 0
+          ? `Start date updated and ${milestoneCount} milestone target dates rescheduled`
+          : "Start date updated",
+      );
     } catch (error) {
+      // The dialog closes so the date can be corrected; nothing was written.
+      setConfirming(false);
       toast.error(
         error instanceof Error
           ? error.message
@@ -425,13 +454,16 @@ function StartDateField({
     }
   };
 
+  const pendingDate = pending ? parse(pending, "yyyy-MM-dd", new Date()) : null;
+  const displayDate = (date: Date) => format(date, "d MMM yyyy");
+
   if (!editing) {
     return (
       <FieldShell label="Start date (on-site)">
         <div className="flex h-9 items-center justify-between gap-2 rounded-lg border border-border bg-card pl-3 pr-1 text-sm">
           <span className="font-mono tabular-nums text-foreground">
             {current
-              ? format(parse(current, "yyyy-MM-dd", new Date()), "d MMM yyyy")
+              ? displayDate(parse(current, "yyyy-MM-dd", new Date()))
               : "Not set"}
           </span>
           <Button
@@ -460,7 +492,7 @@ function StartDateField({
           disabled={saving}
           onChange={(e) => setPending(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") void save();
+            if (e.key === "Enter") requestSave();
             if (e.key === "Escape" && !saving) setEditing(false);
           }}
           className={cn(FIELD_CONTROL_CLASS, "font-mono tabular-nums")}
@@ -469,18 +501,10 @@ function StartDateField({
           size="icon"
           className="size-9 shrink-0"
           aria-label="Save start date"
-          aria-busy={saving}
           disabled={saving}
-          onClick={() => void save()}
+          onClick={requestSave}
         >
-          {saving ? (
-            <Loader2
-              className="size-4 animate-spin motion-reduce:animate-none"
-              aria-hidden="true"
-            />
-          ) : (
-            <Check className="size-4" aria-hidden="true" />
-          )}
+          <Check className="size-4" aria-hidden="true" />
         </Button>
         <Button
           size="icon"
@@ -493,6 +517,71 @@ function StartDateField({
           <X className="size-4" aria-hidden="true" />
         </Button>
       </div>
+
+      <AlertDialog
+        open={confirming}
+        onOpenChange={(open) => {
+          if (!open && !saving) setConfirming(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingDate
+                ? `Move the start date to ${displayDate(pendingDate)}?`
+                : "Move the start date?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                {milestoneCount > 0 && pendingDate ? (
+                  <p>
+                    All {milestoneCount} milestone target dates will be
+                    rescheduled from the new start: the first on{" "}
+                    <span className="font-medium text-foreground">
+                      {displayDate(milestoneTargetDate(pendingDate, 0))}
+                    </span>
+                    , then one every {MILESTONE_SPACING_DAYS} days, the last on{" "}
+                    <span className="font-medium text-foreground">
+                      {displayDate(
+                        milestoneTargetDate(pendingDate, milestoneCount - 1),
+                      )}
+                    </span>
+                    .
+                  </p>
+                ) : (
+                  <p>This project has no milestones to reschedule.</p>
+                )}
+                <p>
+                  This applies to every milestone, including ones already done
+                  or in progress, and replaces any target date set by hand. It
+                  cannot be undone from here.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={saving}
+              aria-busy={saving}
+              onClick={(event) => {
+                // Stay open until the save answers, so a failure is not
+                // mistaken for a dialog that simply closed.
+                event.preventDefault();
+                void save();
+              }}
+            >
+              {saving ? (
+                <Loader2
+                  className="size-4 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+              ) : null}
+              {saving ? "Rescheduling…" : "Move start date"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </FieldShell>
   );
 }
@@ -1785,6 +1874,7 @@ export function ProjectOverviewTab({
             <StartDateField
               projectId={project.id}
               value={project.startDate}
+              milestoneCount={project.milestones.length}
               // The header and the milestone tab read the store, not this
               // tab, so the saved project goes back there.
               onSaved={(saved) => dispatch(setActiveProject(saved))}
