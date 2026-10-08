@@ -5,7 +5,6 @@ import {
   ProjectStatus,
   type Milestone,
 } from "@prisma/client";
-import { addDays } from "date-fns";
 import { v4 as randomUUID } from "uuid";
 
 import { milestoneTemplates } from "@/constants/milestoneTemplate";
@@ -23,6 +22,8 @@ import {
   type DueStageClaim,
 } from "../invoices/stage-claim";
 import type { DomainPrincipal } from "../principal";
+
+import { milestoneTargetDate } from "./milestone-schedule";
 
 // Milestones: creation, ordering, the status state machine, the parent
 // roll-up, and what settling one means for the project it belongs to.
@@ -557,11 +558,40 @@ export async function attachMilestonePhotos(
 }
 
 /**
+ * Re-date every activity on a project from a new start date.
+ *
+ * Every activity moves, whatever its status, so the whole schedule stays one
+ * sequence; a hand-set target date is overwritten. Not a command on its own:
+ * `updateProject` authorizes, decides the start date really moved, and runs
+ * this inside the transaction that writes it, so the project never shows a new
+ * start against the old schedule.
+ */
+export async function rescheduleMilestonesFromStart(
+  input: { readonly projectId: string; readonly startDate: Date },
+  db: DomainDb,
+): Promise<{ rescheduled: number }> {
+  const milestones = await db.milestone.findMany({
+    orderBy: { order: "asc" },
+    select: { id: true },
+    where: { projectId: input.projectId },
+  });
+
+  for (const [position, milestone] of milestones.entries()) {
+    await db.milestone.update({
+      data: { targetDate: milestoneTargetDate(input.startDate, position) },
+      where: { id: milestone.id },
+    });
+  }
+
+  return { rescheduled: milestones.length };
+}
+
+/**
  * Seed a new project's milestones from the configured template.
  *
  * Budgets come from the offer's cost lines: a line referenced by several
  * template activities is split evenly between them, and a parent's budget is
- * the sum of its children's. Target dates are spaced from the project start.
+ * the sum of its children's. Target dates follow `milestoneTargetDate`.
  *
  * Runs inside the creating transaction, so the project never exists without
  * its milestones.
@@ -593,10 +623,11 @@ export async function createMilestonesFromTemplate(
       }, 0);
   };
 
-  const records = milestoneTemplates.map((template) => ({
+  const inOrder = [...milestoneTemplates].sort((a, b) => a.order - b.order);
+  const records = inOrder.map((template, position) => ({
     ...template,
     id: randomUUID(),
-    targetDate: addDays(input.startDate, template.order * 4),
+    targetDate: milestoneTargetDate(input.startDate, position),
     totalBudget: budgetFor(template.relatedCostLines),
   }));
 

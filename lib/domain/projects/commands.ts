@@ -15,6 +15,7 @@ import {
   type DomainPrincipal,
 } from "../principal";
 
+import { rescheduleMilestonesFromStart } from "./milestones";
 import {
   collectProjectDateBlockers,
   partitionBlockers,
@@ -47,6 +48,8 @@ export type UpdateProjectResult = {
   readonly projectId: string;
   /** Blockers that did not stop the save but the header should still show. */
   readonly warnings: readonly string[];
+  /** Activities re-dated because the start date moved; 0 when it did not. */
+  readonly rescheduledMilestones: number;
 };
 
 type PersistedLegalAdministration = {
@@ -116,33 +119,76 @@ export async function updateProject(
     }
   }
 
-  await db.project.update({
-    where: { id: input.projectId },
-    data: {
-      ...(input.name ? { name: input.name } : {}),
-      ...(input.location ? { location: input.location } : {}),
-      ...(input.council !== undefined ? { council: input.council } : {}),
-      ...(input.description !== undefined
-        ? { description: input.description }
-        : {}),
-      ...(input.startDate ? { startDate: new Date(input.startDate) } : {}),
-      ...(input.estimatedEndDate
-        ? { estimatedEndDate: new Date(input.estimatedEndDate) }
-        : {}),
-      ...(input.totalBudget !== undefined
-        ? { totalBudget: new Prisma.Decimal(input.totalBudget) }
-        : {}),
-      ...(input.requirements !== undefined
-        ? {
-            requirements:
-              input.requirements as unknown as Prisma.InputJsonValue,
-          }
-        : {}),
-    },
-  });
+  // Compared by instant, so re-sending the stored date — a form saving its
+  // other fields — never rewrites a schedule nobody asked to move.
+  const nextStartDate = input.startDate ? new Date(input.startDate) : null;
+  const startDateMoved =
+    nextStartDate !== null
+    && nextStartDate.getTime() !== existing.startDate.getTime();
+
+  const writeProjectFields = (tx: DomainDb) =>
+    tx.project.update({
+      where: { id: input.projectId },
+      data: {
+        ...(input.name ? { name: input.name } : {}),
+        ...(input.location ? { location: input.location } : {}),
+        ...(input.council !== undefined ? { council: input.council } : {}),
+        ...(input.description !== undefined
+          ? { description: input.description }
+          : {}),
+        ...(input.startDate ? { startDate: new Date(input.startDate) } : {}),
+        ...(input.estimatedEndDate
+          ? { estimatedEndDate: new Date(input.estimatedEndDate) }
+          : {}),
+        ...(input.totalBudget !== undefined
+          ? { totalBudget: new Prisma.Decimal(input.totalBudget) }
+          : {}),
+        ...(input.requirements !== undefined
+          ? {
+              requirements:
+                input.requirements as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
+      },
+    });
+
+  const write = async (tx: DomainDb): Promise<number> => {
+    await writeProjectFields(tx);
+    if (!startDateMoved || !nextStartDate) return 0;
+
+    // Every activity's target date hangs off the start, so moving it moves
+    // the schedule — in this transaction, or the project would show a new
+    // start against the old dates.
+    const { rescheduled } = await rescheduleMilestonesFromStart(
+      { projectId: input.projectId, startDate: nextStartDate },
+      tx,
+    );
+    await logActionOrThrow(
+      {
+        ...createActivityLogEntry("projectStartDateChanged", {
+          milestonesRescheduled: rescheduled,
+          previousStartDate: existing.startDate.toISOString().slice(0, 10),
+          projectId: input.projectId,
+          startDate: nextStartDate.toISOString().slice(0, 10),
+        }),
+        authorId: attributionUserId(principal),
+      },
+      tx,
+    );
+    return rescheduled;
+  };
+
+  // A caller already inside a transaction hands in its own client, which has
+  // no `$transaction`. Rewriting every activity is one update per row, so the
+  // default five-second interactive window is too tight on a full template.
+  const rescheduledMilestones =
+    startDateMoved && "$transaction" in db
+      ? await db.$transaction(write, { timeout: 30_000 })
+      : await write(db);
 
   return {
     projectId: input.projectId,
+    rescheduledMilestones,
     warnings: warns.map((warn) => warn.label),
   };
 }
