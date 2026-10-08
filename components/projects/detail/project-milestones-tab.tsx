@@ -2,7 +2,13 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { addWeeks, format, isWithinInterval } from "date-fns";
-import { CalendarCheck2, ChevronDown, Lock, Plus } from "lucide-react";
+import {
+  CalendarCheck2,
+  CalendarPlus,
+  ChevronDown,
+  Lock,
+  Plus,
+} from "lucide-react";
 
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
@@ -294,6 +300,15 @@ export function ProjectMilestonesTab({
     );
   };
 
+  const handleScheduleTradies = (stage: ProjectStage) => {
+    dispatch(
+      openModal({
+        type: "scheduleTradie",
+        payload: { project, projectStage: stage },
+      }),
+    );
+  };
+
   const handleOpenViewPicture = (
     imageUrls: string[],
     selectedIndex: number,
@@ -404,7 +419,7 @@ export function ProjectMilestonesTab({
                       Next up
                     </TableHead>
                     <TableHead className="w-12">
-                      <span className="sr-only">Activities</span>
+                      <span className="sr-only">Actions</span>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -497,26 +512,50 @@ export function ProjectMilestonesTab({
                             <NextUp ledgerStage={ledgerStage} />
                           </TableCell>
 
-                          <TableCell className="text-center">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              aria-expanded={isOpen}
-                              aria-controls={isOpen ? bodyId : undefined}
-                              aria-label={`${isOpen ? "Hide" : "Show"} ${ledgerStage.label} activities`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                toggleStage(ledgerStage.stage);
-                              }}
-                            >
-                              <ChevronDown
-                                className={cn(
-                                  "size-4 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
-                                  isOpen && "rotate-180",
-                                )}
-                                aria-hidden="true"
-                              />
-                            </Button>
+                          <TableCell>
+                            <span className="flex items-center justify-end gap-1">
+                              {/* A finished stage has no open activity left to
+                                  book a tradie onto, so it gets no button. */}
+                              {ledgerStage.state !== "complete" ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-primary"
+                                  aria-label={`Schedule tradies for ${ledgerStage.label}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleScheduleTradies(ledgerStage.stage);
+                                  }}
+                                >
+                                  <CalendarPlus
+                                    className="size-4"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="hidden whitespace-nowrap md:inline">
+                                    Schedule tradies
+                                  </span>
+                                </Button>
+                              ) : null}
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                aria-expanded={isOpen}
+                                aria-controls={isOpen ? bodyId : undefined}
+                                aria-label={`${isOpen ? "Hide" : "Show"} ${ledgerStage.label} activities`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleStage(ledgerStage.stage);
+                                }}
+                              >
+                                <ChevronDown
+                                  className={cn(
+                                    "size-4 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
+                                    isOpen && "rotate-180",
+                                  )}
+                                  aria-hidden="true"
+                                />
+                              </Button>
+                            </span>
                           </TableCell>
                         </TableRow>
 

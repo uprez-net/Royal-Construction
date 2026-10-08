@@ -103,9 +103,6 @@ export function TradieScheduleRow({
   );
   const [tradieSearchQuery, setTradieSearchQuery] = useState("");
   const [sendEmailCheck, setSendEmailCheck] = useState(false);
-  const [selectedProjectStage, setSelectedProjectStage] = useState<
-    ProjectStage | undefined
-  >(undefined);
 
   const fieldId = (name: string) => `tradie-schedule-${row.id}-${name}`;
   const errorId = (name: string) => `${fieldId(name)}-error`;
@@ -508,15 +505,22 @@ export function TradieScheduleRow({
 
         {/* Milestone */}
         <div className="space-y-2">
-          <Label htmlFor={fieldId("milestone")}>
+          <Label htmlFor={fieldId("project-stage")}>
             Milestone
             <RequiredMark />
           </Label>
 
           <Select
-            value={selectedProjectStage}
+            value={row.projectStage}
             onValueChange={(value) =>
-              setSelectedProjectStage(value as ProjectStage)
+              // An activity belongs to one stage, so a different stage clears
+              // it rather than leaving a pick the list no longer shows.
+              onChange(index, {
+                projectStage: value as ProjectStage,
+                ...(value === row.projectStage
+                  ? {}
+                  : { milestoneId: undefined }),
+              })
             }
           >
             <SelectTrigger
@@ -551,7 +555,9 @@ export function TradieScheduleRow({
           </Label>
 
           <Select
-            value={row.milestoneId}
+            // "" rather than undefined, so clearing it on a stage change shows
+            // the placeholder instead of Radix falling back to uncontrolled.
+            value={row.milestoneId ?? ""}
             onValueChange={(value) =>
               onChange(index, {
                 milestoneId: value,
@@ -568,14 +574,12 @@ export function TradieScheduleRow({
             </SelectTrigger>
 
             <SelectContent className="w-auto min-w-full">
-              {selectedProjectStage
-                && stageToMilestoneMap[selectedProjectStage].map(
-                  (milestone) => (
-                    <SelectItem key={milestone.id} value={milestone.id}>
-                      {milestone.name}
-                    </SelectItem>
-                  ),
-                )}
+              {row.projectStage
+                && stageToMilestoneMap[row.projectStage]?.map((milestone) => (
+                  <SelectItem key={milestone.id} value={milestone.id}>
+                    {milestone.name}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
 
