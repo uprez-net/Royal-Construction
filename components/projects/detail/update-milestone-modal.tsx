@@ -45,6 +45,7 @@ import {
   MILESTONE_SPACING_DAYS,
 } from "@/lib/domain/projects/milestone-schedule";
 import { Calendar } from "@/components/ui/calendar";
+import { allowedMilestoneTransitions } from "@/lib/domain/projects/milestone-status";
 import {
   settledBookingStatus,
   tradieScheduleSpend,
@@ -75,13 +76,6 @@ const statusOptions: { label: string; value: MilestoneStatus }[] = [
   { label: "Done", value: "DONE" },
   { label: "Not required", value: "NOT_REQUIRED" },
 ];
-
-const STATE_MACHES: Record<MilestoneStatus, MilestoneStatus[]> = {
-  PENDING: ["ACTIVE", "NOT_REQUIRED"],
-  ACTIVE: ["DONE"],
-  DONE: [],
-  NOT_REQUIRED: ["PENDING"],
-};
 
 type MilestoneUpdateErrors = Partial<Record<keyof MilestoneUpdateData, string>>;
 
@@ -336,9 +330,13 @@ export default function UpdateMilestoneModal({
                       key={option.value}
                       value={option.value}
                       disabled={
-                        !STATE_MACHES[
-                          status ?? milestone?.status ?? "PENDING"
-                        ].includes(option.value)
+                        option.value !== milestone?.status
+                        && !allowedMilestoneTransitions(
+                          milestone?.status ?? "PENDING",
+                          project?.milestones.filter(
+                            (child) => child.parentId === milestoneId,
+                          ) ?? [],
+                        ).includes(option.value)
                       }
                     >
                       {option.label}

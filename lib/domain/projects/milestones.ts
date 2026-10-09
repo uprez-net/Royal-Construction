@@ -65,19 +65,8 @@ import { settleMilestoneBookings } from "../tradies/settlement";
 // whichever adapter called, because they are post-commit work and a Xero
 // outage must not roll back a milestone the operator already marked done.
 
-const MILESTONE_STATE_MACHINE: Record<MilestoneStatus, MilestoneStatus[]> = {
-  PENDING: [MilestoneStatus.ACTIVE, MilestoneStatus.NOT_REQUIRED],
-  ACTIVE: [MilestoneStatus.DONE],
-  DONE: [MilestoneStatus.DONE],
-  NOT_REQUIRED: [MilestoneStatus.PENDING],
-};
-
-/** The transitions this milestone may take from where it is now. */
-export function allowedMilestoneTransitions(
-  from: MilestoneStatus,
-): readonly MilestoneStatus[] {
-  return MILESTONE_STATE_MACHINE[from] ?? [];
-}
+import { allowedMilestoneTransitions } from "./milestone-status";
+export { allowedMilestoneTransitions } from "./milestone-status";
 
 export type CreateMilestoneInput = {
   readonly projectId: string;
@@ -372,6 +361,7 @@ export async function updateMilestone(
       parentId: true,
       projectId: true,
       status: true,
+      childrenMilestones: { select: { status: true } },
     },
   });
 
@@ -381,7 +371,10 @@ export async function updateMilestone(
   const statusChanged = input.status !== current.status;
   if (
     statusChanged
-    && !MILESTONE_STATE_MACHINE[current.status].includes(input.status)
+    && !allowedMilestoneTransitions(
+      current.status,
+      current.childrenMilestones ?? [],
+    ).includes(input.status)
   ) {
     throw new DomainTransitionError(
       `A milestone cannot go from ${current.status} to ${input.status}.`,
@@ -451,11 +444,9 @@ export async function updateMilestone(
         }),
       ]);
 
-      if (outstanding === 0) {
-        rolledUpParentStatus =
-          waived === siblings
-            ? MilestoneStatus.NOT_REQUIRED
-            : MilestoneStatus.DONE;
+      // Waiving every child leaves the parent's outcome to the operator.
+      if (outstanding === 0 && waived < siblings) {
+        rolledUpParentStatus = MilestoneStatus.DONE;
         await db.milestone.update({
           where: { id: updated.parentId },
           data: {
@@ -484,7 +475,10 @@ export async function updateMilestone(
       _sum: { spend: true },
     }),
     db.milestone.count({
-      where: { projectId, status: MilestoneStatus.PENDING },
+      where: {
+        projectId,
+        status: { in: [MilestoneStatus.PENDING, MilestoneStatus.ACTIVE] },
+      },
     }),
   ]);
 
