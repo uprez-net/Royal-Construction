@@ -42,6 +42,7 @@ import {
 import { QueuedUploadFile, useUploadQueue } from "@/hooks/use-upload-queue";
 import { ClientPayload } from "@/utils/validators";
 import { buildBlobPath } from "@/utils/formatters";
+import { completeProjectUpload as confirmProjectUpload } from "@/lib/files/complete-project-upload";
 
 const maxFiles = 5;
 
@@ -91,6 +92,7 @@ export function AddUpdateModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isTransitioning, startTransition] = useTransition();
   const uploadControllersRef = useRef<Record<string, AbortController>>({});
+  const transferredUrlsRef = useRef<Record<string, string>>({});
   const fieldPrefix = useId();
   const milestoneFieldId = `${fieldPrefix}-milestone`;
   const notesFieldId = `${fieldPrefix}-notes`;
@@ -104,8 +106,9 @@ export function AddUpdateModal({
       controller.abort(),
     );
     uploadControllersRef.current = {};
+    transferredUrlsRef.current = {};
     resetQueue();
-    setMilestoneId(undefined);
+    setMilestoneId(initialMilestoneId);
     setNotes("");
     setUploading(false);
     setErrorMessage(null);
@@ -118,6 +121,19 @@ export function AddUpdateModal({
     }
 
     onOpenChange(nextOpen);
+  };
+
+  const handleMilestoneChange = (value: string) => {
+    const nextMilestoneId = value === "__none__" ? undefined : value;
+    if (isSubmitting || nextMilestoneId === milestoneId) return;
+
+    // A transferred file belongs to its original milestone, even if posting
+    // failed. Retain the selected photos with fresh upload IDs and no URLs.
+    transferredUrlsRef.current = {};
+    resetQueue();
+    addFiles(queuedFiles.map((queuedFile) => queuedFile.file));
+    dispatch(clearProjectUploads(projectId));
+    setMilestoneId(nextMilestoneId);
   };
 
   useEffect(() => {
@@ -144,38 +160,55 @@ export function AddUpdateModal({
     markUploading(queuedFile.id);
 
     try {
-      const blob = await upload(
-        buildBlobPath({
+      const uploadedUrl =
+        transferredUrlsRef.current[queuedFile.id] ?? queuedFile.url;
+      const blob = uploadedUrl
+        ? { url: uploadedUrl }
+        : await upload(
+            buildBlobPath({
+              fileId: queuedFile.id,
+              fileName: queuedFile.file.name,
+              projectId,
+              milestoneId: milestoneId ?? undefined,
+            }),
+            queuedFile.file,
+            {
+              access: "public",
+              handleUploadUrl: "/api/upload",
+              clientPayload: JSON.stringify({
+                projectId,
+                milestoneId: milestoneId ?? null,
+                fileId: queuedFile.id,
+                fileName: queuedFile.file.name,
+                fileSize: queuedFile.file.size,
+                isOfferFile: false,
+                uploadType: "project-file",
+              } satisfies ClientPayload),
+              abortSignal: controller.signal,
+              onUploadProgress: ({ percentage }) => {
+                dispatch(
+                  updateProjectUploadProgress({
+                    projectId,
+                    fileId: queuedFile.id,
+                    progress: percentage,
+                  }),
+                );
+
+                updateProgress(queuedFile.id, percentage);
+              },
+            },
+          );
+
+      transferredUrlsRef.current[queuedFile.id] = blob.url;
+      await confirmProjectUpload(
+        {
+          projectId,
+          milestoneId: milestoneId ?? null,
           fileId: queuedFile.id,
           fileName: queuedFile.file.name,
-          projectId,
-          milestoneId: milestoneId ?? undefined,
-        }),
-        queuedFile.file,
-        {
-          access: "public",
-          handleUploadUrl: "/api/upload",
-          clientPayload: JSON.stringify({
-            projectId,
-            milestoneId: milestoneId ?? null,
-            fileId: queuedFile.id,
-            fileName: queuedFile.file.name,
-            fileSize: queuedFile.file.size,
-            isOfferFile: false,
-          } satisfies ClientPayload),
-          abortSignal: controller.signal,
-          onUploadProgress: ({ percentage }) => {
-            dispatch(
-              updateProjectUploadProgress({
-                projectId,
-                fileId: queuedFile.id,
-                progress: percentage,
-              }),
-            );
-
-            updateProgress(queuedFile.id, percentage);
-          },
+          fileUrl: blob.url,
         },
+        controller.signal,
       );
 
       dispatch(
@@ -311,11 +344,9 @@ export function AddUpdateModal({
               Milestone
             </Label>
             <Select
-              disabled={initialMilestoneId !== undefined}
+              disabled={isSubmitting || initialMilestoneId !== undefined}
               value={milestoneId ?? "__none__"}
-              onValueChange={(value) =>
-                setMilestoneId(value === "__none__" ? undefined : value)
-              }
+              onValueChange={handleMilestoneChange}
             >
               <SelectTrigger
                 id={milestoneFieldId}

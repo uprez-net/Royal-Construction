@@ -90,6 +90,13 @@ export async function updateTradie(
 ): Promise<Tradie> {
   requireAdminPrincipal(principal);
   const current = await requireTradie(tradieId, db);
+  const name = input.name?.trim();
+  if (name !== undefined && name.length < 2) {
+    throw new DomainValidationError(
+      "Enter a name with at least 2 characters.",
+      "name",
+    );
+  }
   const trade =
     input.trade === undefined
       ? undefined
@@ -107,7 +114,7 @@ export async function updateTradie(
       // dedicated toggle stays staff-level for the directory's star control.
       isFavourite: input.isFavourite,
       location: input.location,
-      name: input.name,
+      name,
       note: input.note,
       phone: input.phone,
       trade,

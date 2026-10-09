@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Files, Search } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Files, Loader2, Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,8 +17,21 @@ import { ProjectDetail } from "@/types/project";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { filePreviewModal } from "@/utils/file-preview";
+import { removeFileFromProject } from "@/lib/store/slices/projectsSlice";
+import { fetchJson } from "@/utils/fetch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
-interface ProjectQuotesTabProps {
+interface ProjectDocumentsTabProps {
   project: ProjectDetail;
   isAdmin: boolean;
 }
@@ -32,12 +46,23 @@ function formatUploadedAt(value: Date | string) {
   return Number.isNaN(parsed.getTime()) ? "—" : dataTimeFormat.format(parsed);
 }
 
-export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
+export function ProjectDocumentsTab({
+  project,
+  isAdmin,
+}: ProjectDocumentsTabProps) {
   const dispatch = useAppDispatch();
+  const [fileToDelete, setFileToDelete] = useState<
+    ProjectDetail["files"][number] | null
+  >(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deletingRef = useRef(false);
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
   const files = project.files.filter((file) => {
+    if (deletedIds.has(file.id)) return false;
     const isAdminOnlyFileType =
-      file.filename.toLowerCase().includes("tender") ||
-      file.filename.toLowerCase().includes("contract");
+      file.filename.toLowerCase().includes("tender")
+      || file.filename.toLowerCase().includes("contract");
 
     return isAdmin || !isAdminOnlyFileType;
   });
@@ -62,9 +87,48 @@ export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
     if (!milestoneId) return "—";
 
     return (
-      project.milestones.find((milestone) => milestone.id === milestoneId)
-        ?.name ?? "—"
+      project.milestones.find((milestone) => milestone.id === milestoneId)?.name
+      ?? "—"
     );
+  };
+
+  const handleDelete = async () => {
+    if (!fileToDelete || deletingRef.current) return;
+    deletingRef.current = true;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const { data } = await fetchJson<{
+        projectId: string;
+        fileId: string;
+        url: string;
+        storageCleanupFailed: boolean;
+      }>(
+        `/api/projects/${encodeURIComponent(project.id)}/files/${encodeURIComponent(fileToDelete.id)}`,
+        { method: "DELETE" },
+        "Unable to delete the document. Please try again.",
+      );
+      dispatch(removeFileFromProject(data));
+      setDeletedIds((current) => new Set(current).add(data.fileId));
+      setFileToDelete(null);
+      if (data.storageCleanupFailed) {
+        toast.warning(
+          "Document removed. Its stored file could not be cleaned up.",
+        );
+      } else {
+        toast.success("Document deleted");
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to delete the document.";
+      setDeleteError(message);
+      toast.error(message);
+    } finally {
+      deletingRef.current = false;
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -129,8 +193,24 @@ export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
             `Open ${visibleFiles[index]?.filename ?? "document"}`
           }
           caption="Documents uploaded to this project, with size, type, linked milestone and upload time."
-          headers={["#", "Name", "Size", "Type", "Milestone", "Uploaded"]}
-          align={["end", "start", "end", "start", "start", "start"]}
+          headers={[
+            "#",
+            "Name",
+            "Size",
+            "Type",
+            "Milestone",
+            "Uploaded",
+            ...(isAdmin ? ["Actions"] : []),
+          ]}
+          align={[
+            "end",
+            "start",
+            "end",
+            "start",
+            "start",
+            "start",
+            ...(isAdmin ? ["end" as const] : []),
+          ]}
           rows={visibleFiles.map((file, index) => [
             <span
               key={`${file.id}-number`}
@@ -167,6 +247,26 @@ export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
             <span key={`${file.id}-uploadedAt`} className="font-mono text-sm">
               {formatUploadedAt(file.createdAt)}
             </span>,
+            ...(isAdmin
+              ? [
+                  <Button
+                    key={`${file.id}-delete`}
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={isDeleting}
+                    aria-label={`Delete ${file.filename}`}
+                    title={`Delete ${file.filename}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setDeleteError(null);
+                      setFileToDelete(file);
+                    }}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>,
+                ]
+              : []),
           ])}
           emptyState={
             <div className="mx-auto flex max-w-md flex-col items-center gap-3">
@@ -204,6 +304,52 @@ export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
           }
         />
       </CardContent>
+      <AlertDialog
+        open={fileToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletingRef.current) {
+            setFileToDelete(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete “{fileToDelete?.filename}” from this project&apos;s
+              documents and milestone photos? Copies used by other records are
+              kept. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{deleteError}</AlertDescription>
+            </Alert>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={isDeleting}
+              aria-busy={isDeleting}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDelete();
+              }}
+            >
+              {isDeleting ? (
+                <Loader2
+                  data-icon="inline-start"
+                  className="animate-spin"
+                  aria-hidden="true"
+                />
+              ) : null}
+              {isDeleting ? "Deleting…" : "Delete document"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

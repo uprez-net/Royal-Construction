@@ -942,7 +942,13 @@ export async function updateTradie(
   data: Partial<
     Pick<
       Tradie,
-      "email" | "abn" | "additionalEmails" | "phone" | "location" | "note"
+      | "name"
+      | "email"
+      | "abn"
+      | "additionalEmails"
+      | "phone"
+      | "location"
+      | "note"
     >
   >,
 ): Promise<TradieDetails> {

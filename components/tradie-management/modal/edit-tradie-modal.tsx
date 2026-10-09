@@ -31,6 +31,7 @@ import { AddressSuggestion } from "@/types/data";
 import { fetchJson } from "@/utils/fetch";
 import { cn } from "@/lib/utils";
 import { EmailListInput } from "./forms/EmailLIstInput";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 
 interface EditTradieModalProps {
   open: boolean;
@@ -39,6 +40,7 @@ interface EditTradieModalProps {
 }
 
 interface TradieUpdateInput {
+  name?: string;
   abn?: string;
   email?: string;
   phone?: string;
@@ -55,6 +57,7 @@ const normalizePhone = (value: string) => value.replace(/[\s()-]/g, "");
 const AU_PHONE_REGEX = /^(?:\+?61|0)[2-478]\d{8}$/;
 
 const updateTradieSchema = z.object({
+  name: z.string().trim().min(2, "Enter a name with at least 2 characters"),
   email: z.email("Please enter a valid email address"),
   additionalEmails: z
     .array(z.email("Please enter a valid email address"))
@@ -87,6 +90,7 @@ export default function EditTradieModal({
     AddressSuggestion[]
   >([]);
   const [formData, setFormData] = useState<TradieUpdateInput>({
+    name: tradie.name,
     abn: tradie.abn,
     email: tradie.email,
     phone: tradie.phone,
@@ -250,13 +254,41 @@ export default function EditTradieModal({
           </DialogTitle>
 
           <DialogDescription>
-            Update contact information and internal notes for {tradie.name}.
-            Fields marked with an asterisk are required.
+            Update the name, contact information and internal notes for{" "}
+            {tradie.name}. Fields marked with an asterisk are required.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 pt-2">
           <div className="grid gap-5 md:grid-cols-2">
+            <Field
+              className="md:col-span-2"
+              data-invalid={Boolean(errors.name)}
+            >
+              <FieldLabel htmlFor="tradie-edit-name">
+                Name <span aria-hidden="true">*</span>
+              </FieldLabel>
+              <Input
+                id="tradie-edit-name"
+                name="name"
+                required
+                disabled={isPending}
+                placeholder="Tradie or business name"
+                value={formData.name ?? ""}
+                aria-invalid={Boolean(errors.name)}
+                aria-describedby={
+                  errors.name ? "tradie-edit-name-error" : undefined
+                }
+                onChange={(event) =>
+                  handleInputChange("name", event.target.value)
+                }
+              />
+              {errors.name ? (
+                <FieldError id="tradie-edit-name-error">
+                  {errors.name}
+                </FieldError>
+              ) : null}
+            </Field>
             {fields.map(({ key, label, icon: Icon, placeholder, mono }) => {
               if (key === "additionalEmails") {
                 return (
