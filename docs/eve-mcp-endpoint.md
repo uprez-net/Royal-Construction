@@ -158,7 +158,12 @@ the supported areas are:
   rate one, list schedules, create, reschedule and transition a schedule,
   request a price change, a removal or a schedule deletion, report an incident.
 - **Admin**, for administrators only — team list and roles, invitations, the
-  approval queue, admin offer content, the Xero connection.
+  approval queue, admin offer content, the Xero connection, and the build
+  sequence template used by new projects. Read its activities, stages, parent
+  links, estimated calendar days, tradie category dependencies and related
+  cost-schedule tasks. Add, update, move or remove activities with owner
+  approval. Edits preserve unrelated activities, reject stale revisions and
+  leave existing projects' milestones unchanged.
 
 Writes that are persistent, irreversible or visible to a client go through the
 approval flow, which reaches you as an `input_required` turn. They are audited

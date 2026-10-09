@@ -18,6 +18,7 @@ import {
 import { ProjectDateBlockerError } from "@/lib/domain/projects/readiness";
 
 import { adminPrincipal, recordingDb } from "./domain-harness";
+import { milestoneTemplates } from "@/constants/milestoneTemplate";
 
 // Moving a project's start date re-dates every activity from it, in the same
 // transaction as the move. These run the command against a recorder.
@@ -155,7 +156,16 @@ test("a refused start date moves nothing", async () => {
 });
 
 test("a new project's activities follow the same spacing", async () => {
-  const recorder = recordingDb();
+  const recorder = recordingDb({
+    "milestoneTemplate.findMany": milestoneTemplates.map((row) => ({
+      ...row,
+      id: `template-${row.order}`,
+      parentId: row.parentId === null ? null : `template-${row.parentId}`,
+      relatedCostLines: [...(row.relatedCostLines ?? [])],
+      estimatedDays: 5,
+      requiredTradeTypeId: null,
+    })),
+  });
   const start = new Date("2026-06-08T00:00:00.000Z");
 
   await createMilestonesFromTemplate(

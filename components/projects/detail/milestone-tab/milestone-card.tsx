@@ -38,6 +38,8 @@ import { currency, formatStatus } from "@/utils/formatters";
 import { MilestoneStatus } from "@prisma/client";
 
 import { MilestoneActionGroup } from "./milestone-action-button";
+import { missingMilestoneTrade } from "@/lib/domain/projects/tradie-dependencies";
+import { milestoneEndDate } from "@/lib/domain/projects/milestone-schedule";
 
 /** How many progress photos sit inline before the rest go behind a button. */
 const INLINE_PHOTO_LIMIT = 3;
@@ -92,7 +94,7 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
       return <span>Completed</span>;
     }
 
-    const late = daysLate(new Date(milestone.targetDate), actual);
+    const late = daysLate(milestone, actual);
 
     return (
       <MetaItem icon={<CheckCircle2 className="size-3.5 text-success-ink" />}>
@@ -103,7 +105,8 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
     );
   }
 
-  const dueness = duenessOf(new Date(milestone.targetDate), new Date());
+  const endDate = milestoneEndDate(milestone);
+  const dueness = duenessOf(milestone, new Date());
 
   if (dueness.kind === "overdue") {
     return (
@@ -112,9 +115,7 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
           Overdue {Math.abs(dueness.days)}d
         </span>{" "}
         · was due{" "}
-        <span className="font-mono tabular-nums">
-          {shortDate(new Date(milestone.targetDate))}
-        </span>
+        <span className="font-mono tabular-nums">{shortDate(endDate)}</span>
       </MetaItem>
     );
   }
@@ -134,10 +135,7 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
           dueness.kind === "soon" && "font-semibold text-warning-ink",
         )}
       >
-        Due{" "}
-        <span className="font-mono tabular-nums">
-          {shortDate(new Date(milestone.targetDate))}
-        </span>
+        Due <span className="font-mono tabular-nums">{shortDate(endDate)}</span>
         {dueness.kind === "soon" ? ` · in ${dueness.days}d` : null}
       </span>
     </MetaItem>
@@ -185,13 +183,11 @@ export function MilestoneCard({
   const children = milestone.childrenMilestones;
   const hasChildren = children.length > 0;
   const isNotRequired = milestone.status === MilestoneStatus.NOT_REQUIRED;
-  const runningOverdueDays = activeOverdueDays(
-    {
-      status: milestone.status,
-      startDate: milestone.startDate ? new Date(milestone.startDate) : null,
-    },
-    new Date(),
+  const missingTrade = missingMilestoneTrade(
+    milestone,
+    project.tradieSchedules,
   );
+  const runningOverdueDays = activeOverdueDays(milestone, new Date());
 
   // Finished parents open on request; anything still in flight opens by default,
   // because its children are where the work actually is.
@@ -240,7 +236,7 @@ export function MilestoneCard({
                 Overdue
                 <span className="sr-only">
                   {" "}
-                  — in progress {runningOverdueDays} business days
+                  — {runningOverdueDays} calendar days past the estimated end
                 </span>
               </StatusPill>
             ) : null}
@@ -325,6 +321,16 @@ export function MilestoneCard({
                   .join(", ")}
               </MetaItem>
             </div>
+          ) : null}
+
+          {missingTrade ? (
+            <p
+              role="status"
+              className="mt-2 flex items-center gap-1.5 text-xs font-medium text-warning-ink"
+            >
+              <CircleAlert className="size-3.5" aria-hidden="true" />
+              No confirmed {missingTrade} booking for this activity
+            </p>
           ) : null}
 
           {depth === 0 && nextTradies.length > 0 ? (

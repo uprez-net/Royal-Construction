@@ -699,6 +699,18 @@ describe("creating a project from a lead", () => {
     startDate: "2026-09-10",
   });
   const script = () => ({
+    "milestoneTemplate.findMany": [
+      {
+        id: "template-1",
+        name: "Survey",
+        order: 1,
+        parentId: null,
+        projectStage: "Deposit",
+        relatedCostLines: [],
+        estimatedDays: 5,
+        requiredTradeTypeId: null,
+      },
+    ],
     "customer.create": (args: unknown) => {
       const data = (args as { data: ProjectOwner }).data;
       return customerRow(`c-${data.name}`, data);

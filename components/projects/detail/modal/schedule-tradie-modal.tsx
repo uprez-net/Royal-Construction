@@ -129,47 +129,50 @@ export default function ScheduleTradieModal({
     };
   }, [open, dispatch]);
 
-  function validateRow(row: TradieScheduleInputRow): TradieScheduleRowErrors {
-    const errors: TradieScheduleRowErrors = {
-      id: row.id,
-    };
+  const validateRow = useCallback(
+    (row: TradieScheduleInputRow): TradieScheduleRowErrors => {
+      const errors: TradieScheduleRowErrors = {
+        id: row.id,
+      };
 
-    if (!row.tradeCategory) {
-      errors.tradeCategory = "Trade category is required";
-    }
-
-    if (!row.tradieId) {
-      errors.tradieId = "Tradie is required";
-    }
-
-    if (!row.milestoneId) {
-      errors.milestoneId = "Milestone is required";
-    }
-
-    if (!row.scheduledDate) {
-      errors.scheduledDate = "Date is required";
-    }
-
-    if (row.durationDays === undefined || row.durationDays < 1) {
-      errors.durationDays = "Duration must be at least 1 day";
-    }
-
-    // Caught here rather than by the server so the operator sees which row and
-    // which booking, before anything is sent. Overlapping days are allowed —
-    // the calendar marks them — but the same booking twice is not.
-    if (!errors.milestoneId && row.bookings) {
-      const duplicate = existingBooking(
-        row.bookings,
-        projectId,
-        row.milestoneId,
-      );
-      if (duplicate) {
-        errors.milestoneId = `Already booked for this milestone: ${describeBooking(duplicate)}. Reschedule that booking instead.`;
+      if (!row.tradeCategory) {
+        errors.tradeCategory = "Trade category is required";
       }
-    }
 
-    return errors;
-  }
+      if (!row.tradieId) {
+        errors.tradieId = "Tradie is required";
+      }
+
+      if (!row.milestoneId) {
+        errors.milestoneId = "Milestone is required";
+      }
+
+      if (!row.scheduledDate) {
+        errors.scheduledDate = "Date is required";
+      }
+
+      if (row.durationDays === undefined || row.durationDays < 1) {
+        errors.durationDays = "Duration must be at least 1 day";
+      }
+
+      // Caught here rather than by the server so the operator sees which row and
+      // which booking, before anything is sent. Overlapping days are allowed —
+      // the calendar marks them — but the same booking twice is not.
+      if (!errors.milestoneId && row.bookings) {
+        const duplicate = existingBooking(
+          row.bookings,
+          projectId,
+          row.milestoneId,
+        );
+        if (duplicate) {
+          errors.milestoneId = `Already booked for this milestone: ${describeBooking(duplicate)}. Reschedule that booking instead.`;
+        }
+      }
+
+      return errors;
+    },
+    [projectId],
+  );
 
   /** Every row's errors, plus a row repeating an earlier row's booking. */
   function validateRows(
@@ -219,7 +222,7 @@ export default function ScheduleTradieModal({
         ),
       );
     },
-    [],
+    [validateRow],
   );
 
   const removeRow = (index: number) => {

@@ -249,6 +249,13 @@ export async function updateMilestone(
     ...outcome.milestone,
     budget: outcome.milestone.budget,
     spend: outcome.milestone.spend,
+    effects: {
+      parents: outcome.parentUpdates,
+      projectStatus: outcome.projectStatus,
+      projectSpent: outcome.projectSpent,
+      projectStartDate: outcome.projectStartDate,
+      settledBookings: outcome.settledBookings,
+    },
   };
 }
 

@@ -145,6 +145,7 @@ const projectDetailInclude = {
   milestones: {
     orderBy: { order: "asc" as const },
     include: {
+      requiredTradeType: { select: { id: true, label: true } },
       siteUpdates: {
         include: {
           author: true,

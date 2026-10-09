@@ -25,6 +25,7 @@ export const READ_TOOLS = {
   "admin-operations": [
     "get_admin_content",
     "get_approval",
+    "get_build_sequence",
     "get_xero_connection",
     "list_approvals",
     "list_team",
@@ -58,6 +59,7 @@ export const WRITE_TOOLS = {
     "resolve_approval",
     "revoke_team_invitation",
     "update_admin_content",
+    "update_build_sequence",
     "update_team_role",
   ],
   "lead-operations": [

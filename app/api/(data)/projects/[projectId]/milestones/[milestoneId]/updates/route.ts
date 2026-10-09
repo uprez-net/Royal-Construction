@@ -3,8 +3,9 @@ import {
   milestoneUpdateSchema,
   parseBodyWithResponse,
   successResponse,
+  errorResponse,
 } from "@/utils/validators";
-import { SafeMilestone } from "@/types/project";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import { updateMilestone } from "@/lib/data/milestones";
 
 export async function PATCH(
@@ -22,7 +23,14 @@ export async function PATCH(
 
   const updateData = validationResult.data;
 
-  const updated = await updateMilestone(milestoneId, updateData);
-
-  return successResponse(updated as SafeMilestone);
+  try {
+    return successResponse(await updateMilestone(milestoneId, updateData));
+  } catch (error) {
+    const refused = domainErrorResponse(error);
+    if (refused) return refused;
+    console.error("Milestone update failed", error);
+    return errorResponse("Could not update the activity. Try again.", {
+      status: 500,
+    });
+  }
 }

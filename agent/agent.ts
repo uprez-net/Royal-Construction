@@ -18,7 +18,7 @@ const description = [
   "projects (search, overview, requirements, milestones, site manager assignment);",
   "compliance on a project (engagement status, documents, certifier outreach and follow-up);",
   "tradies (directory, incidents, ratings, price-change and removal requests, site schedules);",
-  "and admin (approval queue, offer-content defaults, team membership and invitations, Xero connection).",
+  "and admin (approval queue, offer-content defaults, build sequence templates with stages, hierarchy, estimated days, tradie category dependencies and related cost lines, team membership and invitations, Xero connection).",
   "Reads return typed result envelopes (title, summary, entity references, links).",
   "Every write or external side effect pauses as input_required for owner approval, naming the exact target and change; answer it with agent_update.",
   "Not available through the agent: lead email, meetings, files and stage changes; project variations; offer document delivery; project handoff.",

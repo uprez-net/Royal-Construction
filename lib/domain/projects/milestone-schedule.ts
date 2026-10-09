@@ -6,14 +6,28 @@ import { MilestoneStatus } from "@prisma/client";
 //
 // Its own module, with nothing but date arithmetic in it, so the Overview tab
 // can preview the dates a start-date change will produce from the same rule the
-// server then writes — rather than a second copy of "five days apart" in a
-// component.
+// server then writes. Durations are snapshots on the project's milestones.
 
 /** Calendar days between one activity's target date and the next. */
 export const MILESTONE_SPACING_DAYS = 5;
 
+export interface MilestoneTiming {
+  /** Planned start, retained as targetDate in the database. */
+  targetDate: Date | string;
+  startDate?: Date | string | null;
+  estimatedDays?: number;
+}
+
+/** Completion target: actual start when recorded, otherwise planned start, plus calendar duration. */
+export function milestoneEndDate(milestone: MilestoneTiming): Date {
+  return addDays(
+    new Date(milestone.startDate ?? milestone.targetDate),
+    milestone.estimatedDays ?? MILESTONE_SPACING_DAYS,
+  );
+}
+
 /**
- * When the activity at `position` falls due: the first (position 0) on the
+ * When the activity at `position` is planned to start: the first (position 0) on the
  * project's start date, each one after it five calendar days later.
  *
  * `position` is the activity's place in `order`, not the `order` value itself —
@@ -21,12 +35,24 @@ export const MILESTONE_SPACING_DAYS = 5;
  * not grow holes with them. Sub-activities are in the sequence like any other
  * row, because each one is a separate piece of work on site.
  *
- * The one spacing rule: seeding a new project and moving an existing project's
- * start date both use it, so a project re-dated to the start it already had
- * reads exactly as it did the day it was created.
+ * Compatibility helper for the original five-day schedule. New and rescheduled
+ * projects use milestoneTargetDates with each activity's stored duration.
  */
 export function milestoneTargetDate(startDate: Date, position: number): Date {
   return addDays(startDate, position * MILESTONE_SPACING_DAYS);
+}
+
+/** Sequential calendar targets: first on start, then each preceding activity's estimated days. */
+export function milestoneTargetDates(
+  startDate: Date,
+  milestones: readonly { readonly estimatedDays?: number }[],
+): Date[] {
+  let elapsed = 0;
+  return milestones.map((milestone) => {
+    const target = addDays(startDate, elapsed);
+    elapsed += milestone.estimatedDays ?? MILESTONE_SPACING_DAYS;
+    return target;
+  });
 }
 
 /**

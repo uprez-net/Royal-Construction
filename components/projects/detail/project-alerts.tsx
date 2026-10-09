@@ -26,6 +26,7 @@ import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { COMPLIANCE_ALERT_PARTY } from "@/lib/domain/compliance/alert-parties";
 import { sydneyDateOnly } from "@/lib/dates/sydney";
 import { isTradieAlertLive } from "@/lib/domain/tradies/alert-rules";
+import { missingMilestoneTrade } from "@/lib/domain/projects/tradie-dependencies";
 import { INACTIVE_SCHEDULE_STATUSES } from "@/lib/domain/tradies/lifecycle";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -370,6 +371,10 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
   }, [project.tradieSchedules]);
 
   const complianceAlerts = engagement?.alerts ?? [];
+  const dependencyAlerts = project.milestones.flatMap((milestone) => {
+    const trade = missingMilestoneTrade(milestone, project.tradieSchedules);
+    return trade ? [{ milestone, trade }] : [];
+  });
 
   /**
    * The two counts on the header, and why they are two.
@@ -391,7 +396,7 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
   const readyCount = openAlerts.filter(
     (alert) => COMPLIANCE_ALERT_COPY[alert.type].tone === "positive",
   ).length;
-  const openCount = openAlerts.length - readyCount;
+  const openCount = openAlerts.length - readyCount + dependencyAlerts.length;
 
   /**
    * Whether one alert has anybody to chase.
@@ -419,7 +424,11 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
   // Empty chrome was eating a full card slot between the budget cards and the
   // tabs on every quiet project. Alerts only earn the surface when there is
   // something to act on; the "none" case is silence, not a placeholder panel.
-  if (tradieAlerts.length === 0 && complianceAlerts.length === 0) {
+  if (
+    tradieAlerts.length === 0
+    && complianceAlerts.length === 0
+    && dependencyAlerts.length === 0
+  ) {
     return null;
   }
 
@@ -446,6 +455,36 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pt-5">
+        {dependencyAlerts.length > 0 ? (
+          <ul
+            className="flex flex-col gap-2"
+            aria-label="Missing required trades"
+          >
+            {dependencyAlerts.map(({ milestone, trade }) => (
+              <li
+                key={`dependency-${milestone.id}`}
+                className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-light px-4 py-3"
+              >
+                <AlertTriangle
+                  className="mt-0.5 size-4 shrink-0 text-warning-ink"
+                  aria-hidden="true"
+                />
+                <div>
+                  <p className="text-sm font-medium text-warning-ink">
+                    No confirmed {trade} booking for this activity
+                  </p>
+                  <p className="mt-1 text-sm text-foreground">
+                    {milestone.name} has started without a confirmed {trade}{" "}
+                    booking. Book a tradie in this category against this
+                    activity, approve the booking and obtain their final
+                    confirmation. A booking against another activity does not
+                    meet this dependency.
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {complianceAlerts.length > 0 ? (
           <ul className="space-y-2">
             {complianceAlerts.map((alert) => (

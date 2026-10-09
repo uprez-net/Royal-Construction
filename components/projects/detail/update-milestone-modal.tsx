@@ -40,11 +40,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import {
-  hasWorkStarted,
-  MILESTONE_SPACING_DAYS,
-} from "@/lib/domain/projects/milestone-schedule";
+import { hasWorkStarted } from "@/lib/domain/projects/milestone-schedule";
 import { Calendar } from "@/components/ui/calendar";
+import { allowedMilestoneTransitions } from "@/lib/domain/projects/milestone-status";
 import {
   settledBookingStatus,
   tradieScheduleSpend,
@@ -75,13 +73,6 @@ const statusOptions: { label: string; value: MilestoneStatus }[] = [
   { label: "Done", value: "DONE" },
   { label: "Not required", value: "NOT_REQUIRED" },
 ];
-
-const STATE_MACHES: Record<MilestoneStatus, MilestoneStatus[]> = {
-  PENDING: ["ACTIVE", "NOT_REQUIRED"],
-  ACTIVE: ["DONE"],
-  DONE: [],
-  NOT_REQUIRED: ["PENDING"],
-};
 
 type MilestoneUpdateErrors = Partial<Record<keyof MilestoneUpdateData, string>>;
 
@@ -336,9 +327,13 @@ export default function UpdateMilestoneModal({
                       key={option.value}
                       value={option.value}
                       disabled={
-                        !STATE_MACHES[
-                          status ?? milestone?.status ?? "PENDING"
-                        ].includes(option.value)
+                        option.value !== milestone?.status
+                        && !allowedMilestoneTransitions(
+                          milestone?.status ?? "PENDING",
+                          project?.milestones.filter(
+                            (child) => child.parentId === milestoneId,
+                          ) ?? [],
+                        ).includes(option.value)
                       }
                     >
                       {option.label}
@@ -353,8 +348,8 @@ export default function UpdateMilestoneModal({
 
             {/*
               Always editable, whatever the status. Activities seeded from the
-              template carry a placeholder date — project start plus four days
-              per position — so until someone sets the real one, "overdue" on
+              template carry a planned date based on estimated calendar days,
+              so until someone sets the real one, "overdue" on
               the milestones tab counts against a date nobody chose.
             */}
             <div className="space-y-1.5">
@@ -497,8 +492,8 @@ export default function UpdateMilestoneModal({
                       : "its start date"}
                   </span>{" "}
                   the project start date and reschedules every milestone from
-                  it, one every {MILESTONE_SPACING_DAYS} days. The project start
-                  date is locked after that.
+                  it, using each activity&apos;s estimated calendar days. The
+                  project start date is locked after that.
                 </p>
               </div>
             ) : null}

@@ -150,9 +150,27 @@ export interface TradieScheduleWithTradieMilestoneAndProject extends TradieSched
 }
 
 export interface SafeMilestone extends Omit<Milestone, "spend" | "budget"> {
+  requiredTradeType?: { id: string; label: string } | null;
   budget: string;
   spend?: string;
 }
+
+/** Authoritative consequences returned by the milestone command; the store never re-decides them. */
+export type MilestoneUpdateResult = SafeMilestone & {
+  effects: {
+    parents: {
+      id: string;
+      status: Milestone["status"];
+      spend?: string;
+      actualDate?: Date;
+      startDate?: Date;
+    }[];
+    projectStatus: ProjectStatus | null;
+    projectSpent: string;
+    projectStartDate: Date | null;
+    settledBookings: { completed: string[]; cancelled: string[] };
+  };
+};
 
 export interface MilestoneWithFilesTradiesUpdates extends SafeMilestone {
   files: ProjectFile[];

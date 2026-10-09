@@ -164,6 +164,7 @@ async function cachedProjectById(principal: DomainPrincipal, id: string) {
   "use cache";
 
   cacheTag(`project-${id}`);
+  cacheTag("milestone-trade-dependencies");
   cacheLife(CACHE_PROFILES.LONG);
 
   return getProjectDetail(principal, id, prisma);

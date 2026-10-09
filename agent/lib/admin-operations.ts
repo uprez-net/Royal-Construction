@@ -37,6 +37,13 @@ import {
   updateAdminOfferContentSection,
 } from "@/lib/domain/admin/offer-content";
 import {
+  readMilestoneTemplate,
+  listTemplateCostTasks,
+  editMilestoneTemplate,
+} from "@/lib/domain/projects/templates";
+import { listTradeTypesForAdmin } from "@/lib/domain/tradies/trade-types";
+import type { MilestoneTemplateEdit } from "@/types/milestone-template";
+import {
   buildScopeSchema,
   costScheduleDataSchema,
   hbcfClaimDataSchema,
@@ -225,6 +232,65 @@ export async function getAuthorizedAdminContent(ctx: SessionContext) {
     "Offer defaults",
     `Current admin offer content is version ${content.version}.`,
     { content },
+  );
+}
+
+export async function getAuthorizedBuildSequence(ctx: SessionContext) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const principal = userPrincipal(actor);
+  const [template, trades, costTasks] = await Promise.all([
+    readMilestoneTemplate(principal, agentDb),
+    listTradeTypesForAdmin(principal, agentDb),
+    listTemplateCostTasks(principal, agentDb),
+  ]);
+  return result(
+    "admin-summary",
+    "Project build sequence",
+    `${template.activities.length} template activities. Changes apply to new projects; existing projects keep their own plan.`,
+    {
+      ...template,
+      tradeCategories: trades.map(({ id, label, icon, archived }) => ({
+        id,
+        label,
+        icon,
+        archived,
+      })),
+      costTasks,
+      scheduling: {
+        dayType: "calendar",
+        firstTarget: "project start date",
+        followingTargets: "Sum of preceding activities' estimatedDays",
+      },
+    },
+    {
+      links: [{ label: "Open build sequence", href: "/admin/build-sequence" }],
+    },
+  );
+}
+
+export async function updateAuthorizedBuildSequence(
+  ctx: ToolContext,
+  input: MilestoneTemplateEdit,
+  transaction?: Prisma.TransactionClient,
+) {
+  // This write must share the audited operation's transaction. Falling back to
+  // the ambient client would commit the template separately from its receipt.
+  if (!transaction)
+    throw new Error("Build sequence changes require an audited transaction.");
+  const actor = await requireCurrentAgentActor(ctx, transaction);
+  const template = await editMilestoneTemplate(
+    userPrincipal(actor),
+    input,
+    transaction,
+  );
+  return result(
+    "confirmation",
+    "Build sequence updated",
+    `Saved ${input.changes.length} build sequence change${input.changes.length === 1 ? "" : "s"}. New projects will use this plan; existing projects retain their milestones.`,
+    { ...template, appliedChanges: input.changes },
+    {
+      links: [{ label: "Open build sequence", href: "/admin/build-sequence" }],
+    },
   );
 }
 
