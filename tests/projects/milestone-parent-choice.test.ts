@@ -1,0 +1,121 @@
+import { test } from "vitest";
+import assert from "node:assert/strict";
+import { MilestoneStatus as S } from "@prisma/client";
+import { allowedMilestoneTransitions } from "@/lib/domain/projects/milestone-status";
+import { updateMilestone } from "@/lib/domain/projects/milestones";
+import { adminPrincipal, recordingDb } from "../architecture/domain-harness";
+
+test("only a parent whose children are all waived gains the completion choice", () => {
+  assert.ok(
+    allowedMilestoneTransitions(S.PENDING, [
+      { status: S.NOT_REQUIRED },
+    ]).includes(S.DONE),
+  );
+  assert.ok(
+    allowedMilestoneTransitions(S.ACTIVE, [
+      { status: S.NOT_REQUIRED },
+    ]).includes(S.NOT_REQUIRED),
+  );
+  assert.ok(!allowedMilestoneTransitions(S.PENDING).includes(S.DONE));
+  assert.ok(
+    !allowedMilestoneTransitions(S.ACTIVE, [{ status: S.DONE }]).includes(
+      S.NOT_REQUIRED,
+    ),
+  );
+});
+
+for (const allWaived of [true, false]) {
+  test(
+    allWaived
+      ? "waiving the final child keeps the parent open"
+      : "a completed child still automatically completes its settled parent",
+    async () => {
+      const row = {
+        id: "child",
+        parentId: "parent",
+        projectId: "project",
+        status: S.NOT_REQUIRED,
+        budget: "0",
+        spend: null,
+      };
+      const recorder = recordingDb({
+        "project.findUnique": { id: "project", siteManagerId: null },
+        "project.update": { spent: "0", siteManagerId: null },
+        "milestone.findUnique": { projectId: "project" },
+        "milestone.findUniqueOrThrow": { ...row, status: S.PENDING },
+        "milestone.update": row,
+        "milestone.count": (args: unknown) => {
+          const { where } = args as {
+            where: { parentId?: string; status?: { notIn?: unknown } | string };
+          };
+          if (!where.parentId) return 1;
+          if (typeof where.status === "object") return 0;
+          if (where.status === S.NOT_REQUIRED) return allWaived ? 2 : 1;
+          return 2;
+        },
+        "milestone.aggregate": { _sum: { spend: null } },
+        "milestone.findMany": [],
+        "tradieSchedule.findMany": [],
+      });
+      const result = await updateMilestone(
+        adminPrincipal(),
+        { milestoneId: "child", status: S.NOT_REQUIRED },
+        recorder.db,
+      );
+      assert.equal(result.rolledUpParentId, allWaived ? null : "parent");
+      const parentWrites = recorder
+        .writes()
+        .filter(
+          (call) =>
+            call.operation === "milestone.update"
+            && (call.args as { where: { id: string } }).where.id === "parent",
+        );
+      assert.equal(parentWrites.length, allWaived ? 0 : 1);
+      if (!allWaived)
+        assert.equal(
+          (parentWrites[0].args as { data: { status: string } }).data.status,
+          S.DONE,
+        );
+    },
+  );
+}
+
+for (const status of [S.DONE, S.NOT_REQUIRED]) {
+  test(`the operator can choose ${status} for a parent with only waived children`, async () => {
+    const row = {
+      id: "parent",
+      projectId: "project",
+      parentId: null,
+      status,
+      budget: "0",
+      spend: "0",
+    };
+    const recorder = recordingDb({
+      "project.findUnique": { id: "project", siteManagerId: null },
+      "project.update": { spent: "0", siteManagerId: null },
+      "milestone.findUnique": { projectId: "project" },
+      "milestone.findUniqueOrThrow": {
+        ...row,
+        status: S.PENDING,
+        childrenMilestones: [{ status: S.NOT_REQUIRED }],
+      },
+      "milestone.update": row,
+      "milestone.count": 0,
+      "milestone.aggregate": { _sum: { spend: null } },
+      "milestone.findMany": [],
+      "tradieSchedule.findMany": [],
+    });
+    const outcome = await updateMilestone(
+      adminPrincipal(),
+      {
+        milestoneId: "parent",
+        status,
+        startDate: "2026-10-01",
+        actualDate: "2026-10-02",
+        spend: 0,
+      },
+      recorder.db,
+    );
+    assert.equal(outcome.milestone.status, status);
+  });
+}

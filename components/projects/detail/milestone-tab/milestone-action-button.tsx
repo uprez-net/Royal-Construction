@@ -2,6 +2,7 @@ import { BanIcon, Camera, Check, Edit, Play } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { isSettled } from "@/lib/projects/milestone-ledger";
+import { allChildrenNotRequired } from "@/lib/domain/projects/milestone-status";
 import type { UIMilestone } from "@/types/project";
 import { MilestoneStatus } from "@prisma/client";
 
@@ -59,6 +60,34 @@ export function MilestoneActionGroup({
   onMarkasNotRequired: (id: string) => void;
 }) {
   const hasChildren = milestone.childrenMilestones.length > 0;
+
+  if (
+    allChildrenNotRequired(milestone.childrenMilestones)
+    && (milestone.status === MilestoneStatus.ACTIVE
+      || (milestone.status === MilestoneStatus.PENDING && isActiveStage))
+  ) {
+    return (
+      <>
+        <EditActivityButton
+          milestone={milestone}
+          onStatusUpdate={onStatusUpdate}
+        />
+        <Button
+          onClick={() => onStatusUpdate(milestone.id, MilestoneStatus.DONE)}
+        >
+          <Check aria-hidden="true" /> Complete
+          <span className="sr-only">{milestone.name}</span>
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => onMarkasNotRequired(milestone.id)}
+        >
+          <BanIcon aria-hidden="true" /> Not required
+          <span className="sr-only">{milestone.name}</span>
+        </Button>
+      </>
+    );
+  }
 
   if (milestone.status === MilestoneStatus.ACTIVE) {
     const outstandingChildren = milestone.childrenMilestones.filter(

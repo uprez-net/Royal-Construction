@@ -25,6 +25,7 @@ import {
   TradieScheduleWithTradieAndMilestone,
 } from "@/types/project";
 import { reviveMilestoneDates } from "@/lib/projects/milestone-dates";
+import { shouldCompleteParent } from "@/lib/domain/projects/milestone-status";
 import { reviveComplianceEngagementDates } from "@/lib/domain/compliance/engagement-dates";
 import { idempotencyHeader } from "@/lib/idempotency/attempt-key";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
@@ -2028,8 +2029,10 @@ const projectsSlice = createSlice({
           const pendingAfterUpdate = state.activeProject.milestones.filter(
             (m) =>
               m.id === action.meta.arg.milestoneId
-                ? (action.payload.status ?? m.status) === "PENDING"
-                : m.status === "PENDING",
+                ? ["PENDING", "ACTIVE"].includes(
+                    action.payload.status ?? m.status,
+                  )
+                : ["PENDING", "ACTIVE"].includes(m.status),
           );
           if (pendingAfterUpdate.length === 0) {
             state.activeProject.status = "COMPLETED";
@@ -2078,7 +2081,13 @@ const projectsSlice = createSlice({
                 state.activeProject!.milestones.filter(
                   (m) => m.parentId === parentId,
                 );
-              if (allChildrenMilestonesNotCompleted.length === 0) {
+              if (
+                shouldCompleteParent(
+                  allChildrenMilestonesNotCompleted.length,
+                  allChildrenMilestone.length,
+                  allChildrenWereNotRequired.length,
+                )
+              ) {
                 const parentIndex = state.activeProject!.milestones.findIndex(
                   (m) => m.id === parentId,
                 );
@@ -2090,11 +2099,7 @@ const projectsSlice = createSlice({
                 if (parentIndex !== -1) {
                   state.activeProject!.milestones[parentIndex] = {
                     ...state.activeProject!.milestones[parentIndex],
-                    status:
-                      allChildrenWereNotRequired.length
-                      === allChildrenMilestone.length
-                        ? "NOT_REQUIRED"
-                        : "DONE",
+                    status: "DONE",
                     spend: totalChildSpent.toString(),
                     actualDate: action.payload.actualDate,
                   };
