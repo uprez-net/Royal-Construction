@@ -6,7 +6,8 @@ import {
   ArrowDown,
   ArrowUp,
   CornerDownRight,
-  GripVertical,
+  HardHat,
+  Layers,
   Plus,
   Save,
   Trash2,
@@ -29,6 +30,9 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { TemplateCostLinePicker } from "./template-cost-line-picker";
+import { TemplateActivityTree } from "./template-activity-tree";
+import { TemplateSingleSelect } from "./template-single-select";
+import { TradeIconGlyph } from "@/components/tradie-management/trade-icon";
 import {
   Select,
   SelectContent,
@@ -41,7 +45,6 @@ import {
   moveTemplateActivity,
   templateDescendants,
 } from "@/lib/domain/projects/template-tree";
-import { cn } from "@/lib/utils";
 import { fetchJson } from "@/utils/fetch";
 import { formatStatus } from "@/utils/formatters";
 import type {
@@ -65,6 +68,10 @@ export function BuildSequenceAdmin({
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [closedStages, setClosedStages] = useState<Set<ProjectStage>>(
+    new Set(),
+  );
+  const [closedParents, setClosedParents] = useState<Set<string>>(new Set());
   const dirty = JSON.stringify(activities) !== JSON.stringify(saved.activities);
   const selected = activities.find((row) => row.id === selectedId);
   const peers = selected
@@ -75,19 +82,30 @@ export function BuildSequenceAdmin({
     ? templateDescendants(activities, selected.id)
     : new Set<string>();
   const byId = new Map(activities.map((row) => [row.id, row]));
-  const depthOf = (row: TemplateActivity) => {
-    let depth = 0;
-    let parent = row.parentId;
-    while (parent && depth < activities.length) {
-      depth++;
-      parent = byId.get(parent)?.parentId ?? null;
+  const revealActivity = (rows: TemplateActivity[], id: string) => {
+    const lookup = new Map(rows.map((row) => [row.id, row]));
+    let row = lookup.get(id);
+    const parents = new Set<string>();
+    while (row?.parentId) {
+      parents.add(row.parentId);
+      row = lookup.get(row.parentId);
     }
-    return depth;
+    const stage = row?.projectStage;
+    if (stage)
+      setClosedStages(
+        (previous) => new Set([...previous].filter((value) => value !== stage)),
+      );
+    setClosedParents(
+      (previous) =>
+        new Set([...previous].filter((value) => !parents.has(value))),
+    );
   };
   const update = (patch: Partial<TemplateActivity>) => {
-    setActivities((rows) =>
-      rows.map((row) => (row.id === selectedId ? { ...row, ...patch } : row)),
+    const updated = activities.map((row) =>
+      row.id === selectedId ? { ...row, ...patch } : row,
     );
+    setActivities(updated);
+    if (patch.projectStage && selectedId) revealActivity(updated, selectedId);
     setError(null);
   };
   const move = (
@@ -96,7 +114,9 @@ export function BuildSequenceAdmin({
     mode: "before" | "child" | "root",
   ) => {
     try {
-      setActivities(moveTemplateActivity(activities, id, target, mode));
+      const moved = moveTemplateActivity(activities, id, target, mode);
+      setActivities(moved);
+      revealActivity(moved, id);
       setError(null);
     } catch (cause) {
       toast.error(
@@ -118,6 +138,7 @@ export function BuildSequenceAdmin({
     };
     setActivities([...activities, row]);
     setSelectedId(row.id);
+    revealActivity([...activities, row], row.id);
   };
   const save = async () => {
     if (saving) return;
@@ -198,108 +219,37 @@ export function BuildSequenceAdmin({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ol
-              className="flex max-h-[65vh] flex-col overflow-y-auto"
-              aria-label="Build sequence activities"
-            >
-              {activities.map((row, index) => (
-                <li key={row.id}>
-                  {draggedId ? (
-                    <div
-                      key="drop-before"
-                      className="h-3 rounded border border-dashed border-primary/40"
-                      aria-label={`Move before ${row.name}`}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        move(
-                          event.dataTransfer.getData("text/plain") || draggedId,
-                          row.id,
-                          "before",
-                        );
-                      }}
-                    />
-                  ) : null}
-                  <div
-                    key="activity-row"
-                    className={cn(
-                      "flex items-center gap-2 rounded-md border-b border-border/60 py-2 pr-2",
-                      selectedId === row.id && "bg-muted",
-                      draggedId
-                        && draggedId !== row.id
-                        && "hover:bg-warning-light",
-                    )}
-                    style={{
-                      paddingLeft: `${Math.min(depthOf(row), 8) * 16}px`,
-                    }}
-                    onDragOver={(event) => {
-                      if (draggedId !== row.id) event.preventDefault();
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      const source =
-                        event.dataTransfer.getData("text/plain") || draggedId;
-                      if (source) move(source, row.id, "child");
-                    }}
-                  >
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      draggable={!saving}
-                      disabled={saving}
-                      aria-label={`Drag ${row.name}`}
-                      onDragStart={(event) => {
-                        event.dataTransfer.setData("text/plain", row.id);
-                        event.dataTransfer.effectAllowed = "move";
-                        setDraggedId(row.id);
-                      }}
-                      onDragEnd={() => setDraggedId(null)}
-                    >
-                      <GripVertical />
-                    </Button>
-                    <span className="w-6 shrink-0 text-right font-mono text-xs text-muted-foreground">
-                      {index + 1}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={saving}
-                      aria-pressed={selectedId === row.id}
-                      onClick={() => setSelectedId(row.id)}
-                      className="flex min-w-0 flex-1 flex-col items-start gap-1 rounded px-2 py-1 text-left focus-visible:outline-2 focus-visible:outline-ring"
-                    >
-                      <span className="text-sm font-medium">
-                        {row.parentId ? (
-                          <CornerDownRight
-                            className="mr-1 inline size-3 text-muted-foreground"
-                            aria-hidden="true"
-                          />
-                        ) : null}
-                        {row.name || "Unnamed activity"}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatStatus(row.projectStage)} · {row.estimatedDays}{" "}
-                        days
-                        {row.requiredTradeTypeId
-                          ? ` · ${trades.find((trade) => trade.id === row.requiredTradeTypeId)?.label ?? "Required trade"}`
-                          : ""}
-                      </span>
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ol>
-            <div
-              className="mt-3 rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground"
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                const source =
-                  event.dataTransfer.getData("text/plain") || draggedId;
-                if (source) move(source, null, "root");
+            <TemplateActivityTree
+              activities={activities}
+              trades={trades}
+              selectedId={selectedId}
+              draggedId={draggedId}
+              disabled={saving}
+              onSelect={(id) => {
+                setSelectedId(id);
+                revealActivity(activities, id);
               }}
-            >
-              Drop here to move to the end as a main activity
-            </div>
+              onDrag={setDraggedId}
+              onMove={move}
+              closedStages={closedStages}
+              closedParents={closedParents}
+              onStageOpenChange={(stage, open) =>
+                setClosedStages((previous) => {
+                  const next = new Set(previous);
+                  if (open) next.delete(stage);
+                  else next.add(stage);
+                  return next;
+                })
+              }
+              onParentOpenChange={(id, open) =>
+                setClosedParents((previous) => {
+                  const next = new Set(previous);
+                  if (open) next.delete(id);
+                  else next.add(id);
+                  return next;
+                })
+              }
+            />
           </CardContent>
         </Card>
         {selected ? (
@@ -353,34 +303,42 @@ export function BuildSequenceAdmin({
                     <FieldLabel htmlFor="activity-parent">
                       Parent activity
                     </FieldLabel>
-                    <Select
+                    <TemplateSingleSelect
+                      key={`parent-${selected.id}`}
+                      id="activity-parent"
                       value={selected.parentId ?? "none"}
-                      onValueChange={(value) =>
+                      disabled={saving}
+                      searchLabel="Search parent activities"
+                      emptyLabel="No matching parent activities."
+                      options={[
+                        {
+                          id: "none",
+                          label: "Main activity (no parent)",
+                          icon: <Layers />,
+                          group: "Placement",
+                        },
+                        ...activities
+                          .filter((row) => !descendants.has(row.id))
+                          .map((row) => ({
+                            id: row.id,
+                            label: row.name || "Unnamed activity",
+                            description: `Activity ${row.order}${row.parentId ? ` · Under ${byId.get(row.parentId)?.name ?? "parent activity"}` : " · Main activity"}`,
+                            group: formatStatus(row.projectStage),
+                            icon: row.parentId ? (
+                              <CornerDownRight />
+                            ) : (
+                              <Layers />
+                            ),
+                          })),
+                      ]}
+                      onChange={(value) =>
                         move(
                           selected.id,
                           value === "none" ? null : value,
                           value === "none" ? "root" : "child",
                         )
                       }
-                    >
-                      <SelectTrigger id="activity-parent">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectItem value="none">
-                            Main activity (no parent)
-                          </SelectItem>
-                          {activities
-                            .filter((row) => !descendants.has(row.id))
-                            .map((row) => (
-                              <SelectItem key={row.id} value={row.id}>
-                                {row.name}
-                              </SelectItem>
-                            ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
+                    />
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="activity-days">
@@ -410,37 +368,42 @@ export function BuildSequenceAdmin({
                     <FieldLabel htmlFor="activity-trade">
                       Tradie dependency
                     </FieldLabel>
-                    <Select
+                    <TemplateSingleSelect
+                      key={`trade-${selected.id}`}
+                      id="activity-trade"
                       value={selected.requiredTradeTypeId ?? "none"}
-                      onValueChange={(value) =>
+                      disabled={saving}
+                      searchLabel="Search tradie categories"
+                      emptyLabel="No matching tradie categories."
+                      options={[
+                        {
+                          id: "none",
+                          label: "No tradie dependency",
+                          icon: <HardHat />,
+                          group: "Dependency",
+                        },
+                        ...trades
+                          .filter(
+                            (trade) =>
+                              !trade.archived
+                              || trade.id === selected.requiredTradeTypeId,
+                          )
+                          .map((trade) => ({
+                            id: trade.id,
+                            label: trade.label,
+                            description: trade.archived
+                              ? "Archived category · current dependency"
+                              : undefined,
+                            icon: <TradeIconGlyph icon={trade.icon} />,
+                            group: "Tradie categories",
+                          })),
+                      ]}
+                      onChange={(value) =>
                         update({
                           requiredTradeTypeId: value === "none" ? null : value,
                         })
                       }
-                    >
-                      <SelectTrigger id="activity-trade">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectItem value="none">
-                            No tradie dependency
-                          </SelectItem>
-                          {trades
-                            .filter(
-                              (trade) =>
-                                !trade.archived
-                                || trade.id === selected.requiredTradeTypeId,
-                            )
-                            .map((trade) => (
-                              <SelectItem key={trade.id} value={trade.id}>
-                                {trade.label}
-                                {trade.archived ? " (archived)" : ""}
-                              </SelectItem>
-                            ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
+                    />
                     <FieldDescription>
                       An active milestone warns until a tradie in this category
                       has a confirmed booking for that activity.
