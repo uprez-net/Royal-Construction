@@ -1,13 +1,19 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Prisma, ProjectStage } from "@prisma/client";
-import type { DomainDb, TransactionalDomainDb } from "../db";
-import { DomainStaleVersionError, DomainValidationError } from "../errors";
+import type { DomainDb } from "../db";
+import {
+  DomainNotFoundError,
+  DomainStaleVersionError,
+  DomainValidationError,
+} from "../errors";
 import { requireAdminPrincipal, type DomainPrincipal } from "../principal";
 import type {
   MilestoneTemplateSnapshot,
   TemplateActivity,
+  MilestoneTemplateEdit,
 } from "@/types/milestone-template";
 import { coerceCostSchedule } from "../admin/offer-content-coerce";
+import { moveTemplateActivity, templateDescendants } from "./template-tree";
 
 export async function listTemplateCostTasks(
   principal: DomainPrincipal,
@@ -52,6 +58,10 @@ export function validateTemplate(
   if (!activities.length)
     throw new DomainValidationError(
       "Keep at least one activity in the build sequence.",
+    );
+  if (activities.length > 500)
+    throw new DomainValidationError(
+      "Keep the build sequence to 500 activities or fewer.",
     );
   const byId = new Map(activities.map((row) => [row.id, row]));
   if (byId.size !== activities.length)
@@ -136,87 +146,91 @@ export async function readMilestoneTemplate(
   };
 }
 
-/** Whole-template save: a stale tab cannot overwrite a later edit, and hierarchy writes are atomic. */
+/**
+ * Whole-template save: a stale tab cannot overwrite a later edit. Opens a
+ * serializable transaction, or joins the caller's serializable transaction
+ * so Eve can commit the template and its audit result together.
+ */
 export async function saveMilestoneTemplate(
   principal: DomainPrincipal,
   input: MilestoneTemplateSnapshot,
-  db: TransactionalDomainDb,
+  db: DomainDb,
 ): Promise<MilestoneTemplateSnapshot> {
   requireAdminPrincipal(principal);
   validateTemplate(input.activities);
   const inOrder = [...input.activities].sort((a, b) => a.order - b.order);
   try {
-    return await db.$transaction(
-      async (tx) => {
-        const current = await readMilestoneTemplate(principal, tx);
-        if (current.revision !== input.revision)
-          throw new DomainStaleVersionError(
-            "The build sequence changed in another tab. Reload it before saving.",
-          );
-        const trades = await tx.tradeType.findMany({
-          select: { id: true, archivedAt: true },
-        });
-        const available = new Set(
-          trades.filter((trade) => !trade.archivedAt).map((trade) => trade.id),
+    const write = async (tx: DomainDb) => {
+      const current = await readMilestoneTemplate(principal, tx);
+      if (current.revision !== input.revision)
+        throw new DomainStaleVersionError(
+          "The build sequence changed in another tab. Reload it before saving.",
         );
-        const tasks = new Set(await listTemplateCostTasks(principal, tx));
-        for (const row of inOrder) {
-          const previous = current.activities.find((old) => old.id === row.id);
-          if (
-            row.relatedCostLines.some(
-              (line) =>
-                !tasks.has(line.trim())
-                && !previous?.relatedCostLines.includes(line.trim()),
-            )
-          ) {
-            throw new DomainValidationError(
-              "Choose related cost lines from the task names in Admin Offer Content → Cost Schedule.",
-              "relatedCostLines",
-            );
-          }
-          if (
-            row.requiredTradeTypeId
-            && !available.has(row.requiredTradeTypeId)
-            && row.requiredTradeTypeId !== previous?.requiredTradeTypeId
+      const trades = await tx.tradeType.findMany({
+        select: { id: true, archivedAt: true },
+      });
+      const available = new Set(
+        trades.filter((trade) => !trade.archivedAt).map((trade) => trade.id),
+      );
+      const tasks = new Set(await listTemplateCostTasks(principal, tx));
+      for (const row of inOrder) {
+        const previous = current.activities.find((old) => old.id === row.id);
+        if (
+          row.relatedCostLines.some(
+            (line) =>
+              !tasks.has(line.trim())
+              && !previous?.relatedCostLines.includes(line.trim()),
           )
-            throw new DomainValidationError(
-              "Choose an active tradie category from the list.",
-              "requiredTradeTypeId",
-            );
+        ) {
+          throw new DomainValidationError(
+            "Choose related cost lines from the task names in Admin Offer Content → Cost Schedule.",
+            "relatedCostLines",
+          );
         }
-        // Release unique positions and parent links before replacing the hierarchy.
-        // Negative positions are temporary and never visible outside this transaction.
-        for (const [index, row] of current.activities.entries()) {
-          await tx.milestoneTemplate.update({
-            where: { id: row.id },
-            data: { order: -(index + 1), parentId: null },
-          });
-        }
-        const kept = inOrder.map((row) => row.id);
-        await tx.milestoneTemplate.deleteMany({
-          where: { id: { notIn: kept } },
+        if (
+          row.requiredTradeTypeId
+          && !available.has(row.requiredTradeTypeId)
+          && row.requiredTradeTypeId !== previous?.requiredTradeTypeId
+        )
+          throw new DomainValidationError(
+            "Choose an active tradie category from the list.",
+            "requiredTradeTypeId",
+          );
+      }
+      // Release unique positions and parent links before replacing the hierarchy.
+      // Negative positions are temporary and never visible outside this transaction.
+      for (const [index, row] of current.activities.entries()) {
+        await tx.milestoneTemplate.update({
+          where: { id: row.id },
+          data: { order: -(index + 1), parentId: null },
         });
-        for (const row of inOrder) {
-          const data = {
-            ...row,
-            name: row.name.trim(),
-            relatedCostLines: row.relatedCostLines
-              .map((line) => line.trim())
-              .filter(Boolean),
-          };
-          await tx.milestoneTemplate.upsert({
-            where: { id: row.id },
-            create: data,
-            update: data,
-          });
-        }
-        return readMilestoneTemplate(principal, tx);
-      },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        timeout: 30_000,
-      },
-    );
+      }
+      const kept = inOrder.map((row) => row.id);
+      await tx.milestoneTemplate.deleteMany({
+        where: { id: { notIn: kept } },
+      });
+      for (const row of inOrder) {
+        const data = {
+          ...row,
+          name: row.name.trim(),
+          relatedCostLines: row.relatedCostLines
+            .map((line) => line.trim())
+            .filter(Boolean),
+        };
+        await tx.milestoneTemplate.upsert({
+          where: { id: row.id },
+          create: data,
+          update: data,
+        });
+      }
+      return readMilestoneTemplate(principal, tx);
+    };
+    return "$transaction" in db
+      ? await db.$transaction(write, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          timeout: 30_000,
+        })
+      : await write(db);
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError
@@ -227,4 +241,70 @@ export async function saveMilestoneTemplate(
       );
     throw error;
   }
+}
+
+/** Targeted edits, saved through the same revision and dependency rules as the screen. */
+export async function editMilestoneTemplate(
+  principal: DomainPrincipal,
+  input: MilestoneTemplateEdit,
+  db: DomainDb,
+): Promise<MilestoneTemplateSnapshot> {
+  const current = await readMilestoneTemplate(principal, db);
+  if (current.revision !== input.revision)
+    throw new DomainStaleVersionError(
+      "The build sequence changed since it was reviewed. Read it again before applying these changes.",
+    );
+  let activities = current.activities.map((row) => ({
+    ...row,
+    relatedCostLines: [...row.relatedCostLines],
+  }));
+  for (const change of input.changes) {
+    if (change.type === "add") {
+      const row: TemplateActivity = {
+        ...change.activity,
+        id: change.activity.id ?? randomUUID(),
+        order: Math.max(0, ...activities.map((activity) => activity.order)) + 1,
+      };
+      if (activities.some((activity) => activity.id === row.id))
+        throw new DomainValidationError("A new activity must have a new ID.");
+      activities.push({ ...row, parentId: null });
+      if (row.parentId)
+        activities = moveTemplateActivity(
+          activities,
+          row.id,
+          row.parentId,
+          "child",
+        );
+      continue;
+    }
+    const activity = activities.find((row) => row.id === change.activityId);
+    if (!activity)
+      throw new DomainNotFoundError(
+        "That build sequence activity no longer exists.",
+      );
+    if (change.type === "update") {
+      activities = activities.map((row) =>
+        row.id === change.activityId ? { ...row, ...change.patch } : row,
+      );
+    } else if (change.type === "move") {
+      activities = moveTemplateActivity(
+        activities,
+        change.activityId,
+        change.targetId,
+        change.mode,
+      );
+    } else {
+      if (templateDescendants(activities, change.activityId).size > 1)
+        throw new DomainValidationError(
+          "Move the sub-activities elsewhere before removing this activity.",
+        );
+      activities = activities.filter((row) => row.id !== change.activityId);
+    }
+    activities = activities.map((row, index) => ({ ...row, order: index + 1 }));
+  }
+  return saveMilestoneTemplate(
+    principal,
+    { revision: input.revision, activities },
+    db,
+  );
 }
