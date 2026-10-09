@@ -123,6 +123,19 @@ export function AddUpdateModal({
     onOpenChange(nextOpen);
   };
 
+  const handleMilestoneChange = (value: string) => {
+    const nextMilestoneId = value === "__none__" ? undefined : value;
+    if (isSubmitting || nextMilestoneId === milestoneId) return;
+
+    // A transferred file belongs to its original milestone, even if posting
+    // failed. Retain the selected photos with fresh upload IDs and no URLs.
+    transferredUrlsRef.current = {};
+    resetQueue();
+    addFiles(queuedFiles.map((queuedFile) => queuedFile.file));
+    dispatch(clearProjectUploads(projectId));
+    setMilestoneId(nextMilestoneId);
+  };
+
   useEffect(() => {
     return () => {
       Object.values(uploadControllersRef.current).forEach((controller) =>
@@ -331,11 +344,9 @@ export function AddUpdateModal({
               Milestone
             </Label>
             <Select
-              disabled={initialMilestoneId !== undefined}
+              disabled={isSubmitting || initialMilestoneId !== undefined}
               value={milestoneId ?? "__none__"}
-              onValueChange={(value) =>
-                setMilestoneId(value === "__none__" ? undefined : value)
-              }
+              onValueChange={handleMilestoneChange}
             >
               <SelectTrigger
                 id={milestoneFieldId}

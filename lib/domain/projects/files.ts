@@ -77,16 +77,22 @@ export async function deleteProjectFile(
       removed.leadId === null
       && path.startsWith(`projects/${input.projectId}/`)
     ) {
-      const engagement = await db.certifierEngagement.findUnique({
-        where: { projectId: input.projectId },
+      const photoReference = await db.siteUpdate.findFirst({
+        where: { photoUrls: { has: removed.url } },
         select: { id: true },
       });
-      await reclaimSupersededComplianceFiles(
-        engagement?.id ?? "",
-        [removed],
-        db,
-        deleteBlob,
-      );
+      if (!photoReference) {
+        const engagement = await db.certifierEngagement.findUnique({
+          where: { projectId: input.projectId },
+          select: { id: true },
+        });
+        await reclaimSupersededComplianceFiles(
+          engagement?.id ?? "",
+          [removed],
+          db,
+          deleteBlob,
+        );
+      }
     }
   } catch (error) {
     // The durable removal succeeded. Report cleanup separately so retrying

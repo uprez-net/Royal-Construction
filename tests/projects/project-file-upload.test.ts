@@ -165,6 +165,71 @@ test("a reused file ID never replaces another project's file", async () => {
   assert.deepEqual(recorder.writes(), []);
 });
 
+for (const milestoneId of ["m_other", null]) {
+  test(`a reused file ID refuses a different milestone scope: ${milestoneId}`, async () => {
+    const recorder = recordingDb({
+      ...reads,
+      "file.findUnique": { ...saved, milestoneId },
+    });
+    await assert.rejects(
+      () =>
+        saveFile(
+          admin,
+          {
+            ...input,
+            userId: admin.userId,
+            fileType: blob.contentType,
+            fileSize: blob.size,
+          },
+          recorder.db,
+        ),
+      DomainAuthorizationError,
+    );
+    assert.deepEqual(recorder.writes(), []);
+  });
+}
+
+test("a project-wide upload cannot replay an existing milestone upload", async () => {
+  const recorder = recordingDb({ ...reads, "file.findUnique": saved });
+  await assert.rejects(
+    () =>
+      saveFile(
+        admin,
+        {
+          ...input,
+          milestoneId: undefined,
+          userId: admin.userId,
+          fileType: blob.contentType,
+          fileSize: blob.size,
+        },
+        recorder.db,
+      ),
+    DomainAuthorizationError,
+  );
+  assert.deepEqual(recorder.writes(), []);
+});
+
+test("a callback racing confirmation cannot replay a different milestone", async () => {
+  let lookups = 0;
+  const recorder = recordingDb({
+    ...reads,
+    "file.findUnique": () =>
+      ++lookups === 1 ? null : { ...saved, milestoneId: "m_other" },
+    "file.create": () => {
+      throw { code: "P2002" };
+    },
+  });
+  await assert.rejects(
+    () =>
+      completeProjectFileUpload(admin, input, recorder.db, async () => blob),
+    DomainAuthorizationError,
+  );
+  assert.deepEqual(
+    recorder.writes().map((write) => write.operation),
+    ["file.create"],
+  );
+});
+
 for (const pathname of [
   "projects/p_other/milestones/m_1/f_1-site.photo-AbC123.jpg",
   "projects/p_1/milestones/m_other/f_1-site.photo-AbC123.jpg",

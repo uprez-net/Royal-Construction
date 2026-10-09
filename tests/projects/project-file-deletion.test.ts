@@ -26,6 +26,7 @@ const reads = {
   "project.findUnique": { id: "p_1", siteManagerId: null },
   "file.findFirst": file,
   "siteUpdate.findMany": [{ id: "s_1", photoUrls: [file.url, "keep.jpg"] }],
+  "siteUpdate.findFirst": null,
   "certifierEngagement.findUnique": { id: "e_1" },
   "certifierEmail.findMany": [],
   "file.findMany": [],
@@ -130,6 +131,32 @@ test("storage shared by a surviving File record is preserved", async () => {
     assert.fail("shared storage must survive");
   });
   assert.equal(recorder.writes()[1].operation, "file.delete");
+});
+
+test("storage referenced by another project's site update is preserved", async () => {
+  const recorder = recordingDb({
+    ...reads,
+    "siteUpdate.findFirst": { id: "s_other", projectId: "p_other" },
+  });
+  const result = await deleteProjectFile(
+    admin,
+    input,
+    recorder.transactionalDb,
+    async () => {
+      assert.fail("a surviving site update still uses storage");
+    },
+  );
+  assert.equal(result.storageCleanupFailed, false);
+  assert.equal(recorder.writes()[1].operation, "file.delete");
+  assert.deepEqual(
+    recorder.calls.find((call) => call.operation === "siteUpdate.findFirst")
+      ?.args,
+    { where: { photoUrls: { has: file.url } }, select: { id: true } },
+  );
+  assert.equal(
+    recorder.operations().includes("certifierEmail.findMany"),
+    false,
+  );
 });
 
 test("storage cleanup failure is reported separately from the committed removal", async () => {

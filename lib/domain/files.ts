@@ -161,6 +161,7 @@ export async function saveFile(
       file.uploadedBy !== input.userId
       || file.projectId !== projectId
       || file.leadId !== data.leadId
+      || file.milestoneId !== data.milestoneId
       || file.url !== input.fileUrl
     ) {
       throw new DomainAuthorizationError(
