@@ -13,7 +13,7 @@ import {
 import { ProjectMilestonesTab } from "./project-milestones-tab";
 import { ProjectOverviewTab } from "./project-overview-tab";
 import { ProjectPaymentsTab } from "./project-payments-tab";
-import { ProjectQuotesTab } from "./project-quotes-tab";
+import { ProjectDocumentsTab } from "./project-documents-tab";
 import {
   ProjectTabNavigation,
   isVisibleProjectDetailTab,
@@ -108,7 +108,7 @@ export function ProjectDetailTabs({
           <ProjectTradiesTab project={project} />
         ) : null}
         {activeTab === "docs" ? (
-          <ProjectQuotesTab project={project} isAdmin={isAdmin} />
+          <ProjectDocumentsTab project={project} isAdmin={isAdmin} />
         ) : null}
         {activeTab === "history" ? (
           <ProjectHistoryTabs project={project} />
