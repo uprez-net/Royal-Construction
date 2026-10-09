@@ -492,8 +492,8 @@ export default function UpdateMilestoneModal({
                       : "its start date"}
                   </span>{" "}
                   the project start date and reschedules every milestone from
-                  it, using each activity's estimated calendar days. The project
-                  start date is locked after that.
+                  it, using each activity&apos;s estimated calendar days. The
+                  project start date is locked after that.
                 </p>
               </div>
             ) : null}

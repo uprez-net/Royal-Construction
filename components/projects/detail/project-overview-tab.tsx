@@ -583,8 +583,8 @@ function StartDateField({
                     <span className="font-medium text-foreground">
                       {displayDate(pendingDate)}
                     </span>
-                    , then using each activity's estimated calendar days, the
-                    last on{" "}
+                    , then using each activity&apos;s estimated calendar days,
+                    the last on{" "}
                     <span className="font-medium text-foreground">
                       {displayDate(
                         milestoneTargetDates(
