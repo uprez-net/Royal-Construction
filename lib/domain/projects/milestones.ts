@@ -484,18 +484,20 @@ export async function updateMilestone(
       }
     } else if (input.status === MilestoneStatus.ACTIVE) {
       // Starting a child starts its parent, if it has not started already.
-      await db.milestone.updateMany({
+      const { count } = await db.milestone.updateMany({
         where: {
           id: parentId,
           status: { not: MilestoneStatus.ACTIVE },
         },
         data: { status: MilestoneStatus.ACTIVE, startDate },
       });
-      parentUpdates.push({
-        id: parentId,
-        status: MilestoneStatus.ACTIVE,
-        startDate,
-      });
+      if (count > 0) {
+        parentUpdates.push({
+          id: parentId,
+          status: MilestoneStatus.ACTIVE,
+          startDate,
+        });
+      }
     } else {
       break;
     }

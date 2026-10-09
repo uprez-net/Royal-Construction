@@ -329,7 +329,7 @@ export function MilestoneCard({
               className="mt-2 flex items-center gap-1.5 text-xs font-medium text-warning-ink"
             >
               <CircleAlert className="size-3.5" aria-hidden="true" />
-              {missingTrade} not booked for this job
+              No confirmed {missingTrade} booking for this activity
             </p>
           ) : null}
 

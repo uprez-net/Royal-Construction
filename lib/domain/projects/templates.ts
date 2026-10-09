@@ -166,6 +166,9 @@ export async function saveMilestoneTemplate(
         throw new DomainStaleVersionError(
           "The build sequence changed in another tab. Reload it before saving.",
         );
+      const currentById = new Map(
+        current.activities.map((row) => [row.id, row]),
+      );
       const trades = await tx.tradeType.findMany({
         select: { id: true, archivedAt: true },
       });
@@ -174,7 +177,7 @@ export async function saveMilestoneTemplate(
       );
       const tasks = new Set(await listTemplateCostTasks(principal, tx));
       for (const row of inOrder) {
-        const previous = current.activities.find((old) => old.id === row.id);
+        const previous = currentById.get(row.id);
         if (
           row.relatedCostLines.some(
             (line) =>
@@ -199,11 +202,9 @@ export async function saveMilestoneTemplate(
       }
       // Release unique positions and parent links before replacing the hierarchy.
       // Negative positions are temporary and never visible outside this transaction.
-      for (const [index, row] of current.activities.entries()) {
-        await tx.milestoneTemplate.update({
-          where: { id: row.id },
-          data: { order: -(index + 1), parentId: null },
-        });
+      if (current.activities.length) {
+        await tx.milestoneTemplate.updateMany({ data: { parentId: null } });
+        await tx.$executeRaw`UPDATE "MilestoneTemplate" SET "order" = -"order"`;
       }
       const kept = inOrder.map((row) => row.id);
       await tx.milestoneTemplate.deleteMany({
@@ -217,6 +218,17 @@ export async function saveMilestoneTemplate(
             .map((line) => line.trim())
             .filter(Boolean),
         };
+        const previous = currentById.get(row.id);
+        if (
+          previous
+          && templateRevision([previous]) === templateRevision([data])
+        ) {
+          await tx.milestoneTemplate.update({
+            where: { id: row.id },
+            data: { order: row.order, parentId: row.parentId },
+          });
+          continue;
+        }
         await tx.milestoneTemplate.upsert({
           where: { id: row.id },
           create: data,

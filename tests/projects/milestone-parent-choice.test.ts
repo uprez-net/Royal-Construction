@@ -5,6 +5,63 @@ import { allowedMilestoneTransitions } from "@/lib/domain/projects/milestone-sta
 import { updateMilestone } from "@/lib/domain/projects/milestones";
 import { adminPrincipal, recordingDb } from "../architecture/domain-harness";
 
+test("starting a child reports only ancestors actually started and still visits higher ancestors", async () => {
+  const leaf = {
+    id: "leaf",
+    parentId: "already-active",
+    projectId: "project",
+    status: S.ACTIVE,
+    budget: "0",
+    spend: null,
+  };
+  const recorder = recordingDb({
+    "project.findUnique": { id: "project", siteManagerId: null },
+    "project.update": { spent: "0", siteManagerId: null },
+    "milestone.findUnique": (args: unknown) => {
+      const id = (args as { where: { id: string } }).where.id;
+      return id === "leaf"
+        ? { projectId: "project" }
+        : { parentId: id === "already-active" ? "pending-root" : null };
+    },
+    "milestone.findUniqueOrThrow": { ...leaf, status: S.PENDING },
+    "milestone.update": leaf,
+    "milestone.updateMany": (args: unknown) => ({
+      count:
+        (args as { where: { id: string } }).where.id === "already-active"
+          ? 0
+          : 1,
+    }),
+    "milestone.count": 1,
+    "milestone.aggregate": { _sum: { spend: null } },
+    "milestone.findMany": [],
+    "tradieSchedule.findMany": [],
+  });
+  const outcome = await updateMilestone(
+    adminPrincipal(),
+    { milestoneId: "leaf", status: S.ACTIVE, startDate: "2026-10-09" },
+    recorder.db,
+  );
+  assert.deepEqual(outcome.parentUpdates, [
+    { id: "pending-root", status: S.ACTIVE, startDate: new Date("2026-10-09") },
+  ]);
+  const ancestorWrites = recorder
+    .writes()
+    .filter((call) => call.operation === "milestone.updateMany");
+  assert.deepEqual(
+    ancestorWrites.map((call) => call.args),
+    [
+      {
+        where: { id: "already-active", status: { not: S.ACTIVE } },
+        data: { status: S.ACTIVE, startDate: new Date("2026-10-09") },
+      },
+      {
+        where: { id: "pending-root", status: { not: S.ACTIVE } },
+        data: { status: S.ACTIVE, startDate: new Date("2026-10-09") },
+      },
+    ],
+  );
+});
+
 test("only a parent whose children are all waived gains the completion choice", () => {
   assert.ok(
     allowedMilestoneTransitions(S.PENDING, [

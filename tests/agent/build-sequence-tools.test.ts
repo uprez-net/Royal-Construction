@@ -140,6 +140,11 @@ function fixture(initial = [row("a", 1), row("b", 2)]) {
     },
     "milestoneTemplate.findMany": () =>
       structuredClone(stored).sort((a, b) => a.order - b.order),
+    "milestoneTemplate.updateMany": (args: unknown) => {
+      const { data } = args as { data: Partial<TemplateActivity> };
+      stored = stored.map((row) => ({ ...row, ...data }));
+      return { count: stored.length };
+    },
     "milestoneTemplate.update": (args: unknown) => {
       const { where, data } = args as {
         where: { id: string };
@@ -197,6 +202,12 @@ function fixture(initial = [row("a", 1), row("b", 2)]) {
     get(target, key) {
       if (key === "$transaction")
         throw new Error("Nested transaction attempted");
+      if (key === "$executeRaw") {
+        return (...args: Parameters<DomainDb["$executeRaw"]>) => {
+          stored = stored.map((row) => ({ ...row, order: -row.order }));
+          return target.$executeRaw(...args);
+        };
+      }
       return Reflect.get(target, key);
     },
   });

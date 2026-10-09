@@ -298,6 +298,64 @@ test("template saves remove obsolete rows and keep parent links on stable IDs", 
   assert.notEqual(saved.revision, templateRevision(initial));
 });
 
+test("template saves release positions in bulk and restore unchanged rows without upserting their content", async () => {
+  const rows = [
+    activity("parent", 2),
+    activity("child", 4, { parentId: "parent" }),
+    activity("changed", 8),
+  ];
+  const recorder = recordingDb({
+    "milestoneTemplate.findMany": rows,
+    "tradeType.findMany": [],
+    "adminOfferContent.findFirst": null,
+  });
+  await saveMilestoneTemplate(
+    adminPrincipal(),
+    {
+      revision: templateRevision(rows),
+      activities: [
+        ...rows.slice(0, 2),
+        { ...rows[2], estimatedDays: 8 },
+        activity("new", 9),
+      ],
+    },
+    recorder.transactionalDb,
+  );
+  const releases = recorder.calls.filter(
+    (call) => call.operation === "milestoneTemplate.updateMany",
+  );
+  assert.deepEqual(
+    releases.map((call) => call.args),
+    [{ data: { parentId: null } }],
+  );
+  const raw = recorder.calls.filter(
+    (call) => call.operation === "$.executeRaw",
+  );
+  assert.equal(raw.length, 1);
+  assert.deepEqual(raw[0].args, [
+    [`UPDATE "MilestoneTemplate" SET "order" = -"order"`],
+  ]);
+  assert.deepEqual(
+    recorder.calls
+      .filter((call) => call.operation === "milestoneTemplate.update")
+      .map((call) => call.args),
+    [
+      { where: { id: "parent" }, data: { order: 2, parentId: null } },
+      { where: { id: "child" }, data: { order: 4, parentId: "parent" } },
+    ],
+  );
+  assert.deepEqual(
+    recorder.calls
+      .filter((call) => call.operation === "milestoneTemplate.upsert")
+      .map((call) => (call.args as { where: { id: string } }).where.id),
+    ["changed", "new"],
+  );
+  assert.ok(
+    recorder.operations().indexOf("$.executeRaw")
+      < recorder.operations().indexOf("milestoneTemplate.deleteMany"),
+  );
+});
+
 test("only a confirmed booking in the right category on this milestone clears the warning", () => {
   const milestone = {
     id: "a",

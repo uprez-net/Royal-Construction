@@ -471,7 +471,7 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
                 />
                 <div>
                   <p className="text-sm font-medium text-warning-ink">
-                    {trade} not booked for this job
+                    No confirmed {trade} booking for this activity
                   </p>
                   <p className="mt-1 text-sm text-foreground">
                     {milestone.name} has started without a confirmed {trade}{" "}
