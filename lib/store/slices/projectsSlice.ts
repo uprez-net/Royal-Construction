@@ -1564,6 +1564,31 @@ const projectsSlice = createSlice({
         state.activeProject.files.push(action.payload.file);
       }
     },
+    removeFileFromProject(
+      state,
+      action: PayloadAction<{ projectId: string; fileId: string; url: string }>,
+    ) {
+      const project = state.activeProject;
+      if (!project || project.id !== action.payload.projectId) return;
+      project.files = project.files.filter(
+        (file) => file.id !== action.payload.fileId,
+      );
+      for (const update of project.siteUpdates) {
+        update.photoUrls = update.photoUrls.filter(
+          (url) => url !== action.payload.url,
+        );
+      }
+      for (const milestone of project.milestones) {
+        milestone.files = milestone.files.filter(
+          (file) => file.id !== action.payload.fileId,
+        );
+        for (const update of milestone.siteUpdates) {
+          update.photoUrls = update.photoUrls.filter(
+            (url) => url !== action.payload.url,
+          );
+        }
+      }
+    },
     registerProjectUpload(
       state,
       action: PayloadAction<{
@@ -2206,6 +2231,7 @@ export const {
   resetProjectDetailUiState,
   resetProjects,
   appendFileToProject,
+  removeFileFromProject,
   updateProjectTradieSchedule,
 } = projectsSlice.actions;
 

@@ -105,7 +105,13 @@ export const updateTradieThunk = createAsyncThunk<
     data: Partial<
       Pick<
         Tradie,
-        "email" | "abn" | "additionalEmails" | "phone" | "location" | "note"
+        | "name"
+        | "email"
+        | "abn"
+        | "additionalEmails"
+        | "phone"
+        | "location"
+        | "note"
       >
     >;
   }

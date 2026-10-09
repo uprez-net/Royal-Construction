@@ -111,6 +111,37 @@ test("schedule duplicate checks and creates use serialisable transactions", () =
 
 /* ------------------------------------------------------------- directory -- */
 
+test("editing a tradie name trims it and persists only the supplied field", async () => {
+  const recorder = recordingDb({
+    "tradie.findUnique": { ...TRADIE, isActive: true },
+  });
+  await updateTradie(
+    adminPrincipal(),
+    "t_1",
+    { name: "  Sam Electrical  " },
+    recorder.db,
+  );
+  assert.deepEqual(recorder.writes(), [
+    {
+      operation: "tradie.update",
+      args: { data: { name: "Sam Electrical" }, where: { id: "t_1" } },
+    },
+  ]);
+});
+
+test("editing a tradie name refuses blank or one-character names without writing", async () => {
+  for (const name of ["   ", " S "]) {
+    const recorder = recordingDb({
+      "tradie.findUnique": { ...TRADIE, isActive: true },
+    });
+    await assert.rejects(
+      () => updateTradie(adminPrincipal(), "t_1", { name }, recorder.db),
+      DomainValidationError,
+    );
+    assert.deepEqual(recorder.writes(), []);
+  }
+});
+
 test("adding, changing or pricing a tradie is ADMIN only", async () => {
   const cases: [string, () => Promise<unknown>][] = [
     [

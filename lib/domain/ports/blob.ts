@@ -38,6 +38,14 @@ export type BlobHeadPort = (
   pathname: string,
 ) => Promise<{ readonly url: string } | null>;
 
+/** Inspect a browser upload using the application's own Blob store credentials. */
+export type BlobUploadHeadPort = (url: string) => Promise<{
+  readonly url: string;
+  readonly pathname: string;
+  readonly contentType: string;
+  readonly size: number;
+}>;
+
 /**
  * A no-op delete, for a caller that has authorized an effect it is not yet
  * ready to perform. Named rather than an inline `async () => {}` so it reads
