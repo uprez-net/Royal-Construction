@@ -181,6 +181,8 @@ export function FinancialTab({ project }: FinancialTabProps) {
           the project page is where a claim opens.
         */}
         <DataTable
+          mobileLayout="cards"
+          mobileColumns={1}
           headers={["Invoice", "Stage", "Amount", "Paid", "Due", "Status"]}
           align={["start", "start", "end", "end", "start", "start"]}
           caption="Progress claims raised against this project"
@@ -191,8 +193,8 @@ export function FinancialTab({ project }: FinancialTabProps) {
             >
               {invoice.invoiceNumber ?? "—"}
             </span>,
-            PROJECT_STAGE_LABELS[invoice.projectStage as ProjectStage] ??
-              invoice.projectStage,
+            PROJECT_STAGE_LABELS[invoice.projectStage as ProjectStage]
+              ?? invoice.projectStage,
             <span
               key="total"
               className="font-mono tabular-nums text-foreground"

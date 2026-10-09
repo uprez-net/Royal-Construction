@@ -52,7 +52,7 @@ export function LeadEmailSection({
       className="gap-0 h-full overflow-hidden py-0"
       key={`${emails.length}-${leadId}`}
     >
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b py-3">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 border-b px-3 py-3 sm:px-6">
         <div className="flex items-center gap-2">
           <Mail className="size-4 text-primary" />
           <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -101,7 +101,7 @@ export function LeadEmailSection({
                         type="button"
                         onClick={() => setReplyTarget(email)}
                         aria-label={`Reply to ${plainBody.slice(0, 30)}...`}
-                        className="mb-1 shrink-0 rounded-full p-1.5 bg-muted text-foreground opacity-100"
+                        className="mb-1 flex size-11 shrink-0 items-center justify-center rounded-full p-1.5 bg-muted text-foreground opacity-100 md:size-auto"
                       >
                         <Reply className="size-3.5" />
                       </button>

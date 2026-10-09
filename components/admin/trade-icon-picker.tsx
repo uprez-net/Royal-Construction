@@ -51,7 +51,7 @@ export function IconPicker({
         <div
           role="radiogroup"
           aria-label="Trade icon"
-          className="grid grid-cols-8 gap-1"
+          className="grid grid-cols-5 gap-1 md:grid-cols-8"
         >
           {TRADE_ICON_KEYS.map((key) => (
             <button
@@ -66,7 +66,7 @@ export function IconPicker({
                 setOpen(false);
               }}
               className={cn(
-                "flex size-8 items-center justify-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+                "flex size-11 items-center justify-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring md:size-8",
                 key === value
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",

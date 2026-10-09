@@ -299,7 +299,7 @@ export function TradieScheduleRow({
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {/* Trade category */}
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <Label htmlFor={fieldId("category")}>
             Trade category
             <RequiredMark />
@@ -318,12 +318,12 @@ export function TradieScheduleRow({
                     name when no category was set — the tradie name rendered
                     twice, once in the wrong field. */}
                 {row.tradeCategory ? (
-                  <span className="flex items-center gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
                     {renderCategoryIcon(row.tradeCategory, "size-4")}
                     {categoryLabel(row.tradeCategory)}
                   </span>
                 ) : loading ? (
-                  <span className="flex items-center gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
                     <Loader2
                       className="size-4 animate-spin motion-reduce:animate-none"
                       aria-hidden="true"
@@ -343,7 +343,7 @@ export function TradieScheduleRow({
               </Button>
             </PopoverTrigger>
 
-            <PopoverContent className="w-87.5 p-0">
+            <PopoverContent className="w-87.5 max-w-[calc(100vw-2rem)] p-0">
               <Command>
                 <CommandInput placeholder="Search trades..." />
 
@@ -370,7 +370,7 @@ export function TradieScheduleRow({
                           }}
                         >
                           <div className="flex w-full items-center justify-between">
-                            <div className="flex items-center gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
                               {renderCategoryIcon(category, "mr-2 size-4")}
                               <div className="flex flex-col gap-1">
                                 <span>{categoryLabel(category)}</span>
@@ -402,7 +402,7 @@ export function TradieScheduleRow({
         </div>
 
         {/* Tradie */}
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <Label htmlFor={fieldId("tradie")}>
             Tradie
             <RequiredMark />
@@ -423,7 +423,7 @@ export function TradieScheduleRow({
                 className="group w-full justify-between font-normal"
               >
                 {loading ? (
-                  <span className="flex items-center gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
                     <Loader2
                       className="size-4 animate-spin motion-reduce:animate-none"
                       aria-hidden="true"
@@ -447,7 +447,7 @@ export function TradieScheduleRow({
               </Button>
             </PopoverTrigger>
 
-            <PopoverContent className="w-87.5 p-0">
+            <PopoverContent className="w-87.5 max-w-[calc(100vw-2rem)] p-0">
               <Command>
                 <CommandInput
                   placeholder="Search tradies..."
@@ -504,7 +504,7 @@ export function TradieScheduleRow({
         </div>
 
         {/* Milestone */}
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <Label htmlFor={fieldId("project-stage")}>
             Milestone
             <RequiredMark />
@@ -530,12 +530,12 @@ export function TradieScheduleRow({
                 "project-stage",
                 errors.milestoneId,
               )}
-              className="w-auto min-w-full"
+              className="w-full min-w-0"
             >
               <SelectValue placeholder="Select milestone" />
             </SelectTrigger>
 
-            <SelectContent className="w-auto min-w-full">
+            <SelectContent className="w-full min-w-0">
               {Object.entries(stageToMilestoneMap).map(([stage]) => (
                 <SelectItem key={stage} value={stage}>
                   {PROJECT_STAGE_LABELS[stage as ProjectStage]}
@@ -548,7 +548,7 @@ export function TradieScheduleRow({
         </div>
 
         {/* Milestone */}
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <Label htmlFor={fieldId("milestone")}>
             Activity
             <RequiredMark />
@@ -568,12 +568,12 @@ export function TradieScheduleRow({
               id={fieldId("milestone")}
               aria-invalid={Boolean(errors.milestoneId)}
               aria-describedby={describedBy("milestone", errors.milestoneId)}
-              className="w-auto min-w-full"
+              className="w-full min-w-0"
             >
               <SelectValue placeholder="Select milestone" />
             </SelectTrigger>
 
-            <SelectContent className="w-auto min-w-full">
+            <SelectContent className="w-full min-w-0">
               {row.projectStage
                 && stageToMilestoneMap[row.projectStage]?.map((milestone) => (
                   <SelectItem key={milestone.id} value={milestone.id}>
@@ -587,7 +587,7 @@ export function TradieScheduleRow({
         </div>
 
         {/* Date */}
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <Label htmlFor={fieldId("date")}>
             Start date
             <RequiredMark />
@@ -658,7 +658,7 @@ export function TradieScheduleRow({
         </div>
 
         {/* Duration */}
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <Label htmlFor={fieldId("days")}>
             Days on site
             <RequiredMark />
@@ -736,18 +736,24 @@ export function TradieScheduleRow({
               requiresQuote: value === "quote",
             });
           }}
-          className="flex flex-wrap gap-6"
+          className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-6"
         >
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <RadioGroupItem value="fixed" id={fieldId("pricing-fixed")} />
-            <Label htmlFor={fieldId("pricing-fixed")} className="font-normal">
+            <Label
+              htmlFor={fieldId("pricing-fixed")}
+              className="flex min-h-11 items-center font-normal"
+            >
               Fixed or last quoted price
             </Label>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <RadioGroupItem value="quote" id={fieldId("pricing-quote")} />
-            <Label htmlFor={fieldId("pricing-quote")} className="font-normal">
+            <Label
+              htmlFor={fieldId("pricing-quote")}
+              className="flex min-h-11 items-center font-normal"
+            >
               Ask for a quote
             </Label>
           </div>
@@ -759,7 +765,7 @@ export function TradieScheduleRow({
           Send email to tradie
         </p>
 
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <Checkbox
             id={fieldId("send-email-checkbox")}
             checked={sendEmailCheck}
@@ -770,7 +776,7 @@ export function TradieScheduleRow({
 
           <Label
             htmlFor={fieldId("send-email-checkbox")}
-            className="font-normal"
+            className="flex min-h-11 items-center font-normal"
           >
             Send an email to the tradie with the booking details
           </Label>

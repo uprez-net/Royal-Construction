@@ -69,7 +69,7 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
 
   return (
     <>
-      <DialogHeader className="pb-4">
+      <DialogHeader className="pb-4 pr-10">
         <DialogTitle className="flex items-center gap-2">
           <ShieldAlert className="size-5" aria-hidden="true" />
           Incident resolution approval
@@ -110,7 +110,7 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
           </h3>
 
           <div className="rounded-lg border border-border/70 p-4">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h4 className="text-base font-semibold">
                   {approval.tradie.name}
@@ -277,7 +277,7 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
 
         {/* Actions */}
         {approval.status === "PENDING" && (
-          <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
+          <div className="grid gap-2 border-t border-border/70 pt-4 sm:flex sm:justify-end">
             <Button
               variant="outline"
               disabled={mutation.isPending}
@@ -319,10 +319,15 @@ function InfoItem({
   mono?: boolean;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-xs text-muted-foreground">{label}</p>
 
-      <p className={cn("font-medium", mono && "font-mono tabular-nums")}>
+      <p
+        className={cn(
+          "break-words font-medium",
+          mono && "font-mono tabular-nums",
+        )}
+      >
         {value}
       </p>
     </div>
@@ -346,10 +351,15 @@ function DetailRow({
         {icon}
       </div>
 
-      <div>
+      <div className="min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
 
-        <p className={cn("font-medium", mono && "font-mono tabular-nums")}>
+        <p
+          className={cn(
+            "break-words font-medium",
+            mono && "font-mono tabular-nums",
+          )}
+        >
           {value}
         </p>
       </div>

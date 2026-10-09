@@ -420,12 +420,12 @@ export default function EditTradieModal({
             </div>
           </div>
 
-          <div className="flex justify-between border-t border-border/70 pt-4">
+          <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
               {hasChanges ? "You have unsaved changes" : "No changes made"}
             </p>
 
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex">
               <Button variant="outline" disabled={isPending} onClick={onClose}>
                 Cancel
               </Button>

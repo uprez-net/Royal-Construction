@@ -191,7 +191,7 @@ function ComplianceAlertRow({
       </div>
 
       {isOpen ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
           {/* The chase comes first and carries the weight: on a freshly raised
               alert it is what someone is here to do, and Resolve is what they
               come back for once the replacement lands. */}
@@ -248,12 +248,12 @@ function TradieAlertRow({
   const dispatch = useAppDispatch();
 
   return (
-    <li className="flex items-center gap-3 rounded-[10px] border border-border/70 bg-card p-3.5">
+    <li className="flex flex-wrap items-center gap-3 rounded-[10px] border border-border/70 bg-card p-3.5">
       <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-warning-light text-warning-ink">
         <Wrench className="size-5" aria-hidden="true" />
       </div>
 
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1 break-words">
         <p className="text-sm font-medium text-foreground">
           {schedule.tradie.trade} • {schedule.tradie.name}
         </p>
@@ -437,7 +437,7 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
       <CardHeader className="border-b border-border/70 pb-4">
         <CardTitle
           as="h2"
-          className="flex items-center gap-2 text-base font-semibold text-foreground"
+          className="flex flex-wrap items-center gap-2 text-base font-semibold text-foreground"
         >
           <Bell className="size-4 text-warning-ink" aria-hidden="true" />
           Alerts

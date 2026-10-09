@@ -65,6 +65,7 @@ import {
 } from "./shell/offer-boundary-scroll";
 import { AreaCalculatorPanel } from "./offer-workspace-area";
 import { CostSchedulePanel } from "./offer-workspace-cost-schedule";
+import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
 import { OfferDocumentCanvas } from "./offer-document-canvas";
 import { OfferCommandBar } from "./shell/offer-command-bar";
 import { OfferStepRail, type OfferStepState } from "./shell/offer-step-rail";
@@ -489,6 +490,18 @@ export function OfferWorkspaceScreen({
   }, [activeStepId]);
 
   const [railCollapsed, setRailCollapsed] = useState(false);
+  const [mobileCostLineId, setMobileCostLineId] = useState<string | null>(null);
+  const selectedMobileCostLine =
+    mobileCostLineId === "all"
+      ? "all"
+      : mobileCostLineId === "latest"
+        ? (lines.at(-1)?.id ?? "all")
+        : (lines.find((line) => line.id === mobileCostLineId)?.id
+          ?? lines[0]?.id
+          ?? "all");
+  const selectedMobileCostTasks =
+    lines.find((line) => line.id === selectedMobileCostLine)
+      ?.buildingSequenceTasks ?? [];
   const confirmCopy =
     pendingConfirm === null
       ? null
@@ -764,6 +777,50 @@ export function OfferWorkspaceScreen({
                   active={activeStepId === "cost-schedule"}
                   locked={costScheduleLocked}
                   title="Cost schedule"
+                  navigation={
+                    <div className="flex flex-col gap-3 md:hidden">
+                      <MobileFilterSelect
+                        label={
+                          costScheduleLocked
+                            ? "Cost task to view"
+                            : "Cost task to edit"
+                        }
+                        value={selectedMobileCostLine}
+                        options={[
+                          {
+                            value: "all",
+                            label: "All cost tasks",
+                            count: lines.length,
+                          },
+                          ...lines.map((line, index) => ({
+                            value: line.id,
+                            label: `${index + 1}. ${line.itemName || "Unnamed task"}`,
+                          })),
+                        ]}
+                        onChange={setMobileCostLineId}
+                      />
+                      {costScheduleLocked
+                      && selectedMobileCostLine !== "all" ? (
+                        <details className="rounded-lg border bg-card p-3">
+                          <summary className="min-h-11 cursor-pointer text-sm font-medium">
+                            Building sequence
+                          </summary>
+                          <ul className="flex flex-col gap-2 text-sm">
+                            {selectedMobileCostTasks.map((task) => (
+                              <li key={task} className="break-words">
+                                {task}
+                              </li>
+                            ))}
+                          </ul>
+                          {selectedMobileCostTasks.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                              No building sequence tasks for this cost item.
+                            </p>
+                          ) : null}
+                        </details>
+                      ) : null}
+                    </div>
+                  }
                 >
                   <AreaCalculatorPanel
                     calcVersion={calcVersion}
@@ -775,11 +832,15 @@ export function OfferWorkspaceScreen({
                     onJobChange={onJobChange}
                   />
                   <CostSchedulePanel
+                    mobileLineId={selectedMobileCostLine}
                     expandedLineIds={expandedLineIds}
                     onToggleLineExpanded={toggleLineExpanded}
                     importResult={importResult}
                     lines={lines}
-                    onAddLine={onAddLine}
+                    onAddLine={() => {
+                      onAddLine();
+                      setMobileCostLineId("latest");
+                    }}
                     onImported={onImported}
                     onLineChange={onLineChange}
                     onIncludeAll={onIncludeAll}
@@ -1131,6 +1192,7 @@ function StepPane({
   unlockHint,
   title,
   children,
+  navigation,
 }: {
   readonly active: boolean;
   readonly locked?: boolean;
@@ -1138,6 +1200,7 @@ function StepPane({
   readonly unlockHint?: string;
   readonly title: string;
   readonly children: ReactNode;
+  readonly navigation?: ReactNode;
 }) {
   if (!active) {
     return null;
@@ -1154,6 +1217,7 @@ function StepPane({
   return (
     <section aria-labelledby="offer-pane-title" className="space-y-4">
       <PaneHeading locked={locked} title={title} />
+      {navigation}
       <OfferStepBody locked={locked}>{children}</OfferStepBody>
     </section>
   );

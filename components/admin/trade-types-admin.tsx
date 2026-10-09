@@ -277,6 +277,9 @@ export function TradeTypesAdmin({
           />
 
           <DataTable
+            mobileLayout="cards"
+            mobileColumns={1}
+            mobileTitleColumn={1}
             headers={["", "Trade", "Tradies", "Status", ""]}
             align={["start", "start", "end", "start", "end"]}
             caption="Trades a tradie can be listed under, with how many tradies each holds."

@@ -294,8 +294,11 @@ export default function ScheduleTradieModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto p-0 shadow-lg">
-        <DialogHeader className="border-b px-6 py-5">
+      <DialogContent
+        data-mobile-scroll="body"
+        className="grid max-h-[calc(100dvh-1.5rem)] max-w-6xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0 shadow-lg"
+      >
+        <DialogHeader className="border-b px-4 py-4 pr-14 sm:px-6 sm:py-5">
           <DialogTitle>Schedule tradies</DialogTitle>
 
           <DialogDescription>
@@ -304,8 +307,8 @@ export default function ScheduleTradieModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 p-6">
-          <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-2">
+        <div className="flex min-h-0 flex-col gap-4 p-4 sm:p-6">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1">
             {scheduleRows.map((row, index) => (
               <div
                 key={row.id}
@@ -327,13 +330,13 @@ export default function ScheduleTradieModal({
             ))}
           </div>
 
-          <div className="flex items-center justify-between border-t pt-4">
+          <div className="flex shrink-0 flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
             <Button variant="outline" onClick={addRow} disabled={isSubmitting}>
               <Plus className="mr-2 size-4" aria-hidden="true" />
               Add another tradie
             </Button>
 
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex">
               <Button
                 variant="outline"
                 onClick={() => handleOpenChange(false)}

@@ -48,10 +48,11 @@ export function ModalShell({
       }}
     >
       <DialogContent
+        data-mobile-scroll="body"
         showCloseButton={false}
         {...(!subtitle ? { "aria-describedby": undefined } : {})}
         className={cn(
-          "flex max-h-[90dvh] flex-col gap-0 overflow-hidden bg-background p-0 shadow-lg",
+          "flex min-w-0 max-h-[90dvh] flex-col gap-0 overflow-hidden bg-background p-0 shadow-lg",
           maxWidthClass,
           isFullScreen
             && "h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)]",

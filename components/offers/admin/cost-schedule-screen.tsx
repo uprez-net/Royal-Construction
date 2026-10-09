@@ -40,6 +40,7 @@ import { PriceModeCell } from "./shared/price-mode-cell";
 import { FormulaVariablesPanel } from "./shared/formula-variables-panel";
 import { SaveChangesButton } from "./shared/save-changes-button";
 import { COST_SCHEDULE_UNDO_TOAST_ID } from "./shared/undo-toast-ids";
+import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
 
 function newRow(phase: string): CostScheduleRow {
   return {
@@ -54,6 +55,7 @@ function newRow(phase: string): CostScheduleRow {
 }
 
 export function OfferCostScheduleScreen() {
+  const [mobilePhase, setMobilePhase] = useState<string | null>(null);
   const dispatch = useAppDispatch();
   const costSchedule = useAppSelector(
     (s) => s.adminOfferContent.data.costSchedule,
@@ -136,6 +138,11 @@ export function OfferCostScheduleScreen() {
     }
     return { none, fixed, formula, included, total: rows.length };
   }, [rows]);
+  const selectedMobilePhase =
+    mobilePhase === "all"
+      ? "all"
+      : (phases.find(({ phase }) => phase === mobilePhase)?.phase
+        ?? phases[0]?.phase);
 
   const updateRow = (row: CostScheduleRow) => {
     dispatch(costScheduleRowUpserted(row));
@@ -178,9 +185,10 @@ export function OfferCostScheduleScreen() {
           <Button
             size="sm"
             type="button"
-            onClick={() =>
-              dispatch(costScheduleRowUpserted(newRow("NEW PHASE")))
-            }
+            onClick={() => {
+              dispatch(costScheduleRowUpserted(newRow("NEW PHASE")));
+              setMobilePhase("NEW PHASE");
+            }}
           >
             <Plus className="size-4" aria-hidden="true" />
             Add phase
@@ -188,6 +196,19 @@ export function OfferCostScheduleScreen() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
+        <MobileFilterSelect
+          label="Cost phase to edit"
+          value={selectedMobilePhase ?? "all"}
+          options={[
+            { value: "all", label: "All phases", count: rows.length },
+            ...phases.map(({ phase, items }) => ({
+              value: phase,
+              label: phase || "Unnamed phase",
+              count: items.length,
+            })),
+          ]}
+          onChange={setMobilePhase}
+        />
         <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
           <OfferSummaryBadge label="total" value={counts.total} />
           <OfferSummaryBadge label="unpriced" value={counts.none} />
@@ -197,7 +218,7 @@ export function OfferCostScheduleScreen() {
         </div>
 
         <div className="max-w-full overflow-x-auto rounded-lg border border-border bg-card">
-          <Table className="min-w-230 table-fixed border-separate border-spacing-0 text-[13px]">
+          <Table className="admin-cost-table md:min-w-230 table-fixed border-separate border-spacing-0 text-[13px]">
             <colgroup>
               <col className="w-20" />
               <col className="w-72" />
@@ -233,13 +254,20 @@ export function OfferCostScheduleScreen() {
               )}
               {phases.map(({ phase, items }) => (
                 <PhaseGroup
-                  key={phase}
+                  key={items[0]?.id ?? phase}
                   phase={phase}
+                  mobileHidden={
+                    selectedMobilePhase !== "all"
+                    && selectedMobilePhase !== phase
+                  }
                   items={items}
                   formulaVariables={allFormulaVariables}
                   formulaSampleValues={formulaSampleValues}
                   onFormulaValidation={handleFormulaValidation}
-                  onRenamePhase={(next) => renamePhase(phase, next)}
+                  onRenamePhase={(next) => {
+                    renamePhase(phase, next);
+                    setMobilePhase(next);
+                  }}
                   onUpdateRow={updateRow}
                   onRemoveRow={removeRow}
                   onAddTask={() =>
@@ -285,6 +313,7 @@ export function OfferCostScheduleScreen() {
 }
 
 interface PhaseGroupProps {
+  mobileHidden: boolean;
   phase: string;
   items: CostScheduleRow[];
   formulaVariables: readonly string[];
@@ -297,6 +326,7 @@ interface PhaseGroupProps {
 }
 
 function PhaseGroup({
+  mobileHidden,
   phase,
   items,
   formulaVariables,
@@ -311,9 +341,12 @@ function PhaseGroup({
 
   return (
     <>
-      <TableRow className="bg-muted/40 hover:bg-muted/40">
+      <TableRow
+        data-mobile-hidden={mobileHidden}
+        className="admin-cost-phase bg-muted/40 hover:bg-muted/40"
+      >
         <TableCell colSpan={4} className="py-2">
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-2 md:flex md:flex-wrap">
             <button
               type="button"
               aria-label={expanded ? "Collapse phase" : "Expand phase"}
@@ -323,8 +356,8 @@ function PhaseGroup({
             >
               <ChevronDown
                 className={
-                  "size-4 transition-transform " +
-                  (expanded ? "rotate-0" : "-rotate-90")
+                  "size-4 transition-transform "
+                  + (expanded ? "rotate-0" : "-rotate-90")
                 }
                 aria-hidden="true"
               />
@@ -333,7 +366,7 @@ function PhaseGroup({
               value={phase}
               onChange={(e) => onRenamePhase(e.target.value)}
               aria-label="Phase name"
-              className="h-7 max-w-72 font-semibold uppercase tracking-wide"
+              className="h-7 min-w-0 flex-1 font-semibold uppercase tracking-wide md:max-w-72"
             />
             <span className="text-xs font-normal text-muted-foreground">
               {items.length} {items.length === 1 ? "task" : "tasks"}
@@ -351,10 +384,17 @@ function PhaseGroup({
           </div>
         </TableCell>
       </TableRow>
-      {expanded &&
-        items.map((row) => (
-          <TableRow key={row.id}>
-            <TableCell className="border-r border-border/70">
+      {expanded
+        && items.map((row) => (
+          <TableRow
+            key={row.id}
+            data-mobile-hidden={mobileHidden}
+            className="admin-cost-data"
+          >
+            <TableCell
+              data-label="Map number"
+              className="border-r border-border/70"
+            >
               <Input
                 value={row.mapId === undefined ? "" : String(row.mapId)}
                 onChange={(e) => {
@@ -370,7 +410,10 @@ function PhaseGroup({
                 className="h-8 w-16"
               />
             </TableCell>
-            <TableCell className="border-r border-border/70">
+            <TableCell
+              data-label="Task description"
+              className="border-r border-border/70"
+            >
               <Input
                 value={row.task}
                 onChange={(e) => onUpdateRow({ ...row, task: e.target.value })}
@@ -378,7 +421,10 @@ function PhaseGroup({
                 className="h-8"
               />
             </TableCell>
-            <TableCell className="border-r border-border/70">
+            <TableCell
+              data-label="Pricing and inclusion"
+              className="border-r border-border/70"
+            >
               <PriceModeCell
                 row={row}
                 onChange={onUpdateRow}
@@ -389,7 +435,7 @@ function PhaseGroup({
                 }
               />
             </TableCell>
-            <TableCell>
+            <TableCell data-label="Actions">
               <button
                 type="button"
                 aria-label="Remove task"
@@ -397,6 +443,7 @@ function PhaseGroup({
                 className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive-ink"
               >
                 <Trash2 className="size-4" aria-hidden="true" />
+                <span className="ml-2 md:sr-only">Remove task</span>
               </button>
             </TableCell>
           </TableRow>

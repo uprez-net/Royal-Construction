@@ -44,6 +44,7 @@ import { WorkbookImportControl } from "./offer-workspace-import";
 import { FIELD_LABEL_CLASS } from "./offer-workspace-fields";
 
 type CostSchedulePanelProps = {
+  readonly mobileLineId: string;
   // Which rows have their building-sequence editor open. Owned by the screen so
   // it survives a trip to another step: only the active step is mounted now, so
   // local state here was wiped every time the estimator went to Pricing.
@@ -104,6 +105,7 @@ function handleGridCellKeyDown(event: KeyboardEvent<HTMLElement>) {
 }
 
 export function CostSchedulePanel({
+  mobileLineId,
   expandedLineIds,
   onToggleLineExpanded,
   importResult,
@@ -114,6 +116,7 @@ export function CostSchedulePanel({
   onIncludeAll,
   onRemoveLine,
 }: CostSchedulePanelProps) {
+  const selectedMobileLine = mobileLineId;
   const includedCount = lines.filter((line) => line.includedInContract).length;
   const pricedCount = lines.filter((line) => line.costExGst > 0).length;
   const importedCount = lines.filter(
@@ -285,7 +288,13 @@ export function CostSchedulePanel({
 
                 return (
                   <Fragment key={line.id}>
-                    <TableRow className="cost-data-row group align-top hover:bg-royal-gold-light/25 focus-within:bg-royal-gold-light/35">
+                    <TableRow
+                      data-mobile-hidden={
+                        selectedMobileLine !== "all"
+                        && selectedMobileLine !== line.id
+                      }
+                      className="cost-data-row group align-top hover:bg-royal-gold-light/25 focus-within:bg-royal-gold-light/35"
+                    >
                       <TableCell className="sticky left-0 z-10 border-r border-border/70 bg-card px-1 py-0 align-middle group-hover:bg-royal-gold-light/25 group-focus-within:bg-royal-gold-light/35">
                         <div className="flex items-center gap-0.5">
                           <button
@@ -489,6 +498,10 @@ export function CostSchedulePanel({
                     </TableRow>
                     {isExpanded ? (
                       <TableRow
+                        data-mobile-hidden={
+                          selectedMobileLine !== "all"
+                          && selectedMobileLine !== line.id
+                        }
                         className="hover:bg-transparent"
                         id={detailRowId}
                       >
@@ -553,7 +566,7 @@ function SequenceStepEditor({
 
   return (
     <div className="grid gap-3 px-4 py-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className={FIELD_LABEL_CLASS}>
           Building sequence · {count} {count === 1 ? "step" : "steps"}
         </p>
@@ -591,7 +604,7 @@ function SequenceStepEditor({
         </p>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
         <Input
           aria-label={`Add a building sequence step for ${rowLabel} — pick from the list of sequences or type your own`}
           className="h-9 flex-1 text-[13px]"

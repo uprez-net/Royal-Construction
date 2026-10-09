@@ -406,7 +406,7 @@ export function FormulaEditor({
         spellCheck={false}
         autoComplete="off"
         className={cn(
-          "h-8 w-full rounded-md border bg-transparent px-3 font-mono text-sm shadow-xs outline-none transition-colors",
+          "min-h-11 w-full rounded-md border bg-transparent px-3 font-mono text-sm shadow-xs outline-none transition-colors md:min-h-8",
           "focus-visible:border-royal-gold focus-visible:ring-2 focus-visible:ring-royal-gold/40",
           hasError
             ? "border-destructive/60 focus-visible:border-destructive focus-visible:ring-destructive/30"
@@ -418,6 +418,7 @@ export function FormulaEditor({
       {open && suggestions.length > 0 && anchor && (
         <div
           role="listbox"
+          data-slot="formula-suggestions"
           aria-label="Formula suggestions"
           className="absolute z-50 max-h-64 w-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-sm shadow-md"
           style={{ top: anchor.top, left: anchor.left }}
@@ -440,7 +441,7 @@ export function FormulaEditor({
                 insertSuggestion(s);
               }}
               className={cn(
-                "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left outline-none transition-colors",
+                "flex min-h-11 w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left outline-none transition-colors md:min-h-0",
                 i === clampedActiveIndex
                   ? "bg-royal-gold-light text-foreground"
                   : "text-popover-foreground hover:bg-muted",
@@ -464,6 +465,7 @@ export function FormulaEditor({
       )}
       {open && suggestions.length === 0 && anchor && (
         <div
+          data-slot="formula-suggestions"
           className="absolute z-50 w-64 rounded-md border border-border bg-popover p-3 text-xs text-muted-foreground shadow-md"
           style={{ top: anchor.top, left: anchor.left }}
         >

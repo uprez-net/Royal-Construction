@@ -122,6 +122,7 @@ export function TemplateActivityTree({
               draggable={!disabled}
               disabled={disabled}
               aria-label={`Drag ${row.name}`}
+              className="hidden md:inline-flex"
               onDragStart={(event) => {
                 event.dataTransfer.setData("text/plain", row.id);
                 event.dataTransfer.effectAllowed = "move";
