@@ -410,20 +410,20 @@ export function ProjectMilestonesTab({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="project-stage-table">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Stage</TableHead>
                     {isAdmin ? (
                       <TableHead className="text-right">Claim</TableHead>
                     ) : null}
-                    <TableHead className="hidden sm:table-cell">
+                    <TableHead className="hidden md:table-cell">
                       Progress
                     </TableHead>
-                    <TableHead className="hidden sm:table-cell">
+                    <TableHead className="hidden md:table-cell">
                       Status
                     </TableHead>
-                    <TableHead className="hidden sm:table-cell">
+                    <TableHead className="hidden md:table-cell">
                       Next up
                     </TableHead>
                     <TableHead className="w-12">
@@ -454,7 +454,7 @@ export function ProjectMilestonesTab({
                           )}
                           onClick={() => toggleStage(ledgerStage.stage)}
                         >
-                          <TableCell>
+                          <TableCell className="stage-heading">
                             <span className="font-medium text-foreground">
                               {ledgerStage.label}
                             </span>
@@ -466,23 +466,26 @@ export function ProjectMilestonesTab({
 
                             {/* Below `sm` the Status and Next up columns are
                                 gone, so both fold in under the stage name. */}
-                            <span className="ml-1.5 inline-flex align-middle sm:hidden">
+                            <span className="ml-1.5 inline-flex align-middle md:hidden">
                               <StageStatusPill state={ledgerStage.state} />
                             </span>
-                            <span className="mt-1 block text-xs sm:hidden">
+                            <span className="mt-1 block text-xs md:hidden">
                               <NextUp ledgerStage={ledgerStage} />
                             </span>
                           </TableCell>
 
                           {isAdmin ? (
-                            <TableCell className="text-right font-mono tabular-nums">
+                            <TableCell className="stage-claim text-right font-mono tabular-nums">
+                              <span className="mb-1 block font-sans text-xs text-muted-foreground md:hidden">
+                                Stage claim
+                              </span>
                               {ledgerStage.claim === null
                                 ? "—"
                                 : currency.format(ledgerStage.claim)}
                             </TableCell>
                           ) : null}
 
-                          <TableCell className="hidden sm:table-cell">
+                          <TableCell className="hidden md:table-cell">
                             <span className="flex items-center gap-2">
                               <span className="font-mono text-xs tabular-nums text-muted-foreground">
                                 {rollup.done} / {rollup.total}
@@ -512,15 +515,15 @@ export function ProjectMilestonesTab({
                             </span>
                           </TableCell>
 
-                          <TableCell className="hidden sm:table-cell">
+                          <TableCell className="hidden md:table-cell">
                             <StageStatusPill state={ledgerStage.state} />
                           </TableCell>
 
-                          <TableCell className="hidden max-w-[22rem] text-xs sm:table-cell">
+                          <TableCell className="hidden max-w-[22rem] text-xs md:table-cell">
                             <NextUp ledgerStage={ledgerStage} />
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell className="stage-actions">
                             <span className="flex items-center justify-end gap-1">
                               {/* A finished stage has no open activity left to
                                   book a tradie onto, so it gets no button. */}

@@ -39,7 +39,6 @@ import {
   PaginationEllipsis,
 } from "@/components/ui/pagination";
 import { dateFormat, RoleLabelRecord } from "@/utils/formatters";
-import { skeletonTableRows } from "@/components/ui/skeleton";
 import { formatAuPhone } from "@/utils/phone";
 
 export default function TeamManagementPage() {
@@ -112,7 +111,7 @@ export default function TeamManagementPage() {
   }
 
   return (
-    <div className="container py-10">
+    <div className="container py-4 sm:py-10">
       <Card className="mb-8 w-full">
         <CardHeader>
           <CardTitle>Invite Members</CardTitle>
@@ -122,12 +121,13 @@ export default function TeamManagementPage() {
         </CardHeader>
         <CardContent>
           <form
-            className="flex w-full items-center space-x-2"
+            className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:gap-2"
             onSubmit={onSubmit}
           >
             <Input
               type="email"
               placeholder="Email address"
+              aria-label="Invitation email address"
               value={emailAddress}
               onChange={(e) => setEmailAddress(e.target.value)}
               className="flex-1"
@@ -139,7 +139,11 @@ export default function TeamManagementPage() {
               onValueChange={setSelectedRole}
               selectedRole={selectedRole}
             />
-            <Button type="submit" disabled={isPending}>
+            <Button
+              type="submit"
+              disabled={isPending}
+              className="w-full sm:w-auto"
+            >
               <Mail className="mr-2 h-4 w-4" />
               Invite
             </Button>
@@ -219,7 +223,7 @@ function EditableCell({
       onClick={onEdit}
       aria-label={label}
       title="Click to edit"
-      className="group inline-flex items-center gap-1.5 rounded-md text-left transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="group inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-md text-left transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-0"
     >
       {children}
       <Pencil
@@ -250,7 +254,7 @@ function SelectRole({
       onValueChange={(val) => onValueChange(val as Role | undefined)}
       name={fieldName}
     >
-      <SelectTrigger className="w-45">
+      <SelectTrigger aria-label="Member role" className="w-full sm:w-45">
         <SelectValue placeholder="Select role" />
       </SelectTrigger>
       <SelectContent>
@@ -366,18 +370,23 @@ function UserList({
   }, [page, total, count, isLoaded]);
 
   return (
-    <div className="w-full px-4 space-y-4">
+    <div className="w-full space-y-4 sm:px-4">
       <div className="flex items-center space-x-2">
         {/* Search Bar */}
         <Input
           type="text"
           placeholder="Search members..."
+          aria-label="Search members"
           onChange={(e) => setQuery(e.target.value)}
           className="flex-1"
         />
       </div>
       {/* Data Table  */}
       <DataTable
+        mobileLayout="cards"
+        mobileColumns={1}
+        loading={!isLoaded}
+        loadingLabel="Loading team members"
         headers={["Name", "Email", "Phone", "Role"]}
         rows={
           isLoaded
@@ -418,7 +427,7 @@ function UserList({
                     />,
                     email,
                     <div key={`phone-${user.id}`} className="space-y-1">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:flex-nowrap">
                         <Input
                           aria-label="Phone"
                           aria-invalid={Boolean(draft.error)}
@@ -445,7 +454,7 @@ function UserList({
                             )
                           }
                           onKeyDown={onDraftKeyDown}
-                          className="h-8 min-w-36 font-mono tabular-nums"
+                          className="h-8 min-w-0 flex-1 font-mono tabular-nums sm:min-w-36"
                         />
                         <Button
                           type="button"
@@ -518,7 +527,7 @@ function UserList({
                   roleCell,
                 ];
               })
-            : skeletonTableRows(4)
+            : []
         }
         emptyState={
           <div className="flex flex-col items-center justify-center gap-3">
@@ -623,18 +632,23 @@ function InviteList({
   }, [page, total, count, isLoaded]);
 
   return (
-    <div className="w-full px-4 space-y-4">
+    <div className="w-full space-y-4 sm:px-4">
       <div className="flex items-center space-x-2">
         {/* Search Bar */}
         <Input
           type="text"
           placeholder="Search invitations..."
+          aria-label="Search invitations"
           onChange={(e) => setQuery(e.target.value)}
           className="flex-1"
         />
       </div>
       {/* Data Table  */}
       <DataTable
+        mobileLayout="cards"
+        mobileColumns={1}
+        loading={!isLoaded}
+        loadingLabel="Loading invitations"
         headers={["Email", "Role", "Sent At", "Status", "Actions"]}
         rows={
           isLoaded
@@ -659,7 +673,7 @@ function InviteList({
                   </Button>
                 </div>,
               ])
-            : skeletonTableRows(5)
+            : []
         }
         emptyState={
           <div className="flex flex-col items-center justify-center gap-3">

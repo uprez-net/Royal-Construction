@@ -101,9 +101,24 @@ export function OfferSummaryStrip({
     // landmark so the totals are reachable by region navigation.
     <aside
       aria-label="Offer totals"
-      className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-2 border-t border-border/70 bg-white px-5 py-2.5"
+      className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/70 bg-white px-3 py-2.5 md:gap-x-6 md:px-5"
     >
-      <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
+      <details className="w-full md:hidden">
+        <summary className="min-h-11 cursor-pointer rounded-md py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">
+          Price breakdown
+        </summary>
+        <dl className="grid max-h-[25dvh] grid-cols-2 gap-3 overflow-y-auto pb-3">
+          {cells.map(([label, value]) => (
+            <div key={label} className="min-w-0">
+              <dt className="text-xs text-muted-foreground">{label}</dt>
+              <dd className="break-words font-mono text-sm tabular-nums">
+                {value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </details>
+      <dl className="hidden flex-wrap items-center gap-x-6 gap-y-2 md:flex">
         {cells.map(([label, value]) => (
           <div key={label} className="flex items-baseline gap-2">
             <dt className="text-xs text-muted-foreground">{label}</dt>

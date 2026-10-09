@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "vitest";
+import { REPO_ROOT } from "../support/repo-root";
 
 // /offers streams its skeleton first, then swaps in PageHeroCard. The skeleton's
 // hero was a flat tint with p-6 while the real hero is a gradient Card with
 // 40px of vertical padding, so the page flashed and jumped on the swap.
 
-const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
 
 const classesOf = (source: string, pattern: RegExp) => {
   const match = source.match(pattern)?.[1];
@@ -36,10 +37,11 @@ test("the /offers skeleton hero paints the real hero's surface", () => {
 });
 
 test("the /offers skeleton hero keeps the real hero's padding", () => {
-  // Card adds py-4 around CardContent's p-6.
-  assert.match(hero, /<CardContent className="relative p-6">/);
+  // Card adds py-4 around responsive CardContent padding.
+  assert.match(hero, /<CardContent className="relative p-4 sm:p-6">/);
   assert.match(read("components/ui/card.tsx"), /\bpy-4\b/);
 
-  assert.ok(placeholder.includes("px-6"), placeholder.join(" "));
-  assert.ok(placeholder.includes("py-10"), placeholder.join(" "));
+  for (const padding of ["px-4", "py-8", "sm:px-6", "sm:py-10"]) {
+    assert.ok(placeholder.includes(padding), placeholder.join(" "));
+  }
 });

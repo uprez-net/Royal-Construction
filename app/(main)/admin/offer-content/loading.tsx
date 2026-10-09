@@ -5,7 +5,7 @@ export default function OfferContentSkeleton() {
     <PageSkeleton label="Loading offer pre-fill content" className="space-y-6">
       {/* Same surface and padding as PageHeroCard, so the swap to the loaded
           page does not flash from a white card to a gold one. */}
-      <div className="relative overflow-hidden rounded-lg border border-royal-gold/20 bg-linear-to-br from-royal-gold-light to-card px-6 py-10 shadow-sm">
+      <div className="relative overflow-hidden rounded-lg border border-royal-gold/20 bg-linear-to-br from-royal-gold-light to-card px-4 py-8 shadow-sm sm:px-6 sm:py-10">
         <div className="pointer-events-none absolute -right-12 -top-10 size-40 rounded-full bg-royal-gold/10" />
         <div className="relative flex items-start gap-3">
           <Skeleton className="size-9 shrink-0 rounded-lg" />
@@ -21,7 +21,7 @@ export default function OfferContentSkeleton() {
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-border/70 bg-card px-4 py-3 shadow-sm">
-        <div className="flex min-w-190 gap-2">
+        <div className="grid grid-cols-2 gap-x-2 gap-y-4 sm:grid-cols-3 md:flex md:min-w-190 md:gap-0">
           {Array.from({ length: 6 }).map((_, index) => (
             <div
               key={index}

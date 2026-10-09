@@ -236,13 +236,13 @@ const calcComplianceOverviewData = (
     case CertifierEngagementStatus.IN_REVIEW: {
       const unresolved = checklist.filter(
         (document) =>
-          document.status !== ComplianceDocumentStatus.APPROVED &&
-          !isNotRequired(document.status),
+          document.status !== ComplianceDocumentStatus.APPROVED
+          && !isNotRequired(document.status),
       );
       const rejected = unresolved.filter(
         (document) =>
-          document.status === ComplianceDocumentStatus.REJECTED ||
-          document.rejectionReason,
+          document.status === ComplianceDocumentStatus.REJECTED
+          || document.rejectionReason,
       ).length;
       return {
         outstanding: unresolved.length,
@@ -418,59 +418,91 @@ export function ProjectTabNavigation({
   );
 
   return (
-    // Wrapping rather than horizontally scrolling: a scroll container with a
-    // hidden scrollbar gave no affordance that further tabs existed.
-    <div
-      role="tablist"
-      aria-label="Project sections"
-      aria-orientation="horizontal"
-      onKeyDown={handleKeyDown}
-      className="mb-5 flex flex-wrap gap-x-1 border-b-2 border-border/60"
-    >
-      {projectDetailTabs.map((tab) => {
-        const Icon = TabIcons[tab.key];
-        const isActive = activeTab === tab.key;
-        if (tab.isAdminOnly && !isAdmin) {
-          return null;
-        }
+    <>
+      <div className="mb-4 flex flex-col gap-2 md:hidden">
+        <label htmlFor="mobile-project-section" className="text-sm font-medium">
+          Project section
+        </label>
+        <select
+          id="mobile-project-section"
+          value={activeTab}
+          onChange={(event) => {
+            if (isVisibleProjectDetailTab(event.target.value))
+              onTabChange(event.target.value);
+          }}
+          className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          {projectDetailTabs
+            .filter((tab) => !tab.isAdminOnly || isAdmin)
+            .map((tab) => (
+              <option key={tab.key} value={tab.key}>
+                {tab.label}
+                {tab.badge ? ` (${tab.badge.count})` : ""}
+              </option>
+            ))}
+        </select>
+        {projectDetailTabs.find((tab) => tab.key === activeTab)?.badge ? (
+          <p className="text-xs text-muted-foreground">
+            {
+              projectDetailTabs.find((tab) => tab.key === activeTab)?.badge
+                ?.description
+            }
+          </p>
+        ) : null}
+      </div>
+      {/* Desktop tabs wrap so every section is visible without a hidden scrollbar. */}
+      <div
+        role="tablist"
+        aria-label="Project sections"
+        aria-orientation="horizontal"
+        onKeyDown={handleKeyDown}
+        className="mb-5 hidden flex-wrap gap-x-1 border-b-2 border-border/60 md:flex"
+      >
+        {projectDetailTabs.map((tab) => {
+          const Icon = TabIcons[tab.key];
+          const isActive = activeTab === tab.key;
+          if (tab.isAdminOnly && !isAdmin) {
+            return null;
+          }
 
-        return (
-          <button
-            key={tab.key}
-            ref={(node) => {
-              tabRefs.current[tab.key] = node;
-            }}
-            type="button"
-            role="tab"
-            id={projectTabTriggerId(tab.key)}
-            aria-selected={isActive}
-            aria-controls={projectTabPanelId(tab.key)}
-            tabIndex={isActive ? 0 : -1}
-            onClick={() => onTabChange(tab.key)}
-            className={cn(
-              "relative -mb-0.5 inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-              isActive && "border-primary font-semibold text-primary",
-            )}
-          >
-            <Icon className="size-4" aria-hidden="true" />
-            <span>{tab.label}</span>
-            {tab.badge ? (
-              <>
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium leading-none",
-                    BADGE_TONE_CLASS[tab.badge.tone],
-                  )}
-                >
-                  {tab.badge.count}
-                </span>
-                <span className="sr-only">{tab.badge.description}</span>
-              </>
-            ) : null}
-          </button>
-        );
-      })}
-    </div>
+          return (
+            <button
+              key={tab.key}
+              ref={(node) => {
+                tabRefs.current[tab.key] = node;
+              }}
+              type="button"
+              role="tab"
+              id={projectTabTriggerId(tab.key)}
+              aria-selected={isActive}
+              aria-controls={projectTabPanelId(tab.key)}
+              tabIndex={isActive ? 0 : -1}
+              onClick={() => onTabChange(tab.key)}
+              className={cn(
+                "relative -mb-0.5 inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                isActive && "border-primary font-semibold text-primary",
+              )}
+            >
+              <Icon className="size-4" aria-hidden="true" />
+              <span>{tab.label}</span>
+              {tab.badge ? (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium leading-none",
+                      BADGE_TONE_CLASS[tab.badge.tone],
+                    )}
+                  >
+                    {tab.badge.count}
+                  </span>
+                  <span className="sr-only">{tab.badge.description}</span>
+                </>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }

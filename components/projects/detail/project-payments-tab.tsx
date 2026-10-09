@@ -222,6 +222,7 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
         </CardHeader>
         <CardContent className="pt-5">
           <DataTable
+            mobileLayout="cards"
             caption={`Progress claims raised for ${project.name}`}
             headers={[
               "Invoice",
@@ -256,8 +257,8 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
                   <NoValueCell label="Invoice number not yet assigned" />
                 )}
               </span>,
-              PROJECT_STAGE_LABELS[invoice.projectStage as ProjectStage] ??
-                invoice.projectStage,
+              PROJECT_STAGE_LABELS[invoice.projectStage as ProjectStage]
+                ?? invoice.projectStage,
               dateFormat.format(new Date(invoice.issuedDate)),
               dateFormat.format(new Date(invoice.dueDate)),
               <MoneyCell

@@ -9,7 +9,15 @@
 // answers "what does this step say?" without opening it.
 
 import { Check, ChevronLeft, ChevronRight, Lock } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import type { OfferStepId } from "@/lib/offer/step-digests";
 import {
@@ -38,6 +46,10 @@ export function OfferStepRail({
   onSelect,
   onToggleCollapsed,
 }: OfferStepRailProps) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const activeStep = OFFER_WORKFLOW_STEPS.find(
+    (step) => step.id === activeStepId,
+  );
   const listRef = useRef<HTMLOListElement>(null);
   useEffect(() => {
     const list = listRef.current;
@@ -57,74 +69,138 @@ export function OfferStepRail({
   }, [activeStepId, blockedStepId]);
 
   return (
-    <nav
-      aria-label="Offer workflow"
-      className={cn(
-        "flex shrink-0 flex-col border-r border-border/70 bg-white/60 transition-[width]",
-        // Icon-only below lg regardless of the toggle: a 240px rail against a
-        // ~600px pane on a small laptop was a quarter of the width on nav.
-        collapsed ? "w-14" : "w-14 lg:w-60",
-      )}
-    >
-      <ol ref={listRef} className="flex-1 overflow-y-auto py-2">
-        {OFFER_WORKFLOW_PHASES.map((phase) => {
-          const steps = OFFER_WORKFLOW_STEPS.filter(
-            (s) => s.phase === phase.id,
-          );
-          if (steps.length === 0) {
-            return null;
-          }
-          return (
-            <li key={phase.id}>
-              {collapsed ? (
-                <hr className="mx-3 my-2 border-border/70" />
-              ) : (
-                <>
-                  <hr className="mx-3 my-2 border-border/70 lg:hidden" />
-                  <p className="hidden px-4 pb-1 pt-3 text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground lg:block">
-                    {phase.label}
-                  </p>
-                </>
-              )}
-              <ol>
-                {steps.map((step) => (
-                  <li key={step.id} data-step-id={step.id}>
-                    <RailRow
-                      active={step.id === activeStepId}
-                      blocked={step.id === blockedStepId}
-                      collapsed={collapsed}
-                      digest={digests[step.id]}
-                      index={OFFER_WORKFLOW_STEPS.indexOf(step) + 1}
-                      label={step.label}
-                      state={stepStates[step.id]}
-                      onSelect={() => onSelect(step.id)}
-                    />
-                  </li>
-                ))}
-              </ol>
-            </li>
-          );
-        })}
-      </ol>
-      <button
-        type="button"
-        onClick={onToggleCollapsed}
-        aria-label={collapsed ? "Expand step rail" : "Collapse step rail"}
-        aria-expanded={!collapsed}
-        // Below lg the rail is icon-only whatever the toggle says, so there the
-        // button would change nothing but still sit in the tab order.
-        className="hidden items-center gap-2 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 lg:flex"
-      >
-        {collapsed ? (
-          <ChevronRight className="size-4" aria-hidden="true" />
-        ) : (
-          <>
-            <ChevronLeft className="size-4" aria-hidden="true" />
-            <span>Collapse</span>
-          </>
+    <>
+      <div className="shrink-0 border-b border-border/70 bg-background p-2 md:hidden">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full justify-between"
+          onClick={() => setMobileOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={mobileOpen}
+        >
+          <span className="min-w-0 truncate">
+            Step{" "}
+            {OFFER_WORKFLOW_STEPS.findIndex((step) => step.id === activeStepId)
+              + 1}{" "}
+            of {OFFER_WORKFLOW_STEPS.length} · {activeStep?.label}
+          </span>
+          <ChevronRight aria-hidden="true" data-icon="inline-end" />
+        </Button>
+      </div>
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="bottom" className="max-h-[85dvh] rounded-t-xl">
+          <SheetHeader>
+            <SheetTitle>Offer workflow</SheetTitle>
+            <SheetDescription>
+              Choose a step. Each step shows its progress and current details.
+            </SheetDescription>
+          </SheetHeader>
+          <nav
+            aria-label="Offer workflow steps"
+            className="min-h-0 overflow-y-auto overscroll-contain pb-4"
+          >
+            {OFFER_WORKFLOW_PHASES.map((phase) => (
+              <div key={phase.id}>
+                <p className="px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {phase.label}
+                </p>
+                <ol>
+                  {OFFER_WORKFLOW_STEPS.filter(
+                    (step) => step.phase === phase.id,
+                  ).map((step) => (
+                    <li key={step.id}>
+                      <RailRow
+                        active={step.id === activeStepId}
+                        blocked={step.id === blockedStepId}
+                        collapsed={false}
+                        mobile
+                        digest={digests[step.id]}
+                        index={OFFER_WORKFLOW_STEPS.indexOf(step) + 1}
+                        label={step.label}
+                        state={stepStates[step.id]}
+                        onSelect={() => {
+                          onSelect(step.id);
+                          setMobileOpen(false);
+                        }}
+                      />
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </nav>
+        </SheetContent>
+      </Sheet>
+      <nav
+        aria-label="Offer workflow"
+        className={cn(
+          "hidden shrink-0 flex-col border-r border-border/70 bg-white/60 transition-[width] md:flex",
+          // Icon-only below lg regardless of the toggle: a 240px rail against a
+          // ~600px pane on a small laptop was a quarter of the width on nav.
+          collapsed ? "w-14" : "w-14 lg:w-60",
         )}
-      </button>
-    </nav>
+      >
+        <ol ref={listRef} className="flex-1 overflow-y-auto py-2">
+          {OFFER_WORKFLOW_PHASES.map((phase) => {
+            const steps = OFFER_WORKFLOW_STEPS.filter(
+              (s) => s.phase === phase.id,
+            );
+            if (steps.length === 0) {
+              return null;
+            }
+            return (
+              <li key={phase.id}>
+                {collapsed ? (
+                  <hr className="mx-3 my-2 border-border/70" />
+                ) : (
+                  <>
+                    <hr className="mx-3 my-2 border-border/70 lg:hidden" />
+                    <p className="hidden px-4 pb-1 pt-3 text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground lg:block">
+                      {phase.label}
+                    </p>
+                  </>
+                )}
+                <ol>
+                  {steps.map((step) => (
+                    <li key={step.id} data-step-id={step.id}>
+                      <RailRow
+                        active={step.id === activeStepId}
+                        blocked={step.id === blockedStepId}
+                        collapsed={collapsed}
+                        digest={digests[step.id]}
+                        index={OFFER_WORKFLOW_STEPS.indexOf(step) + 1}
+                        label={step.label}
+                        state={stepStates[step.id]}
+                        onSelect={() => onSelect(step.id)}
+                      />
+                    </li>
+                  ))}
+                </ol>
+              </li>
+            );
+          })}
+        </ol>
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-label={collapsed ? "Expand step rail" : "Collapse step rail"}
+          aria-expanded={!collapsed}
+          // Below lg the rail is icon-only whatever the toggle says, so there the
+          // button would change nothing but still sit in the tab order.
+          className="hidden items-center gap-2 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 lg:flex"
+        >
+          {collapsed ? (
+            <ChevronRight className="size-4" aria-hidden="true" />
+          ) : (
+            <>
+              <ChevronLeft className="size-4" aria-hidden="true" />
+              <span>Collapse</span>
+            </>
+          )}
+        </button>
+      </nav>
+    </>
   );
 }
 
@@ -137,6 +213,7 @@ function RailRow({
   label,
   state,
   onSelect,
+  mobile = false,
 }: {
   readonly active: boolean;
   readonly blocked: boolean;
@@ -146,6 +223,7 @@ function RailRow({
   readonly label: string;
   readonly state: OfferStepState;
   readonly onSelect: () => void;
+  readonly mobile?: boolean;
 }) {
   const locked = state === "locked";
   // State goes in the accessible name, not just the colour. A locked step is
@@ -162,7 +240,7 @@ function RailRow({
       aria-label={`Step ${index}, ${label}, ${stateWord}. ${digest}`}
       title={`${label} — ${digest}`}
       className={cn(
-        "flex w-full items-center gap-2.5 px-4 py-2 text-left transition-colors",
+        "flex min-h-11 w-full items-center gap-2.5 px-4 py-2 text-left transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50",
         active ? "bg-royal-gold-light/70" : "hover:bg-muted/50",
         blocked
@@ -171,7 +249,10 @@ function RailRow({
     >
       <StepGlyph active={active} index={index} state={state} />
       {collapsed ? null : (
-        <span aria-hidden="true" className="hidden min-w-0 flex-1 lg:block">
+        <span
+          aria-hidden="true"
+          className={cn("min-w-0 flex-1", mobile ? "block" : "hidden lg:block")}
+        >
           <span
             className={cn(
               "block truncate text-sm leading-tight",

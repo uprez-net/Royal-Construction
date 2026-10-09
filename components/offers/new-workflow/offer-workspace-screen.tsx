@@ -69,6 +69,7 @@ import { OfferDocumentCanvas } from "./offer-document-canvas";
 import { OfferCommandBar } from "./shell/offer-command-bar";
 import { OfferStepRail, type OfferStepState } from "./shell/offer-step-rail";
 import { OfferSummaryStrip } from "./shell/offer-summary-strip";
+import { OFFER_WORKSPACE_FRAME_CLASS } from "./shell/offer-workspace-layout";
 import {
   buildOfferStepDigests,
   type OfferStepId,
@@ -647,7 +648,7 @@ export function OfferWorkspaceScreen({
     // scrolls. Nothing here scrolls the window, so the old measured
     // `--offer-sticky-offset` and every `scroll-mt-*` guess are gone.
     <div
-      className="flex h-[calc(100dvh-7.5rem)] min-h-125 flex-col overflow-hidden rounded-lg border border-border/70 bg-background shadow-sm print:hidden"
+      className={OFFER_WORKSPACE_FRAME_CLASS}
       aria-labelledby="new-offer-workspace-title"
     >
       <OfferCommandBar
@@ -661,7 +662,7 @@ export function OfferWorkspaceScreen({
         onRetrySave={onRetrySave}
         awaitingOffer={awaitingOffer}
       />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <OfferStepRail
           activeStepId={activeStepId}
           blockedStepId={blockedStepId}
@@ -682,7 +683,7 @@ export function OfferWorkspaceScreen({
           aria-labelledby="offer-pane-title"
           aria-busy={transitioning}
           tabIndex={-1}
-          className="@container/pane min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-5 outline-none"
+          className="@container/pane min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain p-3 outline-none md:px-5 md:py-5"
         >
           <div className="space-y-5">
             {awaitingOffer ? (
@@ -1210,6 +1211,7 @@ function OfferPaneLoadState({ failed }: { readonly failed: boolean }) {
       ) : (
         <p
           role="status"
+          aria-busy="true"
           className="flex items-center gap-2 rounded-lg border border-dashed border-border px-4 py-10 text-sm text-muted-foreground"
         >
           <Loader2

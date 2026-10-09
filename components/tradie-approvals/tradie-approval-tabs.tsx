@@ -177,14 +177,15 @@ export function TradieApprovalTabs() {
           <Input
             id="search"
             className="h-10 rounded-lg border-border bg-background pl-9 text-[13px] shadow-none transition-all focus-visible:ring-4 focus-visible:ring-teal-500/10 focus-visible:border-teal-600"
-            placeholder="Search offers..."
+            placeholder="Search approvals…"
+            aria-label="Search approvals"
             value={query.search}
             onChange={handleSearchChange}
           />
         </div>
 
         {selectedApprovalIds.length > 0 && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               className="bg-green-500 hover:bg-green-600 text-white"
@@ -248,9 +249,9 @@ function ApprovalTabs({ activeTab, onTabChange }: ApprovalTabsProps) {
       key: "all",
       label: "All",
       count:
-        kpiData.pendingCount +
-        kpiData.resolvedCount.accepted +
-        kpiData.resolvedCount.rejected,
+        kpiData.pendingCount
+        + kpiData.resolvedCount.accepted
+        + kpiData.resolvedCount.rejected,
       icon: Clock3,
     },
     {

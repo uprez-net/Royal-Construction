@@ -60,36 +60,40 @@ export function OfferCommandBar({
   const owners = formatOwnerNamesLine(job.owners ?? []) || job.clientNames;
 
   return (
-    <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/70 bg-white px-4 py-2.5">
-      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+    <header className="flex shrink-0 flex-col gap-3 border-b border-border/70 bg-white px-3 py-3 md:flex-row md:flex-wrap md:items-center md:gap-x-3 md:gap-y-2 md:px-4 md:py-2.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 md:flex-1 md:flex-nowrap md:gap-2.5">
         <Badge className="shrink-0 bg-royal-gold-ink font-mono text-white">
-          {formatOfferReference(job.reference, job.revision)}
+          {awaitingOffer
+            ? "Loading…"
+            : formatOfferReference(job.reference, job.revision)}
         </Badge>
         {/* The page's only h1. Screen readers get the offer's identity here;
             sighted users get it from the badge and address. */}
         <h1
           id="new-offer-workspace-title"
-          className="min-w-0 truncate text-sm font-medium"
+          className="order-first w-full min-w-0 break-words text-sm font-medium md:order-none md:w-auto md:truncate"
         >
           <span className="sr-only">Offer workspace for </span>
-          {job.siteAddress || "New offer"}
+          {awaitingOffer ? "Loading offer…" : job.siteAddress || "New offer"}
         </h1>
         <span className="hidden shrink-0 truncate text-sm text-muted-foreground lg:inline">
           {owners}
         </span>
         <Badge variant="secondary" className="shrink-0">
-          {OFFER_STATUS_LABEL[status]}
+          {awaitingOffer ? "Loading" : OFFER_STATUS_LABEL[status]}
         </Badge>
-        <ExpiryChip expiry={offerExpiry} />
+        <ExpiryChip expiry={awaitingOffer ? null : offerExpiry} />
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <div className="text-right">
+        <div className="mr-auto text-left md:mr-0 md:text-right">
           <p className="font-mono text-sm font-semibold leading-none tabular-nums">
             <span className="sr-only">Contract value including GST: </span>
-            {formatCurrency(customerPrice.selectedContractValueIncGst)}
+            {awaitingOffer
+              ? "—"
+              : formatCurrency(customerPrice.selectedContractValueIncGst)}
           </p>
-          <div className="mt-1 flex justify-end">
+          <div className="mt-1 flex md:justify-end">
             <SaveIndicator state={saveState} onRetry={onRetrySave} />
           </div>
         </div>

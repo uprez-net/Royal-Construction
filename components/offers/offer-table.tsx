@@ -22,7 +22,7 @@ import { useRouter } from "next/navigation";
 import { OfferStatusBadge } from "./offer-status-badge";
 import { OfferStatus } from "@prisma/client";
 import { cn } from "@/lib/utils";
-import { Skeleton } from "../ui/skeleton";
+import { DataTableSkeleton, PageSkeleton, Skeleton } from "../ui/skeleton";
 import { isDefaultOfferFilters } from "@/lib/offer/offer-listing-view";
 
 const money = (value: string) => {
@@ -110,9 +110,35 @@ export function OfferTable({
     [router],
   );
 
+  if (loading && offers.items.length === 0) {
+    return (
+      <CardContent className="px-5 py-4">
+        <PageSkeleton label="Loading offers">
+          <DataTableSkeleton columnCount={OFFER_TABLE_HEADERS.length} />
+        </PageSkeleton>
+      </CardContent>
+    );
+  }
+
   return (
     <CardContent className="px-5 py-4">
-      <div className="overflow-x-auto rounded-lg border border-border/70 bg-background">
+      {offers.items.length > 0 ? (
+        <div className="flex flex-col gap-3 md:hidden">
+          {offers.items.map((group) => (
+            <OfferMobileCard
+              key={group.leadId}
+              group={group}
+              onStatusChange={handleStatusChange}
+            />
+          ))}
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          "overflow-x-auto rounded-lg border border-border/70 bg-background",
+          offers.items.length > 0 && "hidden md:block",
+        )}
+      >
         <table className="w-full border-collapse text-sm">
           <caption className="sr-only">
             Offers grouped by client, each expandable to its version history
@@ -204,6 +230,144 @@ interface OfferGroupRowsProps {
   onToggle: (leadId: number) => void;
   onOpen: (leadId: number) => void;
   onStatusChange: (offerId: string, status: OfferStatus) => Promise<void>;
+}
+
+function OfferMobileCard({
+  group,
+  onStatusChange,
+}: Pick<OfferGroupRowsProps, "group" | "onStatusChange">) {
+  const { latest } = group;
+  return (
+    <article className="min-w-0 rounded-lg border border-border/70 bg-background p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <Link
+          href={`/offers/${group.leadId}`}
+          className="inline-flex min-h-11 items-center rounded-sm font-mono text-sm font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          {group.reference}
+        </Link>
+        <OfferStatusBadge
+          status={latest.offerStatus}
+          onStatusChange={(status) => onStatusChange(latest.id, status)}
+        />
+      </div>
+      <p className="break-words text-base font-semibold">
+        {group.lead.name || "N/A"}
+      </p>
+      <p className="mt-1 break-words text-sm text-muted-foreground">
+        {group.lead.type.join(", ") || "—"}
+      </p>
+      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <div className="col-span-2 rounded-md bg-muted/50 p-3">
+          <dt className="text-xs text-muted-foreground">
+            Total including GST · v{latest.revisionNumber}
+          </dt>
+          <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">
+            {money(latest.totalAmount)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">
+            Amount excluding GST
+          </dt>
+          <dd className="mt-1 font-mono tabular-nums">
+            {money(latest.amount)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">GST</dt>
+          <dd className="mt-1 font-mono tabular-nums">
+            {money(latest.gstAmount)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Sent</dt>
+          <dd className="mt-1">{day(latest.sentAt)}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Approved</dt>
+          <dd className="mt-1">{day(latest.acceptedAt)}</dd>
+        </div>
+      </dl>
+      {group.versionCount > 1 ? (
+        <details className="mt-4 border-t border-border/70 pt-2">
+          <summary className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">
+            <Layers className="size-4" aria-hidden="true" />{" "}
+            {group.versionCount} versions · View history
+          </summary>
+          <div className="flex flex-col gap-3 pt-2">
+            {group.revisions.map((revision) => (
+              <div
+                key={revision.id}
+                className="rounded-md border border-border/70 p-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-mono text-sm font-semibold">
+                    v{revision.revisionNumber}
+                    {revision.isActive ? " · Active" : ""}
+                  </span>
+                  <OfferStatusBadge
+                    status={revision.offerStatus}
+                    onStatusChange={(status) =>
+                      onStatusChange(revision.id, status)
+                    }
+                  />
+                </div>
+                <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <dt className="text-xs text-muted-foreground">
+                      Total including GST
+                    </dt>
+                    <dd className="font-mono tabular-nums">
+                      {money(revision.totalAmount)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">
+                      Document version
+                    </dt>
+                    <dd>v{revision.version}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">
+                      Amount excluding GST
+                    </dt>
+                    <dd className="font-mono tabular-nums">
+                      {money(revision.amount)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">GST</dt>
+                    <dd className="font-mono tabular-nums">
+                      {money(revision.gstAmount)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Created</dt>
+                    <dd>{day(revision.createdAt)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Sent</dt>
+                    <dd>{day(revision.sentAt)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Approved</dt>
+                    <dd>{day(revision.acceptedAt)}</dd>
+                  </div>
+                </dl>
+              </div>
+            ))}
+          </div>
+        </details>
+      ) : null}
+      <Link
+        href={`/offers/${group.leadId}`}
+        className="mt-3 flex min-h-11 items-center justify-center rounded-lg border border-border text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        Open offer
+      </Link>
+    </article>
+  );
 }
 
 /**

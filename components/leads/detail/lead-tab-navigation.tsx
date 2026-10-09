@@ -103,7 +103,7 @@ export function LeadTabNavigation({
       aria-label="Lead sections"
       aria-orientation="horizontal"
       onKeyDown={handleKeyDown}
-      className="mb-5 flex flex-wrap gap-x-1 border-b-2 border-border/60"
+      className="mb-5 grid grid-cols-2 gap-x-1 border-b-2 border-border/60 sm:flex sm:flex-wrap"
     >
       {LEAD_DETAIL_TABS.map((key) => {
         const Icon = TAB_ICONS[key];
@@ -124,7 +124,7 @@ export function LeadTabNavigation({
             tabIndex={isActive ? 0 : -1}
             onClick={() => onTabChange(key)}
             className={cn(
-              "relative -mb-0.5 inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+              "relative -mb-0.5 inline-flex min-h-11 items-center gap-1.5 border-b-2 border-transparent px-2 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:whitespace-nowrap sm:px-4",
               isActive && "border-primary font-semibold text-primary",
             )}
           >

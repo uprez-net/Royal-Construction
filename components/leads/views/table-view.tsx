@@ -35,6 +35,7 @@ import LeadCommModal from "../modal-ui/lead-comm-modal";
 import { fetchOpenTasks, type LeadTaskRow } from "@/lib/leads/task-service";
 import { useAppSelector } from "@/lib/store/hooks";
 import { cn } from "@/lib/utils";
+import { DataTableSkeleton, PageSkeleton } from "@/components/ui/skeleton";
 
 interface TableViewProps {
   loading: boolean;
@@ -213,7 +214,11 @@ export default function TableView({
           </div>
         </div>
 
-        {leads.length === 0 ? (
+        {loading ? (
+          <PageSkeleton label="Loading leads" className="p-4 sm:p-5">
+            <DataTableSkeleton columnCount={8} />
+          </PageSkeleton>
+        ) : leads.length === 0 ? (
           <div className="table-empty">
             <Search size={32} />
             <p>No leads match your search.</p>
@@ -515,6 +520,7 @@ export default function TableView({
                           <button
                             type="button"
                             className="mobile-link-action"
+                            disabled={lead.isArchived}
                             onClick={() => setAssignedLead(lead)}
                           >
                             {lead.assignedUser?.name || "Assign"}

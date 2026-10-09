@@ -28,7 +28,7 @@ export function PageHeroCard({
 
   return (
     <Card className="overflow-hidden border-royal-gold/20 bg-linear-to-br from-royal-gold-light to-card shadow-sm">
-      <CardContent className="relative p-6">
+      <CardContent className="relative p-4 sm:p-6">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -right-12 -top-10 size-40 rounded-full bg-royal-gold/10"
@@ -60,7 +60,9 @@ export function PageHeroCard({
             <div className="hidden shrink-0 sm:block">{aside}</div>
           ) : null}
           {actions ? (
-            <div className="flex flex-wrap gap-2">{actions}</div>
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+              {actions}
+            </div>
           ) : null}
         </div>
       </CardContent>

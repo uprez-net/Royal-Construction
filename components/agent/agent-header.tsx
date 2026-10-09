@@ -69,11 +69,11 @@ export function AgentHeader({
         >
           <PanelLeft />
         </Button>
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-royal-gold-light text-royal-gold-ink">
+        <span className="hidden size-8 shrink-0 place-items-center rounded-lg bg-royal-gold-light text-royal-gold-ink sm:grid">
           <Bot aria-hidden="true" className="size-4" />
         </span>
         <div className="min-w-0">
-          <h1 className="font-heading truncate text-sm font-semibold text-foreground sm:text-base">
+          <h1 className="font-heading text-sm font-semibold leading-tight text-foreground sm:truncate sm:text-base">
             Operations desk
           </h1>
           <p className="truncate text-xs text-muted-foreground">
@@ -84,7 +84,7 @@ export function AgentHeader({
 
       <div className="flex shrink-0 items-center gap-1.5">
         <AgentSessionMeter usage={usage} />
-        <Badge variant="outline">
+        <Badge variant="outline" aria-label={statusLabel}>
           <span
             className={cn(
               "size-1.5 rounded-full",

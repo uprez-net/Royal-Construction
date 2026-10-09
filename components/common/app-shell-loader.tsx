@@ -34,15 +34,15 @@ export function AppShellLoader({ children }: { children: React.ReactNode }) {
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Header */}
           <header className="z-30 shrink-0 border-b border-border bg-white shadow-sm">
-            <div className="flex w-full items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-              <div className="flex min-w-0 items-center gap-4">
+            <div className="flex w-full items-center justify-between gap-2 px-3 py-2 sm:gap-4 sm:px-6 sm:py-3 lg:px-8">
+              <div className="flex min-w-0 items-center gap-2 sm:gap-4">
                 <Skeleton className="size-10 rounded-lg md:hidden" />
-                <div>
+                <div className="min-w-0">
                   <div className="flex h-7 items-center">
                     <Skeleton className="h-5 w-44 bg-royal-gold/20" />
                   </div>
 
-                  <div className="hidden h-4 items-center gap-2 md:flex">
+                  <div className="flex h-4 items-center gap-2">
                     <Skeleton className="h-3 w-10" />
                     <Skeleton className="h-3 w-14" />
                     <Skeleton className="h-3 w-20" />
@@ -70,9 +70,9 @@ export function AppShellLoader({ children }: { children: React.ReactNode }) {
           {/* Main Content */}
           <main
             className={cn(
-              "flex min-h-0 w-full flex-1 flex-col gap-6",
+              "flex min-h-0 min-w-0 w-full flex-1 flex-col gap-4 sm:gap-6",
               "overflow-y-auto",
-              "px-4 py-5 sm:px-6 lg:px-8 lg:py-6",
+              "px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-6",
               "scrollbar-none",
               "[-ms-overflow-style:none]",
               "[&::-webkit-scrollbar]:hidden",

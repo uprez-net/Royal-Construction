@@ -47,7 +47,7 @@ export function OfferKPI({
     { title: "Sent Offers", dataPoint: sentOffers, Icon: Send, tone: "info" },
   ];
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
       {allKPIs.map((kpi, index) => (
         <MetricCard
           key={index}

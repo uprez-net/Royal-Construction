@@ -143,6 +143,8 @@ export function ProjectHistoryTabs({ project }: ProjectHistoryTabsProps) {
 
       <CardContent className="pt-5">
         <DataTable
+          mobileLayout="cards"
+          mobileTitleColumn={3}
           caption="Recorded activity on this project, newest first."
           headers={["#", "Type", "Date", "Description", "Author"]}
           rows={filteredHistory.map((entry, index) => [

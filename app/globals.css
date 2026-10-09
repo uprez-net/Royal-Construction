@@ -247,7 +247,6 @@
 
   html {
     @apply h-full font-sans;
-    zoom: 0.8;
   }
 
   @media (min-width: 1024px) {
@@ -300,6 +299,179 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+/* Phones use their actual viewport: controls remain readable and touchable
+   instead of scaling the desktop interface down. Keep these screen-only so
+   the customer-facing A4 documents retain their existing print geometry. */
+@media screen and (max-width: 767px) {
+  [data-slot="button"],
+  [data-slot="select-trigger"],
+  [data-slot="tabs-trigger"],
+  [data-slot="toggle"],
+  [data-slot="dropdown-menu-item"],
+  [data-slot="dropdown-menu-radio-item"] {
+    min-height: 44px;
+    min-width: 44px;
+    touch-action: manipulation;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  [data-slot="input"],
+  [data-slot="input-group"] {
+    min-height: 44px;
+  }
+
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"] {
+    max-width: calc(100vw - 1rem) !important;
+    max-height: calc(
+      100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+    ) !important;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  [data-slot="dialog-header"] {
+    padding-right: 2rem;
+  }
+
+  [data-slot="sheet-content"] {
+    max-width: 100vw;
+    overscroll-behavior: contain;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  [data-slot="pagination-content"] {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+
+  .payment-schedule-table,
+  .payment-schedule-table tbody {
+    display: block;
+  }
+
+  .payment-schedule-table thead {
+    display: none;
+  }
+
+  .payment-schedule-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding: 0.5rem 0;
+  }
+
+  .payment-schedule-table td {
+    min-width: 0;
+  }
+
+  .payment-schedule-table td:first-child,
+  .payment-schedule-table td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .cost-schedule-table,
+  .cost-schedule-table tbody,
+  .sequence-mapping-table,
+  .sequence-mapping-table tbody {
+    display: block;
+  }
+
+  .cost-schedule-table colgroup,
+  .cost-schedule-table thead,
+  .sequence-mapping-table colgroup,
+  .sequence-mapping-table thead {
+    display: none;
+  }
+
+  .cost-schedule-table tr,
+  .sequence-mapping-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.75rem 0;
+    gap: 0.75rem;
+  }
+
+  .cost-schedule-table td,
+  .sequence-mapping-table td {
+    position: static;
+    min-width: 0;
+    white-space: normal;
+    border-right: 0;
+  }
+
+  .cost-schedule-table input,
+  .cost-schedule-table textarea {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+
+  .cost-schedule-table [data-slot="checkbox"] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .cost-schedule-table tr[id] td:first-child {
+    display: none;
+  }
+
+  .project-stage-table,
+  .project-stage-table tbody,
+  .project-stage-table tfoot {
+    display: block;
+  }
+
+  .project-stage-table thead {
+    display: none;
+  }
+
+  .project-stage-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .project-stage-table td {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .project-stage-table .stage-heading {
+    grid-column: 1 / -1;
+  }
+
+  .project-stage-table .stage-claim {
+    text-align: left;
+  }
+
+  .project-stage-table tr[id],
+  .project-stage-table tr[id] > td {
+    display: block;
+  }
+
+  .filter-chip,
+  .btn-export {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -2254,7 +2426,7 @@
   }
 
   .filter-chip {
-    min-height: 34px;
+    min-height: 44px;
   }
 
   .table-wrapper {
@@ -2318,7 +2490,7 @@
     align-items: center;
     gap: 6px;
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 700;
   }
 
@@ -2329,7 +2501,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .mobile-lead-meta {
@@ -2357,6 +2529,7 @@
 
   .mobile-link-action,
   .mobile-inline-action {
+    min-height: 44px;
     max-width: 100%;
     border: none;
     background: transparent;
@@ -2375,7 +2548,8 @@
   }
 
   .mobile-lead-actions {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     border-top: 1px solid var(--border-light);
     padding: 10px 12px 12px;
@@ -2383,7 +2557,7 @@
 
   .mobile-action-btn {
     display: inline-flex;
-    min-height: 36px;
+    min-height: 44px;
     flex: 1;
     align-items: center;
     justify-content: center;

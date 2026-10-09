@@ -95,7 +95,7 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
                 aria-pressed={active}
                 onClick={() => handleTabChange(tab)}
                 className={cn(
-                  "group relative inline-flex h-9 items-center rounded-md px-3 text-[12.5px] font-semibold transition-all duration-200",
+                  "group relative inline-flex min-h-11 items-center rounded-md px-3 text-sm font-semibold transition-colors duration-200 sm:min-h-9 sm:text-[12.5px]",
                   active
                     ? "bg-royal-gold-light text-royal-gold-ink shadow-sm"
                     : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
@@ -127,7 +127,7 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative max-w-70 flex-1">
+          <div className="relative min-w-0 flex-1 sm:max-w-70">
             <label htmlFor="search" className="sr-only">
               Search
             </label>

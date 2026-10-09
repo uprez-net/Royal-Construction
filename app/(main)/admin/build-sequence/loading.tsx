@@ -1,10 +1,13 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronRight, Layers, Loader2 } from "lucide-react";
 
 export default function Loading() {
   return (
-    <div className="flex flex-col gap-6" aria-busy="true">
+    <PageSkeleton
+      label="Loading build sequence"
+      className="flex flex-col gap-6"
+    >
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-royal-gold-ink">
@@ -13,10 +16,7 @@ export default function Loading() {
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">
             Build sequence
           </h1>
-          <p
-            role="status"
-            className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"
-          >
+          <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2
               className="size-4 animate-spin motion-reduce:animate-none"
               aria-hidden="true"
@@ -86,6 +86,6 @@ export default function Loading() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageSkeleton>
   );
 }

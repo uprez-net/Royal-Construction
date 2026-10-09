@@ -177,7 +177,7 @@ export function TradieTabs() {
           })}
         </div>
 
-        <div className="relative min-w-52 max-w-70 flex-1">
+        <div className="relative min-w-0 basis-full sm:min-w-52 sm:max-w-70 sm:flex-1 sm:basis-auto">
           <label htmlFor="tradie-search" className="sr-only">
             Search tradies by name
           </label>

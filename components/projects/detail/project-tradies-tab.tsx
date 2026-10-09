@@ -358,6 +358,9 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
         }
       >
         <DataTable
+          mobileLayout="cards"
+          mobileTitleColumn={1}
+          mobileColumns={1}
           key={`${tradies.length}-${tradies.map((t) => t.status).join("-")}`}
           caption="Tradies scheduled on this project, with reminder status, confirmation status and cost."
           align={[

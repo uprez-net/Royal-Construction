@@ -229,9 +229,9 @@ export function LeadHeader({
   };
 
   return (
-    <section className="rounded-xl border border-border/70 bg-card p-6 px-7 shadow-sm">
+    <section className="rounded-xl border border-border/70 bg-card p-4 shadow-sm sm:p-6 sm:px-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2 [&_a]:break-words">
           <Link
             href={backToListHref}
             className="inline-flex items-center gap-1 rounded-md text-sm font-medium text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -241,7 +241,7 @@ export function LeadHeader({
           </Link>
 
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-heading text-2xl leading-tight font-semibold tracking-tight text-foreground">
+            <h1 className="font-heading break-words text-xl leading-tight font-semibold tracking-tight text-foreground sm:text-2xl">
               {lead.name}
             </h1>
             <StageBadgeSelect

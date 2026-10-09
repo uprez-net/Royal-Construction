@@ -1247,7 +1247,7 @@ function PaymentStagesTable({
 
       {stages.length > 0 ? (
         <div className="overflow-hidden rounded-lg border border-border">
-          <div className="grid grid-cols-[1fr_100px_120px_32px] gap-2 bg-muted px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="hidden grid-cols-[1fr_100px_120px_32px] gap-2 bg-muted px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground md:grid">
             <span>Label</span>
             <span>Percent</span>
             <span>Amount</span>
@@ -1257,13 +1257,13 @@ function PaymentStagesTable({
             {stages.map((stage, index) => (
               <div
                 key={index}
-                className="grid grid-cols-[1fr_100px_120px_32px] items-center gap-2 px-3 py-2"
+                className="grid grid-cols-2 items-center gap-3 px-3 py-3 md:grid-cols-[1fr_100px_120px_32px] md:gap-2 md:py-2"
               >
                 <Input
                   aria-label={`Stage ${index + 1} label`}
                   value={stage.label ?? ""}
                   onChange={(e) => updateRow(index, { label: e.target.value })}
-                  className="h-8 rounded-md bg-card text-sm"
+                  className="col-span-2 h-8 rounded-md bg-card text-sm md:col-span-1"
                 />
                 <div className="relative">
                   <Input
@@ -1306,7 +1306,7 @@ function PaymentStagesTable({
                 <button
                   type="button"
                   onClick={() => removeRow(index)}
-                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:h-8 md:w-8"
                   aria-label={`Remove stage ${index + 1}`}
                 >
                   <X aria-hidden="true" className="h-3.5 w-3.5" />
@@ -1848,8 +1848,8 @@ export function ProjectOverviewTab({
   return (
     <section className="space-y-4">
       <Card className="border-border/70 bg-card shadow-sm">
-        <CardHeader className="sticky top-0 z-20 flex flex-row items-center justify-between gap-3 border-b border-border/70 bg-card pb-4 shadow-sm">
-          <div>
+        <CardHeader className="sticky top-0 z-20 flex flex-col items-start justify-between gap-3 border-b border-border/70 bg-card pb-4 shadow-sm sm:flex-row sm:items-center">
+          <div className="min-w-0">
             {/* The page <h1> is the project name in project-header.tsx and
                 nothing between here and it is an <h2>, so this panel title is
                 the first h2 on the tab. The accordion triggers below sit in
@@ -1864,7 +1864,7 @@ export function ProjectOverviewTab({
               Extracted from the tender and contract documents.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {failCount + warnCount > 0 ? (
               /* Live region so the "as of last save" qualifier is announced when
                  the first edit makes these counts stale, not just seen. */

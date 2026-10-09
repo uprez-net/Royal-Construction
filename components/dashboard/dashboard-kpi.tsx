@@ -93,15 +93,15 @@ export function DashboardKPI({
     },
   ];
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
       {allKPIs.map((kpi) => (
         <div
           key={kpi.title}
-          className="grid min-h-18 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border/70 bg-white/95 px-4 py-3 shadow-sm"
+          className="grid min-h-18 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-lg border border-border/70 bg-white/95 px-3 py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-3 sm:px-4"
         >
           <div
             className={cn(
-              "grid size-9 place-items-center rounded-lg text-white",
+              "grid size-7 place-items-center rounded-lg text-white sm:size-9",
               kpi.iconTone,
             )}
           >
@@ -113,11 +113,11 @@ export function DashboardKPI({
                 ? compactCurrency.format(kpi.dataPoint.total)
                 : kpi.dataPoint.total}
             </p>
-            <p className="mt-1 truncate text-xs text-muted-foreground">
+            <p className="mt-1 text-xs text-muted-foreground sm:truncate">
               {kpi.title}
             </p>
           </div>
-          <div className="min-w-12 justify-self-end text-right">
+          <div className="col-start-2 min-w-0 sm:col-start-auto sm:min-w-12 sm:justify-self-end sm:text-right">
             {kpi.dataPoint.trendDelta !== 0 ? (
               <TrendBadge value={kpi.dataPoint.trendDelta} />
             ) : null}
