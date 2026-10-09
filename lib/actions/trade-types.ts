@@ -61,6 +61,7 @@ async function run(
     // straight after this returns, and a stale-while-revalidate read would
     // hand it the list from before the edit.
     updateTag(TRADE_TYPES_TAG);
+    updateTag("milestone-trade-dependencies");
     // A rename also rewrote those tradies' `trade`, so every cached read that
     // shows one has to go too, or the directory groups them under a name the
     // list no longer has.

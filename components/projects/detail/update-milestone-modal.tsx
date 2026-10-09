@@ -40,10 +40,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import {
-  hasWorkStarted,
-  MILESTONE_SPACING_DAYS,
-} from "@/lib/domain/projects/milestone-schedule";
+import { hasWorkStarted } from "@/lib/domain/projects/milestone-schedule";
 import { Calendar } from "@/components/ui/calendar";
 import { allowedMilestoneTransitions } from "@/lib/domain/projects/milestone-status";
 import {
@@ -351,8 +348,8 @@ export default function UpdateMilestoneModal({
 
             {/*
               Always editable, whatever the status. Activities seeded from the
-              template carry a placeholder date — project start plus four days
-              per position — so until someone sets the real one, "overdue" on
+              template carry a planned date based on estimated calendar days,
+              so until someone sets the real one, "overdue" on
               the milestones tab counts against a date nobody chose.
             */}
             <div className="space-y-1.5">
@@ -495,8 +492,8 @@ export default function UpdateMilestoneModal({
                       : "its start date"}
                   </span>{" "}
                   the project start date and reschedules every milestone from
-                  it, one every {MILESTONE_SPACING_DAYS} days. The project start
-                  date is locked after that.
+                  it, using each activity's estimated calendar days. The project
+                  start date is locked after that.
                 </p>
               </div>
             ) : null}

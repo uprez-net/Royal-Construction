@@ -288,7 +288,19 @@ export async function deleteTradeType(
     );
   }
 
-  await db.tradeType.delete({ where: { id: current.id } });
+  try {
+    await db.tradeType.delete({ where: { id: current.id } });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError
+      && error.code === "P2003"
+    ) {
+      throw new DomainValidationError(
+        "This category is required by a build sequence activity or project milestone. Archive it instead.",
+      );
+    }
+    throw error;
+  }
 }
 
 /**

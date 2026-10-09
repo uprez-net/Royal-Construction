@@ -20,12 +20,11 @@ import {
   type ProjectMutationState,
   type ProjectUploadRecord,
   type ProjectWithStats,
-  type SafeMilestone,
+  type MilestoneUpdateResult,
   type BudgetSummary,
   TradieScheduleWithTradieAndMilestone,
 } from "@/types/project";
 import { reviveMilestoneDates } from "@/lib/projects/milestone-dates";
-import { shouldCompleteParent } from "@/lib/domain/projects/milestone-status";
 import { reviveComplianceEngagementDates } from "@/lib/domain/compliance/engagement-dates";
 import { idempotencyHeader } from "@/lib/idempotency/attempt-key";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
@@ -78,11 +77,7 @@ import {
   type CreateProjectFailure,
 } from "@/lib/projects/create-project-errors";
 import { bulkCreateTradieSchedules } from "@/lib/data/tradieSchedules";
-import { settledBookingStatus } from "@/lib/domain/tradies/lifecycle";
-import {
-  hasWorkStarted,
-  milestoneTargetDate,
-} from "@/lib/domain/projects/milestone-schedule";
+import { milestoneTargetDates } from "@/lib/domain/projects/milestone-schedule";
 
 type MutationKey =
   | "createProject"
@@ -359,14 +354,14 @@ export const addProjectMilestone = createAsyncThunk<
 });
 
 export const updateProjectMilestoneStatus = createAsyncThunk<
-  SafeMilestone,
+  MilestoneUpdateResult,
   MilestoneUpdateData & { projectId: string; milestoneId: string },
   { rejectValue: string }
 >(
   "projects/updateMilestoneStatus",
   async ({ projectId, milestoneId, ...payload }, thunkApi) => {
     try {
-      const response = await fetchJson<SafeMilestone>(
+      const response = await fetchJson<MilestoneUpdateResult>(
         `/api/projects/${projectId}/milestones/${milestoneId}/updates`,
         {
           method: "PATCH",
@@ -1447,55 +1442,25 @@ const isComplianceThunkRejected = isAnyOf(
 /**
  * The store's copy of what `updateMilestone` does when the first activity
  * starts: the project's start date becomes that day and every activity is
- * re-dated from it, by the same `milestoneTargetDate` the server used.
+ * re-dated from it, by the same `milestoneTargetDates` the server used.
  */
 function startScheduleInStore(project: ProjectDetail, startDate: Date) {
   if (new Date(project.startDate).getTime() === startDate.getTime()) return;
 
   project.startDate = startDate;
   const targetById = new Map<string, Date>();
-  [...project.milestones]
-    .sort((a, b) => a.order - b.order)
-    .forEach((milestone, position) => {
-      milestone.targetDate = milestoneTargetDate(startDate, position);
-      targetById.set(milestone.id, milestone.targetDate);
-    });
+  const ordered = [...project.milestones].sort((a, b) => a.order - b.order);
+  const targets = milestoneTargetDates(startDate, ordered);
+  ordered.forEach((milestone, position) => {
+    milestone.targetDate = targets[position];
+    targetById.set(milestone.id, milestone.targetDate);
+  });
   for (const schedule of project.tradieSchedules) {
     const targetDate = schedule.milestoneId
       ? targetById.get(schedule.milestoneId)
       : undefined;
     if (schedule.milestone && targetDate) {
       schedule.milestone.targetDate = targetDate;
-    }
-  }
-}
-
-/**
- * The store's copy of `settleMilestoneBookings`: bookings on a milestone that
- * is now done or not required take the status the server just gave them, and
- * the milestone each booking carries is brought up to date, so the tradie
- * alerts clear on the update itself rather than on the next reload.
- */
-function settleBookingsInStore(project: ProjectDetail) {
-  const statusById = new Map(project.milestones.map((m) => [m.id, m.status]));
-  const settlementOf = (milestoneId: string | null) => {
-    const status = milestoneId ? statusById.get(milestoneId) : undefined;
-    return status === "DONE" || status === "NOT_REQUIRED" ? status : null;
-  };
-
-  for (const schedule of project.tradieSchedules) {
-    const settlement = settlementOf(schedule.milestoneId);
-    if (!settlement) continue;
-    if (schedule.milestone) schedule.milestone.status = settlement;
-    schedule.status =
-      settledBookingStatus(schedule.status, settlement) ?? schedule.status;
-  }
-  for (const milestone of project.milestones) {
-    const settlement = settlementOf(milestone.id);
-    if (!settlement) continue;
-    for (const schedule of milestone.tradieSchedules) {
-      schedule.status =
-        settledBookingStatus(schedule.status, settlement) ?? schedule.status;
     }
   }
 }
@@ -2001,135 +1966,49 @@ const projectsSlice = createSlice({
       })
       .addCase(updateProjectMilestoneStatus.fulfilled, (state, action) => {
         state.mutations.updateMilestone = { status: "succeeded", error: null };
-        if (state.activeProject?.id === action.payload.projectId) {
-          // Read before the merge below makes this milestone ACTIVE.
-          const startsWork =
-            action.meta.arg.status === "ACTIVE"
-            && !hasWorkStarted(state.activeProject.milestones);
-          const milestoneIndex = state.activeProject.milestones.findIndex(
-            (m) => m.id === action.meta.arg.milestoneId,
+        const project = state.activeProject;
+        if (project?.id !== action.payload.projectId) return;
+        const { effects, ...milestone } = action.payload;
+        const index = project.milestones.findIndex(
+          (row) => row.id === milestone.id,
+        );
+        if (index !== -1)
+          project.milestones[index] = {
+            ...project.milestones[index],
+            ...milestone,
+          };
+        for (const parent of effects.parents) {
+          const row = project.milestones.find(
+            (candidate) => candidate.id === parent.id,
           );
-          // The same rule `lib/data/milestones.ts` applies, rather than this
-          // reducer's own reading of it.
-          //
-          // It used to force ACTIVE on any project that still had pending
-          // milestones, which was harmless while every project was created
-          // ACTIVE and could only re-assert what was already true. Against the
-          // status ladder it is not: correcting the spend on a job whose
-          // certifier had just been engaged flipped COMPLIANCE_STARTED to
-          // ACTIVE on screen until the next refetch, and did the same to a
-          // NEEDS_ATTENTION somebody had set on purpose.
-          //
-          // So the two ends are stated separately and neither infers the other,
-          // exactly as the server states them: no pending milestones means the
-          // build is finished, a milestone actually being started means it has
-          // begun, and every other update leaves the status alone. Counted
-          // against the status this update carries, because the merge below has
-          // not happened yet.
-          const pendingAfterUpdate = state.activeProject.milestones.filter(
-            (m) =>
-              m.id === action.meta.arg.milestoneId
-                ? ["PENDING", "ACTIVE"].includes(
-                    action.payload.status ?? m.status,
-                  )
-                : ["PENDING", "ACTIVE"].includes(m.status),
-          );
-          if (pendingAfterUpdate.length === 0) {
-            state.activeProject.status = "COMPLETED";
-          } else if (action.meta.arg.status === "ACTIVE") {
-            state.activeProject.status = "ACTIVE";
+          if (!row) continue;
+          row.status = parent.status;
+          if (parent.spend !== undefined) row.spend = parent.spend;
+          if (parent.startDate) row.startDate = new Date(parent.startDate);
+          if (parent.actualDate) row.actualDate = new Date(parent.actualDate);
+        }
+        project.spent = effects.projectSpent;
+        if (effects.projectStatus) project.status = effects.projectStatus;
+        if (effects.projectStartDate)
+          startScheduleInStore(project, new Date(effects.projectStartDate));
+        const completed = new Set(effects.settledBookings.completed);
+        const cancelled = new Set(effects.settledBookings.cancelled);
+        const statusById = new Map(
+          project.milestones.map((row) => [row.id, row.status]),
+        );
+        for (const schedule of project.tradieSchedules) {
+          if (completed.has(schedule.id)) schedule.status = "COMPLETED";
+          if (cancelled.has(schedule.id)) schedule.status = "CANCELLED";
+          const status = schedule.milestoneId
+            ? statusById.get(schedule.milestoneId)
+            : undefined;
+          if (schedule.milestone && status) schedule.milestone.status = status;
+        }
+        for (const row of project.milestones) {
+          for (const schedule of row.tradieSchedules) {
+            if (completed.has(schedule.id)) schedule.status = "COMPLETED";
+            if (cancelled.has(schedule.id)) schedule.status = "CANCELLED";
           }
-          if (milestoneIndex !== -1) {
-            // Captured before the merge: a milestone can be updated more than
-            // once while DONE (editing its target date, correcting the spend),
-            // and adding the full amount each time inflated the project's
-            // "Spent to date" by one milestone per edit. Apply the difference.
-            const spendBeforeUpdate =
-              Number(state.activeProject!.milestones[milestoneIndex].spend)
-              || 0;
-
-            state.activeProject!.milestones[milestoneIndex] = {
-              ...state.activeProject!.milestones[milestoneIndex],
-              ...action.payload,
-            };
-            const parentId =
-              state.activeProject!.milestones[milestoneIndex].parentId;
-            if (action.payload.status === "DONE") {
-              const spendAfterUpdate = Number(action.payload.spend) || 0;
-              state.activeProject!.spent = (
-                Number(state.activeProject!.spent)
-                - spendBeforeUpdate
-                + spendAfterUpdate
-              ).toString();
-            }
-            if (
-              parentId
-              && (action.payload.status === "DONE"
-                || action.payload.status === "NOT_REQUIRED")
-            ) {
-              const allChildrenMilestonesNotCompleted =
-                state.activeProject!.milestones.filter(
-                  (m) =>
-                    m.parentId === parentId
-                    && !["DONE", "NOT_REQUIRED"].includes(m.status),
-                );
-              const allChildrenWereNotRequired =
-                state.activeProject!.milestones.filter(
-                  (m) => m.parentId === parentId && m.status === "NOT_REQUIRED",
-                );
-              const allChildrenMilestone =
-                state.activeProject!.milestones.filter(
-                  (m) => m.parentId === parentId,
-                );
-              if (
-                shouldCompleteParent(
-                  allChildrenMilestonesNotCompleted.length,
-                  allChildrenMilestone.length,
-                  allChildrenWereNotRequired.length,
-                )
-              ) {
-                const parentIndex = state.activeProject!.milestones.findIndex(
-                  (m) => m.id === parentId,
-                );
-                const totalChildSpent = state
-                  .activeProject!.milestones.filter(
-                    (m) => m.parentId === parentId,
-                  )
-                  .reduce((sum, m) => sum + (Number(m.spend) || 0), 0);
-                if (parentIndex !== -1) {
-                  state.activeProject!.milestones[parentIndex] = {
-                    ...state.activeProject!.milestones[parentIndex],
-                    status: "DONE",
-                    spend: totalChildSpent.toString(),
-                    actualDate: action.payload.actualDate,
-                  };
-                }
-              }
-            }
-            if (parentId && action.payload.status === "ACTIVE") {
-              const parentIndex = state.activeProject!.milestones.findIndex(
-                (m) => m.id === parentId,
-              );
-              if (
-                parentIndex !== -1
-                && state.activeProject!.milestones[parentIndex].status
-                  !== "ACTIVE"
-              ) {
-                state.activeProject!.milestones[parentIndex] = {
-                  ...state.activeProject!.milestones[parentIndex],
-                  status: "ACTIVE",
-                  startDate: action.payload.startDate,
-                };
-              }
-            }
-          }
-          if (startsWork && action.payload.startDate) {
-            startScheduleInStore(
-              state.activeProject,
-              new Date(action.payload.startDate),
-            );
-          }
-          settleBookingsInStore(state.activeProject);
         }
       })
       .addCase(dismissTradieAlerts.fulfilled, (state, action) => {

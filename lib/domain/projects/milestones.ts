@@ -7,7 +7,6 @@ import {
 } from "@prisma/client";
 import { v4 as randomUUID } from "uuid";
 
-import { milestoneTemplates } from "@/constants/milestoneTemplate";
 import type { OfferWorkspaceCostLine } from "@/lib/offer/workspace-model";
 
 import { authorizeMilestone, authorizeProject } from "../access/projects";
@@ -29,7 +28,7 @@ import { logActionOrThrow } from "../audit/action-log";
 import { attributionUserId } from "../principal";
 
 import {
-  milestoneTargetDate,
+  milestoneTargetDates,
   STARTED_MILESTONE_STATUSES,
 } from "./milestone-schedule";
 import { settleMilestoneBookings } from "../tradies/settlement";
@@ -247,6 +246,13 @@ export type UpdatedMilestone = Omit<Milestone, "budget" | "spend"> & {
 };
 
 export type UpdateMilestoneOutcome = {
+  readonly parentUpdates: readonly {
+    id: string;
+    status: MilestoneStatus;
+    spend?: string;
+    actualDate?: Date;
+    startDate?: Date;
+  }[];
   readonly milestone: UpdatedMilestone;
   /** True when this call moved the status, not just the dates or the spend. */
   readonly statusChanged: boolean;
@@ -422,27 +428,35 @@ export async function updateMilestone(
 
   let rolledUpParentId: string | null = null;
   let rolledUpParentStatus: MilestoneStatus | null = null;
+  const parentUpdates: {
+    id: string;
+    status: MilestoneStatus;
+    spend?: string;
+    actualDate?: Date;
+    startDate?: Date;
+  }[] = [];
 
-  if (updated.parentId) {
+  let parentId = updated.parentId;
+  while (parentId) {
     if (settled) {
       const [outstanding, siblings, waived, childrenSpend] = await Promise.all([
         db.milestone.count({
           where: {
-            parentId: updated.parentId,
+            parentId,
             status: {
               notIn: [MilestoneStatus.DONE, MilestoneStatus.NOT_REQUIRED],
             },
           },
         }),
-        db.milestone.count({ where: { parentId: updated.parentId } }),
+        db.milestone.count({ where: { parentId } }),
         db.milestone.count({
           where: {
-            parentId: updated.parentId,
+            parentId,
             status: MilestoneStatus.NOT_REQUIRED,
           },
         }),
         db.milestone.aggregate({
-          where: { parentId: updated.parentId },
+          where: { parentId },
           _sum: { spend: true },
         }),
       ]);
@@ -451,25 +465,45 @@ export async function updateMilestone(
       if (shouldCompleteParent(outstanding, siblings, waived)) {
         rolledUpParentStatus = MilestoneStatus.DONE;
         await db.milestone.update({
-          where: { id: updated.parentId },
+          where: { id: parentId },
           data: {
             status: rolledUpParentStatus,
             spend: childrenSpend._sum.spend ?? undefined,
             actualDate,
           },
         });
-        rolledUpParentId = updated.parentId;
+        rolledUpParentId ??= parentId;
+        parentUpdates.push({
+          id: parentId,
+          status: MilestoneStatus.DONE,
+          spend: childrenSpend._sum.spend?.toString(),
+          actualDate,
+        });
+      } else {
+        break;
       }
     } else if (input.status === MilestoneStatus.ACTIVE) {
       // Starting a child starts its parent, if it has not started already.
       await db.milestone.updateMany({
         where: {
-          id: updated.parentId,
+          id: parentId,
           status: { not: MilestoneStatus.ACTIVE },
         },
         data: { status: MilestoneStatus.ACTIVE, startDate },
       });
+      parentUpdates.push({
+        id: parentId,
+        status: MilestoneStatus.ACTIVE,
+        startDate,
+      });
+    } else {
+      break;
     }
+    const parent = await db.milestone.findUnique({
+      where: { id: parentId },
+      select: { parentId: true },
+    });
+    parentId = parent?.parentId ?? null;
   }
 
   const [rootSpend, pendingCount] = await Promise.all([
@@ -538,8 +572,9 @@ export async function updateMilestone(
   const settledMilestones: [string, MilestoneStatus][] = settled
     ? [[updated.id, input.status]]
     : [];
-  if (rolledUpParentId && rolledUpParentStatus) {
-    settledMilestones.push([rolledUpParentId, rolledUpParentStatus]);
+  for (const parent of parentUpdates) {
+    if (parent.status === MilestoneStatus.DONE)
+      settledMilestones.push([parent.id, parent.status]);
   }
   for (const [milestoneId, status] of settledMilestones) {
     const result = await settleMilestoneBookings(
@@ -554,6 +589,7 @@ export async function updateMilestone(
   }
 
   return {
+    parentUpdates,
     milestone: {
       ...updated,
       budget: updated.budget.toString(),
@@ -649,13 +685,14 @@ export async function rescheduleMilestonesFromStart(
 ): Promise<{ rescheduled: number }> {
   const milestones = await db.milestone.findMany({
     orderBy: { order: "asc" },
-    select: { id: true },
+    select: { id: true, estimatedDays: true },
     where: { projectId: input.projectId },
   });
 
+  const targets = milestoneTargetDates(input.startDate, milestones);
   for (const [position, milestone] of milestones.entries()) {
     await db.milestone.update({
-      data: { targetDate: milestoneTargetDate(input.startDate, position) },
+      data: { targetDate: targets[position] },
       where: { id: milestone.id },
     });
   }
@@ -704,7 +741,8 @@ export async function rescheduleProjectFromStart(
  *
  * Budgets come from the offer's cost lines: a line referenced by several
  * template activities is split evenly between them, and a parent's budget is
- * the sum of its children's. Target dates follow `milestoneTargetDate`.
+ * the sum of its children's. Target dates follow `milestoneTargetDates` using
+ * the durations snapshotted from the database template.
  *
  * Runs inside the creating transaction, so the project never exists without
  * its milestones.
@@ -717,6 +755,13 @@ export async function createMilestonesFromTemplate(
   },
   db: DomainDb,
 ): Promise<{ created: number }> {
+  const milestoneTemplates = await db.milestoneTemplate.findMany({
+    orderBy: { order: "asc" },
+  });
+  if (!milestoneTemplates.length)
+    throw new DomainValidationError(
+      "The build sequence is empty. Add activities under Admin before creating a project.",
+    );
   const referenceCounts = milestoneTemplates.reduce((map, template) => {
     template.relatedCostLines?.forEach((costLineName) => {
       map.set(costLineName, (map.get(costLineName) ?? 0) + 1);
@@ -737,20 +782,24 @@ export async function createMilestonesFromTemplate(
   };
 
   const inOrder = [...milestoneTemplates].sort((a, b) => a.order - b.order);
+  const targets = milestoneTargetDates(input.startDate, inOrder);
   const records = inOrder.map((template, position) => ({
     ...template,
     id: randomUUID(),
-    targetDate: milestoneTargetDate(input.startDate, position),
+    templateId: template.id,
+    targetDate: targets[position],
     totalBudget: budgetFor(template.relatedCostLines),
   }));
 
-  const idByOrder = new Map(records.map((record) => [record.order, record.id]));
+  const idByTemplate = new Map(
+    records.map((record) => [record.templateId, record.id]),
+  );
 
   // Roll each child's budget up into its parent.
-  for (const record of records) {
+  for (const record of [...records].reverse()) {
     if (record.parentId === null || record.parentId === undefined) continue;
     const parent = records.find(
-      (candidate) => candidate.id === idByOrder.get(record.parentId!),
+      (candidate) => candidate.id === idByTemplate.get(record.parentId!),
     );
     if (parent) parent.totalBudget += record.totalBudget;
   }
@@ -762,10 +811,12 @@ export async function createMilestonesFromTemplate(
       name: record.name,
       order: record.order,
       targetDate: record.targetDate,
+      estimatedDays: record.estimatedDays,
+      requiredTradeTypeId: record.requiredTradeTypeId,
       parentId:
         record.parentId === null || record.parentId === undefined
           ? null
-          : (idByOrder.get(record.parentId) ?? null),
+          : (idByTemplate.get(record.parentId) ?? null),
       projectStage: record.projectStage,
       budget: new Prisma.Decimal(record.totalBudget),
     })),

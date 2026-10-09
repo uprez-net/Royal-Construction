@@ -38,6 +38,7 @@ import { currency, formatStatus } from "@/utils/formatters";
 import { MilestoneStatus } from "@prisma/client";
 
 import { MilestoneActionGroup } from "./milestone-action-button";
+import { missingMilestoneTrade } from "@/lib/domain/projects/tradie-dependencies";
 
 /** How many progress photos sit inline before the rest go behind a button. */
 const INLINE_PHOTO_LIMIT = 3;
@@ -185,6 +186,10 @@ export function MilestoneCard({
   const children = milestone.childrenMilestones;
   const hasChildren = children.length > 0;
   const isNotRequired = milestone.status === MilestoneStatus.NOT_REQUIRED;
+  const missingTrade = missingMilestoneTrade(
+    milestone,
+    project.tradieSchedules,
+  );
   const runningOverdueDays = activeOverdueDays(
     {
       status: milestone.status,
@@ -325,6 +330,16 @@ export function MilestoneCard({
                   .join(", ")}
               </MetaItem>
             </div>
+          ) : null}
+
+          {missingTrade ? (
+            <p
+              role="status"
+              className="mt-2 flex items-center gap-1.5 text-xs font-medium text-warning-ink"
+            >
+              <CircleAlert className="size-3.5" aria-hidden="true" />
+              {missingTrade} not booked for this job
+            </p>
           ) : null}
 
           {depth === 0 && nextTradies.length > 0 ? (

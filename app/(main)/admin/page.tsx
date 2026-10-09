@@ -27,6 +27,13 @@ export default function AdminPage() {
     href: string;
   }[] = [
     {
+      label: "Manage Build Sequence",
+      description:
+        "Plan project activities, sub-activities, estimated days and required trades.",
+      icon: CheckSquare,
+      href: "/admin/build-sequence",
+    },
+    {
       label: "Manage Offer Pre-Fill Content",
       description:
         "Edit and update the pre-fill content that powers every generated offer.",

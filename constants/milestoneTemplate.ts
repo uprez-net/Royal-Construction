@@ -8,6 +8,7 @@ interface MilestoneTemplate {
   relatedCostLines?: readonly string[]; // Optional property to hold related cost lines
 }
 
+/** Historical seed fixture. Runtime project creation reads MilestoneTemplate in the database. */
 export const milestoneTemplates: MilestoneTemplate[] = [
   {
     order: 1,

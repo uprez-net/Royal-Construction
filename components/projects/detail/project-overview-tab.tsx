@@ -75,8 +75,7 @@ import { useParams } from "next/navigation";
 import { format, parse } from "date-fns";
 import {
   hasWorkStarted,
-  MILESTONE_SPACING_DAYS,
-  milestoneTargetDate,
+  milestoneTargetDates,
 } from "@/lib/domain/projects/milestone-schedule";
 
 // ---------------------------------------------------------------------------
@@ -389,17 +388,18 @@ function DateField({
 function StartDateField({
   projectId,
   value,
-  milestoneCount,
+  milestones,
   locked,
   onSaved,
 }: {
   projectId: string;
   value: unknown;
-  milestoneCount: number;
+  milestones: ProjectDetail["milestones"];
   /** Work has started on site: the date is the day it began, and fixed. */
   locked: boolean;
   onSaved: (project: ProjectDetail) => void;
 }) {
+  const milestoneCount = milestones.length;
   const id = useId();
   const current = toDateInputValue(value);
   const [editing, setEditing] = useState(false);
@@ -581,12 +581,16 @@ function StartDateField({
                     All {milestoneCount} milestone target dates will be
                     rescheduled from the new start: the first on{" "}
                     <span className="font-medium text-foreground">
-                      {displayDate(milestoneTargetDate(pendingDate, 0))}
+                      {displayDate(pendingDate)}
                     </span>
-                    , then one every {MILESTONE_SPACING_DAYS} days, the last on{" "}
+                    , then using each activity's estimated calendar days, the
+                    last on{" "}
                     <span className="font-medium text-foreground">
                       {displayDate(
-                        milestoneTargetDate(pendingDate, milestoneCount - 1),
+                        milestoneTargetDates(
+                          pendingDate,
+                          [...milestones].sort((a, b) => a.order - b.order),
+                        ).at(-1)!,
                       )}
                     </span>
                     .
@@ -1917,7 +1921,7 @@ export function ProjectOverviewTab({
             <StartDateField
               projectId={project.id}
               value={project.startDate}
-              milestoneCount={project.milestones.length}
+              milestones={project.milestones}
               locked={hasWorkStarted(project.milestones)}
               // The header and the milestone tab read the store, not this
               // tab, so the saved project goes back there.

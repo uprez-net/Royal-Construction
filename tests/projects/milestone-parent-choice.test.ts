@@ -119,3 +119,56 @@ for (const status of [S.DONE, S.NOT_REQUIRED]) {
     assert.equal(outcome.milestone.status, status);
   });
 }
+
+test("completion propagates through every level of a nested activity", async () => {
+  const leaf = {
+    id: "leaf",
+    parentId: "middle",
+    projectId: "project",
+    status: S.DONE,
+    budget: "0",
+    spend: "125",
+  };
+  const recorder = recordingDb({
+    "project.findUnique": { id: "project", siteManagerId: null },
+    "project.update": { spent: "125", siteManagerId: null },
+    "milestone.findUnique": (args: unknown) => {
+      const id = (args as { where: { id: string } }).where.id;
+      return id === "leaf"
+        ? { projectId: "project" }
+        : { parentId: id === "middle" ? "root" : null };
+    },
+    "milestone.findUniqueOrThrow": { ...leaf, status: S.ACTIVE },
+    "milestone.update": leaf,
+    "milestone.count": (args: unknown) => {
+      const where = (args as { where: { parentId?: string; status?: unknown } })
+        .where;
+      return where.parentId ? (where.status === undefined ? 1 : 0) : 1;
+    },
+    "milestone.aggregate": { _sum: { spend: "125" } },
+    "milestone.findMany": [],
+    "tradieSchedule.findMany": [],
+  });
+  const outcome = await updateMilestone(
+    adminPrincipal(),
+    {
+      milestoneId: "leaf",
+      status: S.DONE,
+      startDate: "2026-10-09",
+      actualDate: "2026-10-10",
+      spend: 125,
+    },
+    recorder.db,
+  );
+  assert.deepEqual(
+    outcome.parentUpdates.map((parent) => [
+      parent.id,
+      parent.status,
+      parent.spend,
+    ]),
+    [
+      ["middle", S.DONE, "125"],
+      ["root", S.DONE, "125"],
+    ],
+  );
+});
