@@ -317,9 +317,9 @@ export function ProjectDocumentsTab({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete document?</AlertDialogTitle>
             <AlertDialogDescription>
-              Delete “{fileToDelete?.filename}” from this project&apos;s documents
-              and milestone photos? Copies used by other records are kept. This
-              action cannot be undone.
+              Delete “{fileToDelete?.filename}” from this project&apos;s
+              documents and milestone photos? Copies used by other records are
+              kept. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deleteError ? (
