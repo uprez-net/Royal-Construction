@@ -42,6 +42,7 @@ import {
 } from "@/lib/projects/stage-claim";
 import { sydneyDateOnly } from "@/lib/dates/sydney";
 import { isTradieAlertLive } from "@/lib/domain/tradies/alert-rules";
+import { milestoneEndDate } from "@/lib/domain/projects/milestone-schedule";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { cn } from "@/lib/utils";
@@ -119,7 +120,7 @@ function NextUp({ ledgerStage }: { ledgerStage: LedgerStage }) {
     );
   }
 
-  const dueness = duenessOf(new Date(next.activity.targetDate), new Date());
+  const dueness = duenessOf(next.activity, new Date());
   const detail =
     dueness.kind === "overdue"
       ? `Overdue ${Math.abs(dueness.days)}d`
@@ -127,7 +128,7 @@ function NextUp({ ledgerStage }: { ledgerStage: LedgerStage }) {
         ? "Due today"
         : dueness.kind === "soon"
           ? `Due in ${dueness.days}d`
-          : `Due ${shortDate(new Date(next.activity.targetDate))}`;
+          : `Due ${shortDate(milestoneEndDate(next.activity))}`;
 
   return (
     <>

@@ -11,8 +11,23 @@ import { MilestoneStatus } from "@prisma/client";
 /** Calendar days between one activity's target date and the next. */
 export const MILESTONE_SPACING_DAYS = 5;
 
+export interface MilestoneTiming {
+  /** Planned start, retained as targetDate in the database. */
+  targetDate: Date | string;
+  startDate?: Date | string | null;
+  estimatedDays?: number;
+}
+
+/** Completion target: actual start when recorded, otherwise planned start, plus calendar duration. */
+export function milestoneEndDate(milestone: MilestoneTiming): Date {
+  return addDays(
+    new Date(milestone.startDate ?? milestone.targetDate),
+    milestone.estimatedDays ?? MILESTONE_SPACING_DAYS,
+  );
+}
+
 /**
- * When the activity at `position` falls due: the first (position 0) on the
+ * When the activity at `position` is planned to start: the first (position 0) on the
  * project's start date, each one after it five calendar days later.
  *
  * `position` is the activity's place in `order`, not the `order` value itself —

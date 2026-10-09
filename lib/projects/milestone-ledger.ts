@@ -1,6 +1,9 @@
 import { differenceInCalendarDays } from "date-fns";
 
-import { businessDaysSince } from "@/lib/dates/business-days";
+import {
+  milestoneEndDate,
+  type MilestoneTiming,
+} from "@/lib/domain/projects/milestone-schedule";
 import { MilestoneStatus } from "@prisma/client";
 
 /**
@@ -12,10 +15,10 @@ import { MilestoneStatus } from "@prisma/client";
  * activities a stage still owes, which one is next, whether it is late) be
  * tested without a database.
  *
- * Everything is structural: any object carrying these four fields works, so the
+ * Everything is structural: any object carrying these fields works, so the
  * component passes `UIMilestone` straight through and the tests pass literals.
  */
-export interface LedgerMilestone {
+export interface LedgerMilestone extends MilestoneTiming {
   name: string;
   status: MilestoneStatus;
   targetDate: Date;
@@ -189,7 +192,7 @@ export type DuenessKind = "overdue" | "today" | "soon" | "scheduled";
 
 export interface Dueness {
   kind: DuenessKind;
-  /** Whole days until the target date; negative once it has passed. */
+  /** Whole days until the estimated end date; negative once it has passed. */
   days: number;
 }
 
@@ -197,11 +200,11 @@ export interface Dueness {
 const SOON_WINDOW_DAYS = 7;
 
 /**
- * How a target date should read. Calendar days, not elapsed hours, so an
+ * How an activity's estimated end should read. Calendar days, not elapsed hours, so an
  * activity due tomorrow says "in 1d" no matter what time either date carries.
  */
-export function duenessOf(targetDate: Date, today: Date): Dueness {
-  const days = differenceInCalendarDays(targetDate, today);
+export function duenessOf(milestone: MilestoneTiming, today: Date): Dueness {
+  const days = differenceInCalendarDays(milestoneEndDate(milestone), today);
 
   if (days < 0) return { kind: "overdue", days };
   if (days === 0) return { kind: "today", days };
@@ -209,45 +212,36 @@ export function duenessOf(targetDate: Date, today: Date): Dueness {
   return { kind: "scheduled", days };
 }
 
-/** A working week: how long an activity may run once started before it is overdue. */
-export const ACTIVE_OVERDUE_BUSINESS_DAYS = 5;
-
 /**
- * NSW business days an in-progress activity has been running, once that is a
- * working week or more; `null` while it is still inside the week, or when it
- * is not in progress at all.
- *
- * Separate from `duenessOf`, which reads the target date. This reads the start:
- * an activity started on a Monday and still open the following Monday has
- * stalled on site, whatever its target date says. Business days so a long
- * weekend does not flag work nobody could have been doing.
- *
- * An active activity with no start date (rows from before the start was
- * recorded) is never flagged — there is nothing to count from, and guessing
- * would raise an alarm the office cannot clear.
+ * Calendar days an active activity has exceeded its estimated end date.
+ * The badge and due line share one deadline; an absent actual start uses the
+ * planned start rather than an unrelated fixed working-week threshold.
  */
 export function activeOverdueDays(
-  milestone: { status: MilestoneStatus; startDate: Date | null },
+  milestone: MilestoneTiming & { status: MilestoneStatus },
   now: Date,
 ): number | null {
-  if (milestone.status !== MilestoneStatus.ACTIVE || !milestone.startDate) {
+  if (milestone.status !== MilestoneStatus.ACTIVE) {
     return null;
   }
 
-  const elapsed = businessDaysSince(milestone.startDate, now);
-  return elapsed >= ACTIVE_OVERDUE_BUSINESS_DAYS ? elapsed : null;
+  const due = duenessOf(milestone, now);
+  return due.kind === "overdue" ? -due.days : null;
 }
 
 /**
- * Days an activity ran past its target, or 0 when it landed on time or early.
+ * Days an activity ran past its estimated end, or 0 when it finished on time or early.
  *
  * Early completion is deliberately not reported: on this tab the dates are
  * often set per stage rather than per activity, so "24d early" reads as a data
  * error and undermines trust in the dates that do matter. Late is the fact that
  * carries consequences for a claim.
  */
-export function daysLate(targetDate: Date, actualDate: Date): number {
-  return Math.max(0, differenceInCalendarDays(actualDate, targetDate));
+export function daysLate(milestone: MilestoneTiming, actualDate: Date): number {
+  return Math.max(
+    0,
+    differenceInCalendarDays(actualDate, milestoneEndDate(milestone)),
+  );
 }
 
 /** The most recently finished activity, for the "last …" note on the fold. */

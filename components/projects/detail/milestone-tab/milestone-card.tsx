@@ -39,6 +39,7 @@ import { MilestoneStatus } from "@prisma/client";
 
 import { MilestoneActionGroup } from "./milestone-action-button";
 import { missingMilestoneTrade } from "@/lib/domain/projects/tradie-dependencies";
+import { milestoneEndDate } from "@/lib/domain/projects/milestone-schedule";
 
 /** How many progress photos sit inline before the rest go behind a button. */
 const INLINE_PHOTO_LIMIT = 3;
@@ -93,7 +94,7 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
       return <span>Completed</span>;
     }
 
-    const late = daysLate(new Date(milestone.targetDate), actual);
+    const late = daysLate(milestone, actual);
 
     return (
       <MetaItem icon={<CheckCircle2 className="size-3.5 text-success-ink" />}>
@@ -104,7 +105,8 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
     );
   }
 
-  const dueness = duenessOf(new Date(milestone.targetDate), new Date());
+  const endDate = milestoneEndDate(milestone);
+  const dueness = duenessOf(milestone, new Date());
 
   if (dueness.kind === "overdue") {
     return (
@@ -113,9 +115,7 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
           Overdue {Math.abs(dueness.days)}d
         </span>{" "}
         · was due{" "}
-        <span className="font-mono tabular-nums">
-          {shortDate(new Date(milestone.targetDate))}
-        </span>
+        <span className="font-mono tabular-nums">{shortDate(endDate)}</span>
       </MetaItem>
     );
   }
@@ -135,10 +135,7 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
           dueness.kind === "soon" && "font-semibold text-warning-ink",
         )}
       >
-        Due{" "}
-        <span className="font-mono tabular-nums">
-          {shortDate(new Date(milestone.targetDate))}
-        </span>
+        Due <span className="font-mono tabular-nums">{shortDate(endDate)}</span>
         {dueness.kind === "soon" ? ` · in ${dueness.days}d` : null}
       </span>
     </MetaItem>
@@ -190,13 +187,7 @@ export function MilestoneCard({
     milestone,
     project.tradieSchedules,
   );
-  const runningOverdueDays = activeOverdueDays(
-    {
-      status: milestone.status,
-      startDate: milestone.startDate ? new Date(milestone.startDate) : null,
-    },
-    new Date(),
-  );
+  const runningOverdueDays = activeOverdueDays(milestone, new Date());
 
   // Finished parents open on request; anything still in flight opens by default,
   // because its children are where the work actually is.
@@ -245,7 +236,7 @@ export function MilestoneCard({
                 Overdue
                 <span className="sr-only">
                   {" "}
-                  — in progress {runningOverdueDays} business days
+                  — {runningOverdueDays} calendar days past the estimated end
                 </span>
               </StatusPill>
             ) : null}

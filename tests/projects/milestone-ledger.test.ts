@@ -254,25 +254,37 @@ test("a fully settled stage has no next activity", () => {
   assert.equal(nextActivity([]), null);
 });
 
-test("dueness buckets a target date against today", () => {
+test("dueness buckets estimated ends rather than target start dates against today", () => {
   const today = new Date("2026-08-25T09:30:00");
 
-  assert.deepEqual(duenessOf(new Date("2026-08-22T00:00:00"), today), {
-    kind: "overdue",
-    days: -3,
-  });
-  assert.deepEqual(duenessOf(new Date("2026-08-25T23:00:00"), today), {
-    kind: "today",
-    days: 0,
-  });
-  assert.deepEqual(duenessOf(new Date("2026-09-01T00:00:00"), today), {
-    kind: "soon",
-    days: 7,
-  });
-  assert.deepEqual(duenessOf(new Date("2026-09-02T00:00:00"), today), {
-    kind: "scheduled",
-    days: 8,
-  });
+  assert.deepEqual(
+    duenessOf({ targetDate: "2026-08-17T00:00:00", estimatedDays: 5 }, today),
+    {
+      kind: "overdue",
+      days: -3,
+    },
+  );
+  assert.deepEqual(
+    duenessOf({ targetDate: "2026-08-20T23:00:00", estimatedDays: 5 }, today),
+    {
+      kind: "today",
+      days: 0,
+    },
+  );
+  assert.deepEqual(
+    duenessOf({ targetDate: "2026-08-27T00:00:00", estimatedDays: 5 }, today),
+    {
+      kind: "soon",
+      days: 7,
+    },
+  );
+  assert.deepEqual(
+    duenessOf({ targetDate: "2026-08-28T00:00:00", estimatedDays: 5 }, today),
+    {
+      kind: "scheduled",
+      days: 8,
+    },
+  );
 });
 
 test("dueness counts calendar days, so a later clock time is still 'today'", () => {
@@ -280,11 +292,11 @@ test("dueness counts calendar days, so a later clock time is still 'today'", () 
   // into tomorrow; the builder cares which day it is, not how many hours.
   const today = new Date("2026-08-25T23:30:00");
 
-  assert.deepEqual(duenessOf(new Date("2026-08-25T07:00:00"), today), {
+  assert.deepEqual(duenessOf({ targetDate: "2026-08-20T07:00:00" }, today), {
     kind: "today",
     days: 0,
   });
-  assert.deepEqual(duenessOf(new Date("2026-08-26T07:00:00"), today), {
+  assert.deepEqual(duenessOf({ targetDate: "2026-08-21T07:00:00" }, today), {
     kind: "soon",
     days: 1,
   });
@@ -294,15 +306,24 @@ test("only lateness is reported; landing early or on time reports nothing", () =
   // Stage-level target dates make "24d early" common and meaningless, and it
   // reads as a data error. Late is the half that carries a consequence.
   assert.equal(
-    daysLate(new Date("2026-08-14T00:00:00"), new Date("2026-08-16T00:00:00")),
+    daysLate(
+      { targetDate: "2026-08-09T00:00:00" },
+      new Date("2026-08-16T00:00:00"),
+    ),
     2,
   );
   assert.equal(
-    daysLate(new Date("2026-08-14T00:00:00"), new Date("2026-08-14T00:00:00")),
+    daysLate(
+      { targetDate: "2026-08-09T00:00:00" },
+      new Date("2026-08-14T00:00:00"),
+    ),
     0,
   );
   assert.equal(
-    daysLate(new Date("2026-08-27T00:00:00"), new Date("2026-08-03T00:00:00")),
+    daysLate(
+      { targetDate: "2026-08-22T00:00:00" },
+      new Date("2026-08-03T00:00:00"),
+    ),
     0,
   );
 });
@@ -446,49 +467,73 @@ test("a settled activity is never the next step, at any depth", () => {
   assert.equal(nextActivity(stage)?.activity.name, "Slab pour");
 });
 
-test("an activity started a working week ago and still open is overdue", () => {
+test("an active activity becomes overdue after its estimated calendar duration, including weekends", () => {
   const started = {
     status: ACTIVE,
-    startDate: new Date("2026-09-14T09:00:00+10:00"), // Monday
+    targetDate: "2026-09-01T09:00:00",
+    startDate: "2026-09-14T09:00:00", // Monday
+    estimatedDays: 5,
   };
 
   assert.equal(
-    activeOverdueDays(started, new Date("2026-09-18T16:00:00+10:00")),
+    activeOverdueDays(started, new Date("2026-09-19T16:00:00")),
     null,
   );
-  assert.equal(
-    activeOverdueDays(started, new Date("2026-09-21T08:00:00+10:00")),
-    5,
-  );
+  assert.equal(activeOverdueDays(started, new Date("2026-09-20T08:00:00")), 1);
 });
 
-test("a public holiday does not count towards an activity's working week", () => {
-  // Friday before the NSW Labour Day long weekend, read the next Friday.
+test("longer activity estimates are respected and public holidays count as calendar days", () => {
   const started = {
     status: ACTIVE,
-    startDate: new Date("2026-10-02T09:00:00+10:00"),
+    targetDate: "2026-10-02T09:00:00",
+    startDate: "2026-10-02T09:00:00",
+    estimatedDays: 10,
   };
 
   assert.equal(
-    activeOverdueDays(started, new Date("2026-10-09T09:00:00+11:00")),
+    activeOverdueDays(started, new Date("2026-10-09T09:00:00")),
     null,
+  );
+  assert.equal(activeOverdueDays(started, new Date("2026-10-13T09:00:00")), 1);
+  assert.equal(
+    activeOverdueDays(
+      { ...started, estimatedDays: 5 },
+      new Date("2026-10-09T09:00:00"),
+    ),
+    2,
   );
 });
 
-test("only an in-progress activity with a recorded start can run overdue", () => {
-  const now = new Date("2026-12-01T09:00:00+11:00");
-  const longAgo = new Date("2026-09-01T09:00:00+10:00");
+test("active activities fall back to the planned start, while pending and settled rows have no running-overdue badge", () => {
+  const now = new Date("2026-09-07T09:00:00");
+  const longAgo = new Date("2026-09-01T09:00:00");
 
   assert.equal(
-    activeOverdueDays({ status: ACTIVE, startDate: null }, now),
+    activeOverdueDays(
+      { status: ACTIVE, targetDate: longAgo, startDate: null },
+      now,
+    ),
+    1,
+  );
+  assert.equal(
+    activeOverdueDays(
+      { status: PENDING, targetDate: longAgo, startDate: longAgo },
+      now,
+    ),
     null,
   );
   assert.equal(
-    activeOverdueDays({ status: PENDING, startDate: longAgo }, now),
+    activeOverdueDays(
+      { status: DONE, targetDate: longAgo, startDate: longAgo },
+      now,
+    ),
     null,
   );
   assert.equal(
-    activeOverdueDays({ status: DONE, startDate: longAgo }, now),
+    activeOverdueDays(
+      { status: NOT_REQUIRED, targetDate: longAgo, startDate: longAgo },
+      now,
+    ),
     null,
   );
 });
