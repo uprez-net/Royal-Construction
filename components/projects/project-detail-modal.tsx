@@ -49,6 +49,9 @@ export function ProjectDetailModal({
   const idPrefix = useId();
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const visibleTabs = TABS.filter((tab) => !tab.requiresAdmin || isAdmin);
+  const effectiveTab = visibleTabs.some((tab) => tab.id === activeTab)
+    ? activeTab
+    : "overview";
 
   const tabId = (id: TabType) => `${idPrefix}-tab-${id}`;
   const panelId = (id: TabType) => `${idPrefix}-panel-${id}`;
@@ -105,7 +108,7 @@ export function ProjectDetailModal({
 
           <MobileFilterSelect
             label="Project section"
-            value={activeTab}
+            value={effectiveTab}
             options={visibleTabs.map((tab) => ({
               value: tab.id,
               label: tab.label,
@@ -118,11 +121,7 @@ export function ProjectDetailModal({
             className="-mx-6 mt-4 hidden flex-wrap gap-0 border-t border-border/40 px-6 pt-3 md:flex"
           >
             {visibleTabs.map((tab, index) => {
-              const isActive = activeTab === tab.id;
-
-              if (tab.requiresAdmin && !isAdmin) {
-                return null;
-              }
+              const isActive = effectiveTab === tab.id;
 
               return (
                 <button
@@ -153,12 +152,12 @@ export function ProjectDetailModal({
 
         <div
           role="tabpanel"
-          id={panelId(activeTab)}
-          aria-labelledby={tabId(activeTab)}
+          id={panelId(effectiveTab)}
+          aria-labelledby={tabId(effectiveTab)}
           tabIndex={0}
           className="min-h-0 min-w-0 overflow-y-auto overscroll-contain px-4 py-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:px-6 sm:py-5"
         >
-          {activeTab === "overview" && (
+          {effectiveTab === "overview" && (
             <OverviewTab
               isAdmin={isAdmin}
               project={project}
@@ -167,15 +166,15 @@ export function ProjectDetailModal({
             />
           )}
 
-          {activeTab === "customer" && (
+          {effectiveTab === "customer" && (
             <CustomerTab project={project} isAdmin={isAdmin} />
           )}
 
-          {activeTab === "milestones" && <MilestoneTab project={project} />}
+          {effectiveTab === "milestones" && <MilestoneTab project={project} />}
 
-          {activeTab === "financials" && <FinancialTab project={project} />}
+          {effectiveTab === "financials" && <FinancialTab project={project} />}
 
-          {activeTab === "team" && <TeamTab project={project} />}
+          {effectiveTab === "team" && <TeamTab project={project} />}
         </div>
       </DialogContent>
     </Dialog>

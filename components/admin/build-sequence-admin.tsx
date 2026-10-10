@@ -266,10 +266,12 @@ export function BuildSequenceAdmin({
         </p>
       ) : null}
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)]">
-        {isDesktop ? (
-          activityTree
-        ) : (
-          <Sheet open={activityPickerOpen} onOpenChange={setActivityPickerOpen}>
+        <div className="hidden lg:block">{activityTree}</div>
+        <div className="lg:hidden">
+          <Sheet
+            open={activityPickerOpen && !isDesktop}
+            onOpenChange={setActivityPickerOpen}
+          >
             <div className="flex flex-col gap-2 rounded-xl border bg-card p-4">
               <p className="text-xs font-medium text-muted-foreground">
                 Selected activity · {selected?.order} of {activities.length}
@@ -296,7 +298,7 @@ export function BuildSequenceAdmin({
               </div>
             </SheetContent>
           </Sheet>
-        )}
+        </div>
         {selected ? (
           <Card className="min-w-0 lg:sticky lg:top-6">
             <CardHeader>

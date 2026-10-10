@@ -254,7 +254,7 @@ export function OfferCostScheduleScreen() {
               )}
               {phases.map(({ phase, items }) => (
                 <PhaseGroup
-                  key={items[0]?.id ?? phase}
+                  key={phase}
                   phase={phase}
                   mobileHidden={
                     selectedMobilePhase !== "all"

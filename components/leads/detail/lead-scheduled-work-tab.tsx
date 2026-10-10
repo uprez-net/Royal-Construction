@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { toast } from "sonner";
 import { CalendarClock, Check, Trash2 } from "lucide-react";
 
@@ -30,13 +31,25 @@ export function LeadScheduledWorkTab({
   onLeadUpdate: (lead: Lead) => void;
 }) {
   const dispatch = useAppDispatch();
-  const isMobile = useMediaQuery("(max-width: 767px)");
+  const isMobile = useMediaQuery("(max-width: 767px)", null);
+  const [taskForm, setTaskForm] = useState<{
+    breakpoint: boolean | null;
+    open: boolean;
+  }>({ breakpoint: null, open: false });
+  // Wait for the real breakpoint, then reset only when the viewport changes.
+  if (isMobile !== null && taskForm.breakpoint !== isMobile) {
+    setTaskForm({ breakpoint: isMobile, open: !isMobile });
+  }
   const canAddTask = !isTerminalStage(lead.stage) && !lead.isArchived;
 
   return (
     <section className="space-y-4">
       <details
-        open={!isMobile}
+        open={taskForm.open}
+        onToggle={(event) => {
+          const open = event.currentTarget.open;
+          if (open !== taskForm.open) setTaskForm({ ...taskForm, open });
+        }}
         className="rounded-xl border border-border/70 bg-card shadow-sm"
       >
         <summary className="min-h-11 cursor-pointer px-4 py-3 font-medium md:hidden">

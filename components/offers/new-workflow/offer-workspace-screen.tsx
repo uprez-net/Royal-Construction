@@ -806,8 +806,11 @@ export function OfferWorkspaceScreen({
                             Building sequence
                           </summary>
                           <ul className="flex flex-col gap-2 text-sm">
-                            {selectedMobileCostTasks.map((task) => (
-                              <li key={task} className="break-words">
+                            {selectedMobileCostTasks.map((task, index) => (
+                              <li
+                                key={`${task}-${index}`}
+                                className="break-words"
+                              >
                                 {task}
                               </li>
                             ))}

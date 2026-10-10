@@ -102,7 +102,7 @@ export function DataTable({
                 )}
               >
                 {row.map((cell, index) =>
-                  index === mobileTitleColumn ? null : (
+                  index === mobileTitleColumn || cell === null ? null : (
                     <div key={`mobile-cell-${index}`} className="min-w-0">
                       <dt className="mb-1 text-xs text-muted-foreground">
                         {headers[index]}
@@ -119,12 +119,13 @@ export function DataTable({
                   type="button"
                   variant="outline"
                   className="mt-4 w-full"
-                  aria-label={
-                    rowLabel?.(rowIndex) ?? `Open row ${rowIndex + 1}`
-                  }
                   onClick={() => onRowClick(rowIndex)}
                 >
                   View details
+                  <span className="sr-only">
+                    {" "}
+                    {rowLabel?.(rowIndex) ?? `Row ${rowIndex + 1}`}
+                  </span>
                 </Button>
               ) : null}
             </article>

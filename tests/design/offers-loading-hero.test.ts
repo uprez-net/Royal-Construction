@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { PageHeroCard } from "@/components/common/page-hero-card";
 import { REPO_ROOT } from "../support/repo-root";
 
 // /offers streams its skeleton first, then swaps in PageHeroCard. The skeleton's
@@ -37,11 +40,56 @@ test("the /offers skeleton hero paints the real hero's surface", () => {
 });
 
 test("the /offers skeleton hero keeps the real hero's padding", () => {
-  // Card adds py-4 around responsive CardContent padding.
-  assert.match(hero, /<CardContent className="relative p-4 sm:p-6">/);
-  assert.match(read("components/ui/card.tsx"), /\bpy-4\b/);
+  // Render the real components so cn() merges their defaults and overrides.
+  const markup = renderToStaticMarkup(
+    createElement(PageHeroCard, {
+      title: "Offers",
+      description: "Offers",
+      headingLevel: "h1",
+    }),
+  );
+  const card = classesOf(markup, /data-slot="card"[^>]*class="([^"]+)"/);
+  const content = classesOf(
+    markup,
+    /data-slot="card-content"[^>]*class="([^"]+)"/,
+  );
 
-  for (const padding of ["px-4", "py-8", "sm:px-6", "sm:py-10"]) {
-    assert.ok(placeholder.includes(padding), placeholder.join(" "));
+  // Compare all four edges at every responsive size, including inherited values.
+  // Numeric padding is expressed in Tailwind spacing units, so no particular
+  // padding token or class order is part of the contract.
+  const breakpoints = ["", "sm", "md", "lg", "xl", "2xl"];
+  const paddingAt = (classes: string[], breakpoint: number) => {
+    const edges = { t: 0, r: 0, b: 0, l: 0 };
+    for (const prefix of breakpoints.slice(0, breakpoint + 1)) {
+      for (const axis of ["", "x", "y", "t", "r", "b", "l"]) {
+        const utility = `${prefix ? `${prefix}:` : ""}p${axis}-`;
+        for (const name of classes.filter((name) => name.startsWith(utility))) {
+          const value = Number(name.slice(utility.length));
+          assert.ok(
+            Number.isFinite(value),
+            `Unsupported padding utility: ${name}`,
+          );
+          if (axis === "" || axis === "y" || axis === "t") edges.t = value;
+          if (axis === "" || axis === "x" || axis === "r") edges.r = value;
+          if (axis === "" || axis === "y" || axis === "b") edges.b = value;
+          if (axis === "" || axis === "x" || axis === "l") edges.l = value;
+        }
+      }
+    }
+    return edges;
+  };
+  for (const [index, breakpoint] of breakpoints.entries()) {
+    const outer = paddingAt(card, index);
+    const inner = paddingAt(content, index);
+    assert.deepEqual(
+      paddingAt(placeholder, index),
+      {
+        t: outer.t + inner.t,
+        r: outer.r + inner.r,
+        b: outer.b + inner.b,
+        l: outer.l + inner.l,
+      },
+      `Hero padding differs at ${breakpoint || "base"}`,
+    );
   }
 });

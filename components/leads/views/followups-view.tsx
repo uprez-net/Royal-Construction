@@ -714,7 +714,7 @@ function FollowupsView({
       <div className="fu-card">
         <div className="fu-list">
           {busy ? (
-            <div role="status" aria-busy="true" aria-label="Loading tasks">
+            <div role="status" aria-busy="true">
               <span className="sr-only">Loading tasks…</span>
               <DataTableSkeleton
                 rowCount={3}

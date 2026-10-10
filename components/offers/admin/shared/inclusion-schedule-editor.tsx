@@ -24,8 +24,8 @@ export function InclusionScheduleEditor({
   onRestore,
 }: InclusionScheduleEditorProps) {
   const id = useId();
-  const isMobile = useMediaQuery("(max-width: 767px)");
-  const RowContainer = isMobile ? "details" : "div";
+  const isMobile = useMediaQuery("(max-width: 767px)", null);
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const categoryListId = `${id}-categories`;
   const draftSpecId = `${id}-draft-spec`;
   const draftCategoryId = `${id}-draft-category`;
@@ -98,16 +98,42 @@ export function InclusionScheduleEditor({
             const tenderTextId = `${id}-tender-text-${index}`;
             return (
               <li key={index} className="py-2">
-                <RowContainer>
-                  {isMobile ? (
-                    <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3 text-sm font-medium">
-                      <span className="min-w-0 break-words">
-                        {index + 1}.{" "}
-                        {row.spec || row.category || "Untitled inclusion"}
-                      </span>
-                      <span className="shrink-0 text-primary">Edit</span>
-                    </summary>
-                  ) : null}
+                <details
+                  open={isMobile === false || expandedRows.has(index)}
+                  onToggle={(event) => {
+                    if (isMobile !== true) return;
+                    const open = event.currentTarget.open;
+                    setExpandedRows((previous) => {
+                      if (previous.has(index) === open) return previous;
+                      const next = new Set(previous);
+                      if (open) next.add(index);
+                      else next.delete(index);
+                      return next;
+                    });
+                  }}
+                  onFocusCapture={(event) => {
+                    // Keep the editor visible if a focused field crosses into mobile.
+                    if (
+                      !(
+                        event.target instanceof HTMLInputElement
+                        || event.target instanceof HTMLTextAreaElement
+                      )
+                    )
+                      return;
+                    setExpandedRows((previous) =>
+                      previous.has(index)
+                        ? previous
+                        : new Set([...previous, index]),
+                    );
+                  }}
+                >
+                  <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3 text-sm font-medium md:hidden">
+                    <span className="min-w-0 break-words">
+                      {index + 1}.{" "}
+                      {row.spec || row.category || "Untitled inclusion"}
+                    </span>
+                    <span className="shrink-0 text-primary">Edit</span>
+                  </summary>
                   <div className="flex min-w-0 flex-col gap-2 py-3 md:flex-row md:flex-wrap md:items-center md:py-0">
                     <Label
                       htmlFor={specId}
@@ -172,7 +198,7 @@ export function InclusionScheduleEditor({
                       <span className="ml-2 md:sr-only">Remove inclusion</span>
                     </button>
                   </div>
-                </RowContainer>
+                </details>
               </li>
             );
           })}

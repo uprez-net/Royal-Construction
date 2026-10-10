@@ -84,7 +84,7 @@ export function AgentHeader({
 
       <div className="flex shrink-0 items-center gap-1.5">
         <AgentSessionMeter usage={usage} />
-        <Badge variant="outline" aria-label={statusLabel}>
+        <Badge variant="outline">
           <span
             className={cn(
               "size-1.5 rounded-full",
@@ -95,7 +95,7 @@ export function AgentHeader({
                   : "bg-emerald-600",
             )}
           />
-          <span className="hidden sm:inline">{statusLabel}</span>
+          <span className="sr-only sm:not-sr-only">{statusLabel}</span>
         </Badge>
         {busy ? (
           <Button onClick={onCancel} size="sm" type="button" variant="outline">

@@ -535,7 +535,7 @@ export function TradieScheduleRow({
               <SelectValue placeholder="Select milestone" />
             </SelectTrigger>
 
-            <SelectContent className="w-full min-w-0">
+            <SelectContent>
               {Object.entries(stageToMilestoneMap).map(([stage]) => (
                 <SelectItem key={stage} value={stage}>
                   {PROJECT_STAGE_LABELS[stage as ProjectStage]}
@@ -573,7 +573,7 @@ export function TradieScheduleRow({
               <SelectValue placeholder="Select milestone" />
             </SelectTrigger>
 
-            <SelectContent className="w-full min-w-0">
+            <SelectContent>
               {row.projectStage
                 && stageToMilestoneMap[row.projectStage]?.map((milestone) => (
                   <SelectItem key={milestone.id} value={milestone.id}>

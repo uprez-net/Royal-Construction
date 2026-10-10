@@ -244,7 +244,7 @@ export function ApprovalCard({
                   event.stopPropagation();
                   onClick();
                 }}
-                aria-label={`View ${title}`}
+                aria-label={`View request ${title}`}
               >
                 View request
               </Button>

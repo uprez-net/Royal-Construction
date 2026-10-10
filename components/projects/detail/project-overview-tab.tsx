@@ -2105,48 +2105,50 @@ export function ProjectOverviewTab({
 
                     {key === "inclusionsAndExclusions" ? (
                       <div className="grid gap-4 rounded-xl border border-border bg-muted/40 p-4 md:grid-cols-2">
-                        <TagListControl
-                          label={
-                            <h5 className="flex items-center text-sm font-medium text-foreground">
-                              <Check
-                                aria-hidden="true"
-                                className="mr-1 h-3 w-3 shrink-0 text-success-ink"
-                              />
-                              Inclusions
-                            </h5>
-                          }
-                          icon={
+                        <div className="space-y-2">
+                          <h5 className="flex items-center text-sm font-medium text-foreground">
                             <Check
                               aria-hidden="true"
                               className="mr-1 h-3 w-3 shrink-0 text-success-ink"
                             />
-                          }
-                          values={(sectionData.inclusions as string[]) ?? []}
-                          onChange={(v) =>
-                            updateInclusionsExclusionsList("inclusions", v)
-                          }
-                        />
-                        <TagListControl
-                          label={
-                            <h5 className="flex items-center text-sm font-medium text-foreground">
-                              <AlertTriangle
+                            Inclusions
+                          </h5>
+                          <TagListControl
+                            label="Inclusions"
+                            icon={
+                              <Check
                                 aria-hidden="true"
-                                className="mr-1 h-3 w-3 shrink-0 text-warning-ink"
+                                className="mr-1 h-3 w-3 shrink-0 text-success-ink"
                               />
-                              Exclusions
-                            </h5>
-                          }
-                          icon={
+                            }
+                            values={(sectionData.inclusions as string[]) ?? []}
+                            onChange={(v) =>
+                              updateInclusionsExclusionsList("inclusions", v)
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <h5 className="flex items-center text-sm font-medium text-foreground">
                             <AlertTriangle
                               aria-hidden="true"
                               className="mr-1 h-3 w-3 shrink-0 text-warning-ink"
                             />
-                          }
-                          values={(sectionData.exclusions as string[]) ?? []}
-                          onChange={(v) =>
-                            updateInclusionsExclusionsList("exclusions", v)
-                          }
-                        />
+                            Exclusions
+                          </h5>
+                          <TagListControl
+                            label="Exclusions"
+                            icon={
+                              <AlertTriangle
+                                aria-hidden="true"
+                                className="mr-1 h-3 w-3 shrink-0 text-warning-ink"
+                              />
+                            }
+                            values={(sectionData.exclusions as string[]) ?? []}
+                            onChange={(v) =>
+                              updateInclusionsExclusionsList("exclusions", v)
+                            }
+                          />
+                        </div>
                       </div>
                     ) : null}
 
