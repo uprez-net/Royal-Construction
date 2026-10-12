@@ -43,6 +43,8 @@ export function DashboardSiteManagerTable({
       </CardHeader>
       <CardContent>
         <DataTable
+          mobileLayout="cards"
+          mobileColumns={1}
           headers={[
             "Manager",
             "Projects",

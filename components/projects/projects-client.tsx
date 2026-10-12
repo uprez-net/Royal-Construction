@@ -357,7 +357,7 @@ function ProjectsWorkspace({
 
   return (
     <div className="grid gap-6">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MetricCard
           title="Total active"
           value={String(kpis.totalActive)}
@@ -499,6 +499,7 @@ function ProjectsWorkspace({
                  The page-level empty state above covers both "no data" and
                  "no matches", and it offers Clear filters. */
               <DataTable
+                mobileLayout="cards"
                 headers={TABLE_HEADERS}
                 align={[...TABLE_ALIGN]}
                 caption="Active projects, with budget, spend, progress and delivery status. Select a row to open its quick view."

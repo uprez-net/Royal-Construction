@@ -9,7 +9,7 @@ export default function XeroConnectionSkeleton() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
-        <div className="flex items-start justify-between gap-3 border-b border-border/70 p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/70 p-6">
           <div className="min-w-0 flex-1 space-y-2">
             <Skeleton className="h-5 w-40" />
             <Skeleton className="h-4 w-full max-w-lg" />
@@ -23,7 +23,7 @@ export default function XeroConnectionSkeleton() {
               <Skeleton key={index} className="h-20 w-full rounded-lg" />
             ))}
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <Skeleton className="h-9 w-32 rounded-lg" />
             <Skeleton className="h-9 w-28 rounded-lg" />
           </div>

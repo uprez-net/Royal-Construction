@@ -41,11 +41,11 @@ export function LeadMetricCard({
   active?: boolean;
 }) {
   const content = (
-    <div className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-4 py-3">
+    <div className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)] items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4">
       {Icon ? (
         <div
           className={cn(
-            "grid size-9 place-items-center rounded-lg",
+            "grid size-7 place-items-center rounded-lg sm:size-9",
             toneMap[tone],
           )}
         >
@@ -53,15 +53,15 @@ export function LeadMetricCard({
         </div>
       ) : null}
       <div className="min-w-0">
-        <div className="flex items-baseline gap-2">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-2">
           <p className="font-heading text-2xl font-semibold leading-none tracking-tight text-foreground">
             {value}
           </p>
-          <p className="truncate text-xs font-medium text-muted-foreground">
+          <p className="break-words text-xs font-medium text-muted-foreground sm:truncate">
             {label}
           </p>
         </div>
-        <p className="mt-1 truncate text-[11px] text-muted-foreground">
+        <p className="mt-1 break-words text-xs text-muted-foreground sm:truncate sm:text-[11px]">
           {note}
         </p>
       </div>

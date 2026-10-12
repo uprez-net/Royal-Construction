@@ -154,22 +154,26 @@ export function ApprovalCard({
       className={cn(
         "group cursor-pointer rounded-xl border bg-card p-4 transition-all hover:shadow-md",
         selected && "ring-2 ring-primary",
-        disabled || status !== TradieApprovalStatus.PENDING
-          ? "opacity-50"
-          : "cursor-pointer",
+        disabled && "opacity-50",
       )}
     >
       <div className="flex gap-4">
-        <input
-          type="checkbox"
-          checked={selected}
-          disabled={disabled || status !== TradieApprovalStatus.PENDING}
-          onClick={(e) => e.stopPropagation()}
-          onChange={onSelect}
-          className="mt-1"
-        />
+        <label
+          className="grid size-11 shrink-0 place-items-center sm:size-6"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            aria-label={`Select ${title}`}
+            checked={selected}
+            disabled={disabled || status !== TradieApprovalStatus.PENDING}
+            onClick={(e) => e.stopPropagation()}
+            onChange={onSelect}
+            className="size-5"
+          />
+        </label>
 
-        <div className="flex-1 space-y-4">
+        <div className="min-w-0 flex-1 space-y-4 [overflow-wrap:anywhere]">
           {/* Header */}
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -199,7 +203,7 @@ export function ApprovalCard({
           {/* Body */}
 
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold">{title}</h3>
 
               {subtitle && (
@@ -230,7 +234,21 @@ export function ApprovalCard({
           {/* Footer */}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-xs text-muted-foreground">{projectName}</div>
+            <div className="min-w-0 space-y-2">
+              <p className="text-xs text-muted-foreground">{projectName}</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onClick();
+                }}
+                aria-label={`View request ${title}`}
+              >
+                View request
+              </Button>
+            </div>
 
             {status === TradieApprovalStatus.PENDING && (
               <div className="flex gap-2">

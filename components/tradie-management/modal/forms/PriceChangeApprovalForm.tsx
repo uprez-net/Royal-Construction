@@ -108,7 +108,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
 
   return (
     <>
-      <DialogHeader className="pb-4">
+      <DialogHeader className="pb-4 pr-10">
         <DialogTitle className="flex items-center gap-2">
           <DollarSign className="size-5" aria-hidden="true" />
           Price change approval
@@ -149,7 +149,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
           </h3>
 
           <div className="rounded-lg border border-border/70 p-4">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h4 className="text-base font-semibold">
                   {approval.tradie.name}
@@ -217,7 +217,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
           </h3>
 
           <div className="rounded-lg border border-border/70 p-6">
-            <div className="grid grid-cols-3 items-center gap-4">
+            <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-3">
               <div className="text-center">
                 <p className="text-xs text-muted-foreground">Current rate</p>
 
@@ -239,7 +239,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
 
               <div className="flex justify-center">
                 <ArrowRight
-                  className="size-6 text-muted-foreground"
+                  className="size-6 rotate-90 text-muted-foreground sm:rotate-0"
                   aria-hidden="true"
                 />
               </div>
@@ -354,7 +354,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
 
         {/* Actions */}
         {approval.status === "PENDING" && (
-          <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
+          <div className="grid gap-2 border-t border-border/70 pt-4 sm:flex sm:justify-end">
             <Button
               variant="outline"
               onClick={() => submit("rejected")}
@@ -396,10 +396,15 @@ function InfoItem({
   mono?: boolean;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-xs text-muted-foreground">{label}</p>
 
-      <p className={cn("font-medium", mono && "font-mono tabular-nums")}>
+      <p
+        className={cn(
+          "break-words font-medium",
+          mono && "font-mono tabular-nums",
+        )}
+      >
         {value}
       </p>
     </div>
@@ -423,10 +428,15 @@ function DetailRow({
         {icon}
       </div>
 
-      <div>
+      <div className="min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
 
-        <p className={cn("font-medium", mono && "font-mono tabular-nums")}>
+        <p
+          className={cn(
+            "break-words font-medium",
+            mono && "font-mono tabular-nums",
+          )}
+        >
           {value}
         </p>
       </div>

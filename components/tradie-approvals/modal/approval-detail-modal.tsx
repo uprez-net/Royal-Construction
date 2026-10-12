@@ -53,9 +53,12 @@ export function ApprovalDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-3xl p-0">
-        <DialogHeader className="border-b px-6 py-4">
-          <div className="flex items-center gap-4">
+      <DialogContent
+        data-mobile-scroll="body"
+        className="grid max-h-[85dvh] max-w-3xl grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0"
+      >
+        <DialogHeader className="border-b px-4 py-4 pr-14 sm:px-6">
+          <div className="flex flex-wrap items-center gap-2">
             <DialogTitle className="text-lg font-semibold">
               Approval Request
             </DialogTitle>
@@ -64,7 +67,7 @@ export function ApprovalDetailModal({
           </div>
         </DialogHeader>
 
-        <div className="space-y-6 p-6 max-h-120 overflow-y-auto no-scrollbar">
+        <div className="min-h-0 min-w-0 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6">
           {/* Approval Info */}
           <div>
             <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
@@ -195,7 +198,7 @@ export function ApprovalDetailModal({
           )}
         </div>
 
-        <div className="flex bg-muted rounded-b-lg items-center justify-end gap-2 border-t px-6 py-4">
+        <div className="grid grid-cols-2 items-center gap-2 rounded-b-lg border-t bg-muted px-4 py-3 sm:flex sm:justify-end sm:px-6">
           <Button
             size="sm"
             variant="destructive"
@@ -232,7 +235,7 @@ function InfoItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="font-medium">{value}</p>
+      <p className="break-words font-medium">{value}</p>
     </div>
   );
 }
@@ -250,10 +253,10 @@ function DetailRow({
     <div className="flex items-start gap-3">
       <div className="mt-0.5 text-muted-foreground">{icon}</div>
 
-      <div>
+      <div className="min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
 
-        <p className="font-medium">{value}</p>
+        <p className="break-words font-medium">{value}</p>
       </div>
     </div>
   );

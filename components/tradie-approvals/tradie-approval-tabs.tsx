@@ -27,6 +27,7 @@ import { Button } from "../ui/button";
 import { useEffect, useTransition } from "react";
 import { toast } from "sonner";
 import { ApprovalInput, SafeTradieApproval } from "@/types/tradie";
+import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
 import { openModal } from "@/lib/store/slices/uiSlice";
 
 const handlePayload = (approval: SafeTradieApproval, resolution: string) => {
@@ -167,8 +168,8 @@ export function TradieApprovalTabs() {
 
   return (
     <>
-      <div className="flex w-full items-center justify-between gap-4">
-        <div className="relative max-w-70 flex-1">
+      <div className="flex w-full flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-center">
+        <div className="relative min-w-0 flex-1 sm:max-w-70">
           <label htmlFor="search" className="sr-only">
             Search
           </label>
@@ -177,14 +178,15 @@ export function TradieApprovalTabs() {
           <Input
             id="search"
             className="h-10 rounded-lg border-border bg-background pl-9 text-[13px] shadow-none transition-all focus-visible:ring-4 focus-visible:ring-teal-500/10 focus-visible:border-teal-600"
-            placeholder="Search offers..."
+            placeholder="Search approvals…"
+            aria-label="Search approvals"
             value={query.search}
             onChange={handleSearchChange}
           />
         </div>
 
         {selectedApprovalIds.length > 0 && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               className="bg-green-500 hover:bg-green-600 text-white"
@@ -248,9 +250,9 @@ function ApprovalTabs({ activeTab, onTabChange }: ApprovalTabsProps) {
       key: "all",
       label: "All",
       count:
-        kpiData.pendingCount +
-        kpiData.resolvedCount.accepted +
-        kpiData.resolvedCount.rejected,
+        kpiData.pendingCount
+        + kpiData.resolvedCount.accepted
+        + kpiData.resolvedCount.rejected,
       icon: Clock3,
     },
     {
@@ -307,72 +309,88 @@ function ApprovalTabs({ activeTab, onTabChange }: ApprovalTabsProps) {
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
-      {tabs.map((tab) => {
-        const Icon = tab.icon;
+    <>
+      <MobileFilterSelect
+        label="Approval status or request type"
+        value={activeTab}
+        options={[...tabs, ...statusTabs].map((tab) => ({
+          value: tab.key,
+          label: tab.label,
+          count: tab.count,
+        }))}
+        onChange={(value) => onTabChange(value as TabKey)}
+      />
+      <div className="hidden flex-wrap items-center gap-2 rounded-lg border bg-card p-2 md:flex">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
 
-        return (
-          <button
-            key={tab.key}
-            onClick={() => onTabChange(tab.key)}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              activeTab === tab.key
-                ? "bg-primary text-primary-foreground"
-                : "hover:bg-muted",
-            )}
-          >
-            <Icon className="h-4 w-4" />
-
-            <span>{tab.label}</span>
-
-            <span
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              aria-pressed={activeTab === tab.key}
+              onClick={() => onTabChange(tab.key)}
               className={cn(
-                "rounded-full px-2 py-0.5 text-xs",
+                "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 activeTab === tab.key
-                  ? "bg-primary-foreground/20"
-                  : "bg-muted-foreground/10",
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-muted",
               )}
             >
-              {tab.count}
-            </span>
-          </button>
-        );
-      })}
+              <Icon className="h-4 w-4" />
 
-      <div className="flex-1" />
+              <span>{tab.label}</span>
 
-      {statusTabs.map((tab) => {
-        const Icon = tab.icon;
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-xs",
+                  activeTab === tab.key
+                    ? "bg-primary-foreground/20"
+                    : "bg-muted-foreground/10",
+                )}
+              >
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
 
-        return (
-          <button
-            key={tab.key}
-            onClick={() => onTabChange(tab.key)}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              activeTab === tab.key
-                ? "bg-primary text-primary-foreground"
-                : "hover:bg-muted",
-            )}
-          >
-            <Icon className="h-4 w-4" />
+        <div className="flex-1" />
 
-            <span>{tab.label}</span>
+        {statusTabs.map((tab) => {
+          const Icon = tab.icon;
 
-            <span
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              aria-pressed={activeTab === tab.key}
+              onClick={() => onTabChange(tab.key)}
               className={cn(
-                "rounded-full px-2 py-0.5 text-xs",
+                "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 activeTab === tab.key
-                  ? "bg-primary-foreground/20"
-                  : "bg-muted-foreground/10",
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-muted",
               )}
             >
-              {tab.count}
-            </span>
-          </button>
-        );
-      })}
-    </div>
+              <Icon className="h-4 w-4" />
+
+              <span>{tab.label}</span>
+
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-xs",
+                  activeTab === tab.key
+                    ? "bg-primary-foreground/20"
+                    : "bg-muted-foreground/10",
+                )}
+              >
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }

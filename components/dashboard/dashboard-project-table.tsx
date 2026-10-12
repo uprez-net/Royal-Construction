@@ -105,6 +105,7 @@ export function DashboardProjectTable({
           <div className="relative min-w-0 flex-1 sm:w-72 sm:flex-none">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
+              aria-label="Search projects or clients"
               type="text"
               placeholder="Search projects, clients..."
               value={searchQuery}
@@ -125,6 +126,7 @@ export function DashboardProjectTable({
       </CardHeader>
       <CardContent className="space-y-4">
         <DataTable
+          mobileLayout="cards"
           headers={[
             "Project",
             "Client",

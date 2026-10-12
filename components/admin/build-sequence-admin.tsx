@@ -1,6 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { useMediaQuery } from "@/hooks/use-media-query";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { ProjectStage } from "@prisma/client";
 import {
   ArrowDown,
@@ -68,6 +77,8 @@ export function BuildSequenceAdmin({
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const [activityPickerOpen, setActivityPickerOpen] = useState(false);
   const [closedStages, setClosedStages] = useState<Set<ProjectStage>>(
     new Set(),
   );
@@ -167,6 +178,50 @@ export function BuildSequenceAdmin({
       setSaving(false);
     }
   };
+  const activityTree = (
+    <Card>
+      <CardHeader>
+        <CardTitle as="h2">Activity order</CardTitle>
+        <CardDescription>
+          Drop on a row to link beneath it. Drop between rows to reorder.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <TemplateActivityTree
+          activities={activities}
+          trades={trades}
+          selectedId={selectedId}
+          draggedId={draggedId}
+          disabled={saving}
+          onSelect={(id) => {
+            setSelectedId(id);
+            revealActivity(activities, id);
+            setActivityPickerOpen(false);
+          }}
+          onDrag={setDraggedId}
+          onMove={move}
+          closedStages={closedStages}
+          closedParents={closedParents}
+          onStageOpenChange={(stage, open) =>
+            setClosedStages((previous) => {
+              const next = new Set(previous);
+              if (open) next.delete(stage);
+              else next.add(stage);
+              return next;
+            })
+          }
+          onParentOpenChange={(id, open) =>
+            setClosedParents((previous) => {
+              const next = new Set(previous);
+              if (open) next.delete(id);
+              else next.add(id);
+              return next;
+            })
+          }
+        />
+      </CardContent>
+    </Card>
+  );
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -211,49 +266,41 @@ export function BuildSequenceAdmin({
         </p>
       ) : null}
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle as="h2">Activity order</CardTitle>
-            <CardDescription>
-              Drop on a row to link beneath it. Drop between rows to reorder.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <TemplateActivityTree
-              activities={activities}
-              trades={trades}
-              selectedId={selectedId}
-              draggedId={draggedId}
-              disabled={saving}
-              onSelect={(id) => {
-                setSelectedId(id);
-                revealActivity(activities, id);
-              }}
-              onDrag={setDraggedId}
-              onMove={move}
-              closedStages={closedStages}
-              closedParents={closedParents}
-              onStageOpenChange={(stage, open) =>
-                setClosedStages((previous) => {
-                  const next = new Set(previous);
-                  if (open) next.delete(stage);
-                  else next.add(stage);
-                  return next;
-                })
-              }
-              onParentOpenChange={(id, open) =>
-                setClosedParents((previous) => {
-                  const next = new Set(previous);
-                  if (open) next.delete(id);
-                  else next.add(id);
-                  return next;
-                })
-              }
-            />
-          </CardContent>
-        </Card>
+        <div className="hidden lg:block">{activityTree}</div>
+        <div className="lg:hidden">
+          <Sheet
+            open={activityPickerOpen && !isDesktop}
+            onOpenChange={setActivityPickerOpen}
+          >
+            <div className="flex flex-col gap-2 rounded-xl border bg-card p-4">
+              <p className="text-xs font-medium text-muted-foreground">
+                Selected activity · {selected?.order} of {activities.length}
+              </p>
+              <p className="break-words font-semibold">
+                {selected?.name || "Choose an activity"}
+              </p>
+              <SheetTrigger asChild>
+                <Button variant="outline">Choose activity to edit</Button>
+              </SheetTrigger>
+            </div>
+            <SheetContent
+              side="bottom"
+              className="flex max-h-[90dvh] flex-col gap-4 overflow-hidden rounded-t-xl p-4"
+            >
+              <SheetHeader>
+                <SheetTitle>Build sequence activities</SheetTitle>
+                <SheetDescription>
+                  Select an activity to edit its details.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="min-h-0 overflow-y-auto overscroll-contain">
+                {activityTree}
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
         {selected ? (
-          <Card className="lg:sticky lg:top-6">
+          <Card className="min-w-0 lg:sticky lg:top-6">
             <CardHeader>
               <CardTitle as="h2">Activity details</CardTitle>
               <CardDescription>
@@ -477,6 +524,14 @@ export function BuildSequenceAdmin({
             </CardFooter>
           </Card>
         ) : null}
+      </div>
+      <div className="sticky bottom-0 flex items-center justify-between gap-3 rounded-lg border bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-sm lg:hidden">
+        <span className="text-sm text-muted-foreground">
+          {dirty ? "Unsaved changes" : "All changes saved"}
+        </span>
+        <Button disabled={!dirty || saving} onClick={save}>
+          {saving ? "Saving…" : "Save sequence"}
+        </Button>
       </div>
     </div>
   );

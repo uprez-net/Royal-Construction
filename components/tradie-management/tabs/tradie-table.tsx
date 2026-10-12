@@ -41,6 +41,7 @@ export function TradieTable({
 
   return (
     <DataTable
+      mobileLayout="cards"
       caption="Tradies with their trade, last quoted price, rating, completed jobs and incident counts."
       headers={[
         "Tradie",

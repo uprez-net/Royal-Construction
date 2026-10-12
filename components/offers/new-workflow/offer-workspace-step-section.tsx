@@ -47,7 +47,7 @@ export function OfferLockBanner({
       : "This offer has been issued, so job setup, cost schedule, pricing, scope and the offer document are locked to preserve the issued record. To change any of them, create a new revision.";
   return (
     <div className="grid gap-2 rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 px-4 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         {/* flex-1, and a measure well past DESIGN.md's 68ch body rule: that
             rule is for sustained reading, and this is a two-sentence notice in
             a horizontal bar. Held at max-w-prose it wrapped to three lines

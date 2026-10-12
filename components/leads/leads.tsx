@@ -339,14 +339,14 @@ function LeadsWorkspace() {
 
       {/* Header card */}
       <Card className="overflow-hidden border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
-        <CardContent className="relative p-6">
+        <CardContent className="relative p-4 sm:p-6">
           <div className="absolute -right-12 -top-10 h-40 w-40 rounded-full bg-teal-500/10" />
           <div className="absolute -bottom-14 right-20 h-32 w-32 rounded-full bg-teal-700/10" />
           <div className="relative flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-extrabold text-slate-900">
+              <h1 className="text-lg font-extrabold text-slate-900">
                 Lead Pipeline
-              </h2>
+              </h1>
               <p className="text-sm text-slate-600">
                 Google Ads auto-capture • Follow-up automation • Email templates
               </p>
@@ -449,7 +449,7 @@ function LeadsWorkspace() {
                 key={key}
                 onClick={() => handleTabChange(key)}
                 className={cn(
-                  "group relative inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-[12.5px] font-semibold transition-all duration-200",
+                  "group relative inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-sm font-semibold transition-colors duration-200 sm:min-h-9 sm:text-[12.5px]",
                   activeTab === key
                     ? "bg-teal-50 text-teal-700 shadow-sm"
                     : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
@@ -484,6 +484,7 @@ function LeadsWorkspace() {
                 <div className="search-box min-w-0 flex-1">
                   <Search size={16} />
                   <input
+                    aria-label="Search leads"
                     type="text"
                     placeholder="Search leads..."
                     value={searchTerm}

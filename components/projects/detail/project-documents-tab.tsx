@@ -171,6 +171,8 @@ export function ProjectDocumentsTab({
       </CardHeader>
       <CardContent className="p-4">
         <DataTable
+          mobileLayout="cards"
+          mobileTitleColumn={1}
           onRowClick={(index) => {
             // Clicking a picture opens the gallery over every other image in
             // the filtered list, not just the one row — the search term the

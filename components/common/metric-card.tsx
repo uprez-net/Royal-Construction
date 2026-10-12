@@ -87,11 +87,11 @@ export function MetricCard({
     : (iconTone ?? METRIC_TONES.primary);
 
   return (
-    <Card className="overflow-hidden rounded-lg border-border/70 bg-white/95 shadow-sm">
-      <CardContent className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
+    <Card className="overflow-hidden rounded-lg border-border/70 bg-white/95 py-0 shadow-sm sm:py-4">
+      <CardContent className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)] items-center gap-2 px-3 py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-3 sm:px-4">
         <div
           className={cn(
-            "grid size-9 place-items-center rounded-lg text-white",
+            "grid size-7 place-items-center rounded-lg text-white sm:size-9",
             toneClass,
           )}
         >
@@ -101,15 +101,19 @@ export function MetricCard({
           <p className="font-heading text-2xl font-semibold leading-none tracking-tight text-foreground">
             {displayValue}
           </p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">{title}</p>
+          <p className="mt-1 text-xs text-muted-foreground sm:truncate">
+            {title}
+          </p>
           {caption ? (
-            <p className="mt-0.5 truncate font-mono text-[10.5px] tabular-nums text-muted-foreground">
+            <p className="mt-0.5 break-words font-mono text-[10.5px] tabular-nums text-muted-foreground sm:truncate">
               {caption}
             </p>
           ) : null}
         </div>
         {trendDelta !== undefined && trendDelta !== 0 && (
-          <TrendBadge value={trendDelta} isInverse={isInverse} />
+          <div className="col-start-2 sm:col-start-auto">
+            <TrendBadge value={trendDelta} isInverse={isInverse} />
+          </div>
         )}
       </CardContent>
     </Card>

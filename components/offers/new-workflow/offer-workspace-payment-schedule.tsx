@@ -62,7 +62,7 @@ export function PaymentSchedulePanel({
       <CardContent className="grid gap-3">
         <ScheduleLock locked={locked}>
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[680px] text-sm">
+            <table className="payment-schedule-table w-full text-sm md:min-w-[680px]">
               <caption className="sr-only">
                 Payment schedule percentages and amounts seeded for Tender
                 review.
@@ -81,6 +81,9 @@ export function PaymentSchedulePanel({
                 {rows.map((row) => (
                   <tr key={row.id} className="border-t border-border">
                     <td className="px-3 py-2">
+                      <span className="mb-1 block text-xs text-muted-foreground md:hidden">
+                        Payment stage
+                      </span>
                       <Input
                         aria-label={`${row.stageName} payment stage`}
                         value={row.stageName}
@@ -90,6 +93,9 @@ export function PaymentSchedulePanel({
                       />
                     </td>
                     <td className="px-3 py-2">
+                      <span className="mb-1 block text-xs text-muted-foreground md:hidden">
+                        Contract percentage
+                      </span>
                       <Input
                         aria-label={`${row.stageName} payment percent`}
                         className="text-right font-mono"
@@ -113,12 +119,18 @@ export function PaymentSchedulePanel({
                       />
                     </td>
                     <td className="px-3 py-2 text-right font-mono">
+                      <span className="mb-1 block font-sans text-xs text-muted-foreground md:hidden">
+                        Amount including GST
+                      </span>
                       {formatCurrency(
-                        customerPrice.selectedContractValueIncGst *
-                          row.percentOfContract,
+                        customerPrice.selectedContractValueIncGst
+                          * row.percentOfContract,
                       )}
                     </td>
                     <td className="px-3 py-2">
+                      <span className="mb-1 block text-xs text-muted-foreground md:hidden">
+                        Payment trigger
+                      </span>
                       <Input
                         aria-label={`${row.stageName} payment trigger`}
                         value={row.trigger}

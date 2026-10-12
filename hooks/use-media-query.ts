@@ -9,9 +9,18 @@ import { useEffect, useState } from "react";
  * matches during hydration, then settles on the real value. Use it for layout
  * that has to change behaviour, not just appearance — a rail that becomes a
  * drawer, for example. Anything a CSS breakpoint can express belongs in CSS.
+ * Pass `null` to distinguish an unresolved breakpoint from a real `false`.
  */
-export function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(false);
+export function useMediaQuery(query: string): boolean;
+export function useMediaQuery(
+  query: string,
+  initialValue: null,
+): boolean | null;
+export function useMediaQuery(
+  query: string,
+  initialValue: boolean | null = false,
+) {
+  const [matches, setMatches] = useState(initialValue);
 
   useEffect(() => {
     const list = window.matchMedia(query);

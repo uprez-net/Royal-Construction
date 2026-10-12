@@ -861,6 +861,7 @@ function TagRow({
         {icon}
         <Input
           ref={inputRef}
+          aria-label={`Edit ${value}`}
           value={draft}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
             setDraft(e.target.value)
@@ -891,7 +892,7 @@ function TagRow({
           setDraft(value);
           setEditing(true);
         }}
-        className="min-w-0 flex-1 cursor-text truncate text-left"
+        className="min-h-11 min-w-0 flex-1 cursor-text whitespace-normal break-words text-left md:min-h-0 md:truncate"
         title={value}
       >
         {value}
@@ -900,7 +901,7 @@ function TagRow({
       <button
         type="button"
         onClick={onRemove}
-        className="shrink-0 rounded-full p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100 focus:opacity-100"
+        className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-opacity hover:bg-background hover:text-foreground md:size-auto md:p-0.5 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
         aria-label={`Remove ${value}`}
       >
         <X className="h-3 w-3" />
@@ -930,6 +931,7 @@ function TagListControl({
   icon,
   maxHeight = "30vh",
 }: TagListControlProps): React.JSX.Element {
+  const inputId = useId();
   const [draft, setDraft] = useState<string>("");
 
   const addFromText = (text: string): void => {
@@ -988,7 +990,7 @@ function TagListControl({
   };
 
   return (
-    <FieldShell label={label}>
+    <FieldShell label={label} htmlFor={inputId}>
       <div className="space-y-2">
         {values.length > 0 && (
           <ul
@@ -1013,6 +1015,7 @@ function TagListControl({
             aria-hidden="true"
           />
           <Input
+            id={inputId}
             value={draft}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
               setDraft(e.target.value)
@@ -1234,8 +1237,8 @@ function PaymentStagesTable({
     onChange([...stages, { label: "", percentage: null, amount: null }]);
 
   return (
-    <div className="space-y-2 rounded-xl border border-border bg-card p-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-2 rounded-xl border border-border bg-card p-3 md:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-foreground">Payment stages</p>
         <Badge
           variant="outline"
@@ -1247,7 +1250,7 @@ function PaymentStagesTable({
 
       {stages.length > 0 ? (
         <div className="overflow-hidden rounded-lg border border-border">
-          <div className="grid grid-cols-[1fr_100px_120px_32px] gap-2 bg-muted px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="hidden grid-cols-[1fr_100px_120px_32px] gap-2 bg-muted px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground md:grid">
             <span>Label</span>
             <span>Percent</span>
             <span>Amount</span>
@@ -1257,7 +1260,7 @@ function PaymentStagesTable({
             {stages.map((stage, index) => (
               <div
                 key={index}
-                className="grid grid-cols-[1fr_100px_120px_32px] items-center gap-2 px-3 py-2"
+                className="grid grid-cols-1 items-center gap-3 px-3 py-3 md:grid-cols-[1fr_100px_120px_32px] md:gap-2 md:py-2"
               >
                 <Input
                   aria-label={`Stage ${index + 1} label`}
@@ -1306,7 +1309,7 @@ function PaymentStagesTable({
                 <button
                   type="button"
                   onClick={() => removeRow(index)}
-                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:h-8 md:w-8"
                   aria-label={`Remove stage ${index + 1}`}
                 >
                   <X aria-hidden="true" className="h-3.5 w-3.5" />
@@ -1494,7 +1497,7 @@ function ConflictRow({ conflict }: { conflict: ProjectConflictResult }) {
           {toLabel(conflict.resolution)}
         </Badge>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid gap-2 sm:grid-cols-3">
         <ConflictValue label="Tender" value={conflict.tenderValue} />
         <ConflictValue label="Contract" value={conflict.contractValue} />
         <ConflictValue label="Resolved" value={conflict.resolvedValue} />
@@ -1848,8 +1851,8 @@ export function ProjectOverviewTab({
   return (
     <section className="space-y-4">
       <Card className="border-border/70 bg-card shadow-sm">
-        <CardHeader className="sticky top-0 z-20 flex flex-row items-center justify-between gap-3 border-b border-border/70 bg-card pb-4 shadow-sm">
-          <div>
+        <CardHeader className="sticky top-0 z-20 flex flex-col items-start justify-between gap-3 border-b border-border/70 bg-card px-4 pb-4 shadow-sm sm:flex-row sm:items-center sm:px-6">
+          <div className="min-w-0">
             {/* The page <h1> is the project name in project-header.tsx and
                 nothing between here and it is an <h2>, so this panel title is
                 the first h2 on the tab. The accordion triggers below sit in
@@ -1860,11 +1863,11 @@ export function ProjectOverviewTab({
             >
               Project information
             </CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 hidden text-sm text-muted-foreground md:block">
               Extracted from the tender and contract documents.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {failCount + warnCount > 0 ? (
               /* Live region so the "as of last save" qualifier is announced when
                  the first edit makes these counts stale, not just seen. */
@@ -1901,7 +1904,7 @@ export function ProjectOverviewTab({
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-5 pt-5">
+        <CardContent className="space-y-5 px-4 pt-4 sm:px-6 sm:pt-5">
           {/* Overview fields */}
           <div className="grid gap-4 md:grid-cols-3">
             <TextField
@@ -2016,12 +2019,12 @@ export function ProjectOverviewTab({
                   key={key}
                   id={key}
                   value={key}
-                  className="rounded-xl border border-border bg-card px-4"
+                  className="rounded-xl border border-border bg-card px-3 sm:px-4"
                 >
                   <AccordionTrigger className="py-3 hover:no-underline">
-                    <div className="flex flex-1 items-center justify-between gap-3 pr-3 text-left">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2 pr-1 text-left sm:gap-3 sm:pr-3">
+                      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                        <span className="hidden size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground sm:flex">
                           <Icon aria-hidden="true" className="h-4 w-4" />
                         </span>
                         <div>
@@ -2044,7 +2047,7 @@ export function ProjectOverviewTab({
                       ) : null}
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="max-h-[75vh] space-y-4 overflow-y-auto pb-4 pt-1 no-scrollbar">
+                  <AccordionContent className="space-y-4 pb-4 pt-1 md:max-h-[75vh] md:overflow-y-auto">
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                       {SECTION_FIELDS[key].map((config) => (
                         <div
@@ -2102,48 +2105,50 @@ export function ProjectOverviewTab({
 
                     {key === "inclusionsAndExclusions" ? (
                       <div className="grid gap-4 rounded-xl border border-border bg-muted/40 p-4 md:grid-cols-2">
-                        <TagListControl
-                          label={
-                            <h5 className="flex items-center text-sm font-medium text-foreground">
-                              <Check
-                                aria-hidden="true"
-                                className="mr-1 h-3 w-3 shrink-0 text-success-ink"
-                              />
-                              Inclusions
-                            </h5>
-                          }
-                          icon={
+                        <div className="space-y-2">
+                          <h5 className="flex items-center text-sm font-medium text-foreground">
                             <Check
                               aria-hidden="true"
                               className="mr-1 h-3 w-3 shrink-0 text-success-ink"
                             />
-                          }
-                          values={(sectionData.inclusions as string[]) ?? []}
-                          onChange={(v) =>
-                            updateInclusionsExclusionsList("inclusions", v)
-                          }
-                        />
-                        <TagListControl
-                          label={
-                            <h5 className="flex items-center text-sm font-medium text-foreground">
-                              <AlertTriangle
+                            Inclusions
+                          </h5>
+                          <TagListControl
+                            label="Inclusions"
+                            icon={
+                              <Check
                                 aria-hidden="true"
-                                className="mr-1 h-3 w-3 shrink-0 text-warning-ink"
+                                className="mr-1 h-3 w-3 shrink-0 text-success-ink"
                               />
-                              Exclusions
-                            </h5>
-                          }
-                          icon={
+                            }
+                            values={(sectionData.inclusions as string[]) ?? []}
+                            onChange={(v) =>
+                              updateInclusionsExclusionsList("inclusions", v)
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <h5 className="flex items-center text-sm font-medium text-foreground">
                             <AlertTriangle
                               aria-hidden="true"
                               className="mr-1 h-3 w-3 shrink-0 text-warning-ink"
                             />
-                          }
-                          values={(sectionData.exclusions as string[]) ?? []}
-                          onChange={(v) =>
-                            updateInclusionsExclusionsList("exclusions", v)
-                          }
-                        />
+                            Exclusions
+                          </h5>
+                          <TagListControl
+                            label="Exclusions"
+                            icon={
+                              <AlertTriangle
+                                aria-hidden="true"
+                                className="mr-1 h-3 w-3 shrink-0 text-warning-ink"
+                              />
+                            }
+                            values={(sectionData.exclusions as string[]) ?? []}
+                            onChange={(v) =>
+                              updateInclusionsExclusionsList("exclusions", v)
+                            }
+                          />
+                        </div>
                       </div>
                     ) : null}
 

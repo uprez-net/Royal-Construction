@@ -69,11 +69,11 @@ export function AgentHeader({
         >
           <PanelLeft />
         </Button>
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-royal-gold-light text-royal-gold-ink">
+        <span className="hidden size-8 shrink-0 place-items-center rounded-lg bg-royal-gold-light text-royal-gold-ink sm:grid">
           <Bot aria-hidden="true" className="size-4" />
         </span>
         <div className="min-w-0">
-          <h1 className="font-heading truncate text-sm font-semibold text-foreground sm:text-base">
+          <h1 className="font-heading text-sm font-semibold leading-tight text-foreground sm:truncate sm:text-base">
             Operations desk
           </h1>
           <p className="truncate text-xs text-muted-foreground">
@@ -95,7 +95,7 @@ export function AgentHeader({
                   : "bg-emerald-600",
             )}
           />
-          <span className="hidden sm:inline">{statusLabel}</span>
+          <span className="sr-only sm:not-sr-only">{statusLabel}</span>
         </Badge>
         {busy ? (
           <Button onClick={onCancel} size="sm" type="button" variant="outline">

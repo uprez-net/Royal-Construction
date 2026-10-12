@@ -1,4 +1,5 @@
 import {
+  DataTableSkeleton,
   MetricCardSkeleton,
   PageSkeleton,
   Skeleton,
@@ -35,9 +36,9 @@ export default function DashboardSkeleton() {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <MetricCardSkeleton key={i} />
+            <MetricCardSkeleton key={i} compact />
           ))}
         </div>
       </section>
@@ -62,27 +63,8 @@ export default function DashboardSkeleton() {
             <Skeleton className="h-10 w-24 rounded-lg" />
           </div>
         </div>
-        <div className="overflow-x-auto p-5">
-          <div className="min-w-[640px] overflow-hidden rounded-lg border">
-            <div className="grid grid-cols-7 gap-4 border-b bg-muted/40 px-4 py-4">
-              {Array.from({ length: 7 }).map((_, i) => (
-                <Skeleton key={i} className="h-4 w-20" />
-              ))}
-            </div>
-            <div className="space-y-4 p-4">
-              {Array.from({ length: 5 }).map((_, row) => (
-                <div key={row} className="grid grid-cols-7 items-center gap-4">
-                  <Skeleton className="h-5 w-32" />
-                  <Skeleton className="h-5 w-28" />
-                  <Skeleton className="h-5 w-24" />
-                  <Skeleton className="h-5 w-20" />
-                  <Skeleton className="h-5 w-20" />
-                  <Skeleton className="h-3 w-full rounded-full" />
-                  <Skeleton className="h-8 w-24 rounded-full" />
-                </div>
-              ))}
-            </div>
-          </div>
+        <div className="p-4 sm:p-5">
+          <DataTableSkeleton columnCount={7} />
         </div>
       </div>
 

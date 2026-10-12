@@ -258,7 +258,7 @@ export function EmailComposer({
         >
           <EditorContainer>
             <Editor
-              aria-labelledby={`${isReply ? "reply" : "compose"}-email-editor-label`}
+              aria-label={isReply ? "Reply message" : "Email message"}
               placeholder="Write your message here..."
             />
           </EditorContainer>
@@ -269,6 +269,7 @@ export function EmailComposer({
             size="icon"
             variant="royal"
             className="shrink-0"
+            aria-label={isReply ? "Send reply" : "Send email"}
             disabled={sending || body === undefined || !body?.html.trim()}
             onClick={() => startTransition(handleSend)}
           >

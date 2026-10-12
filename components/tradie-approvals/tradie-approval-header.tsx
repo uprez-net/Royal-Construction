@@ -81,7 +81,7 @@ export function TradieApprovalKPI() {
   ];
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+    <div className="grid grid-cols-2 gap-3 xl:grid-cols-7">
       {allKPIs.map((kpi, index) => (
         <MetricCard
           key={index}

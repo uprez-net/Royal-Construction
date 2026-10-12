@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Clock3, MessageSquareText, XCircle } from "lucide-react";
 
 import { ModalShell } from "@/components/common/modal-shell";
+import { ModalLoadingState } from "@/components/common/modal-loading-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -154,9 +155,7 @@ export function FollowupPromptModal({
       maxWidthClass="max-w-[560px]"
     >
       {loading || !lead ? (
-        <div className="py-8 text-center text-sm text-muted-foreground">
-          Loading lead...
-        </div>
+        <ModalLoadingState label="Loading lead" />
       ) : (
         <div className="space-y-6">
           <div className="space-y-2">

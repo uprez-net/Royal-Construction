@@ -8,10 +8,10 @@ export default function TradeTypesLoading() {
         <Skeleton className="h-4 w-96 max-w-full" />
       </div>
       <div className="space-y-4 rounded-xl border border-border/70 bg-card p-6 shadow-sm">
-        <div className="flex gap-3">
-          <Skeleton className="h-10 flex-1" />
-          <Skeleton className="h-10 w-24" />
-          <Skeleton className="h-10 w-28" />
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Skeleton className="h-11 w-full sm:flex-1" />
+          <Skeleton className="h-11 w-24" />
+          <Skeleton className="h-11 w-28" />
         </div>
         {Array.from({ length: 8 }).map((_, index) => (
           <Skeleton key={index} className="h-11 w-full" />

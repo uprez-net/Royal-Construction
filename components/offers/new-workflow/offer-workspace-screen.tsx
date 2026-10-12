@@ -65,10 +65,12 @@ import {
 } from "./shell/offer-boundary-scroll";
 import { AreaCalculatorPanel } from "./offer-workspace-area";
 import { CostSchedulePanel } from "./offer-workspace-cost-schedule";
+import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
 import { OfferDocumentCanvas } from "./offer-document-canvas";
 import { OfferCommandBar } from "./shell/offer-command-bar";
 import { OfferStepRail, type OfferStepState } from "./shell/offer-step-rail";
 import { OfferSummaryStrip } from "./shell/offer-summary-strip";
+import { OFFER_WORKSPACE_FRAME_CLASS } from "./shell/offer-workspace-layout";
 import {
   buildOfferStepDigests,
   type OfferStepId,
@@ -488,6 +490,18 @@ export function OfferWorkspaceScreen({
   }, [activeStepId]);
 
   const [railCollapsed, setRailCollapsed] = useState(false);
+  const [mobileCostLineId, setMobileCostLineId] = useState<string | null>(null);
+  const selectedMobileCostLine =
+    mobileCostLineId === "all"
+      ? "all"
+      : mobileCostLineId === "latest"
+        ? (lines.at(-1)?.id ?? "all")
+        : (lines.find((line) => line.id === mobileCostLineId)?.id
+          ?? lines[0]?.id
+          ?? "all");
+  const selectedMobileCostTasks =
+    lines.find((line) => line.id === selectedMobileCostLine)
+      ?.buildingSequenceTasks ?? [];
   const confirmCopy =
     pendingConfirm === null
       ? null
@@ -647,7 +661,7 @@ export function OfferWorkspaceScreen({
     // scrolls. Nothing here scrolls the window, so the old measured
     // `--offer-sticky-offset` and every `scroll-mt-*` guess are gone.
     <div
-      className="flex h-[calc(100dvh-7.5rem)] min-h-125 flex-col overflow-hidden rounded-lg border border-border/70 bg-background shadow-sm print:hidden"
+      className={OFFER_WORKSPACE_FRAME_CLASS}
       aria-labelledby="new-offer-workspace-title"
     >
       <OfferCommandBar
@@ -661,7 +675,7 @@ export function OfferWorkspaceScreen({
         onRetrySave={onRetrySave}
         awaitingOffer={awaitingOffer}
       />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <OfferStepRail
           activeStepId={activeStepId}
           blockedStepId={blockedStepId}
@@ -682,7 +696,7 @@ export function OfferWorkspaceScreen({
           aria-labelledby="offer-pane-title"
           aria-busy={transitioning}
           tabIndex={-1}
-          className="@container/pane min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-5 outline-none"
+          className="@container/pane min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain p-3 outline-none md:px-5 md:py-5"
         >
           <div className="space-y-5">
             {awaitingOffer ? (
@@ -763,6 +777,53 @@ export function OfferWorkspaceScreen({
                   active={activeStepId === "cost-schedule"}
                   locked={costScheduleLocked}
                   title="Cost schedule"
+                  navigation={
+                    <div className="flex flex-col gap-3 md:hidden">
+                      <MobileFilterSelect
+                        label={
+                          costScheduleLocked
+                            ? "Cost task to view"
+                            : "Cost task to edit"
+                        }
+                        value={selectedMobileCostLine}
+                        options={[
+                          {
+                            value: "all",
+                            label: "All cost tasks",
+                            count: lines.length,
+                          },
+                          ...lines.map((line, index) => ({
+                            value: line.id,
+                            label: `${index + 1}. ${line.itemName || "Unnamed task"}`,
+                          })),
+                        ]}
+                        onChange={setMobileCostLineId}
+                      />
+                      {costScheduleLocked
+                      && selectedMobileCostLine !== "all" ? (
+                        <details className="rounded-lg border bg-card p-3">
+                          <summary className="min-h-11 cursor-pointer text-sm font-medium">
+                            Building sequence
+                          </summary>
+                          <ul className="flex flex-col gap-2 text-sm">
+                            {selectedMobileCostTasks.map((task, index) => (
+                              <li
+                                key={`${task}-${index}`}
+                                className="break-words"
+                              >
+                                {task}
+                              </li>
+                            ))}
+                          </ul>
+                          {selectedMobileCostTasks.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                              No building sequence tasks for this cost item.
+                            </p>
+                          ) : null}
+                        </details>
+                      ) : null}
+                    </div>
+                  }
                 >
                   <AreaCalculatorPanel
                     calcVersion={calcVersion}
@@ -774,11 +835,15 @@ export function OfferWorkspaceScreen({
                     onJobChange={onJobChange}
                   />
                   <CostSchedulePanel
+                    mobileLineId={selectedMobileCostLine}
                     expandedLineIds={expandedLineIds}
                     onToggleLineExpanded={toggleLineExpanded}
                     importResult={importResult}
                     lines={lines}
-                    onAddLine={onAddLine}
+                    onAddLine={() => {
+                      onAddLine();
+                      setMobileCostLineId("latest");
+                    }}
                     onImported={onImported}
                     onLineChange={onLineChange}
                     onIncludeAll={onIncludeAll}
@@ -1130,6 +1195,7 @@ function StepPane({
   unlockHint,
   title,
   children,
+  navigation,
 }: {
   readonly active: boolean;
   readonly locked?: boolean;
@@ -1137,6 +1203,7 @@ function StepPane({
   readonly unlockHint?: string;
   readonly title: string;
   readonly children: ReactNode;
+  readonly navigation?: ReactNode;
 }) {
   if (!active) {
     return null;
@@ -1153,6 +1220,7 @@ function StepPane({
   return (
     <section aria-labelledby="offer-pane-title" className="space-y-4">
       <PaneHeading locked={locked} title={title} />
+      {navigation}
       <OfferStepBody locked={locked}>{children}</OfferStepBody>
     </section>
   );
@@ -1210,6 +1278,7 @@ function OfferPaneLoadState({ failed }: { readonly failed: boolean }) {
       ) : (
         <p
           role="status"
+          aria-busy="true"
           className="flex items-center gap-2 rounded-lg border border-dashed border-border px-4 py-10 text-sm text-muted-foreground"
         >
           <Loader2

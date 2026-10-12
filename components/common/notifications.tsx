@@ -94,7 +94,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
       <PopoverContent
         align="end"
         sideOffset={12}
-        className="min-w-96 overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white p-0 text-slate-900 shadow-[0_24px_60px_rgba(15,23,42,0.12)]"
+        className="w-96 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white p-0 text-slate-900 shadow-[0_24px_60px_rgba(15,23,42,0.12)]"
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-4 border-b border-[#E2E8F0] px-4 py-3">

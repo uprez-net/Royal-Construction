@@ -150,7 +150,7 @@ function ScopeList({
   readonly emptyLabel: string;
 }) {
   return (
-    <section className="rounded-xl border border-border/70 bg-white p-5 shadow-sm">
+    <section className="rounded-xl border border-border/70 bg-white p-3 shadow-sm sm:p-5">
       <div className="mb-4 flex items-center gap-2">
         {icon}
         <h4 className="text-sm font-semibold text-foreground">{title}</h4>
@@ -177,11 +177,11 @@ function ScopeList({
           {items.map((item, index) => (
             <article
               key={item.id}
-              className="flex items-start gap-3 border-b border-border/60 pb-5 last:border-b-0 last:pb-0"
+              className="flex flex-col items-stretch gap-3 border-b sm:flex-row sm:items-start border-border/60 pb-5 last:border-b-0 last:pb-0"
             >
-              <div className="flex-1 space-y-3">
-                <div className="flex items-end gap-3">
-                  <label className="min-w-55 flex-2">
+              <div className="min-w-0 flex-1 space-y-3">
+                <div className="flex flex-col items-stretch gap-3 lg:flex-row lg:items-end">
+                  <label className="min-w-0 flex-2">
                     <FieldLabel>{singular} name</FieldLabel>
                     <Input
                       aria-label={`${title} label`}
@@ -191,7 +191,7 @@ function ScopeList({
                       }
                     />
                   </label>
-                  <label className="w-44">
+                  <label className="w-full lg:w-44">
                     <FieldLabel>Category</FieldLabel>
                     <Select
                       value={item.category}
@@ -221,7 +221,7 @@ function ScopeList({
                       </SelectContent>
                     </Select>
                   </label>
-                  <label className="w-40">
+                  <label className="w-full lg:w-40">
                     <FieldLabel>Amount type</FieldLabel>
                     <Select
                       value={item.amountType}
@@ -262,7 +262,7 @@ function ScopeList({
                   />
                 </label>
 
-                <div className="flex items-end gap-3">
+                <div className="flex flex-col items-stretch gap-3 lg:flex-row lg:items-end">
                   <label className="flex-1">
                     <FieldLabel>Variation rule</FieldLabel>
                     <Input
@@ -276,7 +276,7 @@ function ScopeList({
                       }
                     />
                   </label>
-                  <label className="flex h-9 shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                  <label className="flex min-h-11 shrink-0 items-center gap-2 text-xs text-muted-foreground">
                     <input
                       checked={item.includedInOfferDocument}
                       className="size-4 accent-royal-gold"
@@ -296,11 +296,12 @@ function ScopeList({
 
               <button
                 aria-label={`Remove ${item.label || `${singular.toLowerCase()} ${index + 1}`}`}
-                className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+                className="flex min-h-11 w-full shrink-0 items-center sm:size-11 justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
                 onClick={() => onRemoveItem(item.id)}
                 type="button"
               >
                 <Trash2 className="size-4" aria-hidden="true" />
+                <span className="ml-2 sm:sr-only">Remove item</span>
               </button>
             </article>
           ))}
