@@ -339,6 +339,16 @@ function evaluateSpamPatternGroups(text: string): {
 }
 
 /**
+ * Elementor's website-form footer ("Page URL … Remote IP … Powered by").
+ *
+ * It is machine-generated and appended to every website enquiry. Its
+ * user-agent string is enough to pull franc to a wrong language (an English
+ * enquiry scored as "fra"), so language is judged on the sender's own words.
+ * Only this trailing block is removed; the rest of the body is scored as usual.
+ */
+const WEBSITE_FORM_FOOTER = /page url:[\s\S]*?remote ip:[\s\S]*$/i;
+
+/**
  * Detects the language using franc.
  *
  * Language detection is skipped for very short emails because the result is
@@ -512,7 +522,7 @@ export function evaluateEmail(
   /* Stage 4: Language Detection                                            */
   /* ---------------------------------------------------------------------- */
 
-  const language = detectLanguage(text);
+  const language = detectLanguage(text.replace(WEBSITE_FORM_FOOTER, ""));
 
   if (language === "eng") {
     signals.push({
@@ -601,8 +611,8 @@ export function evaluateEmail(
   }
 
   if (
-    /^[A-Z0-9\s!?.,'"-]+$/.test(subject.trim()) &&
-    subject.trim().length > 6
+    /^[A-Z0-9\s!?.,'"-]+$/.test(subject.trim())
+    && subject.trim().length > 6
   ) {
     signals.push({
       code: "subject_all_caps",
