@@ -1,6 +1,12 @@
 "use client";
 
-import type { KeyboardEvent, ReactNode } from "react";
+import {
+  Fragment,
+  isValidElement,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DataTableSkeleton, PageSkeleton } from "@/components/ui/skeleton";
@@ -13,6 +19,8 @@ interface DataTableProps {
   mobileLayout?: "cards" | "scroll";
   mobileColumns?: 1 | 2;
   mobileTitleColumn?: number;
+  /** Columns of running text that take a card's full width in two columns. */
+  mobileWideColumns?: number[];
   loading?: boolean;
   loadingLabel?: string;
   headers: ReactNode[];
@@ -48,6 +56,7 @@ export function DataTable({
   mobileLayout = "scroll",
   mobileColumns = 2,
   mobileTitleColumn = 0,
+  mobileWideColumns,
   loading = false,
   loadingLabel = "Loading records",
 }: DataTableProps) {
@@ -86,50 +95,112 @@ export function DataTable({
           className="flex flex-col gap-3 md:hidden"
           aria-label={caption}
         >
-          {rows.map((row, rowIndex) => (
-            <article
-              role="listitem"
-              key={`mobile-row-${rowIndex}`}
-              className="min-w-0 rounded-lg border border-border/70 bg-background p-4"
-            >
-              <div className="text-base font-semibold [overflow-wrap:anywhere]">
-                {row[mobileTitleColumn]}
-              </div>
-              <dl
-                className={cn(
-                  "mt-3 grid gap-x-4 gap-y-3",
-                  mobileColumns === 2 && "grid-cols-2",
-                )}
-              >
-                {row.map((cell, index) =>
-                  index === mobileTitleColumn || cell === null ? null : (
-                    <div key={`mobile-cell-${index}`} className="min-w-0">
-                      <dt className="mb-1 text-xs text-muted-foreground">
-                        {headers[index]}
-                      </dt>
-                      <dd className="text-sm [overflow-wrap:anywhere] [&_a]:inline-flex [&_a]:min-h-11 [&_a]:items-center">
+          {rows.map((row, rowIndex) => {
+            // Unlabelled columns are not fields: one before the title (an
+            // icon, a checkbox) leads the title, one after it is an actions
+            // column and gets a row of its own. A "#" row number means nothing
+            // once each row is its own card.
+            const slot = (index: number) =>
+              index === mobileTitleColumn
+                ? "title"
+                : isRowNumberHeader(headers[index])
+                  ? "skip"
+                  : !isActionsHeader(headers[index])
+                    ? "field"
+                    : index < mobileTitleColumn
+                      ? "leading"
+                      : "actions";
+            const cellsIn = (wanted: string) =>
+              row.flatMap((cell, index) =>
+                cell !== null && slot(index) === wanted
+                  ? [
+                      <Fragment key={`mobile-${wanted}-${index}`}>
                         {cell}
-                      </dd>
-                    </div>
-                  ),
+                      </Fragment>,
+                    ]
+                  : [],
+              );
+            const leadingCells = cellsIn("leading");
+            const actionCells = cellsIn("actions");
+            return (
+              <article
+                role="listitem"
+                key={`mobile-row-${rowIndex}`}
+                className={cn(
+                  "min-w-0 rounded-lg border border-border/70 bg-background",
+                  onRowClick
+                    && "cursor-pointer transition-colors active:bg-muted/40",
                 )}
-              </dl>
-              {onRowClick ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="mt-4 w-full"
-                  onClick={() => onRowClick(rowIndex)}
+                // The whole card opens the record, as the whole row does on a
+                // desktop; the chevron is the keyboard and screen-reader way
+                // in. Controls inside the card keep their own taps.
+                onClick={
+                  onRowClick
+                    ? (event) => {
+                        if (isFromControl(event.target, event.currentTarget))
+                          return;
+                        onRowClick(rowIndex);
+                      }
+                    : undefined
+                }
+              >
+                <div className="flex items-start gap-2 px-4 pt-3">
+                  {leadingCells.length > 0 ? (
+                    <div className="flex min-h-9 shrink-0 items-center gap-2">
+                      {leadingCells}
+                    </div>
+                  ) : null}
+                  <div className="min-w-0 flex-1 py-1.5 text-base font-semibold [overflow-wrap:anywhere]">
+                    {row[mobileTitleColumn]}
+                  </div>
+                  {onRowClick ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="-mr-2 shrink-0 text-muted-foreground"
+                      aria-label={
+                        rowLabel?.(rowIndex) ?? `Open row ${rowIndex + 1}`
+                      }
+                      onClick={() => onRowClick(rowIndex)}
+                    >
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
+                  ) : null}
+                </div>
+                <dl
+                  className={cn(
+                    "grid gap-x-4 gap-y-3 px-4 pt-2 pb-4",
+                    mobileColumns === 2 && "grid-cols-2",
+                  )}
                 >
-                  View details
-                  <span className="sr-only">
-                    {" "}
-                    {rowLabel?.(rowIndex) ?? `Row ${rowIndex + 1}`}
-                  </span>
-                </Button>
-              ) : null}
-            </article>
-          ))}
+                  {row.map((cell, index) =>
+                    cell === null || slot(index) !== "field" ? null : (
+                      <div
+                        key={`mobile-cell-${index}`}
+                        className={cn(
+                          "min-w-0",
+                          mobileWideColumns?.includes(index) && "col-span-full",
+                        )}
+                      >
+                        <dt className="mb-1 text-xs text-muted-foreground">
+                          {headers[index]}
+                        </dt>
+                        <dd className="text-sm [overflow-wrap:anywhere] [&_a]:inline-flex [&_a]:min-h-11 [&_a]:items-center">
+                          {cell}
+                        </dd>
+                      </div>
+                    ),
+                  )}
+                </dl>
+                {actionCells.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-2 border-t border-border/70 px-4 py-2">
+                    {actionCells}
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
         </div>
       ) : null}
       {!showMobileCards || rows.length === 0 ? (
@@ -227,4 +298,39 @@ export function DataTable({
       ) : null}
     </>
   );
+}
+
+/**
+ * A column with no visible label: blank, or only "Actions" (often sr-only, so
+ * the desktop header cell still has a name). Rendering it as a labelled field
+ * on a card printed an empty or redundant label above the controls.
+ */
+function isActionsHeader(header: ReactNode) {
+  const text = textOf(header).trim().toLowerCase();
+  return text === "" || text === "actions";
+}
+
+function isRowNumberHeader(header: ReactNode) {
+  return textOf(header).trim() === "#";
+}
+
+function textOf(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return `${node}`;
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  if (isValidElement<{ children?: ReactNode }>(node))
+    return textOf(node.props.children);
+  return "";
+}
+
+/**
+ * True when a tap should not open the card's record: it landed on a control in
+ * the card, or outside the card's DOM altogether — React bubbles events from a
+ * portalled menu or dialog opened by a cell up through the card.
+ */
+function isFromControl(target: EventTarget, card: Element) {
+  if (!(target instanceof Element) || !card.contains(target)) return true;
+  const control = target.closest(
+    "a, button, input, select, textarea, label, summary, [role='button'], [role='combobox'], [role='checkbox'], [role='switch'], [role='menuitem']",
+  );
+  return control !== null && control !== card && card.contains(control);
 }

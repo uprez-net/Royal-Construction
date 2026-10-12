@@ -376,6 +376,8 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
         <CardContent className="space-y-4 px-0 pb-5 pt-0">
           <div className="mx-4 mt-2">
             <DataTable
+              mobileLayout="cards"
+              mobileWideColumns={[4]}
               caption={`Variation log for ${project.name}, with dates, delay, cost impact and revised contract total.`}
               headers={[
                 "Var #",

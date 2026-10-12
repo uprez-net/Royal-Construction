@@ -82,7 +82,10 @@ function DataTableSkeleton({
               key={row}
               className="rounded-lg border border-border/70 bg-background p-4"
             >
-              <Skeleton className="h-5 w-44" />
+              <div className="flex items-center justify-between gap-2">
+                <Skeleton className="h-5 w-44" />
+                <Skeleton className="size-6 shrink-0 rounded-full" />
+              </div>
               <div
                 className={cn(
                   "mt-3 grid gap-x-4 gap-y-3",
@@ -96,7 +99,6 @@ function DataTableSkeleton({
                   </div>
                 ))}
               </div>
-              <Skeleton className="mt-4 h-11 w-full" />
             </div>
           ))}
         </div>

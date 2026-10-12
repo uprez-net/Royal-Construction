@@ -1258,17 +1258,30 @@ function PaymentStagesTable({
           </div>
           <div className="divide-y divide-border">
             {stages.map((stage, index) => (
+              // On a phone each stage is a small card: its number and remove
+              // button on top, the label across, percent and amount side by
+              // side with their names shown, since the column header is gone.
               <div
                 key={index}
-                className="grid grid-cols-1 items-center gap-3 px-3 py-3 md:grid-cols-[1fr_100px_120px_32px] md:gap-2 md:py-2"
+                className="grid grid-cols-2 items-end gap-x-2 gap-y-2 px-3 py-3 md:grid-cols-[1fr_100px_120px_32px] md:items-center md:gap-2 md:py-2"
               >
+                <span className="col-start-1 row-start-1 self-center text-xs font-semibold text-muted-foreground md:hidden">
+                  Stage {index + 1}
+                </span>
                 <Input
                   aria-label={`Stage ${index + 1} label`}
+                  placeholder="Stage label"
                   value={stage.label ?? ""}
                   onChange={(e) => updateRow(index, { label: e.target.value })}
-                  className="h-8 rounded-md bg-card text-sm"
+                  className="col-span-2 h-8 rounded-md bg-card text-sm md:col-span-1"
                 />
                 <div className="relative">
+                  <span
+                    aria-hidden="true"
+                    className="mb-1 block text-xs text-muted-foreground md:hidden"
+                  >
+                    Percent
+                  </span>
                   <Input
                     aria-label={`Stage ${index + 1} percent of contract`}
                     type="number"
@@ -1283,7 +1296,7 @@ function PaymentStagesTable({
                   />
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
+                    className="pointer-events-none absolute right-2 bottom-0 flex h-11 items-center text-xs text-muted-foreground md:h-8"
                   >
                     %
                   </span>
@@ -1291,7 +1304,13 @@ function PaymentStagesTable({
                 <div className="relative">
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
+                    className="mb-1 block text-xs text-muted-foreground md:hidden"
+                  >
+                    Amount
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute bottom-0 left-2 flex h-11 items-center text-xs text-muted-foreground md:h-8"
                   >
                     $
                   </span>
@@ -1309,7 +1328,7 @@ function PaymentStagesTable({
                 <button
                   type="button"
                   onClick={() => removeRow(index)}
-                  className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:h-8 md:w-8"
+                  className="col-start-2 row-start-1 flex h-11 w-11 items-center justify-center justify-self-end rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:col-start-auto md:row-start-auto md:h-8 md:w-8 md:justify-self-auto"
                   aria-label={`Remove stage ${index + 1}`}
                 >
                   <X aria-hidden="true" className="h-3.5 w-3.5" />
@@ -1490,7 +1509,7 @@ function ConflictRow({ conflict }: { conflict: ProjectConflictResult }) {
   return (
     <div className="space-y-2 rounded-lg border border-warning/30 bg-warning-light p-3 text-sm">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-xs text-foreground">
+        <span className="min-w-0 font-mono text-xs break-all text-foreground">
           {conflict.fieldPath}
         </span>
         <Badge className="rounded-full bg-card px-2 py-0.5 text-xs font-medium text-warning-ink">
@@ -1850,9 +1869,12 @@ export function ProjectOverviewTab({
 
   return (
     <section className="space-y-4">
-      <Card className="border-border/70 bg-card shadow-sm">
-        <CardHeader className="sticky top-0 z-20 flex flex-col items-start justify-between gap-3 border-b border-border/70 bg-card px-4 pb-4 shadow-sm sm:flex-row sm:items-center sm:px-6">
-          <div className="min-w-0">
+      {/* Card clips its children by default, which made the header's
+          `sticky` a no-op: it stuck inside a box that never scrolls. Unclipped,
+          Save stays on screen down a form several screens long. */}
+      <Card className="overflow-visible border-border/70 bg-card pt-0 shadow-sm">
+        <CardHeader className="sticky top-0 z-20 flex flex-row flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-card px-4 pt-3 shadow-sm [.border-b]:pb-3 sm:gap-3 sm:px-6 sm:pt-4 sm:[.border-b]:pb-4">
+          <div className="min-w-0 flex-1">
             {/* The page <h1> is the project name in project-header.tsx and
                 nothing between here and it is an <h2>, so this panel title is
                 the first h2 on the tab. The accordion triggers below sit in
@@ -1867,7 +1889,7 @@ export function ProjectOverviewTab({
               Extracted from the tender and contract documents.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {failCount + warnCount > 0 ? (
               /* Live region so the "as of last save" qualifier is announced when
                  the first edit makes these counts stale, not just seen. */
@@ -1899,7 +1921,14 @@ export function ProjectOverviewTab({
               disabled={!dirty || saving}
               aria-busy={saving}
             >
-              {saving ? "Saving…" : "Save changes"}
+              {saving ? (
+                "Saving…"
+              ) : (
+                <>
+                  <span className="sm:hidden">Save</span>
+                  <span className="hidden sm:inline">Save changes</span>
+                </>
+              )}
             </Button>
           </div>
         </CardHeader>

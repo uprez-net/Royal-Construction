@@ -35,6 +35,7 @@ export function FinancialDashboard() {
         description="Financial rows are composable and ready for chart or table rendering."
       >
         <DataTable
+          mobileLayout="cards"
           headers={["Project", "Revenue", "Cost", "Margin", "Status"]}
           rows={financialRows.map((row) => [
             row.project,

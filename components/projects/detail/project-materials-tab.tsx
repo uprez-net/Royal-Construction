@@ -183,6 +183,9 @@ export function ProjectMaterialsTab({ project }: ProjectMaterialsTabProps) {
 
         <div className="mx-4 mt-2">
           <DataTable
+            mobileLayout="cards"
+            mobileTitleColumn={1}
+            mobileWideColumns={[2]}
             caption={`Materials selected for ${project.name}, with quantity, unit cost, total cost, order status and delivery status.`}
             headers={[
               "Category",
