@@ -8,7 +8,12 @@ import {
   CalendarX,
   CheckCircle,
 } from "lucide-react";
-import { KPIListItem, MetricCard } from "../common/metric-card";
+import {
+  KPIListItem,
+  MetricCard,
+  MOBILE_METRIC_STRIP_CLASS,
+} from "../common/metric-card";
+import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/lib/store/hooks";
 
 export function TradieApprovalKPI() {
@@ -81,7 +86,9 @@ export function TradieApprovalKPI() {
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 xl:grid-cols-7">
+    <div
+      className={cn(MOBILE_METRIC_STRIP_CLASS, "sm:grid-cols-2 xl:grid-cols-7")}
+    >
       {allKPIs.map((kpi, index) => (
         <MetricCard
           key={index}

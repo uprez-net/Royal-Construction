@@ -799,6 +799,29 @@ export function LeadOverviewTab({
               const Icon = meta.icon;
               const dirty = isSectionDirty(key);
               const saving = savingSection === key;
+              const saveButton = (className?: string) => (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleSectionSave(key)}
+                  disabled={saving}
+                  aria-busy={saving}
+                  aria-label={`Save ${meta.label}`}
+                  className={className}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2
+                        className="mr-1.5 size-3.5 animate-spin"
+                        aria-hidden="true"
+                      />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save"
+                  )}
+                </Button>
+              );
 
               return (
                 <AccordionItem
@@ -836,32 +859,14 @@ export function LeadOverviewTab({
                         button within a button is invalid and unreachable by
                         keyboard. Living here also means a dirty section can be
                         saved without expanding it. */}
-                    {dirty ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => handleSectionSave(key)}
-                        disabled={saving}
-                        aria-busy={saving}
-                        aria-label={`Save ${meta.label}`}
-                      >
-                        {saving ? (
-                          <>
-                            <Loader2
-                              className="mr-1.5 size-3.5 animate-spin"
-                              aria-hidden="true"
-                            />
-                            Saving…
-                          </>
-                        ) : (
-                          "Save"
-                        )}
-                      </Button>
-                    ) : null}
+                    {dirty ? saveButton() : null}
                   </div>
 
                   <AccordionContent className="space-y-4 pt-1 pb-4">
                     {renderSectionBody(key)}
+                    {/* On a phone the header's Save has scrolled away by the
+                        time the last field in a long section is filled in. */}
+                    {dirty ? saveButton("w-full md:hidden") : null}
                   </AccordionContent>
                 </AccordionItem>
               );

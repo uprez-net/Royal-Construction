@@ -25,17 +25,28 @@ import { Role } from "@prisma/client";
  */
 
 const CARD_SURFACE = "rounded-xl border border-border/70 bg-card p-5 shadow-sm";
+// On a phone the three cards stacked at full size took about 500px before any
+// of the project appeared. There each one is a single row instead: icon,
+// figure over its label, badge. From md up the grid placement is inert and
+// the card lays out as before.
+const STAT_CARD = cn(
+  CARD_SURFACE,
+  "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 p-3 md:block md:p-5",
+);
+const STAT_CARD_TOP =
+  "contents md:mb-2 md:flex md:items-start md:justify-between md:gap-2";
 // DESIGN.md §5 puts metric values in the display face, which is also what
 // `MetricCard` does. These three were overriding it back to `font-mono`, so the
 // one editorial moment on the page read like terminal output. `tabular-nums`
 // stays for even digit widths.
 const CARD_VALUE =
-  "mt-2 font-heading text-3xl font-semibold leading-tight tracking-tight tabular-nums text-foreground";
-const CARD_LABEL = "mt-1 text-xs text-muted-foreground";
+  "col-start-2 row-start-1 font-heading text-xl font-semibold leading-tight tracking-tight tabular-nums text-foreground md:mt-2 md:text-3xl";
+const CARD_LABEL =
+  "col-start-2 row-start-2 text-xs text-muted-foreground md:mt-1";
 const ICON_CONTAINER =
-  "flex size-11 items-center justify-center rounded-2xl text-white";
+  "row-span-2 flex size-9 items-center justify-center rounded-xl text-white md:size-11 md:rounded-2xl";
 const BADGE =
-  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium";
+  "col-start-3 row-span-2 row-start-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium";
 
 // Mirrors the three tones `StatusPill` exposes (neutral/success/danger) so the
 // Contract Value badge stays on-token without coupling this bespoke card to
@@ -112,10 +123,10 @@ export function ProjectStatCards({ role }: { role: Role }) {
     // One column straight to three: a two-column step would strand the third
     // card on a half-empty row at tablet widths, which is the same gap in a
     // different place.
-    <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
+    <section className="grid grid-cols-1 gap-2 md:grid-cols-3 md:gap-4">
       {/* Contract Value — badge is driven by the shared classifier. */}
-      <div className={CARD_SURFACE}>
-        <div className="mb-2 flex items-start justify-between gap-2">
+      <div className={STAT_CARD}>
+        <div className={STAT_CARD_TOP}>
           <div className={cn(ICON_CONTAINER, METRIC_TONES.primary)}>
             <Wallet2 className="size-5" aria-hidden="true" />
           </div>
@@ -138,8 +149,8 @@ export function ProjectStatCards({ role }: { role: Role }) {
       badge already say there are no actuals yet, and replacing the label with
       that same sentence left the figure unidentified while repeating what the
       two cards either side of it were also saying. */}
-      <div className={CARD_SURFACE}>
-        <div className="mb-2 flex items-start justify-between gap-2">
+      <div className={STAT_CARD}>
+        <div className={STAT_CARD_TOP}>
           <div className={cn(ICON_CONTAINER, METRIC_TONES.warning)}>
             <ReceiptText className="size-5" aria-hidden="true" />
           </div>
@@ -168,8 +179,8 @@ export function ProjectStatCards({ role }: { role: Role }) {
       contract value is genuinely still remaining) but is toned neutral rather
       than a healthy green, so the card states the figure without implying
       spend is tracking. */}
-      <div className={CARD_SURFACE}>
-        <div className="mb-2 flex items-start justify-between gap-2">
+      <div className={STAT_CARD}>
+        <div className={STAT_CARD_TOP}>
           <div
             className={cn(
               ICON_CONTAINER,

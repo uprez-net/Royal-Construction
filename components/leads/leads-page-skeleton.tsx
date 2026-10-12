@@ -1,3 +1,5 @@
+import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
+import { cn } from "@/lib/utils";
 import {
   DataTableSkeleton,
   MetricCardSkeleton,
@@ -8,7 +10,12 @@ import {
 export function LeadsContentSkeleton() {
   return (
     <PageSkeleton label="Loading leads" className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+      <div
+        className={cn(
+          MOBILE_METRIC_STRIP_CLASS,
+          "sm:grid-cols-2 md:grid-cols-3",
+        )}
+      >
         {Array.from({ length: 6 }).map((_, index) => (
           <MetricCardSkeleton key={index} compact />
         ))}
@@ -20,9 +27,9 @@ export function LeadsContentSkeleton() {
           <Skeleton className="h-11 w-20 rounded-md" />
           <Skeleton className="h-11 w-24 rounded-md" />
           <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
-            <Skeleton className="h-11 w-32 rounded-full" />
-            <Skeleton className="h-11 w-48 max-w-full rounded-lg" />
-            <Skeleton className="h-11 w-24 rounded-md" />
+            <Skeleton className="h-11 w-full rounded-lg sm:order-2 sm:w-48" />
+            <Skeleton className="h-11 flex-1 rounded-full sm:order-1 sm:w-32 sm:flex-none" />
+            <Skeleton className="h-11 w-24 rounded-md sm:order-3" />
           </div>
         </div>
         <LeadsTableSkeleton />

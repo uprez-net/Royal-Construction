@@ -4,7 +4,6 @@ import { useCallback, useRef } from "react";
 import { CalendarClock, FileText, LayoutGrid, StickyNote } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
 
 export const LEAD_DETAIL_TABS = [
   "overview",
@@ -33,6 +32,14 @@ const TAB_LABELS: Record<LeadDetailTabKey, string> = {
   overview: "Overview",
   scheduledWork: "Tasks",
   documents: "Uploaded Documents",
+  notes: "Notes",
+};
+
+/** A quarter of a phone's width holds one short word under the icon. */
+const TAB_SHORT_LABELS: Record<LeadDetailTabKey, string> = {
+  overview: "Overview",
+  scheduledWork: "Tasks",
+  documents: "Docs",
   notes: "Notes",
 };
 
@@ -99,50 +106,44 @@ export function LeadTabNavigation({
   );
 
   return (
-    <>
-      <MobileFilterSelect
-        label="Lead section"
-        value={activeTab}
-        options={LEAD_DETAIL_TABS.map((key) => ({
-          value: key,
-          label: `${TAB_LABELS[key]}${badges?.[key] ? ` (${badges[key]?.count})` : ""}`,
-        }))}
-        onChange={(value) => {
-          if (isLeadDetailTab(value)) onTabChange(value);
-        }}
-      />
-      <div
-        role="tablist"
-        aria-label="Lead sections"
-        aria-orientation="horizontal"
-        onKeyDown={handleKeyDown}
-        className="mb-5 hidden flex-wrap gap-x-1 border-b-2 border-border/60 md:flex"
-      >
-        {LEAD_DETAIL_TABS.map((key) => {
-          const Icon = TAB_ICONS[key];
-          const isActive = activeTab === key;
-          const badge = badges?.[key];
+    // Four sections fit side by side on a phone, so they stay visible tabs
+    // there too: a picker hid where the operator was and cost a second tap.
+    <div
+      role="tablist"
+      aria-label="Lead sections"
+      aria-orientation="horizontal"
+      onKeyDown={handleKeyDown}
+      className="mb-5 grid grid-cols-4 border-b-2 border-border/60 md:flex md:flex-wrap md:gap-x-1"
+    >
+      {LEAD_DETAIL_TABS.map((key) => {
+        const Icon = TAB_ICONS[key];
+        const isActive = activeTab === key;
+        const badge = badges?.[key];
 
-          return (
-            <button
-              key={key}
-              ref={(node) => {
-                tabRefs.current[key] = node;
-              }}
-              type="button"
-              role="tab"
-              id={leadTabTriggerId(key)}
-              aria-selected={isActive}
-              aria-controls={leadTabPanelId(key)}
-              tabIndex={isActive ? 0 : -1}
-              onClick={() => onTabChange(key)}
-              className={cn(
-                "relative -mb-0.5 inline-flex min-h-11 items-center gap-1.5 border-b-2 border-transparent px-2 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:whitespace-nowrap sm:px-4",
-                isActive && "border-primary font-semibold text-primary",
-              )}
-            >
-              <Icon className="size-4" aria-hidden="true" />
-              <span>{TAB_LABELS[key]}</span>
+        return (
+          <button
+            key={key}
+            ref={(node) => {
+              tabRefs.current[key] = node;
+            }}
+            type="button"
+            role="tab"
+            id={leadTabTriggerId(key)}
+            aria-selected={isActive}
+            aria-controls={leadTabPanelId(key)}
+            tabIndex={isActive ? 0 : -1}
+            onClick={() => onTabChange(key)}
+            className={cn(
+              "relative -mb-0.5 inline-flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border-b-2 border-transparent px-1 py-2 text-center text-xs font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-11 md:flex-row md:gap-1.5 md:px-4 md:text-left md:text-sm md:whitespace-nowrap",
+              isActive && "border-primary font-semibold text-primary",
+            )}
+          >
+            <Icon className="size-4" aria-hidden="true" />
+            <span className="flex max-w-full items-center">
+              <span className="truncate md:hidden">
+                {TAB_SHORT_LABELS[key]}
+              </span>
+              <span className="hidden md:inline">{TAB_LABELS[key]}</span>
               {badge ? (
                 <>
                   <span
@@ -154,10 +155,10 @@ export function LeadTabNavigation({
                   <span className="sr-only">{badge.description}</span>
                 </>
               ) : null}
-            </button>
-          );
-        })}
-      </div>
-    </>
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }

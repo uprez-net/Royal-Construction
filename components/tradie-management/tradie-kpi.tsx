@@ -1,6 +1,11 @@
 "use client";
 import { TriangleAlert, Star, Users } from "lucide-react";
-import { KPIListItem, MetricCard } from "../common/metric-card";
+import {
+  KPIListItem,
+  MetricCard,
+  MOBILE_METRIC_STRIP_CLASS,
+} from "../common/metric-card";
+import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/lib/store/hooks";
 
 export function TradieKPI() {
@@ -31,7 +36,7 @@ export function TradieKPI() {
     // Three across as soon as there is room. Going 1 → 2 → 3 columns left the
     // third card alone on a half-empty row at every width between the md and
     // xl breakpoints, which covers most laptop windows.
-    <div className="grid gap-3 md:grid-cols-3">
+    <div className={cn(MOBILE_METRIC_STRIP_CLASS, "sm:grid-cols-3")}>
       {allKPIs.map((kpi) => (
         <MetricCard
           key={kpi.title}

@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 // placeholders pulse, and Skeleton stops pulsing under reduced motion.
 export function AppShellLoader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0))] overflow-hidden bg-[#F7F6F2] text-foreground">
+    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0px))] overflow-hidden bg-[#F7F6F2] text-foreground">
       <div className="flex h-full">
         {/* Sidebar */}
         <aside className="hidden w-16 shrink-0 border-r border-border bg-white shadow-sm md:flex md:flex-col md:items-center md:py-4">

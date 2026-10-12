@@ -128,12 +128,14 @@ export function ProjectHeader({
                 state this project is in. Absent unless the pool is breached. */}
             <HbcfCapacityBadge projectId={project.id} />
           </div>
-          <div className="flex flex-wrap items-center gap-3 pt-1 text-sm text-muted-foreground">
+          <div className="flex flex-col items-start gap-1.5 pt-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
             <span className="inline-flex items-center gap-1">
               <MapPin className="size-3.5" aria-hidden="true" />
               {legal.siteAddress || project.location}
             </span>
-            <span aria-hidden="true">|</span>
+            <span aria-hidden="true" className="hidden sm:inline">
+              |
+            </span>
             <span className="inline-flex items-center gap-1">
               <CalendarDays className="size-3.5" aria-hidden="true" />
               Signed (contract executed){" "}
@@ -156,7 +158,9 @@ export function ProjectHeader({
                 </Link>
               )}
             </span>
-            <span aria-hidden="true">|</span>
+            <span aria-hidden="true" className="hidden sm:inline">
+              |
+            </span>
             <span className="inline-flex items-center gap-1">
               <ShieldCheck className="size-3.5" aria-hidden="true" />
               PCA{" "}
@@ -184,7 +188,9 @@ export function ProjectHeader({
                 <span className="font-mono tabular-nums">{pcaInspector}</span>
               )}
             </span>
-            <span aria-hidden="true">|</span>
+            <span aria-hidden="true" className="hidden sm:inline">
+              |
+            </span>
             <span
               className="inline-flex items-center gap-1"
               key={hbcfInsuranceNumber}
@@ -228,7 +234,7 @@ export function ProjectHeader({
             <div className="flex flex-col gap-1 pt-1">
               {owners.map((owner, index) => (
                 <p
-                  className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground"
+                  className="flex flex-col items-start gap-1 pt-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-2"
                   key={`owner-${index}`}
                 >
                   <span className="inline-flex items-center gap-1">
@@ -237,7 +243,9 @@ export function ProjectHeader({
                   </span>
                   {owner.phone && (
                     <>
-                      <span aria-hidden="true">|</span>
+                      <span aria-hidden="true" className="hidden sm:inline">
+                        |
+                      </span>
                       <span className="inline-flex items-center gap-1">
                         <Phone className="size-3.5" aria-hidden="true" />
                         <a
@@ -251,7 +259,9 @@ export function ProjectHeader({
                   )}
                   {owner.email && (
                     <>
-                      <span aria-hidden="true">|</span>
+                      <span aria-hidden="true" className="hidden sm:inline">
+                        |
+                      </span>
                       <a
                         href={`mailto:${owner.email}`}
                         className="rounded-md text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -264,14 +274,16 @@ export function ProjectHeader({
               ))}
             </div>
           ) : (
-            <p className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground">
+            <p className="flex flex-col items-start gap-1 pt-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
               <span className="inline-flex items-center gap-1">
                 <UserRound className="size-3.5" aria-hidden="true" />
                 {project.customer.name}
               </span>
               {project.customer.phone ? (
                 <>
-                  <span aria-hidden="true">|</span>
+                  <span aria-hidden="true" className="hidden sm:inline">
+                    |
+                  </span>
                   <span className="inline-flex items-center gap-1">
                     <Phone className="size-3.5" aria-hidden="true" />
                     <a
@@ -283,7 +295,9 @@ export function ProjectHeader({
                   </span>
                 </>
               ) : null}
-              <span aria-hidden="true">|</span>
+              <span aria-hidden="true" className="hidden sm:inline">
+                |
+              </span>
               <a
                 href={`mailto:${project.customer.email}`}
                 className="rounded-md text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"

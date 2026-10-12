@@ -25,6 +25,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { AddLeadModal } from "@/components/leads/modal-ui/add-lead-modal";
 import { EmailCampaignModal } from "@/components/leads/modal-ui/email-campaign-modal";
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
+import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
 import { LeadPagination } from "./lead-pagination";
 import {
   readLeadsListParams,
@@ -347,19 +348,23 @@ function LeadsWorkspace() {
               <h1 className="text-lg font-extrabold text-slate-900">
                 Lead Pipeline
               </h1>
-              <p className="text-sm text-slate-600">
+              <p className="hidden text-sm text-slate-600 sm:block">
                 Google Ads auto-capture • Follow-up automation • Email templates
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
               <Button
                 variant="outline"
                 onClick={() => setShowEmailCampaign(true)}
               >
-                <Mail className="mr-2 size-4" /> Email Campaign
+                <Mail className="mr-2 size-4" />
+                <span className="sm:hidden">Email</span>
+                <span className="hidden sm:inline">Email Campaign</span>
               </Button>
               <Button onClick={() => setShowAddLead(true)}>
-                <Plus className="mr-2 size-4" /> Add Lead Manually
+                <Plus className="mr-2 size-4" />
+                <span className="sm:hidden">Add Lead</span>
+                <span className="hidden sm:inline">Add Lead Manually</span>
               </Button>
             </div>
           </div>
@@ -371,7 +376,14 @@ function LeadsWorkspace() {
       {/* Metric cards */}
       {stats && !loading && (
         <>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-3">
+          {/* Six cards stacked three rows deep pushed the list itself below
+              the fold on a phone; there they scroll sideways instead. */}
+          <div
+            className={cn(
+              MOBILE_METRIC_STRIP_CLASS,
+              "sm:grid-cols-2 md:grid-cols-3",
+            )}
+          >
             <LeadMetricCard
               label="Total Leads"
               value={String(stats.total)}
@@ -469,7 +481,7 @@ function LeadsWorkspace() {
                   value={activeFilterTiming}
                   onValueChange={handleFilterTimingChange}
                 >
-                  <SelectTrigger className="h-9 flex-none rounded-full border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
+                  <SelectTrigger className="h-9 flex-1 rounded-full sm:flex-none border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
                     <SelectValue placeholder="Select timeframe" />
                   </SelectTrigger>
                   <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">

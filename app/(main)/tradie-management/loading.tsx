@@ -1,3 +1,5 @@
+import { cn } from "@/lib/utils";
+import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
 import {
   DataTableSkeleton,
   MetricCardSkeleton,
@@ -20,7 +22,12 @@ export default function TradieManagementSkeleton() {
           </div>
         </div>
       </div>
-      <div className="grid gap-3 md:grid-cols-3">
+      <div
+        className={cn(
+          MOBILE_METRIC_STRIP_CLASS,
+          "overflow-hidden sm:grid-cols-3",
+        )}
+      >
         {Array.from({ length: 3 }, (_, i) => (
           <MetricCardSkeleton key={i} />
         ))}

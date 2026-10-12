@@ -89,7 +89,7 @@ export function AgentTranscript({
   }, [data.subagents]);
 
   return (
-    <div className="relative h-[60vh] overflow-hidden">
+    <div className="relative min-h-0 flex-1 overflow-hidden">
       <div
         className="absolute inset-0 overflow-y-auto overscroll-contain"
         onScroll={handleMessageScroll}
@@ -97,7 +97,7 @@ export function AgentTranscript({
       >
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8">
           {data.messages.length === 0 && agentStatus !== "resuming" ? (
-            <Empty className="min-h-96 border-0">
+            <Empty className="border-0 p-2 sm:min-h-96 sm:p-6">
               <EmptyHeader>
                 <EmptyMedia
                   className="size-12 rounded-xl bg-royal-gold-light text-royal-gold-ink"

@@ -257,38 +257,40 @@ function OfferMobileCard({
       <p className="mt-1 break-words text-sm text-muted-foreground">
         {group.lead.type.join(", ") || "—"}
       </p>
-      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-        <div className="col-span-2 rounded-md bg-muted/50 p-3">
-          <dt className="text-xs text-muted-foreground">
-            Total including GST · v{latest.revisionNumber}
-          </dt>
-          <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">
-            {money(latest.totalAmount)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">
-            Amount excluding GST
-          </dt>
-          <dd className="mt-1 font-mono tabular-nums">
-            {money(latest.amount)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">GST</dt>
-          <dd className="mt-1 font-mono tabular-nums">
+      {/* The ex-GST split rides under the total, and a date shows only once
+          it exists: two rows of "-" made every unsent offer about 390px tall. */}
+      <dl className="mt-3 rounded-md bg-muted/50 p-3 text-sm">
+        <dt className="text-xs text-muted-foreground">
+          Total including GST · v{latest.revisionNumber}
+        </dt>
+        <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">
+          {money(latest.totalAmount)}
+        </dd>
+        <dd className="mt-1 text-xs text-muted-foreground">
+          <span className="font-mono tabular-nums">{money(latest.amount)}</span>{" "}
+          ex GST ·{" "}
+          <span className="font-mono tabular-nums">
             {money(latest.gstAmount)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">Sent</dt>
-          <dd className="mt-1">{day(latest.sentAt)}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">Approved</dt>
-          <dd className="mt-1">{day(latest.acceptedAt)}</dd>
-        </div>
+          </span>{" "}
+          GST
+        </dd>
       </dl>
+      {latest.sentAt || latest.acceptedAt ? (
+        <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          {latest.sentAt ? (
+            <div className="flex gap-1.5">
+              <dt className="text-muted-foreground">Sent</dt>
+              <dd>{day(latest.sentAt)}</dd>
+            </div>
+          ) : null}
+          {latest.acceptedAt ? (
+            <div className="flex gap-1.5">
+              <dt className="text-muted-foreground">Approved</dt>
+              <dd>{day(latest.acceptedAt)}</dd>
+            </div>
+          ) : null}
+        </dl>
+      ) : null}
       {group.versionCount > 1 ? (
         <details className="mt-4 border-t border-border/70 pt-2">
           <summary className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">

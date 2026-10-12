@@ -177,7 +177,7 @@ export function AgentComposer({
 
   return (
     <footer
-      className="relative z-10 shrink-0 border-t border-border/70 bg-white p-3 sm:p-4"
+      className="relative z-10 shrink-0 border-t border-border/70 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4"
       onDragLeave={(event) => {
         if (event.currentTarget.contains(event.relatedTarget as Node)) return;
         setDraggingOver(false);
@@ -293,7 +293,7 @@ export function AgentComposer({
               aria-controls={menuOpen ? listboxId : undefined}
               aria-expanded={menuOpen}
               aria-label="Message the operations agent"
-              className="max-h-40 min-h-20 px-3 py-3"
+              className="max-h-32 min-h-14 px-3 py-3 sm:max-h-40 sm:min-h-20"
               disabled={disabled}
               onChange={(event) => {
                 onChange(event.target.value);
@@ -375,7 +375,7 @@ export function AgentComposer({
           </InputGroup>
         </div>
 
-        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+        <p className="mt-2 hidden text-center text-[11px] text-muted-foreground sm:block">
           Live business data is permission-scoped. Confirm important details
           before acting.
         </p>
@@ -417,7 +417,7 @@ function Chip({
       {children}
       <button
         aria-label={removeLabel}
-        className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="grid place-items-center rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground pointer-coarse:size-8"
         onClick={onRemove}
         type="button"
       >

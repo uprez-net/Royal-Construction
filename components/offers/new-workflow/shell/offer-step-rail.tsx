@@ -8,7 +8,13 @@
 // its state in the accessible name, and carries a one-line digest so the rail
 // answers "what does this step say?" without opening it.
 
-import { Check, ChevronLeft, ChevronRight, Lock } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Lock,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,9 +53,13 @@ export function OfferStepRail({
   onToggleCollapsed,
 }: OfferStepRailProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const activeStep = OFFER_WORKFLOW_STEPS.find(
+  const activeIndex = OFFER_WORKFLOW_STEPS.findIndex(
     (step) => step.id === activeStepId,
   );
+  const activeStep = OFFER_WORKFLOW_STEPS[activeIndex];
+  const previousStep =
+    activeIndex > 0 ? OFFER_WORKFLOW_STEPS[activeIndex - 1] : undefined;
+  const nextStep = OFFER_WORKFLOW_STEPS[activeIndex + 1];
   const listRef = useRef<HTMLOListElement>(null);
   useEffect(() => {
     const list = listRef.current;
@@ -70,22 +80,50 @@ export function OfferStepRail({
 
   return (
     <>
-      <div className="shrink-0 border-b border-border/70 bg-background p-2 md:hidden">
+      {/* A phone works the steps in order, so the neighbours are one tap
+          away; the sheet is for jumping. They go through onSelect like a rail
+          row does, so a locked step opens read-only here too. */}
+      <div className="flex shrink-0 items-center gap-1.5 border-b border-border/70 bg-background p-1.5 md:hidden">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={
+            previousStep
+              ? `Previous step: ${previousStep.label}`
+              : "Previous step"
+          }
+          disabled={!previousStep}
+          onClick={() => previousStep && onSelect(previousStep.id)}
+        >
+          <ChevronLeft aria-hidden="true" />
+        </Button>
         <Button
           type="button"
           variant="outline"
-          className="w-full justify-between"
+          className="min-w-0 flex-1 justify-between"
           onClick={() => setMobileOpen(true)}
           aria-haspopup="dialog"
           aria-expanded={mobileOpen}
         >
           <span className="min-w-0 truncate">
-            Step{" "}
-            {OFFER_WORKFLOW_STEPS.findIndex((step) => step.id === activeStepId)
-              + 1}{" "}
-            of {OFFER_WORKFLOW_STEPS.length} · {activeStep?.label}
+            <span className="text-muted-foreground">
+              {activeIndex + 1}/{OFFER_WORKFLOW_STEPS.length}
+            </span>{" "}
+            {activeStep?.label}
+            <span className="sr-only">, choose a step</span>
           </span>
-          <ChevronRight aria-hidden="true" data-icon="inline-end" />
+          <ChevronDown aria-hidden="true" data-icon="inline-end" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={nextStep ? `Next step: ${nextStep.label}` : "Next step"}
+          disabled={!nextStep}
+          onClick={() => nextStep && onSelect(nextStep.id)}
+        >
+          <ChevronRight aria-hidden="true" />
         </Button>
       </div>
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>

@@ -73,12 +73,21 @@ export function OfferVersionsMenu({
     <>
       <Popover open={open} onOpenChange={handleOpenChange} modal>
         <PopoverTrigger asChild>
-          <Button ref={triggerRef} size="sm" type="button" variant="outline">
+          <Button
+            ref={triggerRef}
+            aria-label="Versions"
+            size="sm"
+            type="button"
+            variant="outline"
+          >
             <History className="size-4" aria-hidden="true" />
-            Versions
+            <span className="hidden sm:inline">Versions</span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-80 p-0">
+        <PopoverContent
+          align="end"
+          className="w-80 max-w-[calc(100vw-1rem)] p-0"
+        >
           <div className="border-b border-border/70 px-3 py-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Version history
@@ -131,8 +140,8 @@ function VersionRow({
   readonly onSelect: () => void;
 }) {
   const statusLabel =
-    OFFER_STATUS_LABEL[version.status.toLowerCase() as OfferWorkspaceStatus] ??
-    version.status;
+    OFFER_STATUS_LABEL[version.status.toLowerCase() as OfferWorkspaceStatus]
+    ?? version.status;
   const date = new Date(version.createdAt).toLocaleDateString("en-AU", {
     day: "numeric",
     month: "short",

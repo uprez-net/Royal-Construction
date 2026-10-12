@@ -52,9 +52,11 @@ export function TradieAttentionCard({
   const isDismissingAll = allIds.every((id) => dismissing.includes(id));
 
   return (
+    // 30vh on a phone left the list a sliver under the header: it scrolls, but
+    // only one cut-off row showed.
     <Card
       role="alert"
-      className="flex max-h-[30vh] flex-col overflow-hidden border-warning/40 bg-linear-to-br from-warning-light/80 via-card to-card shadow-sm"
+      className="flex max-h-[55dvh] flex-col overflow-hidden sm:max-h-[30vh] border-warning/40 bg-linear-to-br from-warning-light/80 via-card to-card shadow-sm"
     >
       <CardContent className="flex min-h-0 flex-1 flex-col p-0">
         <div className="flex shrink-0 items-start gap-3 p-4">
@@ -139,7 +141,9 @@ export function TradieAttentionCard({
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-semibold text-foreground">
+                  {/* Wraps on a phone: truncated, "KDD Archies was remo…" hid
+                      what had happened, which is the whole point of the row. */}
+                  <p className="text-xs font-semibold text-foreground [overflow-wrap:anywhere] sm:truncate">
                     {title}
                   </p>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">

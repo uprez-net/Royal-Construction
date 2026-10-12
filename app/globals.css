@@ -306,7 +306,11 @@
    instead of scaling the desktop interface down. Keep these screen-only so
    the customer-facing A4 documents retain their existing print geometry. */
 @media screen and (max-width: 767px) {
+  /* A Button rendered through a Radix trigger with `asChild` carries the
+     trigger's data-slot (popover-trigger, dropdown-menu-trigger, ...) instead
+     of "button", so it missed this rule and stayed 28px tall. */
   [data-slot="button"],
+  button[data-slot$="-trigger"],
   [data-slot="select-trigger"],
   [data-slot="tabs-trigger"],
   [data-slot="toggle"],
@@ -1330,6 +1334,23 @@
 
 .btn-export:hover {
   color: var(--leads-primary);
+}
+
+/* These rules are unlayered, so they outrank the Tailwind `flex-1` on the
+   search box and the phone rules earlier in this file. Without this the box
+   stayed a fixed 220px and 32px tall beside a wrapped Export button. From sm
+   up the toolbar sits beside the tabs and keeps its fixed width. */
+@media screen and (max-width: 639px) {
+  .search-box {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: none;
+    order: -1;
+  }
+
+  .search-box input {
+    min-height: 44px;
+  }
 }
 
 /* ── Table layout ─────────────────────────── */

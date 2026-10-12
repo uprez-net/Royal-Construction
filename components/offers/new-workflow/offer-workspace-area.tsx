@@ -140,8 +140,8 @@ export function AreaCalculatorPanel({
             <BasisRow label="Kitchen" value={basis.kitchenSqm} />
           </dl>
         </section>
-        <section className="grid grid-cols-3 gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
-          <h4 className={cn("col-span-3", GROUP_HEADING_CLASS)}>
+        <section className="grid grid-cols-1 gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3 @md/pane:grid-cols-3">
+          <h4 className={cn("col-span-full", GROUP_HEADING_CLASS)}>
             Kitchen & linens & Showers
           </h4>
           <AreaField

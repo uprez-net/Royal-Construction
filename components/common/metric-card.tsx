@@ -19,6 +19,15 @@ export interface DataPoint {
  * white: `--warning` only reaches 2.05:1 against white, so a white icon on it is
  * invisible. The -ink variants all clear 4.55:1.
  */
+/**
+ * A row of metric cards above a list. On a phone the cards scroll sideways,
+ * two and a bit in view, instead of stacking rows deep and pushing the list
+ * below the fold; from sm up the row is a grid, so add the `sm:grid-cols-*`
+ * and wider column counts the row needs.
+ */
+export const MOBILE_METRIC_STRIP_CLASS =
+  "-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-1 no-scrollbar *:w-[44%] *:min-w-36 *:shrink-0 *:snap-start sm:mx-0 sm:grid sm:overflow-visible sm:px-0 sm:pb-0 sm:*:w-auto sm:*:min-w-0";
+
 export const METRIC_TONES = {
   primary: "bg-primary",
   success: "bg-success-ink",
