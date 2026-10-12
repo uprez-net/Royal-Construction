@@ -140,7 +140,7 @@ export function AgentMessage({
         ) : null}
       </MessageContent>
       {text || time ? (
-        <MessageActions className="self-end opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        <MessageActions className="self-end opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100">
           {time ? (
             <span className="mr-1 text-[11px] text-muted-foreground">
               {time}

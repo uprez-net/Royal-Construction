@@ -11,24 +11,26 @@ export default function OfferWorkspaceSkeleton() {
       label="Loading offer workspace"
       className={OFFER_WORKSPACE_FRAME_CLASS}
     >
-      <div className="flex shrink-0 flex-col gap-3 border-b border-border/70 bg-white px-3 py-3 md:flex-row md:flex-wrap md:items-center md:gap-x-3 md:gap-y-2 md:px-4 md:py-2.5">
-        <div className="flex min-w-0 flex-wrap items-center gap-2 md:flex-1 md:flex-nowrap md:gap-2.5">
-          <Skeleton className="order-first h-5 w-full md:order-none md:w-56" />
-          <Skeleton className="h-5.5 w-28 shrink-0" />
-          <Skeleton className="h-5.5 w-16 shrink-0 rounded-full" />
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <div className="mr-auto space-y-1 md:mr-0">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-3 w-16" />
-          </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border/70 bg-white px-3 py-2 md:flex-nowrap md:gap-x-2.5 md:px-4 md:py-2.5">
+        <Skeleton className="h-5 min-w-0 flex-1 basis-0 md:order-2 md:w-56 md:flex-none" />
+        <div className="flex shrink-0 items-center gap-2 md:order-6">
           <Skeleton className="size-11 md:h-8 md:w-9" />
-          <Skeleton className="h-11 w-24 md:h-8" />
+          <Skeleton className="size-11 sm:w-24 md:h-8" />
+        </div>
+        <div className="flex w-full items-center gap-2 md:contents">
+          <Skeleton className="h-5.5 w-28 shrink-0 md:order-1" />
+          <Skeleton className="h-5.5 w-16 shrink-0 rounded-full md:order-4" />
+        </div>
+        <div className="hidden space-y-1 md:order-5 md:ml-auto md:block">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-3 w-16" />
         </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <div className="shrink-0 border-b border-border/70 p-2 md:hidden">
-          <Skeleton className="h-11 w-full" />
+        <div className="flex shrink-0 items-center gap-1.5 border-b border-border/70 p-1.5 md:hidden">
+          <Skeleton className="size-11 shrink-0" />
+          <Skeleton className="h-11 flex-1" />
+          <Skeleton className="size-11 shrink-0" />
         </div>
         <div className="hidden w-14 shrink-0 flex-col border-r border-border/70 bg-white/60 md:flex lg:w-60">
           <div className="flex-1 overflow-hidden py-2">
@@ -72,8 +74,8 @@ export default function OfferWorkspaceSkeleton() {
           </div>
         </div>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/70 bg-white px-3 py-2.5 md:gap-x-6 md:px-5">
-        <Skeleton className="h-11 w-full md:hidden" />
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/70 bg-white px-3 py-1 md:gap-x-6 md:px-5 md:py-2.5">
+        <Skeleton className="h-11 w-24 md:hidden" />
         <div className="hidden flex-wrap gap-x-6 gap-y-2 md:flex">
           {Array.from({ length: 5 }, (_, i) => (
             <div key={i} className="flex gap-2">

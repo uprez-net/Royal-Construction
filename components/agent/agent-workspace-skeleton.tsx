@@ -4,7 +4,7 @@ export function AgentWorkspaceSkeleton() {
   return (
     <PageSkeleton
       label="Loading operations desk"
-      className="flex h-full min-h-full w-full flex-col overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm"
+      className="flex h-full min-h-full w-full flex-col overflow-hidden bg-white sm:rounded-xl sm:border sm:border-border/70 sm:shadow-sm"
     >
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/70 px-3 py-2.5 sm:px-4">
         <div className="flex min-w-0 items-center gap-2.5">

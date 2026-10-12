@@ -96,7 +96,7 @@ export function HoverRow({
       {children}
       <Button
         aria-label={removeLabel}
-        className="mt-0.5 size-6 shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"
+        className="mt-0.5 size-6 shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
         onClick={onRemove}
         size="icon"
         type="button"

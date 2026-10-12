@@ -559,12 +559,13 @@ export function AgentWorkspace({
     else setSheet((current) => (current === pane ? null : pane));
   }
 
-  const history = (
+  const renderHistory = (onClose?: () => void) => (
     <AgentHistory
       activeSessionId={activeSessionId}
       activeSessionTitle={activeSessionTitle}
       initialSessions={initialSessions}
       onArchive={archiveSession}
+      onClose={onClose}
       onNavigate={() => {
         // Moving to another conversation from the rail must not lose what was
         // typed here; the initialiser restores it on the way back.
@@ -593,7 +594,7 @@ export function AgentWorkspace({
     // which throw without a provider above them; the app shell only provides
     // one around its notifications.
     <TooltipProvider>
-      <section className="flex h-full max-h-full min-h-full w-full flex-col overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
+      <section className="flex h-full max-h-full min-h-full w-full flex-col overflow-hidden bg-white sm:rounded-xl sm:border sm:border-border/70 sm:shadow-sm">
         <AgentHeader
           agentStatus={agent.status}
           busy={busy}
@@ -613,7 +614,7 @@ export function AgentWorkspace({
         <div className="flex min-h-0 min-w-0 flex-1">
           {historyRailOpen ? (
             <div className="w-72 shrink-0 border-r border-border/70">
-              {history}
+              {renderHistory()}
             </div>
           ) : null}
 
@@ -680,14 +681,18 @@ export function AgentWorkspace({
           onOpenChange={(open) => setSheet(open ? "history" : null)}
           open={sheet === "history"}
         >
-          <SheetContent className="w-76 p-0" side="left">
+          <SheetContent
+            className="w-76 max-w-[calc(100vw-3rem)] p-0"
+            showCloseButton={false}
+            side="left"
+          >
             <SheetHeader className="sr-only">
               <SheetTitle>Conversations</SheetTitle>
               <SheetDescription>
                 Switch between your agent conversations.
               </SheetDescription>
             </SheetHeader>
-            {history}
+            {renderHistory(() => setSheet(null))}
           </SheetContent>
         </Sheet>
 
@@ -695,7 +700,12 @@ export function AgentWorkspace({
           onOpenChange={(open) => setSheet(open ? "inspector" : null)}
           open={sheet === "inspector"}
         >
-          <SheetContent className="w-84 p-0" side="right">
+          {/* The inspector carries its own close control. */}
+          <SheetContent
+            className="w-84 max-w-[calc(100vw-3rem)] p-0"
+            showCloseButton={false}
+            side="right"
+          >
             <SheetHeader className="sr-only">
               <SheetTitle>This session</SheetTitle>
               <SheetDescription>

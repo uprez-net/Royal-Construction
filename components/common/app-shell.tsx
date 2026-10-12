@@ -391,9 +391,11 @@ export function AppShell({
             className={cn(
               "min-h-0 min-w-0 w-full flex-1 gap-4 outline-none sm:gap-6",
               pathName.startsWith("/agent")
-                ? "grid h-0 grid-rows-[minmax(0,1fr)] overflow-hidden"
-                : "flex flex-col overflow-y-auto",
-              "px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-6",
+                ? // The workspace is its own full-height card; on a phone the
+                  // gutter around it only takes room from the transcript, and
+                  // the composer pads for the home indicator itself.
+                  "grid h-0 grid-rows-[minmax(0,1fr)] overflow-hidden p-0 sm:px-6 sm:py-4 lg:px-8 lg:py-6"
+                : "flex flex-col overflow-y-auto px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-6",
               "scrollbar-none",
               "[-ms-overflow-style:none]",
               "[&::-webkit-scrollbar]:hidden",

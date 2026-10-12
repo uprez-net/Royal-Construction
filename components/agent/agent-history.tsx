@@ -8,6 +8,7 @@ import {
   MessageSquareText,
   Plus,
   Search,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,7 @@ export function AgentHistory({
   activeSessionTitle,
   initialSessions,
   onArchive,
+  onClose,
   onNavigate,
   sessions,
 }: {
@@ -35,6 +37,8 @@ export function AgentHistory({
   activeSessionTitle: string;
   initialSessions: AgentSessionListItem[];
   onArchive: (sessionId: string) => Promise<void>;
+  /** Given when the rail is a drawer, which then needs its own way out. */
+  onClose?: () => void;
   onNavigate?: () => void;
   sessions: AgentSessionListItem[];
 }) {
@@ -68,16 +72,29 @@ export function AgentHistory({
         <p className="font-heading text-sm font-semibold text-foreground">
           Conversations
         </p>
-        <Button
-          asChild
-          aria-label="New conversation"
-          size="icon-sm"
-          variant="outline"
-        >
-          <Link href="/agent" onClick={onNavigate}>
-            <Plus data-icon="inline-start" />
-          </Link>
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            asChild
+            aria-label="New conversation"
+            size="icon-sm"
+            variant="outline"
+          >
+            <Link href="/agent" onClick={onNavigate}>
+              <Plus data-icon="inline-start" />
+            </Link>
+          </Button>
+          {onClose ? (
+            <Button
+              aria-label="Close conversations"
+              onClick={onClose}
+              size="icon-sm"
+              type="button"
+              variant="ghost"
+            >
+              <X />
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {sessions.length > 3 ? (
@@ -117,7 +134,7 @@ export function AgentHistory({
                 <Link
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "block rounded-lg border px-2.5 py-2 pr-9 transition-colors",
+                    "block rounded-lg border px-2.5 py-2 pr-9 transition-colors pointer-coarse:py-3 pointer-coarse:pr-14",
                     active
                       ? "border-royal-gold/50 bg-royal-gold-light/55"
                       : "border-transparent hover:border-border hover:bg-white",
@@ -153,7 +170,7 @@ export function AgentHistory({
                 </Link>
                 <Button
                   aria-label={`Archive ${titleFor(session)}`}
-                  className="absolute top-1.5 right-1.5 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                  className="absolute top-1.5 right-1.5 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:top-1/2 pointer-coarse:-translate-y-1/2 pointer-coarse:opacity-100"
                   onClick={(event) => {
                     event.preventDefault();
                     void onArchive(session.eveSessionId);

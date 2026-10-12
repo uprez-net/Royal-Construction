@@ -1332,6 +1332,23 @@
   color: var(--leads-primary);
 }
 
+/* These rules are unlayered, so they outrank the Tailwind `flex-1` on the
+   search box and the phone rules earlier in this file. Without this the box
+   stayed a fixed 220px and 32px tall beside a wrapped Export button. From sm
+   up the toolbar sits beside the tabs and keeps its fixed width. */
+@media screen and (max-width: 639px) {
+  .search-box {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: none;
+    order: -1;
+  }
+
+  .search-box input {
+    min-height: 44px;
+  }
+}
+
 /* ── Table layout ─────────────────────────── */
 .table-wrapper {
   overflow-x: auto;
