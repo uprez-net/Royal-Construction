@@ -1,5 +1,7 @@
 import { franc } from "franc";
 
+import { isOwnMailbox } from "@/lib/graph/mailbox";
+
 /* ========================================================================== *
  * Configuration
  * ========================================================================== */
@@ -339,6 +341,16 @@ function evaluateSpamPatternGroups(text: string): {
 }
 
 /**
+ * Elementor's website-form footer ("Page URL … Remote IP … Powered by").
+ *
+ * It is machine-generated and appended to every website enquiry. Its
+ * user-agent string is enough to pull franc to a wrong language (an English
+ * enquiry scored as "fra"), so language is judged on the sender's own words.
+ * Only this trailing block is removed; the rest of the body is scored as usual.
+ */
+const WEBSITE_FORM_FOOTER = /page url:[\s\S]*?remote ip:[\s\S]*$/i;
+
+/**
  * Detects the language using franc.
  *
  * Language detection is skipped for very short emails because the result is
@@ -374,6 +386,12 @@ function isSuspiciousSenderDomain(
   from: string | undefined,
   replyTo: string | undefined,
 ): boolean {
+  // Our own website form is relayed by our mailbox to itself with the
+  // client's address in Reply-To, so every genuine enquiry looks like this.
+  // Penalising it dropped real leads; the LLM extractor still screens the
+  // message body for solicitations.
+  if (isOwnMailbox(from?.match(/[^\s<>"]+@[^\s<>"]+/)?.[0])) return false;
+
   const fromDomain = extractSenderDomain(from);
   const replyToDomain = extractSenderDomain(replyTo);
 
@@ -512,7 +530,7 @@ export function evaluateEmail(
   /* Stage 4: Language Detection                                            */
   /* ---------------------------------------------------------------------- */
 
-  const language = detectLanguage(text);
+  const language = detectLanguage(text.replace(WEBSITE_FORM_FOOTER, ""));
 
   if (language === "eng") {
     signals.push({
@@ -601,8 +619,8 @@ export function evaluateEmail(
   }
 
   if (
-    /^[A-Z0-9\s!?.,'"-]+$/.test(subject.trim()) &&
-    subject.trim().length > 6
+    /^[A-Z0-9\s!?.,'"-]+$/.test(subject.trim())
+    && subject.trim().length > 6
   ) {
     signals.push({
       code: "subject_all_caps",
