@@ -26,7 +26,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { ProjectDetail } from "@/types/project";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ProjectDetailTabKey } from "@/utils/validators/projects";
 
 /**
@@ -373,6 +373,20 @@ export function ProjectTabNavigation({
     [project],
   );
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Keep the active tab in view on the phone strip, without scrolling the page.
+  useEffect(() => {
+    const list = listRef.current;
+    const tab = tabRefs.current[activeTab];
+    if (!list || !tab || list.scrollWidth <= list.clientWidth) return;
+    const left = tab.offsetLeft - list.offsetLeft;
+    if (
+      left < list.scrollLeft
+      || left + tab.offsetWidth > list.scrollLeft + list.clientWidth
+    )
+      list.scrollTo({ left: Math.max(0, left - 12), behavior: "smooth" });
+  }, [activeTab]);
 
   const focusTab = useCallback(
     (tab: ProjectDetailTab) => {
@@ -419,44 +433,17 @@ export function ProjectTabNavigation({
 
   return (
     <>
-      <div className="mb-4 flex flex-col gap-2 md:hidden">
-        <label htmlFor="mobile-project-section" className="text-sm font-medium">
-          Project section
-        </label>
-        <select
-          id="mobile-project-section"
-          value={activeTab}
-          onChange={(event) => {
-            if (isVisibleProjectDetailTab(event.target.value))
-              onTabChange(event.target.value);
-          }}
-          className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-        >
-          {projectDetailTabs
-            .filter((tab) => !tab.isAdminOnly || isAdmin)
-            .map((tab) => (
-              <option key={tab.key} value={tab.key}>
-                {tab.label}
-                {tab.badge ? ` (${tab.badge.count})` : ""}
-              </option>
-            ))}
-        </select>
-        {projectDetailTabs.find((tab) => tab.key === activeTab)?.badge ? (
-          <p className="text-xs text-muted-foreground">
-            {
-              projectDetailTabs.find((tab) => tab.key === activeTab)?.badge
-                ?.description
-            }
-          </p>
-        ) : null}
-      </div>
-      {/* Desktop tabs wrap so every section is visible without a hidden scrollbar. */}
+      {/* Desktop tabs wrap so every section is visible without a hidden
+          scrollbar. A phone has room for two or three, so there the same
+          tablist scrolls sideways with the active tab kept in view; it
+          replaces a <select> that hid every other section behind a tap. */}
       <div
+        ref={listRef}
         role="tablist"
         aria-label="Project sections"
         aria-orientation="horizontal"
         onKeyDown={handleKeyDown}
-        className="mb-5 hidden flex-wrap gap-x-1 border-b-2 border-border/60 md:flex"
+        className="-mx-3 mb-5 flex snap-x gap-x-1 overflow-x-auto overscroll-x-contain border-b-2 border-border/60 px-3 no-scrollbar md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
       >
         {projectDetailTabs.map((tab) => {
           const Icon = TabIcons[tab.key];
@@ -479,7 +466,7 @@ export function ProjectTabNavigation({
               tabIndex={isActive ? 0 : -1}
               onClick={() => onTabChange(tab.key)}
               className={cn(
-                "relative -mb-0.5 inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                "relative -mb-0.5 inline-flex min-h-11 shrink-0 snap-start items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm md:px-4 font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                 isActive && "border-primary font-semibold text-primary",
               )}
             >

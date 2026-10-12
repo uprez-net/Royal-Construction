@@ -21,6 +21,11 @@ interface DataTableProps {
   mobileTitleColumn?: number;
   /** Columns of running text that take a card's full width in two columns. */
   mobileWideColumns?: number[];
+  /**
+   * Where a card puts its actions column. "header" suits a single compact
+   * control such as an overflow menu, which otherwise gets a row to itself.
+   */
+  mobileActionsPlacement?: "header" | "footer";
   loading?: boolean;
   loadingLabel?: string;
   headers: ReactNode[];
@@ -57,6 +62,7 @@ export function DataTable({
   mobileColumns = 2,
   mobileTitleColumn = 0,
   mobileWideColumns,
+  mobileActionsPlacement = "footer",
   loading = false,
   loadingLabel = "Loading records",
 }: DataTableProps) {
@@ -153,6 +159,12 @@ export function DataTable({
                   <div className="min-w-0 flex-1 py-1.5 text-base font-semibold [overflow-wrap:anywhere]">
                     {row[mobileTitleColumn]}
                   </div>
+                  {mobileActionsPlacement === "header"
+                  && actionCells.length > 0 ? (
+                    <div className="flex shrink-0 items-center">
+                      {actionCells}
+                    </div>
+                  ) : null}
                   {onRowClick ? (
                     <Button
                       type="button"
@@ -193,7 +205,8 @@ export function DataTable({
                     ),
                   )}
                 </dl>
-                {actionCells.length > 0 ? (
+                {mobileActionsPlacement === "footer"
+                && actionCells.length > 0 ? (
                   <div className="flex flex-wrap items-center gap-2 border-t border-border/70 px-4 py-2">
                     {actionCells}
                   </div>

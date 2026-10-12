@@ -25,6 +25,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { AddLeadModal } from "@/components/leads/modal-ui/add-lead-modal";
 import { EmailCampaignModal } from "@/components/leads/modal-ui/email-campaign-modal";
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
+import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
 import { LeadPagination } from "./lead-pagination";
 import {
   readLeadsListParams,
@@ -377,7 +378,12 @@ function LeadsWorkspace() {
         <>
           {/* Six cards stacked three rows deep pushed the list itself below
               the fold on a phone; there they scroll sideways instead. */}
-          <div className="-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-1 no-scrollbar *:w-[44%] *:min-w-36 *:shrink-0 *:snap-start sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 sm:*:w-auto sm:*:min-w-0 md:grid-cols-3">
+          <div
+            className={cn(
+              MOBILE_METRIC_STRIP_CLASS,
+              "sm:grid-cols-2 md:grid-cols-3",
+            )}
+          >
             <LeadMetricCard
               label="Total Leads"
               value={String(stats.total)}
