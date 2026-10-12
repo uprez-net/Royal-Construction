@@ -127,7 +127,11 @@ export function AppShell({
   );
 
   return (
-    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0))] overflow-hidden bg-[#F7F6F2] text-foreground">
+    // The fallback needs its unit: `calc(100dvh - 0)` is invalid, so outside
+    // the sandbox (where the variable is unset) the height used to drop to
+    // auto. The shell then grew with its content, the window scrolled instead
+    // of <main>, and the agent workspace collapsed to its composer.
+    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0px))] overflow-hidden bg-[#F7F6F2] text-foreground">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-background focus:p-3 focus:text-foreground focus:outline-2 focus:outline-ring"
