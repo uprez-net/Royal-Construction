@@ -1,5 +1,7 @@
 import { franc } from "franc";
 
+import { isOwnMailbox } from "@/lib/graph/mailbox";
+
 /* ========================================================================== *
  * Configuration
  * ========================================================================== */
@@ -384,6 +386,12 @@ function isSuspiciousSenderDomain(
   from: string | undefined,
   replyTo: string | undefined,
 ): boolean {
+  // Our own website form is relayed by our mailbox to itself with the
+  // client's address in Reply-To, so every genuine enquiry looks like this.
+  // Penalising it dropped real leads; the LLM extractor still screens the
+  // message body for solicitations.
+  if (isOwnMailbox(from?.match(/[^\s<>"]+@[^\s<>"]+/)?.[0])) return false;
+
   const fromDomain = extractSenderDomain(from);
   const replyToDomain = extractSenderDomain(replyTo);
 

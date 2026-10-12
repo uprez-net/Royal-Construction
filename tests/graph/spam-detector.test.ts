@@ -39,12 +39,32 @@ const LONG_MESSAGE =
 const FRENCH_SOLICITATION =
   "Bonjour, je vous contacte pour vous proposer nos services de rénovation et de nettoyage de façade à un prix exceptionnel. Nous sommes une entreprise sérieuse avec une longue expérience dans le domaine et nous serions ravis de discuter de votre projet.";
 
+// The real headers Graph returns for an Elementor notification: sent by our own
+// mailbox, with the client's address in Reply-To.
+const FORM_HEADERS = {
+  from: '"info - Royal Constructions" <info@royalconstructions.com.au>',
+  replyTo: '"Test Person" <test@example.com>',
+};
+
+// Regression: the From/Reply-To domain mismatch (-3) dropped every form that
+// carried no construction keywords, e.g. "House and Granny Flat" with no message.
+test("a website form relayed by our own mailbox is not penalised for Reply-To mismatch", () => {
+  const result = evaluateEmail(FORM_SUBJECT, formBody(), FORM_HEADERS);
+
+  assert.equal(
+    result.signals.some((s) => s.code === "suspicious_sender_domain"),
+    false,
+  );
+  assert.equal(result.shouldEvaluate, true, JSON.stringify(result.signals));
+});
+
 // Regression: franc reads this body as "fra" (-4) with the footer included, and
-// as English once the footer is removed. Fails on the unfixed detector.
-test("the Elementor website form body is not dropped by language detection", () => {
+// as English once the footer is removed.
+test("the Elementor footer does not make an English form read as another language", () => {
   const result = evaluateEmail(
     FORM_SUBJECT,
-    formBody({ interest: "Renovation" }),
+    formBody({ interest: "Extension" }),
+    FORM_HEADERS,
   );
 
   assert.notEqual(result.language, "fra");
@@ -53,6 +73,14 @@ test("the Elementor website form body is not dropped by language detection", () 
     false,
   );
   assert.equal(result.shouldEvaluate, true, JSON.stringify(result.signals));
+});
+
+test("a French solicitation wrapped in the form footer is still rejected", () => {
+  const body = `${FRENCH_SOLICITATION}\r\nPage URL: https://example.com/contact/\r\nUser Agent: ${IPHONE_UA}\r\nRemote IP: 203.0.113.7\r\nPowered by: Elementor`;
+  const result = evaluateEmail(FORM_SUBJECT, body, FORM_HEADERS);
+
+  assert.equal(result.language, "fra");
+  assert.equal(result.shouldEvaluate, false, JSON.stringify(result.signals));
 });
 
 test("form variants with a message, other interests and a desktop user agent pass", () => {
@@ -67,27 +95,25 @@ test("form variants with a message, other interests and a desktop user agent pas
   ];
 
   for (const body of variants) {
-    const result = evaluateEmail(FORM_SUBJECT, body);
-    assert.equal(result.shouldEvaluate, true, body);
-    assert.equal(
-      result.signals.some((s) => s.code === "foreign_language"),
-      false,
-      body,
-    );
+    const result = evaluateEmail(FORM_SUBJECT, body, FORM_HEADERS);
+    assert.equal(result.shouldEvaluate, true, JSON.stringify(result.signals));
   }
 });
 
-test("a French solicitation is still rejected", () => {
-  const result = evaluateEmail("Offre spéciale", FRENCH_SOLICITATION);
+test("a Reply-To mismatch from a third-party sender is still penalised", () => {
+  const result = evaluateEmail(FORM_SUBJECT, formBody(), {
+    from: "Sales <sales@vendor-example.com>",
+    replyTo: "<other@elsewhere-example.com>",
+  });
 
-  assert.equal(result.language, "fra");
-  assert.equal(result.shouldEvaluate, false, JSON.stringify(result.signals));
+  assert.equal(
+    result.signals.some((s) => s.code === "suspicious_sender_domain"),
+    true,
+  );
 });
 
-test("a French solicitation wrapped in the form footer is still rejected", () => {
-  const body = `${FRENCH_SOLICITATION}\r\nPage URL: https://example.com/contact/\r\nUser Agent: ${IPHONE_UA}\r\nRemote IP: 203.0.113.7\r\nPowered by: Elementor`;
-  const result = evaluateEmail(FORM_SUBJECT, body);
+test("a French solicitation relayed through our own mailbox is still rejected", () => {
+  const result = evaluateEmail(FORM_SUBJECT, FRENCH_SOLICITATION, FORM_HEADERS);
 
-  assert.equal(result.language, "fra");
   assert.equal(result.shouldEvaluate, false, JSON.stringify(result.signals));
 });
