@@ -44,6 +44,7 @@ const FRENCH_SOLICITATION =
 const FORM_HEADERS = {
   from: '"info - Royal Constructions" <info@royalconstructions.com.au>',
   replyTo: '"Test Person" <test@example.com>',
+  returnPath: "info@royalconstructions.com.au",
 };
 
 // Regression: the From/Reply-To domain mismatch (-3) dropped every form that
@@ -115,5 +116,27 @@ test("a Reply-To mismatch from a third-party sender is still penalised", () => {
 test("a French solicitation relayed through our own mailbox is still rejected", () => {
   const result = evaluateEmail(FORM_SUBJECT, FRENCH_SOLICITATION, FORM_HEADERS);
 
+  assert.equal(result.shouldEvaluate, false, JSON.stringify(result.signals));
+});
+
+test("a forged own-mailbox From with a foreign Return-Path is still penalised", () => {
+  const result = evaluateEmail(FORM_SUBJECT, formBody(), {
+    ...FORM_HEADERS,
+    returnPath: "bounce@spammer-example.com",
+  });
+
+  assert.equal(
+    result.signals.some((s) => s.code === "suspicious_sender_domain"),
+    true,
+  );
+});
+
+test("the footer is only ignored when it is the real four-line block ending the message", () => {
+  // The loose rule cut everything after the first "Page URL:", hiding the
+  // French from detection. The words alone are not a footer.
+  const mentionsFooter = `Bonjour.\r\nPage URL: see below.\r\n${FRENCH_SOLICITATION}\r\nRemote IP: n/a\r\n${FRENCH_SOLICITATION}`;
+  const result = evaluateEmail(FORM_SUBJECT, mentionsFooter, FORM_HEADERS);
+
+  assert.equal(result.language, "fra");
   assert.equal(result.shouldEvaluate, false, JSON.stringify(result.signals));
 });
