@@ -1,5 +1,7 @@
 import { franc } from "franc";
 
+import { isOwnMailbox } from "@/lib/graph/mailbox";
+
 /* ========================================================================== *
  * Configuration
  * ========================================================================== */
@@ -339,6 +341,19 @@ function evaluateSpamPatternGroups(text: string): {
 }
 
 /**
+ * Elementor's website-form footer ("Page URL … Remote IP … Powered by").
+ *
+ * It is machine-generated and appended to every website enquiry. Its
+ * user-agent string is enough to pull franc to a wrong language (an English
+ * enquiry scored as "fra"), so language is judged on the sender's own words.
+ * Only this block is removed, and only when its lines are in the form's order,
+ * each at the start of a line, and it ends the message; anything else that
+ * merely mentions "page url:" is left alone.
+ */
+const WEBSITE_FORM_FOOTER =
+  /^page url:[^\r\n]*\r?\n^user agent:[^\r\n]*\r?\n^remote ip:[^\r\n]*(?:\r?\n^powered by:[^\r\n]*)?\s*(?![\s\S])/im;
+
+/**
  * Detects the language using franc.
  *
  * Language detection is skipped for very short emails because the result is
@@ -373,7 +388,20 @@ function extractSenderDomain(from: string | undefined): string | undefined {
 function isSuspiciousSenderDomain(
   from: string | undefined,
   replyTo: string | undefined,
+  returnPath?: string | undefined,
 ): boolean {
+  // Our own website form is relayed by our mailbox to itself with the
+  // client's address in Reply-To, so every genuine enquiry looks like this.
+  // Penalising it dropped real leads; the LLM extractor still screens the
+  // message body for solicitations. The Return-Path must be ours too: a
+  // forged From carries the forger's own Return-Path, and the headers hold no
+  // authentication result to check instead.
+  const addressIn = (value: string | undefined) =>
+    value?.match(/[^\s<>"]+@[^\s<>"]+/)?.[0];
+  if (isOwnMailbox(addressIn(from)) && isOwnMailbox(addressIn(returnPath))) {
+    return false;
+  }
+
   const fromDomain = extractSenderDomain(from);
   const replyToDomain = extractSenderDomain(replyTo);
 
@@ -512,7 +540,7 @@ export function evaluateEmail(
   /* Stage 4: Language Detection                                            */
   /* ---------------------------------------------------------------------- */
 
-  const language = detectLanguage(text);
+  const language = detectLanguage(text.replace(WEBSITE_FORM_FOOTER, ""));
 
   if (language === "eng") {
     signals.push({
@@ -601,8 +629,8 @@ export function evaluateEmail(
   }
 
   if (
-    /^[A-Z0-9\s!?.,'"-]+$/.test(subject.trim()) &&
-    subject.trim().length > 6
+    /^[A-Z0-9\s!?.,'"-]+$/.test(subject.trim())
+    && subject.trim().length > 6
   ) {
     signals.push({
       code: "subject_all_caps",
@@ -625,7 +653,9 @@ export function evaluateEmail(
   /* Stage 10: Sender Domain Mismatch                                       */
   /* ---------------------------------------------------------------------- */
 
-  if (isSuspiciousSenderDomain(headers.from, headers.replyTo)) {
+  if (
+    isSuspiciousSenderDomain(headers.from, headers.replyTo, headers.returnPath)
+  ) {
     signals.push({
       code: "suspicious_sender_domain",
       delta: SCORE_WEIGHTS.suspiciousSenderDomain,
