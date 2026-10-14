@@ -23,6 +23,7 @@ import {
   rescheduleOutcome,
   type RescheduleNotice,
 } from "./reschedule-rules";
+import { canTransitionSchedule } from "./schedule-transitions";
 import {
   normalizeQuoteBasis,
   parseQuotedAmount,
@@ -346,54 +347,6 @@ export async function createTradieSchedules(
     : run(db);
 }
 
-const ALLOWED_TRANSITIONS: Record<
-  TradieScheduleStatus,
-  readonly TradieScheduleStatus[]
-> = {
-  [TradieScheduleStatus.PENDING]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.NO_RESPONSE,
-    TradieScheduleStatus.PENDING_RESPONSE,
-  ],
-  [TradieScheduleStatus.AWAITING_QUOTE]: [
-    TradieScheduleStatus.PENDING_RESPONSE,
-    TradieScheduleStatus.NO_RESPONSE,
-  ],
-  [TradieScheduleStatus.PENDING_RESPONSE]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.QUOTE_RECEIVED]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.AWAITING_ADMIN_APPROVAL]: [
-    TradieScheduleStatus.CONFIRMED,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.CONFIRMED]: [
-    TradieScheduleStatus.COMPLETED,
-    TradieScheduleStatus.DECLINED,
-    TradieScheduleStatus.CONFIRMED,
-  ],
-  [TradieScheduleStatus.PENDING_FINAL_CONFIRMATION]: [
-    TradieScheduleStatus.CONFIRMED,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.NO_RESPONSE]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.DECLINED]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.PENDING_RESPONSE,
-    TradieScheduleStatus.NO_RESPONSE,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.COMPLETED]: [],
-  [TradieScheduleStatus.CANCELLED]: [],
-};
-
 type ScheduleQuoteInput = {
   readonly quote?: string | null;
   readonly quoteUnit?: "FIXED" | "HOURLY" | "DAILY";
@@ -466,7 +419,7 @@ async function applyScheduleTransition(
   }
   if (
     !input.statusAlreadyApplied
-    && !ALLOWED_TRANSITIONS[existing.status].includes(input.toStatus)
+    && !canTransitionSchedule(existing.status, input.toStatus)
   ) {
     throw new DomainTransitionError(
       `Invalid schedule transition from ${existing.status} to ${input.toStatus}.`,

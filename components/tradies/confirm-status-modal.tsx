@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 
 import type { TradieScheduleListItem } from "@/types/project";
-import { TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
+import { canTransitionSchedule } from "@/lib/domain/tradies/schedule-transitions";
 import { updateProjectTradieSchedule } from "@/lib/store/slices/projectsSlice";
 import { useRouter } from "next/navigation";
 
@@ -232,7 +232,14 @@ export function ConfirmStatusModal({
         })
         .catch((err: unknown) => {
           setActiveLoading(null);
-          setError(err instanceof Error ? err.message : String(err));
+          // `unwrap()` rejects with the thunk's SerializedError, a plain
+          // object rather than an Error, so the server's refusal ("Invalid
+          // schedule transition from …") is on `message`, not `String(err)`.
+          const message =
+            err && typeof err === "object" && "message" in err
+              ? String(err.message)
+              : "";
+          setError(message || "Failed to update schedule status.");
         });
     });
   }
@@ -294,7 +301,8 @@ export function ConfirmStatusModal({
                 (pendingFromStore && isPending);
 
               if (
-                !TRADIE_SCHEDULE_STATE_MACHINE[schedule.status].includes(
+                !canTransitionSchedule(
+                  schedule.status,
                   option.value as TradieScheduleStatus,
                 )
               )
