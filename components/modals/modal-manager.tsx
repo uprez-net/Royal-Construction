@@ -18,6 +18,7 @@ import type {
 } from "@/types/project";
 import { CreateProjectModal } from "../projects/create-project-modal";
 import { ReminderModal } from "../tradies/reminder-send-modal";
+import { RescheduleScheduleModal } from "../tradies/reschedule-schedule-modal";
 import { TradieScheduleDetailsModal } from "../tradies/details-view-modal";
 import { DeleteScheduleModal } from "../tradies/delete-schedule-modal";
 import {
@@ -289,25 +290,35 @@ export function ModalManager() {
           onOpenChange={(open) => !open && handleClose()}
         />
       );
-    case "tradieReminder":
+    case "tradieReminder": {
       const { schedule } = modal.payload as {
         schedule: TradieScheduleListItem;
       };
-      const tradie = schedule.contact;
-      const siteManager = schedule.siteManager;
 
       return (
         <ReminderModal
-          schedule={schedule as TradieScheduleListItem}
-          tradie={tradie as { email: string; phone: string }}
-          siteManager={
-            siteManager as { email: string; phone: string; name: string }
-          }
+          schedule={schedule}
           open
           onOpenChange={(open) => !open && handleClose()}
           onSend={handleClose}
         />
       );
+    }
+    case "rescheduleTradie": {
+      const schedule = modal.payload?.schedule as
+        | TradieScheduleListItem
+        | undefined;
+      if (!schedule) return null;
+
+      return (
+        <RescheduleScheduleModal
+          schedule={schedule}
+          open
+          onOpenChange={(open) => !open && handleClose()}
+          onDone={handleClose}
+        />
+      );
+    }
     case "tradieScheduleDetails":
       const scheduleDetails = modal.payload
         ?.schedule as TradieUrgentReminderItem;

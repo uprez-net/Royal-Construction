@@ -92,6 +92,18 @@ export const activityLogSchemas = {
     reason: z.string(),
   }),
 
+  tradieScheduleRescheduled: z.object({
+    projectId: z.string(),
+    scheduleId: z.string(),
+    tradieName: z.string(),
+    previousDate: z.string(),
+    scheduleDate: z.string(),
+    durationDays: z.number(),
+    milestoneId: z.string().optional(),
+    /** What the tradie was told: emailed, not emailed, or the email failed. */
+    notice: z.enum(["emailed", "not-emailed", "email-failed"]),
+  }),
+
   tradieScheduleDeleted: z.object({
     projectId: z.string(),
     scheduleId: z.string(),

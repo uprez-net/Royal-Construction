@@ -5,28 +5,30 @@ import { AlertTriangle, ChevronDown, Clock10, Loader2, X } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import type { TradieScheduleWithTradieAndMilestone } from "@/types/project";
-
-export type TradieAttentionItem = {
-  schedule: TradieScheduleWithTradieAndMilestone;
-  title: string;
-  detail: string;
-  tone: "danger" | "warning";
-};
+import type { ProjectDetail } from "@/types/project";
+import {
+  TradieAttentionActionButton,
+  type TradieAttentionEntry,
+} from "./tradie-attention";
 
 /**
  * Dismissing is saved against each booking's current status, so it holds
  * across reloads and for everyone on the shared login, and an alert comes back
  * on its own once its booking moves on. The card used to forget a dismissal
  * the moment the page reloaded.
+ *
+ * Each row's button is the one the project's Alerts card shows for the same
+ * booking (`TradieAttentionActionButton`). It used to be a "Review" button
+ * that opened the status dialog for every alert — a dialog that can neither
+ * book a replacement for a declined tradie nor approve anything.
  */
 export function TradieAttentionCard({
   items,
-  onReview,
+  project,
   onDismiss,
 }: {
-  items: TradieAttentionItem[];
-  onReview: (schedule: TradieScheduleWithTradieAndMilestone) => void;
+  items: TradieAttentionEntry[];
+  project: ProjectDetail;
   onDismiss: (scheduleIds: string[]) => Promise<void>;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -122,7 +124,10 @@ export function TradieAttentionCard({
             id="tradie-attention-items"
             className="no-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain border-t border-warning/20 px-4 pb-4 pt-3"
           >
-            {items.map(({ schedule, title, detail, tone }) => (
+            {items.map((entry) => {
+              const { schedule, title, detail } = entry;
+              const tone = entry.attention.tone;
+              return (
               <div
                 key={schedule.id}
                 className="flex items-center gap-3 rounded-xl border border-border/70 bg-card/85 p-3"
@@ -150,14 +155,7 @@ export function TradieAttentionCard({
                     {detail}
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 shrink-0 rounded-lg px-2.5 text-[11px]"
-                  onClick={() => onReview(schedule)}
-                >
-                  Review
-                </Button>
+                <TradieAttentionActionButton entry={entry} project={project} />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -176,7 +174,8 @@ export function TradieAttentionCard({
                   )}
                 </Button>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </CardContent>

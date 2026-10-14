@@ -74,7 +74,11 @@ export async function sendTradieReminders(): Promise<{
 
   for (const schedule of window.actionable) {
     await enqueueOutboxEvent(prisma, {
-      key: `tradie-reminder:${schedule.id}`,
+      // The date is part of what stays the same. Keyed on the booking alone,
+      // a booking rescheduled after its reminder had gone out found the old,
+      // succeeded event, was never claimed again, and its tradie was never
+      // reminded about the new date.
+      key: `tradie-reminder:${schedule.id}:${schedule.scheduledDate.toISOString().slice(0, 10)}`,
       kind: OutboxEventKind.TRADIE_SCHEDULE_REMINDER,
       payload: { scheduleId: schedule.id },
     });

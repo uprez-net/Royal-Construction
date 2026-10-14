@@ -1,11 +1,10 @@
 import type {
   ProjectDetail,
-  TradieScheduleListItem,
   TradieScheduleWithTradieAndMilestone,
   TradieUrgentReminderItem,
 } from "@/types/project";
 import { Button } from "@/components/ui/button";
-import { Plus, Bell, Phone, Pencil, Clock10 } from "lucide-react";
+import { Plus, Bell, Phone, Pencil, Clock10, CalendarClock } from "lucide-react";
 import { SectionCard } from "@/components/common/section-card";
 import { StatusPill } from "@/components/common/status-pill";
 import {
@@ -18,16 +17,15 @@ import type { TradieScheduleStatus } from "@prisma/client";
 import { differenceInDays } from "date-fns";
 import { DataTable } from "@/components/common/data-table";
 import { toast } from "sonner";
-import { sydneyDateOnly } from "@/lib/dates/sydney";
-import { isTradieAlertLive } from "@/lib/domain/tradies/alert-rules";
+import { reminderTone } from "@/lib/domain/tradies/attention";
+import { rescheduleOutcome } from "@/lib/domain/tradies/reschedule-rules";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { dismissTradieAlerts } from "@/lib/store/slices/projectsSlice";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { calculateScheduleTotalCost } from "@/utils/calculations";
-import {
-  TradieAttentionCard,
-  type TradieAttentionItem,
-} from "./tradie-attention-card";
+import { TradieAttentionCard } from "./tradie-attention-card";
+import { useTradieAttention } from "./tradie-attention";
+import { toScheduleListItem as buildScheduleListItem } from "./schedule-list-item";
 
 /**
  * Formats a money value, falling back to an em dash rather than rendering
@@ -90,196 +88,19 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
     }
   };
 
-  const getReminderTone = (
-    reminder: Date | null,
-    scheduledDate: Date,
-    status: TradieScheduleStatus,
-  ): "success" | "warning" | "neutral" => {
-    // Finalized states don't need reminder urgency
-    if (status === "COMPLETED") {
-      return "success";
-    }
-
-    if (status === "PENDING_FINAL_CONFIRMATION") {
-      return "warning";
-    }
-
-    if (status === "CONFIRMED") {
-      return "success";
-    }
-
-    if (status === "CANCELLED") return "neutral";
-    if (status === "DECLINED") {
-      return "warning";
-    }
-
-    const now = new Date();
-    const daysUntilScheduled = differenceInDays(scheduledDate, now);
-
-    if (daysUntilScheduled <= 7) {
-      return "warning";
-    }
-
-    if (!reminder) {
-      return status === "NO_RESPONSE" ? "warning" : "neutral";
-    }
-
-    const daysSinceReminder = differenceInDays(now, reminder);
-
-    // Recently reminded and still enough runway
-    if (daysSinceReminder <= 3 && daysUntilScheduled > 7) {
-      return "success";
-    }
-
-    // No response and schedule approaching
-    if (
-      (status === "NO_RESPONSE" || status === "PENDING_RESPONSE")
-      && daysUntilScheduled <= 7
-    ) {
-      return "warning";
-    }
-
-    // Reminder getting stale
-    if (daysSinceReminder > 7) {
-      return "warning";
-    }
-
-    return "neutral";
-  };
-
-  const getAttentionItems = (
-    tradies: typeof project.tradieSchedules,
-  ): TradieAttentionItem[] => {
-    const today = sydneyDateOnly(new Date());
-    return tradies.flatMap<TradieAttentionItem>((tradie) => {
-      // Dismissed, settled with its milestone, replaced, or past its dates:
-      // the follow-up is over, whatever the status below would say.
-      if (!isTradieAlertLive(tradie, tradies, today)) {
-        return [];
-      }
-      const reminderTone = getReminderTone(
-        tradie.reminderSentAt,
-        new Date(tradie.scheduledDate),
-        tradie.status,
-      );
-
-      const tradieName = tradie.tradie.name;
-      const scheduledDate = shortDateFormat.format(
-        new Date(tradie.scheduledDate),
-      );
-
-      if (tradie.status === "NO_RESPONSE") {
-        return [
-          {
-            schedule: tradie,
-            title: `${tradieName} has not responded`,
-            detail: `Follow up before the ${scheduledDate} booking.`,
-            tone: "danger" as const,
-          },
-        ];
-      }
-
-      if (tradie.status === "DECLINED" || tradie.status === "CANCELLED") {
-        return [
-          {
-            schedule: tradie,
-            title: `${tradieName} ${tradie.status === "CANCELLED" ? "was removed from" : "declined"} the booking`,
-            detail: `Arrange a replacement before ${scheduledDate}.`,
-            tone: "danger" as const,
-          },
-        ];
-      }
-
-      if (tradie.status === "PENDING_FINAL_CONFIRMATION") {
-        return [
-          {
-            schedule: tradie,
-            title: `Final confirmation needed from ${tradieName}`,
-            detail: `The approved booking is on ${scheduledDate}.`,
-            tone: "warning" as const,
-          },
-        ];
-      }
-
-      if (
-        tradie.status === "AWAITING_ADMIN_APPROVAL"
-        && differenceInDays(new Date(tradie.scheduledDate), new Date()) <= 7
-      ) {
-        return [
-          {
-            schedule: tradie,
-            title: `Admin approval needed for ${tradieName}`,
-            detail: `Review availability before the ${scheduledDate} booking.`,
-            tone: "warning" as const,
-          },
-        ];
-      }
-
-      if (reminderTone === "warning") {
-        return [
-          {
-            schedule: tradie,
-            title: `${tradieName} needs a confirmation follow-up`,
-            detail: `The booking is scheduled for ${scheduledDate}.`,
-            tone: "warning" as const,
-          },
-        ];
-      }
-
-      return [];
-    });
-  };
+  // The board's reminder cell and the attention card read the same rule
+  // (lib/domain/tradies/attention.ts), so a cell saying "follow up" always
+  // has an alert beside it saying why.
+  const now = new Date();
 
   const tradies = project.tradieSchedules;
-  const attentionItems = getAttentionItems(tradies);
+  const attentionItems = useTradieAttention(tradies);
   const dispatch = useAppDispatch();
 
-  /**
-   * Builds the payload the tradie modals expect. Previously inlined three times
-   * with `updatedAt: new Date().toISOString()` — a fabricated timestamp; the row
-   * carries a real `updatedAt`.
-   */
   const toScheduleListItem = (
     tradie: TradieScheduleWithTradieAndMilestone,
     options: { includeQuote: boolean },
-  ): TradieScheduleListItem => ({
-    id: tradie.id,
-    tradieId: tradie.tradie.id,
-    tradieName: tradie.tradie.name,
-    lastQuotedPriceUnit: tradie.tradie.lastQuotedPriceUnit,
-    tradeType: tradie.tradie.trade,
-    abn: tradie.tradie.abn,
-    projectId: project.id,
-    projectName: project.name,
-    milestoneId: tradie.milestone?.id,
-    milestoneName: tradie.milestone?.name,
-    taskLabel: tradie.milestone?.name
-      ? `${tradie.tradie.trade} for ${tradie.milestone.name}`
-      : tradie.tradie.trade,
-    scheduledDate: new Date(tradie.scheduledDate).toISOString(),
-    durationDays: tradie.durationDays,
-    status: tradie.status,
-    updatedAt: new Date(tradie.updatedAt).toISOString(),
-    reminderSentAt: tradie.reminderSentAt
-      ? new Date(tradie.reminderSentAt).toISOString()
-      : undefined,
-    contact: {
-      email: tradie.tradie.email,
-      phone: tradie.tradie.phone,
-      additionalEmails: tradie.tradie.additionalEmails,
-    },
-    siteManager: {
-      name: project.siteManager?.name ?? "Unassigned",
-      email: project.siteManager?.email ?? "",
-      phone: project.siteManager?.phone ?? "",
-    },
-    isFavourite: tradie.tradie.isFavourite,
-    note: tradie.tradie.note,
-    requiresQuote: options.includeQuote ? tradie.requiresQuote : false,
-    quotedPrice: options.includeQuote
-      ? (tradie.quotedPrice ?? undefined)
-      : undefined,
-  });
+  ) => buildScheduleListItem(project, tradie, options);
 
   const scheduleCost = (tradie: TradieScheduleWithTradieAndMilestone) => {
     if (tradie.requiresQuote) {
@@ -310,6 +131,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
     <div className="space-y-4">
       <TradieAttentionCard
         items={attentionItems}
+        project={project}
         onDismiss={async (scheduleIds) => {
           try {
             await dispatch(
@@ -323,16 +145,6 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
             );
           }
         }}
-        onReview={(schedule) =>
-          dispatch(
-            openModal({
-              type: "confirmStatus",
-              payload: {
-                schedule: toScheduleListItem(schedule, { includeQuote: true }),
-              },
-            }),
-          )
-        }
       />
 
       <SectionCard
@@ -388,11 +200,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
             "Actions",
           ]}
           rows={tradies.map((tradie) => {
-            const reminderTone = getReminderTone(
-              tradie.reminderSentAt,
-              new Date(tradie.scheduledDate),
-              tradie.status,
-            );
+            const tone = reminderTone(tradie, now);
 
             const reminderDate = tradie.reminderSentAt
               ? shortDateFormat.format(new Date(tradie.reminderSentAt))
@@ -428,8 +236,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
               // The tone is a second signal only: the cell always spells out
               // the reminder date, and adds "follow up" in words when the tone
               // is a warning, so colour is never the sole carrier of meaning.
-              <StatusPill key={`${tradie.id}-reminder`} tone={reminderTone}>
-                {reminderTone === "warning"
+              <StatusPill key={`${tradie.id}-reminder`} tone={tone}>
+                {tone === "warning"
                   ? `${reminderDate} · follow up`
                   : reminderDate}
               </StatusPill>,
@@ -514,6 +322,34 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                 >
                   <Phone className="size-3.5" aria-hidden="true" />
                 </Button>
+
+                {/* Declined, completed and removed bookings cannot move: the
+                    same rule the server applies, so the button is never one
+                    that can only fail. */}
+                {rescheduleOutcome(tradie.status) && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label={`Reschedule ${tradie.tradie.name}`}
+                    title="Reschedule"
+                    className="size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      dispatch(
+                        openModal({
+                          type: "rescheduleTradie",
+                          payload: {
+                            schedule: toScheduleListItem(tradie, {
+                              includeQuote: true,
+                            }),
+                          },
+                        }),
+                      );
+                    }}
+                  >
+                    <CalendarClock className="size-3.5" aria-hidden="true" />
+                  </Button>
+                )}
 
                 <Button
                   variant="outline"

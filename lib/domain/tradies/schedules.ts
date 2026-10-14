@@ -10,6 +10,7 @@ import {
   DomainAuthorizationError,
   DomainError,
   DomainNotFoundError,
+  DomainStaleVersionError,
   DomainTransitionError,
   DomainValidationError,
 } from "../errors";
@@ -17,6 +18,11 @@ import { attributionUserId, type DomainPrincipal } from "../principal";
 import { authorizeProject, canManageProject } from "../access/projects";
 import { assertCanReadTradieDirectory } from "../access/tradies";
 import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
+import {
+  notReschedulableReason,
+  rescheduleOutcome,
+  type RescheduleNotice,
+} from "./reschedule-rules";
 import {
   normalizeQuoteBasis,
   parseQuotedAmount,
@@ -599,7 +605,35 @@ async function applyScheduleTransition(
   };
 }
 
-/** Reschedule one booking with an optimistic old-date/duration check. */
+export type RescheduleScheduleResult = ScheduleMutationResult & {
+  readonly milestoneId: string | null;
+  readonly previousScheduledDate: Date;
+  readonly previousDurationDays: number;
+  /**
+   * The email the tradie is now owed, or `null` when only the milestone moved
+   * and the dates the tradie answered for still stand. The command does not
+   * send it: the App sends it after this commits and says if it failed, and
+   * Eve, which has no mailbox, tells the operator it is still owed.
+   */
+  readonly notice: RescheduleNotice | null;
+  /** A pending approval for the old date was withdrawn. */
+  readonly withdrewApproval: boolean;
+};
+
+/**
+ * Move one booking's dates (or milestone), and put it back to the tradie.
+ *
+ * The status the booking lands in is `rescheduleOutcome`'s: an approved
+ * booking only needs the tradie to confirm the new date, anything else needs
+ * their availability again. The week-out reminder and any dismissed alert are
+ * reset with it, because both were about the old date.
+ *
+ * Optimistic on the dates, duration and status the caller saw. The status
+ * check is what keeps the dialog honest: it chose its email from the status it
+ * was opened on, and a tradie's reply landing in between would otherwise send
+ * an "approved, just confirm" email about a booking that is now waiting on an
+ * admin.
+ */
 export async function rescheduleTradieSchedule(
   principal: DomainPrincipal,
   input: {
@@ -607,83 +641,153 @@ export async function rescheduleTradieSchedule(
     scheduledDate: Date;
     durationDays?: number;
     milestoneId?: string | null;
+    /** The status the caller decided from; refused as stale if it moved. */
+    expectedStatus?: TradieScheduleStatus;
   },
   db: DomainDb,
-): Promise<ScheduleMutationResult> {
-  const existing = await findSchedule(input.scheduleId, db);
-  await authorizeProject(principal, existing.projectId, db);
-  const durationDays = input.durationDays ?? existing.durationDays;
-  if (
-    existing.status === TradieScheduleStatus.CANCELLED
-    || existing.tradie.archivedAt
-  ) {
-    throw new DomainTransitionError(
-      "A cancelled booking cannot be rescheduled.",
-    );
-  }
-  if (!Number.isInteger(durationDays) || durationDays < 1) {
-    throw new DomainValidationError(
-      "A schedule must last at least one day.",
-      "durationDays",
-    );
-  }
-  if (Number.isNaN(input.scheduledDate.getTime())) {
-    throw new DomainValidationError(
-      "The scheduled date is invalid.",
-      "scheduledDate",
-    );
-  }
-  if (input.milestoneId) {
-    await assertMilestoneOnProject(existing.projectId, input.milestoneId, db);
-  }
-  // Moving a booking onto another milestone must not turn it into a copy of
-  // one the tradie already holds there. A date change cannot.
-  if (
-    input.milestoneId !== undefined
-    && input.milestoneId !== existing.milestoneId
-  ) {
-    await assertNotAlreadyBooked(
-      {
-        ignoreScheduleId: existing.id,
-        milestoneId: input.milestoneId,
-        projectId: existing.projectId,
-        tradieId: existing.tradieId,
+): Promise<RescheduleScheduleResult> {
+  const write = async (
+    transactionDb: DomainDb,
+  ): Promise<RescheduleScheduleResult> => {
+    const existing = await findSchedule(input.scheduleId, transactionDb);
+    await authorizeProject(principal, existing.projectId, transactionDb);
+    const durationDays = input.durationDays ?? existing.durationDays;
+    if (existing.tradie.archivedAt) {
+      throw new DomainTransitionError(
+        "This tradie has been removed from the active directory.",
+      );
+    }
+    const outcome = rescheduleOutcome(existing.status);
+    if (!outcome) {
+      throw new DomainTransitionError(notReschedulableReason(existing.status));
+    }
+    if (input.expectedStatus && input.expectedStatus !== existing.status) {
+      throw new DomainStaleVersionError(
+        "This booking changed while you were rescheduling it — the tradie may have replied. Close this and try again.",
+      );
+    }
+    if (!Number.isInteger(durationDays) || durationDays < 1) {
+      throw new DomainValidationError(
+        "A schedule must last at least one day.",
+        "durationDays",
+      );
+    }
+    if (Number.isNaN(input.scheduledDate.getTime())) {
+      throw new DomainValidationError(
+        "The scheduled date is invalid.",
+        "scheduledDate",
+      );
+    }
+
+    const datesChanged =
+      input.scheduledDate.getTime() !== existing.scheduledDate.getTime()
+      || durationDays !== existing.durationDays;
+    const milestoneChanged =
+      input.milestoneId !== undefined
+      && input.milestoneId !== existing.milestoneId;
+    if (!datesChanged && !milestoneChanged) {
+      throw new DomainValidationError(
+        "Pick a different date or duration to reschedule this booking.",
+        "scheduledDate",
+      );
+    }
+
+    if (input.milestoneId) {
+      await assertMilestoneOnProject(
+        existing.projectId,
+        input.milestoneId,
+        transactionDb,
+      );
+    }
+    // Moving a booking onto another milestone must not turn it into a copy of
+    // one the tradie already holds there. A date change cannot.
+    if (milestoneChanged) {
+      await assertNotAlreadyBooked(
+        {
+          ignoreScheduleId: existing.id,
+          milestoneId: input.milestoneId ?? null,
+          projectId: existing.projectId,
+          tradieId: existing.tradieId,
+        },
+        transactionDb,
+      );
+    }
+
+    // Only a change of dates reopens the booking. Moving it to another
+    // milestone on the same days leaves the tradie's answer standing.
+    const status = datesChanged ? outcome.status : existing.status;
+    const updatedCount = await transactionDb.tradieSchedule.updateMany({
+      data: {
+        durationDays,
+        ...(input.milestoneId !== undefined
+          ? { milestoneId: input.milestoneId }
+          : {}),
+        scheduledDate: input.scheduledDate,
+        ...(datesChanged
+          ? {
+              alertDismissedAt: null,
+              alertDismissedStatus: null,
+              reminderSentAt: null,
+              status,
+            }
+          : {}),
       },
-      db,
-    );
-  }
+      where: {
+        durationDays: existing.durationDays,
+        id: existing.id,
+        scheduledDate: existing.scheduledDate,
+        status: existing.status,
+      },
+    });
+    if (updatedCount.count !== 1) {
+      throw new DomainTransitionError(
+        "The schedule changed before it could be rescheduled.",
+      );
+    }
 
-  const updatedCount = await db.tradieSchedule.updateMany({
-    data: {
+    let withdrewApproval = false;
+    if (datesChanged && outcome.withdrawsApproval) {
+      const withdrawn = await transactionDb.tradieApproval.updateMany({
+        where: {
+          actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
+          status: TradieApprovalStatus.PENDING,
+          tradieId: existing.tradieId,
+          updationData: { path: ["scheduleId"], equals: existing.id },
+        },
+        data: {
+          rejectionReason: `The booking moved to ${bookingDay(input.scheduledDate)}; the tradie has been asked to confirm the new date.`,
+          status: TradieApprovalStatus.REJECTED,
+        },
+      });
+      withdrewApproval = withdrawn.count > 0;
+    }
+
+    return {
       durationDays,
-      ...(input.milestoneId !== undefined
-        ? { milestoneId: input.milestoneId }
-        : {}),
+      milestoneId:
+        input.milestoneId !== undefined
+          ? input.milestoneId
+          : existing.milestoneId,
+      notice: datesChanged ? outcome.notice : null,
+      previousDurationDays: existing.durationDays,
+      previousScheduledDate: existing.scheduledDate,
+      previousStatus: existing.status,
+      projectId: existing.projectId,
+      projectName: existing.project.name,
+      quotedPrice: existing.quotedPrice,
+      scheduleId: existing.id,
       scheduledDate: input.scheduledDate,
-    },
-    where: {
-      durationDays: existing.durationDays,
-      id: existing.id,
-      scheduledDate: existing.scheduledDate,
-    },
-  });
-  if (updatedCount.count !== 1) {
-    throw new DomainTransitionError(
-      "The schedule changed before it could be rescheduled.",
-    );
-  }
-
-  return {
-    durationDays,
-    projectId: existing.projectId,
-    projectName: existing.project.name,
-    quotedPrice: existing.quotedPrice,
-    scheduleId: existing.id,
-    scheduledDate: input.scheduledDate,
-    status: existing.status,
-    tradieId: existing.tradieId,
-    tradieName: existing.tradie.name,
+      status,
+      tradieId: existing.tradieId,
+      tradieName: existing.tradie.name,
+      withdrewApproval,
+    };
   };
+
+  // The booking and the withdrawn approval commit together, or a booking
+  // waiting on the tradie again would leave an approval for the old date in
+  // the queue for somebody to approve.
+  return "$transaction" in db ? db.$transaction(write) : write(db);
 }
 
 /** Queue deletion; the booking remains until an admin resolves the request. */
