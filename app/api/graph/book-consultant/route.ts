@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { ClientSecretCredential } from "@azure/identity";
 import { fromZonedTime } from "date-fns-tz";
 import { getGraphConfig } from "@/lib/graph/config";
+import { createGraphContext } from "@/lib/graph/client";
+import { DEFAULT_BUSINESS_EMAIL } from "@/lib/graph/mailbox";
+import { generateInPersonConsultationEmail } from "@/lib/graph/Email/in-person-consultation-email";
+import { MAX_CONSULTATION_VENUE_LENGTH } from "@/lib/leads/consultation-venue";
 import { createLead, findLeadById, updateLead } from "@/lib/data/leads";
 import { authorizeLeadAccess } from "@/lib/data/offer-access";
 import { verifyBookConsultationToken } from "@/lib/leads/book-consultation-token";
@@ -98,10 +102,10 @@ async function findConflictingEvent(
   // ambiguity. $filter is undocumented on calendarView, so cancelled and
   // non-blocking events are filtered below rather than in the query.
   let nextUrl: string | undefined =
-    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(senderUpn)}/calendar/calendarView` +
-    `?startDateTime=${encodeURIComponent(windowStart.toISOString())}` +
-    `&endDateTime=${encodeURIComponent(windowEnd.toISOString())}` +
-    `&$select=subject,start,end,isCancelled,showAs&$top=1000`;
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(senderUpn)}/calendar/calendarView`
+    + `?startDateTime=${encodeURIComponent(windowStart.toISOString())}`
+    + `&endDateTime=${encodeURIComponent(windowEnd.toISOString())}`
+    + `&$select=subject,start,end,isCancelled,showAs&$top=1000`;
 
   let pagesFetched = 0;
 
@@ -177,8 +181,8 @@ async function resolveLeadClaim(
 ): Promise<LeadClaim> {
   const rawId = body.id;
   const hasId =
-    typeof rawId === "number" ||
-    (typeof rawId === "string" && rawId.trim().length > 0);
+    typeof rawId === "number"
+    || (typeof rawId === "string" && rawId.trim().length > 0);
   if (!hasId) {
     return { kind: "anonymous" };
   }
@@ -202,12 +206,46 @@ async function resolveLeadClaim(
   return { kind: "unauthorized" };
 }
 
+/**
+ * The MEETING task the Follow-ups tab reads. Every booking gets one, whichever
+ * lead it lands on.
+ *
+ * The Graph event (and, in person, the confirmation email) already exists by
+ * the time this runs, so a failed task must not fail the booking: the client
+ * has their confirmation either way. Log loudly and keep the lead write.
+ */
+async function createMeetingTask(
+  leadId: number,
+  meetingAt: Date,
+  taskNote: string,
+): Promise<void> {
+  try {
+    await createLeadTask(
+      {
+        leadId,
+        type: "MEETING",
+        dueDate: meetingAt,
+        dueTime: toTimeOnly(meetingAt),
+        notes: taskNote,
+      },
+      prisma,
+    );
+  } catch (taskError) {
+    console.error(
+      `Booking saved but the meeting task was not created for lead ${leadId}`,
+      taskError,
+    );
+  }
+}
+
 async function upsertBookingNotes({
   existingLeadId,
   name,
   email,
   notes,
   noteDetail,
+  meetingMode,
+  taskNote,
   /** When the consultation actually is. */
   meetingAt,
 }: {
@@ -216,6 +254,9 @@ async function upsertBookingNotes({
   email: string;
   notes: string;
   noteDetail: string;
+  /** "Online" or "Offline" — the same two values the meeting review modal writes. */
+  meetingMode: "Online" | "Offline";
+  taskNote: string;
   meetingAt: Date;
 }): Promise<number | null> {
   const now = new Date();
@@ -246,31 +287,12 @@ async function upsertBookingNotes({
       // when work is scheduled and leaves anything further on alone.
       meetingDate: meetingAt.toISOString(),
       meetingTime: toTimeOnly(meetingAt),
-      meetingMode: "Online",
+      meetingMode,
       // Only the new entry. Handing back the merged list re-inserted every row
       // the lead already had, once per booking.
       history: [noteEntry],
     });
-    // The Graph event already exists by this point, so a failed task must not
-    // fail the booking: the customer has the invitation either way. Log loudly
-    // and let the lead keep the meetingDate that was just written.
-    try {
-      await createLeadTask(
-        {
-          leadId: existingLead.id,
-          type: "MEETING",
-          dueDate: meetingAt,
-          dueTime: toTimeOnly(meetingAt),
-          notes: "Consultation booked from the website",
-        },
-        prisma,
-      );
-    } catch (taskError) {
-      console.error(
-        "Booking saved but the meeting task was not created",
-        taskError,
-      );
-    }
+    await createMeetingTask(existingLead.id, meetingAt, taskNote);
     return existingLead.id;
   }
 
@@ -288,7 +310,7 @@ async function upsertBookingNotes({
       notes,
       meetingDate: meetingAt.toISOString(),
       meetingTime: toTimeOnly(meetingAt),
-      meetingMode: "Online",
+      meetingMode,
       followupNotes: "",
       urgent: false,
       history: [
@@ -303,31 +325,30 @@ async function upsertBookingNotes({
     { skipWelcomeEmail: true },
   );
 
-  // The Follow-ups tab reads tasks, so a booking that only set meetingDate on
-  // the lead would be invisible there. createLead returns a conflict object
-  // rather than a lead when the email already exists, hence the id check.
-  if (created && typeof created === "object" && "id" in created) {
-    try {
-      await createLeadTask(
-        {
-          leadId: Number(created.id),
-          type: "MEETING",
-          dueDate: meetingAt,
-          dueTime: toTimeOnly(meetingAt),
-          notes: "Consultation booked from the website",
-        },
-        prisma,
-      );
-    } catch (taskError) {
-      console.error("Lead created but the meeting task was not", taskError);
-    }
-    return Number(created.id);
+  // createLead answers with a conflict object rather than a lead when the
+  // email already belongs to one. That lead still gets the MEETING task: the
+  // booking happened, and the task is the only place the office would see it.
+  // Nothing else on that lead is touched — the caller proved only that they
+  // can type its email address, not that they own the record — and the
+  // invitation or confirmation went to that same address regardless.
+  const leadId =
+    created && typeof created === "object" && "id" in created
+      ? Number(created.id)
+      : created && typeof created === "object" && "existingLead" in created
+        ? Number(created.existingLead.id)
+        : null;
+
+  if (leadId === null || !Number.isSafeInteger(leadId)) {
+    console.error(
+      "Booking made but no lead could be resolved for its meeting task",
+    );
+    return null;
   }
 
-  // createLead answers with a conflict object rather than a lead when the
-  // email already belongs to one. The booking still happened, so the intent
-  // records it with no lead id rather than failing.
-  return null;
+  // The Follow-ups tab reads tasks, so a booking that only set meetingDate on
+  // the lead would be invisible there.
+  await createMeetingTask(leadId, meetingAt, taskNote);
+  return leadId;
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
@@ -338,6 +359,25 @@ export async function POST(req: NextRequest): Promise<Response> {
     if (!name || !email || !startDateTime) {
       return NextResponse.json(
         { error: "Missing name, email, or startDateTime" },
+        { status: 400 },
+      );
+    }
+
+    // Strictly `true`: anything else, including a missing field from an older
+    // copy of the page, is the online booking this route has always made.
+    const inPerson = body.inPerson === true;
+    const venue = typeof body.venue === "string" ? body.venue.trim() : "";
+    if (inPerson && !venue) {
+      return NextResponse.json(
+        { error: "Please enter where the in-person meeting will be held." },
+        { status: 400 },
+      );
+    }
+    if (inPerson && venue.length > MAX_CONSULTATION_VENUE_LENGTH) {
+      return NextResponse.json(
+        {
+          error: `The venue must be ${MAX_CONSULTATION_VENUE_LENGTH} characters or fewer.`,
+        },
         { status: 400 },
       );
     }
@@ -486,17 +526,39 @@ export async function POST(req: NextRequest): Promise<Response> {
     // "AEST", it disagreed with every booking made on daylight saving.
     const displayTime = `${formatDisplayTime(start)} - ${formatDisplayTime(endDateTimeObj)} (${sydneyTimeZoneAbbreviation(slotStart)})`;
 
-    const emailHtml = await render(
-      BookConsultantScheduleMeeting({
-        name,
-        formattedDate: displayDate,
-        formattedTime: displayTime,
-      }),
-    );
+    const trimmedNotes = typeof notes === "string" ? notes.trim() : "";
 
-    const attendees = [
-      { emailAddress: { address: email, name }, type: "required" }, // Main Lead
-    ];
+    // In person, the client gets a templated confirmation email with the venue
+    // rather than a Teams invitation. The office calendar still gets the event
+    // — it is what the availability check reads — but without the client on
+    // it, so they are not sent a second, link-less invitation beside the email.
+    const inPersonEmail = inPerson
+      ? generateInPersonConsultationEmail({
+          name,
+          formattedDate: displayDate,
+          formattedTime: displayTime,
+          venue,
+          agenda: trimmedNotes,
+          signatureEmail: process.env.BUSINESS_EMAIL || DEFAULT_BUSINESS_EMAIL,
+        })
+      : null;
+
+    const emailHtml = inPersonEmail
+      ? inPersonEmail.html
+      : await render(
+          BookConsultantScheduleMeeting({
+            name,
+            formattedDate: displayDate,
+            formattedTime: displayTime,
+          }),
+        );
+
+    const attendees: {
+      emailAddress: { address: string; name: string };
+      type: "required" | "optional";
+    }[] = inPerson
+      ? []
+      : [{ emailAddress: { address: email, name }, type: "required" }]; // Main Lead
 
     // Add CC from .env if it exists (Graph API uses 'optional' type for CC)
     const ccEmail = process.env.MAIL_ID_CC;
@@ -508,21 +570,31 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     const event = {
-      subject: `Consultation with ${name} - Royal Constructions`,
+      subject: inPerson
+        ? `In-person consultation with ${name} - Royal Constructions`
+        : `Consultation with ${name} - Royal Constructions`,
       body: {
         contentType: "HTML",
         content: emailHtml,
       },
       start: { dateTime: graphStartStr, timeZone: "Australia/Sydney" },
       end: { dateTime: graphEndStr, timeZone: "Australia/Sydney" },
-      location: { displayName: "Microsoft Teams Meeting" },
       attendees: attendees,
-      isOnlineMeeting: true,
-      onlineMeetingProvider: "teamsForBusiness",
+      ...(inPerson
+        ? { location: { displayName: venue }, isOnlineMeeting: false }
+        : {
+            location: { displayName: "Microsoft Teams Meeting" },
+            isOnlineMeeting: true,
+            onlineMeetingProvider: "teamsForBusiness",
+          }),
     };
 
-    const trimmedNotes = typeof notes === "string" ? notes.trim() : "";
-    const appointmentLabel = `${displayDate} at ${displayTime}`;
+    const appointmentLabel = inPerson
+      ? `${displayDate} at ${displayTime}, in person at ${venue}`
+      : `${displayDate} at ${displayTime}, online (Microsoft Teams)`;
+    const baseTaskNote = inPerson
+      ? `In-person consultation at ${venue}`
+      : "Online consultation (Microsoft Teams) booked from the website";
     const noteDetail =
       trimmedNotes.length > 0
         ? `${trimmedNotes}\n\nAppointment: ${appointmentLabel}`
@@ -557,12 +629,46 @@ export async function POST(req: NextRequest): Promise<Response> {
             throw new Error("Failed to create event");
           }
           const eventData = await response.json();
+
+          // After the event, so a client is never told about a meeting the
+          // calendar refused. A failed send does NOT fail the booking: the slot
+          // is taken and the lead is about to be written, so throwing would
+          // leave the client reading "could not book" about a meeting that
+          // exists. It is reported instead — on the meeting task, where the
+          // office looks, and in the response, so the page can tell the client.
+          let confirmationSent = true;
+          if (inPersonEmail) {
+            try {
+              const mail = await createGraphContext(config);
+              await mail.sendMail({
+                to: email,
+                subject: inPersonEmail.subject,
+                body: inPersonEmail.html,
+                // Comma-separated, per lib/graph/mailbox.ts.
+                cc: (ccEmail ?? "")
+                  .split(",")
+                  .map((address) => address.trim())
+                  .filter(Boolean),
+              });
+            } catch (mailError) {
+              confirmationSent = false;
+              console.error(
+                "In-person booking made but the confirmation email failed",
+                mailError,
+              );
+            }
+          }
+
           const leadId = await upsertBookingNotes({
             existingLeadId: leadClaim.kind === "lead" ? leadClaim.leadId : null,
             name,
             email,
             notes: trimmedNotes,
             noteDetail,
+            meetingMode: inPerson ? "Offline" : "Online",
+            taskNote: confirmationSent
+              ? baseTaskNote
+              : `${baseTaskNote}. The confirmation email to the client FAILED to send — contact them with the venue and time.`,
             // slotStart, not `start`. `start` is the Sydney wall clock carried
             // as UTC, which is what the Graph payload needs and exactly wrong
             // for a stored instant: a 3:00 PM booking was saved as 15:00Z and
@@ -572,6 +678,7 @@ export async function POST(req: NextRequest): Promise<Response> {
             meetingAt: slotStart,
           });
           return {
+            confirmationSent,
             joinUrl: eventData?.onlineMeeting?.joinUrl || null,
             leadId,
           };
@@ -594,6 +701,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       success: true,
       joinUrl: booked.joinUrl,
       alreadyBooked: booked.alreadyBooked,
+      confirmationSent: booked.confirmationSent,
     });
   } catch (error) {
     console.error("Book consultant failed", error);

@@ -109,11 +109,16 @@ test("resubmitting the same booking does not make a second meeting", async () =>
     recordingDb(pendingIntent()).transactionalDb,
     async () => {
       calendarCalls += 1;
-      return { joinUrl: "https://teams.example/1", leadId: 7 };
+      return {
+        confirmationSent: true,
+        joinUrl: "https://teams.example/1",
+        leadId: 7,
+      };
     },
   );
   assert.deepEqual(first, {
     alreadyBooked: false,
+    confirmationSent: true,
     joinUrl: "https://teams.example/1",
     leadId: 7,
   });
@@ -133,13 +138,37 @@ test("resubmitting the same booking does not make a second meeting", async () =>
     }).transactionalDb,
     async () => {
       calendarCalls += 1;
-      return { joinUrl: "https://teams.example/2", leadId: 9 };
+      return {
+        confirmationSent: true,
+        joinUrl: "https://teams.example/2",
+        leadId: 9,
+      };
     },
   );
   assert.equal(second.alreadyBooked, true);
   // The client is handed the meeting they already have, not a second one.
   assert.equal(second.joinUrl, "https://teams.example/1");
   assert.equal(calendarCalls, 1);
+  // That stored result predates confirmationSent. Every booking then was an
+  // online one, confirmed by its Teams invitation, so absent means sent.
+  assert.equal(second.confirmationSent, true);
+});
+
+test("an in-person booking whose confirmation email failed says so", async () => {
+  const booked = await bookConsultation(
+    customerPrincipal(),
+    {
+      email: "client@example.com",
+      name: "Client",
+      startsAt: new Date("2026-10-02T04:00:00.000Z"),
+    },
+    recordingDb(pendingIntent()).transactionalDb,
+    async () => ({ confirmationSent: false, joinUrl: null, leadId: 7 }),
+  );
+  // Reported, not swallowed: the page tells the client, and the meeting task
+  // tells the office, that nobody has the venue yet.
+  assert.equal(booked.confirmationSent, false);
+  assert.equal(booked.alreadyBooked, false);
 });
 
 test("the booking route commits the meeting and the lead together", () => {
