@@ -15,6 +15,11 @@ import {
   bookConsultation,
   consultationBookingKey,
 } from "@/lib/domain/leads/booking";
+import {
+  assertConsultationSlot,
+  DEFAULT_CONSULTATION_MINUTES,
+} from "@/lib/domain/leads/consultation-hours";
+import { isDomainError } from "@/lib/domain/errors";
 import { anonymousPrincipal } from "@/lib/domain/principal";
 import {
   sydneyDateOnly,
@@ -41,7 +46,6 @@ const ANONYMOUS_BOOKING = anonymousPrincipal("public booking form");
 const pad = (n: number) => n.toString().padStart(2, "0");
 const formatToGraphDateTime = (d: Date) =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
-const SLOT_DURATION_MS = 60 * 60 * 1000;
 
 // calendarView's boundary behaviour is not documented, so the window is padded
 // and the overlap decided here. A day of padding catches long and all-day
@@ -382,6 +386,24 @@ export async function POST(req: NextRequest): Promise<Response> {
       );
     }
 
+    // The length the visitor chose, and whether the page could have offered
+    // it at that time. Missing means an hour: a page loaded before the length
+    // could be chosen still books exactly what it says. Checked here, before
+    // the calendar is read, because this route is on the open internet and a
+    // request is only JSON — "nine hours from 5pm" posts as easily as the one
+    // hour at 2pm the page offers.
+    const durationMinutes =
+      body.durationMinutes === undefined
+        ? DEFAULT_CONSULTATION_MINUTES
+        : body.durationMinutes;
+    try {
+      assertConsultationSlot(String(startDateTime), durationMinutes);
+    } catch (slotError) {
+      if (!isDomainError(slotError)) throw slotError;
+      return NextResponse.json({ error: slotError.message }, { status: 400 });
+    }
+    const durationMs = durationMinutes * 60 * 1000;
+
     // Resolved HERE, before anything with an outside effect.
     //
     // This used to sit 37 lines further down, after the Graph event had already
@@ -425,8 +447,8 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     const start = new Date(startDateTime);
 
-    // Calculate end time locally (adds 1 hour, automatically handles day rollovers like 23:30 -> 00:30)
-    const endDateTimeObj = new Date(start.getTime() + 60 * 60 * 1000);
+    // The end, from the chosen length. Opening hours keep it inside the day.
+    const endDateTimeObj = new Date(start.getTime() + durationMs);
 
     const graphStartStr = formatToGraphDateTime(start);
     const graphEndStr = formatToGraphDateTime(endDateTimeObj);
@@ -435,7 +457,9 @@ export async function POST(req: NextRequest): Promise<Response> {
     // the conflict check has to compare the same instant — not the server-local
     // reading of the incoming string.
     const slotStart = fromZonedTime(graphStartStr, BOOKING_TIMEZONE);
-    const slotEnd = new Date(slotStart.getTime() + SLOT_DURATION_MS);
+    // The whole meeting has to be free, not just its first hour: a two-hour
+    // booking at 2pm runs into a 3pm event.
+    const slotEnd = new Date(slotStart.getTime() + durationMs);
 
     // Idempotency key for this exact slot and client, resolved before the
     // calendar is touched. Two submissions of the same form — a double-click,

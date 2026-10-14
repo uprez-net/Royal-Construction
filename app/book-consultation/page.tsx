@@ -28,6 +28,14 @@ import {
 } from "@/lib/leads/consultation-venue";
 import { sydneyTimeZoneAbbreviation } from "@/lib/dates/sydney";
 import {
+  CONSULTATION_DURATIONS_MINUTES,
+  DEFAULT_CONSULTATION_MINUTES,
+  consultationDurationLabel,
+  consultationHours,
+  consultationStartTimes,
+  type ConsultationDurationMinutes,
+} from "@/lib/domain/leads/consultation-hours";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -51,7 +59,6 @@ const NOTES_HELPER =
 // key and slot instant here is therefore derived in Sydney so the UI cannot
 // drift from the server when a visitor's browser is in another timezone.
 const BOOKING_TIMEZONE = "Australia/Sydney";
-const SLOT_DURATION_MS = 60 * 60 * 1000;
 
 type DayBusy = { intervals: { start: Date; end: Date }[]; allDay: boolean };
 
@@ -67,22 +74,15 @@ function parseEventInstant(dateTime: string): Date {
   return Number.isNaN(instant.getTime()) ? new Date(NaN) : instant;
 }
 
-const generateTimeSlots = (date: Date | null) => {
-  if (!date) return [];
-  const day = date.getDay();
-  const isWeekend = day === 0 || day === 6;
-  const slots: string[] = [];
-  if (isWeekend) {
-    for (let hour = 9; hour < 14; hour++) {
-      slots.push(`${hour.toString().padStart(2, "0")}:00`);
-    }
-  } else {
-    for (let hour = 14; hour < 18; hour++) {
-      slots.push(`${hour.toString().padStart(2, "0")}:00`);
-    }
-  }
-  return slots;
-};
+// The hours and the lengths come from lib/domain/leads/consultation-hours.ts,
+// which the booking route checks too: the page offers exactly what the route
+// will take, and a request for anything else is refused there.
+const generateTimeSlots = (date: Date | null, minutes: number) =>
+  date ? consultationStartTimes(date.getDay(), minutes) : [];
+
+/** "2 PM" style, from a whole-hour count. */
+const formatHour = (hour: number) =>
+  `${hour % 12 || 12}:00 ${hour >= 12 ? "PM" : "AM"}`;
 
 function BookingContent() {
   const searchParams = useSearchParams();
@@ -102,6 +102,8 @@ function BookingContent() {
   const [confirmationSent, setConfirmationSent] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [durationMinutes, setDurationMinutes] =
+    useState<ConsultationDurationMinutes>(DEFAULT_CONSULTATION_MINUTES);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [booked, setBooked] = useState<boolean>(false);
@@ -111,7 +113,7 @@ function BookingContent() {
   // busy map — that would render every slot, including taken ones, as free.
   const [calendarError, setCalendarError] = useState<string | null>(null);
 
-  const timeSlots = generateTimeSlots(selectedDate);
+  const timeSlots = generateTimeSlots(selectedDate, durationMinutes);
 
   useEffect(() => {
     async function fetchCalendar() {
@@ -206,6 +208,7 @@ function BookingContent() {
           name: trimmedName,
           email: trimmedEmail,
           startDateTime,
+          durationMinutes,
           notes: notes.trim(),
           ...(inPerson ? { inPerson: true, venue: trimmedVenue } : {}),
         }),
@@ -247,9 +250,15 @@ function BookingContent() {
       )
     : "AEST";
 
-  const isSlotBusy = (date: Date, time: string) => {
+  // The whole meeting has to be free, not just its first hour: a two-hour
+  // booking at 2pm runs into a 3pm event.
+  const isSlotBusy = (
+    date: Date,
+    time: string,
+    minutes: number = durationMinutes,
+  ) => {
     const slotStart = slotInstant(date, time);
-    const slotEnd = new Date(slotStart.getTime() + SLOT_DURATION_MS);
+    const slotEnd = new Date(slotStart.getTime() + minutes * 60 * 1000);
     const dateKey = formatInTimeZone(slotStart, BOOKING_TIMEZONE, "yyyy-MM-dd");
     const day = busySlotsMap[dateKey];
     if (!day) return false;
@@ -260,7 +269,7 @@ function BookingContent() {
   };
 
   const isDateFullyBooked = (date: Date) => {
-    const expectedSlots = generateTimeSlots(date);
+    const expectedSlots = generateTimeSlots(date, durationMinutes);
     if (expectedSlots.length === 0) return false;
     return expectedSlots.every((slot) => isSlotBusy(date, slot));
   };
@@ -284,6 +293,33 @@ function BookingContent() {
     const ampm = h >= 12 ? "PM" : "AM";
     const hour12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
     return `${hour12}:00 ${ampm}`;
+  };
+
+  /** "2:00 PM – 3:30 PM". */
+  const formatTimeRange = (time: string, minutes: number) => {
+    const [h] = time.split(":").map(Number);
+    const end = h * 60 + minutes;
+    const endHour = Math.floor(end / 60);
+    const endMinutes = (end % 60).toString().padStart(2, "0");
+    const endLabel = `${endHour % 12 || 12}:${endMinutes} ${endHour >= 12 ? "PM" : "AM"}`;
+    return `${formatTimeDisplay(time)} – ${endLabel}`;
+  };
+
+  /**
+   * Picking a longer meeting can leave the chosen start with no room before
+   * closing, or running into a booked hour. Clear it then, rather than leave a
+   * slot selected that the list no longer offers.
+   */
+  const chooseDuration = (minutes: ConsultationDurationMinutes) => {
+    setDurationMinutes(minutes);
+    if (
+      selectedDate
+      && selectedTime
+      && (!generateTimeSlots(selectedDate, minutes).includes(selectedTime)
+        || isSlotBusy(selectedDate, selectedTime, minutes))
+    ) {
+      setSelectedTime(null);
+    }
   };
 
   const displayName = clientName.trim() || "Client";
@@ -572,94 +608,140 @@ function BookingContent() {
                   time slot.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 gap-8 md:grid-cols-2">
-                {/* Left Column: Date Picker */}
-                <div className="flex justify-center md:border-r md:border-border md:pr-8">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate ?? undefined}
-                    onSelect={(date) => {
-                      setSelectedDate(date ?? null);
-                      setSelectedTime(null);
-                    }}
-                    disabled={isDateDisabled}
-                    className="rounded-md border border-border p-3"
-                    captionLayout="dropdown"
-                  />
+              <CardContent className="space-y-6">
+                {/* Chosen before the day and the time, because it decides
+                    both: a longer meeting has fewer starts that finish by
+                    closing, and a day with one free hour has nothing for a
+                    two-hour one. */}
+                <div
+                  role="radiogroup"
+                  aria-label="Meeting length"
+                  className="space-y-2"
+                >
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Meeting Length
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {CONSULTATION_DURATIONS_MINUTES.map((minutes) => {
+                      const isSelected = durationMinutes === minutes;
+                      return (
+                        <button
+                          key={minutes}
+                          type="button"
+                          role="radio"
+                          aria-checked={isSelected}
+                          onClick={() => chooseDuration(minutes)}
+                          className={cn(
+                            "rounded-md border px-3.5 py-2 font-condensed text-sm font-medium transition-colors",
+                            isSelected
+                              ? "border-royal-gold-ink bg-royal-gold-ink text-card"
+                              : "border-border bg-card text-foreground hover:border-royal-gold",
+                          )}
+                        >
+                          {consultationDurationLabel(minutes)}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                {/* Right Column: Time Slots */}
-                <div>
-                  {selectedDate ? (
-                    <>
-                      <div className="mb-2 flex items-center gap-2">
-                        <Clock className="h-3.5 w-3.5 text-royal-gold" />
-                        <span className="text-xs font-medium text-muted-foreground">
-                          {formatDateLong(selectedDate)}
-                        </span>
-                      </div>
-                      <div className="mb-4 rounded-md border border-border bg-royal-gold-light px-2.5 py-1.5">
-                        <p className="text-[11px] font-medium text-foreground">
-                          {selectedDate.getDay() === 0
-                          || selectedDate.getDay() === 6
-                            ? "Weekend Hours: 9:00 AM - 2:00 PM"
-                            : "Weekday Hours: 2:00 PM - 6:00 PM"}{" "}
-                          ({selectedZoneLabel})
-                        </p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2.5">
-                        {timeSlots.map((time) => {
-                          const busy = isSlotBusy(selectedDate, time);
-                          const isSelected = selectedTime === time;
-                          return (
-                            <button
-                              key={time}
-                              disabled={busy}
-                              onClick={() => setSelectedTime(time)}
-                              className={cn(
-                                "flex flex-col items-center justify-center rounded-md border px-2 py-3 transition-colors",
-                                busy
-                                  ? "cursor-not-allowed border-border bg-muted opacity-50"
-                                  : isSelected
-                                    ? "border-royal-gold-ink bg-royal-gold-ink cursor-pointer"
-                                    : "border-border bg-card cursor-pointer hover:border-royal-gold",
-                              )}
-                            >
-                              <span
+                <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                  {/* Left Column: Date Picker */}
+                  <div className="flex justify-center md:border-r md:border-border md:pr-8">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate ?? undefined}
+                      onSelect={(date) => {
+                        setSelectedDate(date ?? null);
+                        setSelectedTime(null);
+                      }}
+                      disabled={isDateDisabled}
+                      className="rounded-md border border-border p-3"
+                      captionLayout="dropdown"
+                    />
+                  </div>
+
+                  {/* Right Column: Time Slots */}
+                  <div>
+                    {selectedDate ? (
+                      <>
+                        <div className="mb-2 flex items-center gap-2">
+                          <Clock className="h-3.5 w-3.5 text-royal-gold" />
+                          <span className="text-xs font-medium text-muted-foreground">
+                            {formatDateLong(selectedDate)}
+                          </span>
+                        </div>
+                        <div className="mb-4 rounded-md border border-border bg-royal-gold-light px-2.5 py-1.5">
+                          <p className="text-[11px] font-medium text-foreground">
+                            {selectedDate.getDay() === 0
+                            || selectedDate.getDay() === 6
+                              ? "Weekend Hours"
+                              : "Weekday Hours"}
+                            :{" "}
+                            {formatHour(
+                              consultationHours(selectedDate.getDay()).open,
+                            )}{" "}
+                            -{" "}
+                            {formatHour(
+                              consultationHours(selectedDate.getDay()).close,
+                            )}{" "}
+                            ({selectedZoneLabel})
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2.5">
+                          {timeSlots.map((time) => {
+                            const busy = isSlotBusy(selectedDate, time);
+                            const isSelected = selectedTime === time;
+                            return (
+                              <button
+                                key={time}
+                                disabled={busy}
+                                onClick={() => setSelectedTime(time)}
                                 className={cn(
-                                  "font-condensed text-sm font-medium",
+                                  "flex flex-col items-center justify-center rounded-md border px-2 py-3 transition-colors",
                                   busy
-                                    ? "text-muted-foreground"
+                                    ? "cursor-not-allowed border-border bg-muted opacity-50"
                                     : isSelected
-                                      ? "text-card"
-                                      : "text-foreground",
+                                      ? "border-royal-gold-ink bg-royal-gold-ink cursor-pointer"
+                                      : "border-border bg-card cursor-pointer hover:border-royal-gold",
                                 )}
                               >
-                                {formatTimeDisplay(time)}
-                              </span>
-                              {busy && (
-                                <span className="mt-1 text-[9px] font-semibold uppercase text-destructive">
-                                  Booked
+                                <span
+                                  className={cn(
+                                    "font-condensed text-sm font-medium",
+                                    busy
+                                      ? "text-muted-foreground"
+                                      : isSelected
+                                        ? "text-card"
+                                        : "text-foreground",
+                                  )}
+                                >
+                                  {formatTimeDisplay(time)}
                                 </span>
-                              )}
-                              {isSelected && !busy && (
-                                <span className="mt-1 text-[9px] font-semibold uppercase text-card">
-                                  Selected
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
+                                {busy && (
+                                  <span className="mt-1 text-[9px] font-semibold uppercase text-destructive">
+                                    Booked
+                                  </span>
+                                )}
+                                {isSelected && !busy && (
+                                  <span className="mt-1 text-[9px] font-semibold uppercase text-card">
+                                    Selected
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center px-5 py-10 text-center text-muted-foreground">
+                        <CalendarIcon className="mb-4 h-10 w-10 opacity-40" />
+                        <p className="text-[13px]">
+                          Please select a date first to view available times.
+                        </p>
                       </div>
-                    </>
-                  ) : (
-                    <div className="flex h-full flex-col items-center justify-center px-5 py-10 text-center text-muted-foreground">
-                      <CalendarIcon className="mb-4 h-10 w-10 opacity-40" />
-                      <p className="text-[13px]">
-                        Please select a date first to view available times.
-                      </p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -681,9 +763,14 @@ function BookingContent() {
                         Consultation Summary
                       </h4>
                       <p className="mt-0.5 text-xs font-light text-muted-foreground">
+                        {/* "2-hour", as the old "1-hour" read. */}
+                        {consultationDurationLabel(durationMinutes).replace(
+                          / hours?$/,
+                          "-hour",
+                        )}{" "}
                         {inPerson
-                          ? "1-hour in-person meeting"
-                          : "1-hour Microsoft Teams meeting"}
+                          ? "in-person meeting"
+                          : "Microsoft Teams meeting"}
                       </p>
                     </div>
                   </div>
@@ -702,7 +789,8 @@ function BookingContent() {
                         Time
                       </div>
                       <div className="text-sm font-medium text-foreground">
-                        {formatTimeDisplay(selectedTime)} ({selectedZoneLabel})
+                        {formatTimeRange(selectedTime, durationMinutes)} (
+                        {selectedZoneLabel})
                       </div>
                     </div>
                     {inPerson && (

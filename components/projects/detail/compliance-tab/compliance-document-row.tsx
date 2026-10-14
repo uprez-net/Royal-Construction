@@ -9,7 +9,6 @@ import {
   ListChecks,
   Loader2,
   RotateCcw,
-  Send,
   Upload,
   X,
 } from "lucide-react";
@@ -17,6 +16,7 @@ import { useRef, useState, type ReactNode } from "react";
 
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Collapsible,
   CollapsibleContent,
@@ -76,8 +76,16 @@ type ComplianceDocumentRowProps = {
   onReject?: () => void;
   /** The current file has appeared on an outbound certifier message. */
   sentForReview?: boolean;
-  /** Sends this row now, without waiting for the rest of the checklist. */
-  onSendForReview?: () => void;
+  /**
+   * Whether this row is ticked for the next early send to the certifier.
+   *
+   * The checkbox shows only when `onSelectedChange` is passed, which the
+   * checklist does for a row that can go (`canSelectForEarlyReview`). The send
+   * itself lives above the list, because it carries every ticked row in one
+   * email; a send button on each row was one email per document.
+   */
+  selected?: boolean;
+  onSelectedChange?: (selected: boolean) => void;
   /**
    * Marks the line as not applying to this job, or puts it back.
    *
@@ -281,7 +289,8 @@ export function ComplianceDocumentRow({
   onApprove,
   onReject,
   sentForReview = false,
-  onSendForReview,
+  selected = false,
+  onSelectedChange,
   onSetNotRequired,
   consultantAction,
   mappedFrom,
@@ -326,10 +335,22 @@ export function ComplianceDocumentRow({
 
   return (
     <li className="flex flex-wrap items-start gap-x-4 gap-y-2 border-b border-border/70 py-3 last:border-b-0">
-      <FileText
-        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-        aria-hidden="true"
-      />
+      {/* In the icon's place, so a ticked row and an unticked one line up
+          with the rows around them that have nothing to tick. */}
+      {onSelectedChange ? (
+        <Checkbox
+          className="mt-0.5"
+          checked={selected}
+          disabled={isBusy}
+          onCheckedChange={(checked) => onSelectedChange(checked === true)}
+          aria-label={`Include ${label} in the next send to the certifier`}
+        />
+      ) : (
+        <FileText
+          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+      )}
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -517,23 +538,6 @@ export function ComplianceDocumentRow({
               {files.length > 0 ? "Replace" : "Upload"}
               <span className="sr-only"> {label}</span>
             </Button>
-            {onSendForReview && files.length > 0 ? (
-              <Button
-                type="button"
-                size="sm"
-                disabled={isBusy}
-                onClick={onSendForReview}
-              >
-                {isBusy ? (
-                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Send className="size-4" aria-hidden="true" />
-                )}
-                Send {files.length} document{files.length === 1 ? "" : "s"} to
-                certifier
-                <span className="sr-only"> for {label}</span>
-              </Button>
-            ) : null}
           </>
         ) : null}
 
