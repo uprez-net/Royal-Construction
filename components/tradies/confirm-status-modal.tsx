@@ -297,8 +297,8 @@ export function ConfirmStatusModal({
             {statusOptions.map((option) => {
               const selected = status === option.value;
               const isLoading =
-                activeLoading === option.value ||
-                (pendingFromStore && isPending);
+                activeLoading === option.value
+                || (pendingFromStore && isPending);
 
               if (
                 !canTransitionSchedule(
@@ -312,8 +312,8 @@ export function ConfirmStatusModal({
               // queue. The status modal can record availability and final
               // reconfirmation, but cannot bypass that approval boundary.
               if (
-                schedule.status === "AWAITING_ADMIN_APPROVAL" &&
-                option.value === "CONFIRMED"
+                schedule.status === "AWAITING_ADMIN_APPROVAL"
+                && option.value === "CONFIRMED"
               ) {
                 return null;
               }
