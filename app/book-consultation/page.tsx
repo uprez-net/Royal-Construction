@@ -8,6 +8,7 @@ import {
   Clock,
   Calendar as CalendarIcon,
   Video,
+  MapPin,
   ArrowRight,
   Loader2,
 } from "lucide-react";
@@ -20,6 +21,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Calendar } from "@/components/ui/calendar";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DEFAULT_CONSULTATION_VENUE,
+  MAX_CONSULTATION_VENUE_LENGTH,
+} from "@/lib/leads/consultation-venue";
 import { sydneyTimeZoneAbbreviation } from "@/lib/dates/sydney";
 import {
   Card,
@@ -89,6 +95,11 @@ function BookingContent() {
   const [clientName, setClientName] = useState(initialName);
   const [clientEmail, setClientEmail] = useState(initialEmail);
   const [notes, setNotes] = useState("");
+  const [inPerson, setInPerson] = useState(false);
+  const [venue, setVenue] = useState(DEFAULT_CONSULTATION_VENUE);
+  // False when the booking went through but the in-person confirmation email
+  // did not; the client has to be told, or they never learn the venue.
+  const [confirmationSent, setConfirmationSent] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -135,8 +146,8 @@ function BookingContent() {
               const startInstant = parseEventInstant(startStr);
               const endInstant = parseEventInstant(endStr);
               if (
-                Number.isNaN(startInstant.getTime()) ||
-                Number.isNaN(endInstant.getTime())
+                Number.isNaN(startInstant.getTime())
+                || Number.isNaN(endInstant.getTime())
               )
                 return;
               const key = formatInTimeZone(
@@ -174,6 +185,11 @@ function BookingContent() {
       setError("Please select a date and time slot.");
       return;
     }
+    const trimmedVenue = venue.trim();
+    if (inPerson && !trimmedVenue) {
+      setError("Please enter where the in-person meeting will be held.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     const year = selectedDate.getFullYear();
@@ -191,10 +207,12 @@ function BookingContent() {
           email: trimmedEmail,
           startDateTime,
           notes: notes.trim(),
+          ...(inPerson ? { inPerson: true, venue: trimmedVenue } : {}),
         }),
       });
       const data = await res.json();
       if (data.success) {
+        setConfirmationSent(data.confirmationSent !== false);
         setBooked(true);
       } else {
         setError(data.error || "Failed to book consultation.");
@@ -287,12 +305,29 @@ function BookingContent() {
             </p>
             <div className="mt-8 rounded-md border border-border bg-muted px-5 py-4">
               <div className="flex items-center justify-center gap-2.5">
-                <Video className="h-4 w-4 text-royal-gold" />
+                {inPerson ? (
+                  <MapPin className="h-4 w-4 shrink-0 text-royal-gold" />
+                ) : (
+                  <Video className="h-4 w-4 shrink-0 text-royal-gold" />
+                )}
                 <span className="text-[13px] text-muted-foreground">
-                  An invite has also been sent to {clientEmail}
+                  {!inPerson
+                    ? `An invite has also been sent to ${clientEmail}`
+                    : confirmationSent
+                      ? `A confirmation with the venue details has been sent to ${clientEmail}`
+                      : `In person at ${venue.trim()}`}
                 </span>
               </div>
             </div>
+            {!confirmationSent && (
+              <Alert className="mt-4 text-left">
+                <AlertDescription>
+                  Your meeting is booked, but we could not email your
+                  confirmation. Our team will be in touch, or call us on 1300
+                  832 355.
+                </AlertDescription>
+              </Alert>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -451,6 +486,10 @@ function BookingContent() {
                   >
                     Notes
                   </Label>
+                  {/* The AI rewrite calls /api/ai, which needs a signed-in
+                      session. A TeammateName means a staff member opened this
+                      from the app; a client on the public link would only ever
+                      see the button fail. */}
                   <Textarea
                     id="booking-notes"
                     name="notes"
@@ -458,9 +497,64 @@ function BookingContent() {
                     onChange={(event) => setNotes(event.target.value)}
                     placeholder="Example sample notes: I am looking at a 550 square meter block. I want a 2 bedroom, 2 toilet main build..."
                     rows={5}
-                    className="min-h-30 resize-y"
+                    aiRewrite={Boolean(TeammateName)}
+                    className={TeammateName ? undefined : "min-h-30 resize-y"}
+                    textareaClassName={
+                      TeammateName ? "min-h-30 resize-y" : undefined
+                    }
                   />
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* ═══ MEETING TYPE ═══ */}
+            <Card className="border-border shadow-sm">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-royal-gold" />
+                  <CardTitle className="font-condensed text-[17px] font-medium uppercase tracking-wide">
+                    Meeting Type
+                  </CardTitle>
+                </div>
+                <CardDescription className="text-[13px] font-light">
+                  Meetings are held online over Microsoft Teams unless you
+                  choose to meet in person.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2.5">
+                  <Checkbox
+                    id="booking-in-person"
+                    checked={inPerson}
+                    onCheckedChange={(checked) => setInPerson(checked === true)}
+                  />
+                  <Label
+                    htmlFor="booking-in-person"
+                    className="cursor-pointer text-sm font-medium text-foreground"
+                  >
+                    In person
+                  </Label>
+                </div>
+                {inPerson && (
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="booking-venue"
+                      className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                      Venue
+                    </Label>
+                    <Input
+                      id="booking-venue"
+                      name="venue"
+                      autoComplete="street-address"
+                      type="text"
+                      value={venue}
+                      maxLength={MAX_CONSULTATION_VENUE_LENGTH}
+                      onChange={(event) => setVenue(event.target.value)}
+                      placeholder={DEFAULT_CONSULTATION_VENUE}
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -506,8 +600,8 @@ function BookingContent() {
                       </div>
                       <div className="mb-4 rounded-md border border-border bg-royal-gold-light px-2.5 py-1.5">
                         <p className="text-[11px] font-medium text-foreground">
-                          {selectedDate.getDay() === 0 ||
-                          selectedDate.getDay() === 6
+                          {selectedDate.getDay() === 0
+                          || selectedDate.getDay() === 6
                             ? "Weekend Hours: 9:00 AM - 2:00 PM"
                             : "Weekday Hours: 2:00 PM - 6:00 PM"}{" "}
                           ({selectedZoneLabel})
@@ -576,14 +670,20 @@ function BookingContent() {
                 <CardContent className="pt-6">
                   <div className="mb-5 flex items-center gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-royal-gold-light">
-                      <Video className="h-5 w-5 text-royal-gold" />
+                      {inPerson ? (
+                        <MapPin className="h-5 w-5 text-royal-gold" />
+                      ) : (
+                        <Video className="h-5 w-5 text-royal-gold" />
+                      )}
                     </div>
                     <div className="flex-1">
                       <h4 className="font-condensed text-[17px] font-medium uppercase text-foreground">
                         Consultation Summary
                       </h4>
                       <p className="mt-0.5 text-xs font-light text-muted-foreground">
-                        1-hour Microsoft Teams meeting
+                        {inPerson
+                          ? "1-hour in-person meeting"
+                          : "1-hour Microsoft Teams meeting"}
                       </p>
                     </div>
                   </div>
@@ -605,6 +705,16 @@ function BookingContent() {
                         {formatTimeDisplay(selectedTime)} ({selectedZoneLabel})
                       </div>
                     </div>
+                    {inPerson && (
+                      <div className="col-span-2 rounded-md border border-border bg-muted px-4 py-3.5">
+                        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Venue
+                        </div>
+                        <div className="text-sm font-medium break-words text-foreground">
+                          {venue.trim() || "Enter a venue above"}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {error && (
