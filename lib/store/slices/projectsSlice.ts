@@ -451,6 +451,8 @@ export const complianceScope = {
   signedCopies: "signed-copies" as ComplianceScope,
   /** The submission that closes collection. */
   review: "review" as ComplianceScope,
+  /** Ticked checklist rows going over early, as one email. */
+  earlyReview: "early-review" as ComplianceScope,
   /** One message on the thread. */
   reply: "reply" as ComplianceScope,
   /** A plain re-read. Writes nothing, so nothing should block on it. */
@@ -679,26 +681,50 @@ export const resolveComplianceDocument = createAsyncThunk<
   },
 );
 
-/** Sends one checklist item without waiting for the rest of the pack. */
-export const sendComplianceDocumentForReview = createAsyncThunk<
-  { projectId: string; engagement: CertifierEngagementDetail | null },
-  { projectId: string; documentId: string },
+/**
+ * Sends the ticked checklist rows to the certifier in one email, without
+ * waiting for the rest of the pack.
+ *
+ * Returns how many went and how many the certifier already had, so the tab can
+ * say which — "sent" for a set that was already on the thread would tell the
+ * office an email went out when none did.
+ */
+export const sendComplianceDocumentsForReview = createAsyncThunk<
+  {
+    projectId: string;
+    engagement: CertifierEngagementDetail | null;
+    sentCount: number;
+    alreadySentCount: number;
+  },
+  { projectId: string; documentIds: string[] },
   { rejectValue: string }
 >(
-  "projects/sendComplianceDocumentForReview",
-  async ({ projectId, documentId }, thunkApi) => {
+  "projects/sendComplianceDocumentsForReview",
+  async ({ projectId, documentIds }, thunkApi) => {
+    const fallback = "Unable to send the documents for verification";
     try {
-      return await replaceEngagement(
-        projectId,
-        `/documents/${documentId}/review`,
-        { method: "POST" },
-        "Unable to send the document for verification",
+      const sent = await fetchJson<{
+        sentCount: number;
+        alreadySentCount: number;
+      }>(
+        `/api/projects/${projectId}/compliance/early-review`,
+        jsonPost({ documentIds }),
+        fallback,
       );
+      const refreshed = await fetchJson<CertifierEngagementDetail | null>(
+        `/api/projects/${projectId}/compliance`,
+        { method: "GET" },
+        fallback,
+      );
+      return {
+        projectId,
+        engagement: reviveComplianceEngagementDates(refreshed.data),
+        sentCount: sent.data.sentCount,
+        alreadySentCount: sent.data.alreadySentCount,
+      };
     } catch (error) {
       return thunkApi.rejectWithValue(
-        error instanceof Error
-          ? error.message
-          : "Unable to send the document for verification",
+        error instanceof Error ? error.message : fallback,
       );
     }
   },
@@ -1306,11 +1332,24 @@ type ComplianceResult = {
  * accepting `never` so the table can hold nine differently-argued thunks — the
  * reducer only ever calls it with the argument that thunk was dispatched with.
  */
-function complianceOperation<Arg extends { projectId: string }>(
-  thunk: AsyncThunk<ComplianceResult, Arg, { rejectValue: string }>,
+function complianceOperation<
+  Arg extends { projectId: string },
+  Result extends ComplianceResult = ComplianceResult,
+>(
+  thunk: AsyncThunk<Result, Arg, { rejectValue: string }>,
   scope: (arg: Arg) => ComplianceScope,
 ) {
-  return { thunk, scope: scope as (arg: never) => ComplianceScope };
+  // A thunk may answer with more than the engagement — the early send also
+  // says how many documents went — but the table only ever reads the
+  // engagement, which every one of them carries.
+  return {
+    thunk: thunk as unknown as AsyncThunk<
+      ComplianceResult,
+      Arg,
+      { rejectValue: string }
+    >,
+    scope: scope as (arg: never) => ComplianceScope,
+  };
 }
 
 const complianceOperations = [
@@ -1323,8 +1362,8 @@ const complianceOperations = [
   complianceOperation(sendCertifierReply, () => complianceScope.reply),
   complianceOperation(resolveComplianceDocument, complianceScope.document),
   complianceOperation(
-    sendComplianceDocumentForReview,
-    complianceScope.document,
+    sendComplianceDocumentsForReview,
+    () => complianceScope.earlyReview,
   ),
   complianceOperation(
     setComplianceDocumentNotRequired,

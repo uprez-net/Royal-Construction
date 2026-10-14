@@ -27,6 +27,19 @@ export type ComplianceDocumentParam = z.infer<
   typeof complianceDocumentParamSchema
 >;
 
+/**
+ * The checklist rows one early review send carries. Bounded because it is a
+ * list of ids from the browser; a checklist is a few dozen lines at most.
+ */
+export const earlyReviewSendSchema = z.object({
+  documentIds: z
+    .array(z.string().trim().min(1, "Document ID is required"))
+    .min(1, "Select at least one checklist document to send.")
+    .max(100),
+});
+
+export type EarlyReviewSendInput = z.infer<typeof earlyReviewSendSchema>;
+
 // ============================================================================
 // Engagement
 // ============================================================================
@@ -192,8 +205,8 @@ export const developerDecisionSchema = z
   })
   .refine(
     (input) =>
-      input.decision !== ComplianceApprovalDecision.REJECTED ||
-      Boolean(input.reason?.trim()),
+      input.decision !== ComplianceApprovalDecision.REJECTED
+      || Boolean(input.reason?.trim()),
     {
       message:
         "Say why they rejected it — whoever produced the document is sent this word for word.",
@@ -319,9 +332,9 @@ const isoDateSchema = z
     if (dateOnly) {
       const [, year, month, day] = dateOnly;
       const rollsForward =
-        parsed.getUTCFullYear() !== Number(year) ||
-        parsed.getUTCMonth() + 1 !== Number(month) ||
-        parsed.getUTCDate() !== Number(day);
+        parsed.getUTCFullYear() !== Number(year)
+        || parsed.getUTCMonth() + 1 !== Number(month)
+        || parsed.getUTCDate() !== Number(day);
       if (rollsForward) {
         ctx.addIssue({
           code: "custom",

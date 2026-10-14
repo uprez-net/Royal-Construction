@@ -1,83 +1,121 @@
 import { LOGO_EMAIL, RC_COLORS, RC_URLS } from "@/lib/graph/Email/email-theme";
+import type { RescheduleNotice } from "@/lib/domain/tradies/reschedule-rules";
 import { TradieScheduleListItem } from "@/types/project";
 
-export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
-  subject: string;
-  html: string;
-} {
-  const formattedDate = new Date(input.scheduledDate).toLocaleDateString(
-    "en-AU",
-    {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    },
+// Every email a tradie gets about a booking, on one layout.
+//
+// They used to be one branded template (the outreach) and then whatever each
+// sender wrote: the reminder modal sent a plain-text body through a mailbox
+// that sends everything as HTML, so its line breaks collapsed and the tradie
+// read one run-on paragraph. Each message below differs only in its words and
+// rows; the frame, the details table, the site manager panel and the footer
+// are `renderTradieEmail`'s.
+
+/** Escape a value for interpolation into the email HTML. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** "Tuesday, 20 October 2026". */
+function longDate(date: string): string {
+  return new Date(date).toLocaleDateString("en-AU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function durationLabel(days: number): string {
+  return `${days} day${days > 1 ? "s" : ""}`;
+}
+
+const paragraph = (html: string, last = false) =>
+  `<p style="margin:${last ? "0" : "0 0 16px"};color:${RC_COLORS.text};font-size:16px;line-height:26px;">${html}</p>`;
+
+type DetailRow = {
+  readonly label: string;
+  /** Already-escaped HTML. */
+  readonly value: string;
+};
+
+type SiteManager = TradieScheduleListItem["siteManager"];
+
+/**
+ * A site manager worth printing. The project screens fill the gaps with
+ * "Unassigned" and empty strings, and a panel headed "Site Manager" reading
+ * "Unassigned" tells the tradie nothing they can act on.
+ */
+function hasSiteManagerContact(siteManager: SiteManager): boolean {
+  return Boolean(
+    siteManager.name.trim()
+    && siteManager.name !== "Unassigned"
+    && (siteManager.email.trim() || siteManager.phone.trim()),
   );
+}
 
-  const subject = input.requiresQuote
-    ? `Request for Quotation – ${input.projectName} | ${input.tradeType}`
-    : `Availability Confirmation Required – ${input.projectName}`;
+function renderTradieEmail(input: {
+  readonly subject: string;
+  readonly heading: string;
+  /** Already-escaped HTML paragraphs. */
+  readonly intro: string;
+  readonly rows: readonly DetailRow[];
+  /** Already-escaped HTML. */
+  readonly action: string;
+  readonly siteManager: SiteManager;
+  /** Already-escaped HTML. */
+  readonly closing: string;
+}): string {
+  const rows = input.rows
+    .map(
+      (row, index) => `
+            <tr>
+            <td style="padding:14px 20px;color:${RC_COLORS.muted};${index === 0 ? "width:220px;" : ""}border-top:1px solid ${RC_COLORS.border};">
+            ${row.label}
+            </td>
+            <td style="padding:14px 20px;color:${RC_COLORS.text};border-top:1px solid ${RC_COLORS.border};">
+            ${row.value}
+            </td>
+            </tr>`,
+    )
+    .join("\n");
 
-  const intro = input.requiresQuote
+  const siteManager = hasSiteManagerContact(input.siteManager)
     ? `
-      <p style="margin:0 0 16px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
-        Dear ${input.tradieName},
-      </p>
+            <div
+            style="
+            margin:36px 0;
+            padding:22px;
+            background:${RC_COLORS.card};
+            border-left:4px solid ${RC_COLORS.gold};">
 
-      <p style="margin:0 0 16px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
-        Royal Constructions is inviting you to provide a quotation for an upcoming project.
-        Based on your trade expertise, we would like you to review the project information
-        and submit your pricing for the requested scope of works, together with confirmation
-        that you can attend on the scheduled date.
-      </p>
+            <p style="margin:0 0 12px;color:${RC_COLORS.text};font-weight:bold;">
+            Site Manager
+            </p>
 
-      <p style="margin:0;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
-        The project documentation, including the council-approved architectural plans,
-        specifications and milestone information, will be attached to this email for your review.
-      </p>
-    `
-    : `
-      <p style="margin:0 0 16px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
-        Dear ${input.tradieName},
-      </p>
+            <p style="margin:0;color:${RC_COLORS.text};line-height:26px;">
+            <strong>${escapeHtml(input.siteManager.name)}</strong><br>
+            ${escapeHtml(input.siteManager.email)}<br>
+            ${escapeHtml(input.siteManager.phone)}
+            </p>
 
-      <p style="margin:0 0 16px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
-        We have scheduled you for an upcoming stage of works on one of our active
-        construction projects. Please review the schedule details below and confirm
-        your availability at your earliest convenience.
-      </p>
+            </div>`
+    : "";
 
-      <p style="margin:0;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
-        Prompt confirmation helps us coordinate trades efficiently and maintain
-        construction timelines across the project.
-      </p>
-    `;
-
-  const actionText = input.requiresQuote
-    ? `
-      Please review the attached documentation and submit your quotation based on
-      the requested scope of works. Your quotation should include labour,
-      materials (where applicable), exclusions and any assumptions relevant
-      to your pricing. Please also confirm your availability for the scheduled date.
-    `
-    : `
-      Please confirm whether you are available to complete these works on the
-      scheduled date. If you are unavailable, notify the site manager as soon
-      as possible so alternative arrangements can be made.
-    `;
-
-  return {
-    subject,
-    html: `
+  return `
             <!DOCTYPE html>
             <html>
             <head>
             <meta charset="UTF-8">
-            <title>${subject}</title>
+            <title>${escapeHtml(input.subject)}</title>
             </head>
 
-            <body style="margin:0;padding:0;background:${RC_COLORS.dark};font-family:Arial,sans-serif;" contenteditable="true">
+            <body style="margin:0;padding:0;background:${RC_COLORS.dark};font-family:Arial,sans-serif;">
 
             <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${RC_COLORS.dark};padding:40px 20px;">
             <tr>
@@ -108,10 +146,10 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             font-size:30px;
             font-weight:bold;
             line-height:38px;">
-            ${input.requiresQuote ? "Request for Quotation" : "Availability Confirmation"}
+            ${input.heading}
             </h1>
 
-            ${intro}
+            ${input.intro}
 
             <table width="100%" cellpadding="0" cellspacing="0"
             style="
@@ -132,91 +170,14 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             Project Details
             </td>
             </tr>
-
-            <tr>
-            <td style="padding:14px 20px;color:${RC_COLORS.muted};width:220px;border-top:1px solid ${RC_COLORS.border};">
-            Project
-            </td>
-            <td style="padding:14px 20px;color:${RC_COLORS.text};border-top:1px solid ${RC_COLORS.border};">
-            ${input.projectName}
-            </td>
-            </tr>
-
-            <tr>
-            <td style="padding:14px 20px;color:${RC_COLORS.muted};border-top:1px solid ${RC_COLORS.border};">
-            Trade
-            </td>
-            <td style="padding:14px 20px;color:${RC_COLORS.text};border-top:1px solid ${RC_COLORS.border};">
-            ${input.tradeType}
-            </td>
-            </tr>
-
-            <tr>
-            <td style="padding:14px 20px;color:${RC_COLORS.muted};border-top:1px solid ${RC_COLORS.border};">
-            Milestone
-            </td>
-            <td style="padding:14px 20px;color:${RC_COLORS.text};border-top:1px solid ${RC_COLORS.border};">
-            ${input.milestoneName ?? input.taskLabel}
-            </td>
-            </tr>
-
-            <tr>
-            <td style="padding:14px 20px;color:${RC_COLORS.muted};border-top:1px solid ${RC_COLORS.border};">
-            Scheduled Date
-            </td>
-            <td style="padding:14px 20px;color:${RC_COLORS.text};border-top:1px solid ${RC_COLORS.border};">
-            ${formattedDate}
-            </td>
-            </tr>
-
-            <tr>
-            <td style="padding:14px 20px;color:${RC_COLORS.muted};border-top:1px solid ${RC_COLORS.border};">
-            Duration
-            </td>
-            <td style="padding:14px 20px;color:${RC_COLORS.text};border-top:1px solid ${RC_COLORS.border};">
-            ${input.durationDays} day${input.durationDays > 1 ? "s" : ""}
-            </td>
-            </tr>
-
-            ${
-              !input.requiresQuote
-                ? `
-            <tr>
-            <td style="padding:14px 20px;color:${RC_COLORS.muted};border-top:1px solid ${RC_COLORS.border};">
-            Agreed Price
-            </td>
-            <td style="padding:14px 20px;color:${RC_COLORS.text};border-top:1px solid ${RC_COLORS.border};">
-            ${input.quotedPrice ?? "-"}
-            </td>
-            </tr>
-            `
-                : ""
-            }
+${rows}
 
             </table>
 
             <p style="margin:0 0 24px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
-            ${actionText}
+            ${input.action}
             </p>
-
-            <div
-            style="
-            margin:36px 0;
-            padding:22px;
-            background:${RC_COLORS.card};
-            border-left:4px solid ${RC_COLORS.gold};">
-
-            <p style="margin:0 0 12px;color:${RC_COLORS.text};font-weight:bold;">
-            Site Manager
-            </p>
-
-            <p style="margin:0;color:${RC_COLORS.text};line-height:26px;">
-            <strong>${input.siteManager.name}</strong><br>
-            ${input.siteManager.email}<br>
-            ${input.siteManager.phone}
-            </p>
-
-            </div>
+${siteManager}
 
             <p style="
             margin:40px 0 0;
@@ -224,9 +185,7 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             line-height:24px;
             color:${RC_COLORS.muted};">
 
-            If you have any questions regarding this work package or require further
-            clarification, please contact the assigned site manager before the scheduled
-            commencement date.
+            ${input.closing}
 
             </p>
 
@@ -262,7 +221,264 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
 
             </body>
             </html>
-            `,
+            `;
+}
+
+/** Project, trade and milestone: the rows every booking email opens with. */
+function bookingRows(input: TradieScheduleListItem): DetailRow[] {
+  return [
+    { label: "Project", value: escapeHtml(input.projectName) },
+    { label: "Trade", value: escapeHtml(input.tradeType) },
+    {
+      label: "Milestone",
+      value: escapeHtml(input.milestoneName ?? input.taskLabel),
+    },
+  ];
+}
+
+const QUESTIONS_CLOSING = `If you have any questions regarding this work package or require further
+            clarification, please contact the assigned site manager before the scheduled
+            commencement date.`;
+
+export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
+  subject: string;
+  html: string;
+} {
+  const formattedDate = longDate(input.scheduledDate);
+  const tradieName = escapeHtml(input.tradieName);
+
+  const subject = input.requiresQuote
+    ? `Request for Quotation – ${input.projectName} | ${input.tradeType}`
+    : `Availability Confirmation Required – ${input.projectName}`;
+
+  const intro = input.requiresQuote
+    ? [
+        paragraph(`Dear ${tradieName},`),
+        paragraph(`Royal Constructions is inviting you to provide a quotation for an upcoming project.
+        Based on your trade expertise, we would like you to review the project information
+        and submit your pricing for the requested scope of works, together with confirmation
+        that you can attend on the scheduled date.`),
+        paragraph(
+          `The project documentation, including the council-approved architectural plans,
+        specifications and milestone information, will be attached to this email for your review.`,
+          true,
+        ),
+      ].join("\n")
+    : [
+        paragraph(`Dear ${tradieName},`),
+        paragraph(`We have scheduled you for an upcoming stage of works on one of our active
+        construction projects. Please review the schedule details below and confirm
+        your availability at your earliest convenience.`),
+        paragraph(
+          `Prompt confirmation helps us coordinate trades efficiently and maintain
+        construction timelines across the project.`,
+          true,
+        ),
+      ].join("\n");
+
+  const action = input.requiresQuote
+    ? `Please review the attached documentation and submit your quotation based on
+      the requested scope of works. Your quotation should include labour,
+      materials (where applicable), exclusions and any assumptions relevant
+      to your pricing. Please also confirm your availability for the scheduled date.`
+    : `Please confirm whether you are available to complete these works on the
+      scheduled date. If you are unavailable, notify the site manager as soon
+      as possible so alternative arrangements can be made.`;
+
+  return {
+    subject,
+    html: renderTradieEmail({
+      action,
+      closing: QUESTIONS_CLOSING,
+      heading: input.requiresQuote
+        ? "Request for Quotation"
+        : "Availability Confirmation",
+      intro,
+      rows: [
+        ...bookingRows(input),
+        { label: "Scheduled Date", value: formattedDate },
+        { label: "Duration", value: durationLabel(input.durationDays) },
+        ...(!input.requiresQuote
+          ? [
+              {
+                label: "Agreed Price",
+                value: escapeHtml(input.quotedPrice ?? "-"),
+              },
+            ]
+          : []),
+      ],
+      siteManager: input.siteManager,
+      subject,
+    }),
+  };
+}
+
+/** A booking the office has approved: only the tradie's word is left. */
+function isApproved(status: TradieScheduleListItem["status"]): boolean {
+  return status === "CONFIRMED" || status === "PENDING_FINAL_CONFIRMATION";
+}
+
+/**
+ * The reminder the office sends by hand from a booking.
+ *
+ * What it asks for follows the booking: an approved booking asks the tradie
+ * to confirm they are still coming, one waiting on a quote asks for the quote,
+ * and anything else asks again whether they can take the date. One wording
+ * for all three asked an approved tradie whether they were available — a
+ * question they had already answered and the office had already accepted.
+ */
+export function generateTradieReminderEmail(input: TradieScheduleListItem): {
+  subject: string;
+  html: string;
+} {
+  const formattedDate = longDate(input.scheduledDate);
+  const tradieName = escapeHtml(input.tradieName);
+  const project = escapeHtml(input.projectName);
+
+  const kind = isApproved(input.status)
+    ? "attendance"
+    : input.status === "AWAITING_QUOTE"
+      ? "quote"
+      : "availability";
+
+  const copy = {
+    attendance: {
+      subject: `Booking reminder – ${input.projectName} | ${input.tradeType}`,
+      heading: "Booking Reminder",
+      intro: `This is a reminder of your approved booking with Royal Constructions on
+        ${project}. The details are below.`,
+      action: `Please reply to this email with <strong>confirmed</strong> to let us know
+        you will be attending on ${formattedDate}. If anything has changed, contact the
+        site manager as soon as possible so we can make other arrangements.`,
+    },
+    quote: {
+      subject: `Quotation reminder – ${input.projectName} | ${input.tradeType}`,
+      heading: "Quotation Reminder",
+      intro: `We are following up on our request for a quotation for the works below on
+        ${project}. We have not yet received your pricing.`,
+      action: `Please reply with your quotation for the requested scope of works,
+        including labour, materials (where applicable), exclusions and any assumptions,
+        and confirm whether you are available on the scheduled date.`,
+    },
+    availability: {
+      subject: `Availability reminder – ${input.projectName} | ${input.tradeType}`,
+      heading: "Availability Reminder",
+      intro: `We are following up on our earlier request about the works below on
+        ${project}. We have not yet received your confirmation.`,
+      action: `Please reply to this email to let us know whether you are available to
+        complete these works on the scheduled date. If you are unavailable, notify the
+        site manager as soon as possible so alternative arrangements can be made.`,
+    },
+  }[kind];
+
+  return {
+    subject: copy.subject,
+    html: renderTradieEmail({
+      action: copy.action,
+      closing: QUESTIONS_CLOSING,
+      heading: copy.heading,
+      intro: [
+        paragraph(`Dear ${tradieName},`),
+        paragraph(copy.intro, true),
+      ].join("\n"),
+      rows: [
+        ...bookingRows(input),
+        { label: "Scheduled Date", value: `<strong>${formattedDate}</strong>` },
+        { label: "Duration", value: durationLabel(input.durationDays) },
+      ],
+      siteManager: input.siteManager,
+      subject: copy.subject,
+    }),
+  };
+}
+
+/**
+ * The email a rescheduled booking sends its tradie.
+ *
+ * Which one is `rescheduleOutcome`'s decision, passed in as `notice`, so the
+ * wording cannot promise something the booking's new status does not mean:
+ *
+ * - `reconfirm-attendance`: the booking was approved and stays approved. The
+ *   tradie is told so, and asked only to confirm they can attend the new date.
+ * - `confirm-availability`: nothing was approved yet. It reads as a follow-up
+ *   to the request they already have, with the date updated, asking them to
+ *   confirm their availability for it.
+ *
+ * `input` carries the *new* dates; `previous` the ones the tradie was told.
+ */
+export function generateTradieRescheduleEmail(
+  input: TradieScheduleListItem,
+  previous: { readonly scheduledDate: string; readonly durationDays: number },
+  notice: RescheduleNotice,
+): { subject: string; html: string } {
+  const newDate = longDate(input.scheduledDate);
+  const oldDate = longDate(previous.scheduledDate);
+  const tradieName = escapeHtml(input.tradieName);
+  const project = escapeHtml(input.projectName);
+  const durationChanged = previous.durationDays !== input.durationDays;
+
+  const reconfirm = notice === "reconfirm-attendance";
+  const subject = reconfirm
+    ? `Booking date changed – please confirm – ${input.projectName} | ${input.tradeType}`
+    : `Updated date – availability confirmation required – ${input.projectName} | ${input.tradeType}`;
+
+  const intro = reconfirm
+    ? [
+        paragraph(`Dear ${tradieName},`),
+        paragraph(`The date of your approved booking on ${project} has changed. The
+          booking itself remains approved — we only need you to confirm that you can
+          attend on the new date.`),
+        paragraph(
+          `We apologise for any inconvenience the change may cause.`,
+          true,
+        ),
+      ]
+    : [
+        paragraph(`Dear ${tradieName},`),
+        paragraph(`We are following up on our earlier request about the works below on
+          ${project}. The scheduled date has been updated, so please review the new
+          details and confirm your availability for the new date.`),
+        paragraph(
+          input.status === "AWAITING_QUOTE"
+            ? `If you have not yet sent your quotation, please include it with your reply.`
+            : `Any earlier answer you gave us was for the previous date, so we need your
+          confirmation again.`,
+          true,
+        ),
+      ];
+
+  const action = reconfirm
+    ? `Please reply to this email with <strong>confirmed</strong> if you can attend on
+      ${newDate}. If you cannot, contact the site manager as soon as possible so we can
+      make other arrangements.`
+    : `Please reply to this email to let us know whether you are available on
+      ${newDate}. If you are unavailable, notify the site manager as soon as possible so
+      alternative arrangements can be made.`;
+
+  return {
+    subject,
+    html: renderTradieEmail({
+      action,
+      closing: QUESTIONS_CLOSING,
+      heading: reconfirm ? "Booking Date Changed" : "Updated Booking Date",
+      intro: intro.join("\n"),
+      rows: [
+        ...bookingRows(input),
+        {
+          label: "Previous Date",
+          value: `<span style="color:${RC_COLORS.muted};text-decoration:line-through;">${oldDate}</span>`,
+        },
+        { label: "New Date", value: `<strong>${newDate}</strong>` },
+        {
+          label: "Duration",
+          value: durationChanged
+            ? `<strong>${durationLabel(input.durationDays)}</strong> (previously ${durationLabel(previous.durationDays)})`
+            : durationLabel(input.durationDays),
+        },
+      ],
+      siteManager: input.siteManager,
+      subject,
+    }),
   };
 }
 
@@ -274,33 +490,26 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
 export function generateTradieFinalConfirmationEmail(
   input: TradieScheduleListItem,
 ): { subject: string; html: string } {
-  const formattedDate = new Date(input.scheduledDate).toLocaleDateString(
-    "en-AU",
-    { weekday: "long", day: "numeric", month: "long", year: "numeric" },
-  );
+  const formattedDate = longDate(input.scheduledDate);
   const subject = `Final confirmation required – ${input.projectName} | ${input.tradeType}`;
 
   return {
     subject,
-    html: `
-      <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;color:${RC_COLORS.text};">
-        <div style="background:${RC_COLORS.dark};padding:28px;text-align:center;">
-          <img src="${RC_URLS.logo}" width="${LOGO_EMAIL.width}" height="${LOGO_EMAIL.height}" alt="Royal Constructions" />
-        </div>
-        <div style="padding:32px 28px;border:1px solid ${RC_COLORS.border};">
-          <h1 style="margin:0 0 18px;font-size:28px;">Final booking confirmation</h1>
-          <p>Dear ${input.tradieName},</p>
-          <p>Please confirm that you are still available for the approved booking below. Reply to this email with <strong>confirmed</strong> or let us know immediately if anything has changed.</p>
-          <table style="width:100%;border-collapse:collapse;margin:24px 0;background:${RC_COLORS.card};">
-            <tr><td style="padding:12px;border-bottom:1px solid ${RC_COLORS.border};">Project</td><td style="padding:12px;border-bottom:1px solid ${RC_COLORS.border};"><strong>${input.projectName}</strong></td></tr>
-            <tr><td style="padding:12px;border-bottom:1px solid ${RC_COLORS.border};">Trade</td><td style="padding:12px;border-bottom:1px solid ${RC_COLORS.border};">${input.tradeType}</td></tr>
-            <tr><td style="padding:12px;border-bottom:1px solid ${RC_COLORS.border};">Milestone</td><td style="padding:12px;border-bottom:1px solid ${RC_COLORS.border};">${input.milestoneName ?? input.taskLabel}</td></tr>
-            <tr><td style="padding:12px;">Scheduled date</td><td style="padding:12px;"><strong>${formattedDate}</strong></td></tr>
-          </table>
-          <p style="color:${RC_COLORS.muted};">If we do not receive confirmation, the booking will remain flagged for follow-up by the site team.</p>
-          <p>Kind regards,<br /><strong>${input.siteManager.name}</strong><br />${input.siteManager.email}<br />${input.siteManager.phone}</p>
-        </div>
-      </div>
-    `,
+    html: renderTradieEmail({
+      action: `Please confirm that you are still available for the approved booking
+        above. Reply to this email with <strong>confirmed</strong> or let us know
+        immediately if anything has changed.`,
+      closing: `If we do not receive confirmation, the booking will remain flagged for
+        follow-up by the site team.`,
+      heading: "Final Booking Confirmation",
+      intro: paragraph(`Dear ${escapeHtml(input.tradieName)},`, true),
+      rows: [
+        ...bookingRows(input),
+        { label: "Scheduled Date", value: `<strong>${formattedDate}</strong>` },
+        { label: "Duration", value: durationLabel(input.durationDays) },
+      ],
+      siteManager: input.siteManager,
+      subject,
+    }),
   };
 }

@@ -1008,10 +1008,13 @@ test("rescheduling checks the project milestone and uses old values as a stale g
     .find((call) => call.operation === "tradieSchedule.updateMany")?.args as {
     where: unknown;
   };
+  // The status is part of the guard: the reschedule decides the booking's new
+  // status from the one it read.
   assert.deepEqual(args.where, {
     durationDays: 1,
     id: "schedule_1",
     scheduledDate: new Date("2026-10-01T00:00:00.000Z"),
+    status: TradieScheduleStatus.PENDING,
   });
 });
 

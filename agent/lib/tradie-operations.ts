@@ -634,14 +634,26 @@ export async function rescheduleAuthorizedTradie(
       transaction ?? agentDb,
     ),
   );
+  // Eve has no mailbox, so the email the tradie is now owed is not sent from
+  // here. Say so in the summary: a booking quietly moved under a tradie who
+  // was never told is the failure nobody notices until the day.
+  const owed =
+    changed.notice === "reconfirm-attendance"
+      ? ` The booking is still approved, but ${changed.tradieName} has not been told about the new date — send them a reminder from the project's Tradies tab so they can confirm it.`
+      : changed.notice === "confirm-availability"
+        ? ` ${changed.tradieName} has not been told about the new date — send them a reminder from the project's Tradies tab asking them to confirm their availability.${changed.withdrewApproval ? " The approval waiting for the old date was withdrawn; their confirmation for the new date will raise a fresh one." : ""}`
+        : "";
   return envelope(
     "confirmation",
     "Tradie booking rescheduled",
-    `${changed.tradieName}'s booking for ${changed.projectName} now starts ${changed.scheduledDate.toISOString().slice(0, 10)}.`,
+    `${changed.tradieName}'s booking for ${changed.projectName} now starts ${changed.scheduledDate.toISOString().slice(0, 10)}.${owed}`,
     {
       scheduleId: changed.scheduleId,
       scheduledDate: changed.scheduledDate.toISOString(),
       durationDays: changed.durationDays,
+      status: changed.status,
+      previousStatus: changed.previousStatus,
+      tradieNotified: false,
     },
     {
       entityRef: {

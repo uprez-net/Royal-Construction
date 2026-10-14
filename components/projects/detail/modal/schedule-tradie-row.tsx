@@ -25,16 +25,10 @@ import {
   Loader2,
   Trash2,
 } from "lucide-react";
-import { Calendar, CalendarDayButton } from "@/components/ui/calendar";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Calendar } from "@/components/ui/calendar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { getTradieBookings } from "@/lib/data/tradieSchedules";
-import { cn } from "@/lib/utils";
-import { bookingsOn, describeBooking } from "./tradie-bookings";
+import { useBookedDayButton } from "./booked-day-button";
 import { TradeIcon } from "@/components/tradie-management/trade-icon";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -45,7 +39,7 @@ import {
   TradieScheduleRowErrors,
 } from "./schedule-tradie-modal";
 import { useAppSelector } from "@/lib/store/hooks";
-import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { format, parse } from "date-fns";
 import { CollapsibleEmailContent } from "../tradie-tab/collapsible-email-content";
@@ -177,40 +171,7 @@ export function TradieScheduleRow({
 
   const bookings = useMemo(() => row.bookings ?? [], [row.bookings]);
 
-  const DayButton = useMemo(() => {
-    function BookedAwareDayButton(
-      props: ComponentProps<typeof CalendarDayButton>,
-    ) {
-      const booked = bookingsOn(bookings, format(props.day.date, "yyyy-MM-dd"));
-      if (booked.length === 0) return <CalendarDayButton {...props} />;
-      // Marked, not disabled: the office may book a tradie onto two jobs on
-      // one day, so a booked day stays pickable and just says what is on it.
-      // The tooltip hangs off a wrapper because CalendarDayButton keeps its
-      // own ref.
-      return (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="block w-full">
-              <CalendarDayButton
-                {...props}
-                className={cn(
-                  props.className,
-                  "bg-warning-light text-warning-ink hover:bg-warning/30",
-                )}
-              />
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="flex-col items-start">
-            <span className="font-medium">Already booked</span>
-            {booked.map((booking) => (
-              <span key={booking.scheduleId}>{describeBooking(booking)}</span>
-            ))}
-          </TooltipContent>
-        </Tooltip>
-      );
-    }
-    return BookedAwareDayButton;
-  }, [bookings]);
+  const DayButton = useBookedDayButton(bookings);
 
   const selectedDate = row.scheduledDate
     ? parse(row.scheduledDate, "yyyy-MM-dd", new Date())

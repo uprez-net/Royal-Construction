@@ -9,6 +9,7 @@ export type ModalType =
   | "tradieDirectory"
   | "createProject"
   | "tradieReminder"
+  | "rescheduleTradie"
   | "tradieScheduleDetails"
   | "deleteTradieSchedule"
   | "projectDetail"

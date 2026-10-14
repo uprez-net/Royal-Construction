@@ -18,6 +18,7 @@ import {
   Loader2,
   MessagesSquare,
   RefreshCw,
+  Send,
   ShieldCheck,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -77,6 +78,7 @@ import {
   partyBlockedReason,
 } from "@/lib/domain/compliance/prerequisites";
 import { defaultComplianceSubjectAddress } from "@/lib/domain/compliance/subject-address";
+import { canSelectForEarlyReview } from "@/lib/domain/compliance/early-review";
 import {
   isDocumentOverdue,
   overdueComplianceDocuments,
@@ -98,7 +100,7 @@ import {
   recordPartySelfSupplied,
   refreshCertifierEngagement,
   sendCertifierReply,
-  sendComplianceDocumentForReview,
+  sendComplianceDocumentsForReview,
   sendPartyReply,
   setComplianceDocumentNotRequired,
   setDeveloperApprovalRequired,
@@ -332,6 +334,14 @@ export function ProjectComplianceTab({
   const [sections, setSections] = useState<
     Partial<Record<SectionKey, boolean>>
   >({});
+  /**
+   * Checklist rows ticked for the next early send. Ids only: what is actually
+   * sendable is re-read from the engagement on every render, so a tick on a row
+   * that has since gone over or been replaced simply stops counting.
+   */
+  const [reviewSelection, setReviewSelection] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
 
   const engagement = project.certifierEngagement;
 
@@ -1270,24 +1280,51 @@ export function ProjectComplianceTab({
     );
   };
 
-  const handleSendDocumentForReview = async (
-    document: ComplianceDocumentWithFiles,
-  ) => {
+  const toggleReviewSelection = (documentId: string, selected: boolean) =>
+    setReviewSelection((current) => {
+      const next = new Set(current);
+      if (selected) next.add(documentId);
+      else next.delete(documentId);
+      return next;
+    });
+
+  /**
+   * Sends every ticked checklist row to the certifier in one email.
+   *
+   * Says how many actually went. A row the certifier already had is left off by
+   * the server rather than attached again, and "sent" for a set that was
+   * entirely on the thread already would tell the office an email went out
+   * when none did.
+   */
+  const handleSendSelectedForReview = async (documentIds: string[]) => {
     try {
-      await dispatch(
-        sendComplianceDocumentForReview({
+      const result = await dispatch(
+        sendComplianceDocumentsForReview({
           projectId: project.id,
-          documentId: document.id,
+          documentIds,
         }),
       ).unwrap();
-      toast.success("Document sent to the certifier for verification.");
+      setReviewSelection(new Set());
+      const skipped =
+        result.alreadySentCount > 0
+          ? ` ${result.alreadySentCount} the certifier already had ${result.alreadySentCount === 1 ? "was" : "were"} left off.`
+          : "";
+      if (result.sentCount === 0) {
+        toast.info(
+          "The certifier already has the current copy of every selected document. Nothing was sent.",
+        );
+      } else {
+        toast.success(
+          `${result.sentCount} document${result.sentCount === 1 ? "" : "s"} sent to the certifier in one email.${skipped}`,
+        );
+      }
     } catch (error) {
       toast.error(
         typeof error === "string"
           ? error
           : error instanceof Error
             ? error.message
-            : "Could not send the document for verification.",
+            : "Could not send the documents for verification.",
       );
     }
   };
@@ -1729,6 +1766,8 @@ export function ProjectComplianceTab({
   /** The review send, and every document it submits. */
   const reviewBusy = isAnyScopeBusy([
     complianceScope.review,
+    // An early send in the air is carrying some of the same rows.
+    complianceScope.earlyReview,
     insuranceScope,
     ...checklistScopes,
   ]);
@@ -1741,6 +1780,29 @@ export function ProjectComplianceTab({
    * payload, and changing one underneath the request is what this prevents.
    */
   const submissionClaimed = isScopeBusy(complianceScope.review);
+
+  /**
+   * The checklist rows that can go to the certifier now, ahead of the rest:
+   * uploaded, not yet on the thread, not sent back, not settled. The same rule
+   * the server applies to the send (`earlyReviewSelection`), so a row offers a
+   * checkbox exactly when the send would take it.
+   */
+  const selectableForReview = checklistItems.filter((item) =>
+    canSelectForEarlyReview(engagement, item),
+  );
+  const selectedForReview = selectableForReview.filter((item) =>
+    reviewSelection.has(item.id),
+  );
+  const earlyReviewClaimed = isScopeBusy(complianceScope.earlyReview);
+  const earlyReviewBusy =
+    earlyReviewClaimed
+    || submissionClaimed
+    || selectedForReview.some((item) =>
+      isScopeBusy(scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM)),
+    );
+  const allReadySelected =
+    selectableForReview.length > 0
+    && selectedForReview.length === selectableForReview.length;
 
   // -------------------------------------------------------------------
   // Which block the flow is waiting on, and therefore which one opens.
@@ -2501,6 +2563,56 @@ export function ProjectComplianceTab({
               </p>
             ) : null}
 
+            {/* A partly complete pack, as one email. Above the rows rather
+                than on each of them: the send carries every ticked row, and a
+                button per row was one email per document. */}
+            {selectableForReview.length > 0 ? (
+              <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2">
+                <p className="min-w-0 flex-1 text-sm text-foreground">
+                  {selectedForReview.length === 0
+                    ? `${selectableForReview.length} uploaded document${selectableForReview.length === 1 ? " is" : "s are"} not with the certifier yet. Tick the ones to send together.`
+                    : `${selectedForReview.length} of ${selectableForReview.length} ready document${selectableForReview.length === 1 ? "" : "s"} selected.`}
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={earlyReviewBusy}
+                  onClick={() =>
+                    setReviewSelection(
+                      allReadySelected
+                        ? new Set()
+                        : new Set(selectableForReview.map((item) => item.id)),
+                    )
+                  }
+                >
+                  {allReadySelected ? "Clear selection" : "Select all ready"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={selectedForReview.length === 0 || earlyReviewBusy}
+                  onClick={() =>
+                    void handleSendSelectedForReview(
+                      selectedForReview.map((item) => item.id),
+                    )
+                  }
+                >
+                  {earlyReviewClaimed ? (
+                    <Loader2
+                      className="size-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <Send className="size-4" aria-hidden="true" />
+                  )}
+                  {selectedForReview.length > 0
+                    ? `Send ${selectedForReview.length} to certifier`
+                    : "Send to certifier"}
+                </Button>
+              </div>
+            ) : null}
+
             <ul>
               {checklistItems.map((item) => {
                 const sentForReview = isSentForReview(item);
@@ -2524,7 +2636,9 @@ export function ProjectComplianceTab({
                     isBusy={
                       isScopeBusy(
                         scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM),
-                      ) || submissionClaimed
+                      )
+                      || submissionClaimed
+                      || (earlyReviewClaimed && reviewSelection.has(item.id))
                     }
                     // By id, not by type. Twenty lines share CHECKLIST_ITEM, so
                     // the consultant three weeks late on the geotechnical report
@@ -2539,12 +2653,10 @@ export function ProjectComplianceTab({
                     onApprove={() => void handleApprove(item)}
                     onReject={() => handleReject(item)}
                     sentForReview={sentForReview}
-                    onSendForReview={
-                      item.files.length > 0
-                      && !sentForReview
-                      && !item.rejectionReason
-                      && !checklistBlocked
-                        ? () => void handleSendDocumentForReview(item)
+                    selected={reviewSelection.has(item.id)}
+                    onSelectedChange={
+                      selectableForReview.includes(item)
+                        ? (selected) => toggleReviewSelection(item.id, selected)
                         : undefined
                     }
                     // Offered to an admin, and only while the file is still

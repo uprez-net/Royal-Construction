@@ -24,6 +24,7 @@ import {
   listTradieBookings,
   type TradieBooking,
   requestTradieScheduleDeletion as requestTradieScheduleDeletionDomain,
+  rescheduleTradieSchedule as rescheduleTradieScheduleDomain,
 } from "@/lib/domain/tradies/schedules";
 import { sendTradieScheduleReminder as sendTradieScheduleReminderDomain } from "@/lib/domain/tradies/reminders";
 import { DomainNotFoundError, isDomainError } from "@/lib/domain/errors";
@@ -571,6 +572,156 @@ export async function sendTradieScheduleReminder({
     console.error("Error sending tradie schedule reminder:", error);
     throw new Error("Failed to send tradie schedule reminder.");
   }
+}
+
+export type RescheduleTradieScheduleResult =
+  | {
+      readonly ok: true;
+      readonly status: TradieScheduleStatus;
+      readonly scheduledDate: string;
+      readonly durationDays: number;
+      /** A pending approval for the old date was withdrawn. */
+      readonly withdrewApproval: boolean;
+      /**
+       * What happened to the tradie's email. `failed` is still `ok: true`:
+       * the booking did move, and the dialog has to say both things.
+       */
+      readonly email: "sent" | "already-sent" | "not-sent" | "failed";
+      readonly emailError?: string;
+    }
+  | DomainActionFailure
+  | { readonly ok: false; readonly error: string };
+
+const BOOKING_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Move a booking to new dates, then email its tradie about it.
+ *
+ * The status the booking lands in, and therefore which email it needs, is
+ * `rescheduleTradieSchedule`'s decision; the dialog previews the same one from
+ * `rescheduleOutcome` and sends `expectedStatus` so a reply landing in between
+ * is refused rather than answered with the wrong email.
+ *
+ * The move commits first and the email follows. A failed email does not undo
+ * the move — the date is what the office decided — but it is reported, in the
+ * result and in the activity log, because a booking quietly moved under a
+ * tradie who was never told is the failure nobody sees until the day.
+ *
+ * @param idempotencyKey Held by the dialog until a send succeeds, so a retry
+ * after a timeout lands on the same email rather than a second one.
+ */
+export async function rescheduleTradieScheduleAction(input: {
+  scheduleId: string;
+  scheduledDate: string;
+  durationDays: number;
+  expectedStatus: TradieScheduleStatus;
+  email: { subject: string; body: string } | null;
+  idempotencyKey: string;
+}): Promise<RescheduleTradieScheduleResult> {
+  const access = await requireInternalUser();
+  if (!access.ok) return { ok: false, error: access.error };
+
+  if (
+    !BOOKING_DAY.test(input.scheduledDate)
+    || !Number.isInteger(input.durationDays)
+    || input.durationDays < 1
+    || input.durationDays > 365
+  ) {
+    return { ok: false, error: "Pick a valid date and duration." };
+  }
+  if (
+    input.email
+    && (!input.email.subject.trim() || !input.email.body.trim())
+  ) {
+    return { ok: false, error: "The email needs a subject and a body." };
+  }
+  if (!input.idempotencyKey.trim()) {
+    return { ok: false, error: "Missing request key; reopen the dialog." };
+  }
+
+  const principal = userPrincipal(access.user);
+  let moved: Awaited<ReturnType<typeof rescheduleTradieScheduleDomain>>;
+  try {
+    moved = await rescheduleTradieScheduleDomain(
+      principal,
+      {
+        durationDays: input.durationDays,
+        expectedStatus: input.expectedStatus,
+        scheduleId: input.scheduleId,
+        scheduledDate: new Date(`${input.scheduledDate}T00:00:00.000Z`),
+      },
+      prisma,
+    );
+  } catch (error) {
+    const refused = domainActionFailure(error);
+    if (refused) return refused;
+    console.error("Error rescheduling tradie schedule:", error);
+    return { ok: false, error: "Could not reschedule this booking." };
+  }
+
+  let email: "sent" | "already-sent" | "not-sent" | "failed" = "not-sent";
+  let emailError: string | undefined;
+  if (moved.notice && input.email) {
+    try {
+      const sent = await sendTradieScheduleReminderDomain(
+        principal,
+        {
+          body: input.email.body,
+          // Scoped to the move as well as the attempt: moving the same
+          // booking twice in a day is two emails, not one.
+          idempotencyKey: `reschedule:${moved.scheduleId}:${input.scheduledDate}:${moved.durationDays}:${input.idempotencyKey}`,
+          scheduleId: moved.scheduleId,
+          subject: input.email.subject,
+        },
+        prisma,
+        (message) => sendEmail(message),
+      );
+      email = sent.alreadySent ? "already-sent" : "sent";
+    } catch (error) {
+      email = "failed";
+      emailError = isDomainError(error)
+        ? error.message
+        : "The email provider did not accept the message.";
+      console.error("Error emailing rescheduled tradie:", error);
+    }
+  }
+
+  after(async () => {
+    revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
+    revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+    revalidateTag(`project-${moved.projectId}`, CACHE_PROFILES.MEDIUM);
+    if (moved.withdrewApproval) {
+      revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
+      revalidateTag("approval-kpi", CACHE_PROFILES.MEDIUM);
+    }
+    await logAction(
+      createActivityLogEntry("tradieScheduleRescheduled", {
+        durationDays: moved.durationDays,
+        milestoneId: moved.milestoneId ?? undefined,
+        notice:
+          email === "sent" || email === "already-sent"
+            ? "emailed"
+            : email === "failed"
+              ? "email-failed"
+              : "not-emailed",
+        previousDate: dateFormat.format(moved.previousScheduledDate),
+        projectId: moved.projectId,
+        scheduleDate: dateFormat.format(moved.scheduledDate),
+        scheduleId: moved.scheduleId,
+        tradieName: moved.tradieName,
+      }),
+    );
+  });
+
+  return {
+    durationDays: moved.durationDays,
+    email,
+    ...(emailError ? { emailError } : {}),
+    ok: true,
+    scheduledDate: moved.scheduledDate.toISOString(),
+    status: moved.status,
+    withdrewApproval: moved.withdrewApproval,
+  };
 }
 
 async function cachedTradieBookings(
