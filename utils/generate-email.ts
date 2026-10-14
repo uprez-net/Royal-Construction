@@ -54,8 +54,8 @@ type SiteManager = TradieScheduleListItem["siteManager"];
 function hasSiteManagerContact(siteManager: SiteManager): boolean {
   return Boolean(
     siteManager.name.trim()
-      && siteManager.name !== "Unassigned"
-      && (siteManager.email.trim() || siteManager.phone.trim()),
+    && siteManager.name !== "Unassigned"
+    && (siteManager.email.trim() || siteManager.phone.trim()),
   );
 }
 

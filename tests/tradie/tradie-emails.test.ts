@@ -99,10 +99,7 @@ test("names are escaped and the sent email is not editable", () => {
   });
   assert.match(email.html, /O&#39;Brien &amp; Sons/);
   assert.match(email.html, /Lot 5 &lt;Stage 2&gt;/);
-  for (const html of [
-    email.html,
-    generateTradieOutreachEmail(SCHEDULE).html,
-  ]) {
+  for (const html of [email.html, generateTradieOutreachEmail(SCHEDULE).html]) {
     assert.doesNotMatch(html, /contenteditable/);
   }
 });

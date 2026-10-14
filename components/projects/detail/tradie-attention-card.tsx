@@ -128,52 +128,55 @@ export function TradieAttentionCard({
               const { schedule, title, detail } = entry;
               const tone = entry.attention.tone;
               return (
-              <div
-                key={schedule.id}
-                className="flex items-center gap-3 rounded-xl border border-border/70 bg-card/85 p-3"
-              >
                 <div
-                  className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
-                    tone === "danger"
-                      ? "bg-destructive-light text-destructive"
-                      : "bg-warning-light text-warning"
-                  }`}
+                  key={schedule.id}
+                  className="flex items-center gap-3 rounded-xl border border-border/70 bg-card/85 p-3"
                 >
-                  {tone === "danger" ? (
-                    <AlertTriangle className="size-4" aria-hidden="true" />
-                  ) : (
-                    <Clock10 className="size-4" aria-hidden="true" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  {/* Wraps on a phone: truncated, "KDD Archies was remo…" hid
+                  <div
+                    className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
+                      tone === "danger"
+                        ? "bg-destructive-light text-destructive"
+                        : "bg-warning-light text-warning"
+                    }`}
+                  >
+                    {tone === "danger" ? (
+                      <AlertTriangle className="size-4" aria-hidden="true" />
+                    ) : (
+                      <Clock10 className="size-4" aria-hidden="true" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    {/* Wraps on a phone: truncated, "KDD Archies was remo…" hid
                       what had happened, which is the whole point of the row. */}
-                  <p className="text-xs font-semibold text-foreground [overflow-wrap:anywhere] sm:truncate">
-                    {title}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    {detail}
-                  </p>
+                    <p className="text-xs font-semibold text-foreground [overflow-wrap:anywhere] sm:truncate">
+                      {title}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {detail}
+                    </p>
+                  </div>
+                  <TradieAttentionActionButton
+                    entry={entry}
+                    project={project}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 shrink-0 rounded-lg text-muted-foreground hover:bg-warning/10 hover:text-foreground"
+                    aria-label={`Dismiss: ${title}`}
+                    disabled={dismissing.includes(schedule.id)}
+                    onClick={() => void dismiss([schedule.id])}
+                  >
+                    {dismissing.includes(schedule.id) ? (
+                      <Loader2
+                        className="size-3.5 animate-spin motion-reduce:animate-none"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <X className="size-3.5" aria-hidden="true" />
+                    )}
+                  </Button>
                 </div>
-                <TradieAttentionActionButton entry={entry} project={project} />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 shrink-0 rounded-lg text-muted-foreground hover:bg-warning/10 hover:text-foreground"
-                  aria-label={`Dismiss: ${title}`}
-                  disabled={dismissing.includes(schedule.id)}
-                  onClick={() => void dismiss([schedule.id])}
-                >
-                  {dismissing.includes(schedule.id) ? (
-                    <Loader2
-                      className="size-3.5 animate-spin motion-reduce:animate-none"
-                      aria-hidden="true"
-                    />
-                  ) : (
-                    <X className="size-3.5" aria-hidden="true" />
-                  )}
-                </Button>
-              </div>
               );
             })}
           </div>

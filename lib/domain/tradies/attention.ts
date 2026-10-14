@@ -56,7 +56,10 @@ export type ReminderTone = "success" | "warning" | "neutral";
  * cannot disagree about whether a booking needs chasing.
  */
 export function reminderTone(
-  booking: Pick<AttentionBooking, "status" | "scheduledDate" | "reminderSentAt">,
+  booking: Pick<
+    AttentionBooking,
+    "status" | "scheduledDate" | "reminderSentAt"
+  >,
   now: Date,
 ): ReminderTone {
   switch (booking.status) {

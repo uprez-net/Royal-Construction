@@ -145,8 +145,7 @@ test("the list leads with what is going wrong, then the soonest", () => {
 });
 
 test("both project surfaces render from the shared rule, not their own", () => {
-  const read = (path: string) =>
-    readFileSync(join(REPO_ROOT, path), "utf8");
+  const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
   for (const path of [
     "components/projects/detail/project-alerts.tsx",
     "components/projects/detail/project-tradies-tab.tsx",

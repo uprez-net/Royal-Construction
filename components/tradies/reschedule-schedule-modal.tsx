@@ -264,7 +264,10 @@ export function RescheduleScheduleModal({
                         variant="outline"
                         className="w-full justify-start font-normal"
                       >
-                        <CalendarIcon className="mr-2 size-4" aria-hidden="true" />
+                        <CalendarIcon
+                          className="mr-2 size-4"
+                          aria-hidden="true"
+                        />
                         {displayDay(day)}
                       </Button>
                     </PopoverTrigger>
@@ -404,7 +407,10 @@ export function RescheduleScheduleModal({
                   role="alert"
                   className="flex items-start gap-2 rounded-[8px] bg-destructive-light px-3 py-2 text-[12px] text-destructive"
                 >
-                  <XCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                  <XCircle
+                    className="mt-0.5 size-4 shrink-0"
+                    aria-hidden="true"
+                  />
                   {error}
                 </div>
               ) : null}
@@ -431,7 +437,10 @@ export function RescheduleScheduleModal({
             onClick={handleSubmit}
           >
             {isPending ? (
-              <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />
+              <Loader2
+                className="mr-1.5 size-4 animate-spin"
+                aria-hidden="true"
+              />
             ) : notify ? (
               <Send className="mr-1.5 size-4" aria-hidden="true" />
             ) : (
