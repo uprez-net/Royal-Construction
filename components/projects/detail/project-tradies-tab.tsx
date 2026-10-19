@@ -33,6 +33,39 @@ import { calculateScheduleTotalCost } from "@/utils/calculations";
 import { TradieAttentionCard } from "./tradie-attention-card";
 import { useTradieAttention } from "./tradie-attention";
 import { toScheduleListItem as buildScheduleListItem } from "./schedule-list-item";
+import { useCallback, useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { sameTrade } from "@/lib/domain/tradies/request-rules";
+import {
+  projectTrades,
+  schedulesForTrade,
+  tradeOverview,
+} from "./tradie-requests";
+import { TradeList, TradeWorkbench } from "./tradie-trade-overview";
+import { RequestDeliveryStatus } from "./request-delivery-status";
+import { tradeKey } from "@/lib/domain/tradies/selection-rules";
+
+const GST_WORDS = {
+  EXCLUSIVE: "ex GST",
+  INCLUSIVE: "inc GST",
+  NOT_REGISTERED: "no GST",
+} as const;
+
+/** Where the amount in the Quote column came from. */
+function quoteSource(tradie: TradieScheduleWithTradieAndMilestone): string {
+  if (!tradie.requiresQuote) return "From rate";
+  if (tradie.status === "AWAITING_QUOTE") return "";
+  const quote = tradie.quote;
+  if (!quote) return tradie.quotedPrice ? "Recorded on booking" : "";
+  const source =
+    quote.source === "EMAIL"
+      ? `Email reply · ${shortDateFormat.format(new Date(quote.quotedAt))}`
+      : `Manual${quote.enteredBy ? ` · ${quote.enteredBy.name}` : ""}`;
+  return quote.gstTreatment
+    ? `${source} · ${GST_WORDS[quote.gstTreatment]}`
+    : source;
+}
 
 /**
  * Formats a money value, falling back to an em dash rather than rendering
@@ -100,14 +133,68 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
   // has an alert beside it saying why.
   const now = new Date();
 
-  const tradies = project.tradieSchedules;
-  const attentionItems = useTradieAttention(tradies);
+  const attentionItems = useTradieAttention(project.tradieSchedules);
   const dispatch = useAppDispatch();
+
+  // The trade being looked at lives in the URL, beside `activeTab`, so it
+  // survives a reload and the back button, and a fresh visit starts on "All".
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
+  const trades = useMemo(() => projectTrades(project), [project]);
+  const tradeParam = searchParams.get("trade");
+  const trade = tradeParam
+    ? (trades.find((option) => sameTrade(option, tradeParam)) ?? null)
+    : null;
+
+  const selectTrade = useCallback(
+    (next: string | null) => {
+      const params = new URLSearchParams(searchParamsString);
+      if (next) params.set("trade", next);
+      else params.delete("trade");
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParamsString],
+  );
+
+  const overviews = useMemo(
+    () => trades.map((option) => tradeOverview(project, option)),
+    [project, trades],
+  );
+  const overview = trade
+    ? overviews.find((item) => item.trade === trade)
+    : undefined;
+
+  // The board shows the selected trade's bookings, or every booking.
+  const tradies = useMemo(
+    () => schedulesForTrade(project.tradieSchedules, trade),
+    [project.tradieSchedules, trade],
+  );
+
+  const openRequestWizard = () =>
+    dispatch(
+      openModal({
+        type: "scheduleTradie",
+        payload: { project, ...(trade ? { trade } : {}) },
+      }),
+    );
 
   const toScheduleListItem = (
     tradie: TradieScheduleWithTradieAndMilestone,
     options: { includeQuote: boolean },
   ) => buildScheduleListItem(project, tradie, options);
+
+  // Who holds each trade, for the board's "Selected" marker.
+  const liveSelections = useMemo(
+    () =>
+      new Map(
+        (project.tradeSelections ?? [])
+          .filter((selection) => selection.status !== "CANCELLED")
+          .map((selection) => [selection.tradeKey, selection]),
+      ),
+    [project.tradeSelections],
+  );
 
   const scheduleCost = (tradie: TradieScheduleWithTradieAndMilestone) => {
     if (tradie.requiresQuote) {
@@ -155,25 +242,71 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
       />
 
       <SectionCard
-        title="Tradie coordination board"
+        title="Trade requests"
+        description="Ask tradies to quote for a trade's activities, compare what comes back, and see which activities have their tradie."
         action={
           <Button
             size="sm"
             className="h-8 rounded-md px-3 text-xs font-medium"
-            onClick={() =>
-              dispatch(
-                openModal({
-                  type: "scheduleTradie",
-                  payload: {
-                    project,
-                  },
-                }),
-              )
-            }
+            onClick={openRequestWizard}
           >
             <Plus className="mr-1 size-3.5" aria-hidden="true" />
             Schedule tradies
           </Button>
+        }
+      >
+        <div className="space-y-4">
+          {trades.length > 0 ? (
+            <div
+              role="group"
+              aria-label="Trade category"
+              className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1"
+            >
+              {[null, ...trades].map((option) => {
+                const selected = option === trade;
+                return (
+                  <button
+                    key={option ?? "all"}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => selectTrade(option)}
+                    className={cn(
+                      "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/50",
+                      selected
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border/70 bg-card text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                    )}
+                  >
+                    {option ?? "All trades"}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {overview ? (
+            <TradeWorkbench
+              project={project}
+              overview={overview}
+              onRequest={openRequestWizard}
+            />
+          ) : trades.length > 0 ? (
+            <TradeList overviews={overviews} onSelect={selectTrade} />
+          ) : (
+            <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+              No activities on this project name a trade yet, and nobody has
+              been booked. Use Schedule tradies to send a first request.
+            </p>
+          )}
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Tradie coordination board"
+        description={
+          trade
+            ? `${trade} bookings, one row per tradie and activity.`
+            : "Every booking, one row per tradie and activity."
         }
       >
         <DataTable
@@ -181,9 +314,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
           mobileTitleColumn={1}
           mobileColumns={1}
           key={`${tradies.length}-${tradies.map((t) => t.status).join("-")}`}
-          caption="Tradies scheduled on this project, with reminder status, confirmation status and cost."
+          caption="Tradies booked on this project: the request email, confirmation status and quote for each tradie and activity."
           align={[
-            "start",
             "start",
             "start",
             "start",
@@ -197,36 +329,48 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
           headers={[
             "Trade",
             "Company",
-            "Contact",
             "Needed for",
             "Scheduled",
-            "1-week reminder",
+            "Request",
             "Duration",
             "Status",
-            "Cost",
+            "Quote",
             "Actions",
           ]}
+          rowClassName={(rowIndex) => {
+            // Once a trade has its tradie, everyone else's rows in it recede.
+            const row = tradies[rowIndex];
+            const holder = liveSelections.get(tradeKey(row.tradie.trade));
+            return holder && holder.tradieId !== row.tradieId
+              ? "opacity-60"
+              : undefined;
+          }}
           rows={tradies.map((tradie) => {
             const tone = reminderTone(tradie, now);
 
             const reminderDate = tradie.reminderSentAt
               ? shortDateFormat.format(new Date(tradie.reminderSentAt))
-              : "Not sent";
+              : "not sent";
+            const selection = liveSelections.get(tradeKey(tradie.tradie.trade));
+            const isSelected = selection?.tradieId === tradie.tradieId;
 
             return [
               <span className="text-sm font-medium" key={tradie.id}>
                 {tradie.tradie.trade}
               </span>,
 
-              <span className="text-sm" key={`${tradie.id}-company`}>
-                {tradie.tradie.name}
-              </span>,
-
               <span
-                className="font-mono text-xs tabular-nums"
-                key={`${tradie.id}-phone`}
+                className="flex flex-wrap items-center gap-1.5 text-sm"
+                key={`${tradie.id}-company`}
               >
-                {tradie.tradie.phone}
+                {tradie.tradie.name}
+                {isSelected ? (
+                  <StatusPill tone="success">
+                    {selection?.status === "CANCELLATION_PENDING"
+                      ? "Selected · cancellation pending"
+                      : "Selected"}
+                  </StatusPill>
+                ) : null}
               </span>,
 
               <span className="text-xs" key={`${tradie.id}-milestone`}>
@@ -240,14 +384,22 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                 {dateFormat.format(new Date(tradie.scheduledDate))}
               </span>,
 
-              // The tone is a second signal only: the cell always spells out
-              // the reminder date, and adds "follow up" in words when the tone
-              // is a warning, so colour is never the sole carrier of meaning.
-              <StatusPill key={`${tradie.id}-reminder`} tone={tone}>
-                {tone === "warning"
-                  ? `${reminderDate} · follow up`
-                  : reminderDate}
-              </StatusPill>,
+              tradie.requestRecipient ? (
+                <RequestDeliveryStatus
+                  key={`${tradie.id}-request`}
+                  projectId={project.id}
+                  delivery={tradie.requestRecipient}
+                  tradieName={tradie.tradie.name}
+                  compact
+                />
+              ) : (
+                <span
+                  className="text-xs text-muted-foreground"
+                  key={`${tradie.id}-request`}
+                >
+                  Booked directly
+                </span>
+              ),
 
               <span className="text-xs" key={`${tradie.id}-duration`}>
                 {tradie.durationDays === 1
@@ -255,19 +407,43 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                   : `${tradie.durationDays} days`}
               </span>,
 
-              <StatusPill
+              // The reminder sits under the status it is chasing. Its tone is a
+              // second signal only: "follow up" is always spelled out, so
+              // colour never carries the meaning alone.
+              <div
+                className="flex flex-col items-start gap-1"
                 key={`${tradie.id}-status`}
-                tone={getStatusTone(tradie.status)}
               >
-                {getStatusText(tradie.status)}
-              </StatusPill>,
+                <StatusPill tone={getStatusTone(tradie.status)}>
+                  {getStatusText(tradie.status)}
+                </StatusPill>
+                {tradie.status !== "COMPLETED"
+                && tradie.status !== "CANCELLED" ? (
+                  <span
+                    className={cn(
+                      "text-[11px]",
+                      tone === "warning"
+                        ? "font-medium text-warning-ink"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    Reminder {reminderDate}
+                    {tone === "warning" ? " · follow up" : ""}
+                  </span>
+                ) : null}
+              </div>,
 
-              <span
-                className="font-mono text-xs font-medium tabular-nums"
+              <div
+                className="flex flex-col items-end gap-0.5"
                 key={`${tradie.id}-cost`}
               >
-                {scheduleCost(tradie)}
-              </span>,
+                <span className="font-mono text-xs font-medium tabular-nums">
+                  {scheduleCost(tradie)}
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  {quoteSource(tradie)}
+                </span>
+              </div>,
 
               <div className="flex gap-1" key={`${tradie.id}-actions`}>
                 {tradie.status !== "COMPLETED"
@@ -437,11 +613,14 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
 
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">
-                  No tradies scheduled on this project
+                  {trade
+                    ? `No ${trade} tradies booked on this project`
+                    : "No tradies scheduled on this project"}
                 </p>
 
                 <p className="text-xs text-muted-foreground">
-                  Use Schedule tradies to book a trade against a milestone.
+                  Use Schedule tradies to request quotes for a trade&apos;s
+                  activities.
                 </p>
               </div>
             </div>

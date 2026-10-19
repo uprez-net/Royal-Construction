@@ -161,6 +161,19 @@ export interface ScheduleDeletionJsonPayload {
   currentStatus: TradieScheduleStatus;
 }
 
+/**
+ * Recorded on a TRADE_CANCELLATION approval: the selection to release, and
+ * enough of the project for the queue to describe it.
+ */
+export interface TradeCancellationJsonPayload {
+  selectionId: string;
+  projectId: string;
+  projectName: string;
+  trade: string;
+  /** Open bookings the tradie held on the project when this was asked. */
+  openBookings: number;
+}
+
 export interface PriceUpdateJsonPayload {
   newHourlyRate: number;
   newPriceUnit?: TradiePriceUnit;
@@ -176,6 +189,7 @@ export interface IncidentReportJsonPayload {
 export type TradieApprovalPayload =
   | ScheduleApprovalJsonPayload
   | ScheduleDeletionJsonPayload
+  | TradeCancellationJsonPayload
   | PriceUpdateJsonPayload
   | IncidentReportJsonPayload
   | undefined;

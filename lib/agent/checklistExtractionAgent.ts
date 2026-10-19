@@ -8,7 +8,7 @@ import {
 import { z } from "zod";
 
 import { MAPPABLE_DOCUMENT_TYPES } from "@/constants/complianceDocuments";
-import { gateway } from "@/lib/model";
+import { gateway, TEXT_MODEL_ID } from "@/lib/model";
 import type {
   ChecklistDocumentDetail,
   ChecklistItemDetail,
@@ -227,9 +227,7 @@ export async function runChecklistExtraction(
 ): Promise<ChecklistExtractionAgentResult> {
   try {
     const { output } = await generateText({
-      model: gateway("google/gemini-2.5-flash"),
-      temperature: 0.015,
-      topK: 30,
+      model: gateway(TEXT_MODEL_ID),
       system: input.system,
       output: Output.object({ schema: checklistExtractionSchema }),
       prompt: input.prompt,

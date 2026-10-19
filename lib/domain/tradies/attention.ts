@@ -2,6 +2,11 @@ import { TradieScheduleStatus } from "@prisma/client";
 import { differenceInDays } from "date-fns";
 
 import { isTradieAlertLive, type AlertBooking } from "./alert-rules";
+import { INACTIVE_SCHEDULE_STATUSES } from "./lifecycle";
+import {
+  requestEmailNeedsAttention,
+  type RequestDeliveryState,
+} from "./request-delivery";
 
 // Which tradie bookings need somebody, and what that somebody should do.
 //
@@ -26,7 +31,9 @@ export type TradieAttentionAction =
   /** The booking is in the admin approval queue. */
   | "approve"
   /** The tradie is not coming; book someone else. */
-  | "replace";
+  | "replace"
+  /** The request email did not go; send it again. */
+  | "retry-email";
 
 export type TradieAttentionKind =
   | "no-response"
@@ -34,7 +41,8 @@ export type TradieAttentionKind =
   | "removed"
   | "final-confirmation"
   | "admin-approval"
-  | "follow-up";
+  | "follow-up"
+  | "request-email-failed";
 
 export type TradieAttention = {
   readonly kind: TradieAttentionKind;
@@ -158,4 +166,47 @@ export function tradieAttentionItems<T extends AttentionBooking>(
         || new Date(a.booking.scheduledDate).getTime()
           - new Date(b.booking.scheduledDate).getTime(),
     );
+}
+
+/**
+ * Request emails that need a person: failed, or an automatic retry that never
+ * ran. One alert per email, not per booking — one email asked for every
+ * activity in it — carried on the soonest of its bookings still open.
+ *
+ * Not dismissible on purpose: it goes away when the email is sent. A request
+ * nobody received is the silent failure this exists to stop.
+ */
+export function requestEmailAttentionItems<
+  T extends {
+    readonly status: TradieScheduleStatus;
+    readonly scheduledDate: Date | string;
+    readonly requestRecipient?:
+      | (RequestDeliveryState & { readonly id: string })
+      | null;
+  },
+>(
+  bookings: readonly T[],
+  now: Date,
+): { readonly booking: T; readonly attention: TradieAttention }[] {
+  const byEmail = new Map<string, T>();
+  for (const booking of bookings) {
+    const email = booking.requestRecipient;
+    if (!email || INACTIVE_SCHEDULE_STATUSES.includes(booking.status)) continue;
+    if (!requestEmailNeedsAttention(email, now)) continue;
+    const held = byEmail.get(email.id);
+    if (
+      !held
+      || new Date(booking.scheduledDate) < new Date(held.scheduledDate)
+    ) {
+      byEmail.set(email.id, booking);
+    }
+  }
+  return [...byEmail.values()].map((booking) => ({
+    attention: {
+      action: "retry-email",
+      kind: "request-email-failed",
+      tone: "danger",
+    },
+    booking,
+  }));
 }

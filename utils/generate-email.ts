@@ -70,6 +70,8 @@ function renderTradieEmail(input: {
   readonly siteManager: SiteManager;
   /** Already-escaped HTML. */
   readonly closing: string;
+  /** Already-escaped HTML, between the details table and the action. */
+  readonly sections?: string;
 }): string {
   const rows = input.rows
     .map(
@@ -173,7 +175,7 @@ function renderTradieEmail(input: {
 ${rows}
 
             </table>
-
+${input.sections ?? ""}
             <p style="margin:0 0 24px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
             ${input.action}
             </p>
@@ -510,6 +512,168 @@ export function generateTradieFinalConfirmationEmail(
       ],
       siteManager: input.siteManager,
       subject,
+    }),
+  };
+}
+
+/** One activity in a tradie request, as the email lists it. */
+export type TradieRequestEmailActivity = {
+  readonly name: string;
+  /** Display label, e.g. "Lock Up". */
+  readonly stage: string;
+  /** `YYYY-MM-DD`, or an ISO timestamp at UTC midnight. */
+  readonly scheduledDate: string;
+  readonly durationDays: number;
+  /** Plain text; escaped here. */
+  readonly workLines: readonly string[];
+};
+
+export type TradieRequestEmailInput = {
+  readonly subject: string;
+  readonly tradieName: string;
+  readonly projectName: string;
+  readonly trade: string;
+  readonly activities: readonly TradieRequestEmailActivity[];
+  /** Plain text from the office; escaped here, line breaks kept. */
+  readonly note?: string;
+  readonly siteManager: SiteManager;
+};
+
+/** "Tue 20 Oct 2026". Request dates are calendar days, stored at UTC midnight. */
+function shortRequestDate(date: string): string {
+  const day = date.length === 10 ? `${date}T00:00:00.000Z` : date;
+  return new Date(day).toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+    weekday: "short",
+    year: "numeric",
+  });
+}
+
+function activityCountLabel(count: number): string {
+  return `${count} ${count === 1 ? "activity" : "activities"}`;
+}
+
+/** The subject a new request starts with; the office may change it. */
+export function tradieRequestSubject(input: {
+  readonly projectName: string;
+  readonly trade: string;
+  readonly activityCount: number;
+}): string {
+  return `Request for Quotation – ${input.projectName} | ${input.trade} (${activityCountLabel(input.activityCount)})`;
+}
+
+/**
+ * The request a company receives for one trade across several activities.
+ *
+ * One email per company, whatever the number of activities, so the tradie
+ * prices the package once and itemises it — rather than receiving the same
+ * request once per activity, which is what the per-booking outreach did.
+ *
+ * The preview in the request wizard renders this same function, so what the
+ * office reviews is what the tradie reads.
+ */
+export function generateTradieRequestEmail(input: TradieRequestEmailInput): {
+  subject: string;
+  html: string;
+} {
+  const tradieName = escapeHtml(input.tradieName);
+  const project = escapeHtml(input.projectName);
+  const trade = escapeHtml(input.trade);
+  const count = activityCountLabel(input.activities.length);
+
+  const activityRows = input.activities
+    .map((activity, index) => {
+      const lines = activity.workLines
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      const work =
+        lines.length > 0
+          ? `<ul style="margin:10px 0 0;padding:0 0 0 20px;color:${RC_COLORS.text};font-size:15px;line-height:24px;">
+              ${lines.map((line) => `<li style="margin:0 0 4px;">${escapeHtml(line)}</li>`).join("\n")}
+              </ul>`
+          : "";
+      return `
+            <tr>
+            <td style="padding:16px 20px;border-top:1px solid ${RC_COLORS.border};vertical-align:top;width:28px;color:${RC_COLORS.muted};font-weight:bold;">
+            ${index + 1}
+            </td>
+            <td style="padding:16px 20px 16px 0;border-top:1px solid ${RC_COLORS.border};vertical-align:top;">
+            <strong style="color:${RC_COLORS.text};font-size:16px;">${escapeHtml(activity.name)}</strong>
+            <div style="margin-top:4px;color:${RC_COLORS.muted};font-size:14px;line-height:22px;">
+            ${escapeHtml(activity.stage)} stage · Approx. start ${shortRequestDate(activity.scheduledDate)} · ${durationLabel(activity.durationDays)}
+            </div>
+            ${work}
+            </td>
+            </tr>`;
+    })
+    .join("\n");
+
+  const note = input.note?.trim()
+    ? `
+            <div style="margin:0 0 32px;padding:20px;background:${RC_COLORS.card};border:1px solid ${RC_COLORS.border};border-radius:8px;">
+            <p style="margin:0 0 8px;color:${RC_COLORS.text};font-weight:bold;">Notes from Royal Constructions</p>
+            <p style="margin:0;color:${RC_COLORS.text};font-size:15px;line-height:24px;">${escapeHtml(input.note.trim()).replace(/\r?\n/g, "<br>")}</p>
+            </div>`
+    : "";
+
+  const sections = `
+            <table width="100%" cellpadding="0" cellspacing="0"
+            style="
+            margin:0 0 16px;
+            border-collapse:collapse;
+            background:${RC_COLORS.card};
+            border:1px solid ${RC_COLORS.border};
+            border-radius:8px;">
+
+            <tr>
+            <td colspan="2"
+            style="
+            padding:16px 20px;
+            background:${RC_COLORS.gold};
+            color:${RC_COLORS.dark};
+            font-weight:bold;
+            font-size:18px;">
+            Requested Works
+            </td>
+            </tr>
+${activityRows}
+
+            </table>
+
+            <p style="margin:0 0 32px;color:${RC_COLORS.muted};font-size:14px;line-height:22px;">
+            Dates are approximate and may move with the build programme. We will
+            confirm exact dates with you before work starts.
+            </p>
+${note}`;
+
+  return {
+    subject: input.subject,
+    html: renderTradieEmail({
+      action: `Please reply with <strong>one quotation covering all ${count}</strong>,
+        itemised per activity, including labour, materials (where applicable),
+        exclusions and any assumptions behind your pricing. Please also let us know
+        whether the approximate dates suit you.`,
+      closing: QUESTIONS_CLOSING,
+      heading: "Request for Quotation",
+      intro: [
+        paragraph(`Dear ${tradieName},`),
+        paragraph(
+          `Royal Constructions is inviting you to quote for ${trade} works on
+        ${project}. This request covers ${count}, listed below with the work
+        involved in each and when we expect it to start.`,
+          true,
+        ),
+      ].join("\n"),
+      rows: [
+        { label: "Project", value: project },
+        { label: "Trade", value: trade },
+        { label: "Activities", value: count },
+      ],
+      sections,
+      siteManager: input.siteManager,
+      subject: input.subject,
     }),
   };
 }

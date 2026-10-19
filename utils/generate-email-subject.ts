@@ -1,6 +1,6 @@
 "use server";
 import { generateText } from "ai";
-import { gateway } from "@/lib/model";
+import { gateway, TEXT_MODEL_ID } from "@/lib/model";
 
 /**
  * Generates a short, professional email subject line from raw email content.
@@ -42,7 +42,7 @@ export async function generateEmailSubject(body: string): Promise<string> {
   const cleanBody = body.replace(/\s+/g, " ").trim().slice(0, 3000);
 
   const result = await generateText({
-    model: gateway("google/gemini-2.5-flash"),
+    model: gateway(TEXT_MODEL_ID),
     prompt: `
 Generate a clear professional email subject line.
 
@@ -56,8 +56,10 @@ Rules:
 Email:
 ${cleanBody}
 `,
-    temperature: 0.2,
-    maxOutputTokens: 30,
+    // Headroom for the reasoning as well as the eight words: a 30-token cap
+    // was spent reasoning, the call returned "", and every subject silently
+    // became the "Project Inquiry" fallback below.
+    maxOutputTokens: 400,
   });
 
   return (
