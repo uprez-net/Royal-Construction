@@ -43,6 +43,7 @@ import {
   unsentRequiredDocuments,
 } from "@/lib/domain/compliance/required-pack";
 import { packSendBlockedReason } from "@/lib/domain/compliance/prerequisites";
+import { certifierCopyAddresses } from "@/lib/domain/compliance/certifier-copies";
 import { earlyReviewSelection } from "@/lib/domain/compliance/early-review";
 import {
   recordPreliminaryPlansArrival,
@@ -414,12 +415,13 @@ export async function sendCertifierOutreach(engagementId: string) {
     pending,
   );
   const attachments = await Promise.all(files.map(toEmailAttachment));
+  const cc = await certifierCopyAddresses(certifierEmail, config.cc, prisma);
 
   await client.sendMail({
     to: certifierEmail,
     subject,
     body,
-    cc: config.cc,
+    cc,
     attachments,
   });
 
@@ -572,6 +574,7 @@ export async function sendCertifierReply(
     : [];
 
   const attachments = await Promise.all(files.map(toEmailAttachment));
+  const cc = await certifierCopyAddresses(certifierEmail, config.cc, prisma);
 
   // Subject threading: what opens the thread before the certifier has answered,
   // and what is left if the message we were replying onto is gone.
@@ -580,7 +583,7 @@ export async function sendCertifierReply(
       to: certifierEmail,
       subject,
       body: input.body,
-      cc: config.cc,
+      cc,
       ...(attachments.length > 0 ? { attachments } : {}),
     });
 
@@ -593,7 +596,7 @@ export async function sendCertifierReply(
         messageId: engagement.lastInboundMessageId,
         body: input.body,
         to: certifierEmail,
-        cc: config.cc,
+        cc,
         ...(attachments.length > 0 ? { attachments } : {}),
       });
     } catch (error) {
