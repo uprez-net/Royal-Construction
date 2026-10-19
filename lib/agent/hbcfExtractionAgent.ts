@@ -6,7 +6,7 @@ import {
   TypeValidationError,
 } from "ai";
 import { z } from "zod";
-import { gateway } from "@/lib/model";
+import { gateway, TEXT_MODEL_ID } from "@/lib/model";
 import {
   buildHbcfExtractionPrompt,
   HBCF_EXTRACTION_SYSTEM_PROMPT,
@@ -52,9 +52,7 @@ export async function handleHbcfExtractionGeneration(
 ): Promise<HbcfExtractionResult> {
   try {
     const { output } = await generateText({
-      model: gateway("google/gemini-2.5-flash"),
-      temperature: 0.015,
-      topK: 30,
+      model: gateway(TEXT_MODEL_ID),
       system: HBCF_EXTRACTION_SYSTEM_PROMPT,
       output: Output.object({ schema: hbcfExtractionSchema }),
       prompt: buildHbcfExtractionPrompt(input.markdown),
