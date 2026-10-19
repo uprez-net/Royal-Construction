@@ -9,7 +9,7 @@ import {
 import { z } from "zod";
 
 import { CLASSIFIABLE_DOCUMENT_TYPES } from "@/constants/complianceDocuments";
-import { gateway } from "@/lib/model";
+import { gateway, TEXT_MODEL_ID } from "@/lib/model";
 import { ocrPagesToText, processPDFWithMistral } from "@/lib/ocr";
 import {
   buildDocumentClassifierPrompt,
@@ -111,9 +111,7 @@ export async function classifyDocumentMarkdown(
 
   try {
     const { output } = await generateText({
-      model: gateway("google/gemini-2.5-flash"),
-      temperature: 0.015,
-      topK: 30,
+      model: gateway(TEXT_MODEL_ID),
       system: DOCUMENT_CLASSIFIER_SYSTEM_PROMPT,
       output: Output.object({ schema: documentClassificationSchema }),
       prompt: buildDocumentClassifierPrompt(
