@@ -7,7 +7,7 @@ import {
 } from "ai";
 import { z } from "zod";
 
-import { gateway } from "@/lib/model";
+import { gateway, TEXT_MODEL_ID } from "@/lib/model";
 import type {
   WorkDetailsDraft,
   WorkDetailsDraftInput,
@@ -70,8 +70,7 @@ export async function draftTradieRequestWorkDetailsWithAi(
 
   try {
     const { output } = await generateText({
-      model: gateway("google/gemini-2.5-flash"),
-      temperature: 0.2,
+      model: gateway(TEXT_MODEL_ID),
       system: SYSTEM_PROMPT,
       output: Output.object({ schema: draftSchema }),
       prompt: `Trade: ${input.trade}\nBuilding: ${input.buildingType}\nProject notes: ${input.projectDescription?.trim() || "(none)"}\n\n${activities}`,
