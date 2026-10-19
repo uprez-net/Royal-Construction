@@ -446,7 +446,7 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
             <ul className="space-y-3">
               {tradieAlerts.slice(0, TRADIE_ALERT_LIMIT).map((entry) => (
                 <TradieAlertRow
-                  key={entry.schedule.id}
+                  key={entry.key}
                   entry={entry}
                   project={project}
                 />

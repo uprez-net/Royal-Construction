@@ -43,6 +43,29 @@ import {
   tradeOverview,
 } from "./tradie-requests";
 import { TradeList, TradeWorkbench } from "./tradie-trade-overview";
+import { RequestDeliveryStatus } from "./request-delivery-status";
+import { tradeKey } from "@/lib/domain/tradies/selection-rules";
+
+const GST_WORDS = {
+  EXCLUSIVE: "ex GST",
+  INCLUSIVE: "inc GST",
+  NOT_REGISTERED: "no GST",
+} as const;
+
+/** Where the amount in the Quote column came from. */
+function quoteSource(tradie: TradieScheduleWithTradieAndMilestone): string {
+  if (!tradie.requiresQuote) return "From rate";
+  if (tradie.status === "AWAITING_QUOTE") return "";
+  const quote = tradie.quote;
+  if (!quote) return tradie.quotedPrice ? "Recorded on booking" : "";
+  const source =
+    quote.source === "EMAIL"
+      ? `Email reply · ${shortDateFormat.format(new Date(quote.quotedAt))}`
+      : `Manual${quote.enteredBy ? ` · ${quote.enteredBy.name}` : ""}`;
+  return quote.gstTreatment
+    ? `${source} · ${GST_WORDS[quote.gstTreatment]}`
+    : source;
+}
 
 /**
  * Formats a money value, falling back to an em dash rather than rendering
@@ -162,6 +185,17 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
     options: { includeQuote: boolean },
   ) => buildScheduleListItem(project, tradie, options);
 
+  // Who holds each trade, for the board's "Selected" marker.
+  const liveSelections = useMemo(
+    () =>
+      new Map(
+        (project.tradeSelections ?? [])
+          .filter((selection) => selection.status !== "CANCELLED")
+          .map((selection) => [selection.tradeKey, selection]),
+      ),
+    [project.tradeSelections],
+  );
+
   const scheduleCost = (tradie: TradieScheduleWithTradieAndMilestone) => {
     if (tradie.requiresQuote) {
       return tradie.status === "AWAITING_QUOTE"
@@ -251,7 +285,11 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
           ) : null}
 
           {overview ? (
-            <TradeWorkbench overview={overview} onRequest={openRequestWizard} />
+            <TradeWorkbench
+              project={project}
+              overview={overview}
+              onRequest={openRequestWizard}
+            />
           ) : trades.length > 0 ? (
             <TradeList overviews={overviews} onSelect={selectTrade} />
           ) : (
@@ -276,9 +314,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
           mobileTitleColumn={1}
           mobileColumns={1}
           key={`${tradies.length}-${tradies.map((t) => t.status).join("-")}`}
-          caption="Tradies scheduled on this project, with reminder status, confirmation status and cost."
+          caption="Tradies booked on this project: the request email, confirmation status and quote for each tradie and activity."
           align={[
-            "start",
             "start",
             "start",
             "start",
@@ -292,36 +329,48 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
           headers={[
             "Trade",
             "Company",
-            "Contact",
             "Needed for",
             "Scheduled",
-            "1-week reminder",
+            "Request",
             "Duration",
             "Status",
-            "Cost",
+            "Quote",
             "Actions",
           ]}
+          rowClassName={(rowIndex) => {
+            // Once a trade has its tradie, everyone else's rows in it recede.
+            const row = tradies[rowIndex];
+            const holder = liveSelections.get(tradeKey(row.tradie.trade));
+            return holder && holder.tradieId !== row.tradieId
+              ? "opacity-60"
+              : undefined;
+          }}
           rows={tradies.map((tradie) => {
             const tone = reminderTone(tradie, now);
 
             const reminderDate = tradie.reminderSentAt
               ? shortDateFormat.format(new Date(tradie.reminderSentAt))
-              : "Not sent";
+              : "not sent";
+            const selection = liveSelections.get(tradeKey(tradie.tradie.trade));
+            const isSelected = selection?.tradieId === tradie.tradieId;
 
             return [
               <span className="text-sm font-medium" key={tradie.id}>
                 {tradie.tradie.trade}
               </span>,
 
-              <span className="text-sm" key={`${tradie.id}-company`}>
-                {tradie.tradie.name}
-              </span>,
-
               <span
-                className="font-mono text-xs tabular-nums"
-                key={`${tradie.id}-phone`}
+                className="flex flex-wrap items-center gap-1.5 text-sm"
+                key={`${tradie.id}-company`}
               >
-                {tradie.tradie.phone}
+                {tradie.tradie.name}
+                {isSelected ? (
+                  <StatusPill tone="success">
+                    {selection?.status === "CANCELLATION_PENDING"
+                      ? "Selected · cancellation pending"
+                      : "Selected"}
+                  </StatusPill>
+                ) : null}
               </span>,
 
               <span className="text-xs" key={`${tradie.id}-milestone`}>
@@ -335,14 +384,22 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                 {dateFormat.format(new Date(tradie.scheduledDate))}
               </span>,
 
-              // The tone is a second signal only: the cell always spells out
-              // the reminder date, and adds "follow up" in words when the tone
-              // is a warning, so colour is never the sole carrier of meaning.
-              <StatusPill key={`${tradie.id}-reminder`} tone={tone}>
-                {tone === "warning"
-                  ? `${reminderDate} · follow up`
-                  : reminderDate}
-              </StatusPill>,
+              tradie.requestRecipient ? (
+                <RequestDeliveryStatus
+                  key={`${tradie.id}-request`}
+                  projectId={project.id}
+                  delivery={tradie.requestRecipient}
+                  tradieName={tradie.tradie.name}
+                  compact
+                />
+              ) : (
+                <span
+                  className="text-xs text-muted-foreground"
+                  key={`${tradie.id}-request`}
+                >
+                  Booked directly
+                </span>
+              ),
 
               <span className="text-xs" key={`${tradie.id}-duration`}>
                 {tradie.durationDays === 1
@@ -350,19 +407,43 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                   : `${tradie.durationDays} days`}
               </span>,
 
-              <StatusPill
+              // The reminder sits under the status it is chasing. Its tone is a
+              // second signal only: "follow up" is always spelled out, so
+              // colour never carries the meaning alone.
+              <div
+                className="flex flex-col items-start gap-1"
                 key={`${tradie.id}-status`}
-                tone={getStatusTone(tradie.status)}
               >
-                {getStatusText(tradie.status)}
-              </StatusPill>,
+                <StatusPill tone={getStatusTone(tradie.status)}>
+                  {getStatusText(tradie.status)}
+                </StatusPill>
+                {tradie.status !== "COMPLETED"
+                && tradie.status !== "CANCELLED" ? (
+                  <span
+                    className={cn(
+                      "text-[11px]",
+                      tone === "warning"
+                        ? "font-medium text-warning-ink"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    Reminder {reminderDate}
+                    {tone === "warning" ? " · follow up" : ""}
+                  </span>
+                ) : null}
+              </div>,
 
-              <span
-                className="font-mono text-xs font-medium tabular-nums"
+              <div
+                className="flex flex-col items-end gap-0.5"
                 key={`${tradie.id}-cost`}
               >
-                {scheduleCost(tradie)}
-              </span>,
+                <span className="font-mono text-xs font-medium tabular-nums">
+                  {scheduleCost(tradie)}
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  {quoteSource(tradie)}
+                </span>
+              </div>,
 
               <div className="flex gap-1" key={`${tradie.id}-actions`}>
                 {tradie.status !== "COMPLETED"

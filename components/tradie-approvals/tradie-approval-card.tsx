@@ -78,6 +78,13 @@ const approvalConfig = {
     badgeClass:
       "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300",
   },
+
+  [TradieApprovalActionType.TRADE_CANCELLATION]: {
+    label: "Trade Cancellation",
+    icon: CalendarX,
+    badgeClass:
+      "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300",
+  },
 };
 
 const severityConfig = {

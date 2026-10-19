@@ -943,6 +943,7 @@ test("schedule transition normalizes a daily quote once and persists the total",
     },
     "tradieSchedule.updateMany": { count: 1 },
     "tradie.update": {},
+    "tradieQuote.create": { id: "quote_1" },
   });
 
   const result = await transitionTradieSchedule(
@@ -961,10 +962,19 @@ test("schedule transition normalizes a daily quote once and persists the total",
     .writes()
     .find((call) => call.operation === "tradieSchedule.updateMany");
   assert.deepEqual((scheduleWrite?.args as { data: unknown }).data, {
+    quoteId: "quote_1",
     quotedPrice: "1900.00",
     requiresQuote: true,
     status: TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
   });
+  // Entered by a person, so the board says it was entered, not emailed.
+  const quote = recorder
+    .writes()
+    .find((call) => call.operation === "tradieQuote.create");
+  assert.equal(
+    (quote?.args as { data: { source: string } }).data.source,
+    "MANUAL",
+  );
 });
 
 test("rescheduling checks the project milestone and uses old values as a stale guard", async () => {

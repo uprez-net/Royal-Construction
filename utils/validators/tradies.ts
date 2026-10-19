@@ -118,6 +118,56 @@ export type SendTradieRequestsFormInput = z.input<
   typeof sendTradieRequestsSchema
 >;
 
+/** A person retrying one tradie request email. */
+export const retryTradieRequestEmailSchema = z.object({
+  projectId: z.string().trim().min(1),
+  recipientId: z.string().trim().min(1),
+});
+
+/** A quote the office received some other way, priced per activity. */
+export const manualTradieQuoteSchema = z.object({
+  projectId: z.string().trim().min(1, "Project ID is required"),
+  tradieId: z.string().trim().min(1, "Choose the tradie who quoted"),
+  lines: z
+    .array(
+      z.object({
+        milestoneId: z.string().trim().min(1),
+        amount: z.coerce
+          .number("Enter an amount")
+          .positive("Every amount must be more than $0")
+          .max(10_000_000, "That amount is too large"),
+      }),
+    )
+    .min(1, "Add an amount for at least one activity"),
+  gstTreatment: z.enum(["INCLUSIVE", "EXCLUSIVE", "NOT_REGISTERED"], {
+    error: () => ({ message: "Say how the quote treats GST" }),
+  }),
+  quotedAt: z.iso.date("Enter the date on the quote"),
+  validUntil: z.iso.date().optional(),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+export type ManualTradieQuoteFormInput = z.input<
+  typeof manualTradieQuoteSchema
+>;
+
+/** Choose one tradie for a whole trade on a project. */
+export const selectTradeQuoteSchema = z.object({
+  projectId: z.string().trim().min(1),
+  tradieId: z.string().trim().min(1),
+});
+
+/** Ask the admins to release the tradie selected for a trade. */
+export const tradeCancellationRequestSchema = z.object({
+  projectId: z.string().trim().min(1),
+  selectionId: z.string().trim().min(1),
+  reason: z
+    .string()
+    .trim()
+    .min(1, "Say why the tradie should be cancelled")
+    .max(1000),
+});
+
 /**
  * Update tradie schedule status
  */

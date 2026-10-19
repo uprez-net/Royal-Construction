@@ -7,6 +7,7 @@ import { Bell, ShieldCheck, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { sydneyDateOnly } from "@/lib/dates/sydney";
 import {
+  requestEmailAttentionItems,
   tradieAttentionItems,
   type TradieAttention,
 } from "@/lib/domain/tradies/attention";
@@ -19,6 +20,7 @@ import type {
 } from "@/types/project";
 import { shortDateFormat } from "@/utils/formatters";
 import { toScheduleListItem } from "./schedule-list-item";
+import { RetryEmailButton } from "./request-delivery-status";
 
 // The project page's two tradie alert surfaces — the Alerts card above the
 // tabs and the attention card in the Tradies tab — render from this, so a
@@ -26,10 +28,14 @@ import { toScheduleListItem } from "./schedule-list-item";
 // behind it is `tradieAttention` in lib/domain/tradies/attention.ts.
 
 export type TradieAttentionEntry = {
+  /** Unique per alert: one booking can carry a booking alert and an email one. */
+  readonly key: string;
   readonly schedule: TradieScheduleWithTradieAndMilestone;
   readonly attention: TradieAttention;
   readonly title: string;
   readonly detail: string;
+  /** A failed email clears by being sent, not by being hidden. */
+  readonly dismissible: boolean;
 };
 
 function describe(
@@ -70,6 +76,15 @@ function describe(
         title: `${name} needs a confirmation follow-up`,
         detail: `The booking is scheduled for ${date}.`,
       };
+    case "request-email-failed":
+      return {
+        title: `Request email to ${name} did not send`,
+        detail:
+          schedule.requestRecipient?.deliveryStatus === "RETRYING"
+            ? "Its automatic retry did not run. Retry it now."
+            : (schedule.requestRecipient?.lastError
+              ?? "Retry it so they can quote."),
+      };
   }
 }
 
@@ -79,13 +94,28 @@ export function useTradieAttention(
 ): TradieAttentionEntry[] {
   return useMemo(() => {
     const now = new Date();
-    return tradieAttentionItems(schedules, sydneyDateOnly(now), now).map(
+    // Emails first: until one is sent, nothing else about it can happen.
+    const emails = requestEmailAttentionItems(schedules, now).map(
       ({ booking, attention }) => ({
         attention,
+        dismissible: false,
+        key: `email:${booking.requestRecipient?.id ?? booking.id}`,
         schedule: booking,
         ...describe(attention, booking),
       }),
     );
+    const bookings = tradieAttentionItems(
+      schedules,
+      sydneyDateOnly(now),
+      now,
+    ).map(({ booking, attention }) => ({
+      attention,
+      dismissible: true,
+      key: `booking:${booking.id}`,
+      schedule: booking,
+      ...describe(attention, booking),
+    }));
+    return [...emails, ...bookings];
   }, [schedules]);
 }
 
@@ -93,6 +123,7 @@ const ACTION_LABEL: Record<TradieAttention["action"], string> = {
   approve: "Review approval",
   remind: "Send reminder",
   replace: "Book replacement",
+  "retry-email": "Retry",
 };
 
 /** The one control an alert carries, identical wherever the alert shows. */
@@ -109,6 +140,18 @@ export function TradieAttentionActionButton({
   const { action } = entry.attention;
   const label = ACTION_LABEL[action];
   const classes = cn("h-8 shrink-0 rounded-lg px-2.5 text-[11px]", className);
+
+  if (action === "retry-email") {
+    const delivery = entry.schedule.requestRecipient;
+    return delivery ? (
+      <RetryEmailButton
+        projectId={project.id}
+        delivery={delivery}
+        tradieName={entry.schedule.tradie.name}
+        className={classes}
+      />
+    ) : null;
+  }
 
   if (action === "approve") {
     // The approval carries the cost and the dates the admin is approving, so

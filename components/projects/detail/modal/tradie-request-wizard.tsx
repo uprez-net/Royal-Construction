@@ -1,5 +1,5 @@
 import type { ProjectStage } from "@prisma/client";
-import { CheckCircle2, Loader2, Send, XCircle } from "lucide-react";
+import { Loader2, Send } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { draftTradieRequestWorkDetailsAction } from "@/lib/data/tradie-request-ai";
-import type { SentTradieRequestsResult } from "@/lib/data/tradieSchedules";
+import type { SentTradieRequestsResult } from "@/lib/data/tradie-requests";
 import { getTradieGroupedByCategoryCached } from "@/lib/data/tradie-management";
 import {
   MAX_REQUEST_ACTIVITIES,
@@ -41,6 +41,7 @@ import {
 } from "../tradie-requests";
 import { RequestActivitiesStep } from "./request-activities-step";
 import { RequestEmailStep } from "./request-email-step";
+import { RequestDeliveryStatus } from "../request-delivery-status";
 
 export type RequestActivityDraft = {
   /** `YYYY-MM-DD`. */
@@ -424,10 +425,10 @@ export default function TradieRequestWizard({
         }),
       ).unwrap();
 
-      const failed = sent.deliveries.filter(
-        (delivery) => delivery.status === "failed",
+      const notSent = sent.deliveries.filter(
+        (delivery) => delivery.status !== "SENT",
       );
-      if (failed.length === 0) {
+      if (notSent.length === 0) {
         toast.success(
           sent.deliveries.length === 1
             ? `Request sent to ${sent.deliveries[0].tradieName}.`
@@ -436,7 +437,8 @@ export default function TradieRequestWizard({
         closeAndReset();
         return;
       }
-      // Saved but not everyone was emailed: say so, by name, and stay open.
+      // Saved but not everyone was emailed yet: say so, by name, and stay
+      // open with Retry where a person may retry.
       setResult(sent);
       setStep("sent");
     } catch (error) {
@@ -585,7 +587,7 @@ export default function TradieRequestWizard({
               subjectError={stepErrors.subject}
             />
           ) : result ? (
-            <DeliveryReport result={result} />
+            <DeliveryReport projectId={project.id} result={result} />
           ) : null}
         </div>
 
@@ -651,57 +653,88 @@ export default function TradieRequestWizard({
 }
 
 /**
- * Shown only when at least one email failed. The bookings are saved either
- * way; this is the office's one chance to see who never heard from them.
+ * Shown only when at least one email did not go straight out. The bookings
+ * are saved either way. Each row reads the live state from the store, so a
+ * Retry here — or one that happens on the Tradies tab — updates it in place.
  */
-function DeliveryReport({ result }: { result: SentTradieRequestsResult }) {
-  const failed = result.deliveries.filter(
-    (delivery) => delivery.status === "failed",
+function DeliveryReport({
+  projectId,
+  result,
+}: {
+  projectId: string;
+  result: SentTradieRequestsResult;
+}) {
+  const schedules = useAppSelector(
+    (state) => state.projects.activeProject?.tradieSchedules,
   );
+  const live = (recipientId: string) =>
+    schedules?.find((schedule) => schedule.requestRecipient?.id === recipientId)
+      ?.requestRecipient;
+  const deliveries = result.deliveries.map((delivery) => ({
+    delivery: live(delivery.recipientId) ?? {
+      attempts: delivery.attempts,
+      deliveryStatus: delivery.status,
+      id: delivery.recipientId,
+      lastError: delivery.reason,
+      nextAttemptAt: delivery.nextAttemptAt,
+      sentAt: null,
+    },
+    to: delivery.to,
+    tradieId: delivery.tradieId,
+    tradieName: delivery.tradieName,
+  }));
+  const waiting = deliveries.filter(
+    ({ delivery }) => delivery.deliveryStatus !== "SENT",
+  );
+  const retrying = waiting.filter(
+    ({ delivery }) => delivery.deliveryStatus === "RETRYING",
+  ).length;
+
   return (
     <div className="mx-auto max-w-xl space-y-4">
       <div
         role="alert"
-        className="rounded-lg border border-warning/40 bg-warning-light p-4"
+        className={
+          waiting.length === 0
+            ? "rounded-lg border border-success/40 bg-success-light p-4"
+            : "rounded-lg border border-warning/40 bg-warning-light p-4"
+        }
       >
-        <p className="text-sm font-semibold text-warning-ink">
-          The request is saved, but {failed.length} of{" "}
-          {result.deliveries.length}{" "}
-          {result.deliveries.length === 1 ? "email" : "emails"} did not send.
+        <p
+          className={
+            waiting.length === 0
+              ? "text-sm font-semibold text-success-ink"
+              : "text-sm font-semibold text-warning-ink"
+          }
+        >
+          {waiting.length === 0
+            ? "Every email has now gone out."
+            : `The request is saved, but ${waiting.length} of ${deliveries.length} ${deliveries.length === 1 ? "email has" : "emails have"} not gone out yet.`}
         </p>
-        <p className="mt-1 text-sm text-warning-ink">
-          The bookings are on the Tradies tab as awaiting quote. Use the
-          reminder button on a tradie&apos;s row to email them again.
-        </p>
+        {waiting.length > 0 ? (
+          <p className="mt-1 text-sm text-warning-ink">
+            {retrying > 0
+              ? "Emails marked Retrying are tried again automatically. "
+              : ""}
+            Anything that fails stays on the Tradies tab and in the project
+            alerts with a Retry button until it is sent.
+          </p>
+        ) : null}
       </div>
       <ul className="divide-y rounded-lg border border-border/70 bg-card">
-        {result.deliveries.map((delivery) => (
-          <li
-            key={delivery.tradieId}
-            className="flex items-start gap-3 px-4 py-3"
-          >
-            {delivery.status === "sent" ? (
-              <CheckCircle2
-                className="mt-0.5 size-4 shrink-0 text-success"
-                aria-hidden="true"
-              />
-            ) : (
-              <XCircle
-                className="mt-0.5 size-4 shrink-0 text-destructive"
-                aria-hidden="true"
-              />
-            )}
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">
-                {delivery.tradieName}
-                <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">
-                  {delivery.to}
-                </span>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {delivery.status === "sent" ? "Email sent" : delivery.reason}
-              </p>
-            </div>
+        {deliveries.map(({ delivery, to, tradieId, tradieName }) => (
+          <li key={tradieId} className="space-y-1.5 px-4 py-3">
+            <p className="text-sm font-medium text-foreground">
+              {tradieName}
+              <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">
+                {to}
+              </span>
+            </p>
+            <RequestDeliveryStatus
+              projectId={projectId}
+              delivery={delivery}
+              tradieName={tradieName}
+            />
           </li>
         ))}
       </ul>

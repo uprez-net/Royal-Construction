@@ -48,6 +48,8 @@ interface DataTableProps {
    * no name.
    */
   rowLabel?: (rowIndex: number) => string;
+  /** Extra classes for one row, on the desktop row and the phone card alike. */
+  rowClassName?: (rowIndex: number) => string | undefined;
 }
 
 export function DataTable({
@@ -58,6 +60,7 @@ export function DataTable({
   align,
   caption,
   rowLabel,
+  rowClassName,
   mobileLayout = "scroll",
   mobileColumns = 2,
   mobileTitleColumn = 0,
@@ -136,6 +139,7 @@ export function DataTable({
                   "min-w-0 rounded-lg border border-border/70 bg-background",
                   onRowClick
                     && "cursor-pointer transition-colors active:bg-muted/40",
+                  rowClassName?.(rowIndex),
                 )}
                 // The whole card opens the record, as the whole row does on a
                 // desktop; the chevron is the keyboard and screen-reader way
@@ -253,6 +257,7 @@ export function DataTable({
                       "border-t border-border/70 transition-colors",
                       onRowClick
                         && "cursor-pointer hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+                      rowClassName?.(rowIndex),
                     )}
                     // A clickable row is an interactive control: without role, name,
                     // tab stop and Enter/Space, keyboard users cannot reach the

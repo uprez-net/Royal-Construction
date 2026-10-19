@@ -192,6 +192,36 @@ export async function handleAdminApproval(input: ApprovalInput) {
       });
     }
 
+    if (
+      resolved.actionType === "TRADE_CANCELLATION"
+      && typeof resolved.affected.projectId === "string"
+    ) {
+      const projectId = resolved.affected.projectId;
+      after(async () => {
+        revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
+        revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+        revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
+        // The person who asked hears the answer; the admins already know it.
+        const request = await prisma.tradieApproval.findUnique({
+          select: { requestedBy: true },
+          where: { id: resolved.approvalId },
+        });
+        if (request?.requestedBy) {
+          await triggerNotification(
+            [request.requestedBy],
+            createNotification("tradeCancellationResolved", {
+              approvalId: resolved.approvalId,
+              approved: resolved.resolution === "approved",
+              projectId,
+              projectName: String(resolved.affected.projectName ?? ""),
+              trade: String(resolved.affected.trade ?? resolved.tradieTrade),
+              tradieName: resolved.tradieName,
+            }),
+          );
+        }
+      });
+    }
+
     return {
       approvalId: resolved.approvalId,
       actionType: resolved.actionType,

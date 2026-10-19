@@ -50,7 +50,9 @@ export function TradieAttentionCard({
     return null;
   }
 
-  const allIds = items.map((item) => item.schedule.id);
+  const allIds = items
+    .filter((item) => item.dismissible)
+    .map((item) => item.schedule.id);
   const isDismissingAll = allIds.every((id) => dismissing.includes(id));
 
   return (
@@ -104,6 +106,7 @@ export function TradieAttentionCard({
               size="icon"
               className="size-8 rounded-lg text-muted-foreground hover:bg-warning/10 hover:text-foreground"
               aria-label="Dismiss all schedule follow-ups"
+              hidden={allIds.length === 0}
               disabled={isDismissingAll}
               onClick={() => void dismiss(allIds)}
             >
@@ -129,7 +132,7 @@ export function TradieAttentionCard({
               const tone = entry.attention.tone;
               return (
                 <div
-                  key={schedule.id}
+                  key={entry.key}
                   className="flex items-center gap-3 rounded-xl border border-border/70 bg-card/85 p-3"
                 >
                   <div
@@ -163,6 +166,7 @@ export function TradieAttentionCard({
                     variant="ghost"
                     size="icon"
                     className="size-8 shrink-0 rounded-lg text-muted-foreground hover:bg-warning/10 hover:text-foreground"
+                    hidden={!entry.dismissible}
                     aria-label={`Dismiss: ${title}`}
                     disabled={dismissing.includes(schedule.id)}
                     onClick={() => void dismiss([schedule.id])}

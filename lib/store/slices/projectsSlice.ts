@@ -69,6 +69,7 @@ import type {
   MilestonePictureUploadData,
   ProjectDetailTabKey,
   CreateTradieScheduleInput,
+  ManualTradieQuoteFormInput,
   SendTradieRequestsFormInput,
 } from "@/utils/validators";
 import { createProjectWithLeadAction } from "@/lib/actions/projects";
@@ -78,9 +79,13 @@ import {
   type CreateProjectFailure,
 } from "@/lib/projects/create-project-errors";
 import {
+  recordManualTradieQuote,
+  requestTradeCancellationForProject,
+  retryTradieRequestEmailForProject,
+  selectTradeQuoteForProject,
   sendTradieRequestsForProject,
-  type SentTradieRequestsResult,
-} from "@/lib/data/tradieSchedules";
+} from "@/lib/data/tradie-requests";
+import type { DomainActionFailure } from "@/lib/http/domain-response";
 import { milestoneTargetDates } from "@/lib/domain/projects/milestone-schedule";
 
 type MutationKey =
@@ -285,28 +290,82 @@ export const createTradieScheduleForProject = createAsyncThunk<
 });
 
 /**
- * Sends a tradie request (one trade, several activities, one or more
- * companies). Resolves with the bookings AND which emails went out: a saved
- * request whose email failed is still a success to the store, and the wizard
- * reports the failed sends itself.
+ * A Tradies-tab action that answers with the project as it now stands. The
+ * store takes that project whole (see `isTradieTabActionFulfilled`) instead of
+ * patching bookings in by hand, so the tab shows what the server committed.
+ * A refusal comes back as a value: a thrown Server Action message is a digest
+ * in production.
  */
-export const sendTradieRequests = createAsyncThunk<
-  SentTradieRequestsResult,
-  SendTradieRequestsFormInput
->("tradies/sendRequests", async (payload, thunkApi) => {
-  try {
-    const result = await sendTradieRequestsForProject(payload);
-    // A refusal comes back as a value: a thrown Server Action message is a
-    // digest in production.
-    if (!result.ok) return thunkApi.rejectWithValue(result.error);
+function tradieTabAction<
+  Arg,
+  Result extends { ok: true; project: ProjectDetail },
+>(
+  type: string,
+  action: (arg: Arg) => Promise<Result | DomainActionFailure>,
+  fallback: string,
+) {
+  return createAsyncThunk<Result, Arg, { rejectValue: string }>(
+    type,
+    async (arg, thunkApi) => {
+      try {
+        const result = await action(arg);
+        if (!result.ok) return thunkApi.rejectWithValue(result.error);
+        return result;
+      } catch (error) {
+        return thunkApi.rejectWithValue(
+          error instanceof Error ? error.message : fallback,
+        );
+      }
+    },
+  );
+}
 
-    return result;
-  } catch (error) {
-    return thunkApi.rejectWithValue(
-      error instanceof Error ? error.message : "Failed to send the request",
-    );
-  }
-});
+/**
+ * Sends a tradie request (one trade, several activities, one or more
+ * companies). A saved request whose email failed is still a success here: the
+ * wizard reports the failed sends, and the tab keeps showing them with Retry.
+ */
+export const sendTradieRequests = tradieTabAction(
+  "tradies/sendRequests",
+  (payload: SendTradieRequestsFormInput) =>
+    sendTradieRequestsForProject(payload),
+  "Failed to send the request",
+);
+
+export const retryTradieRequestEmail = tradieTabAction(
+  "tradies/retryRequestEmail",
+  (payload: { projectId: string; recipientId: string }) =>
+    retryTradieRequestEmailForProject(payload),
+  "Failed to retry the email",
+);
+
+export const recordManualQuote = tradieTabAction(
+  "tradies/recordManualQuote",
+  (payload: ManualTradieQuoteFormInput) => recordManualTradieQuote(payload),
+  "Failed to record the quote",
+);
+
+export const selectTradeQuote = tradieTabAction(
+  "tradies/selectTradeQuote",
+  (payload: { projectId: string; tradieId: string }) =>
+    selectTradeQuoteForProject(payload),
+  "Failed to select the quote",
+);
+
+export const requestTradeCancellation = tradieTabAction(
+  "tradies/requestTradeCancellation",
+  (payload: { projectId: string; selectionId: string; reason: string }) =>
+    requestTradeCancellationForProject(payload),
+  "Failed to request the cancellation",
+);
+
+const isTradieTabActionFulfilled = isAnyOf(
+  sendTradieRequests.fulfilled,
+  retryTradieRequestEmail.fulfilled,
+  recordManualQuote.fulfilled,
+  selectTradeQuote.fulfilled,
+  requestTradeCancellation.fulfilled,
+);
 
 /** Dismisses tradie follow-up alerts until their bookings change status. */
 export const dismissTradieAlerts = createAsyncThunk<
@@ -1890,6 +1949,8 @@ const projectsSlice = createSlice({
             milestone: milestone,
             requiresQuote: schedule.requiresQuote,
             quotedPrice: schedule.quotedPrice ?? null,
+            requestRecipientId: null,
+            quoteId: null,
           });
         }
       })
@@ -1908,54 +1969,11 @@ const projectsSlice = createSlice({
           error: null,
         };
       })
-      .addCase(sendTradieRequests.fulfilled, (state, action) => {
+      .addCase(sendTradieRequests.fulfilled, (state) => {
         state.mutations.createTradieSchedule = {
           status: "succeeded",
           error: null,
         };
-        const { schedules } = action.payload;
-        if (state.activeProject !== null) {
-          schedules.forEach((schedule) => {
-            const milestone = state.activeProject!.milestones.find(
-              (m) => m.id === schedule.milestoneId,
-            );
-            state.activeProject!.tradieSchedules.push({
-              id: schedule.id,
-              status: schedule.status,
-              alertDismissedStatus: null,
-              alertDismissedAt: null,
-              scheduledDate: new Date(schedule.scheduledDate),
-              durationDays: schedule.durationDays,
-              tradieId: schedule.tradieId,
-              tradie: {
-                name: schedule.tradieName,
-                id: schedule.tradieId,
-                lastQuotedPriceUnit: schedule.lastQuotedPriceUnit,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                email: schedule.contact.email,
-                phone: schedule.contact.phone,
-                trade: schedule.tradeType,
-                location: null,
-                archivedAt: null,
-                abn: schedule.abn,
-                isFavourite: schedule.isFavourite,
-                note: null,
-                additionalEmails: [],
-              },
-              createdAt: new Date(),
-              updatedAt: new Date(),
-              projectId: schedule.projectId,
-              milestoneId: schedule.milestoneId ?? null,
-              reminderSentAt: schedule.reminderSentAt
-                ? new Date(schedule.reminderSentAt)
-                : null,
-              milestone: milestone,
-              requiresQuote: schedule.requiresQuote,
-              quotedPrice: schedule.quotedPrice ?? null,
-            });
-          });
-        }
       })
       .addCase(sendTradieRequests.rejected, (state, action) => {
         state.mutations.createTradieSchedule = {
@@ -2106,6 +2124,17 @@ const projectsSlice = createSlice({
       // twenty-seven near-identical cases. What differs is where the status
       // goes: each request files under its own scope, so several can be in
       // flight at once without any of them speaking for the others.
+      .addMatcher(isTradieTabActionFulfilled, (state, action) => {
+        const project = action.payload.project;
+        if (state.activeProject?.id !== project.id) return;
+        state.activeProject = {
+          ...project,
+          milestones: project.milestones.map(reviveMilestoneDates),
+          certifierEngagement: reviveComplianceEngagementDates(
+            project.certifierEngagement,
+          ),
+        };
+      })
       .addMatcher(isComplianceThunkPending, (state, action) => {
         state.complianceMutations[complianceScopeOf(action)] = {
           status: "pending",
