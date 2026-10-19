@@ -89,6 +89,36 @@ export type CreateTradieScheduleInput = z.infer<
 >;
 
 /**
+ * A tradie request: one trade, several activities, one or more companies.
+ *
+ * Shape only; the counts, the trade match and which milestones may still be
+ * requested are lib/domain/tradies/requests.ts's to decide. The email copy
+ * travels as data, not HTML — the server renders it with the same function
+ * the wizard previews.
+ */
+export const sendTradieRequestsSchema = z.object({
+  projectId: z.string().trim().min(1, "Project ID is required"),
+  tradieIds: z.array(z.string().trim().min(1)).min(1, "Choose a tradie"),
+  activities: z
+    .array(
+      z.object({
+        milestoneId: z.string().trim().min(1),
+        // A calendar day: the date picker's value, not a timestamp.
+        scheduledDate: z.iso.date("Each activity needs a date"),
+        durationDays: z.coerce.number().int().positive().max(365),
+        workLines: z.array(z.string().trim().max(300)).max(12).default([]),
+      }),
+    )
+    .min(1, "Choose an activity"),
+  subject: z.string().trim().min(1, "Email subject is required").max(200),
+  note: z.string().trim().max(2000).optional(),
+});
+
+export type SendTradieRequestsFormInput = z.input<
+  typeof sendTradieRequestsSchema
+>;
+
+/**
  * Update tradie schedule status
  */
 export const updateTradieScheduleSchema = z.object({

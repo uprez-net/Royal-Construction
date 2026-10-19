@@ -69,6 +69,7 @@ import type {
   MilestonePictureUploadData,
   ProjectDetailTabKey,
   CreateTradieScheduleInput,
+  SendTradieRequestsFormInput,
 } from "@/utils/validators";
 import { createProjectWithLeadAction } from "@/lib/actions/projects";
 import type { CreateProjectWithLeadInput } from "@/lib/data/projectsWrite";
@@ -76,7 +77,10 @@ import {
   toCreateProjectFailure,
   type CreateProjectFailure,
 } from "@/lib/projects/create-project-errors";
-import { bulkCreateTradieSchedules } from "@/lib/data/tradieSchedules";
+import {
+  sendTradieRequestsForProject,
+  type SentTradieRequestsResult,
+} from "@/lib/data/tradieSchedules";
 import { milestoneTargetDates } from "@/lib/domain/projects/milestone-schedule";
 
 type MutationKey =
@@ -280,22 +284,26 @@ export const createTradieScheduleForProject = createAsyncThunk<
   return response.data;
 });
 
-export const createBulkTradieScheduleForProject = createAsyncThunk<
-  TradieScheduleListItem[],
-  CreateTradieScheduleInput[]
->("tradies/createBulkSchedule", async (payload, thunkApi) => {
+/**
+ * Sends a tradie request (one trade, several activities, one or more
+ * companies). Resolves with the bookings AND which emails went out: a saved
+ * request whose email failed is still a success to the store, and the wizard
+ * reports the failed sends itself.
+ */
+export const sendTradieRequests = createAsyncThunk<
+  SentTradieRequestsResult,
+  SendTradieRequestsFormInput
+>("tradies/sendRequests", async (payload, thunkApi) => {
   try {
-    const result = await bulkCreateTradieSchedules(payload);
+    const result = await sendTradieRequestsForProject(payload);
     // A refusal comes back as a value: a thrown Server Action message is a
     // digest in production.
     if (!result.ok) return thunkApi.rejectWithValue(result.error);
 
-    return result.schedules;
+    return result;
   } catch (error) {
     return thunkApi.rejectWithValue(
-      error instanceof Error
-        ? error.message
-        : "Failed to create tradie schedules",
+      error instanceof Error ? error.message : "Failed to send the request",
     );
   }
 });
@@ -1894,65 +1902,62 @@ const projectsSlice = createSlice({
             ?? "Failed to create tradie schedule",
         };
       })
-      .addCase(createBulkTradieScheduleForProject.pending, (state) => {
+      .addCase(sendTradieRequests.pending, (state) => {
         state.mutations.createTradieSchedule = {
           status: "pending",
           error: null,
         };
       })
-      .addCase(
-        createBulkTradieScheduleForProject.fulfilled,
-        (state, action) => {
-          state.mutations.createTradieSchedule = {
-            status: "succeeded",
-            error: null,
-          };
-          const schedules = action.payload;
-          if (state.activeProject !== null) {
-            schedules.forEach((schedule) => {
-              const milestone = state.activeProject!.milestones.find(
-                (m) => m.id === schedule.milestoneId,
-              );
-              state.activeProject!.tradieSchedules.push({
-                id: schedule.id,
-                status: schedule.status,
-                alertDismissedStatus: null,
-                alertDismissedAt: null,
-                scheduledDate: new Date(schedule.scheduledDate),
-                durationDays: schedule.durationDays,
-                tradieId: schedule.tradieId,
-                tradie: {
-                  name: schedule.tradieName,
-                  id: schedule.tradieId,
-                  lastQuotedPriceUnit: schedule.lastQuotedPriceUnit,
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-                  email: schedule.contact.email,
-                  phone: schedule.contact.phone,
-                  trade: schedule.tradeType,
-                  location: null,
-                  archivedAt: null,
-                  abn: schedule.abn,
-                  isFavourite: schedule.isFavourite,
-                  note: null,
-                  additionalEmails: [],
-                },
+      .addCase(sendTradieRequests.fulfilled, (state, action) => {
+        state.mutations.createTradieSchedule = {
+          status: "succeeded",
+          error: null,
+        };
+        const { schedules } = action.payload;
+        if (state.activeProject !== null) {
+          schedules.forEach((schedule) => {
+            const milestone = state.activeProject!.milestones.find(
+              (m) => m.id === schedule.milestoneId,
+            );
+            state.activeProject!.tradieSchedules.push({
+              id: schedule.id,
+              status: schedule.status,
+              alertDismissedStatus: null,
+              alertDismissedAt: null,
+              scheduledDate: new Date(schedule.scheduledDate),
+              durationDays: schedule.durationDays,
+              tradieId: schedule.tradieId,
+              tradie: {
+                name: schedule.tradieName,
+                id: schedule.tradieId,
+                lastQuotedPriceUnit: schedule.lastQuotedPriceUnit,
                 createdAt: new Date(),
                 updatedAt: new Date(),
-                projectId: schedule.projectId,
-                milestoneId: schedule.milestoneId ?? null,
-                reminderSentAt: schedule.reminderSentAt
-                  ? new Date(schedule.reminderSentAt)
-                  : null,
-                milestone: milestone,
-                requiresQuote: false,
-                quotedPrice: null,
-              });
+                email: schedule.contact.email,
+                phone: schedule.contact.phone,
+                trade: schedule.tradeType,
+                location: null,
+                archivedAt: null,
+                abn: schedule.abn,
+                isFavourite: schedule.isFavourite,
+                note: null,
+                additionalEmails: [],
+              },
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              projectId: schedule.projectId,
+              milestoneId: schedule.milestoneId ?? null,
+              reminderSentAt: schedule.reminderSentAt
+                ? new Date(schedule.reminderSentAt)
+                : null,
+              milestone: milestone,
+              requiresQuote: schedule.requiresQuote,
+              quotedPrice: schedule.quotedPrice ?? null,
             });
-          }
-        },
-      )
-      .addCase(createBulkTradieScheduleForProject.rejected, (state, action) => {
+          });
+        }
+      })
+      .addCase(sendTradieRequests.rejected, (state, action) => {
         state.mutations.createTradieSchedule = {
           status: "failed",
           error:

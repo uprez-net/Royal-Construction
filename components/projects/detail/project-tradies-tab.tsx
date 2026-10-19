@@ -33,6 +33,16 @@ import { calculateScheduleTotalCost } from "@/utils/calculations";
 import { TradieAttentionCard } from "./tradie-attention-card";
 import { useTradieAttention } from "./tradie-attention";
 import { toScheduleListItem as buildScheduleListItem } from "./schedule-list-item";
+import { useCallback, useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { sameTrade } from "@/lib/domain/tradies/request-rules";
+import {
+  projectTrades,
+  schedulesForTrade,
+  tradeOverview,
+} from "./tradie-requests";
+import { TradeList, TradeWorkbench } from "./tradie-trade-overview";
 
 /**
  * Formats a money value, falling back to an em dash rather than rendering
@@ -100,9 +110,52 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
   // has an alert beside it saying why.
   const now = new Date();
 
-  const tradies = project.tradieSchedules;
-  const attentionItems = useTradieAttention(tradies);
+  const attentionItems = useTradieAttention(project.tradieSchedules);
   const dispatch = useAppDispatch();
+
+  // The trade being looked at lives in the URL, beside `activeTab`, so it
+  // survives a reload and the back button, and a fresh visit starts on "All".
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
+  const trades = useMemo(() => projectTrades(project), [project]);
+  const tradeParam = searchParams.get("trade");
+  const trade = tradeParam
+    ? (trades.find((option) => sameTrade(option, tradeParam)) ?? null)
+    : null;
+
+  const selectTrade = useCallback(
+    (next: string | null) => {
+      const params = new URLSearchParams(searchParamsString);
+      if (next) params.set("trade", next);
+      else params.delete("trade");
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParamsString],
+  );
+
+  const overviews = useMemo(
+    () => trades.map((option) => tradeOverview(project, option)),
+    [project, trades],
+  );
+  const overview = trade
+    ? overviews.find((item) => item.trade === trade)
+    : undefined;
+
+  // The board shows the selected trade's bookings, or every booking.
+  const tradies = useMemo(
+    () => schedulesForTrade(project.tradieSchedules, trade),
+    [project.tradieSchedules, trade],
+  );
+
+  const openRequestWizard = () =>
+    dispatch(
+      openModal({
+        type: "scheduleTradie",
+        payload: { project, ...(trade ? { trade } : {}) },
+      }),
+    );
 
   const toScheduleListItem = (
     tradie: TradieScheduleWithTradieAndMilestone,
@@ -155,25 +208,67 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
       />
 
       <SectionCard
-        title="Tradie coordination board"
+        title="Trade requests"
+        description="Ask tradies to quote for a trade's activities, compare what comes back, and see which activities have their tradie."
         action={
           <Button
             size="sm"
             className="h-8 rounded-md px-3 text-xs font-medium"
-            onClick={() =>
-              dispatch(
-                openModal({
-                  type: "scheduleTradie",
-                  payload: {
-                    project,
-                  },
-                }),
-              )
-            }
+            onClick={openRequestWizard}
           >
             <Plus className="mr-1 size-3.5" aria-hidden="true" />
             Schedule tradies
           </Button>
+        }
+      >
+        <div className="space-y-4">
+          {trades.length > 0 ? (
+            <div
+              role="group"
+              aria-label="Trade category"
+              className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1"
+            >
+              {[null, ...trades].map((option) => {
+                const selected = option === trade;
+                return (
+                  <button
+                    key={option ?? "all"}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => selectTrade(option)}
+                    className={cn(
+                      "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/50",
+                      selected
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border/70 bg-card text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                    )}
+                  >
+                    {option ?? "All trades"}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {overview ? (
+            <TradeWorkbench overview={overview} onRequest={openRequestWizard} />
+          ) : trades.length > 0 ? (
+            <TradeList overviews={overviews} onSelect={selectTrade} />
+          ) : (
+            <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+              No activities on this project name a trade yet, and nobody has
+              been booked. Use Schedule tradies to send a first request.
+            </p>
+          )}
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Tradie coordination board"
+        description={
+          trade
+            ? `${trade} bookings, one row per tradie and activity.`
+            : "Every booking, one row per tradie and activity."
         }
       >
         <DataTable
@@ -437,11 +532,14 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
 
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">
-                  No tradies scheduled on this project
+                  {trade
+                    ? `No ${trade} tradies booked on this project`
+                    : "No tradies scheduled on this project"}
                 </p>
 
                 <p className="text-xs text-muted-foreground">
-                  Use Schedule tradies to book a trade against a milestone.
+                  Use Schedule tradies to request quotes for a trade&apos;s
+                  activities.
                 </p>
               </div>
             </div>
