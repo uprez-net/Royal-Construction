@@ -1,14 +1,34 @@
-import { MilestoneStatus, type ProjectStage } from "@prisma/client";
+import {
+  MilestoneStatus,
+  OutboxEventKind,
+  Prisma,
+  TradieRequestDeliveryStatus,
+  type ProjectStage,
+} from "@prisma/client";
 
 import type { DomainDb } from "../db";
-import { DomainNotFoundError, DomainValidationError } from "../errors";
-import type { DomainPrincipal } from "../principal";
+import {
+  DomainNotFoundError,
+  DomainTransitionError,
+  DomainValidationError,
+} from "../errors";
+import {
+  attributionUserId,
+  isInternalPrincipal,
+  type DomainPrincipal,
+} from "../principal";
 import { authorizeProject } from "../access/projects";
+import { runOutboxEffectWithOutcome } from "../outbox";
 import type {
   TradieRequestAiPort,
   WorkDetailsDraft,
 } from "../ports/tradie-request-ai";
 import { requireActiveTradie } from "./lifecycle";
+import {
+  canRetryRequestEmail,
+  deliveryAfterFailure,
+  type RequestSendFailure,
+} from "./request-delivery";
 import {
   activityAcceptsTrade,
   isRequestableMilestone,
@@ -22,7 +42,7 @@ import { createTradieSchedules, type CreatedSchedule } from "./schedules";
 // one or more companies so their quotes can be compared.
 //
 // Each company gets ONE email covering every activity. The bulk booking this
-// replaces looked up a row's email by tradie, so a tradie booked onto three
+// replaced looked up a row's email by tradie, so a tradie booked onto three
 // milestones received the same email three times.
 //
 // What the command refuses, beyond what `createTradieSchedule` already does
@@ -37,11 +57,11 @@ import { createTradieSchedules, type CreatedSchedule } from "./schedules";
 //   - A company with no email address. The request IS the email, so saving
 //     the bookings and sending nothing would report a request nobody received.
 //
-// The bookings are written in one transaction first, then each email is sent.
-// A failed send does not undo the bookings: it is reported per company, so
-// the screen can say exactly who did not get it rather than claiming success.
-// A retry cannot double-send either, because the second attempt is refused as
-// the same booking twice before anything goes out.
+// The request, each company's copy of the email and the bookings are written
+// in one transaction. Then each email is sent as its own attempt, and where it
+// stands — sent, retrying, failed — is stored on the copy, so a failure stays
+// on screen with a Retry button instead of living only in a toast. Retrying
+// resends the stored email, not a re-render, so it is what was reviewed.
 
 export type TradieRequestActivityInput = {
   readonly milestoneId: string;
@@ -54,13 +74,8 @@ export type SendTradieRequestsInput = {
   readonly projectId: string;
   readonly tradieIds: readonly string[];
   readonly activities: readonly TradieRequestActivityInput[];
-};
-
-export type TradieRequestRecipient = {
-  readonly id: string;
-  readonly name: string;
-  readonly email: string;
-  readonly additionalEmails: readonly string[];
+  readonly subject: string;
+  readonly note?: string | null;
 };
 
 export type TradieRequestActivity = {
@@ -71,24 +86,41 @@ export type TradieRequestActivity = {
   readonly durationDays: number;
 };
 
-/** Sends one company its request. Throws when the mail was not accepted. */
-export type TradieRequestEmailPort = (message: {
+/** Renders one company's email. Pure: no sending. */
+export type TradieRequestRenderPort = (message: {
   readonly project: { readonly id: string; readonly name: string };
   readonly trade: string;
-  readonly tradie: TradieRequestRecipient;
+  readonly subject: string;
+  readonly tradieName: string;
   readonly activities: readonly TradieRequestActivity[];
-}) => Promise<void>;
+}) => { readonly subject: string; readonly html: string };
+
+export type TradieRequestMailPorts = {
+  /** Sends one stored email. Throws when the mail server did not accept it. */
+  readonly send: (email: {
+    readonly to: string;
+    readonly cc: readonly string[];
+    readonly subject: string;
+    readonly html: string;
+  }) => Promise<void>;
+  /** What a thrown send means: see `RequestSendFailure`. */
+  readonly classifyFailure: (error: unknown) => RequestSendFailure;
+};
 
 export type TradieRequestDelivery = {
+  readonly recipientId: string;
   readonly tradieId: string;
   readonly tradieName: string;
   readonly to: string;
-} & (
-  | { readonly status: "sent" }
-  | { readonly status: "failed"; readonly reason: string }
-);
+  readonly status: TradieRequestDeliveryStatus;
+  readonly attempts: number;
+  readonly nextAttemptAt: Date | null;
+  /** Why it is not sent, when it is not. Operator-facing. */
+  readonly reason: string | null;
+};
 
 export type SentTradieRequests = {
+  readonly requestId: string;
   readonly trade: string;
   readonly schedules: readonly CreatedSchedule[];
   readonly deliveries: readonly TradieRequestDelivery[];
@@ -104,7 +136,7 @@ export async function sendTradieRequests(
   principal: DomainPrincipal,
   input: SendTradieRequestsInput,
   db: DomainDb,
-  send: TradieRequestEmailPort,
+  ports: TradieRequestMailPorts & { readonly render: TradieRequestRenderPort },
 ): Promise<SentTradieRequests> {
   if (input.tradieIds.length === 0) {
     throw new DomainValidationError("Choose at least one tradie.", "tradieIds");
@@ -127,6 +159,9 @@ export async function sendTradieRequests(
       "activities",
     );
   }
+  if (!input.subject.trim()) {
+    throw new DomainValidationError("Give the email a subject.", "subject");
+  }
   assertDistinct(input.tradieIds, "tradie");
   assertDistinct(
     input.activities.map((activity) => activity.milestoneId),
@@ -143,7 +178,7 @@ export async function sendTradieRequests(
 
   const project = await authorizeProject(principal, input.projectId, db);
 
-  const tradies = [];
+  const tradies: Awaited<ReturnType<typeof requireActiveTradie>>[] = [];
   for (const tradieId of input.tradieIds) {
     tradies.push(await requireActiveTradie(tradieId, db));
   }
@@ -211,57 +246,280 @@ export async function sendTradieRequests(
     },
   );
 
-  // Every booking or none: the same command and checks as a single booking,
-  // in one serialisable transaction.
-  const schedules = await createTradieSchedules(
-    principal,
-    tradies.flatMap((tradie) =>
-      activities.map((activity) => ({
-        durationDays: activity.durationDays,
-        milestoneId: activity.milestoneId,
+  // Rendered before the transaction: it is pure, and what is stored is what
+  // is sent, now and on every retry.
+  const emails = tradies.map((tradie) => ({
+    tradie,
+    ...ports.render({
+      activities,
+      project: { id: project.id, name: project.name },
+      subject: input.subject.trim(),
+      trade,
+      tradieName: tradie.name,
+    }),
+  }));
+
+  const write = async (tx: DomainDb) => {
+    const request = await tx.tradieRequest.create({
+      data: {
+        createdById: attributionUserId(principal),
+        note: input.note?.trim() || null,
         projectId: project.id,
-        requiresQuote: true,
-        scheduledDate: activity.scheduledDate,
-        tradieId: tradie.id,
-      })),
-    ),
-    db,
-  );
+        subject: input.subject.trim(),
+        trade,
+      },
+      select: { id: true },
+    });
+    const recipients: { id: string; tradieId: string }[] = [];
+    for (const email of emails) {
+      recipients.push(
+        await tx.tradieRequestRecipient.create({
+          data: {
+            ccAddresses: email.tradie.additionalEmails,
+            html: email.html,
+            requestId: request.id,
+            subject: email.subject,
+            toAddress: email.tradie.email.trim(),
+            tradieId: email.tradie.id,
+          },
+          select: { id: true, tradieId: true },
+        }),
+      );
+    }
+    const recipientByTradie = new Map(
+      recipients.map((recipient) => [recipient.tradieId, recipient.id]),
+    );
+    // Every booking or none: the same command and checks as a single booking.
+    const schedules = await createTradieSchedules(
+      principal,
+      tradies.flatMap((tradie) =>
+        activities.map((activity) => ({
+          durationDays: activity.durationDays,
+          milestoneId: activity.milestoneId,
+          projectId: project.id,
+          requestRecipientId: recipientByTradie.get(tradie.id) ?? null,
+          requiresQuote: true,
+          scheduledDate: activity.scheduledDate,
+          tradieId: tradie.id,
+        })),
+      ),
+      tx,
+    );
+    return { recipients, requestId: request.id, schedules };
+  };
+  const written =
+    "$transaction" in db
+      ? await db.$transaction(write, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        })
+      : await write(db);
 
   const deliveries: TradieRequestDelivery[] = [];
-  for (const tradie of tradies) {
-    const recipient: TradieRequestRecipient = {
-      additionalEmails: tradie.additionalEmails,
-      email: tradie.email.trim(),
-      id: tradie.id,
-      name: tradie.name,
-    };
-    const delivery = {
-      tradieId: tradie.id,
-      tradieName: tradie.name,
-      to: recipient.email,
-    };
-    try {
-      await send({
-        activities,
-        project: { id: project.id, name: project.name },
-        trade,
-        tradie: recipient,
-      });
-      deliveries.push({ ...delivery, status: "sent" });
-    } catch {
-      // The provider's own message is not for the operator; the adapter logs
-      // it. What they need is who missed out and what to do about it.
-      deliveries.push({
-        ...delivery,
-        reason:
-          "The email service did not accept the message. The request is saved; send a reminder from its row to try again.",
-        status: "failed",
-      });
+  for (const recipient of written.recipients) {
+    deliveries.push(
+      await deliverTradieRequest(
+        principal,
+        { recipientId: recipient.id, trigger: "initial" },
+        db,
+        ports,
+      ),
+    );
+  }
+
+  return {
+    deliveries,
+    requestId: written.requestId,
+    schedules: written.schedules,
+    trade,
+  };
+}
+
+/**
+ * Make one attempt at one tradie's request email, and record where it stands.
+ *
+ * - `initial`: the first send, straight after the request was written.
+ * - `automatic`: a scheduled retry, run by the retry workflow as the system.
+ * - `manual`: a person pressed Retry. Allowed once the email has failed, or
+ *   when a scheduled retry is overdue (`canRetryRequestEmail`).
+ *
+ * The attempt is claimed with a conditional update on the status and attempt
+ * count it was decided from, so a double-click, a workflow step that runs
+ * twice, or a person and the workflow at the same moment make one attempt,
+ * not two. The send itself goes through the outbox under a key per attempt.
+ *
+ * A send that fails is an answer, not an exception: it is recorded and
+ * returned. Only a refusal to attempt at all throws.
+ */
+export async function deliverTradieRequest(
+  principal: DomainPrincipal,
+  input: {
+    readonly recipientId: string;
+    readonly trigger: "initial" | "automatic" | "manual";
+    /** For a manual retry: the project the screen showed it under. */
+    readonly projectId?: string;
+    readonly now?: Date;
+  },
+  db: DomainDb,
+  ports: TradieRequestMailPorts,
+): Promise<TradieRequestDelivery> {
+  const now = input.now ?? new Date();
+  const recipient = await db.tradieRequestRecipient.findUnique({
+    select: {
+      attempts: true,
+      ccAddresses: true,
+      deliveryStatus: true,
+      html: true,
+      id: true,
+      lastError: true,
+      nextAttemptAt: true,
+      request: { select: { projectId: true } },
+      subject: true,
+      toAddress: true,
+      tradie: { select: { archivedAt: true, name: true } },
+      tradieId: true,
+    },
+    where: { id: input.recipientId },
+  });
+  if (!recipient) throw new DomainNotFoundError("Request email not found.");
+
+  const describe = (state: {
+    readonly attempts: number;
+    readonly deliveryStatus: TradieRequestDeliveryStatus;
+    readonly lastError: string | null;
+    readonly nextAttemptAt: Date | null;
+  }): TradieRequestDelivery => ({
+    attempts: state.attempts,
+    nextAttemptAt: state.nextAttemptAt,
+    reason:
+      state.deliveryStatus === TradieRequestDeliveryStatus.SENT
+        ? null
+        : state.lastError,
+    recipientId: recipient.id,
+    status: state.deliveryStatus,
+    to: recipient.toAddress,
+    tradieId: recipient.tradieId,
+    tradieName: recipient.tradie.name,
+  });
+
+  switch (input.trigger) {
+    case "initial":
+      if (
+        recipient.deliveryStatus !== TradieRequestDeliveryStatus.SENDING
+        || recipient.attempts !== 0
+      ) {
+        return describe(recipient);
+      }
+      break;
+    case "automatic":
+      if (!isInternalPrincipal(principal)) {
+        throw new DomainTransitionError("Automatic retries run as the system.");
+      }
+      // Not due, or no longer waiting: someone retried by hand, or a step ran
+      // twice. Nothing to do.
+      if (
+        recipient.deliveryStatus !== TradieRequestDeliveryStatus.RETRYING
+        || !recipient.nextAttemptAt
+        || recipient.nextAttemptAt.getTime() > now.getTime()
+      ) {
+        return describe(recipient);
+      }
+      break;
+    case "manual": {
+      const project = await authorizeProject(
+        principal,
+        recipient.request.projectId,
+        db,
+      );
+      if (input.projectId && input.projectId !== project.id) {
+        throw new DomainNotFoundError("Request email not found.");
+      }
+      if (recipient.tradie.archivedAt) {
+        throw new DomainTransitionError(
+          "This tradie has been removed from the directory, so the request cannot be resent.",
+        );
+      }
+      if (!canRetryRequestEmail(recipient, now)) {
+        throw new DomainTransitionError(
+          recipient.deliveryStatus === TradieRequestDeliveryStatus.SENT
+            ? "This email has already been sent."
+            : recipient.deliveryStatus === TradieRequestDeliveryStatus.RETRYING
+              ? "This email is already scheduled to be retried automatically."
+              : "This email is being sent right now.",
+        );
+      }
+      break;
     }
   }
 
-  return { deliveries, schedules, trade };
+  const attempt = recipient.attempts + 1;
+  const claimed = await db.tradieRequestRecipient.updateMany({
+    data: {
+      attempts: attempt,
+      deliveryStatus: TradieRequestDeliveryStatus.SENDING,
+      lastAttemptAt: now,
+      nextAttemptAt: null,
+    },
+    where: {
+      attempts: recipient.attempts,
+      deliveryStatus: recipient.deliveryStatus,
+      id: recipient.id,
+    },
+  });
+  if (claimed.count !== 1) {
+    if (input.trigger === "manual") {
+      throw new DomainTransitionError(
+        "This email is already being sent. Refresh to see how it went.",
+      );
+    }
+    return describe(recipient);
+  }
+
+  let failure: RequestSendFailure | null = null;
+  try {
+    await runOutboxEffectWithOutcome(
+      db,
+      {
+        key: `tradie-request:${recipient.id}:${attempt}`,
+        kind: OutboxEventKind.TRADIE_REQUEST_SEND,
+        payload: { attempt, recipientId: recipient.id },
+      },
+      async () => {
+        await ports.send({
+          cc: recipient.ccAddresses,
+          html: recipient.html,
+          subject: recipient.subject,
+          to: recipient.toAddress,
+        });
+        return { sent: true };
+      },
+    );
+  } catch (error) {
+    // The outbox refusing this attempt means it was already tried under this
+    // key: whether it went is not known, so a person decides.
+    failure =
+      error instanceof DomainTransitionError
+        ? "ambiguous"
+        : ports.classifyFailure(error);
+  }
+
+  const outcome =
+    failure === null
+      ? {
+          deliveryStatus: TradieRequestDeliveryStatus.SENT,
+          lastError: null,
+          nextAttemptAt: null,
+          sentAt: now,
+        }
+      : deliveryAfterFailure(failure, attempt, input.trigger, now);
+  await db.tradieRequestRecipient.updateMany({
+    data: outcome,
+    where: {
+      attempts: attempt,
+      deliveryStatus: TradieRequestDeliveryStatus.SENDING,
+      id: recipient.id,
+    },
+  });
+  return describe({ ...outcome, attempts: attempt });
 }
 
 /**

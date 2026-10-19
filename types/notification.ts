@@ -178,6 +178,20 @@ export const notificationTemplates: NotificationTemplateFactory = {
     url: `/admin-approvals?q=${encodeURIComponent(data.tradieName)}&approvalType=${TradieApprovalActionType.SCHEDULE_DELETION}&status=${TradieApprovalStatus.PENDING}&approvalId=${data.approvalId}`,
   }),
 
+  tradeCancellationRequest: (data) => ({
+    title: `Trade Cancellation Request: ${data.tradieName} (${data.trade}) for ${data.projectName}`,
+    message: `${data.requestedBy} has asked to release ${data.tradieName} from ${data.trade} on ${data.projectName}: ${data.reason}`,
+    url: `/admin-approvals?q=${encodeURIComponent(data.tradieName)}&approvalType=${TradieApprovalActionType.TRADE_CANCELLATION}&status=${TradieApprovalStatus.PENDING}&approvalId=${data.approvalId}`,
+  }),
+
+  tradeCancellationResolved: (data) => ({
+    title: `Trade Cancellation ${data.approved ? "Approved" : "Rejected"}: ${data.tradieName} (${data.trade})`,
+    message: data.approved
+      ? `${data.tradieName} has been released from ${data.trade} on ${data.projectName}, and their bookings there are cancelled`
+      : `The request to release ${data.tradieName} from ${data.trade} on ${data.projectName} was rejected — they remain selected`,
+    url: `/projects/${data.projectId}?activeTab=tradies&trade=${encodeURIComponent(data.trade)}`,
+  }),
+
   tradieScheduleDeletionResolved: (data) => ({
     title: `Schedule Deletion ${data.approved ? "Approved" : "Rejected"}: ${data.tradieName} (${data.trade})`,
     message: data.approved

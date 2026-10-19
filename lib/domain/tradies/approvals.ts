@@ -12,6 +12,7 @@ import {
 } from "../errors";
 import { requireAdminPrincipal, type DomainPrincipal } from "../principal";
 import { INACTIVE_SCHEDULE_STATUSES } from "./lifecycle";
+import { settleTradeCancellation } from "./trade-selection";
 
 export async function listTradieApprovals(
   principal: DomainPrincipal,
@@ -324,7 +325,24 @@ export async function resolveTradieApproval(
           };
           break;
         }
+
+        case TradieApprovalActionType.TRADE_CANCELLATION: {
+          affected = await settleTradeCancellation(
+            { id: approval.id, payload, tradieId: approval.tradieId },
+            true,
+            tx,
+          );
+          break;
+        }
       }
+    } else if (
+      approval.actionType === TradieApprovalActionType.TRADE_CANCELLATION
+    ) {
+      affected = await settleTradeCancellation(
+        { id: approval.id, payload, tradieId: approval.tradieId },
+        false,
+        tx,
+      );
     } else if (
       approval.actionType === TradieApprovalActionType.SCHEDULE_APPROVAL
     ) {

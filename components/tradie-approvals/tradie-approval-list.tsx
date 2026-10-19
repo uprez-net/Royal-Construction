@@ -5,6 +5,7 @@ import {
   SafeTradieApproval,
   ScheduleApprovalJsonPayload,
   ScheduleDeletionJsonPayload,
+  TradeCancellationJsonPayload,
 } from "@/types/tradie";
 import { dateFormat } from "@/utils/formatters";
 import {
@@ -29,6 +30,10 @@ const createApprovalTitle = (approval: SafeTradieApproval) => {
       return `Schedule Approval for ${approval.tradie.name}`;
     case "SCHEDULE_DELETION":
       return `Schedule Removal for ${approval.tradie.name}`;
+    case "TRADE_CANCELLATION": {
+      const data = approval.updationData as TradeCancellationJsonPayload;
+      return `Release ${approval.tradie.name} from ${data?.trade ?? approval.tradie.trade}`;
+    }
   }
 };
 
@@ -46,6 +51,10 @@ const createApprovalDescription = (approval: SafeTradieApproval) => {
       const data = approval.updationData as ScheduleDeletionJsonPayload;
       return `Removal of ${approval.tradie.name}'s booking on ${data?.scheduledDate ?? "an unrecorded date"} has been requested. ${approval.reason}`;
     }
+    case "TRADE_CANCELLATION": {
+      const data = approval.updationData as TradeCancellationJsonPayload;
+      return `Approving cancels ${approval.tradie.name}'s ${data?.openBookings ?? "open"} open bookings on ${data?.projectName ?? "the project"}. ${approval.reason}`;
+    }
   }
 };
 
@@ -62,6 +71,9 @@ const calculateSeverity = (approval: SafeTradieApproval) => {
     // Approving this deletes a booking a tradie has already been told about.
     case "SCHEDULE_DELETION":
       return "HIGH";
+    // Approving this cancels every booking the tradie holds on the project.
+    case "TRADE_CANCELLATION":
+      return "HIGH";
   }
 };
 
@@ -71,10 +83,12 @@ const approvalProjectName = (approval: SafeTradieApproval) => {
   switch (approval.actionType) {
     case "SCHEDULE_APPROVAL":
     case "SCHEDULE_DELETION":
+    case "TRADE_CANCELLATION":
       return (
         approval.updationData as
           | ScheduleApprovalJsonPayload
           | ScheduleDeletionJsonPayload
+          | TradeCancellationJsonPayload
       )?.projectName;
     default:
       return undefined;

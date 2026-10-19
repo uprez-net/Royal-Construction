@@ -1,7 +1,8 @@
 "use server";
 
 import prisma from "@/lib/prisma";
-import { requireInternalUser } from "@/lib/auth/require-internal-user";
+import { auth } from "@clerk/nextjs/server";
+import { getUserByClerkIdCached } from "@/lib/data/user";
 import { isDomainError } from "@/lib/domain/errors";
 import { userPrincipal } from "@/lib/domain/principal";
 import { draftTradieRequestWorkDetails } from "@/lib/domain/tradies/requests";
@@ -23,11 +24,14 @@ export async function draftTradieRequestWorkDetailsAction(input: {
   readonly trade: string;
   readonly milestoneIds: readonly string[];
 }): Promise<WorkDetailsDraft> {
-  const guard = await requireInternalUser();
-  if (!guard.ok) return { ok: false, message: guard.error };
+  // Which project they may draft for is the domain's call (authorizeProject).
+  const { userId } = await auth();
+  if (!userId) return { ok: false, message: "Sign in to continue." };
+  const user = await getUserByClerkIdCached(userId);
+  if (!user) return { ok: false, message: "Sign in to continue." };
   try {
     return await draftTradieRequestWorkDetails(
-      userPrincipal(guard.user),
+      userPrincipal(user),
       input,
       prisma,
       requestAi,

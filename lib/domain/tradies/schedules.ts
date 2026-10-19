@@ -2,6 +2,7 @@ import {
   Prisma,
   TradieApprovalActionType,
   TradieApprovalStatus,
+  TradieQuoteSource,
   TradieScheduleStatus,
 } from "@prisma/client";
 
@@ -57,6 +58,8 @@ export type CreateScheduleInput = {
   readonly scheduledDate: Date;
   readonly durationDays: number;
   readonly requiresQuote: boolean;
+  /** The request email this booking is part of, when it is. */
+  readonly requestRecipientId?: string | null;
 };
 
 /**
@@ -278,6 +281,7 @@ export async function createTradieSchedule(
         durationDays: input.durationDays,
         milestoneId: input.milestoneId ?? null,
         projectId: project.id,
+        requestRecipientId: input.requestRecipientId ?? null,
         requiresQuote: input.requiresQuote,
         scheduledDate: input.scheduledDate,
         status: input.requiresQuote
@@ -431,6 +435,24 @@ async function applyScheduleTransition(
   const normalized = input.statusAlreadyApplied
     ? null
     : readQuote(input.quote, input.quoteUnit);
+  // Where the amount came from, for the board's quote column: the reply
+  // webhook records quotes as the system, a person records the rest.
+  const quote = normalized
+    ? await db.tradieQuote.create({
+        data: {
+          enteredById: attributionUserId(principal),
+          projectId: existing.projectId,
+          quotedAt: new Date(),
+          source:
+            principal.kind === "system"
+              ? TradieQuoteSource.EMAIL
+              : TradieQuoteSource.MANUAL,
+          trade: existing.tradie.trade,
+          tradieId: existing.tradieId,
+        },
+        select: { id: true },
+      })
+    : null;
   if (!input.statusAlreadyApplied) {
     const updatedCount = await db.tradieSchedule.updateMany({
       data: {
@@ -446,6 +468,7 @@ async function applyScheduleTransition(
                 existing.durationDays,
                 normalized.unit,
               ).toFixed(2),
+              quoteId: quote?.id,
               requiresQuote: true,
             }
           : {}),

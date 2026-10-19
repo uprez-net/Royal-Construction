@@ -174,6 +174,45 @@ const projectDetailInclude = {
     include: {
       tradie: true,
       milestone: true,
+      // The delivery, not the stored email: the html is only for resending.
+      requestRecipient: {
+        select: {
+          id: true,
+          deliveryStatus: true,
+          attempts: true,
+          lastAttemptAt: true,
+          nextAttemptAt: true,
+          sentAt: true,
+          lastError: true,
+          toAddress: true,
+          request: { select: { id: true, createdAt: true, subject: true } },
+        },
+      },
+      quote: {
+        select: {
+          id: true,
+          source: true,
+          gstTreatment: true,
+          quotedAt: true,
+          validUntil: true,
+          notes: true,
+          enteredBy: { select: { name: true } },
+        },
+      },
+    },
+  },
+  tradeSelections: {
+    orderBy: { selectedAt: "desc" as const },
+    select: {
+      id: true,
+      trade: true,
+      tradeKey: true,
+      tradieId: true,
+      status: true,
+      selectedAt: true,
+      cancelledAt: true,
+      tradie: { select: { name: true } },
+      selectedBy: { select: { name: true } },
     },
   },
   files: true,

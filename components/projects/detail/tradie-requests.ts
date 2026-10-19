@@ -7,9 +7,17 @@ import {
   isRequestableMilestone,
   sameTrade,
 } from "@/lib/domain/tradies/request-rules";
+import {
+  bookingsDisplacedBySelection,
+  LIVE_SELECTION_STATUSES,
+  selectionRefusal,
+  type SelectionBooking,
+} from "@/lib/domain/tradies/selection-rules";
 import type {
   ProjectDetail,
   SafeMilestone,
+  TradeSelectionSummary,
+  TradieRequestDeliverySummary,
   TradieScheduleWithTradieAndMilestone,
 } from "@/types/project";
 import { parseQuotedAmount } from "@/utils/calculations";
@@ -156,6 +164,14 @@ export type TradeTradie = {
   readonly nextDate: Date | null;
   /** Approved on at least one activity. */
   readonly approved: boolean;
+  /** Their most recent request email, when they were sent one. */
+  readonly delivery: TradieRequestDeliverySummary | null;
+  /** The trade's live selection is this tradie. */
+  readonly selected: boolean;
+  /** Why Select is off for them, or null when it is on. */
+  readonly selectBlockedBy: string | null;
+  /** Other tradies' bookings selecting them would cancel. */
+  readonly displaces: number;
 };
 
 export type TradeActivity = {
@@ -169,6 +185,8 @@ export type TradeActivity = {
 
 export type TradeOverview = {
   readonly trade: string;
+  /** Who holds the trade: active, or waiting on a cancellation. */
+  readonly selection: TradeSelectionSummary | null;
   readonly tradies: readonly TradeTradie[];
   readonly activities: readonly TradeActivity[];
   readonly stats: {
@@ -200,12 +218,54 @@ export function schedulesForTrade(
     : [...schedules];
 }
 
+function asSelectionBooking(schedule: Schedule): SelectionBooking & {
+  readonly tradieId: string;
+} {
+  return {
+    milestoneId: schedule.milestoneId,
+    milestoneName: schedule.milestone?.name ?? null,
+    quotedPrice: schedule.quotedPrice,
+    status: schedule.status,
+    trade: schedule.tradie.trade,
+    tradieId: schedule.tradieId,
+    tradieName: schedule.tradie.name,
+  };
+}
+
+/** The most recent request email among a tradie's bookings. */
+function latestDelivery(
+  schedules: readonly Schedule[],
+): TradieRequestDeliverySummary | null {
+  return schedules
+    .map((schedule) => schedule.requestRecipient)
+    .filter(
+      (recipient): recipient is TradieRequestDeliverySummary => !!recipient,
+    )
+    .reduce<TradieRequestDeliverySummary | null>(
+      (latest, recipient) =>
+        !latest
+        || new Date(recipient.request.createdAt)
+          > new Date(latest.request.createdAt)
+          ? recipient
+          : latest,
+      null,
+    );
+}
+
 export function tradeOverview(
-  project: Pick<ProjectDetail, "milestones" | "tradieSchedules">,
+  project: Pick<ProjectDetail, "milestones" | "tradieSchedules">
+    & Partial<Pick<ProjectDetail, "tradeSelections">>,
   trade: string,
   now: Date = new Date(),
 ): TradeOverview {
   const schedules = schedulesForTrade(project.tradieSchedules, trade);
+  const selection =
+    project.tradeSelections?.find(
+      (item) =>
+        sameTrade(item.trade, trade)
+        && LIVE_SELECTION_STATUSES.includes(item.status),
+    ) ?? null;
+  const allBookings = project.tradieSchedules.map(asSelectionBooking);
 
   const byTradie = new Map<string, Schedule[]>();
   for (const schedule of schedules) {
@@ -226,8 +286,29 @@ export function tradeOverview(
       .filter((date) => date.getTime() >= now.getTime() - 86_400_000)
       .sort((a, b) => a.getTime() - b.getTime());
     const { tradie } = own[0];
+    const mine = allBookings.filter(
+      (booking) => booking.tradieId === tradie.id,
+    );
+    const others = allBookings.filter(
+      (booking) => booking.tradieId !== tradie.id,
+    );
+    const refusal = selectionRefusal({
+      liveSelection: selection
+        ? { status: selection.status, tradieName: selection.tradie.name }
+        : null,
+      others,
+      own: mine,
+      trade,
+      tradieName: tradie.name,
+    });
     return {
       approved: own.some((schedule) => COVERING_STATUSES.has(schedule.status)),
+      delivery: latestDelivery(own),
+      displaces: refusal
+        ? 0
+        : bookingsDisplacedBySelection(mine, others, trade).length,
+      selectBlockedBy: refusal?.message ?? null,
+      selected: selection?.tradieId === tradie.id,
       email: tradie.email,
       name: tradie.name,
       nextDate: upcoming[0] ?? null,
@@ -299,6 +380,7 @@ export function tradeOverview(
 
   return {
     activities,
+    selection,
     stats: {
       activityCount: counted.length,
       covered: counted.filter(
