@@ -97,6 +97,8 @@ test("approved removal archives identity and cancels only unfinished bookings, r
   assert.deepEqual(result.affected, {
     archived: true,
     cancelledSchedules: 2,
+    // Any trade the tradie held is released with them.
+    endedSelections: 1,
     projectIds: ["p_1"],
   });
   assert.ok(

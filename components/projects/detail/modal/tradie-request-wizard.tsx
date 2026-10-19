@@ -673,8 +673,11 @@ function DeliveryReport({
   const deliveries = result.deliveries.map((delivery) => ({
     delivery: live(delivery.recipientId) ?? {
       attempts: delivery.attempts,
+      // Only read when the store has not caught up; a fresh send is not stalled.
+      createdAt: new Date(),
       deliveryStatus: delivery.status,
       id: delivery.recipientId,
+      lastAttemptAt: null,
       lastError: delivery.reason,
       nextAttemptAt: delivery.nextAttemptAt,
       sentAt: null,

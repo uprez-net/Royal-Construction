@@ -1,4 +1,5 @@
 import {
+  TradeSelectionStatus,
   TradieApprovalActionType,
   TradieApprovalStatus,
   TradieScheduleStatus,
@@ -12,6 +13,7 @@ import {
 } from "../errors";
 import { requireAdminPrincipal, type DomainPrincipal } from "../principal";
 import { INACTIVE_SCHEDULE_STATUSES } from "./lifecycle";
+import { LIVE_SELECTION_STATUSES } from "./selection-rules";
 import { settleTradeCancellation } from "./trade-selection";
 
 export async function listTradieApprovals(
@@ -220,9 +222,23 @@ export async function resolveTradieApproval(
               rejectionReason: "Tradie removed from the active directory.",
             },
           });
+          // A removed tradie cannot hold a trade. Left alone, an active
+          // selection would block anyone else being chosen, and one waiting on
+          // the cancellation just rejected above would wait for ever.
+          const endedSelections = await tx.tradeSelection.updateMany({
+            data: {
+              cancelledAt: new Date(),
+              status: TradeSelectionStatus.CANCELLED,
+            },
+            where: {
+              status: { in: [...LIVE_SELECTION_STATUSES] },
+              tradieId: approval.tradieId,
+            },
+          });
           affected = {
             archived: true,
             cancelledSchedules: cancelled.count,
+            endedSelections: endedSelections.count,
             projectIds: [
               ...new Set(bookings.map((booking) => booking.projectId)),
             ],

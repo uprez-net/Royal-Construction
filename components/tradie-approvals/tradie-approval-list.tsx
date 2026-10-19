@@ -53,7 +53,12 @@ const createApprovalDescription = (approval: SafeTradieApproval) => {
     }
     case "TRADE_CANCELLATION": {
       const data = approval.updationData as TradeCancellationJsonPayload;
-      return `Approving cancels ${approval.tradie.name}'s ${data?.openBookings ?? "open"} open bookings on ${data?.projectName ?? "the project"}. ${approval.reason}`;
+      const count = data?.openBookings;
+      const bookings =
+        typeof count !== "number"
+          ? "open bookings"
+          : `${count} open ${count === 1 ? "booking" : "bookings"}`;
+      return `Approving cancels ${approval.tradie.name}'s ${bookings} on ${data?.projectName ?? "the project"}. ${approval.reason}`;
     }
   }
 };

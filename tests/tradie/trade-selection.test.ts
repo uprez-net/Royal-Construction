@@ -8,8 +8,11 @@ import { requestEmailAttentionItems } from "@/lib/domain/tradies/attention";
 import {
   canRetryRequestEmail,
   deliveryAfterFailure,
+  isStalledSend,
   MAX_AUTOMATIC_ATTEMPTS,
+  type RequestDeliveryState,
 } from "@/lib/domain/tradies/request-delivery";
+import { resolveTradieApproval } from "@/lib/domain/tradies/approvals";
 import {
   bookingsDisplacedBySelection,
   selectionRefusal,
@@ -71,28 +74,42 @@ test("only a clearly-unsent failure is retried automatically, on the schedule", 
   );
 });
 
+const minutesAgo = (minutes: number) =>
+  new Date(NOW.getTime() - minutes * 60_000);
+
+/** A delivery stored an hour ago, attempted when `lastAttemptAt` says. */
+const delivery = (
+  state: Pick<RequestDeliveryState, "attempts" | "deliveryStatus">
+    & Partial<RequestDeliveryState>,
+): RequestDeliveryState => ({
+  createdAt: minutesAgo(60),
+  lastAttemptAt: state.attempts > 0 ? minutesAgo(60) : null,
+  nextAttemptAt: null,
+  ...state,
+});
+
 test("a person may retry once it failed, or once a scheduled retry is overdue", () => {
   assert.equal(
     canRetryRequestEmail(
-      { attempts: 2, deliveryStatus: "FAILED", nextAttemptAt: null },
+      delivery({ attempts: 2, deliveryStatus: "FAILED" }),
       NOW,
     ),
     true,
   );
   assert.equal(
     canRetryRequestEmail(
-      { attempts: 1, deliveryStatus: "SENT", nextAttemptAt: null },
+      delivery({ attempts: 1, deliveryStatus: "SENT" }),
       NOW,
     ),
     false,
   );
-  const due = (minutesAgo: number) =>
+  const due = (minutes: number) =>
     canRetryRequestEmail(
-      {
+      delivery({
         attempts: 1,
         deliveryStatus: "RETRYING",
-        nextAttemptAt: new Date(NOW.getTime() - minutesAgo * 60_000),
-      },
+        nextAttemptAt: minutesAgo(minutes),
+      }),
       NOW,
     );
   assert.equal(
@@ -101,6 +118,35 @@ test("a person may retry once it failed, or once a scheduled retry is overdue", 
     "a retry a few minutes late is still the robot's",
   );
   assert.equal(due(11), true, "a retry well overdue is a person's");
+});
+
+test("a send that never reported back becomes a person's call, after a grace period", () => {
+  const sending = (attempts: number, lastAttemptAt: Date | null) =>
+    delivery({
+      attempts,
+      createdAt: minutesAgo(60),
+      deliveryStatus: "SENDING",
+      lastAttemptAt,
+    });
+  // In flight: the robot or the request that claimed it is still going.
+  assert.equal(isStalledSend(sending(1, minutesAgo(2)), NOW), false);
+  assert.equal(canRetryRequestEmail(sending(1, minutesAgo(2)), NOW), false);
+  // Claimed long ago and never finished.
+  assert.equal(isStalledSend(sending(1, minutesAgo(11)), NOW), true);
+  assert.equal(canRetryRequestEmail(sending(1, minutesAgo(11)), NOW), true);
+  // Stored and never attempted at all: timed from when it was stored.
+  assert.equal(isStalledSend(sending(0, null), NOW), true);
+  assert.equal(
+    isStalledSend(
+      delivery({
+        attempts: 0,
+        createdAt: minutesAgo(1),
+        deliveryStatus: "SENDING",
+      }),
+      NOW,
+    ),
+    false,
+  );
 });
 
 test("Graph failures are sorted by whether the email might have gone", () => {
@@ -127,10 +173,8 @@ test("Graph failures are sorted by whether the email might have gone", () => {
 
 test("one alert per failed email, on its soonest open booking, never for a sent one", () => {
   const failed = {
-    attempts: 2,
-    deliveryStatus: "FAILED" as const,
+    ...delivery({ attempts: 2, deliveryStatus: "FAILED" }),
     id: "r_1",
-    nextAttemptAt: null,
   };
   const items = requestEmailAttentionItems(
     [
@@ -163,12 +207,25 @@ test("one alert per failed email, on its soonest open booking, never for a sent 
         scheduledDate: "2026-11-02",
         status: "CANCELLED" as const,
       },
+      // A send stuck at "sending" is raised too: nothing else will finish it.
+      {
+        id: "s_5",
+        requestRecipient: {
+          ...delivery({ attempts: 1, deliveryStatus: "SENDING" }),
+          id: "r_4",
+        },
+        scheduledDate: "2026-11-05",
+        status: "AWAITING_QUOTE" as const,
+      },
     ],
     NOW,
   );
   assert.deepEqual(
     items.map((item) => [item.booking.id, item.attention.action]),
-    [["s_1", "retry-email"]],
+    [
+      ["s_1", "retry-email"],
+      ["s_5", "retry-email"],
+    ],
   );
 });
 
@@ -501,4 +558,85 @@ test("rejecting a cancellation puts the selection back and touches no booking", 
     recorder.db,
   );
   assert.deepEqual(recorder.operations(), ["tradeSelection.updateMany"]);
+});
+
+test("removing a tradie ends their selections, including one waiting on a cancellation", async () => {
+  const recorder = recordingDb({
+    "tradie.updateMany": { count: 1 },
+    "tradieApproval.findUnique": {
+      actionType: "TRADIE_REMOVAL",
+      id: "ap_remove",
+      tradie: { id: "t_abc", name: "ABC", trade: "Plumbing" },
+      tradieId: "t_abc",
+      updationData: {},
+    },
+    "tradieApproval.updateMany": { count: 1 },
+    "tradieSchedule.findMany": [{ projectId: "p_1" }],
+    "tradieSchedule.updateMany": { count: 1 },
+    "tradeSelection.updateMany": { count: 1 },
+  });
+  const resolved = await resolveTradieApproval(
+    adminPrincipal(),
+    { approvalId: "ap_remove", resolution: "approved" },
+    recorder.db,
+  );
+
+  const pending = recorder
+    .writes()
+    .filter((w) => w.operation === "tradieApproval.updateMany")
+    .map((w) => (w.args as { where: Record<string, unknown> }).where)
+    .find((where) => where.tradieId === "t_abc" && where.status === "PENDING");
+  assert.ok(
+    pending,
+    "the pending trade cancellation is rejected with the rest",
+  );
+
+  const ended = recorder
+    .writes()
+    .find((w) => w.operation === "tradeSelection.updateMany");
+  const args = ended?.args as {
+    data: { status: string };
+    where: { tradieId: string; status: { in: string[] } };
+  };
+  assert.equal(args.data.status, "CANCELLED");
+  assert.equal(args.where.tradieId, "t_abc");
+  assert.deepEqual(
+    [...args.where.status.in].sort(),
+    ["ACTIVE", "CANCELLATION_PENDING"],
+    "a selection waiting on the rejected cancellation is ended, not left pending",
+  );
+  assert.equal(resolved.affected.endedSelections, 1);
+});
+
+test("a manual quote's new booking never starts before today in Sydney", async () => {
+  // 08:00 in Sydney on 21 Oct is still 20 Oct in UTC.
+  const morning = new Date("2026-10-20T21:00:00.000Z");
+  const recorder = recordingDb({
+    "milestone.findMany": [
+      { ...MILESTONE, targetDate: new Date("2026-10-20T00:00:00.000Z") },
+    ],
+    "project.findUnique": PROJECT,
+    "tradie.findUnique": ABC,
+    "tradieQuote.create": { id: "q_1" },
+    "tradieSchedule.create": (args: unknown) => ({
+      ...(args as { data: Record<string, unknown> }).data,
+      id: "s_new",
+    }),
+    "tradieSchedule.findFirst": null,
+    "milestone.findFirst": { id: "m_rough" },
+  });
+  await recordManualQuote(
+    adminPrincipal(),
+    { ...QUOTE, today: morning },
+    recorder.db,
+  );
+  const created = recorder
+    .writes()
+    .find((w) => w.operation === "tradieSchedule.create");
+  assert.equal(
+    (created?.args as { data: { scheduledDate: Date } }).data.scheduledDate
+      .toISOString()
+      .slice(0, 10),
+    "2026-10-21",
+  );
 });

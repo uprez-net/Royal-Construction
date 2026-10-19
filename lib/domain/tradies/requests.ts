@@ -6,7 +6,7 @@ import {
   type ProjectStage,
 } from "@prisma/client";
 
-import type { DomainDb } from "../db";
+import type { DomainDb, TransactionalDomainDb } from "../db";
 import {
   DomainNotFoundError,
   DomainTransitionError,
@@ -132,10 +132,15 @@ function assertDistinct(ids: readonly string[], what: string): void {
   }
 }
 
+/**
+ * Takes the client, not a transaction: the command owns its transaction
+ * because the emails go out after it commits. Inside a caller's transaction
+ * they would be sent for bookings that could still roll back.
+ */
 export async function sendTradieRequests(
   principal: DomainPrincipal,
   input: SendTradieRequestsInput,
-  db: DomainDb,
+  db: TransactionalDomainDb,
   ports: TradieRequestMailPorts & { readonly render: TradieRequestRenderPort },
 ): Promise<SentTradieRequests> {
   if (input.tradieIds.length === 0) {
@@ -307,12 +312,9 @@ export async function sendTradieRequests(
     );
     return { recipients, requestId: request.id, schedules };
   };
-  const written =
-    "$transaction" in db
-      ? await db.$transaction(write, {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        })
-      : await write(db);
+  const written = await db.$transaction(write, {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+  });
 
   const deliveries: TradieRequestDelivery[] = [];
   for (const recipient of written.recipients) {
@@ -367,9 +369,11 @@ export async function deliverTradieRequest(
     select: {
       attempts: true,
       ccAddresses: true,
+      createdAt: true,
       deliveryStatus: true,
       html: true,
       id: true,
+      lastAttemptAt: true,
       lastError: true,
       nextAttemptAt: true,
       request: { select: { projectId: true } },

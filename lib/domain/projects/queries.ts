@@ -185,6 +185,7 @@ const projectDetailInclude = {
           sentAt: true,
           lastError: true,
           toAddress: true,
+          createdAt: true,
           request: { select: { id: true, createdAt: true, subject: true } },
         },
       },

@@ -9,6 +9,7 @@ import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
 import {
   canRetryRequestEmail,
+  isStalledSend,
   MAX_AUTOMATIC_ATTEMPTS,
 } from "@/lib/domain/tradies/request-delivery";
 import { useAppDispatch } from "@/lib/store/hooks";
@@ -28,6 +29,8 @@ type Delivery = Pick<
   | "nextAttemptAt"
   | "sentAt"
   | "lastError"
+  | "lastAttemptAt"
+  | "createdAt"
 >;
 
 function time(value: Date | string): string {
@@ -50,7 +53,15 @@ export function describeDelivery(
         tone: "success",
       };
     case "SENDING":
-      return { detail: null, label: "Sending…", tone: "neutral" };
+      // A send that never reported back may still have reached the tradie.
+      return isStalledSend(delivery, now)
+        ? {
+            detail:
+              "This send never finished, so it may have gone out. Check the Sent folder before retrying.",
+            label: "Possibly sent",
+            tone: "danger",
+          }
+        : { detail: null, label: "Sending…", tone: "neutral" };
     case "RETRYING":
       return canRetryRequestEmail(delivery, now)
         ? {

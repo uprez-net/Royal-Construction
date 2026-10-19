@@ -82,8 +82,10 @@ function describe(
         detail:
           schedule.requestRecipient?.deliveryStatus === "RETRYING"
             ? "Its automatic retry did not run. Retry it now."
-            : (schedule.requestRecipient?.lastError
-              ?? "Retry it so they can quote."),
+            : schedule.requestRecipient?.deliveryStatus === "SENDING"
+              ? "The send never finished, so it may have gone out. Check the Sent folder before retrying."
+              : (schedule.requestRecipient?.lastError
+                ?? "Retry it so they can quote."),
       };
   }
 }

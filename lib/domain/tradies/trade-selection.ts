@@ -8,6 +8,7 @@ import {
   type TradieQuoteGst,
 } from "@prisma/client";
 
+import { sydneyDateOnly } from "@/lib/dates/sydney";
 import type { DomainDb } from "../db";
 import {
   DomainAuthorizationError,
@@ -195,7 +196,9 @@ export async function recordManualQuote(
     }
   }
   const milestoneById = new Map(milestones.map((m) => [m.id, m]));
-  const todayKey = (input.today ?? new Date()).toISOString().slice(0, 10);
+  // The site's calendar day: before mid-morning in Sydney, UTC is still on
+  // yesterday, and the clamp below would let a booking start in the past.
+  const todayKey = sydneyDateOnly(input.today ?? new Date());
 
   return serializable(db, async (tx) => {
     const quote = await tx.tradieQuote.create({

@@ -235,7 +235,7 @@ test("each tradie gets one stored email covering every activity, and a quote boo
   const result = await sendTradieRequests(
     adminPrincipal(),
     REQUEST,
-    recorder.db,
+    recorder.transactionalDb,
     ports,
   );
 
@@ -281,7 +281,7 @@ test("a clearly-unsent failure is scheduled for an automatic retry; the bookings
   const result = await sendTradieRequests(
     adminPrincipal(),
     REQUEST,
-    recorder.db,
+    recorder.transactionalDb,
     ports,
   );
 
@@ -305,7 +305,7 @@ test("a refused or ambiguous send fails for a person to decide, never for a robo
     const result = await sendTradieRequests(
       adminPrincipal(),
       REQUEST,
-      database().db,
+      database().transactionalDb,
       ports,
     );
     const xyz = result.deliveries.find(
@@ -328,7 +328,7 @@ async function assertRefusedWithoutEffects(
     sendTradieRequests(
       adminPrincipal(),
       { ...REQUEST, ...input },
-      recorder.db,
+      recorder.transactionalDb,
       ports,
     ),
     (error: unknown) =>
@@ -413,7 +413,7 @@ test("a tradie already holding the booking refuses the whole request, before any
     sendTradieRequests(
       adminPrincipal(),
       { ...REQUEST, activities: [ACTIVITIES[0]], tradieIds: ["t_abc"] },
-      recorder.db,
+      recorder.transactionalDb,
       ports,
     ),
     /already booked/,

@@ -31,6 +31,13 @@ export const MAX_AUTOMATIC_ATTEMPTS = REQUEST_RETRY_DELAYS_MS.length + 1;
 export const OVERDUE_RETRY_GRACE_MS = 10 * 60_000;
 
 /**
+ * How long an attempt may stay "sending" before it is treated as stalled. A
+ * send takes seconds; one still pending after this died between claiming the
+ * attempt and recording how it went, and nothing else will ever finish it.
+ */
+export const STALLED_SEND_GRACE_MS = 10 * 60_000;
+
+/**
  * - `transient`: clearly not sent; safe for a robot to try again.
  * - `rejected`: the mail server said no; retrying the same email will not help.
  * - `ambiguous`: it may have gone; a person should check before resending.
@@ -41,7 +48,27 @@ export type RequestDeliveryState = {
   readonly deliveryStatus: TradieRequestDeliveryStatus;
   readonly attempts: number;
   readonly nextAttemptAt: Date | string | null;
+  /** When the current attempt was claimed. */
+  readonly lastAttemptAt: Date | string | null;
+  /** When the email was stored; the clock for one never attempted. */
+  readonly createdAt: Date | string;
 };
+
+/**
+ * An attempt that never reported back. Whether the email went is unknown —
+ * the process may have died after Graph accepted it — so it is a person's
+ * call, the same as an ambiguous failure.
+ */
+export function isStalledSend(state: RequestDeliveryState, now: Date): boolean {
+  if (state.deliveryStatus !== TradieRequestDeliveryStatus.SENDING) {
+    return false;
+  }
+  const since =
+    state.attempts === 0
+      ? state.createdAt
+      : (state.lastAttemptAt ?? state.createdAt);
+  return new Date(since).getTime() + STALLED_SEND_GRACE_MS <= now.getTime();
+}
 
 export type DeliveryAfterFailure = {
   readonly deliveryStatus: TradieRequestDeliveryStatus;
@@ -102,16 +129,17 @@ function failureMessage(
 /**
  * May a person retry this email now?
  *
- * Yes once it has failed, and also when an automatic retry is overdue — the
- * workflow that should have run it may never have started. Not while an
- * attempt is in flight, and not while a scheduled retry is still on time:
- * pressing Retry then would race the robot to the tradie's inbox.
+ * Yes once it has failed, when an automatic retry is overdue — the workflow
+ * that should have run it may never have started — and when a send stalled.
+ * Not while an attempt is in flight, and not while a scheduled retry is still
+ * on time: pressing Retry then would race the robot to the tradie's inbox.
  */
 export function canRetryRequestEmail(
   state: RequestDeliveryState,
   now: Date,
 ): boolean {
   if (state.deliveryStatus === TradieRequestDeliveryStatus.FAILED) return true;
+  if (isStalledSend(state, now)) return true;
   if (
     state.deliveryStatus === TradieRequestDeliveryStatus.RETRYING
     && state.nextAttemptAt
@@ -124,7 +152,7 @@ export function canRetryRequestEmail(
   return false;
 }
 
-/** Needs a person: failed, or a retry that should have happened by now. */
+/** Needs a person: failed, stalled, or a retry that should have happened by now. */
 export function requestEmailNeedsAttention(
   state: RequestDeliveryState,
   now: Date,

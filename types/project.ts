@@ -160,6 +160,7 @@ export type TradieRequestDeliverySummary = {
   sentAt: Date | null;
   lastError: string | null;
   toAddress: string;
+  createdAt: Date;
   request: { id: string; createdAt: Date; subject: string };
 };
 
