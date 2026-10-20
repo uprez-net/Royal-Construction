@@ -15,7 +15,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { TradeIcon } from "@/components/tradie-management/trade-icon";
 import { cn } from "@/lib/utils";
-import { sameTrade } from "@/lib/domain/tradies/request-rules";
+import { sameTrade, tradeList } from "@/lib/domain/tradies/request-rules";
 import { PROJECT_STAGE_LABELS } from "@/types/project";
 import type { TradieRow } from "@/types/tradie";
 import { formatQuotedPrice } from "@/utils/calculations";
@@ -270,7 +270,9 @@ export function RequestActivitiesStep({
                       <span className="block text-xs text-muted-foreground">
                         {PROJECT_STAGE_LABELS[milestone.projectStage]}
                         {" · "}
-                        {milestone.requiredTradeType?.label ?? "No trade set"}
+                        {milestone.requiredTradeTypes?.length
+                          ? tradeList(milestone.requiredTradeTypes)
+                          : "No trade set"}
                         {already.length > 0
                           ? ` · Requested from ${already.join(", ")}`
                           : ""}

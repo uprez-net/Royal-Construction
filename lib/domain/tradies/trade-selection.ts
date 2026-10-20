@@ -23,6 +23,7 @@ import {
   activityAcceptsTrade,
   isRequestableMilestone,
   MAX_REQUEST_ACTIVITIES,
+  tradeList,
 } from "./request-rules";
 import { createTradieSchedule, transitionTradieSchedule } from "./schedules";
 import {
@@ -170,7 +171,7 @@ export async function recordManualQuote(
       estimatedDays: true,
       id: true,
       name: true,
-      requiredTradeType: { select: { label: true } },
+      requiredTradeTypes: { select: { label: true } },
       startDate: true,
       status: true,
       targetDate: true,
@@ -188,10 +189,9 @@ export async function recordManualQuote(
         `${milestone.name} is already settled, so it cannot be quoted.`,
       );
     }
-    const required = milestone.requiredTradeType?.label;
-    if (!activityAcceptsTrade(required, trade)) {
+    if (!activityAcceptsTrade(milestone.requiredTradeTypes, trade)) {
       throw new DomainValidationError(
-        `${milestone.name} needs ${required}, not ${trade}.`,
+        `${milestone.name} needs ${tradeList(milestone.requiredTradeTypes)}, not ${trade}.`,
       );
     }
   }

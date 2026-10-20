@@ -57,7 +57,7 @@ const row = (
   projectStage: ProjectStage.Slab,
   relatedCostLines: [],
   estimatedDays: 5,
-  requiredTradeTypeId: null,
+  requiredTradeTypeIds: [],
   ...patch,
 });
 const ctx = (callId = "save-call") =>
@@ -138,8 +138,14 @@ function fixture(initial = [row("a", 1), row("b", 2)]) {
       audits.set(where.id, { ...audits.get(where.id), ...data });
       return audits.get(where.id);
     },
+    // Prisma returns the trades as a relation, not as the activity's id list.
     "milestoneTemplate.findMany": () =>
-      structuredClone(stored).sort((a, b) => a.order - b.order),
+      structuredClone(stored)
+        .sort((a, b) => a.order - b.order)
+        .map(({ requiredTradeTypeIds, ...activity }) => ({
+          ...activity,
+          requiredTradeTypes: requiredTradeTypeIds.map((id) => ({ id })),
+        })),
     "milestoneTemplate.updateMany": (args: unknown) => {
       const { data } = args as { data: Partial<TemplateActivity> };
       stored = stored.map((row) => ({ ...row, ...data }));
@@ -162,7 +168,17 @@ function fixture(initial = [row("a", 1), row("b", 2)]) {
       return { count: 1 };
     },
     "milestoneTemplate.upsert": (args: unknown) => {
-      const activity = (args as { create: TemplateActivity }).create;
+      const { requiredTradeTypes, ...fields } = (
+        args as {
+          create: Omit<TemplateActivity, "requiredTradeTypeIds"> & {
+            requiredTradeTypes: { connect: { id: string }[] };
+          };
+        }
+      ).create;
+      const activity: TemplateActivity = {
+        ...fields,
+        requiredTradeTypeIds: requiredTradeTypes.connect.map(({ id }) => id),
+      };
       stored = [
         ...stored.filter((row) => row.id !== activity.id),
         structuredClone(activity),
@@ -276,13 +292,13 @@ test("targeted contracts bound changes and retain add defaults and explicit clea
       estimatedDays: 5,
       parentId: null,
       relatedCostLines: [],
-      requiredTradeTypeId: null,
+      requiredTradeTypeIds: [],
     },
   });
   const update = {
     type: "update",
     activityId: "a",
-    patch: { requiredTradeTypeId: null, relatedCostLines: [] },
+    patch: { requiredTradeTypeIds: [], relatedCostLines: [] },
   };
   assert.equal(
     updateBuildSequenceInputSchema.safeParse({
@@ -319,7 +335,7 @@ test("targeted contracts bound changes and retain add defaults and explicit clea
 test("the admin read returns live hierarchy, revision and the screen's category and cost choices", async () => {
   const db = fixture([
     row("parent", 1),
-    row("child", 2, { parentId: "parent", requiredTradeTypeId: "archived" }),
+    row("child", 2, { parentId: "parent", requiredTradeTypeIds: ["archived"] }),
   ]);
   const result = agentResultEnvelopeSchema.parse(await execute(readTool, {}));
   assert.equal(result.data.revision, db.revision());
@@ -382,7 +398,7 @@ test("targeted edits preserve unrelated activities and commit with the audit in 
         activityId: "a",
         patch: {
           estimatedDays: 8,
-          requiredTradeTypeId: "plumbing",
+          requiredTradeTypeIds: ["plumbing", "plumbing"],
           relatedCostLines: ["Survey"],
         },
       },
@@ -393,7 +409,8 @@ test("targeted edits preserve unrelated activities and commit with the audit in 
   );
   assert.deepEqual(db.stored()[1], originalB);
   assert.equal(db.stored()[0].estimatedDays, 8);
-  assert.equal(db.stored()[0].requiredTradeTypeId, "plumbing");
+  // A repeated id is one dependency, not two.
+  assert.deepEqual(db.stored()[0].requiredTradeTypeIds, ["plumbing"]);
   assert.deepEqual(db.stored()[0].relatedCostLines, ["Survey"]);
   assert.equal(result.data.revision, db.revision());
   assert.equal(db.operations()[0].status, "SUCCEEDED");
@@ -498,7 +515,7 @@ test("invalid categories, cost tasks, cycles and parent removals refuse the enti
     {
       type: "update",
       activityId: "parent",
-      patch: { requiredTradeTypeId: "archived" },
+      patch: { requiredTradeTypeIds: ["plumbing", "archived"] },
     },
     {
       type: "update",
@@ -537,7 +554,7 @@ test("invalid categories, cost tasks, cycles and parent removals refuse the enti
 test("retained archived categories and older cost mappings remain editable, and explicit clears work", async () => {
   const db = fixture([
     row("a", 1, {
-      requiredTradeTypeId: "archived",
+      requiredTradeTypeIds: ["archived"],
       relatedCostLines: ["Historical task"],
     }),
     row("b", 2),
@@ -552,7 +569,25 @@ test("retained archived categories and older cost mappings remain editable, and 
     }),
     ctx("keep-history"),
   );
-  assert.equal(db.stored()[0].requiredTradeTypeId, "archived");
+  assert.deepEqual(db.stored()[0].requiredTradeTypeIds, ["archived"]);
+  await execute(
+    writeTool,
+    updateBuildSequenceInputSchema.parse({
+      revision: db.revision(),
+      changes: [
+        {
+          type: "update",
+          activityId: "a",
+          patch: { requiredTradeTypeIds: ["archived", "plumbing"] },
+        },
+      ],
+    }),
+    ctx("add-beside-history"),
+  );
+  assert.deepEqual(db.stored()[0].requiredTradeTypeIds, [
+    "archived",
+    "plumbing",
+  ]);
   assert.deepEqual(db.stored()[0].relatedCostLines, ["Historical task"]);
   await execute(
     writeTool,
@@ -562,13 +597,13 @@ test("retained archived categories and older cost mappings remain editable, and 
         {
           type: "update",
           activityId: "a",
-          patch: { requiredTradeTypeId: null, relatedCostLines: [] },
+          patch: { requiredTradeTypeIds: [], relatedCostLines: [] },
         },
       ],
     }),
     ctx("clear-history"),
   );
-  assert.equal(db.stored()[0].requiredTradeTypeId, null);
+  assert.deepEqual(db.stored()[0].requiredTradeTypeIds, []);
   assert.deepEqual(db.stored()[0].relatedCostLines, []);
 });
 

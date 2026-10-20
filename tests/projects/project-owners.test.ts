@@ -708,7 +708,7 @@ describe("creating a project from a lead", () => {
         projectStage: "Deposit",
         relatedCostLines: [],
         estimatedDays: 5,
-        requiredTradeTypeId: null,
+        requiredTradeTypes: [],
       },
     ],
     "customer.create": (args: unknown) => {

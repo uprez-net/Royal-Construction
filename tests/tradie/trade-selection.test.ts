@@ -411,7 +411,7 @@ const MILESTONE = {
   estimatedDays: 3,
   id: "m_rough",
   name: "Rough-in",
-  requiredTradeType: { label: "Plumbing" },
+  requiredTradeTypes: [{ label: "Plumbing" }],
   startDate: null,
   status: MilestoneStatus.PENDING,
   targetDate: new Date("2026-11-10T00:00:00.000Z"),

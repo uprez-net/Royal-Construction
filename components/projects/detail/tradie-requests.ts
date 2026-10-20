@@ -25,7 +25,7 @@ import { parseQuotedAmount } from "@/utils/calculations";
 // How the Tradies tab and the request wizard read a project by trade.
 //
 // A trade's "activities" are its milestones: the build sequence names the
-// trade a milestone needs (`requiredTradeType`), and every booking hangs off
+// trades a milestone needs (`requiredTradeTypes`), and every booking hangs off
 // one. Nothing here is stored per trade — it is all derived from the
 // milestones and bookings the project page already holds, so it cannot drift
 // from them.
@@ -42,7 +42,7 @@ export type RequestMilestone = Pick<
   | "startDate"
   | "targetDate"
   | "estimatedDays"
-  | "requiredTradeType"
+  | "requiredTradeTypes"
 >;
 
 const INACTIVE = new Set<TradieScheduleStatus>(INACTIVE_SCHEDULE_STATUSES);
@@ -74,7 +74,9 @@ export function requestTradeOptions(
   directoryTrades.forEach(add);
   milestones
     .filter((milestone) => isRequestableMilestone(milestone.status))
-    .forEach((milestone) => add(milestone.requiredTradeType?.label));
+    .forEach((milestone) =>
+      milestone.requiredTradeTypes?.forEach((trade) => add(trade.label)),
+    );
   return trades.sort((a, b) => a.localeCompare(b));
 }
 
@@ -99,8 +101,8 @@ export function requestableActivities<T extends RequestMilestone>(
       (milestone) => !options.stage || milestone.projectStage === options.stage,
     )
     .filter((milestone) => {
-      const required = milestone.requiredTradeType?.label;
-      if (!required) return Boolean(options.includeUnassigned);
+      const required = milestone.requiredTradeTypes ?? [];
+      if (!required.length) return Boolean(options.includeUnassigned);
       return activityAcceptsTrade(required, options.trade);
     })
     .sort((a, b) => a.order - b.order);
@@ -339,8 +341,9 @@ export function tradeOverview(
   const milestones = [...project.milestones]
     .filter(
       (milestone) =>
-        (milestone.requiredTradeType
-          && sameTrade(milestone.requiredTradeType.label, trade))
+        milestone.requiredTradeTypes?.some((required) =>
+          sameTrade(required.label, trade),
+        )
         || schedules.some((schedule) => schedule.milestoneId === milestone.id),
     )
     .sort((a, b) => a.order - b.order);

@@ -84,7 +84,9 @@ export function TemplateActivityTree({
   const renderActivity = (row: WithChildren<TemplateActivity>, depth = 0) => {
     const hasChildren = row.childrenMilestones.length > 0;
     const open = !closedParents.has(row.id);
-    const trade = trades.find((trade) => trade.id === row.requiredTradeTypeId);
+    const required = trades.filter((trade) =>
+      row.requiredTradeTypeIds.includes(trade.id),
+    );
     return (
       <li key={row.id}>
         <Collapsible
@@ -173,12 +175,15 @@ export function TemplateActivityTree({
                 <span>
                   {formatStatus(row.projectStage)} · {row.estimatedDays} days
                 </span>
-                {trade ? (
-                  <span className="inline-flex items-center gap-1">
+                {required.map((trade) => (
+                  <span
+                    key={trade.id}
+                    className="inline-flex items-center gap-1"
+                  >
                     <TradeIconGlyph icon={trade.icon} className="size-3" />
                     {trade.label}
                   </span>
-                ) : null}
+                ))}
                 {hasChildren ? (
                   <span>{row.childrenMilestones.length} sub-activities</span>
                 ) : null}

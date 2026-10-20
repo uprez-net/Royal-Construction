@@ -759,6 +759,7 @@ export async function createMilestonesFromTemplate(
 ): Promise<{ created: number }> {
   const milestoneTemplates = await db.milestoneTemplate.findMany({
     orderBy: { order: "asc" },
+    include: { requiredTradeTypes: { select: { id: true } } },
   });
   if (!milestoneTemplates.length)
     throw new DomainValidationError(
@@ -814,7 +815,6 @@ export async function createMilestonesFromTemplate(
       order: record.order,
       targetDate: record.targetDate,
       estimatedDays: record.estimatedDays,
-      requiredTradeTypeId: record.requiredTradeTypeId,
       parentId:
         record.parentId === null || record.parentId === undefined
           ? null
@@ -823,6 +823,14 @@ export async function createMilestonesFromTemplate(
       budget: new Prisma.Decimal(record.totalBudget),
     })),
   });
+  // createMany cannot write a relation; the trades follow, in the same transaction.
+  for (const record of records) {
+    if (!record.requiredTradeTypes.length) continue;
+    await db.milestone.update({
+      where: { id: record.id },
+      data: { requiredTradeTypes: { connect: record.requiredTradeTypes } },
+    });
+  }
 
   return { created: created.count };
 }

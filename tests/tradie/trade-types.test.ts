@@ -208,9 +208,32 @@ test("only a trade nobody holds can be deleted", async () => {
   const unused = recordingDb({
     "tradeType.findUnique": row({ label: "Lighting" }),
     "tradie.count": 0,
+    "milestoneTemplate.count": 0,
+    "milestone.count": 0,
   });
   await deleteTradeType(admin, { id: "tt_1" }, unused.db);
   assert.deepEqual(unused.operations().at(-1), "tradeType.delete");
+});
+
+test("a trade an activity still needs is archived, not deleted", async () => {
+  // The dependency join rows cascade, so this check is all that keeps a
+  // delete from quietly dropping the activity's dependency.
+  for (const [activities, milestones] of [
+    [1, 0],
+    [0, 2],
+  ]) {
+    const required = recordingDb({
+      "tradeType.findUnique": row({ label: "Lighting" }),
+      "tradie.count": 0,
+      "milestoneTemplate.count": activities,
+      "milestone.count": milestones,
+    });
+    await assert.rejects(
+      () => deleteTradeType(admin, { id: "tt_1" }, required.db),
+      /required by a build sequence activity or project milestone\. Archive it instead/,
+    );
+    assert.deepEqual(required.writes(), []);
+  }
 });
 
 test("a tradie's trade is spelled the way the list spells it", async () => {

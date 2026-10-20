@@ -45,7 +45,7 @@ export function templateRevision(rows: readonly TemplateActivity[]): string {
           projectStage: row.projectStage,
           relatedCostLines: row.relatedCostLines,
           estimatedDays: row.estimatedDays,
-          requiredTradeTypeId: row.requiredTradeTypeId,
+          requiredTradeTypeIds: [...row.requiredTradeTypeIds].sort(),
         })),
       ),
     )
@@ -119,31 +119,30 @@ export async function readMilestoneTemplate(
   requireAdminPrincipal(principal);
   const rows = await db.milestoneTemplate.findMany({
     orderBy: { order: "asc" },
+    include: { requiredTradeTypes: { select: { id: true } } },
   });
-  return {
-    revision: templateRevision(rows),
-    activities: rows.map(
-      ({
-        id,
-        name,
-        order,
-        parentId,
-        projectStage,
-        relatedCostLines,
-        estimatedDays,
-        requiredTradeTypeId,
-      }) => ({
-        id,
-        name,
-        order,
-        parentId,
-        projectStage,
-        relatedCostLines,
-        estimatedDays,
-        requiredTradeTypeId,
-      }),
-    ),
-  };
+  const activities = rows.map(
+    ({
+      id,
+      name,
+      order,
+      parentId,
+      projectStage,
+      relatedCostLines,
+      estimatedDays,
+      requiredTradeTypes,
+    }) => ({
+      id,
+      name,
+      order,
+      parentId,
+      projectStage,
+      relatedCostLines,
+      estimatedDays,
+      requiredTradeTypeIds: requiredTradeTypes.map((trade) => trade.id).sort(),
+    }),
+  );
+  return { revision: templateRevision(activities), activities };
 }
 
 /**
@@ -190,14 +189,17 @@ export async function saveMilestoneTemplate(
             "relatedCostLines",
           );
         }
+        // An archived trade the activity already needed may stay; it cannot be added.
         if (
-          row.requiredTradeTypeId
-          && !available.has(row.requiredTradeTypeId)
-          && row.requiredTradeTypeId !== previous?.requiredTradeTypeId
+          row.requiredTradeTypeIds.some(
+            (tradeId) =>
+              !available.has(tradeId)
+              && !previous?.requiredTradeTypeIds.includes(tradeId),
+          )
         )
           throw new DomainValidationError(
-            "Choose an active tradie category from the list.",
-            "requiredTradeTypeId",
+            "Choose active tradie categories from the list.",
+            "requiredTradeTypeIds",
           );
       }
       // Release unique positions and parent links before replacing the hierarchy.
@@ -211,8 +213,9 @@ export async function saveMilestoneTemplate(
         where: { id: { notIn: kept } },
       });
       for (const row of inOrder) {
+        const { requiredTradeTypeIds, ...fields } = row;
         const data = {
-          ...row,
+          ...fields,
           name: row.name.trim(),
           relatedCostLines: row.relatedCostLines
             .map((line) => line.trim())
@@ -221,7 +224,8 @@ export async function saveMilestoneTemplate(
         const previous = currentById.get(row.id);
         if (
           previous
-          && templateRevision([previous]) === templateRevision([data])
+          && templateRevision([previous])
+            === templateRevision([{ ...data, requiredTradeTypeIds }])
         ) {
           await tx.milestoneTemplate.update({
             where: { id: row.id },
@@ -229,10 +233,11 @@ export async function saveMilestoneTemplate(
           });
           continue;
         }
+        const trades = requiredTradeTypeIds.map((id) => ({ id }));
         await tx.milestoneTemplate.upsert({
           where: { id: row.id },
-          create: data,
-          update: data,
+          create: { ...data, requiredTradeTypes: { connect: trades } },
+          update: { ...data, requiredTradeTypes: { set: trades } },
         });
       }
       return readMilestoneTemplate(principal, tx);

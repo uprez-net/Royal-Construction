@@ -35,6 +35,7 @@ import {
   MAX_REQUEST_ACTIVITIES,
   MAX_REQUEST_TRADIES,
   sameTrade,
+  tradeList,
 } from "./request-rules";
 import { createTradieSchedules, type CreatedSchedule } from "./schedules";
 
@@ -208,7 +209,7 @@ export async function sendTradieRequests(
       id: true,
       name: true,
       projectStage: true,
-      requiredTradeType: { select: { label: true } },
+      requiredTradeTypes: { select: { label: true } },
       status: true,
     },
     where: {
@@ -234,10 +235,9 @@ export async function sendTradieRequests(
           "activities",
         );
       }
-      const required = milestone.requiredTradeType?.label;
-      if (required && !activityAcceptsTrade(required, trade)) {
+      if (!activityAcceptsTrade(milestone.requiredTradeTypes, trade)) {
         throw new DomainValidationError(
-          `${milestone.name} needs ${required}, not ${trade}.`,
+          `${milestone.name} needs ${tradeList(milestone.requiredTradeTypes)}, not ${trade}.`,
           "activities",
         );
       }

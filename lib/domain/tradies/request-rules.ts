@@ -31,11 +31,21 @@ export function sameTrade(a: string, b: string): boolean {
 
 /**
  * May this trade be asked to do this activity? Yes when the build sequence
- * names no trade for it, or names this one.
+ * names no trade for it, or names this one among those it needs.
  */
 export function activityAcceptsTrade(
-  requiredTrade: string | null | undefined,
+  requiredTrades: readonly { label: string }[],
   trade: string,
 ): boolean {
-  return !requiredTrade || sameTrade(requiredTrade, trade);
+  return (
+    !requiredTrades.length
+    || requiredTrades.some((required) => sameTrade(required.label, trade))
+  );
+}
+
+/** "Plumbing", "Plumbing and Electrical", "Plumbing, Tiling and Electrical". */
+export function tradeList(trades: readonly { label: string }[]): string {
+  return new Intl.ListFormat("en-AU", { type: "conjunction" }).format(
+    trades.map((trade) => trade.label),
+  );
 }

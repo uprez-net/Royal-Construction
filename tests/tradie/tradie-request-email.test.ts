@@ -96,7 +96,7 @@ const milestone = (
   name: overrides.id,
   order: 1,
   projectStage: "Frame",
-  requiredTradeType: null,
+  requiredTradeTypes: [],
   startDate: null,
   status: MilestoneStatus.PENDING,
   targetDate: new Date("2026-11-10T00:00:00.000Z"),
@@ -107,20 +107,20 @@ const MILESTONES = [
   milestone({
     id: "rough",
     order: 2,
-    requiredTradeType: { id: "tt1", label: "Plumbing" },
+    requiredTradeTypes: [{ id: "tt1", label: "Plumbing" }],
   }),
   milestone({ id: "loose", order: 1 }),
   milestone({
     id: "done",
     order: 3,
-    requiredTradeType: { id: "tt1", label: "Plumbing" },
+    requiredTradeTypes: [{ id: "tt1", label: "Plumbing" }],
     status: MilestoneStatus.DONE,
   }),
   milestone({
     id: "board",
     order: 4,
     projectStage: "Lockup",
-    requiredTradeType: { id: "tt2", label: "Electrical" },
+    requiredTradeTypes: [{ id: "tt2", label: "Electrical" }],
   }),
 ];
 

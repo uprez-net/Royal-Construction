@@ -645,24 +645,23 @@ model ProjectCustomer {
 }
 
 model Milestone {
-  id                  String          @id @default(uuid())
-  projectId           String
-  name                String
-  order               Int
-  description         String?
-  projectStage        ProjectStage
-  targetDate          DateTime
-  startDate           DateTime?
-  actualDate          DateTime?
-  budget              Decimal         @default(10000) @db.Decimal(12, 2)
-  spend               Decimal?        @db.Decimal(12, 2)
-  status              MilestoneStatus @default(PENDING)
-  isPhotoRequired     Boolean         @default(false)
-  parentId            String?
+  id                 String          @id @default(uuid())
+  projectId          String
+  name               String
+  order              Int
+  description        String?
+  projectStage       ProjectStage
+  targetDate         DateTime
+  startDate          DateTime?
+  actualDate         DateTime?
+  budget             Decimal         @default(10000) @db.Decimal(12, 2)
+  spend              Decimal?        @db.Decimal(12, 2)
+  status             MilestoneStatus @default(PENDING)
+  isPhotoRequired    Boolean         @default(false)
+  parentId           String?
   /// Snapshot from the build sequence. Later template edits do not change this job.
-  estimatedDays       Int             @default(5)
-  requiredTradeTypeId String?
-  requiredTradeType   TradeType?      @relation("MilestoneRequiredTrade", fields: [requiredTradeTypeId], references: [id], onDelete: Restrict)
+  estimatedDays      Int             @default(5)
+  requiredTradeTypes TradeType[]     @relation("MilestoneRequiredTrades")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -683,22 +682,20 @@ model Milestone {
 
 /// The admin-managed build sequence used only when a project is created.
 model MilestoneTemplate {
-  id                  String              @id @default(uuid())
-  name                String
-  order               Int                 @unique
-  projectStage        ProjectStage
-  parentId            String?
-  parent              MilestoneTemplate?  @relation("TemplateHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children            MilestoneTemplate[] @relation("TemplateHierarchy")
-  relatedCostLines    String[]            @default([])
-  estimatedDays       Int                 @default(5)
-  requiredTradeTypeId String?
-  requiredTradeType   TradeType?          @relation("TemplateRequiredTrade", fields: [requiredTradeTypeId], references: [id], onDelete: Restrict)
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  id                 String              @id @default(uuid())
+  name               String
+  order              Int                 @unique
+  projectStage       ProjectStage
+  parentId           String?
+  parent             MilestoneTemplate?  @relation("TemplateHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children           MilestoneTemplate[] @relation("TemplateHierarchy")
+  relatedCostLines   String[]            @default([])
+  estimatedDays      Int                 @default(5)
+  requiredTradeTypes TradeType[]         @relation("TemplateRequiredTrades")
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   @@index([parentId])
-  @@index([requiredTradeTypeId])
 }
 
 model Material {
@@ -776,8 +773,9 @@ model TradeType {
 
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
-  milestoneTemplates MilestoneTemplate[] @relation("TemplateRequiredTrade")
-  requiredMilestones Milestone[]         @relation("MilestoneRequiredTrade")
+  /// Many-to-many: the join rows cascade, so deleteTradeType checks for holders itself.
+  milestoneTemplates MilestoneTemplate[] @relation("TemplateRequiredTrades")
+  requiredMilestones Milestone[]         @relation("MilestoneRequiredTrades")
 }
 
 model TradieIncident {

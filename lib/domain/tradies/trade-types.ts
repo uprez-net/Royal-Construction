@@ -288,19 +288,23 @@ export async function deleteTradeType(
     );
   }
 
-  try {
-    await db.tradeType.delete({ where: { id: current.id } });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError
-      && error.code === "P2003"
-    ) {
-      throw new DomainValidationError(
-        "This category is required by a build sequence activity or project milestone. Archive it instead.",
-      );
-    }
-    throw error;
+  // The dependency join rows cascade, so the database no longer refuses this
+  // delete itself: without the check it would silently drop the dependency.
+  const [activities, milestones] = await Promise.all([
+    db.milestoneTemplate.count({
+      where: { requiredTradeTypes: { some: { id: current.id } } },
+    }),
+    db.milestone.count({
+      where: { requiredTradeTypes: { some: { id: current.id } } },
+    }),
+  ]);
+  if (activities + milestones > 0) {
+    throw new DomainValidationError(
+      "This category is required by a build sequence activity or project milestone. Archive it instead.",
+    );
   }
+
+  await db.tradeType.delete({ where: { id: current.id } });
 }
 
 /**

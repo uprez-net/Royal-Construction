@@ -199,7 +199,7 @@ export interface TradieScheduleWithTradieMilestoneAndProject extends TradieSched
 }
 
 export interface SafeMilestone extends Omit<Milestone, "spend" | "budget"> {
-  requiredTradeType?: { id: string; label: string } | null;
+  requiredTradeTypes?: { id: string; label: string }[];
   budget: string;
   spend?: string;
 }

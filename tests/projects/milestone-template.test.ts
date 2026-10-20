@@ -26,7 +26,7 @@ import {
 } from "@/lib/domain/projects/milestones";
 import { milestoneTargetDates } from "@/lib/domain/projects/milestone-schedule";
 import { moveTemplateActivity } from "@/lib/domain/projects/template-tree";
-import { missingMilestoneTrade } from "@/lib/domain/projects/tradie-dependencies";
+import { missingMilestoneTrades } from "@/lib/domain/projects/tradie-dependencies";
 import { milestoneTemplates } from "@/constants/milestoneTemplate";
 import type { TemplateActivity } from "@/types/milestone-template";
 import { adminPrincipal, recordingDb } from "../architecture/domain-harness";
@@ -42,10 +42,24 @@ const activity = (
   parentId: null,
   projectStage: ProjectStage.Slab,
   estimatedDays: 5,
-  requiredTradeTypeId: null,
+  requiredTradeTypeIds: [],
   relatedCostLines: [],
   ...patch,
 });
+/** The row as Prisma returns it: the trades come back as a relation. */
+const dbRow = ({ requiredTradeTypeIds, ...row }: TemplateActivity) => ({
+  ...row,
+  requiredTradeTypes: requiredTradeTypeIds.map((id) => ({ id })),
+});
+/** What the save wrote, read back the way Prisma would return it. */
+const upserted = (args: unknown) => {
+  const { create } = args as {
+    create: Omit<TemplateActivity, "requiredTradeTypeIds"> & {
+      requiredTradeTypes: { connect: { id: string }[] };
+    };
+  };
+  return { ...create, requiredTradeTypes: create.requiredTradeTypes.connect };
+};
 const seed = milestoneTemplates.map((row) =>
   activity(`milestone-template-${row.order}`, row.order, {
     ...row,
@@ -98,10 +112,12 @@ test("creation snapshots database durations, dependencies, hierarchy and nested 
     activity("grandchild", 3, {
       parentId: "child",
       relatedCostLines: ["Survey"],
-      requiredTradeTypeId: "survey",
+      requiredTradeTypeIds: ["survey", "plumbing"],
     }),
   ];
-  const recorder = recordingDb({ "milestoneTemplate.findMany": rows });
+  const recorder = recordingDb({
+    "milestoneTemplate.findMany": rows.map(dbRow),
+  });
   await createMilestonesFromTemplate(
     {
       projectId: "job",
@@ -119,7 +135,6 @@ test("creation snapshots database durations, dependencies, hierarchy and nested 
         budget: { toString(): string };
         targetDate: Date;
         estimatedDays: number;
-        requiredTradeTypeId: string | null;
       }[];
     }
   ).data;
@@ -133,7 +148,24 @@ test("creation snapshots database durations, dependencies, hierarchy and nested 
     data.map((row) => row.budget.toString()),
     ["150", "150", "150"],
   );
-  assert.equal(data[2].requiredTradeTypeId, "survey");
+  // createMany cannot write the relation, so only the activity that needs
+  // trades is updated afterwards, with every trade it needs.
+  assert.deepEqual(
+    recorder
+      .writes()
+      .filter((write) => write.operation === "milestone.update")
+      .map((write) => write.args),
+    [
+      {
+        where: { id: data[2].id },
+        data: {
+          requiredTradeTypes: {
+            connect: [{ id: "survey" }, { id: "plumbing" }],
+          },
+        },
+      },
+    ],
+  );
   assert.equal(data[1].estimatedDays, 7);
 });
 
@@ -235,7 +267,7 @@ test("only admins can read or write the template, and refusals write nothing", a
 
 test("a stale tab and invalid dependencies cannot change the template", async () => {
   const rows = [activity("a", 1)];
-  const stale = recordingDb({ "milestoneTemplate.findMany": rows });
+  const stale = recordingDb({ "milestoneTemplate.findMany": rows.map(dbRow) });
   await assert.rejects(
     () =>
       saveMilestoneTemplate(
@@ -247,7 +279,7 @@ test("a stale tab and invalid dependencies cannot change the template", async ()
   );
   assert.deepEqual(stale.writes(), []);
   const invalid = recordingDb({
-    "milestoneTemplate.findMany": rows,
+    "milestoneTemplate.findMany": rows.map(dbRow),
     "tradeType.findMany": [],
     "adminOfferContent.findFirst": null,
   });
@@ -257,7 +289,7 @@ test("a stale tab and invalid dependencies cannot change the template", async ()
         adminPrincipal(),
         {
           revision: templateRevision(rows),
-          activities: [{ ...rows[0], requiredTradeTypeId: "unknown" }],
+          activities: [{ ...rows[0], requiredTradeTypeIds: ["unknown"] }],
         },
         invalid.transactionalDb,
       ),
@@ -267,18 +299,21 @@ test("a stale tab and invalid dependencies cannot change the template", async ()
 });
 
 test("template saves remove obsolete rows and keep parent links on stable IDs", async () => {
-  let stored = [activity("a", 1), activity("obsolete", 2)];
-  const initial = [...stored];
+  const initial = [activity("a", 1), activity("obsolete", 2)];
+  let stored = initial.map(dbRow);
   const recorder = recordingDb({
     "milestoneTemplate.findMany": () => stored.map((row) => ({ ...row })),
-    "tradeType.findMany": [{ id: "plumbing", archivedAt: null }],
+    "tradeType.findMany": [
+      { id: "plumbing", archivedAt: null },
+      { id: "electrical", archivedAt: null },
+    ],
     "adminOfferContent.findFirst": null,
     "milestoneTemplate.deleteMany": () => {
       stored = stored.filter((row) => row.id !== "obsolete");
       return { count: 1 };
     },
     "milestoneTemplate.upsert": (args: unknown) => {
-      const row = (args as { create: TemplateActivity }).create;
+      const row = upserted(args);
       stored = [...stored.filter((item) => item.id !== row.id), row].sort(
         (a, b) => a.order - b.order,
       );
@@ -287,7 +322,10 @@ test("template saves remove obsolete rows and keep parent links on stable IDs", 
   });
   const next = [
     activity("a", 1, { estimatedDays: 8 }),
-    activity("new", 2, { parentId: "a", requiredTradeTypeId: "plumbing" }),
+    activity("new", 2, {
+      parentId: "a",
+      requiredTradeTypeIds: ["electrical", "plumbing"],
+    }),
   ];
   const saved = await saveMilestoneTemplate(
     adminPrincipal(),
@@ -305,7 +343,7 @@ test("template saves release positions in bulk and restore unchanged rows withou
     activity("changed", 8),
   ];
   const recorder = recordingDb({
-    "milestoneTemplate.findMany": rows,
+    "milestoneTemplate.findMany": rows.map(dbRow),
     "tradeType.findMany": [],
     "adminOfferContent.findFirst": null,
   });
@@ -360,14 +398,14 @@ test("only a confirmed booking in the right category on this milestone clears th
   const milestone = {
     id: "a",
     status: MS.ACTIVE,
-    requiredTradeType: { label: "Plumbing" },
+    requiredTradeTypes: [{ label: "Plumbing" }],
   };
   const booking = {
     milestoneId: "a",
     status: TS.CONFIRMED,
     tradie: { trade: "Plumbing" },
   };
-  assert.equal(missingMilestoneTrade(milestone, []), "Plumbing");
+  assert.deepEqual(missingMilestoneTrades(milestone, []), ["Plumbing"]);
   for (const status of [
     TS.PENDING,
     TS.AWAITING_ADMIN_APPROVAL,
@@ -375,23 +413,48 @@ test("only a confirmed booking in the right category on this milestone clears th
     TS.DECLINED,
     TS.CANCELLED,
   ])
-    assert.equal(
-      missingMilestoneTrade(milestone, [{ ...booking, status }]),
-      "Plumbing",
+    assert.deepEqual(
+      missingMilestoneTrades(milestone, [{ ...booking, status }]),
+      ["Plumbing"],
     );
-  assert.equal(
-    missingMilestoneTrade(milestone, [{ ...booking, milestoneId: "b" }]),
-    "Plumbing",
+  assert.deepEqual(
+    missingMilestoneTrades(milestone, [{ ...booking, milestoneId: "b" }]),
+    ["Plumbing"],
   );
-  assert.equal(
-    missingMilestoneTrade(milestone, [
+  assert.deepEqual(
+    missingMilestoneTrades(milestone, [
       { ...booking, tradie: { trade: "Electrical" } },
     ]),
-    "Plumbing",
+    ["Plumbing"],
   );
-  assert.equal(missingMilestoneTrade(milestone, [booking]), null);
+  assert.deepEqual(missingMilestoneTrades(milestone, [booking]), []);
   for (const status of [MS.PENDING, MS.DONE, MS.NOT_REQUIRED])
-    assert.equal(missingMilestoneTrade({ ...milestone, status }, []), null);
+    assert.deepEqual(missingMilestoneTrades({ ...milestone, status }, []), []);
+});
+
+test("an activity needing two trades warns for each until both are confirmed", () => {
+  const milestone = {
+    id: "a",
+    status: MS.ACTIVE,
+    requiredTradeTypes: [{ label: "Plumbing" }, { label: "Electrical" }],
+  };
+  const plumber = {
+    milestoneId: "a",
+    status: TS.CONFIRMED,
+    tradie: { trade: "Plumbing" },
+  };
+  const electrician = { ...plumber, tradie: { trade: "Electrical" } };
+  assert.deepEqual(missingMilestoneTrades(milestone, []), [
+    "Plumbing",
+    "Electrical",
+  ]);
+  assert.deepEqual(missingMilestoneTrades(milestone, [plumber]), [
+    "Electrical",
+  ]);
+  assert.deepEqual(
+    missingMilestoneTrades(milestone, [plumber, electrician]),
+    [],
+  );
 });
 
 test("cost-line choices come from admin cost-schedule task names, deduplicated", async () => {
@@ -420,7 +483,7 @@ test("cost-line choices come from admin cost-schedule task names, deduplicated",
 test("new cost-line mappings must name an admin cost-schedule task", async () => {
   const rows = [activity("a", 1)];
   const recorder = recordingDb({
-    "milestoneTemplate.findMany": rows,
+    "milestoneTemplate.findMany": rows.map(dbRow),
     "tradeType.findMany": [],
     "adminOfferContent.findFirst": {
       costSchedule: {

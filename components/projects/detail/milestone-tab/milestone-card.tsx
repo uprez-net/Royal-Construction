@@ -38,7 +38,7 @@ import { currency, formatStatus } from "@/utils/formatters";
 import { MilestoneStatus } from "@prisma/client";
 
 import { MilestoneActionGroup } from "./milestone-action-button";
-import { missingMilestoneTrade } from "@/lib/domain/projects/tradie-dependencies";
+import { missingMilestoneTrades } from "@/lib/domain/projects/tradie-dependencies";
 import { milestoneEndDate } from "@/lib/domain/projects/milestone-schedule";
 
 /** How many progress photos sit inline before the rest go behind a button. */
@@ -183,7 +183,7 @@ export function MilestoneCard({
   const children = milestone.childrenMilestones;
   const hasChildren = children.length > 0;
   const isNotRequired = milestone.status === MilestoneStatus.NOT_REQUIRED;
-  const missingTrade = missingMilestoneTrade(
+  const missingTrades = missingMilestoneTrades(
     milestone,
     project.tradieSchedules,
   );
@@ -323,15 +323,16 @@ export function MilestoneCard({
             </div>
           ) : null}
 
-          {missingTrade ? (
+          {missingTrades.map((missingTrade) => (
             <p
+              key={missingTrade}
               role="status"
               className="mt-2 flex items-center gap-1.5 text-xs font-medium text-warning-ink"
             >
               <CircleAlert className="size-3.5" aria-hidden="true" />
               No confirmed {missingTrade} booking for this activity
             </p>
-          ) : null}
+          ))}
 
           {depth === 0 && nextTradies.length > 0 ? (
             <div className="mt-2 space-y-1.5">

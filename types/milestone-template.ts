@@ -8,7 +8,8 @@ export type TemplateActivity = {
   projectStage: ProjectStage;
   relatedCostLines: string[];
   estimatedDays: number;
-  requiredTradeTypeId: string | null;
+  /** Every trade the activity needs. Empty means no tradie dependency. */
+  requiredTradeTypeIds: string[];
 };
 
 export type MilestoneTemplateSnapshot = {
