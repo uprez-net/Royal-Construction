@@ -1,7 +1,10 @@
+import { differenceInDays } from "date-fns";
+
 import type {
   ProjectDetail,
   TradieScheduleListItem,
   TradieScheduleWithTradieAndMilestone,
+  TradieUrgentReminderItem,
 } from "@/types/project";
 
 /**
@@ -56,5 +59,41 @@ export function toScheduleListItem(
     quotedPrice: options.includeQuote
       ? (tradie.quotedPrice ?? undefined)
       : undefined,
+  };
+}
+
+/** The payload the booking details dialog takes. */
+export function toScheduleDetailsItem(
+  project: Pick<ProjectDetail, "name" | "siteManager">,
+  tradie: TradieScheduleWithTradieAndMilestone,
+  now: Date = new Date(),
+): TradieUrgentReminderItem {
+  return {
+    id: tradie.id,
+    tradieName: tradie.tradie.name,
+    lastQuotedPriceUnit: tradie.tradie.lastQuotedPriceUnit,
+    tradeType: tradie.tradie.trade,
+    abn: tradie.tradie.abn,
+    projectName: project.name,
+    milestoneName: tradie.milestone?.name,
+    taskLabel: tradie.milestone?.name
+      ? `${tradie.tradie.trade} for ${tradie.milestone.name}`
+      : tradie.tradie.trade,
+    scheduledDate: new Date(tradie.scheduledDate).toISOString(),
+    daysLeft: differenceInDays(new Date(tradie.scheduledDate), now),
+    status: tradie.status,
+    reminderSentAt: tradie.reminderSentAt
+      ? new Date(tradie.reminderSentAt).toISOString()
+      : undefined,
+    contact: {
+      email: tradie.tradie.email,
+      phone: tradie.tradie.phone,
+      additionalEmails: tradie.tradie.additionalEmails,
+    },
+    siteManager: {
+      name: project.siteManager?.name ?? "Unassigned",
+      email: project.siteManager?.email ?? "",
+      phone: project.siteManager?.phone ?? "",
+    },
   };
 }

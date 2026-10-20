@@ -1,9 +1,14 @@
+import type { TradieScheduleStatus } from "@prisma/client";
 import {
   ArrowDownRight,
+  Bell,
   CalendarCheck2,
+  CalendarClock,
   CheckCircle2,
   FilePlus2,
   Inbox,
+  Pencil,
+  Phone,
   Send,
   UserPlus,
 } from "lucide-react";
@@ -12,12 +17,29 @@ import { useState, type ReactNode } from "react";
 import { StatusPill } from "@/components/common/status-pill";
 import { TradeIcon } from "@/components/tradie-management/trade-icon";
 import { Button } from "@/components/ui/button";
+import { reminderTone } from "@/lib/domain/tradies/attention";
+import { rescheduleOutcome } from "@/lib/domain/tradies/reschedule-rules";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { openModal } from "@/lib/store/slices/uiSlice";
 import { cn } from "@/lib/utils";
-import { PROJECT_STAGE_LABELS, type ProjectDetail } from "@/types/project";
-import { currency, dateFormat } from "@/utils/formatters";
+import {
+  PROJECT_STAGE_LABELS,
+  type ProjectDetail,
+  type TradieScheduleWithTradieAndMilestone,
+} from "@/types/project";
+import {
+  currency,
+  dateFormat,
+  formatStatus,
+  shortDateFormat,
+} from "@/utils/formatters";
 
 import { ManualQuoteDialog } from "./manual-quote-dialog";
 import { RequestDeliveryStatus } from "./request-delivery-status";
+import {
+  toScheduleDetailsItem,
+  toScheduleListItem,
+} from "./schedule-list-item";
 import {
   CancelSelectionDialog,
   SelectQuoteDialog,
@@ -31,8 +53,8 @@ import {
 
 // The trade workbench on the Tradies tab: who was asked and whether the email
 // reached them, who quoted, who is selected, and which of the trade's
-// activities have their tradie. Booking-level actions — remind, reschedule,
-// status — stay on the coordination board beneath it.
+// activities have their tradie. Once a tradie is selected, each activity also
+// carries their booking and its actions — reschedule, status, remind, call.
 
 function initials(name: string): string {
   return (
@@ -209,6 +231,232 @@ function QuoteCard({
         ) : null}
       </div>
     </article>
+  );
+}
+
+function scheduleStatusTone(
+  status: TradieScheduleStatus,
+): "success" | "warning" | "danger" | "neutral" {
+  switch (status) {
+    case "COMPLETED":
+    case "CONFIRMED":
+      return "success";
+    case "DECLINED":
+    case "NO_RESPONSE":
+      return "danger";
+    case "PENDING":
+    case "PENDING_RESPONSE":
+    case "PENDING_FINAL_CONFIRMATION":
+    case "AWAITING_QUOTE":
+    case "AWAITING_ADMIN_APPROVAL":
+      return "warning";
+    default:
+      return "neutral";
+  }
+}
+
+function scheduleStatusText(status: TradieScheduleStatus): string {
+  switch (status) {
+    case "PENDING":
+      return "Pending confirmation";
+    case "PENDING_RESPONSE":
+      return "Awaiting response";
+    case "NO_RESPONSE":
+      return "No response";
+    case "CONFIRMED":
+      return "Confirmed";
+    case "DECLINED":
+      return "Declined";
+    case "COMPLETED":
+      return "Completed";
+    case "AWAITING_QUOTE":
+      return "Awaiting quote";
+    case "AWAITING_ADMIN_APPROVAL":
+      return "Availability confirmed · admin review";
+    case "PENDING_FINAL_CONFIRMATION":
+      return "Pending final confirmation";
+    default:
+      // Never render a raw enum: a status added to the schema but not to this
+      // switch still reads as a label rather than SCREAMING_SNAKE_CASE.
+      return formatStatus(status);
+  }
+}
+
+/** The selected tradie's booking on an activity: the open one, else the last. */
+function selectedBooking(
+  activity: TradeActivity,
+  tradieId: string,
+): TradieScheduleWithTradieAndMilestone | null {
+  const own = activity.schedules.filter(
+    (schedule) =>
+      schedule.tradieId === tradieId && schedule.status !== "CANCELLED",
+  );
+  return (
+    own.find((schedule) => isActiveSchedule(schedule.status))
+    ?? own.at(-1)
+    ?? null
+  );
+}
+
+const ICON_BUTTON =
+  "size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary";
+
+/** The selected tradie's booking on one activity, and what can be done to it. */
+function SelectedBookingRow({
+  project,
+  booking,
+}: {
+  project: ProjectDetail;
+  booking: TradieScheduleWithTradieAndMilestone;
+}) {
+  const dispatch = useAppDispatch();
+  const { name } = booking.tradie;
+  const status = booking.status;
+  const closed = status === "COMPLETED" || status === "CANCELLED";
+  // The reminder line reads the same rule as the attention card
+  // (lib/domain/tradies/attention.ts), so "follow up" here always has an
+  // alert beside it saying why.
+  const tone = reminderTone(booking, new Date());
+  const reminderDate = booking.reminderSentAt
+    ? shortDateFormat.format(new Date(booking.reminderSentAt))
+    : "not sent";
+  const listItem = (includeQuote: boolean) =>
+    toScheduleListItem(project, booking, { includeQuote });
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md bg-muted/30 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 flex-col items-start gap-1">
+        <button
+          type="button"
+          className="max-w-full truncate rounded-sm text-left text-xs font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/50"
+          aria-label={`Open booking details for ${name}`}
+          onClick={() =>
+            dispatch(
+              openModal({
+                type: "tradieScheduleDetails",
+                payload: { schedule: toScheduleDetailsItem(project, booking) },
+              }),
+            )
+          }
+        >
+          {name} ·{" "}
+          <span className="font-mono tabular-nums">
+            {dateFormat.format(new Date(booking.scheduledDate))}
+          </span>
+        </button>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <StatusPill tone={scheduleStatusTone(status)}>
+            {scheduleStatusText(status)}
+          </StatusPill>
+          {/* Its tone is a second signal only: "follow up" is always spelled
+              out, so colour never carries the meaning alone. */}
+          {!closed ? (
+            <span
+              className={cn(
+                "text-[11px]",
+                tone === "warning"
+                  ? "font-medium text-warning-ink"
+                  : "text-muted-foreground",
+              )}
+            >
+              Reminder {reminderDate}
+              {tone === "warning" ? " · follow up" : ""}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="flex shrink-0 gap-1">
+        {/* Declined, completed and removed bookings cannot move: the same rule
+            the server applies, so the button is never one that can only fail. */}
+        {rescheduleOutcome(status) ? (
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={`Reschedule ${name}`}
+            title="Reschedule"
+            className={ICON_BUTTON}
+            onClick={() =>
+              dispatch(
+                openModal({
+                  type: "rescheduleTradie",
+                  payload: { schedule: listItem(true) },
+                }),
+              )
+            }
+          >
+            <CalendarClock className="size-3.5" aria-hidden="true" />
+          </Button>
+        ) : null}
+
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label={`Update the status of ${name}`}
+          title="Update status"
+          className={ICON_BUTTON}
+          onClick={() =>
+            dispatch(
+              openModal({
+                type: "confirmStatus",
+                payload: { schedule: listItem(false) },
+              }),
+            )
+          }
+        >
+          <Pencil className="size-3.5" aria-hidden="true" />
+        </Button>
+
+        {!closed ? (
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={`Send a reminder to ${name}`}
+            title="Send reminder"
+            className={ICON_BUTTON}
+            disabled={[
+              "AWAITING_ADMIN_APPROVAL",
+              "DECLINED",
+              "CONFIRMED",
+            ].includes(status)}
+            onClick={() =>
+              dispatch(
+                openModal({
+                  type: "tradieReminder",
+                  payload: { schedule: listItem(true) },
+                }),
+              )
+            }
+          >
+            <Bell className="size-3.5" aria-hidden="true" />
+          </Button>
+        ) : null}
+
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label={`Log a call with ${name}`}
+          title="Log call"
+          className={ICON_BUTTON}
+          disabled={[
+            "CANCELLED",
+            "AWAITING_ADMIN_APPROVAL",
+            "DECLINED",
+            "CONFIRMED",
+          ].includes(status)}
+          onClick={() =>
+            dispatch(
+              openModal({
+                type: "logCall",
+                payload: { schedule: listItem(false) },
+              }),
+            )
+          }
+        >
+          <Phone className="size-3.5" aria-hidden="true" />
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -466,29 +714,40 @@ export function TradeWorkbench({
             ) : (
               activities.map((activity) => {
                 const state = activityState(activity);
+                // Booking actions only once the trade has its tradie: before
+                // that an activity can hold several tradies' requests, and the
+                // quote cards are where those are compared.
+                const booking = selection
+                  ? selectedBooking(activity, selection.tradieId)
+                  : null;
                 return (
                   <li
                     key={activity.milestoneId ?? "general"}
-                    className="flex items-start justify-between gap-3 px-4 py-3"
+                    className="space-y-2 px-4 py-3"
                   >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">
-                        {activity.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {activity.stage
-                          ? PROJECT_STAGE_LABELS[activity.stage]
-                          : "General"}
-                      </p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">
+                          {activity.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {activity.stage
+                            ? PROJECT_STAGE_LABELS[activity.stage]
+                            : "General"}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <StatusPill tone={state.tone}>{state.label}</StatusPill>
+                        {state.detail && !booking ? (
+                          <span className="font-mono text-[11px] text-muted-foreground">
+                            {state.detail}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <StatusPill tone={state.tone}>{state.label}</StatusPill>
-                      {state.detail ? (
-                        <span className="font-mono text-[11px] text-muted-foreground">
-                          {state.detail}
-                        </span>
-                      ) : null}
-                    </div>
+                    {booking ? (
+                      <SelectedBookingRow project={project} booking={booking} />
+                    ) : null}
                   </li>
                 );
               })
