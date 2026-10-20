@@ -1,5 +1,7 @@
 import { MilestoneStatus, TradieScheduleStatus } from "@prisma/client";
 
+import { sameTrade } from "../tradies/request-rules";
+
 type DependentMilestone = {
   id: string;
   status: MilestoneStatus;
@@ -29,7 +31,7 @@ export function missingMilestoneTrades(
           (booking) =>
             booking.milestoneId === milestone.id
             && booking.status === TradieScheduleStatus.CONFIRMED
-            && booking.tradie.trade === label,
+            && sameTrade(booking.tradie.trade, label),
         ),
     );
 }

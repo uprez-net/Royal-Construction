@@ -428,6 +428,13 @@ test("only a confirmed booking in the right category on this milestone clears th
     ["Plumbing"],
   );
   assert.deepEqual(missingMilestoneTrades(milestone, [booking]), []);
+  // The same trade as a request would accept it, whatever the directory's case.
+  assert.deepEqual(
+    missingMilestoneTrades(milestone, [
+      { ...booking, tradie: { trade: " plumbing " } },
+    ]),
+    [],
+  );
   for (const status of [MS.PENDING, MS.DONE, MS.NOT_REQUIRED])
     assert.deepEqual(missingMilestoneTrades({ ...milestone, status }, []), []);
 });
