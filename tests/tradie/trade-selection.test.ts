@@ -25,6 +25,7 @@ import {
   settleTradeCancellation,
 } from "@/lib/domain/tradies/trade-selection";
 import {
+  DomainNotFoundError,
   DomainTransitionError,
   DomainValidationError,
 } from "@/lib/domain/errors";
@@ -429,6 +430,7 @@ test("a manual quote is written onto the tradie's booking for the activity", asy
   const recorder = recordingDb({
     "milestone.findMany": [MILESTONE],
     "project.findUnique": PROJECT,
+    "tradeSelection.findFirst": null,
     "tradie.findUnique": ABC,
     "tradieQuote.create": { id: "q_1" },
     "tradieSchedule.findFirst": { id: "s_abc", status: "AWAITING_QUOTE" },
@@ -457,6 +459,7 @@ test("an approved booking's price cannot be changed by a manual quote", async ()
   const recorder = recordingDb({
     "milestone.findMany": [MILESTONE],
     "project.findUnique": PROJECT,
+    "tradeSelection.findFirst": null,
     "tradie.findUnique": ABC,
     "tradieQuote.create": { id: "q_1" },
     "tradieSchedule.findFirst": { id: "s_abc", status: "CONFIRMED" },
@@ -515,6 +518,43 @@ test("a cancellation request needs a reason, and only marks the selection pendin
     ["tradieApproval.create", "tradeSelection.updateMany"],
     "no booking moves until an admin approves",
   );
+});
+
+test("a cancellation for a selection on another project is not found, before anything is written", async () => {
+  const recorder = recordingDb({
+    "tradeSelection.findUnique": {
+      id: "sel_1",
+      projectId: "p_other",
+      status: "ACTIVE",
+      trade: "Plumbing",
+      tradie: { id: "t_abc", name: "ABC" },
+    },
+  });
+  await assert.rejects(
+    requestTradeCancellation(
+      adminPrincipal(),
+      { projectId: "p_1", reason: "Cannot meet the dates", selectionId: "sel_1" },
+      recorder.db,
+    ),
+    DomainNotFoundError,
+  );
+  assert.deepEqual(recorder.writes(), []);
+});
+
+test("a manual quote from a rival of the selected tradie is refused, and no quote is created", async () => {
+  const recorder = recordingDb({
+    "milestone.findMany": [MILESTONE],
+    "project.findUnique": PROJECT,
+    "tradeSelection.findFirst": { tradie: { name: "XYZ Plumbing" } },
+    "tradie.findUnique": ABC,
+  });
+  await assert.rejects(
+    recordManualQuote(adminPrincipal(), QUOTE, recorder.db),
+    (error: unknown) =>
+      error instanceof DomainTransitionError
+      && /XYZ Plumbing is already selected/.test(error.message),
+  );
+  assert.deepEqual(recorder.writes(), []);
 });
 
 test("approving a cancellation ends the selection and cancels the tradie's open bookings", async () => {
@@ -616,6 +656,7 @@ test("a manual quote's new booking never starts before today in Sydney", async (
       { ...MILESTONE, targetDate: new Date("2026-10-20T00:00:00.000Z") },
     ],
     "project.findUnique": PROJECT,
+    "tradeSelection.findFirst": null,
     "tradie.findUnique": ABC,
     "tradieQuote.create": { id: "q_1" },
     "tradieSchedule.create": (args: unknown) => ({

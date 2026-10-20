@@ -1039,6 +1039,10 @@ model TradeSelection {
   tradie     Tradie  @relation(fields: [tradieId], references: [id])
   selectedBy User?   @relation("TradeSelectionSelectedBy", fields: [selectedById], references: [id], onDelete: SetNull)
 
+  // NOTE: one-live-selection-per-trade is enforced via a partial unique index
+  // (TradeSelection_one_live_per_trade, WHERE status is ACTIVE or
+  // CANCELLATION_PENDING) added in the migration, since Prisma cannot express
+  // a filtered unique in the schema.
   @@index([projectId, tradeKey, status])
   @@index([tradieId])
 }

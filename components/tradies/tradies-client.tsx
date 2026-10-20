@@ -575,12 +575,6 @@ export function TradiesClient({
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
-                onClick={() => dispatch(openModal({ type: "scheduleTradie" }))}
-              >
-                <CalendarDays className="mr-2 size-4" />
-                Schedule Tradie
-              </Button>
-              <Button
                 variant="outline"
                 onClick={() => dispatch(openModal({ type: "tradieDirectory" }))}
               >

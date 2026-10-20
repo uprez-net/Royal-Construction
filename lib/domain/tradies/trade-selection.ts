@@ -201,6 +201,23 @@ export async function recordManualQuote(
   const todayKey = sydneyDateOnly(input.today ?? new Date());
 
   return serializable(db, async (tx) => {
+    // Once another tradie is selected for the trade a rival quote has nowhere
+    // to go: selecting it is refused until that tradie is cancelled.
+    const rival = await tx.tradeSelection.findFirst({
+      select: { tradie: { select: { name: true } } },
+      where: {
+        projectId: project.id,
+        status: { in: [...LIVE_SELECTION_STATUSES] },
+        tradeKey: tradeKey(trade),
+        tradieId: { not: tradie.id },
+      },
+    });
+    if (rival) {
+      throw new DomainTransitionError(
+        `${rival.tradie.name} is already selected for ${trade}. Cancel them before recording another quote.`,
+      );
+    }
+
     const quote = await tx.tradieQuote.create({
       data: {
         enteredById,
@@ -460,7 +477,12 @@ export type TradeCancellationPayload = {
  */
 export async function requestTradeCancellation(
   principal: DomainPrincipal,
-  input: { readonly selectionId: string; readonly reason: string },
+  input: {
+    readonly selectionId: string;
+    readonly reason: string;
+    /** The project the caller was looking at; a selection elsewhere is not found. */
+    readonly projectId?: string;
+  },
   db: DomainDb,
 ): Promise<{
   approvalId: string;
@@ -494,7 +516,12 @@ export async function requestTradeCancellation(
     },
     where: { id: input.selectionId },
   });
-  if (!selection) throw new DomainNotFoundError("Selection not found.");
+  if (
+    !selection
+    || (input.projectId !== undefined && selection.projectId !== input.projectId)
+  ) {
+    throw new DomainNotFoundError("Selection not found.");
+  }
   const project = await authorizeProject(principal, selection.projectId, db);
   if (selection.status !== TradeSelectionStatus.ACTIVE) {
     throw new DomainTransitionError(

@@ -364,12 +364,13 @@ export async function requestTradeCancellationForProject(raw: {
     const input = parse(tradeCancellationRequestSchema.safeParse(raw));
     const requested = await requestTradeCancellation(
       principal,
-      { reason: input.reason, selectionId: input.selectionId },
+      {
+        projectId: input.projectId,
+        reason: input.reason,
+        selectionId: input.selectionId,
+      },
       prisma,
     );
-    if (requested.projectId !== input.projectId) {
-      throw new DomainNotFoundError("Selection not found.");
-    }
     after(async () => {
       expireProject(input.projectId, true);
       await triggerNotification(

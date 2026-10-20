@@ -18,7 +18,7 @@ export const tradieRequestMail: TradieRequestMailPorts = {
       });
     } catch (error) {
       // The office sees a sentence, never this; it is for whoever reads logs.
-      console.error(`Tradie request email to ${email.to} failed:`, error);
+      console.error("Tradie request email failed:", error);
       throw error;
     }
   },
