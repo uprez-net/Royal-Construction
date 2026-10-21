@@ -105,31 +105,31 @@ export async function settleMilestoneBookings(
     });
   }
 
-  // Conditional on the status still being open: a booking another request
-  // settled a moment ago keeps what that request gave it.
-  if (completed.length > 0) {
-    await db.tradieSchedule.updateMany({
-      data: { status: TradieScheduleStatus.COMPLETED },
-      where: {
-        id: { in: completed },
-        status: { notIn: INACTIVE_SCHEDULE_STATUSES },
-      },
-    });
-  }
-  if (cancelled.length > 0) {
-    await db.tradieSchedule.updateMany({
-      data: { status: TradieScheduleStatus.CANCELLED },
-      where: {
-        id: { in: cancelled },
-        status: { notIn: INACTIVE_SCHEDULE_STATUSES },
-      },
-    });
-  }
-
+  // One booking at a time, conditional on its status still being open: a
+  // booking another request settled a moment ago keeps what that request gave
+  // it, and is not put on the tradie's history a second time.
   const reason = SETTLED_BOOKING_REASON[input.settlement];
+  const principal = input.principal ?? null;
+  const settled: { completed: string[]; cancelled: string[] } = {
+    cancelled: [],
+    completed: [],
+  };
   for (const booking of open) {
     const done = completed.includes(booking.id);
     if (!done && !cancelled.includes(booking.id)) continue;
+    const updated = await db.tradieSchedule.updateMany({
+      data: {
+        status: done
+          ? TradieScheduleStatus.COMPLETED
+          : TradieScheduleStatus.CANCELLED,
+      },
+      where: {
+        id: booking.id,
+        status: { notIn: INACTIVE_SCHEDULE_STATUSES },
+      },
+    });
+    if (updated.count !== 1) continue;
+    (done ? settled.completed : settled.cancelled).push(booking.id);
     const data = {
       milestoneId: input.milestoneId,
       projectId: booking.projectId,
@@ -137,7 +137,6 @@ export async function settleMilestoneBookings(
       scheduleId: booking.id,
       tradieId: booking.tradieId,
     };
-    const principal = input.principal ?? null;
     await recordTradieActivity(
       done
         ? { data, principal, type: "bookingCompleted" }
@@ -146,7 +145,7 @@ export async function settleMilestoneBookings(
     );
   }
 
-  return { cancelled, completed };
+  return settled;
 }
 
 /**
@@ -182,15 +181,19 @@ export async function completeElapsedBookings(
   const elapsedBookings = candidates.filter(
     (booking) => bookingLastDay(booking) < today,
   );
-  const elapsed = elapsedBookings.map((booking) => booking.id);
-  if (elapsed.length === 0) return { completed: 0 };
+  if (elapsedBookings.length === 0) return { completed: 0 };
 
-  const result = await db.tradieSchedule.updateMany({
-    data: { status: TradieScheduleStatus.COMPLETED },
-    where: { id: { in: elapsed }, status: TradieScheduleStatus.CONFIRMED },
-  });
-  // A cron with no transaction around it: noted, never thrown.
+  // One booking at a time, so only a booking this run actually moved goes on
+  // the tradie's history: one someone changed since the read keeps theirs.
+  let completed = 0;
   for (const booking of elapsedBookings) {
+    const updated = await db.tradieSchedule.updateMany({
+      data: { status: TradieScheduleStatus.COMPLETED },
+      where: { id: booking.id, status: TradieScheduleStatus.CONFIRMED },
+    });
+    if (updated.count !== 1) continue;
+    completed += 1;
+    // A cron with no transaction around it: noted, never thrown.
     await noteTradieActivity(
       {
         data: {
@@ -207,5 +210,5 @@ export async function completeElapsedBookings(
       db,
     );
   }
-  return { completed: result.count };
+  return { completed };
 }

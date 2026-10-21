@@ -6,7 +6,10 @@ import { isInternalPrincipal, type DomainPrincipal } from "../principal";
 import { runOutboxEffectWithOutcome } from "../outbox";
 import { INACTIVE_SCHEDULE_STATUSES } from "./lifecycle";
 import { subjectWithTradieRef } from "./reply-reference";
-import { noteTradieActivity } from "../audit/tradie-activity-log";
+import {
+  noteTradieActivity,
+  recordTradieActivity,
+} from "../audit/tradie-activity-log";
 import { TRADIE_REMINDER_CRON } from "@/types/tradieActivityLog";
 
 const NON_ACTIONABLE_STATUSES = new Set<TradieScheduleStatus>(
@@ -174,13 +177,17 @@ export async function markTradieReminderSent(
       : schedule.status === TradieScheduleStatus.PENDING
         ? TradieScheduleStatus.PENDING_RESPONSE
         : schedule.status;
-  const updated = await db.tradieSchedule.updateMany({
-    data: { reminderSentAt: sentAt, status },
-    where: { id: scheduleId, reminderSentAt: null },
-  });
-  if (updated.count === 1) {
+  // The move and its history entry commit together. Recorded, not noted: a
+  // swallowed failure inside a caller's transaction would abort it while this
+  // reported the reminder as recorded.
+  const advance = async (tx: DomainDb): Promise<boolean> => {
+    const updated = await tx.tradieSchedule.updateMany({
+      data: { reminderSentAt: sentAt, status },
+      where: { id: scheduleId, reminderSentAt: null },
+    });
+    if (updated.count !== 1) return false;
     if (status !== schedule.status) {
-      await noteTradieActivity(
+      await recordTradieActivity(
         {
           data: {
             from: schedule.status,
@@ -194,11 +201,14 @@ export async function markTradieReminderSent(
           principal: null,
           type: "bookingStatusChanged",
         },
-        db,
+        tx,
       );
     }
-    return { alreadySent: false, status };
-  }
+    return true;
+  };
+  const advanced =
+    "$transaction" in db ? await db.$transaction(advance) : await advance(db);
+  if (advanced) return { alreadySent: false, status };
 
   const current = await db.tradieSchedule.findUnique({
     select: { reminderSentAt: true, status: true },
