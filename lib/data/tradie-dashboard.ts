@@ -72,6 +72,7 @@ type ScheduleRow = {
   tradie_phone: string;
   requiresQuote: boolean;
   quotedPrice: string | null;
+  ref_token: string | null;
 };
 
 type CountRow = { count: bigint };
@@ -133,6 +134,7 @@ type UrgentRow = {
   last_quoted_price: string | null;
   last_quoted_price_unit: "HOURLY" | "FIXED";
   rating: string | null;
+  ref_token: string | null;
 };
 
 type TradeTypeRow = { id: string; trade_type: string };
@@ -425,7 +427,8 @@ export async function getTradieCoordinationDashboard(
           t.email              AS tradie_email,
           t.phone              AS tradie_phone,
           ts."requiresQuote"    AS requiresQuote,
-          ts."quotedPrice"     AS quotedPrice
+          ts."quotedPrice"     AS quotedPrice,
+          ts."refToken"        AS ref_token
         FROM "TradieSchedule" ts
         JOIN "Tradie"  t  ON t.id  = ts."tradieId"
         JOIN "Project" p  ON p.id  = ts."projectId"
@@ -681,7 +684,8 @@ export async function getTradieCoordinationDashboard(
           t.phone             AS tradie_phone,
           t."lastQuotedPrice"::text AS last_quoted_price,
           t."lastQuotedPriceUnit"::text AS last_quoted_price_unit,
-          t.rating::text       AS rating
+          t.rating::text       AS rating,
+          ts."refToken"        AS ref_token
         FROM "TradieSchedule" ts
         JOIN "Tradie"  t  ON t.id  = ts."tradieId"
         JOIN "Project" p  ON p.id  = ts."projectId"
@@ -880,6 +884,7 @@ export async function getTradieCoordinationDashboard(
           },
           requiresQuote: row.requiresQuote,
           quotedPrice: row.quotedPrice ?? undefined,
+          refToken: row.ref_token,
         }) satisfies TradieScheduleListItem,
     );
 
@@ -926,6 +931,7 @@ export async function getTradieCoordinationDashboard(
       rating: row.rating ?? undefined,
       lastQuotedPrice: row.last_quoted_price ?? undefined,
       reminderSentAt: row.reminder_sent_at?.toISOString(),
+      refToken: row.ref_token,
     }));
 
     // -----------------------------------------------------------------------

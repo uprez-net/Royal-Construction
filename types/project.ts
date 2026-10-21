@@ -4,6 +4,7 @@ import type {
   TradieQuoteGst,
   TradieQuoteSource,
   TradieRequestDeliveryStatus,
+  TradieRequestKind,
 } from "@prisma/client";
 import {
   Milestone,
@@ -161,7 +162,12 @@ export type TradieRequestDeliverySummary = {
   lastError: string | null;
   toAddress: string;
   createdAt: Date;
-  request: { id: string; createdAt: Date; subject: string };
+  request: {
+    id: string;
+    createdAt: Date;
+    subject: string;
+    kind: TradieRequestKind;
+  };
 };
 
 /** Where a booking's quoted amount came from. */
@@ -382,6 +388,8 @@ export type TradieScheduleListItem = {
   rating?: string;
   requiresQuote: boolean;
   quotedPrice?: string;
+  /** The booking's reply reference, quoted on every email about it. */
+  refToken?: string | null;
   contact: {
     email: string;
     phone: string;
@@ -449,6 +457,8 @@ export type TradieUrgentReminderItem = {
   daysLeft: number;
   status: TradieScheduleStatus;
   reminderSentAt?: string;
+  /** The booking's reply reference, for a reminder sent from here. */
+  refToken?: string | null;
   contact: {
     email: string;
     phone: string;

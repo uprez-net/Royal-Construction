@@ -1,3 +1,4 @@
+import type { TradieRequestKind } from "@prisma/client";
 import type { ProjectDetail } from "@/types/project";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -49,11 +50,15 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
     ? overviews.find((item) => item.trade === trade)
     : undefined;
 
-  const openRequestWizard = () =>
+  const openRequestWizard = (kind?: TradieRequestKind) =>
     dispatch(
       openModal({
         type: "scheduleTradie",
-        payload: { project, ...(trade ? { trade } : {}) },
+        payload: {
+          project,
+          ...(trade ? { trade } : {}),
+          ...(kind ? { kind } : {}),
+        },
       }),
     );
 
@@ -79,12 +84,12 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
 
       <SectionCard
         title="Trade requests"
-        description="Ask tradies to quote for a trade's activities, compare what comes back, and see which activities have their tradie."
+        description="Ask tradies to quote for a trade's activities and compare what comes back, or book one directly and record their price later."
         action={
           <Button
             size="sm"
             className="h-8 rounded-md px-3 text-xs font-medium"
-            onClick={openRequestWizard}
+            onClick={() => openRequestWizard()}
           >
             <Plus className="mr-1 size-3.5" aria-hidden="true" />
             Schedule tradies

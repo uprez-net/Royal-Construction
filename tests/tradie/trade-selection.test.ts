@@ -456,17 +456,115 @@ test("a manual quote is written onto the tradie's booking for the activity", asy
 });
 
 test("an approved booking's price cannot be changed by a manual quote", async () => {
+  for (const booking of [
+    // Asked to quote, quoted, approved.
+    { quotedPrice: "450.00", requestRecipient: null, requiresQuote: true },
+    // Booked directly, priced, approved.
+    {
+      quotedPrice: "450.00",
+      requestRecipient: { request: { kind: "BOOKING" } },
+      requiresQuote: true,
+    },
+  ]) {
+    const recorder = recordingDb({
+      "milestone.findMany": [MILESTONE],
+      "project.findUnique": PROJECT,
+      "tradeSelection.findFirst": null,
+      "tradie.findUnique": ABC,
+      "tradieQuote.create": { id: "q_1" },
+      "tradieSchedule.findFirst": {
+        id: "s_abc",
+        status: "CONFIRMED",
+        ...booking,
+      },
+    });
+    await assert.rejects(
+      recordManualQuote(adminPrincipal(), QUOTE, recorder.db),
+      /booking for Rough-in is confirmed/,
+    );
+  }
+});
+
+test("a directly booked tradie's price lands on the booking without moving it", async () => {
   const recorder = recordingDb({
     "milestone.findMany": [MILESTONE],
     "project.findUnique": PROJECT,
     "tradeSelection.findFirst": null,
     "tradie.findUnique": ABC,
     "tradieQuote.create": { id: "q_1" },
-    "tradieSchedule.findFirst": { id: "s_abc", status: "CONFIRMED" },
+    "tradieSchedule.findFirst": {
+      id: "s_abc",
+      quotedPrice: null,
+      requestRecipient: { request: { kind: "BOOKING" } },
+      requiresQuote: false,
+      status: "PENDING_RESPONSE",
+    },
+  });
+  await recordManualQuote(adminPrincipal(), QUOTE, recorder.db);
+  const priced = recorder
+    .writes()
+    .find((w) => w.operation === "tradieSchedule.updateMany");
+  // No status: "quote received" would put it back into a comparison.
+  assert.deepEqual(priced?.args, {
+    data: { quoteId: "q_1", quotedPrice: "450.00", requiresQuote: true },
+    where: { id: "s_abc", quotedPrice: null, status: "PENDING_RESPONSE" },
+  });
+});
+
+test("an approved direct booking with no price yet can have it filled in, and its waiting approval shows it", async () => {
+  const recorder = recordingDb({
+    "milestone.findMany": [MILESTONE],
+    "project.findUnique": PROJECT,
+    "tradeSelection.findFirst": null,
+    "tradie.findUnique": ABC,
+    "tradieApproval.findFirst": {
+      id: "ap_1",
+      updationData: { cost: "$0.00", scheduleId: "s_abc" },
+    },
+    "tradieQuote.create": { id: "q_1" },
+    "tradieSchedule.findFirst": {
+      id: "s_abc",
+      quotedPrice: null,
+      requestRecipient: { request: { kind: "BOOKING" } },
+      requiresQuote: false,
+      status: "AWAITING_ADMIN_APPROVAL",
+    },
+  });
+  await recordManualQuote(adminPrincipal(), QUOTE, recorder.db);
+  const priced = recorder
+    .writes()
+    .find((w) => w.operation === "tradieSchedule.updateMany");
+  assert.equal(
+    (priced?.args as { data: Record<string, unknown> }).data.status,
+    undefined,
+  );
+  const approval = recorder
+    .writes()
+    .find((w) => w.operation === "tradieApproval.update");
+  assert.deepEqual(approval?.args, {
+    data: { updationData: { cost: "$450", scheduleId: "s_abc" } },
+    where: { id: "ap_1" },
+  });
+});
+
+test("a quote booking that stopped waiting on its quote stays closed to a manual quote", async () => {
+  const recorder = recordingDb({
+    "milestone.findMany": [MILESTONE],
+    "project.findUnique": PROJECT,
+    "tradeSelection.findFirst": null,
+    "tradie.findUnique": ABC,
+    "tradieQuote.create": { id: "q_1" },
+    "tradieSchedule.findFirst": {
+      id: "s_abc",
+      quotedPrice: null,
+      requestRecipient: { request: { kind: "QUOTE" } },
+      requiresQuote: true,
+      status: "NO_RESPONSE",
+    },
   });
   await assert.rejects(
     recordManualQuote(adminPrincipal(), QUOTE, recorder.db),
-    /booking for Rough-in is confirmed/,
+    /booking for Rough-in is unanswered/,
   );
 });
 
@@ -533,7 +631,11 @@ test("a cancellation for a selection on another project is not found, before any
   await assert.rejects(
     requestTradeCancellation(
       adminPrincipal(),
-      { projectId: "p_1", reason: "Cannot meet the dates", selectionId: "sel_1" },
+      {
+        projectId: "p_1",
+        reason: "Cannot meet the dates",
+        selectionId: "sel_1",
+      },
       recorder.db,
     ),
     DomainNotFoundError,

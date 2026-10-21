@@ -1,4 +1,4 @@
-import type { TradieScheduleStatus } from "@prisma/client";
+import type { TradieRequestKind, TradieScheduleStatus } from "@prisma/client";
 import {
   ArrowDownRight,
   Bell,
@@ -129,6 +129,9 @@ function QuoteCard({
   const requested = tradie.schedules.filter((schedule) =>
     isActiveSchedule(schedule.status),
   ).length;
+  // Booked without a quote: the card is about the booking, and its price is
+  // something to add rather than something still to arrive.
+  const booked = tradie.delivery?.request.kind === "BOOKING";
   const reasonId = `select-blocked-${tradie.tradieId}`;
   return (
     <article
@@ -159,13 +162,13 @@ function QuoteCard({
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">
             {tradie.quotedTotal === null
-              ? `Requested · ${requested || tradie.schedules.length} of ${activityCount} activities`
-              : `Quoted · ${tradie.quotedCount} of ${activityCount} activities`}
+              ? `${booked ? "Booked" : "Requested"} · ${requested || tradie.schedules.length} of ${activityCount} activities`
+              : `${booked ? "Priced" : "Quoted"} · ${tradie.quotedCount} of ${activityCount} activities`}
           </p>
           <p className="flex items-center gap-2 font-mono text-sm font-medium text-foreground">
             {tradie.quotedTotal === null ? (
               <span className="font-sans text-muted-foreground">
-                No quote yet
+                {booked ? "No price yet" : "No quote yet"}
               </span>
             ) : (
               currency.format(tradie.quotedTotal)
@@ -505,9 +508,12 @@ function activityState(activity: TradeActivity): {
 function SelectionBanner({
   overview,
   onCancel,
+  onAddPrice,
 }: {
   overview: TradeOverview;
   onCancel: () => void;
+  /** Booked directly with no price yet: record it. */
+  onAddPrice: () => void;
 }) {
   const selection = overview.selection;
   if (!selection) return null;
@@ -515,6 +521,11 @@ function SelectionBanner({
     (item) => item.tradieId === selection.tradieId,
   );
   const pending = selection.status === "CANCELLATION_PENDING";
+  const unpriced =
+    tradie !== undefined
+    && tradie.quotedTotal === null
+    && tradie.openCount > 0
+    && tradie.delivery?.request.kind === "BOOKING";
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-success/40 bg-success-light px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
@@ -535,18 +546,26 @@ function SelectionBanner({
           {selection.selectedBy ? ` by ${selection.selectedBy.name}` : ""}
         </p>
       </div>
-      {pending ? (
-        <StatusPill tone="warning">Cancellation waiting on admin</StatusPill>
-      ) : (
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-8 shrink-0 text-xs"
-          onClick={onCancel}
-        >
-          Request cancellation
-        </Button>
-      )}
+      <div className="flex shrink-0 flex-wrap gap-2">
+        {unpriced ? (
+          <Button size="sm" className="h-8 text-xs" onClick={onAddPrice}>
+            <FilePlus2 className="mr-1.5 size-3.5" aria-hidden="true" />
+            Add their price
+          </Button>
+        ) : null}
+        {pending ? (
+          <StatusPill tone="warning">Cancellation waiting on admin</StatusPill>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs"
+            onClick={onCancel}
+          >
+            Request cancellation
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
@@ -558,13 +577,16 @@ export function TradeWorkbench({
 }: {
   project: ProjectDetail;
   overview: TradeOverview;
-  /** Opens the request wizard for this trade. */
-  onRequest: () => void;
+  /** Opens the request wizard for this trade, on a quote request or a booking. */
+  onRequest: (kind?: TradieRequestKind) => void;
 }) {
   const { stats, activities, trade, selection } = overview;
   const [selecting, setSelecting] = useState<TradeTradie | null>(null);
   const [cancelling, setCancelling] = useState(false);
-  const [manualQuote, setManualQuote] = useState(false);
+  /** Open, and on whom: `null` lets the office choose. */
+  const [manualQuote, setManualQuote] = useState<{
+    tradieId: string | null;
+  } | null>(null);
 
   // The selected tradie first; the order otherwise is the quote comparison's.
   const tradies = [...overview.tradies].sort(
@@ -641,6 +663,9 @@ export function TradeWorkbench({
       <SelectionBanner
         overview={overview}
         onCancel={() => setCancelling(true)}
+        onAddPrice={() =>
+          setManualQuote({ tradieId: selection?.tradieId ?? null })
+        }
       />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
@@ -659,7 +684,7 @@ export function TradeWorkbench({
               size="sm"
               variant="outline"
               className="h-8 text-xs"
-              onClick={() => setManualQuote(true)}
+              onClick={() => setManualQuote({ tradieId: null })}
             >
               <FilePlus2 className="mr-1.5 size-3.5" aria-hidden="true" />
               Manual quote
@@ -670,10 +695,27 @@ export function TradeWorkbench({
               <p className="text-sm text-muted-foreground">
                 No {trade} tradies have been asked yet.
               </p>
-              <Button size="sm" variant="outline" onClick={onRequest}>
-                <UserPlus className="mr-1.5 size-3.5" aria-hidden="true" />
-                Request {trade} quotes
-              </Button>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onRequest("QUOTE")}
+                >
+                  <UserPlus className="mr-1.5 size-3.5" aria-hidden="true" />
+                  Request {trade} quotes
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onRequest("BOOKING")}
+                >
+                  <CalendarCheck2
+                    className="mr-1.5 size-3.5"
+                    aria-hidden="true"
+                  />
+                  Book a tradie directly
+                </Button>
+              </div>
             </div>
           ) : (
             tradies.map((tradie) => (
@@ -771,8 +813,11 @@ export function TradeWorkbench({
         onOpenChange={setCancelling}
       />
       <ManualQuoteDialog
-        open={manualQuote}
-        onOpenChange={setManualQuote}
+        open={manualQuote !== null}
+        onOpenChange={(open) => {
+          if (!open) setManualQuote(null);
+        }}
+        initialTradieId={manualQuote?.tradieId ?? null}
         project={project}
         trade={trade}
       />

@@ -7,9 +7,14 @@ import { applyTradieScheduleUpdate } from "@/lib/data/tradie-schedule-updates";
 import { getAllAdminUsersIds } from "@/lib/data/user";
 import {
   AWAITING_TRADIE_REPLY,
+  findTradieReplyReference,
+  isReplyFromTradie,
   matchTradieReplyToSchedule,
+  referencedReplyTargets,
   tradieReplyStatus,
+  type TradieReplyReference,
 } from "@/lib/domain/tradies/replies";
+import { extractTradieRefToken } from "@/lib/domain/tradies/reply-reference";
 import { triggerNotification } from "@/lib/notification/novu";
 import { createNotification } from "@/types/notification";
 import { saveLeadEmailTrail } from "@/lib/graph/save-lead-email-trail";
@@ -36,6 +41,7 @@ import {
   CertifierEmailDirection,
   CompliancePartyType,
   GraphMailbox as PrismaGraphMailbox,
+  type TradieScheduleStatus,
 } from "@prisma/client";
 import { processInboundCertifierEmail } from "@/lib/workflow/certifier-email";
 import { processInboundPartyEmail } from "@/lib/workflow/party-email";
@@ -120,6 +126,128 @@ async function notifyTradieReplyNeedsReview(
     );
   } catch (error) {
     console.error("Could not notify admins about a tradie reply:", error);
+  }
+}
+
+/**
+ * Read a tradie's reply and apply it to the booking, or bookings, it answers.
+ *
+ * With a `reference`, only the bookings it names are candidates, and a reply
+ * to a request email covering several activities can answer all of them at
+ * once (`referencedReplyTargets`). Without one, every booking the tradie has
+ * open is a candidate and the reply must pick out exactly one, as before.
+ * Whatever cannot be applied goes to the admins rather than the log.
+ */
+async function handleTradieReply(input: {
+  tradie: { id: string; name: string };
+  /** The subject as received; "" when there was none. */
+  subject: string;
+  content: string;
+  reference: TradieReplyReference | null;
+}): Promise<void> {
+  const { tradie, content, reference } = input;
+  const subject = input.subject || "(no subject)";
+  const label = reference
+    ? `${reference.token} (${reference.projectName})`
+    : `Tradie ${tradie.id}`;
+
+  const openBookings = await prisma.tradieSchedule.count({
+    where: {
+      status: { in: [...AWAITING_TRADIE_REPLY] },
+      tradieId: tradie.id,
+    },
+  });
+  if (openBookings === 0) {
+    console.log(`  ${label}: no booking awaiting a reply. Skipping.`);
+    return;
+  }
+
+  const tradieInfo = await extractTradieScheduleInfoFromMessage(
+    input.subject,
+    content,
+  );
+  if (!tradieInfo) {
+    await notifyTradieReplyNeedsReview(
+      tradie,
+      subject,
+      `The reply${reference ? ` to ${label}` : ""} could not be read automatically. Check it and update the booking by hand.`,
+    );
+    return;
+  }
+  console.log(`  extractedTradieInfo: ${JSON.stringify(tradieInfo)}`);
+
+  const match = await matchTradieReplyToSchedule(
+    { hints: tradieInfo, scope: reference?.scope, tradieId: tradie.id },
+    prisma,
+  );
+  if (match.kind === "none") {
+    console.log(`  ${label}: no booking awaiting a reply. Skipping.`);
+    return;
+  }
+
+  let targets: readonly { id: string; status: TradieScheduleStatus }[];
+  let where: string;
+  if (match.kind === "matched") {
+    targets = [match.schedule];
+    where = match.schedule.project.name;
+  } else {
+    const all = reference
+      ? referencedReplyTargets(match.candidates, {
+          confirmed: tradieInfo.scheduleConfirmation,
+          quoted: Boolean(tradieInfo.scheduleQuote),
+        })
+      : null;
+    if (!all) {
+      await notifyTradieReplyNeedsReview(
+        tradie,
+        subject,
+        reference
+          ? `The reply to ${label} covers ${match.candidates.length} open activities and could not be split between them automatically. Record any quote per activity with Manual quote on the Tradies tab, and update the bookings by hand.`
+          : `The reply did not say which of ${match.candidates.length} open bookings it is about (${match.candidates
+              .map((candidate) => candidate.project.name)
+              .join(", ")}). Update the right one by hand.`,
+      );
+      return;
+    }
+    targets = all;
+    where = `${all.length} activities on ${reference?.projectName}`;
+  }
+
+  const failed: string[] = [];
+  for (const target of targets) {
+    try {
+      await applyTradieScheduleUpdate(
+        systemPrincipal("graph:tradie-email-reply"),
+        target.id,
+        {
+          status: tradieReplyStatus(
+            target.status,
+            tradieInfo.scheduleConfirmation,
+          ),
+          // A price is never spread over several bookings: one amount written
+          // onto each would count it several times over.
+          quote:
+            targets.length === 1
+              ? (tradieInfo.scheduleQuote ?? undefined)
+              : undefined,
+          // Without the basis the amount is unreadable: "$950" is a day rate
+          // as often as it is a small job, and the schedule total and the
+          // tradie's last quoted price both hang off which one it is. FIXED
+          // when the tradie named a price and no basis.
+          quoteUnit: tradieInfo.scheduleQuoteBasis ?? undefined,
+        },
+      );
+    } catch (error) {
+      console.error("Failed to apply a tradie reply:", error);
+      failed.push(target.status);
+    }
+  }
+  if (failed.length > 0) {
+    await notifyTradieReplyNeedsReview(
+      tradie,
+      subject,
+      `The reply was matched to ${where} but ${failed.length === targets.length ? "the booking" : `${failed.length} of ${targets.length} bookings`} could not be updated from ${[...new Set(failed)].join(", ")}. Update ${failed.length === 1 ? "it" : "them"} by hand.`,
+    );
   }
 }
 
@@ -748,88 +876,60 @@ async function processNotifications(
           // change itself runs as the system, because this webhook has no
           // signed-in user — `updateTradieSchedule` is the browser's door and
           // refused every reply here with "User not authenticated".
+          //
+          // A reply that quotes one of our references ([RCTRQ-…] on a
+          // request, [RCTBK-…] on one booking) is matched to the bookings it
+          // names. One that does not — or names nothing we have — falls back
+          // to the sender and the tradie's open bookings, as before.
+          const tradieRefToken = extractTradieRefToken(
+            message.subject,
+            content,
+          );
+          const tradieReference = tradieRefToken
+            ? await findTradieReplyReference(tradieRefToken, prisma)
+            : null;
+          if (tradieReference) {
+            const subject = message.subject ?? "(no subject)";
+            if (isMachineGenerated(message.headers)) {
+              // A bounce or an out-of-office quotes the subject, reference
+              // and all. Logged: it is the only trace of either today.
+              console.log(
+                `  Tradie reply ${tradieReference.token}: auto-generated`,
+                JSON.stringify({
+                  autoSubmitted: message.headers.autoSubmitted ?? null,
+                  from: message.from,
+                  subject: message.subject,
+                }),
+              );
+            } else if (!isReplyFromTradie(tradieReference, message.from)) {
+              await notifyTradieReplyNeedsReview(
+                tradieReference.tradie,
+                subject,
+                `The reply quotes ${tradieReference.token} (${tradieReference.projectName}) but came from ${message.from || "an unknown sender"}, which is not an address on ${tradieReference.tradie.name}'s record. Check it and update the booking by hand.`,
+              );
+            } else {
+              await handleTradieReply({
+                content,
+                reference: tradieReference,
+                subject: message.subject ?? "",
+                tradie: tradieReference.tradie,
+              });
+            }
+            continue;
+          }
+
           if (message.from && (await isTradieMessage(message.from))) {
             const tradie = await prisma.tradie.findUnique({
               select: { id: true, name: true },
               where: { email: message.from },
             });
             if (!tradie) continue;
-            const subject = message.subject ?? "(no subject)";
-
-            const openBookings = await prisma.tradieSchedule.count({
-              where: {
-                status: { in: [...AWAITING_TRADIE_REPLY] },
-                tradieId: tradie.id,
-              },
-            });
-            if (openBookings === 0) {
-              console.log(
-                `  Tradie ${tradie.id} has no booking awaiting a reply. Skipping.`,
-              );
-              continue;
-            }
-
-            const tradieInfo = await extractTradieScheduleInfoFromMessage(
-              message.subject ?? "",
+            await handleTradieReply({
               content,
-            );
-            if (!tradieInfo) {
-              await notifyTradieReplyNeedsReview(
-                tradie,
-                subject,
-                "The reply could not be read automatically. Check it and update the booking by hand.",
-              );
-              continue;
-            }
-            console.log(`  extractedTradieInfo: ${JSON.stringify(tradieInfo)}`);
-
-            const match = await matchTradieReplyToSchedule(
-              { hints: tradieInfo, tradieId: tradie.id },
-              prisma,
-            );
-            if (match.kind === "none") {
-              console.log(
-                `  Tradie ${tradie.id} has no booking awaiting a reply. Skipping.`,
-              );
-              continue;
-            }
-            if (match.kind === "ambiguous") {
-              await notifyTradieReplyNeedsReview(
-                tradie,
-                subject,
-                `The reply did not say which of ${match.candidates.length} open bookings it is about (${match.candidates
-                  .map((candidate) => candidate.project.name)
-                  .join(", ")}). Update the right one by hand.`,
-              );
-              continue;
-            }
-
-            try {
-              await applyTradieScheduleUpdate(
-                systemPrincipal("graph:tradie-email-reply"),
-                match.schedule.id,
-                {
-                  status: tradieReplyStatus(
-                    match.schedule.status,
-                    tradieInfo.scheduleConfirmation,
-                  ),
-                  quote: tradieInfo.scheduleQuote ?? undefined,
-                  // Without the basis the amount is unreadable: "$950" is a
-                  // day rate as often as it is a small job, and the schedule
-                  // total and the tradie's last quoted price both hang off
-                  // which one it is. FIXED when the tradie named a price and
-                  // no basis.
-                  quoteUnit: tradieInfo.scheduleQuoteBasis ?? undefined,
-                },
-              );
-            } catch (error) {
-              console.error("Failed to apply a tradie reply:", error);
-              await notifyTradieReplyNeedsReview(
-                tradie,
-                subject,
-                `The reply was matched to ${match.schedule.project.name} but the booking could not be updated from ${match.schedule.status}. Update it by hand.`,
-              );
-            }
+              reference: null,
+              subject: message.subject ?? "",
+              tradie,
+            });
             continue;
           }
 

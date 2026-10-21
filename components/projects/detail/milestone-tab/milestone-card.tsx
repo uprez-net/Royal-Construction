@@ -406,6 +406,7 @@ export function MilestoneCard({
                         note: schedule.tradie.note,
                         requiresQuote: schedule.requiresQuote,
                         quotedPrice: schedule.quotedPrice ?? undefined,
+                        refToken: schedule.refToken,
                       } satisfies TradieScheduleListItem)
                     }
                   >

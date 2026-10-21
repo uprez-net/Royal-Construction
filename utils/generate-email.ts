@@ -1,4 +1,5 @@
 import { LOGO_EMAIL, RC_COLORS, RC_URLS } from "@/lib/graph/Email/email-theme";
+import { subjectWithTradieRef } from "@/lib/domain/tradies/reply-reference";
 import type { RescheduleNotice } from "@/lib/domain/tradies/reschedule-rules";
 import { TradieScheduleListItem } from "@/types/project";
 
@@ -10,6 +11,10 @@ import { TradieScheduleListItem } from "@/types/project";
 // read one run-on paragraph. Each message below differs only in its words and
 // rows; the frame, the details table, the site manager panel and the footer
 // are `renderTradieEmail`'s.
+//
+// Each one also carries the reference its reply is matched on
+// (lib/domain/tradies/reply-reference.ts): on the end of the subject, and in
+// a note asking the tradie to answer on the same thread.
 
 /** Escape a value for interpolation into the email HTML. */
 function escapeHtml(value: string): string {
@@ -47,6 +52,34 @@ type DetailRow = {
 type SiteManager = TradieScheduleListItem["siteManager"];
 
 /**
+ * Most tradies answer by hitting Reply, which keeps the reference in the
+ * subject without them noticing it. The note is for the ones who start a fresh
+ * email, or forward the job to their office.
+ */
+function referenceNote(reference: string): string {
+  return `
+            <div
+            style="
+            margin:0 0 24px;
+            padding:16px 20px;
+            background:${RC_COLORS.card};
+            border:1px dashed ${RC_COLORS.gold};
+            border-radius:8px;">
+
+            <p style="margin:0 0 6px;color:${RC_COLORS.text};font-size:15px;line-height:24px;">
+            Our reference: <strong style="font-family:Consolas,Menlo,monospace;letter-spacing:0.5px;">${escapeHtml(reference)}</strong>
+            </p>
+
+            <p style="margin:0;color:${RC_COLORS.muted};font-size:14px;line-height:22px;">
+            Please reply directly to this email and keep this reference in the
+            subject line, so your response is matched to this job straight away.
+            If you write to us separately, include the reference in your message.
+            </p>
+
+            </div>`;
+}
+
+/**
  * A site manager worth printing. The project screens fill the gaps with
  * "Unassigned" and empty strings, and a panel headed "Site Manager" reading
  * "Unassigned" tells the tradie nothing they can act on.
@@ -72,6 +105,8 @@ function renderTradieEmail(input: {
   readonly closing: string;
   /** Already-escaped HTML, between the details table and the action. */
   readonly sections?: string;
+  /** What the tradie's reply is matched on; shown under the action. */
+  readonly reference?: string | null;
 }): string {
   const rows = input.rows
     .map(
@@ -179,6 +214,7 @@ ${input.sections ?? ""}
             <p style="margin:0 0 24px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
             ${input.action}
             </p>
+${input.reference ? referenceNote(input.reference) : ""}
 ${siteManager}
 
             <p style="
@@ -249,9 +285,12 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
   const formattedDate = longDate(input.scheduledDate);
   const tradieName = escapeHtml(input.tradieName);
 
-  const subject = input.requiresQuote
-    ? `Request for Quotation – ${input.projectName} | ${input.tradeType}`
-    : `Availability Confirmation Required – ${input.projectName}`;
+  const subject = subjectWithTradieRef(
+    input.requiresQuote
+      ? `Request for Quotation – ${input.projectName} | ${input.tradeType}`
+      : `Availability Confirmation Required – ${input.projectName}`,
+    input.refToken,
+  );
 
   const intro = input.requiresQuote
     ? [
@@ -309,6 +348,7 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             ]
           : []),
       ],
+      reference: input.refToken,
       siteManager: input.siteManager,
       subject,
     }),
@@ -373,8 +413,9 @@ export function generateTradieReminderEmail(input: TradieScheduleListItem): {
     },
   }[kind];
 
+  const subject = subjectWithTradieRef(copy.subject, input.refToken);
   return {
-    subject: copy.subject,
+    subject,
     html: renderTradieEmail({
       action: copy.action,
       closing: QUESTIONS_CLOSING,
@@ -383,13 +424,14 @@ export function generateTradieReminderEmail(input: TradieScheduleListItem): {
         paragraph(`Dear ${tradieName},`),
         paragraph(copy.intro, true),
       ].join("\n"),
+      reference: input.refToken,
       rows: [
         ...bookingRows(input),
         { label: "Scheduled Date", value: `<strong>${formattedDate}</strong>` },
         { label: "Duration", value: durationLabel(input.durationDays) },
       ],
       siteManager: input.siteManager,
-      subject: copy.subject,
+      subject,
     }),
   };
 }
@@ -420,9 +462,12 @@ export function generateTradieRescheduleEmail(
   const durationChanged = previous.durationDays !== input.durationDays;
 
   const reconfirm = notice === "reconfirm-attendance";
-  const subject = reconfirm
-    ? `Booking date changed – please confirm – ${input.projectName} | ${input.tradeType}`
-    : `Updated date – availability confirmation required – ${input.projectName} | ${input.tradeType}`;
+  const subject = subjectWithTradieRef(
+    reconfirm
+      ? `Booking date changed – please confirm – ${input.projectName} | ${input.tradeType}`
+      : `Updated date – availability confirmation required – ${input.projectName} | ${input.tradeType}`,
+    input.refToken,
+  );
 
   const intro = reconfirm
     ? [
@@ -464,6 +509,7 @@ export function generateTradieRescheduleEmail(
       closing: QUESTIONS_CLOSING,
       heading: reconfirm ? "Booking Date Changed" : "Updated Booking Date",
       intro: intro.join("\n"),
+      reference: input.refToken,
       rows: [
         ...bookingRows(input),
         {
@@ -493,7 +539,10 @@ export function generateTradieFinalConfirmationEmail(
   input: TradieScheduleListItem,
 ): { subject: string; html: string } {
   const formattedDate = longDate(input.scheduledDate);
-  const subject = `Final confirmation required – ${input.projectName} | ${input.tradeType}`;
+  const subject = subjectWithTradieRef(
+    `Final confirmation required – ${input.projectName} | ${input.tradeType}`,
+    input.refToken,
+  );
 
   return {
     subject,
@@ -505,6 +554,7 @@ export function generateTradieFinalConfirmationEmail(
         follow-up by the site team.`,
       heading: "Final Booking Confirmation",
       intro: paragraph(`Dear ${escapeHtml(input.tradieName)},`, true),
+      reference: input.refToken,
       rows: [
         ...bookingRows(input),
         { label: "Scheduled Date", value: `<strong>${formattedDate}</strong>` },
@@ -537,6 +587,11 @@ export type TradieRequestEmailInput = {
   /** Plain text from the office; escaped here, line breaks kept. */
   readonly note?: string;
   readonly siteManager: SiteManager;
+  /**
+   * This tradie's reference. The command mints one per tradie when it sends;
+   * the wizard's preview passes `TRADIE_REF_PREVIEW`.
+   */
+  readonly reference?: string | null;
 };
 
 /** "Tue 20 Oct 2026". Request dates are calendar days, stored at UTC midnight. */
@@ -564,25 +619,28 @@ export function tradieRequestSubject(input: {
   return `Request for Quotation – ${input.projectName} | ${input.trade} (${activityCountLabel(input.activityCount)})`;
 }
 
-/**
- * The request a company receives for one trade across several activities.
- *
- * One email per company, whatever the number of activities, so the tradie
- * prices the package once and itemises it — rather than receiving the same
- * request once per activity, which is what the per-booking outreach did.
- *
- * The preview in the request wizard renders this same function, so what the
- * office reviews is what the tradie reads.
- */
-export function generateTradieRequestEmail(input: TradieRequestEmailInput): {
-  subject: string;
-  html: string;
-} {
-  const tradieName = escapeHtml(input.tradieName);
-  const project = escapeHtml(input.projectName);
-  const trade = escapeHtml(input.trade);
-  const count = activityCountLabel(input.activities.length);
+/** The subject a new direct booking starts with; the office may change it. */
+export function tradieBookingSubject(input: {
+  readonly projectName: string;
+  readonly trade: string;
+  readonly activityCount: number;
+}): string {
+  return `Booking – Please Confirm Availability – ${input.projectName} | ${input.trade} (${activityCountLabel(input.activityCount)})`;
+}
 
+/**
+ * The activity table and office note a request and a booking share. A booking
+ * names its dates as planned rather than approximate: the office has chosen
+ * them, and the tradie is being asked to hold them.
+ */
+function requestedWorksSections(
+  input: Pick<TradieRequestEmailInput, "activities" | "note">,
+  wording: {
+    readonly heading: string;
+    readonly startLabel: string;
+    readonly datesNote: string;
+  },
+): string {
   const activityRows = input.activities
     .map((activity, index) => {
       const lines = activity.workLines
@@ -602,7 +660,7 @@ export function generateTradieRequestEmail(input: TradieRequestEmailInput): {
             <td style="padding:16px 20px 16px 0;border-top:1px solid ${RC_COLORS.border};vertical-align:top;">
             <strong style="color:${RC_COLORS.text};font-size:16px;">${escapeHtml(activity.name)}</strong>
             <div style="margin-top:4px;color:${RC_COLORS.muted};font-size:14px;line-height:22px;">
-            ${escapeHtml(activity.stage)} stage · Approx. start ${shortRequestDate(activity.scheduledDate)} · ${durationLabel(activity.durationDays)}
+            ${escapeHtml(activity.stage)} stage · ${wording.startLabel} ${shortRequestDate(activity.scheduledDate)} · ${durationLabel(activity.durationDays)}
             </div>
             ${work}
             </td>
@@ -618,7 +676,7 @@ export function generateTradieRequestEmail(input: TradieRequestEmailInput): {
             </div>`
     : "";
 
-  const sections = `
+  return `
             <table width="100%" cellpadding="0" cellspacing="0"
             style="
             margin:0 0 16px;
@@ -635,7 +693,7 @@ export function generateTradieRequestEmail(input: TradieRequestEmailInput): {
             color:${RC_COLORS.dark};
             font-weight:bold;
             font-size:18px;">
-            Requested Works
+            ${wording.heading}
             </td>
             </tr>
 ${activityRows}
@@ -643,13 +701,39 @@ ${activityRows}
             </table>
 
             <p style="margin:0 0 32px;color:${RC_COLORS.muted};font-size:14px;line-height:22px;">
-            Dates are approximate and may move with the build programme. We will
-            confirm exact dates with you before work starts.
+            ${wording.datesNote}
             </p>
 ${note}`;
+}
+
+/**
+ * The request a company receives for one trade across several activities.
+ *
+ * One email per company, whatever the number of activities, so the tradie
+ * prices the package once and itemises it — rather than receiving the same
+ * request once per activity, which is what the per-booking outreach did.
+ *
+ * The preview in the request wizard renders this same function, so what the
+ * office reviews is what the tradie reads.
+ */
+export function generateTradieRequestEmail(input: TradieRequestEmailInput): {
+  subject: string;
+  html: string;
+} {
+  const tradieName = escapeHtml(input.tradieName);
+  const project = escapeHtml(input.projectName);
+  const trade = escapeHtml(input.trade);
+  const count = activityCountLabel(input.activities.length);
+  const subject = subjectWithTradieRef(input.subject, input.reference);
+  const sections = requestedWorksSections(input, {
+    datesNote: `Dates are approximate and may move with the build programme. We will
+            confirm exact dates with you before work starts.`,
+    heading: "Requested Works",
+    startLabel: "Approx. start",
+  });
 
   return {
-    subject: input.subject,
+    subject,
     html: renderTradieEmail({
       action: `Please reply with <strong>one quotation covering all ${count}</strong>,
         itemised per activity, including labour, materials (where applicable),
@@ -671,9 +755,65 @@ ${note}`;
         { label: "Trade", value: trade },
         { label: "Activities", value: count },
       ],
+      reference: input.reference,
       sections,
       siteManager: input.siteManager,
-      subject: input.subject,
+      subject,
+    }),
+  };
+}
+
+/**
+ * A direct booking: the office has chosen this tradie, so the email asks for
+ * nothing but confirmation that they can do the work on the dates listed.
+ *
+ * Deliberately silent on price. Asking for one would read as a quote request,
+ * and the tradie would answer with a number instead of a yes; the office
+ * records the price on the bookings when it has it.
+ *
+ * Previewed in the request wizard from this same function.
+ */
+export function generateTradieBookingEmail(input: TradieRequestEmailInput): {
+  subject: string;
+  html: string;
+} {
+  const tradieName = escapeHtml(input.tradieName);
+  const project = escapeHtml(input.projectName);
+  const trade = escapeHtml(input.trade);
+  const count = activityCountLabel(input.activities.length);
+  const subject = subjectWithTradieRef(input.subject, input.reference);
+
+  return {
+    subject,
+    html: renderTradieEmail({
+      action: `Please reply to this email to <strong>confirm you are available</strong>
+        for all ${count} on the dates above. If any date does not suit, tell us which
+        one and when you could start instead, so we can adjust the programme.`,
+      closing: QUESTIONS_CLOSING,
+      heading: "Booking – Please Confirm Availability",
+      intro: [
+        paragraph(`Dear ${tradieName},`),
+        paragraph(
+          `Royal Constructions would like to book you for ${trade} works on
+        ${project}. This booking covers ${count}, listed below with the work
+        involved in each and the date we have planned for it to start.`,
+          true,
+        ),
+      ].join("\n"),
+      reference: input.reference,
+      rows: [
+        { label: "Project", value: project },
+        { label: "Trade", value: trade },
+        { label: "Activities", value: count },
+      ],
+      sections: requestedWorksSections(input, {
+        datesNote: `These are the dates we have planned. If the build programme moves,
+            we will contact you before work starts.`,
+        heading: "Booked Works",
+        startLabel: "Planned start",
+      }),
+      siteManager: input.siteManager,
+      subject,
     }),
   };
 }

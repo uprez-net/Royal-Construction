@@ -3,6 +3,8 @@ import {
   OutboxEventKind,
   Prisma,
   TradieRequestDeliveryStatus,
+  TradieRequestKind,
+  TradieScheduleStatus,
   type ProjectStage,
 } from "@prisma/client";
 
@@ -23,7 +25,11 @@ import type {
   TradieRequestAiPort,
   WorkDetailsDraft,
 } from "../ports/tradie-request-ai";
-import { requireActiveTradie } from "./lifecycle";
+import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
+import {
+  generateTradieRefToken,
+  subjectWithTradieRef,
+} from "./reply-reference";
 import {
   canRetryRequestEmail,
   deliveryAfterFailure,
@@ -38,6 +44,12 @@ import {
   tradeList,
 } from "./request-rules";
 import { createTradieSchedules, type CreatedSchedule } from "./schedules";
+import {
+  bookingsDisplacedBySelection,
+  directBookingRefusal,
+  LIVE_SELECTION_STATUSES,
+  tradeKey,
+} from "./selection-rules";
 
 // A tradie request: one trade, several of the project's activities, sent to
 // one or more companies so their quotes can be compared.
@@ -58,6 +70,21 @@ import { createTradieSchedules, type CreatedSchedule } from "./schedules";
 //   - A company with no email address. The request IS the email, so saving
 //     the bookings and sending nothing would report a request nobody received.
 //
+// A request is one of two kinds (`TradieRequestKind`):
+//
+//   - QUOTE: one or more companies are asked to price the work, and their
+//     bookings wait on a quote until one is selected.
+//   - BOOKING: the office has already chosen the company. Exactly one tradie;
+//     the email asks only that they confirm the dates, the bookings start
+//     PENDING rather than AWAITING_QUOTE, and the trade selection a chosen
+//     quote would have made is made now — so the same rules stop it
+//     (`directBookingRefusal`) and the same other tradies' open requests on
+//     those activities are cancelled. A price can be recorded later.
+//
+// Each company's copy carries its own reference (`reply-reference.ts`) in the
+// subject and the body, so the tradie's reply is matched to the bookings that
+// email asked about instead of being guessed from the sender.
+//
 // The request, each company's copy of the email and the bookings are written
 // in one transaction. Then each email is sent as its own attempt, and where it
 // stands — sent, retrying, failed — is stored on the copy, so a failure stays
@@ -72,6 +99,8 @@ export type TradieRequestActivityInput = {
 };
 
 export type SendTradieRequestsInput = {
+  /** QUOTE when omitted. */
+  readonly kind?: TradieRequestKind;
   readonly projectId: string;
   readonly tradieIds: readonly string[];
   readonly activities: readonly TradieRequestActivityInput[];
@@ -89,6 +118,9 @@ export type TradieRequestActivity = {
 
 /** Renders one company's email. Pure: no sending. */
 export type TradieRequestRenderPort = (message: {
+  readonly kind: TradieRequestKind;
+  /** This tradie's copy's reference; the template shows it in the body. */
+  readonly reference: string;
   readonly project: { readonly id: string; readonly name: string };
   readonly trade: string;
   readonly subject: string;
@@ -122,9 +154,16 @@ export type TradieRequestDelivery = {
 
 export type SentTradieRequests = {
   readonly requestId: string;
+  readonly kind: TradieRequestKind;
   readonly trade: string;
   readonly schedules: readonly CreatedSchedule[];
   readonly deliveries: readonly TradieRequestDelivery[];
+  /** A direct booking: other tradies' open bookings it cancelled. */
+  readonly cancelled: readonly {
+    readonly scheduleId: string;
+    readonly tradieName: string;
+    readonly milestoneName: string | null;
+  }[];
 };
 
 function assertDistinct(ids: readonly string[], what: string): void {
@@ -163,6 +202,14 @@ export async function sendTradieRequests(
     throw new DomainValidationError(
       `A request can cover at most ${MAX_REQUEST_ACTIVITIES} activities.`,
       "activities",
+    );
+  }
+  const kind = input.kind ?? TradieRequestKind.QUOTE;
+  const booking = kind === TradieRequestKind.BOOKING;
+  if (booking && input.tradieIds.length !== 1) {
+    throw new DomainValidationError(
+      "Book one tradie at a time. To compare prices from several, send a quote request instead.",
+      "tradieIds",
     );
   }
   if (!input.subject.trim()) {
@@ -252,22 +299,45 @@ export async function sendTradieRequests(
   );
 
   // Rendered before the transaction: it is pure, and what is stored is what
-  // is sent, now and on every retry.
-  const emails = tradies.map((tradie) => ({
-    tradie,
-    ...ports.render({
+  // is sent, now and on every retry. The reference goes on the subject here,
+  // whatever the template did, because the reply is matched on it.
+  const emails = tradies.map((tradie) => {
+    const refToken = generateTradieRefToken("request");
+    const rendered = ports.render({
       activities,
+      kind,
       project: { id: project.id, name: project.name },
+      reference: refToken,
       subject: input.subject.trim(),
       trade,
       tradieName: tradie.name,
-    }),
-  }));
+    });
+    return {
+      html: rendered.html,
+      refToken,
+      subject: subjectWithTradieRef(rendered.subject, refToken),
+      tradie,
+    };
+  });
 
   const write = async (tx: DomainDb) => {
+    // Refused before anything is written: a direct booking takes the trade.
+    const claim = booking
+      ? await claimTradeForBooking(
+          {
+            milestoneIds: activities.map((activity) => activity.milestoneId),
+            projectId: project.id,
+            trade,
+            tradie: tradies[0],
+          },
+          tx,
+        )
+      : null;
+
     const request = await tx.tradieRequest.create({
       data: {
         createdById: attributionUserId(principal),
+        kind,
         note: input.note?.trim() || null,
         projectId: project.id,
         subject: input.subject.trim(),
@@ -282,6 +352,7 @@ export async function sendTradieRequests(
           data: {
             ccAddresses: email.tradie.additionalEmails,
             html: email.html,
+            refToken: email.refToken,
             requestId: request.id,
             subject: email.subject,
             toAddress: email.tradie.email.trim(),
@@ -303,14 +374,48 @@ export async function sendTradieRequests(
           milestoneId: activity.milestoneId,
           projectId: project.id,
           requestRecipientId: recipientByTradie.get(tradie.id) ?? null,
-          requiresQuote: true,
+          requiresQuote: !booking,
           scheduledDate: activity.scheduledDate,
           tradieId: tradie.id,
         })),
       ),
       tx,
     );
-    return { recipients, requestId: request.id, schedules };
+
+    if (claim) {
+      if (claim.displaced.length > 0) {
+        await tx.tradieSchedule.updateMany({
+          data: { status: TradieScheduleStatus.CANCELLED },
+          where: {
+            id: { in: claim.displaced.map((displaced) => displaced.id) },
+            status: { notIn: INACTIVE_SCHEDULE_STATUSES },
+          },
+        });
+      }
+      // Already theirs when this adds activities to a tradie selected before.
+      if (!claim.selected) {
+        await tx.tradeSelection.create({
+          data: {
+            projectId: project.id,
+            selectedById: attributionUserId(principal),
+            trade,
+            tradeKey: tradeKey(trade),
+            tradieId: tradies[0].id,
+          },
+          select: { id: true },
+        });
+      }
+    }
+    return {
+      cancelled: (claim?.displaced ?? []).map((displaced) => ({
+        milestoneName: displaced.milestoneName,
+        scheduleId: displaced.id,
+        tradieName: displaced.tradieName,
+      })),
+      recipients,
+      requestId: request.id,
+      schedules,
+    };
   };
   const written = await db.$transaction(write, {
     isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -329,10 +434,99 @@ export async function sendTradieRequests(
   }
 
   return {
+    cancelled: written.cancelled,
     deliveries,
+    kind,
     requestId: written.requestId,
     schedules: written.schedules,
     trade,
+  };
+}
+
+/**
+ * Whether this tradie may take the trade by being booked directly, and what
+ * that cancels. Read inside the request's transaction, before it writes.
+ */
+async function claimTradeForBooking(
+  input: {
+    readonly projectId: string;
+    readonly trade: string;
+    readonly tradie: { readonly id: string; readonly name: string };
+    readonly milestoneIds: readonly string[];
+  },
+  tx: DomainDb,
+): Promise<{
+  /** The tradie already holds the trade's live selection. */
+  readonly selected: boolean;
+  readonly displaced: readonly {
+    readonly id: string;
+    readonly tradieName: string;
+    readonly milestoneName: string | null;
+  }[];
+}> {
+  const live = await tx.tradeSelection.findFirst({
+    select: {
+      status: true,
+      tradie: { select: { name: true } },
+      tradieId: true,
+    },
+    where: {
+      projectId: input.projectId,
+      status: { in: [...LIVE_SELECTION_STATUSES] },
+      tradeKey: tradeKey(input.trade),
+    },
+  });
+  const rows = await tx.tradieSchedule.findMany({
+    select: {
+      id: true,
+      milestone: { select: { name: true } },
+      milestoneId: true,
+      quotedPrice: true,
+      status: true,
+      tradie: { select: { name: true, trade: true } },
+    },
+    where: { projectId: input.projectId, tradieId: { not: input.tradie.id } },
+  });
+  const others = rows.map((row) => ({
+    id: row.id,
+    milestoneId: row.milestoneId,
+    milestoneName: row.milestone?.name ?? null,
+    quotedPrice: row.quotedPrice,
+    status: row.status,
+    trade: row.tradie.trade,
+    tradieName: row.tradie.name,
+  }));
+
+  const refusal = directBookingRefusal({
+    liveSelection: live
+      ? {
+          status: live.status,
+          tradieId: live.tradieId,
+          tradieName: live.tradie.name,
+        }
+      : null,
+    milestoneIds: input.milestoneIds,
+    others,
+    trade: input.trade,
+    tradieId: input.tradie.id,
+    tradieName: input.tradie.name,
+  });
+  if (refusal) {
+    throw refusal.kind === "validation"
+      ? new DomainValidationError(refusal.message)
+      : new DomainTransitionError(refusal.message);
+  }
+
+  return {
+    displaced: bookingsDisplacedBySelection(
+      input.milestoneIds.map((milestoneId) => ({
+        milestoneId,
+        status: TradieScheduleStatus.PENDING,
+      })),
+      others,
+      input.trade,
+    ),
+    selected: live !== null,
   };
 }
 

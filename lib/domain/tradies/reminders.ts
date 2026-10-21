@@ -5,6 +5,7 @@ import { DomainNotFoundError, DomainTransitionError } from "../errors";
 import { isInternalPrincipal, type DomainPrincipal } from "../principal";
 import { runOutboxEffectWithOutcome } from "../outbox";
 import { INACTIVE_SCHEDULE_STATUSES } from "./lifecycle";
+import { subjectWithTradieRef } from "./reply-reference";
 
 const NON_ACTIONABLE_STATUSES = new Set<TradieScheduleStatus>(
   INACTIVE_SCHEDULE_STATUSES,
@@ -27,6 +28,10 @@ export type TradieReminderEmailPort = (input: {
  * enough to cover the double-click and the retry-after-timeout this guard is
  * actually for, and short enough that a deliberate resend goes out. A replay
  * inside that day is reported as one rather than as a fresh send.
+ *
+ * The subject always leaves with the booking's reference on it, whatever the
+ * office typed over the modal's suggestion: the tradie's reply is matched on
+ * it, and losing it puts the reply back to being guessed.
  */
 export async function sendTradieScheduleReminder(
   principal: DomainPrincipal,
@@ -48,6 +53,7 @@ export async function sendTradieScheduleReminder(
   }
   const schedule = await db.tradieSchedule.findUnique({
     select: {
+      refToken: true,
       status: true,
       tradie: { select: { email: true, archivedAt: true } },
     },
@@ -65,6 +71,7 @@ export async function sendTradieScheduleReminder(
   const to = schedule.tradie.email.trim();
   if (!to) throw new DomainTransitionError("This tradie has no email address.");
 
+  const subject = subjectWithTradieRef(input.subject, schedule.refToken);
   const day = (input.now ?? new Date()).toISOString().slice(0, 10);
   const { replayed } = await runOutboxEffectWithOutcome(
     db,
@@ -74,12 +81,12 @@ export async function sendTradieScheduleReminder(
       payload: {
         body: input.body,
         scheduleId: input.scheduleId,
-        subject: input.subject,
+        subject,
         to,
       },
     },
     async () => {
-      await send({ body: input.body, subject: input.subject, to });
+      await send({ body: input.body, subject, to });
       return { to };
     },
   );

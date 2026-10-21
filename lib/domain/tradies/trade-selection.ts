@@ -30,9 +30,12 @@ import {
   bookingsDisplacedBySelection,
   LIVE_SELECTION_STATUSES,
   QUOTABLE_STATUSES,
+  quoteEntryFor,
   selectionRefusal,
   tradeKey,
+  type QuoteEntry,
 } from "./selection-rules";
+import { currency } from "../../../utils/formatters";
 
 // Choosing one tradie for a whole trade on a project, and the quotes that
 // choice is made from.
@@ -237,7 +240,13 @@ export async function recordManualQuote(
     for (const line of input.lines) {
       const milestone = milestoneById.get(line.milestoneId)!;
       const existing = await tx.tradieSchedule.findFirst({
-        select: { id: true, status: true },
+        select: {
+          id: true,
+          quotedPrice: true,
+          requestRecipient: { select: { request: { select: { kind: true } } } },
+          requiresQuote: true,
+          status: true,
+        },
         where: {
           milestoneId: milestone.id,
           projectId: project.id,
@@ -248,8 +257,16 @@ export async function recordManualQuote(
 
       let scheduleId: string;
       let created = false;
+      // A new booking is made to hold a quote, so it is always one.
+      let entry: QuoteEntry = "quote";
       if (existing) {
-        if (!QUOTABLE_STATUSES.includes(existing.status)) {
+        entry = quoteEntryFor({
+          quotedPrice: existing.quotedPrice,
+          requestKind: existing.requestRecipient?.request.kind ?? null,
+          requiresQuote: existing.requiresQuote,
+          status: existing.status,
+        });
+        if (entry === "locked") {
           throw new DomainTransitionError(
             `${tradie.name}'s booking for ${milestone.name} is ${STATUS_WORDS[existing.status] ?? existing.status.toLowerCase()}, so its price cannot be changed here.`,
           );
@@ -289,24 +306,78 @@ export async function recordManualQuote(
         created = true;
       }
 
+      // A booked tradie's price lands where the booking already is; it is not
+      // in a comparison, and "quote received" would undo a confirmation.
       const written = await tx.tradieSchedule.updateMany({
         data: {
           quoteId: quote.id,
           quotedPrice: money(line.amount),
           requiresQuote: true,
-          status: TradieScheduleStatus.QUOTE_RECEIVED,
+          ...(entry === "quote"
+            ? { status: TradieScheduleStatus.QUOTE_RECEIVED }
+            : {}),
         },
-        where: { id: scheduleId, status: { in: [...QUOTABLE_STATUSES] } },
+        where:
+          entry === "quote" || !existing
+            ? { id: scheduleId, status: { in: [...QUOTABLE_STATUSES] } }
+            : {
+                id: scheduleId,
+                quotedPrice: existing.quotedPrice,
+                status: existing.status,
+              },
       });
       if (written.count !== 1) {
         throw new DomainTransitionError(
           `${tradie.name}'s booking for ${milestone.name} changed while the quote was being saved. Refresh and try again.`,
         );
       }
+      // The admin decides a waiting approval from the cost it shows; it was
+      // worked out before this price existed.
+      if (
+        existing
+        && existing.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL
+      ) {
+        await refreshPendingApprovalCost(
+          { amount: line.amount, scheduleId, tradieId: tradie.id },
+          tx,
+        );
+      }
       bookings.push({ created, scheduleId });
     }
 
     return { bookings, quoteId: quote.id, trade, tradieName: tradie.name };
+  });
+}
+
+async function refreshPendingApprovalCost(
+  input: {
+    readonly scheduleId: string;
+    readonly tradieId: string;
+    readonly amount: number;
+  },
+  tx: DomainDb,
+): Promise<void> {
+  const approval = await tx.tradieApproval.findFirst({
+    select: { id: true, updationData: true },
+    where: {
+      actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
+      status: TradieApprovalStatus.PENDING,
+      tradieId: input.tradieId,
+      updationData: { equals: input.scheduleId, path: ["scheduleId"] },
+    },
+  });
+  const payload = approval?.updationData;
+  if (
+    !approval
+    || !payload
+    || typeof payload !== "object"
+    || Array.isArray(payload)
+  ) {
+    return;
+  }
+  await tx.tradieApproval.update({
+    data: { updationData: { ...payload, cost: currency.format(input.amount) } },
+    where: { id: approval.id },
   });
 }
 

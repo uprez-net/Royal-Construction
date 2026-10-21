@@ -27,7 +27,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { getTradieGroupedByCategoryCached } from "@/lib/data/tradie-management";
 import { sameTrade } from "@/lib/domain/tradies/request-rules";
-import { QUOTABLE_STATUSES } from "@/lib/domain/tradies/selection-rules";
+import { quoteEntryFor } from "@/lib/domain/tradies/selection-rules";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { recordManualQuote } from "@/lib/store/slices/projectsSlice";
 import { PROJECT_STAGE_LABELS, type ProjectDetail } from "@/types/project";
@@ -45,17 +45,23 @@ const GST_OPTIONS: { value: TradieQuoteGst; label: string }[] = [
  * Record a quote that arrived by phone, on paper or as a PDF handed over on
  * site — one amount per activity, because milestone spend is counted per
  * booking. A tradie who was never sent a request gets a booking made for them.
+ *
+ * Also how a tradie booked directly gets their price: the amount lands on the
+ * booking and the booking stays where it is (`quoteEntryFor`).
  */
 export function ManualQuoteDialog({
   open,
   onOpenChange,
   project,
   trade,
+  initialTradieId = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   project: ProjectDetail;
   trade: string;
+  /** Opens on this tradie, e.g. the one just booked. */
+  initialTradieId?: string | null;
 }) {
   const dispatch = useAppDispatch();
   const [directory, setDirectory] = useState<{ id: string; name: string }[]>(
@@ -71,6 +77,14 @@ export function ManualQuoteDialog({
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Each opening starts on the tradie it was opened for. Adjusted while
+  // rendering, on the change of `open`, rather than in an effect.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setTradieId(initialTradieId ?? "");
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -128,10 +142,21 @@ export function ManualQuoteDialog({
           && schedule.milestoneId === milestone.id
           && isActiveSchedule(schedule.status),
       );
+      // The same rule the command applies: a quote booking moves to "quote
+      // received", a direct booking keeps its status, and an approved price
+      // is the admin's to change, not this form's.
+      const entry = booking
+        ? quoteEntryFor({
+            quotedPrice: booking.quotedPrice,
+            requestKind: booking.requestRecipient?.request.kind ?? null,
+            requiresQuote: booking.requiresQuote,
+            status: booking.status,
+          })
+        : "quote";
       return {
         id: milestone.id,
-        // An approved price is the admin's to change, not this form's.
-        locked: booking ? !QUOTABLE_STATUSES.includes(booking.status) : false,
+        locked: entry === "locked",
+        priceOnly: entry === "price",
         name: milestone.name,
         stage: PROJECT_STAGE_LABELS[milestone.projectStage],
       };
@@ -210,8 +235,9 @@ export function ManualQuoteDialog({
         <DialogHeader>
           <DialogTitle>Manual {trade} quote</DialogTitle>
           <DialogDescription>
-            For a quote that did not come by email. Enter what the tradie priced
-            each activity at; leave the rest blank.
+            For a quote that did not come by email, or the price of a tradie you
+            booked directly. Enter what the tradie priced each activity at;
+            leave the rest blank.
           </DialogDescription>
         </DialogHeader>
 
@@ -264,7 +290,9 @@ export function ManualQuoteDialog({
                       <span className="block text-xs text-muted-foreground">
                         {activity.locked
                           ? "Already approved; its price cannot change here"
-                          : activity.stage}
+                          : activity.priceOnly
+                            ? `${activity.stage} · booked directly; the booking stays as it is`
+                            : activity.stage}
                       </span>
                     </Label>
                     <Input

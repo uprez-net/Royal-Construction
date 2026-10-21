@@ -1,5 +1,12 @@
-import type { ProjectStage } from "@prisma/client";
-import { AlertTriangle, Loader2, Search, Star } from "lucide-react";
+import type { ProjectStage, TradieRequestKind } from "@prisma/client";
+import {
+  AlertTriangle,
+  CalendarCheck2,
+  FileQuestion,
+  Loader2,
+  Search,
+  Star,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,7 +44,84 @@ type ScheduleRef = {
   readonly tradie: { readonly name: string; readonly trade: string };
 };
 
+const KINDS: {
+  value: TradieRequestKind;
+  label: string;
+  hint: string;
+  icon: typeof FileQuestion;
+}[] = [
+  {
+    hint: "Ask one or more tradies to price the work, then compare.",
+    icon: FileQuestion,
+    label: "Request quotes",
+    value: "QUOTE",
+  },
+  {
+    hint: "Book one tradie now; they confirm the dates. Add a price later.",
+    icon: CalendarCheck2,
+    label: "Book directly",
+    value: "BOOKING",
+  },
+];
+
+/** Quote request or direct booking: the first thing the wizard asks. */
+export function RequestKindPicker({
+  kind,
+  onKindChange,
+}: {
+  kind: TradieRequestKind;
+  onKindChange: (kind: TradieRequestKind) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="What to send"
+      className="grid gap-2 sm:grid-cols-2"
+    >
+      {KINDS.map((option) => {
+        const checked = option.value === kind;
+        const Icon = option.icon;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={checked}
+            onClick={() => onKindChange(option.value)}
+            className={cn(
+              "flex items-start gap-3 rounded-lg border bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/50",
+              checked ? "border-primary/60 bg-muted/30" : "border-border/70",
+            )}
+          >
+            <Icon
+              className={cn(
+                "mt-0.5 size-4 shrink-0",
+                checked ? "text-primary" : "text-muted-foreground",
+              )}
+              aria-hidden="true"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-foreground">
+                {option.label}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {option.hint}
+              </span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export interface RequestActivitiesStepProps {
+  kind: TradieRequestKind;
+  /** A direct booking: other tradies' open bookings it would cancel. */
+  displaced: readonly {
+    readonly tradieName: string;
+    readonly milestoneName: string | null;
+  }[];
   milestones: readonly RequestMilestone[];
   schedules: readonly ScheduleRef[];
   tradeOptions: readonly string[];
@@ -70,6 +154,8 @@ function priceLabel(tradie: TradieRow): string | null {
 }
 
 export function RequestActivitiesStep({
+  kind,
+  displaced,
   milestones,
   schedules,
   tradeOptions,
@@ -143,6 +229,7 @@ export function RequestActivitiesStep({
       .map((schedule) => schedule.tradie.name);
 
   const selectedCount = Object.keys(activities).length;
+  const booking = kind === "BOOKING";
 
   return (
     <div className="grid min-h-0 gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
@@ -378,16 +465,37 @@ export function RequestActivitiesStep({
             id="request-tradies-heading"
             className="text-sm font-semibold text-foreground"
           >
-            Send request to
+            {booking ? "Book" : "Send request to"}
             <span className="ml-2 font-normal text-muted-foreground">
               {tradieIds.length} selected
             </span>
           </h3>
         </div>
         <p className="text-xs text-muted-foreground">
-          Each tradie gets their own email covering every selected activity, so
-          their quotes can be compared.
+          {booking
+            ? "One tradie. They become the selected tradie for this trade, and get one email asking them to confirm every selected activity."
+            : "Each tradie gets their own email covering every selected activity, so their quotes can be compared."}
         </p>
+
+        {booking && displaced.length > 0 ? (
+          <p className="flex items-start gap-1.5 rounded-md border border-warning/40 bg-warning-light px-3 py-2 text-xs text-warning-ink">
+            <AlertTriangle
+              className="mt-0.5 size-3.5 shrink-0"
+              aria-hidden="true"
+            />
+            <span>
+              Booking cancels the open{" "}
+              {displaced.length === 1 ? "request" : "requests"} from{" "}
+              {displaced
+                .map(
+                  (item) =>
+                    `${item.tradieName}${item.milestoneName ? ` (${item.milestoneName})` : ""}`,
+                )
+                .join(", ")}
+              . They are not emailed.
+            </span>
+          </p>
+        ) : null}
 
         <div className="relative">
           <Search

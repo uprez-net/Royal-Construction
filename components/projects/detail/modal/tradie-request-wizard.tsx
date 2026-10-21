@@ -1,4 +1,4 @@
-import type { ProjectStage } from "@prisma/client";
+import type { ProjectStage, TradieRequestKind } from "@prisma/client";
 import { Loader2, Send } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -14,11 +14,17 @@ import {
 import { draftTradieRequestWorkDetailsAction } from "@/lib/data/tradie-request-ai";
 import type { SentTradieRequestsResult } from "@/lib/data/tradie-requests";
 import { getTradieGroupedByCategoryCached } from "@/lib/data/tradie-management";
+import { TRADIE_REF_PREVIEW } from "@/lib/domain/tradies/reply-reference";
 import {
   MAX_REQUEST_ACTIVITIES,
   MAX_REQUEST_TRADIES,
   sameTrade,
 } from "@/lib/domain/tradies/request-rules";
+import {
+  bookingsDisplacedBySelection,
+  directBookingRefusal,
+  LIVE_SELECTION_STATUSES,
+} from "@/lib/domain/tradies/selection-rules";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { sendTradieRequests } from "@/lib/store/slices/projectsSlice";
 import {
@@ -29,7 +35,9 @@ import {
 import { cn } from "@/lib/utils";
 import { PROJECT_STAGE_LABELS, type ProjectDetail } from "@/types/project";
 import {
+  generateTradieBookingEmail,
   generateTradieRequestEmail,
+  tradieBookingSubject,
   tradieRequestSubject,
 } from "@/utils/generate-email";
 
@@ -39,7 +47,10 @@ import {
   requestTradeOptions,
   type RequestMilestone,
 } from "../tradie-requests";
-import { RequestActivitiesStep } from "./request-activities-step";
+import {
+  RequestActivitiesStep,
+  RequestKindPicker,
+} from "./request-activities-step";
 import { RequestEmailStep } from "./request-email-step";
 import { RequestDeliveryStatus } from "../request-delivery-status";
 
@@ -64,6 +75,8 @@ interface TradieRequestWizardProps {
   initialProjectStage?: ProjectStage;
   /** Preselects the trade, when opened from a trade on the Tradies tab. */
   initialTrade?: string;
+  /** Opens on a quote request (the default) or a direct booking. */
+  initialKind?: TradieRequestKind;
 }
 
 /** "Tue 20 Oct 2026 · 3 days" for a `YYYY-MM-DD` day. */
@@ -87,6 +100,7 @@ export default function TradieRequestWizard({
   project,
   initialProjectStage,
   initialTrade,
+  initialKind = "QUOTE",
 }: TradieRequestWizardProps) {
   const dispatch = useAppDispatch();
   const { tradiesByCategory, loading: tradiesLoading } = useAppSelector(
@@ -94,6 +108,8 @@ export default function TradieRequestWizard({
   );
 
   const [step, setStep] = useState<Step>("activities");
+  const [kind, setKind] = useState<TradieRequestKind>(initialKind);
+  const booking = kind === "BOOKING";
   const [stage, setStage] = useState<ProjectStage | null>(
     initialProjectStage ?? null,
   );
@@ -200,8 +216,63 @@ export default function TradieRequestWizard({
     return found;
   }, [project.tradieSchedules, recipients, selected]);
 
+  // A direct booking takes the trade the way a selected quote does, so the
+  // same rule says whether it may, and what it cancels — shown before Next
+  // rather than learned from a refusal after the email is written.
+  const bookingCheck = useMemo(() => {
+    if (!booking || !trade || recipients.length !== 1) return null;
+    const [tradie] = recipients;
+    const others = project.tradieSchedules
+      .filter((schedule) => schedule.tradieId !== tradie.id)
+      .map((schedule) => ({
+        milestoneId: schedule.milestoneId,
+        milestoneName: schedule.milestone?.name ?? null,
+        quotedPrice: schedule.quotedPrice,
+        status: schedule.status,
+        trade: schedule.tradie.trade,
+        tradieName: schedule.tradie.name,
+      }));
+    const live = project.tradeSelections.find(
+      (item) =>
+        sameTrade(item.trade, trade)
+        && LIVE_SELECTION_STATUSES.includes(item.status),
+    );
+    const milestoneIds = selected.map((milestone) => milestone.id);
+    return {
+      displaced: bookingsDisplacedBySelection(
+        milestoneIds.map((milestoneId) => ({
+          milestoneId,
+          status: "PENDING" as const,
+        })),
+        others,
+        trade,
+      ),
+      refusal: directBookingRefusal({
+        liveSelection: live
+          ? {
+              status: live.status,
+              tradieId: live.tradieId,
+              tradieName: live.tradie.name,
+            }
+          : null,
+        milestoneIds,
+        others,
+        trade,
+        tradieId: tradie.id,
+        tradieName: tradie.name,
+      }),
+    };
+  }, [
+    booking,
+    project.tradeSelections,
+    project.tradieSchedules,
+    recipients,
+    selected,
+    trade,
+  ]);
+
   const defaultSubject = trade
-    ? tradieRequestSubject({
+    ? (booking ? tradieBookingSubject : tradieRequestSubject)({
         activityCount: selected.length,
         projectName: project.name,
         trade,
@@ -256,16 +327,32 @@ export default function TradieRequestWizard({
     [],
   );
 
-  const toggleTradie = useCallback((tradieId: string, on: boolean) => {
-    setTradieIds((previous) =>
-      on
-        ? previous.includes(tradieId)
-          ? previous
-          : [...previous, tradieId]
-        : previous.filter((id) => id !== tradieId),
-    );
-    setStepErrors((previous) => ({ ...previous, tradies: undefined }));
-  }, []);
+  // A booking is one tradie: ticking another replaces the first.
+  const toggleTradie = useCallback(
+    (tradieId: string, on: boolean) => {
+      setTradieIds((previous) =>
+        on
+          ? booking
+            ? [tradieId]
+            : previous.includes(tradieId)
+              ? previous
+              : [...previous, tradieId]
+          : previous.filter((id) => id !== tradieId),
+      );
+      setStepErrors((previous) => ({ ...previous, tradies: undefined }));
+    },
+    [booking],
+  );
+
+  const changeKind = (next: TradieRequestKind) => {
+    if (next === kind) return;
+    setKind(next);
+    if (next === "BOOKING") setTradieIds((previous) => previous.slice(0, 1));
+    // A subject written for a quote request is wrong on a booking.
+    setSubject("");
+    setSubjectEdited(false);
+    setStepErrors({});
+  };
 
   const draft = useCallback(
     async (milestoneIds: readonly string[]) => {
@@ -327,9 +414,16 @@ export default function TradieRequestWizard({
       errors.activities =
         "Some tradies already have an open request for a selected activity.";
 
-    if (tradieIds.length === 0) errors.tradies = "Choose at least one tradie.";
+    if (tradieIds.length === 0)
+      errors.tradies = booking
+        ? "Choose the tradie to book."
+        : "Choose at least one tradie.";
+    else if (booking && tradieIds.length > 1)
+      errors.tradies = "Book one tradie at a time.";
     else if (tradieIds.length > MAX_REQUEST_TRADIES)
       errors.tradies = `A request can go to at most ${MAX_REQUEST_TRADIES} tradies at once.`;
+    else if (bookingCheck?.refusal)
+      errors.tradies = bookingCheck.refusal.message;
 
     setStepErrors(errors);
     return !errors.activities && !errors.tradies;
@@ -369,13 +463,14 @@ export default function TradieRequestWizard({
     if (step !== "email" || !trade) return "";
     const recipient =
       recipients.find((item) => item.id === previewTradieId) ?? recipients[0];
-    return generateTradieRequestEmail({
+    return (booking ? generateTradieBookingEmail : generateTradieRequestEmail)({
       activities: emailActivities.map((activity) => ({
         ...activity,
         workLines: workLines[activity.milestoneId] ?? [],
       })),
       note,
       projectName: project.name,
+      reference: TRADIE_REF_PREVIEW,
       siteManager: {
         email: project.siteManager?.email ?? "",
         name: project.siteManager?.name ?? "",
@@ -386,6 +481,7 @@ export default function TradieRequestWizard({
       tradieName: recipient?.name ?? "Tradie",
     }).html;
   }, [
+    booking,
     effectiveSubject,
     emailActivities,
     note,
@@ -418,6 +514,7 @@ export default function TradieRequestWizard({
               .map((line) => line.trim())
               .filter(Boolean),
           })),
+          kind,
           note: note.trim() || undefined,
           projectId: project.id,
           subject: effectiveSubject.trim(),
@@ -428,11 +525,18 @@ export default function TradieRequestWizard({
       const notSent = sent.deliveries.filter(
         (delivery) => delivery.status !== "SENT",
       );
+      if (sent.cancelled > 0) {
+        toast.info(
+          `${sent.cancelled} other ${sent.cancelled === 1 ? "tradie's open request was" : "tradies' open requests were"} cancelled. They were not emailed.`,
+        );
+      }
       if (notSent.length === 0) {
         toast.success(
-          sent.deliveries.length === 1
-            ? `Request sent to ${sent.deliveries[0].tradieName}.`
-            : `Request sent to ${sent.deliveries.length} tradies.`,
+          booking
+            ? `Booking sent to ${sent.deliveries[0]?.tradieName}. Their bookings wait on their confirmation.`
+            : sent.deliveries.length === 1
+              ? `Request sent to ${sent.deliveries[0].tradieName}.`
+              : `Request sent to ${sent.deliveries.length} tradies.`,
         );
         closeAndReset();
         return;
@@ -458,6 +562,7 @@ export default function TradieRequestWizard({
   // request's selections, drafts or result.
   const closeAndReset = () => {
     setStep("activities");
+    setKind(initialKind);
     setStage(initialProjectStage ?? null);
     setTrade(initialTrade ?? null);
     setIncludeUnassigned(false);
@@ -488,10 +593,13 @@ export default function TradieRequestWizard({
       >
         <DialogHeader className="space-y-3 border-b px-4 py-4 pr-14 sm:px-6 sm:py-5">
           <div>
-            <DialogTitle>New tradie request</DialogTitle>
+            <DialogTitle>
+              {booking ? "Book a tradie" : "New tradie request"}
+            </DialogTitle>
             <DialogDescription>
-              Ask one or more tradies to quote for several activities in one
-              trade. Each tradie receives a single email covering them all.
+              {booking
+                ? "Book one tradie for several activities in one trade, without a quote. They get one email asking them to confirm the dates; you can record their price later."
+                : "Ask one or more tradies to quote for several activities in one trade. Each tradie receives a single email covering them all."}
             </DialogDescription>
           </div>
           {step !== "sent" ? (
@@ -536,28 +644,34 @@ export default function TradieRequestWizard({
 
         <div className="min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
           {step === "activities" ? (
-            <RequestActivitiesStep
-              milestones={milestones}
-              schedules={project.tradieSchedules}
-              tradeOptions={tradeOptions}
-              tradies={tradies}
-              tradiesLoading={tradiesLoading}
-              stage={stage}
-              onStageChange={setStage}
-              trade={trade}
-              onTradeChange={changeTrade}
-              includeUnassigned={includeUnassigned}
-              onIncludeUnassignedChange={setIncludeUnassigned}
-              activities={activities}
-              onToggleActivity={toggleActivity}
-              onActivityChange={changeActivity}
-              tradieIds={tradieIds}
-              onToggleTradie={toggleTradie}
-              conflicts={conflicts}
-              errors={stepErrors}
-            />
+            <div className="space-y-5">
+              <RequestKindPicker kind={kind} onKindChange={changeKind} />
+              <RequestActivitiesStep
+                kind={kind}
+                displaced={bookingCheck?.displaced ?? []}
+                milestones={milestones}
+                schedules={project.tradieSchedules}
+                tradeOptions={tradeOptions}
+                tradies={tradies}
+                tradiesLoading={tradiesLoading}
+                stage={stage}
+                onStageChange={setStage}
+                trade={trade}
+                onTradeChange={changeTrade}
+                includeUnassigned={includeUnassigned}
+                onIncludeUnassignedChange={setIncludeUnassigned}
+                activities={activities}
+                onToggleActivity={toggleActivity}
+                onActivityChange={changeActivity}
+                tradieIds={tradieIds}
+                onToggleTradie={toggleTradie}
+                conflicts={conflicts}
+                errors={stepErrors}
+              />
+            </div>
           ) : step === "email" ? (
             <RequestEmailStep
+              kind={kind}
               activities={emailActivities}
               workLines={workLines}
               onWorkLinesChange={(milestoneId, lines) =>
@@ -638,9 +752,11 @@ export default function TradieRequestWizard({
                     )}
                     {submitting
                       ? "Sending…"
-                      : recipients.length === 1
-                        ? "Send request"
-                        : `Send ${recipients.length} requests`}
+                      : booking
+                        ? "Send booking"
+                        : recipients.length === 1
+                          ? "Send request"
+                          : `Send ${recipients.length} requests`}
                   </Button>
                 )}
               </div>

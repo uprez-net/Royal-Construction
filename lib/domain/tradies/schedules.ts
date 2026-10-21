@@ -24,6 +24,7 @@ import {
   rescheduleOutcome,
   type RescheduleNotice,
 } from "./reschedule-rules";
+import { generateTradieRefToken } from "./reply-reference";
 import { canTransitionSchedule } from "./schedule-transitions";
 import {
   normalizeQuoteBasis,
@@ -281,6 +282,9 @@ export async function createTradieSchedule(
         durationDays: input.durationDays,
         milestoneId: input.milestoneId ?? null,
         projectId: project.id,
+        // Minted here, the one place a booking is created, so every email
+        // about it can quote the same reference.
+        refToken: generateTradieRefToken("booking"),
         requestRecipientId: input.requestRecipientId ?? null,
         requiresQuote: input.requiresQuote,
         scheduledDate: input.scheduledDate,

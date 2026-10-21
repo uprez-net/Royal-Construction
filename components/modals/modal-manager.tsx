@@ -33,6 +33,7 @@ import {
   ProjectStage,
   TradieApprovalActionType,
   TradieScheduleStatus,
+  type TradieRequestKind,
   type ComplianceDocumentType,
   type ComplianceExternalApplicationKind,
   type CompliancePartyType,
@@ -221,6 +222,7 @@ export function ModalManager() {
             modal.payload?.projectStage as ProjectStage | undefined
           }
           initialTrade={modal.payload?.trade as string | undefined}
+          initialKind={modal.payload?.kind as TradieRequestKind | undefined}
         />
       );
     case "logCall": {

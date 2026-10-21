@@ -97,6 +97,8 @@ export type CreateTradieScheduleInput = z.infer<
  * the wizard previews.
  */
 export const sendTradieRequestsSchema = z.object({
+  /** QUOTE asks for prices; BOOKING books one tradie and asks them to confirm. */
+  kind: z.enum(["QUOTE", "BOOKING"]).default("QUOTE"),
   projectId: z.string().trim().min(1, "Project ID is required"),
   tradieIds: z.array(z.string().trim().min(1)).min(1, "Choose a tradie"),
   activities: z

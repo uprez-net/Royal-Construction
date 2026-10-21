@@ -1951,6 +1951,7 @@ const projectsSlice = createSlice({
             quotedPrice: schedule.quotedPrice ?? null,
             requestRecipientId: null,
             quoteId: null,
+            refToken: schedule.refToken ?? null,
           });
         }
       })

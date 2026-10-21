@@ -59,6 +59,7 @@ export function toScheduleListItem(
     quotedPrice: options.includeQuote
       ? (tradie.quotedPrice ?? undefined)
       : undefined,
+    refToken: tradie.refToken,
   };
 }
 
@@ -82,6 +83,7 @@ export function toScheduleDetailsItem(
     scheduledDate: new Date(tradie.scheduledDate).toISOString(),
     daysLeft: differenceInDays(new Date(tradie.scheduledDate), now),
     status: tradie.status,
+    refToken: tradie.refToken,
     reminderSentAt: tradie.reminderSentAt
       ? new Date(tradie.reminderSentAt).toISOString()
       : undefined,

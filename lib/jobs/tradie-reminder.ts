@@ -157,6 +157,7 @@ export async function sendTradieReminders(): Promise<{
           updatedAt: schedule.updatedAt.toISOString(),
           requiresQuote: schedule.requiresQuote,
           quotedPrice: schedule.quotedPrice ?? undefined,
+          refToken: schedule.refToken,
           contact: {
             email: schedule.tradie.email,
             phone: schedule.tradie.phone,

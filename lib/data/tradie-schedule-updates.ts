@@ -70,6 +70,7 @@ export const convertToTradieScheduleListItem = (
     updatedAt: dateFormat.format(schedule.updatedAt),
     requiresQuote: schedule.requiresQuote,
     quotedPrice: schedule.quotedPrice ?? undefined,
+    refToken: schedule.refToken,
     contact: {
       email: schedule.tradie.email,
       phone: schedule.tradie.phone,
