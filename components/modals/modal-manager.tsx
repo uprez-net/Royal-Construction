@@ -58,7 +58,7 @@ import { AdminApprovalActionModal } from "../tradie-management/modal/admin-appro
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApprovalDetailModal } from "../tradie-approvals/modal/approval-detail-modal";
-import ScheduleTradieModal from "../projects/detail/modal/schedule-tradie-modal";
+import TradieRequestWizard from "../projects/detail/modal/tradie-request-wizard";
 import InsuranceClaimDatesModal from "../projects/detail/modal/insurance-claim-dates-modal";
 import { TradieApprovalRejectionModal } from "../tradie-approvals/modal/rejection-input-modal";
 import { WorkflowStreamProvider } from "@/context/WorkFlowStatusContext";
@@ -208,39 +208,19 @@ export function ModalManager() {
         </WorkflowStreamProvider>
       );
     case "scheduleTradie":
-      const project = projectPayload
-        ? {
-            id: projectPayload.id,
-            name: projectPayload.name,
-          }
-        : undefined;
-      const milestones = projectPayload
-        ? projectPayload.milestones
-            .filter(
-              (m) =>
-                m.status !== MilestoneStatus.DONE
-                && m.status !== MilestoneStatus.NOT_REQUIRED,
-            )
-            .map((m) => ({
-              id: m.id,
-              name: m.name,
-              projectStage: m.projectStage,
-            }))
-        : undefined;
-
-      if (!project || !milestones) {
+      if (!projectPayload) {
         return null;
       }
 
       return (
-        <ScheduleTradieModal
+        <TradieRequestWizard
           open
           onClose={handleClose}
-          projectId={project.id}
-          milestones={milestones}
+          project={projectPayload}
           initialProjectStage={
             modal.payload?.projectStage as ProjectStage | undefined
           }
+          initialTrade={modal.payload?.trade as string | undefined}
         />
       );
     case "logCall": {

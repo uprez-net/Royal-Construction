@@ -10,7 +10,10 @@ const fieldsSchema = z.strictObject({
     .max(100)
     .transform((lines) => lines.filter(Boolean)),
   estimatedDays: z.number().int().min(1).max(365),
-  requiredTradeTypeId: activityIdSchema.nullable(),
+  requiredTradeTypeIds: z
+    .array(activityIdSchema)
+    .max(20)
+    .transform((ids) => [...new Set(ids)]),
 });
 
 export const milestoneTemplateSnapshotSchema = z.strictObject({
@@ -43,8 +46,8 @@ export const milestoneTemplateEditSchema = z.strictObject({
             id: z.string().uuid().optional(),
             parentId: activityIdSchema.nullable().default(null),
             estimatedDays: fieldsSchema.shape.estimatedDays.default(5),
-            requiredTradeTypeId:
-              fieldsSchema.shape.requiredTradeTypeId.default(null),
+            requiredTradeTypeIds:
+              fieldsSchema.shape.requiredTradeTypeIds.default([]),
             relatedCostLines: fieldsSchema.shape.relatedCostLines.default([]),
           }),
         }),

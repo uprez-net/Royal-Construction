@@ -1,7 +1,7 @@
 import { stripEmailThread, stripHtml } from "@/utils/formatters";
 import { z } from "zod";
 import { generateText, Output } from "ai";
-import { gateway } from "../model";
+import { gateway, TEXT_MODEL_ID } from "../model";
 
 const tradieScheduleInfoSchema = z.object({
   scheduleDate: z
@@ -79,10 +79,8 @@ export async function extractTradieScheduleInfoFromMessage(
     const cleanBody = stripHtml(threadBody);
 
     const { output } = await generateText({
-      model: gateway("google/gemini-2.5-flash"),
+      model: gateway(TEXT_MODEL_ID),
       system: INSTRUCTION,
-      temperature: 0.15,
-      topK: 20,
       prompt: `
                 Subject: ${subject}
                 Email Body: ${cleanBody}

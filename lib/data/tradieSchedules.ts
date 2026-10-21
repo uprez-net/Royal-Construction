@@ -13,14 +13,12 @@ import { triggerNotification } from "../notification/novu";
 import { createNotification } from "@/types/notification";
 import { currency, dateFormat } from "@/utils/formatters";
 import { after } from "next/server";
-import { TradieScheduleListItem } from "@/types/project";
 import { auth } from "@clerk/nextjs/server";
 import { requireInternalUser } from "@/lib/auth/require-internal-user";
 import { getAllAdminUsersIds, getUserByClerkIdCached } from "./user";
 import { authorizeProject } from "@/lib/domain/access/projects";
 import {
   createTradieSchedule as createTradieScheduleDomain,
-  createTradieSchedules as createTradieSchedulesDomain,
   listTradieBookings,
   type TradieBooking,
   requestTradieScheduleDeletion as requestTradieScheduleDeletionDomain,
@@ -43,7 +41,7 @@ import {
 } from "./tradie-schedule-updates";
 import { logAction } from "./actionLog";
 import { scheduleTotalCost } from "@/utils/calculations";
-import { get } from "@vercel/blob";
+import { recordScheduleCreated } from "./tradie-schedule-records";
 
 /**
  * Ensures the currently authenticated user is the site manager of the
@@ -132,44 +130,7 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
       revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
       revalidateTag("projects", CACHE_PROFILES.MEDIUM);
       revalidateTag(`project-${schedule.projectId}`, CACHE_PROFILES.MEDIUM);
-      const siteManagerId = schedule.project.siteManagerId;
-      const notificationPayload = createNotification("tradieScheduleCreated", {
-        tradieName: schedule.tradie.name,
-        projectName: schedule.project.name,
-        milestoneName: schedule.milestone
-          ? schedule.milestone.name
-          : "General Task",
-        projectId: schedule.projectId,
-        tradieTrade: schedule.tradie.trade,
-        scheduleDate: dateFormat.format(schedule.scheduledDate),
-      });
-      const activityLogEntry = createActivityLogEntry("tradieScheduleCreated", {
-        projectId: schedule.projectId,
-        scheduleId: schedule.id,
-        tradieId: schedule.tradieId,
-        tradieName: schedule.tradie.name,
-        trade: schedule.tradie.trade,
-        scheduleDate: dateFormat.format(schedule.scheduledDate),
-        durationDays: schedule.durationDays,
-        cost:
-          schedule.quotedPrice
-          ?? currency.format(
-            scheduleTotalCost(
-              parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"),
-              schedule.durationDays,
-              schedule.tradie.lastQuotedPriceUnit,
-            ),
-          ),
-        milestoneId: schedule.milestoneId ?? undefined,
-        milestoneName: schedule.milestone
-          ? schedule.milestone.name
-          : "General Task",
-      });
-      await logAction(activityLogEntry);
-      await triggerNotification(
-        siteManagerId ? [siteManagerId] : [],
-        notificationPayload,
-      );
+      await recordScheduleCreated(schedule);
       const emailContent = generateTradieOutreachEmail(result);
       await sendEmail({
         to: schedule.tradie.email,
@@ -184,180 +145,6 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
     // A refusal keeps its own status and sentence for the route to answer with.
     if (isDomainError(error)) throw error;
     throw new Error("Failed to create tradie schedule.");
-  }
-}
-
-/**
- * Creates multiple tradie schedules in a single operation.
- *
- * All schedules are created with a default status of `PENDING`. After
- * successful creation, cache tags are revalidated and notifications are
- * sent for each created schedule.
- *
- * @param inputs - An array of schedule creation payloads.
- * A domain refusal — the same booking twice, a milestone on another project,
- * no access — is **returned**, not thrown. This is a Server Action, and in
- * production Next replaces a thrown message with an opaque digest, so the
- * office saw "Failed to bulk create tradie schedules." for a refusal the
- * domain had already named.
- *
- * @returns The formatted {@link TradieScheduleListItem} objects, or the refusal.
- * @throws {Error} If the operation fails for a reason that is not a refusal.
- */
-export async function bulkCreateTradieSchedules(
-  inputs: CreateTradieScheduleInput[],
-): Promise<
-  { ok: true; schedules: TradieScheduleListItem[] } | DomainActionFailure
-> {
-  try {
-    if (inputs.length === 0) {
-      throw new Error("No inputs provided for bulk creation.");
-    }
-    const projectId = inputs[0].projectId;
-    const actingUser = await userHasAccessToSchedule(projectId);
-    const created = await createTradieSchedulesDomain(
-      userPrincipal(actingUser),
-      inputs.map((input) => ({
-        durationDays: input.durationDays ?? 1,
-        milestoneId: input.milestoneId ?? null,
-        projectId: input.projectId,
-        requiresQuote: input.requiresQuote ?? false,
-        scheduledDate: new Date(input.scheduledDate),
-        tradieId: input.tradieId,
-      })),
-      prisma,
-    );
-    const stored = await prisma.tradieSchedule.findMany({
-      where: { id: { in: created.map((schedule) => schedule.id) } },
-      include: {
-        tradie: true,
-        project: { include: { siteManager: true } },
-        milestone: true,
-      },
-    });
-    const storedById = new Map(
-      stored.map((schedule) => [schedule.id, schedule]),
-    );
-    const schedules = created.map((schedule) => {
-      const storedSchedule = storedById.get(schedule.id);
-      if (!storedSchedule)
-        throw new Error("Schedule not found after creation.");
-      return storedSchedule;
-    });
-
-    after(async () => {
-      const projectIds = Array.from(
-        new Set(schedules.map((schedule) => schedule.projectId)),
-      );
-      revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
-      revalidateTag("projects", CACHE_PROFILES.MEDIUM);
-      for (const projectId of projectIds) {
-        revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
-      }
-      for (const schedule of schedules) {
-        const siteManagerId = schedule.project.siteManagerId;
-        const notificationPayload = createNotification(
-          "tradieScheduleCreated",
-          {
-            tradieName: schedule.tradie.name,
-            projectName: schedule.project.name,
-            milestoneName: schedule.milestone
-              ? schedule.milestone.name
-              : "General Task",
-            projectId: schedule.projectId,
-            tradieTrade: schedule.tradie.trade,
-            scheduleDate: dateFormat.format(schedule.scheduledDate),
-          },
-        );
-        const activityLogEntry = createActivityLogEntry(
-          "tradieScheduleCreated",
-          {
-            projectId: schedule.projectId,
-            scheduleId: schedule.id,
-            tradieId: schedule.tradieId,
-            tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
-            scheduleDate: dateFormat.format(schedule.scheduledDate),
-            durationDays: schedule.durationDays,
-            cost:
-              schedule.quotedPrice
-              ?? currency.format(
-                scheduleTotalCost(
-                  parseFloat(
-                    schedule.tradie.lastQuotedPrice?.toString() ?? "0",
-                  ),
-                  schedule.durationDays,
-                  schedule.tradie.lastQuotedPriceUnit,
-                ),
-              ),
-            milestoneId: schedule.milestoneId ?? undefined,
-            milestoneName: schedule.milestone
-              ? schedule.milestone.name
-              : "General Task",
-          },
-        );
-        await logAction(activityLogEntry);
-        await triggerNotification(
-          siteManagerId ? [siteManagerId] : [],
-          notificationPayload,
-        );
-        const emailContent = inputs.find(
-          (input) => input.tradieId === schedule.tradieId,
-        )!.emailContent;
-        if (!emailContent) continue;
-        const attachments: { name: string; contentBytes: string }[] = [];
-        for (const attachment of emailContent.attachments) {
-          const blob = await get(attachment.url, { access: "public" });
-
-          if (!blob?.stream) continue;
-
-          const reader = blob.stream.getReader();
-          const chunks: Uint8Array[] = [];
-
-          while (true) {
-            const { done, value } = await reader.read();
-
-            if (done) break;
-            if (value) chunks.push(value);
-          }
-
-          const buffer = Buffer.concat(
-            chunks.map((chunk) => Buffer.from(chunk)),
-          );
-
-          attachments.push({
-            name: attachment.name,
-            contentBytes: buffer.toString("base64"),
-          });
-        }
-        await sendEmail({
-          to: schedule.tradie.email,
-          subject: emailContent.subject,
-          body: emailContent.body,
-          cc:
-            schedule.tradie.additionalEmails.length > 0
-              ? schedule.tradie.additionalEmails
-              : undefined,
-          attachments:
-            attachments.length > 0
-              ? attachments.map((att) => ({
-                  name: att.name,
-                  contentBytes: att.contentBytes,
-                }))
-              : undefined,
-        });
-      }
-    });
-
-    return {
-      ok: true,
-      schedules: schedules.map(convertToTradieScheduleListItem),
-    };
-  } catch (error) {
-    const refused = domainActionFailure(error);
-    if (refused) return refused;
-    console.error("Error bulk creating tradie schedules:", error);
-    throw new Error("Failed to bulk create tradie schedules.");
   }
 }
 

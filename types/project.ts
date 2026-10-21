@@ -1,4 +1,10 @@
-import type { TradiePriceUnit } from "@prisma/client";
+import type {
+  TradeSelectionStatus,
+  TradiePriceUnit,
+  TradieQuoteGst,
+  TradieQuoteSource,
+  TradieRequestDeliveryStatus,
+} from "@prisma/client";
 import {
   Milestone,
   Project,
@@ -141,16 +147,59 @@ export interface TradieScheduleWithTradie extends TradieSchedule {
   tradie: SafeTradie;
 }
 
+/**
+ * Where the request email a booking came from stands. Shared by every booking
+ * the same email asked for, so it is keyed by `id`, not by the booking.
+ */
+export type TradieRequestDeliverySummary = {
+  id: string;
+  deliveryStatus: TradieRequestDeliveryStatus;
+  attempts: number;
+  lastAttemptAt: Date | null;
+  nextAttemptAt: Date | null;
+  sentAt: Date | null;
+  lastError: string | null;
+  toAddress: string;
+  createdAt: Date;
+  request: { id: string; createdAt: Date; subject: string };
+};
+
+/** Where a booking's quoted amount came from. */
+export type TradieQuoteSummary = {
+  id: string;
+  source: TradieQuoteSource;
+  gstTreatment: TradieQuoteGst | null;
+  quotedAt: Date;
+  validUntil: Date | null;
+  notes: string | null;
+  enteredBy: { name: string } | null;
+};
+
 export interface TradieScheduleWithTradieAndMilestone extends TradieScheduleWithTradie {
   milestone?: SafeMilestone;
+  requestRecipient?: TradieRequestDeliverySummary | null;
+  quote?: TradieQuoteSummary | null;
 }
+
+/** The tradie chosen for a trade on a project. */
+export type TradeSelectionSummary = {
+  id: string;
+  trade: string;
+  tradeKey: string;
+  tradieId: string;
+  status: TradeSelectionStatus;
+  selectedAt: Date;
+  cancelledAt: Date | null;
+  tradie: { name: string };
+  selectedBy: { name: string } | null;
+};
 
 export interface TradieScheduleWithTradieMilestoneAndProject extends TradieScheduleWithTradieAndMilestone {
   project: SafeProject;
 }
 
 export interface SafeMilestone extends Omit<Milestone, "spend" | "budget"> {
-  requiredTradeType?: { id: string; label: string } | null;
+  requiredTradeTypes?: { id: string; label: string }[];
   budget: string;
   spend?: string;
 }
@@ -226,6 +275,8 @@ export interface ProjectDetail extends SafeProject {
   certifierEngagement: CertifierEngagementDetail | null;
   /** Progress claims raised against this project, newest first. */
   invoices: SafeInvoice[];
+  /** Who is selected for each trade, newest first, cancelled ones included. */
+  tradeSelections: TradeSelectionSummary[];
 }
 
 /**

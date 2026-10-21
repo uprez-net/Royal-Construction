@@ -7,6 +7,7 @@ import {
   SafeTradieApproval,
   ScheduleApprovalJsonPayload,
   ScheduleDeletionJsonPayload,
+  TradeCancellationJsonPayload,
 } from "@/types/tradie";
 import {
   Dialog,
@@ -97,6 +98,19 @@ function ApprovalDetails({ approval }: { approval: SafeTradieApproval }) {
           <p>Cost: {data?.cost}</p>
           <p className="text-muted-foreground">
             Rejecting leaves this booking in place.
+          </p>
+        </div>
+      );
+    }
+    case "TRADE_CANCELLATION": {
+      const data = approval.updationData as TradeCancellationJsonPayload;
+      return (
+        <div className="space-y-1 text-sm">
+          <p>Project: {data?.projectName}</p>
+          <p>Trade: {data?.trade}</p>
+          <p>Open bookings: {data?.openBookings}</p>
+          <p className="text-muted-foreground">
+            Rejecting keeps the tradie selected.
           </p>
         </div>
       );

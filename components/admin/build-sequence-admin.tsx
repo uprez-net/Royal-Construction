@@ -15,7 +15,6 @@ import {
   ArrowDown,
   ArrowUp,
   CornerDownRight,
-  HardHat,
   Layers,
   Plus,
   Save,
@@ -40,6 +39,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { TemplateCostLinePicker } from "./template-cost-line-picker";
 import { TemplateActivityTree } from "./template-activity-tree";
+import { TemplateMultiSelect } from "./template-multi-select";
 import { TemplateSingleSelect } from "./template-single-select";
 import { TradeIconGlyph } from "@/components/tradie-management/trade-icon";
 import {
@@ -145,7 +145,7 @@ export function BuildSequenceAdmin({
       projectStage: selected?.projectStage ?? ProjectStage.Deposit,
       relatedCostLines: [],
       estimatedDays: 5,
-      requiredTradeTypeId: null,
+      requiredTradeTypeIds: [],
     };
     setActivities([...activities, row]);
     setSelectedId(row.id);
@@ -413,47 +413,39 @@ export function BuildSequenceAdmin({
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="activity-trade">
-                      Tradie dependency
+                      Tradie dependencies
                     </FieldLabel>
-                    <TemplateSingleSelect
+                    <TemplateMultiSelect
                       key={`trade-${selected.id}`}
                       id="activity-trade"
-                      value={selected.requiredTradeTypeId ?? "none"}
+                      value={selected.requiredTradeTypeIds}
                       disabled={saving}
+                      placeholder="No tradie dependency"
+                      noun={["tradie category", "tradie categories"]}
                       searchLabel="Search tradie categories"
                       emptyLabel="No matching tradie categories."
-                      options={[
-                        {
-                          id: "none",
-                          label: "No tradie dependency",
-                          icon: <HardHat />,
-                          group: "Dependency",
-                        },
-                        ...trades
-                          .filter(
-                            (trade) =>
-                              !trade.archived
-                              || trade.id === selected.requiredTradeTypeId,
-                          )
-                          .map((trade) => ({
-                            id: trade.id,
-                            label: trade.label,
-                            description: trade.archived
-                              ? "Archived category · current dependency"
-                              : undefined,
-                            icon: <TradeIconGlyph icon={trade.icon} />,
-                            group: "Tradie categories",
-                          })),
-                      ]}
-                      onChange={(value) =>
-                        update({
-                          requiredTradeTypeId: value === "none" ? null : value,
-                        })
+                      options={trades
+                        .filter(
+                          (trade) =>
+                            !trade.archived
+                            || selected.requiredTradeTypeIds.includes(trade.id),
+                        )
+                        .map((trade) => ({
+                          id: trade.id,
+                          label: trade.label,
+                          description: trade.archived
+                            ? "Archived category · current dependency"
+                            : undefined,
+                          icon: <TradeIconGlyph icon={trade.icon} />,
+                          group: "Tradie categories",
+                        }))}
+                      onChange={(requiredTradeTypeIds) =>
+                        update({ requiredTradeTypeIds })
                       }
                     />
                     <FieldDescription>
-                      An active milestone warns until a tradie in this category
-                      has a confirmed booking for that activity.
+                      An active milestone warns until each selected category has
+                      a confirmed booking for that activity.
                     </FieldDescription>
                   </Field>
                   <Field>

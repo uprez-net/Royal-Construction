@@ -163,7 +163,7 @@ test("a new project's activities follow the same spacing", async () => {
       parentId: row.parentId === null ? null : `template-${row.parentId}`,
       relatedCostLines: [...(row.relatedCostLines ?? [])],
       estimatedDays: 5,
-      requiredTradeTypeId: null,
+      requiredTradeTypes: [],
     })),
   });
   const start = new Date("2026-06-08T00:00:00.000Z");

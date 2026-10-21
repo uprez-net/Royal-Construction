@@ -17,6 +17,7 @@ import { TradieRemovalApprovalForm } from "./forms/TradieRemovalApprovalForm";
 import { IncidentResolutionApprovalForm } from "./forms/IncidentResolutionApprovalForm";
 import { ScheduleApprovalForm } from "./forms/ScheduleApprovalForm";
 import { ScheduleDeletionApprovalForm } from "./forms/ScheduleDeletionApprovalForm";
+import { TradeCancellationApprovalForm } from "./forms/TradeCancellationApprovalForm";
 
 interface AdminApprovalActionModalProps {
   open: boolean;
@@ -72,6 +73,11 @@ export function AdminApprovalActionModal({
       case TradieApprovalActionType.SCHEDULE_DELETION:
         return (
           <ScheduleDeletionApprovalForm approval={data} onSuccess={onClose} />
+        );
+
+      case TradieApprovalActionType.TRADE_CANCELLATION:
+        return (
+          <TradeCancellationApprovalForm approval={data} onSuccess={onClose} />
         );
 
       default:

@@ -6,7 +6,7 @@ import {
   NoOutputGeneratedError,
 } from "ai";
 import { z } from "zod";
-import { gateway } from "@/lib/model";
+import { gateway, TEXT_MODEL_ID } from "@/lib/model";
 import { FACADE_OPTIONS } from "@/lib/offer/workspace-model";
 
 const FACADE_VALUES = FACADE_OPTIONS.map((option) => option.value);
@@ -115,8 +115,7 @@ export async function generateOfferPrefillDraft(
 ): Promise<OfferPrefillDraftResult> {
   try {
     const { output } = await generateText({
-      model: gateway("google/gemini-2.5-flash"),
-      temperature: 0.1,
+      model: gateway(TEXT_MODEL_ID),
       system: SYSTEM_PROMPT,
       output: Output.object({ schema: offerPrefillSchema }),
       prompt: `Draft the offer pre-fill fields from this lead's context. Follow the hard rules — blank is better than wrong.\n\n<lead_context>\n${leadContextMarkdown}\n</lead_context>`,
@@ -124,9 +123,9 @@ export async function generateOfferPrefillDraft(
     return { ok: true, draft: offerPrefillSchema.parse(output) };
   } catch (error) {
     if (
-      NoObjectGeneratedError.isInstance(error) ||
-      TypeValidationError.isInstance(error) ||
-      NoOutputGeneratedError.isInstance(error)
+      NoObjectGeneratedError.isInstance(error)
+      || TypeValidationError.isInstance(error)
+      || NoOutputGeneratedError.isInstance(error)
     ) {
       return { ok: false, message: (error as Error).message };
     }

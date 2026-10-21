@@ -22,7 +22,7 @@ import {
 } from "@/constants/complianceAlerts";
 import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { COMPLIANCE_ALERT_PARTY } from "@/lib/domain/compliance/alert-parties";
-import { missingMilestoneTrade } from "@/lib/domain/projects/tradie-dependencies";
+import { missingMilestoneTrades } from "@/lib/domain/projects/tradie-dependencies";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import {
@@ -301,10 +301,14 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
   const tradieAlerts = useTradieAttention(project.tradieSchedules);
 
   const complianceAlerts = engagement?.alerts ?? [];
-  const dependencyAlerts = project.milestones.flatMap((milestone) => {
-    const trade = missingMilestoneTrade(milestone, project.tradieSchedules);
-    return trade ? [{ milestone, trade }] : [];
-  });
+  // One alert per missing trade: an activity needing two trades can be
+  // missing either, and each has its own booking to chase.
+  const dependencyAlerts = project.milestones.flatMap((milestone) =>
+    missingMilestoneTrades(milestone, project.tradieSchedules).map((trade) => ({
+      milestone,
+      trade,
+    })),
+  );
 
   /**
    * The two counts on the header, and why they are two.
@@ -393,7 +397,7 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
           >
             {dependencyAlerts.map(({ milestone, trade }) => (
               <li
-                key={`dependency-${milestone.id}`}
+                key={`dependency-${milestone.id}-${trade}`}
                 className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-light px-4 py-3"
               >
                 <AlertTriangle
@@ -446,7 +450,7 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
             <ul className="space-y-3">
               {tradieAlerts.slice(0, TRADIE_ALERT_LIMIT).map((entry) => (
                 <TradieAlertRow
-                  key={entry.schedule.id}
+                  key={entry.key}
                   entry={entry}
                   project={project}
                 />

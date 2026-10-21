@@ -1,7 +1,7 @@
 "use server";
 
 import { generateText } from "ai";
-import { gateway } from "@/lib/model";
+import { gateway, TEXT_MODEL_ID } from "@/lib/model";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
 import { requireInternalUser } from "@/lib/auth/require-internal-user";
@@ -186,10 +186,15 @@ export async function generateEmailTemplate(
   }
 
   try {
-    const model = gateway("google/gemini-2.5-flash");
+    const model = gateway(TEXT_MODEL_ID);
     return await generateEmailTemplateDocument(
       userPrincipal(access.user),
-      { attachments, description, links, systemInstruction: SYSTEM_INSTRUCTION },
+      {
+        attachments,
+        description,
+        links,
+        systemInstruction: SYSTEM_INSTRUCTION,
+      },
       async ({ prompt, system }) => {
         const { text } = await generateText({ model, prompt, system });
         return text;
