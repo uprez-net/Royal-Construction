@@ -292,6 +292,12 @@ test("the Graph webhook matches a referenced reply before falling back to the se
   const bySender = route.indexOf("isTradieMessage(message.from)");
   assert.ok(referenced > 0 && bySender > referenced);
   assert.match(route, /isReplyFromTradie\(/);
+  // A reply to a request email that also covers cancelled or declined work
+  // goes to the office: the tradie was never told it is off.
+  assert.match(
+    route,
+    /requestRecipientId: reference\.scope\.requestRecipientId,\s*status: \{\s*in: \[TradieScheduleStatus\.CANCELLED, TradieScheduleStatus\.DECLINED\]/,
+  );
 });
 
 test("the Graph webhook applies a reply as the system, not through the browser's Server Action", () => {

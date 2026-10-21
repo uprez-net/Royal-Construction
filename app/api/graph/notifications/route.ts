@@ -41,7 +41,7 @@ import {
   CertifierEmailDirection,
   CompliancePartyType,
   GraphMailbox as PrismaGraphMailbox,
-  type TradieScheduleStatus,
+  TradieScheduleStatus,
 } from "@prisma/client";
 import { processInboundCertifierEmail } from "@/lib/workflow/certifier-email";
 import { processInboundPartyEmail } from "@/lib/workflow/party-email";
@@ -198,6 +198,33 @@ async function handleTradieReply(input: {
       console.log(`  ${label}: no booking awaiting a reply. Skipping.`);
     }
     return;
+  }
+
+  // The email asked about several activities and some are no longer going
+  // ahead: cancelled when another tradie was chosen, or declined. Nobody told
+  // the tradie, so a "yes" to the whole email can mean they turn up for work
+  // that is not happening. The open ones are still answered below.
+  if (reference && "requestRecipientId" in reference.scope) {
+    const withdrawn = await prisma.tradieSchedule.findMany({
+      select: { milestone: { select: { name: true } } },
+      where: {
+        requestRecipientId: reference.scope.requestRecipientId,
+        status: {
+          in: [TradieScheduleStatus.CANCELLED, TradieScheduleStatus.DECLINED],
+        },
+      },
+    });
+    if (withdrawn.length > 0) {
+      await notifyTradieReplyNeedsReview(
+        tradie,
+        subject,
+        `The reply to ${label} also covers ${withdrawn.length} ${withdrawn.length === 1 ? "activity that is" : "activities that are"} no longer going ahead (${withdrawn
+          .map((booking) => booking.milestone?.name ?? "general works")
+          .join(
+            ", ",
+          )}). The tradie may not know; let them know. Their answer on the open activities has been applied.`,
+      );
+    }
   }
 
   let targets: readonly { id: string; status: TradieScheduleStatus }[];

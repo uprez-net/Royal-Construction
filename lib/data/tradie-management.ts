@@ -38,7 +38,7 @@ import {
   listTradieActivity,
   type TradieActivityPage,
 } from "@/lib/domain/tradies/queries";
-import { tradieTrades } from "@/lib/domain/tradies/request-rules";
+import { bookingTrade, tradieTrades } from "@/lib/domain/tradies/request-rules";
 import { tradeLabelsMatching } from "@/lib/domain/tradies/trade-types";
 import { domainActionFailure } from "@/lib/http/domain-response";
 
@@ -505,6 +505,7 @@ export async function getTradieGroupedByCategory(): Promise<
           select: {
             id: true,
             status: true,
+            trade: true,
           },
         },
         incidents: {
@@ -519,6 +520,8 @@ export async function getTradieGroupedByCategory(): Promise<
     });
 
     const grouped = new Map<string, TradieRow[]>();
+    /** Completed jobs per tile, each counted under the trade it was for. */
+    const categoryJobs = new Map<string, number>();
 
     for (const tradie of tradies) {
       const row: TradieRow = {
@@ -542,6 +545,18 @@ export async function getTradieGroupedByCategory(): Promise<
         },
       };
 
+      // A tradie in two trades sits under both tiles, but each completed job
+      // was for one trade, and counts toward that tile alone — a gas job is
+      // not plumbing work done.
+      const completedByTrade = new Map<string, number>();
+      for (const schedule of tradie.schedules) {
+        if (schedule.status !== "COMPLETED") continue;
+        const key = tradeCategory(
+          bookingTrade({ ...schedule, tradie }),
+        ).toLowerCase();
+        completedByTrade.set(key, (completedByTrade.get(key) ?? 0) + 1);
+      }
+
       // Under every category they work in, so a plumber who also does gas
       // is offered for gas work too.
       for (const category of tradeCategories(tradie)) {
@@ -551,6 +566,11 @@ export async function getTradieGroupedByCategory(): Promise<
         } else {
           grouped.set(category, [row]);
         }
+        categoryJobs.set(
+          category,
+          (categoryJobs.get(category) ?? 0)
+            + (completedByTrade.get(category.toLowerCase()) ?? 0),
+        );
       }
     }
 
@@ -573,10 +593,7 @@ export async function getTradieGroupedByCategory(): Promise<
                 )
               : 0,
 
-          totalCategoryJobsCompleted: tradies.reduce(
-            (sum, tradie) => sum + tradie.jobsCompleted,
-            0,
-          ),
+          totalCategoryJobsCompleted: categoryJobs.get(category) ?? 0,
 
           tradies,
         };

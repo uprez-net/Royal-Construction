@@ -557,10 +557,16 @@ test("an approved direct booking with no price yet can have it filled in, and it
   const priced = recorder
     .writes()
     .find((w) => w.operation === "tradieSchedule.updateMany");
-  assert.equal(
-    (priced?.args as { data: Record<string, unknown> }).data.status,
-    undefined,
-  );
+  // The price lands; the status and requiresQuote stay as they were, and the
+  // write is conditional on the booking still being where it was read.
+  assert.deepEqual(priced?.args, {
+    data: { quoteId: "q_1", quotedPrice: "450.00" },
+    where: {
+      id: "s_abc",
+      quotedPrice: null,
+      status: "AWAITING_ADMIN_APPROVAL",
+    },
+  });
   const approval = recorder
     .writes()
     .find((w) => w.operation === "tradieApproval.update");

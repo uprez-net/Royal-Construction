@@ -91,7 +91,7 @@ type StatusCountRow = {
 type ActiveTradieRow = { tradie_id: string };
 
 type TradeStatusGroupRow = {
-  tradie_id: string;
+  trade_type: string | null;
   status: TradieScheduleStatus;
   cnt: bigint;
 };
@@ -136,8 +136,6 @@ type UrgentRow = {
   rating: string | null;
   ref_token: string | null;
 };
-
-type TradeTypeRow = { id: string; trade_type: string };
 
 type TabCountRow = {
   tab_all: bigint;
@@ -608,10 +606,11 @@ export async function getTradieCoordinationDashboard(
         WHERE ${insightsWhere}
       `),
 
-      // 15. Trade × status groups (for tradeBreakdown chart)
+      // 15. Trade × status groups (for tradeBreakdown chart), by the trade
+      //     each booking is for: a tradie in two trades has bookings in both.
       prisma.$queryRaw<TradeStatusGroupRow[]>(Prisma.sql`
         SELECT
-          ts."tradieId"  AS tradie_id,
+          ${Prisma.raw(BOOKING_TRADE_SQL)} AS trade_type,
           ts.status,
           COUNT(*)::bigint AS cnt
         FROM "TradieSchedule" ts
@@ -619,7 +618,7 @@ export async function getTradieCoordinationDashboard(
         JOIN "Project" p ON p.id = ts."projectId"
         LEFT JOIN "Milestone" m ON m.id = ts."milestoneId"
         WHERE ${insightsWhere}
-        GROUP BY ts."tradieId", ts.status
+        GROUP BY 1, ts.status
       `),
 
       // 16. Project allocations — top 6, with name joined in the same query
@@ -772,33 +771,16 @@ export async function getTradieCoordinationDashboard(
     };
 
     // -----------------------------------------------------------------------
-    // Trade breakdown
-    // We need tradeType per tradieId — batch-fetch distinct tradieIds
+    // Trade breakdown, already grouped by each booking's trade
     // -----------------------------------------------------------------------
 
-    const distinctTradieIds = Array.from(
-      new Set(tradeStatusGroupRows.map((r) => r.tradie_id)),
-    );
-
-    const tradeTypeRows: TradeTypeRow[] =
-      distinctTradieIds.length > 0
-        ? await prisma.$queryRaw<TradeTypeRow[]>(Prisma.sql`
-          SELECT id, "trade" AS trade_type
-          FROM "Tradie"
-          WHERE id::text = ANY(${distinctTradieIds})
-        `)
-        : [];
-
-    const tradeTypeMap = new Map(
-      tradeTypeRows.map((r) => [r.id, r.trade_type]),
-    );
     const tradeBreakdownMap = new Map<
       string,
       { total: number; confirmed: number }
     >();
 
     for (const row of tradeStatusGroupRows) {
-      const tradeType = tradeTypeMap.get(row.tradie_id) ?? "Unknown";
+      const tradeType = row.trade_type?.trim() || "Unknown";
       const current = tradeBreakdownMap.get(tradeType) ?? {
         total: 0,
         confirmed: 0,
