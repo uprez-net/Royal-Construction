@@ -17,6 +17,7 @@ import {
   DomainValidationError,
 } from "../errors";
 import { attributionUserId, type DomainPrincipal } from "../principal";
+import { recordTradieActivity } from "../audit/tradie-activity-log";
 import { authorizeProject } from "../access/projects";
 import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
 import {
@@ -38,7 +39,7 @@ import {
   tradeKey,
   type QuoteEntry,
 } from "./selection-rules";
-import { currency } from "../../../utils/formatters";
+import { currency, rateCurrency } from "../../../utils/formatters";
 
 // Choosing one tradie for a whole trade on a project, and the quotes that
 // choice is made from.
@@ -363,6 +364,21 @@ export async function recordManualQuote(
           `${tradie.name}'s booking for ${milestone.name} changed while the quote was being saved. Refresh and try again.`,
         );
       }
+      await recordTradieActivity(
+        {
+          data: {
+            amount: rateCurrency.format(line.amount),
+            milestoneId: milestone.id,
+            priceOnly: entry === "price",
+            projectId: project.id,
+            scheduleId,
+            tradieId: tradie.id,
+          },
+          principal,
+          type: "quoteRecorded",
+        },
+        tx,
+      );
       // The admin decides a waiting approval from the cost it shows; it was
       // worked out before this price existed.
       if (
@@ -543,6 +559,37 @@ export async function selectTradeQuote(
         },
       });
     }
+    // On each displaced tradie's own history, so their page says why work
+    // they were asked about went away.
+    for (const booking of displaced) {
+      await recordTradieActivity(
+        {
+          data: {
+            milestoneId: booking.milestoneId,
+            projectId: project.id,
+            reason: `${tradie.name} was selected for ${trade}`,
+            scheduleId: booking.id,
+            tradieId: booking.tradieId,
+          },
+          principal,
+          type: "bookingCancelled",
+        },
+        tx,
+      );
+    }
+    await recordTradieActivity(
+      {
+        data: {
+          fromQuote: true,
+          projectId: project.id,
+          trade,
+          tradieId: tradie.id,
+        },
+        principal,
+        type: "selectedForTrade",
+      },
+      tx,
+    );
 
     const selection = await tx.tradeSelection.create({
       data: {
@@ -685,6 +732,19 @@ export async function requestTradeCancellation(
         "This selection changed while the request was being made. Refresh and try again.",
       );
     }
+    await recordTradieActivity(
+      {
+        data: {
+          projectId: project.id,
+          reason,
+          trade: selection.trade,
+          tradieId: selection.tradie.id,
+        },
+        principal,
+        type: "tradeCancellationRequested",
+      },
+      tx,
+    );
     return {
       approvalId: approval.id,
       projectId: project.id,

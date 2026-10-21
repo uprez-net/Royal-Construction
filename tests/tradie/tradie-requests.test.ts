@@ -505,6 +505,7 @@ const XYZ_ROUGH_REQUEST = {
   quotedPrice: null,
   status: "AWAITING_QUOTE",
   tradie: { name: "XYZ Plumbing Services", trade: " plumbing " },
+  tradieId: "t_xyz",
 };
 
 test("a direct booking books one tradie without a quote, selects them, and cancels the others' requests", async () => {
@@ -547,6 +548,22 @@ test("a direct booking books one tradie without a quote, selects them, and cance
     tradeKey: "plumbing",
     tradieId: "t_abc",
   });
+  // Each tradie's own history says what happened to them, and why.
+  const history = writesTo(recorder, "tradieActivityLog.create").map(
+    (call) => call.data,
+  );
+  const cancelled = history.find((row) => row.type === "bookingCancelled");
+  assert.equal(cancelled?.tradieId, "t_xyz");
+  assert.equal(cancelled?.scheduleId, "s_xyz_rough");
+  assert.match(
+    String(cancelled?.message),
+    /ABC Plumbing Co\. was booked directly for Plumbing/,
+  );
+  assert.ok(
+    history.some(
+      (row) => row.type === "selectedForTrade" && row.tradieId === "t_abc",
+    ),
+  );
 });
 
 test("booking a tradie already selected for the trade adds to their bookings without a second selection", async () => {

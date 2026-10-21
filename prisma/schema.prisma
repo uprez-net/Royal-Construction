@@ -622,6 +622,7 @@ model Project {
   tradieSchedules     TradieSchedule[]
   files               File[]               @relation("ProjectFiles")
   activityLogs        ActivityLog[]
+  tradieActivityLogs  TradieActivityLog[]
   materials           Material[]
   tradies             Tradie[]             @relation("ProjectTradies")
   certifierEngagement CertifierEngagement? @relation("ProjectCertifierEngagement")
@@ -678,6 +679,7 @@ model Milestone {
   siteUpdates        SiteUpdate[]
   tradieSchedules    TradieSchedule[]
   activityLogs       ActivityLog[]
+  tradieActivityLogs TradieActivityLog[]
   project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   files              File[]           @relation("MilestoneFiles")
   tradies            Tradie[]         @relation("TradieMilestones")
@@ -764,6 +766,7 @@ model Tradie {
   requestRecipients TradieRequestRecipient[]
   quotes            TradieQuote[]
   tradeSelections   TradeSelection[]
+  activityLogs      TradieActivityLog[]
 
   complianceOutreaches ComplianceOutreach[] @relation("TradieComplianceOutreaches")
 
@@ -1091,6 +1094,36 @@ model ActivityLog {
   @@index([createdAt])
 }
 
+/// A tradie's own history: every booking, quote, request email, selection,
+/// cancellation and incident, across every project. Written by the domain
+/// commands through lib/domain/audit/tradie-activity-log.ts, from the
+/// templates in types/tradieActivityLog.ts. The project's ActivityLog is the
+/// job's story; this is the tradie's.
+model TradieActivityLog {
+  id          String   @id @default(uuid())
+  tradieId    String
+  /// Null for an entry about the tradie rather than a job, or once the
+  /// project is deleted: the history outlives it.
+  projectId   String?
+  milestoneId String?
+  /// Not a relation: a deleted booking keeps the history of what happened to it.
+  scheduleId  String?
+  /// Who did it. Null for the system — the email-reply webhook, a cron.
+  authorId    String?
+  type        String
+  message     String   @db.Text
+  createdAt   DateTime @default(now())
+
+  tradie    Tradie     @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  project   Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  milestone Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  author    User?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([tradieId, createdAt])
+  @@index([projectId])
+  @@index([scheduleId])
+}
+
 model Customer {
   id      String  @id @default(uuid())
   name    String
@@ -1133,6 +1166,7 @@ model User {
   siteManagerProjects Project[]          @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
+  tradieActivityLogs  TradieActivityLog[]
   assignedLeads       Lead[]             @relation("LeadAssignee")
   leadHistories       LeadHistory[]      @relation("LeadHistoryAuthor")
   leadTasks           LeadTask[]         @relation("LeadTaskAssignee")

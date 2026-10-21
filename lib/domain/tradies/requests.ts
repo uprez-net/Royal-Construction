@@ -21,6 +21,11 @@ import {
 } from "../principal";
 import { authorizeProject } from "../access/projects";
 import { runOutboxEffectWithOutcome } from "../outbox";
+import {
+  noteTradieActivity,
+  recordTradieActivity,
+  viaOf,
+} from "../audit/tradie-activity-log";
 import type {
   TradieRequestAiPort,
   WorkDetailsDraft,
@@ -404,6 +409,22 @@ export async function sendTradieRequests(
           },
         });
       }
+      for (const displaced of claim.displaced) {
+        await recordTradieActivity(
+          {
+            data: {
+              milestoneId: displaced.milestoneId,
+              projectId: project.id,
+              reason: `${tradies[0].name} was booked directly for ${trade}`,
+              scheduleId: displaced.id,
+              tradieId: displaced.tradieId,
+            },
+            principal,
+            type: "bookingCancelled",
+          },
+          tx,
+        );
+      }
       // Already theirs when this adds activities to a tradie selected before.
       if (!claim.selected) {
         await tx.tradeSelection.create({
@@ -416,6 +437,19 @@ export async function sendTradieRequests(
           },
           select: { id: true },
         });
+        await recordTradieActivity(
+          {
+            data: {
+              fromQuote: false,
+              projectId: project.id,
+              trade,
+              tradieId: tradies[0].id,
+            },
+            principal,
+            type: "selectedForTrade",
+          },
+          tx,
+        );
       }
     }
     return {
@@ -472,7 +506,9 @@ async function claimTradeForBooking(
   readonly selected: boolean;
   readonly displaced: readonly {
     readonly id: string;
+    readonly tradieId: string;
     readonly tradieName: string;
+    readonly milestoneId: string | null;
     readonly milestoneName: string | null;
   }[];
 }> {
@@ -497,11 +533,13 @@ async function claimTradeForBooking(
       status: true,
       trade: true,
       tradie: { select: { name: true, trade: true } },
+      tradieId: true,
     },
     where: { projectId: input.projectId, tradieId: { not: input.tradie.id } },
   });
   const others = rows.map((row) => ({
     id: row.id,
+    tradieId: row.tradieId,
     milestoneId: row.milestoneId,
     milestoneName: row.milestone?.name ?? null,
     quotedPrice: row.quotedPrice,
@@ -682,6 +720,15 @@ export async function deliverTradieRequest(
       if (input.trigger === "manual") {
         throw new DomainTransitionError(WITHDRAWN_REQUEST_EMAIL);
       }
+      await noteDelivery(
+        principal,
+        recipient,
+        {
+          attempt: recipient.attempts,
+          reason: WITHDRAWN_REQUEST_EMAIL,
+        },
+        db,
+      );
       // Terminal: FAILED with no next attempt, so the retry workflow stops.
       // No alert follows — attention skips emails on closed bookings.
       const withdrawn = {
@@ -769,7 +816,49 @@ export async function deliverTradieRequest(
       id: recipient.id,
     },
   });
+  await noteDelivery(
+    principal,
+    recipient,
+    { attempt, reason: failure === null ? null : outcome.lastError },
+    db,
+  );
   return describe({ ...outcome, attempts: attempt });
+}
+
+/**
+ * One attempt at a request email, on the tradie's history: sent, or why not.
+ * After the send, so it never turns a sent email into an error.
+ */
+async function noteDelivery(
+  principal: DomainPrincipal,
+  recipient: {
+    readonly tradieId: string;
+    readonly toAddress: string;
+    readonly request: { readonly projectId: string };
+  },
+  result: { readonly attempt: number; readonly reason: string | null },
+  db: DomainDb,
+): Promise<void> {
+  const common = {
+    projectId: recipient.request.projectId,
+    to: recipient.toAddress,
+    tradieId: recipient.tradieId,
+    via: viaOf(principal),
+  };
+  await noteTradieActivity(
+    result.reason === null
+      ? {
+          data: { ...common, attempt: Math.max(1, result.attempt) },
+          principal,
+          type: "requestEmailSent",
+        }
+      : {
+          data: { ...common, reason: result.reason },
+          principal,
+          type: "requestEmailNotSent",
+        },
+    db,
+  );
 }
 
 /**

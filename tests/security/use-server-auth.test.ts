@@ -61,6 +61,9 @@ const CALLER_CHECKS = new Set([
   "commitOfferStatusTransition",
   // Removal impact is admin-only in the shared domain query.
   "getTradieRemovalImpact",
+  // The tradie activity log: assertCanReadTradieDirectory before the read,
+  // and project names only for projects the caller may manage.
+  "listTradieActivity",
   // The Tradies tab's request, quote and selection commands. Each calls
   // authorizeProject (ADMIN, or the project's site manager) before it reads
   // or writes anything; deliverTradieRequest does so for the "manual" trigger,

@@ -6,6 +6,8 @@ import { isInternalPrincipal, type DomainPrincipal } from "../principal";
 import { runOutboxEffectWithOutcome } from "../outbox";
 import { INACTIVE_SCHEDULE_STATUSES } from "./lifecycle";
 import { subjectWithTradieRef } from "./reply-reference";
+import { noteTradieActivity } from "../audit/tradie-activity-log";
+import { TRADIE_REMINDER_CRON } from "@/types/tradieActivityLog";
 
 const NON_ACTIONABLE_STATUSES = new Set<TradieScheduleStatus>(
   INACTIVE_SCHEDULE_STATUSES,
@@ -53,9 +55,12 @@ export async function sendTradieScheduleReminder(
   }
   const schedule = await db.tradieSchedule.findUnique({
     select: {
+      milestoneId: true,
+      projectId: true,
       refToken: true,
       status: true,
       tradie: { select: { email: true, archivedAt: true } },
+      tradieId: true,
     },
     where: { id: input.scheduleId },
   });
@@ -90,6 +95,22 @@ export async function sendTradieScheduleReminder(
       return { to };
     },
   );
+  if (!replayed) {
+    await noteTradieActivity(
+      {
+        data: {
+          milestoneId: schedule.milestoneId,
+          projectId: schedule.projectId,
+          scheduleId: input.scheduleId,
+          subject,
+          tradieId: schedule.tradieId,
+        },
+        principal,
+        type: "bookingEmailSent",
+      },
+      db,
+    );
+  }
   return { alreadySent: replayed, to };
 }
 
@@ -128,7 +149,13 @@ export async function markTradieReminderSent(
   sentAt = new Date(),
 ): Promise<{ alreadySent: boolean; status: TradieScheduleStatus }> {
   const schedule = await db.tradieSchedule.findUnique({
-    select: { reminderSentAt: true, status: true },
+    select: {
+      milestoneId: true,
+      projectId: true,
+      reminderSentAt: true,
+      status: true,
+      tradieId: true,
+    },
     where: { id: scheduleId },
   });
   if (!schedule) throw new DomainNotFoundError("Schedule not found.");
@@ -151,7 +178,27 @@ export async function markTradieReminderSent(
     data: { reminderSentAt: sentAt, status },
     where: { id: scheduleId, reminderSentAt: null },
   });
-  if (updated.count === 1) return { alreadySent: false, status };
+  if (updated.count === 1) {
+    if (status !== schedule.status) {
+      await noteTradieActivity(
+        {
+          data: {
+            from: schedule.status,
+            milestoneId: schedule.milestoneId,
+            projectId: schedule.projectId,
+            scheduleId,
+            to: status,
+            tradieId: schedule.tradieId,
+            via: TRADIE_REMINDER_CRON,
+          },
+          principal: null,
+          type: "bookingStatusChanged",
+        },
+        db,
+      );
+    }
+    return { alreadySent: false, status };
+  }
 
   const current = await db.tradieSchedule.findUnique({
     select: { reminderSentAt: true, status: true },

@@ -12,6 +12,7 @@ import {
   DomainValidationError,
 } from "../errors";
 import { requireAdminPrincipal, type DomainPrincipal } from "../principal";
+import { recordTradieActivity } from "../audit/tradie-activity-log";
 import { INACTIVE_SCHEDULE_STATUSES } from "./lifecycle";
 import { LIVE_SELECTION_STATUSES } from "./selection-rules";
 import { settleTradeCancellation } from "./trade-selection";
@@ -235,6 +236,17 @@ export async function resolveTradieApproval(
               tradieId: approval.tradieId,
             },
           });
+          await recordTradieActivity(
+            {
+              data: {
+                cancelledBookings: cancelled.count,
+                tradieId: approval.tradieId,
+              },
+              principal,
+              type: "removedFromDirectory",
+            },
+            tx,
+          );
           affected = {
             archived: true,
             cancelledSchedules: cancelled.count,
@@ -273,6 +285,14 @@ export async function resolveTradieApproval(
             data: { resolution, status: "RESOLVED" },
             where: { id: incident.id },
           });
+          await recordTradieActivity(
+            {
+              data: { resolution, tradieId: approval.tradieId },
+              principal,
+              type: "incidentResolved",
+            },
+            tx,
+          );
           affected = { incidentId: incident.id, status: "RESOLVED" };
           break;
         }
@@ -300,6 +320,13 @@ export async function resolveTradieApproval(
               "This schedule is no longer awaiting admin approval.",
             );
           }
+          await recordScheduleDecision(
+            principal,
+            approval.tradieId,
+            payload,
+            TradieScheduleStatus.PENDING_FINAL_CONFIRMATION,
+            tx,
+          );
           affected = {
             scheduleId,
             status: TradieScheduleStatus.PENDING_FINAL_CONFIRMATION,
@@ -324,6 +351,23 @@ export async function resolveTradieApproval(
           const deleted = await tx.tradieSchedule.deleteMany({
             where: { id: scheduleId, tradieId: approval.tradieId },
           });
+          if (deleted.count === 1 && projectId) {
+            await recordTradieActivity(
+              {
+                data: {
+                  milestoneId: stringValue(payload?.milestoneId),
+                  projectId,
+                  scheduleId,
+                  scheduledDate:
+                    stringValue(payload?.scheduledDate)?.slice(0, 10) ?? null,
+                  tradieId: approval.tradieId,
+                },
+                principal,
+                type: "bookingDeleted",
+              },
+              tx,
+            );
+          }
           // The booking row is gone by now, so everything the adapter needs to
           // describe it — the date a site manager reads in the notification,
           // the milestone the activity entry is filed against — has to come off
@@ -348,6 +392,13 @@ export async function resolveTradieApproval(
             true,
             tx,
           );
+          await recordCancellationDecision(
+            principal,
+            approval.tradieId,
+            affected,
+            true,
+            tx,
+          );
           break;
         }
       }
@@ -359,12 +410,19 @@ export async function resolveTradieApproval(
         false,
         tx,
       );
+      await recordCancellationDecision(
+        principal,
+        approval.tradieId,
+        affected,
+        false,
+        tx,
+      );
     } else if (
       approval.actionType === TradieApprovalActionType.SCHEDULE_APPROVAL
     ) {
       const scheduleId = stringValue(payload?.scheduleId);
       if (scheduleId) {
-        await tx.tradieSchedule.updateMany({
+        const declined = await tx.tradieSchedule.updateMany({
           data: { status: TradieScheduleStatus.DECLINED },
           where: {
             id: scheduleId,
@@ -372,6 +430,15 @@ export async function resolveTradieApproval(
             tradieId: approval.tradieId,
           },
         });
+        if (declined.count === 1) {
+          await recordScheduleDecision(
+            principal,
+            approval.tradieId,
+            payload,
+            TradieScheduleStatus.DECLINED,
+            tx,
+          );
+        }
         affected = { scheduleId, status: TradieScheduleStatus.DECLINED };
       }
     }
@@ -388,6 +455,63 @@ export async function resolveTradieApproval(
   };
 
   return "$transaction" in db ? db.$transaction(run) : run(db);
+}
+
+/** An admin's decision on a booking's approval, on the tradie's history. */
+async function recordScheduleDecision(
+  principal: DomainPrincipal,
+  tradieId: string,
+  payload: Record<string, unknown> | null,
+  to: TradieScheduleStatus,
+  tx: DomainDb,
+): Promise<void> {
+  const scheduleId = stringValue(payload?.scheduleId);
+  const projectId = stringValue(payload?.projectId);
+  if (!scheduleId || !projectId) return;
+  await recordTradieActivity(
+    {
+      data: {
+        from: TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+        milestoneId: stringValue(payload?.milestoneId),
+        projectId,
+        scheduleId,
+        to,
+        tradieId,
+      },
+      principal,
+      type: "bookingStatusChanged",
+    },
+    tx,
+  );
+}
+
+/** An admin's decision on releasing a selected tradie. */
+async function recordCancellationDecision(
+  principal: DomainPrincipal,
+  tradieId: string,
+  affected: Record<string, unknown>,
+  approved: boolean,
+  tx: DomainDb,
+): Promise<void> {
+  const projectId = stringValue(affected.projectId);
+  if (!projectId) return;
+  await recordTradieActivity(
+    {
+      data: {
+        approved,
+        cancelledBookings:
+          typeof affected.cancelledSchedules === "number"
+            ? affected.cancelledSchedules
+            : 0,
+        projectId,
+        trade: stringValue(affected.trade) ?? "the trade",
+        tradieId,
+      },
+      principal,
+      type: "tradeCancellationResolved",
+    },
+    tx,
+  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

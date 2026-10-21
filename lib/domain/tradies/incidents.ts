@@ -9,6 +9,7 @@ import type { DomainDb, TransactionalDomainDb } from "../db";
 import { DomainNotFoundError, DomainValidationError } from "../errors";
 import { attributionUserId, type DomainPrincipal } from "../principal";
 import { assertCanReadTradieDirectory } from "../access/tradies";
+import { recordTradieActivity } from "../audit/tradie-activity-log";
 
 // Reporting an incident against a tradie, with the evidence the reporter
 // attached.
@@ -107,6 +108,19 @@ export async function reportTradieIncident(
         );
       }
     }
+
+    await recordTradieActivity(
+      {
+        data: {
+          incidentType: input.incidentType,
+          severity: input.severity,
+          tradieId: tradie.id,
+        },
+        principal,
+        type: "incidentReported",
+      },
+      tx,
+    );
 
     const approval = await tx.tradieApproval.create({
       data: {

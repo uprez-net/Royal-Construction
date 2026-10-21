@@ -16,6 +16,11 @@ import {
   DomainValidationError,
 } from "../errors";
 import { attributionUserId, type DomainPrincipal } from "../principal";
+import {
+  noteTradieActivity,
+  recordTradieActivity,
+  viaOf,
+} from "../audit/tradie-activity-log";
 import { authorizeProject, canManageProject } from "../access/projects";
 import { assertCanReadTradieDirectory } from "../access/tradies";
 import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
@@ -32,7 +37,12 @@ import {
   parseQuotedAmount,
   scheduleTotalCost,
 } from "../../../utils/calculations";
-import { currency } from "../../../utils/formatters";
+import { currency, rateCurrency } from "../../../utils/formatters";
+
+/** `YYYY-MM-DD`: schedule dates are calendar days stored at UTC midnight. */
+function isoDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
 
 // Booking a tradie onto a project.
 //
@@ -294,7 +304,7 @@ export async function createTradieSchedule(
       transactionDb,
     );
 
-    return transactionDb.tradieSchedule.create({
+    const created = await transactionDb.tradieSchedule.create({
       data: {
         durationDays: input.durationDays,
         milestoneId: input.milestoneId ?? null,
@@ -322,6 +332,25 @@ export async function createTradieSchedule(
         tradieId: true,
       },
     });
+    await recordTradieActivity(
+      {
+        data: {
+          asksForQuote: input.requiresQuote,
+          durationDays: created.durationDays,
+          milestoneId: created.milestoneId,
+          projectId: created.projectId,
+          scheduleId: created.id,
+          scheduledDate: isoDay(created.scheduledDate),
+          trade,
+          tradieId: created.tradieId,
+          via: viaOf(principal),
+        },
+        principal,
+        type: "bookingCreated",
+      },
+      transactionDb,
+    );
+    return created;
   };
 
   return "$transaction" in db
@@ -502,6 +531,31 @@ async function applyScheduleTransition(
         "The schedule changed before this transition was applied.",
       );
     }
+    await recordTradieActivity(
+      {
+        data: {
+          from: existing.status,
+          milestoneId: existing.milestoneId,
+          projectId: existing.projectId,
+          quote: normalized
+            ? rateCurrency.format(
+                scheduleTotalCost(
+                  normalized.amount,
+                  existing.durationDays,
+                  normalized.unit,
+                ),
+              )
+            : null,
+          scheduleId: existing.id,
+          to: input.toStatus,
+          tradieId: existing.tradieId,
+          via: viaOf(principal),
+        },
+        principal,
+        type: "bookingStatusChanged",
+      },
+      db,
+    );
 
     if (
       input.toStatus === TradieScheduleStatus.DECLINED
@@ -742,6 +796,29 @@ export async function rescheduleTradieSchedule(
         "The schedule changed before it could be rescheduled.",
       );
     }
+    if (datesChanged) {
+      await recordTradieActivity(
+        {
+          data: {
+            durationDays,
+            milestoneId:
+              input.milestoneId !== undefined
+                ? input.milestoneId
+                : existing.milestoneId,
+            previousDate: isoDay(existing.scheduledDate),
+            previousDurationDays: existing.durationDays,
+            projectId: existing.projectId,
+            scheduleId: existing.id,
+            scheduledDate: isoDay(input.scheduledDate),
+            tradieId: existing.tradieId,
+            via: viaOf(principal),
+          },
+          principal,
+          type: "bookingRescheduled",
+        },
+        transactionDb,
+      );
+    }
 
     let withdrewApproval = false;
     if (datesChanged && outcome.withdrawsApproval) {
@@ -863,6 +940,20 @@ export async function requestTradieScheduleDeletion(
     },
     select: { id: true },
   });
+  await noteTradieActivity(
+    {
+      data: {
+        milestoneId: schedule.milestoneId,
+        projectId: schedule.projectId,
+        reason: input.reason.trim(),
+        scheduleId: schedule.id,
+        tradieId: schedule.tradieId,
+      },
+      principal,
+      type: "bookingDeletionRequested",
+    },
+    db,
+  );
   return {
     approvalId: approval.id,
     projectId: schedule.projectId,

@@ -634,9 +634,15 @@ test("a cancellation request needs a reason, and only marks the selection pendin
     recorder.db,
   );
   assert.equal(result.approvalId, "ap_1");
+  // The request is on the tradie's history; no booking moves until an admin
+  // approves.
   assert.deepEqual(
     recorder.writes().map((w) => w.operation),
-    ["tradieApproval.create", "tradeSelection.updateMany"],
+    [
+      "tradieApproval.create",
+      "tradeSelection.updateMany",
+      "tradieActivityLog.create",
+    ],
     "no booking moves until an admin approves",
   );
 });

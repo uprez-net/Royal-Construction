@@ -33,7 +33,11 @@ import {
 } from "@/lib/domain/tradies/directory";
 import { reportTradieIncident as reportTradieIncidentDomain } from "@/lib/domain/tradies/incidents";
 import { userPrincipal } from "@/lib/domain/principal";
-import { getTradieRemovalImpact } from "@/lib/domain/tradies/queries";
+import {
+  getTradieRemovalImpact,
+  listTradieActivity,
+  type TradieActivityPage,
+} from "@/lib/domain/tradies/queries";
 import { tradieTrades } from "@/lib/domain/tradies/request-rules";
 import { tradeLabelsMatching } from "@/lib/domain/tradies/trade-types";
 import { domainActionFailure } from "@/lib/http/domain-response";
@@ -123,6 +127,32 @@ export async function createTradie(
   } catch (error) {
     console.error("Error creating tradie:", error);
     throw new Error("Failed to create tradie");
+  }
+}
+
+/**
+ * One page of a tradie's activity log, newest first, for the details page.
+ *
+ * Not cached: the log is written by Eve, the email-reply webhook and the
+ * reminder cron as well as this app, and none of those can expire a tag.
+ */
+export async function fetchTradieActivityLog(
+  tradieId: string,
+  cursor?: string | null,
+) {
+  try {
+    const actor = await requireTradieActor();
+    const page: TradieActivityPage = await listTradieActivity(
+      userPrincipal(actor),
+      { cursor: cursor ?? null, tradieId },
+      prisma,
+    );
+    return { ok: true as const, ...page };
+  } catch (error) {
+    const failure = domainActionFailure(error);
+    if (failure) return failure;
+    console.error("Error loading the tradie activity log:", error);
+    throw new Error("Failed to load the activity log");
   }
 }
 
