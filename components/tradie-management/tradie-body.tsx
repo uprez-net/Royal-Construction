@@ -25,7 +25,10 @@ function matchesTradieQuery(tradie: TradieRow, query: TradieTableQuery) {
     return false;
   }
 
-  if (query.category && !tradie.trades.includes(query.category)) {
+  // A tradie with no trade sits under the "Others" tile, so that filter
+  // has to find them there.
+  const categories = tradie.trades.length > 0 ? tradie.trades : ["Others"];
+  if (query.category && !categories.includes(query.category)) {
     return false;
   }
 

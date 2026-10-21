@@ -5,9 +5,11 @@ import { test } from "vitest";
 
 import { DomainValidationError } from "@/lib/domain/errors";
 import { createTradie, updateTradie } from "@/lib/domain/tradies/directory";
+import { searchTradies } from "@/lib/domain/tradies/queries";
 import {
   bookingTrade,
   tradieCoversTrade,
+  tradieInTradeWhere,
   tradieTrades,
 } from "@/lib/domain/tradies/request-rules";
 import {
@@ -92,9 +94,10 @@ test("selecting a tradie for one trade ignores their bookings in another", () =>
 });
 
 test("cancelling a tradie for one trade leaves their bookings in another", async () => {
+  // A row older than the booking-trade column, matched by its tradie's trade.
   const recorder = recordingDb({
     "tradeSelection.updateMany": { count: 1 },
-    "tradieSchedule.findMany": [],
+    "tradieSchedule.findMany": [{ id: "s_legacy" }],
   });
   await settleTradeCancellation(
     {
@@ -116,6 +119,58 @@ test("cancelling a tradie for one trade leaves their bookings in another", async
       tradie: { trade: { equals: "Plumbing", mode: "insensitive" } },
     },
   ]);
+  const cancel = recorder
+    .writes()
+    .find((call) => call.operation === "tradieSchedule.updateMany");
+  assert.deepEqual(
+    (cancel?.args as { where: { id: { in: string[] } } }).where.id.in,
+    ["s_legacy"],
+  );
+});
+
+test("a cancellation that does not name its trade cancels nothing", async () => {
+  const recorder = recordingDb({});
+  await assert.rejects(
+    settleTradeCancellation(
+      {
+        id: "ap_1",
+        payload: { projectId: "p_1", selectionId: "sel_1", trade: "  " },
+        tradieId: "t_abc",
+      },
+      true,
+      recorder.db,
+    ),
+    (error: unknown) =>
+      error instanceof DomainValidationError
+      && /which trade/.test(error.message),
+  );
+  assert.deepEqual(recorder.writes(), []);
+});
+
+test("a search for part of a trade's name reaches tradies whose second trade it is", async () => {
+  const recorder = recordingDb({
+    "tradeType.findFirst": { label: "Gas Fitting" },
+    "tradeType.findMany": [{ label: "Gas Fitting" }],
+    "tradie.findMany": [],
+  });
+  await searchTradies(
+    adminPrincipal(),
+    { favouriteOnly: false, limit: 10, query: "gas", trade: "gas fitting" },
+    recorder.db,
+  );
+  const where = (
+    recorder.calls.find((call) => call.operation === "tradie.findMany")
+      ?.args as { where: { AND: Record<string, unknown>[] } }
+  ).where;
+  // The free-text trade, spelled as the list spells it.
+  assert.deepEqual(where.AND[0], tradieInTradeWhere("Gas Fitting"));
+  assert.ok(
+    (where.AND[1].OR as Record<string, unknown>[]).some(
+      (clause) =>
+        JSON.stringify(clause)
+        === JSON.stringify({ trades: { hasSome: ["Gas Fitting"] } }),
+    ),
+  );
 });
 
 // ---------------------------------------------------------------------------

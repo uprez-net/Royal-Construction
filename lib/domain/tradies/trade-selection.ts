@@ -272,6 +272,9 @@ export async function recordManualQuote(
           status: true,
         },
         where: {
+          // This trade's booking. A tradie doing two trades on one activity
+          // must not have a Gas quote written onto their Plumbing booking.
+          ...bookingInTradeWhere(trade),
           milestoneId: milestone.id,
           projectId: project.id,
           status: { notIn: INACTIVE_SCHEDULE_STATUSES },
@@ -750,6 +753,16 @@ export async function settleTradeCancellation(
     return { ...described, status: TradeSelectionStatus.ACTIVE };
   }
 
+  // The trade they were selected for. A tradie who also works in another
+  // trade on this job keeps those bookings — so without one, nothing can say
+  // which bookings to cancel, and cancelling all of them is the wrong guess.
+  const trade = described.trade.trim();
+  if (!trade) {
+    throw new DomainValidationError(
+      "This cancellation request does not say which trade it is for.",
+    );
+  }
+
   const ended = await tx.tradeSelection.updateMany({
     data: { cancelledAt: now, status: TradeSelectionStatus.CANCELLED },
     where: {
@@ -763,14 +776,10 @@ export async function settleTradeCancellation(
       "This selection is no longer waiting on a cancellation.",
     );
   }
-  // The trade they were selected for. A tradie who also works in another
-  // trade on this job keeps those bookings.
-  const trade =
-    typeof approval.payload?.trade === "string" ? approval.payload.trade : "";
   const bookings = await tx.tradieSchedule.findMany({
     select: { id: true },
     where: {
-      ...(trade ? bookingInTradeWhere(trade) : {}),
+      ...bookingInTradeWhere(trade),
       projectId,
       status: { notIn: INACTIVE_SCHEDULE_STATUSES },
       tradieId: approval.tradieId,

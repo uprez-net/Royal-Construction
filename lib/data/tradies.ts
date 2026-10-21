@@ -17,6 +17,10 @@ const tradieScheduleInclude = {
 } as const;
 import { CACHE_PROFILES } from "@/types/cache";
 import { tradieInTradeWhere } from "@/lib/domain/tradies/request-rules";
+import {
+  canonicalTradeLabel,
+  tradeLabelsMatching,
+} from "@/lib/domain/tradies/trade-types";
 import { getTradieCoordinationDashboard } from "./tradie-dashboard";
 import { ProjectRequirementsPayload } from "@/types/project-flow";
 
@@ -218,12 +222,16 @@ export async function getCachedTradieCoordinationDashboard(
 
 export async function getTradiesForLookup(limit = 20, search = "", trade = "") {
   try {
-    const search_ = search
+    const tradeLabels = search ? await tradeLabelsMatching(search, prisma) : [];
+    const search_: Prisma.TradieWhereInput | undefined = search
       ? {
           OR: [
             { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
             { abn: { contains: search, mode: Prisma.QueryMode.insensitive } },
             { trade: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            ...(tradeLabels.length > 0
+              ? [{ trades: { hasSome: tradeLabels } }]
+              : []),
           ],
         }
       : undefined;
@@ -233,7 +241,12 @@ export async function getTradiesForLookup(limit = 20, search = "", trade = "") {
     // tradie's categories counts: a firm that surveys among other things is
     // still a surveyor.
     const where: Prisma.TradieWhereInput | undefined = trade
-      ? { AND: [search_ ?? {}, tradieInTradeWhere(trade)] }
+      ? {
+          AND: [
+            search_ ?? {},
+            tradieInTradeWhere(await canonicalTradeLabel(trade, prisma)),
+          ],
+        }
       : search_;
 
     const tradies = await prisma.tradie.findMany({

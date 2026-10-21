@@ -182,10 +182,18 @@ function resolveCoordinationQuery(
 // Sort column whitelist — never interpolate user input directly
 // ---------------------------------------------------------------------------
 
+/**
+ * The trade a booking is for (`bookingTrade`): its own, else its tradie's.
+ * Filter, sort and the trade column all read this one expression. `Tradie`
+ * has no "tradeType" column, so the filter and sort that named one failed the
+ * whole query into an empty dashboard.
+ */
+const BOOKING_TRADE_SQL = `COALESCE(NULLIF(btrim(ts.trade), ''), t.trade)`;
+
 const SORT_COLUMN_MAP: Record<TradieCoordinationSortBy, string> = {
   scheduledDate: 'ts."scheduledDate"',
   tradieName: "t.name",
-  tradeType: 't."tradeType"',
+  tradeType: BOOKING_TRADE_SQL,
   projectName: "p.name",
   status: "ts.status::text",
 };
@@ -223,7 +231,9 @@ function buildWhere(
   }
 
   if (resolved.tradeType) {
-    parts.push(Prisma.sql`t."tradeType" = ${resolved.tradeType}`);
+    parts.push(
+      Prisma.sql`lower(${Prisma.raw(BOOKING_TRADE_SQL)}) = lower(${resolved.tradeType})`,
+    );
   }
 
   if (resolved.search) {
@@ -409,7 +419,7 @@ export async function getTradieCoordinationDashboard(
           t."isFavourite"       AS isFavourite,
           t.note              AS note,
           t.abn               AS abn,
-          COALESCE(NULLIF(btrim(ts.trade), ''), t.trade) AS trade_type,
+          ${Prisma.raw(BOOKING_TRADE_SQL)} AS trade_type,
           ts."projectId"      AS project_id,
           p.name              AS project_name,
           sm.name             AS site_manager_name,
@@ -672,7 +682,7 @@ export async function getTradieCoordinationDashboard(
         SELECT
           ts.id,
           t.name              AS tradie_name,
-          COALESCE(NULLIF(btrim(ts.trade), ''), t.trade) AS trade_type,
+          ${Prisma.raw(BOOKING_TRADE_SQL)} AS trade_type,
           t.abn               AS abn,
           p.name              AS project_name,
           sm.name             AS site_manager_name,

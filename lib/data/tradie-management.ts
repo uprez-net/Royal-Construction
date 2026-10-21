@@ -35,6 +35,7 @@ import { reportTradieIncident as reportTradieIncidentDomain } from "@/lib/domain
 import { userPrincipal } from "@/lib/domain/principal";
 import { getTradieRemovalImpact } from "@/lib/domain/tradies/queries";
 import { tradieTrades } from "@/lib/domain/tradies/request-rules";
+import { tradeLabelsMatching } from "@/lib/domain/tradies/trade-types";
 import { domainActionFailure } from "@/lib/http/domain-response";
 
 export async function fetchTradieRemovalImpact(tradieId: string) {
@@ -442,6 +443,15 @@ function tradeCategory(trade: string): string {
   return trade.trim() || "Others";
 }
 
+/** Every tile a tradie sits under: each trade, or "Others" with none. */
+function tradeCategories(tradie: {
+  trade: string;
+  trades?: string[] | null;
+}): string[] {
+  const categories = tradieTrades(tradie).map(tradeCategory);
+  return categories.length > 0 ? categories : ["Others"];
+}
+
 /**
  * Retrieves all tradies grouped by trade category with aggregated metrics.
  *
@@ -504,8 +514,7 @@ export async function getTradieGroupedByCategory(): Promise<
 
       // Under every category they work in, so a plumber who also does gas
       // is offered for gas work too.
-      const categories = tradieTrades(tradie).map(tradeCategory);
-      for (const category of categories.length > 0 ? categories : ["Others"]) {
+      for (const category of tradeCategories(tradie)) {
         const existing = grouped.get(category);
         if (existing) {
           existing.push(row);
@@ -599,6 +608,10 @@ export async function fetchFilteredTradies(
   input: TradieTableQuery,
 ): Promise<TradieRow[]> {
   try {
+    // "gas" finds a tradie whose second trade is Gas Fitting.
+    const tradeLabels = input.search
+      ? await tradeLabelsMatching(input.search, prisma)
+      : [];
     const whereClause: Prisma.TradieWhereInput = {
       archivedAt: null,
       ...(input.search
@@ -606,7 +619,9 @@ export async function fetchFilteredTradies(
             OR: [
               { name: { contains: input.search, mode: "insensitive" } },
               { trade: { contains: input.search, mode: "insensitive" } },
-              { trades: { has: input.search.trim() } },
+              ...(tradeLabels.length > 0
+                ? [{ trades: { hasSome: tradeLabels } }]
+                : []),
               { abn: { contains: input.search, mode: "insensitive" } },
             ],
           }
@@ -645,9 +660,7 @@ export async function fetchFilteredTradies(
     // listing is not paginated, so nothing is lost by filtering after.
     const inCategory = input.category
       ? tradies.filter((tradie) =>
-          tradieTrades(tradie).some(
-            (trade) => tradeCategory(trade) === input.category,
-          ),
+          tradeCategories(tradie).includes(input.category!),
         )
       : tradies;
 

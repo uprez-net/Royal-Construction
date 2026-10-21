@@ -132,14 +132,17 @@ export function ManualQuoteDialog({
           (schedule) =>
             schedule.tradieId === tradieId
             && schedule.milestoneId === milestone.id
+            && sameTrade(bookingTrade(schedule), trade)
             && isActiveSchedule(schedule.status),
         ),
     );
     return [...open, ...booked].map((milestone) => {
+      // This trade's booking only, the same one the command will price.
       const booking = project.tradieSchedules.find(
         (schedule) =>
           schedule.tradieId === tradieId
           && schedule.milestoneId === milestone.id
+          && sameTrade(bookingTrade(schedule), trade)
           && isActiveSchedule(schedule.status),
       );
       // The same rule the command applies: a quote booking moves to "quote

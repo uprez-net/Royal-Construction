@@ -15,6 +15,7 @@ import {
 } from "../principal";
 import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
 import { tradieInTradeWhere } from "./request-rules";
+import { canonicalTradeLabel, tradeLabelsMatching } from "./trade-types";
 
 /** Read fresh at request/review time, including overdue unfinished bookings. */
 export async function getTradieRemovalImpact(
@@ -56,19 +57,24 @@ export async function searchTradies(
 ) {
   assertCanReadTradieDirectory(principal);
   const query = input.query.trim();
+  // Eve types trades freely; the list's spelling is what `trades` matches.
+  const trade = input.trade ? await canonicalTradeLabel(input.trade, db) : null;
+  const tradeLabels = query ? await tradeLabelsMatching(query, db) : [];
   return db.tradie.findMany({
     where: {
       archivedAt: null,
       isFavourite: input.favouriteOnly ? true : undefined,
       AND: [
         // Any of their categories: a plumber who also does gas is a gasfitter.
-        input.trade ? tradieInTradeWhere(input.trade) : {},
+        trade ? tradieInTradeWhere(trade) : {},
         query
           ? {
               OR: [
                 { name: { contains: query, mode: "insensitive" as const } },
                 { trade: { contains: query, mode: "insensitive" as const } },
-                { trades: { has: query } },
+                ...(tradeLabels.length > 0
+                  ? [{ trades: { hasSome: tradeLabels } }]
+                  : []),
                 { abn: { contains: query, mode: "insensitive" as const } },
               ],
             }

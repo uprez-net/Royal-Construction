@@ -426,6 +426,28 @@ const QUOTE = {
   tradieId: "t_abc",
 };
 
+test("a manual quote only prices the tradie's booking in the trade quoted for", async () => {
+  const recorder = recordingDb({
+    "milestone.findMany": [MILESTONE],
+    "project.findUnique": PROJECT,
+    "tradeSelection.findFirst": null,
+    "tradie.findUnique": ABC,
+    "tradieQuote.create": { id: "q_1" },
+    "tradieSchedule.findFirst": { id: "s_abc", status: "AWAITING_QUOTE" },
+  });
+  await recordManualQuote(adminPrincipal(), QUOTE, recorder.db);
+  const lookup = recorder.calls.find(
+    (call) => call.operation === "tradieSchedule.findFirst",
+  );
+  assert.deepEqual((lookup?.args as { where: { OR: unknown } }).where.OR, [
+    { trade: { equals: "Plumbing", mode: "insensitive" } },
+    {
+      trade: null,
+      tradie: { trade: { equals: "Plumbing", mode: "insensitive" } },
+    },
+  ]);
+});
+
 test("a manual quote is written onto the tradie's booking for the activity", async () => {
   const recorder = recordingDb({
     "milestone.findMany": [MILESTONE],

@@ -37,6 +37,7 @@ import { runOutboxEffectWithOutcome } from "../outbox";
 import {
   tradieCoversTrade,
   tradieInTradeWhere,
+  tradieTrades,
 } from "../tradies/request-rules";
 import type { DomainPrincipal } from "../principal";
 
@@ -473,7 +474,7 @@ async function resolveOutreachRecipient(
   }
   if (!tradieCoversTrade(tradie, trade)) {
     throw new DomainValidationError(
-      `${tradie.name} is listed under ${tradie.trade}, not ${trade}. Choose the ${label.toLowerCase()} from the ${trade} list.`,
+      `${tradie.name} is listed under ${tradieTrades(tradie).join(", ") || "no trade"}, not ${trade}. Choose the ${label.toLowerCase()} from the ${trade} list.`,
       "tradieId",
     );
   }

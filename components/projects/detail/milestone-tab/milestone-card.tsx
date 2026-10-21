@@ -40,6 +40,7 @@ import { MilestoneStatus } from "@prisma/client";
 import { MilestoneActionGroup } from "./milestone-action-button";
 import { missingMilestoneTrades } from "@/lib/domain/projects/tradie-dependencies";
 import { milestoneEndDate } from "@/lib/domain/projects/milestone-schedule";
+import { bookingTrade } from "@/lib/domain/tradies/request-rules";
 
 /** How many progress photos sit inline before the rest go behind a button. */
 const INLINE_PHOTO_LIMIT = 3;
@@ -316,7 +317,7 @@ export function MilestoneCard({
                 {milestone.tradieSchedules
                   .map(
                     (schedule) =>
-                      `${schedule.tradie.name} — ${schedule.trade?.trim() || schedule.tradie.trade}`,
+                      `${schedule.tradie.name} — ${bookingTrade(schedule)}`,
                   )
                   .join(", ")}
               </MetaItem>
@@ -352,8 +353,7 @@ export function MilestoneCard({
                   />
                   <span className="text-foreground">
                     <span className="font-medium">
-                      Booked: {schedule.tradie.name} (
-                      {schedule.trade?.trim() || schedule.tradie.trade})
+                      Booked: {schedule.tradie.name} ({bookingTrade(schedule)})
                     </span>{" "}
                     <span className="text-muted-foreground">
                       ·{" "}
@@ -381,14 +381,13 @@ export function MilestoneCard({
                         ).toISOString(),
                         abn: schedule.tradie.abn,
                         status: schedule.status,
-                        tradeType:
-                          schedule.trade?.trim() || schedule.tradie.trade,
+                        tradeType: bookingTrade(schedule),
                         tradieName: schedule.tradie.name,
                         lastQuotedPriceUnit:
                           schedule.tradie.lastQuotedPriceUnit,
                         projectId: schedule.projectId,
                         projectName: project.name,
-                        taskLabel: `${milestone.name} - ${schedule.trade?.trim() || schedule.tradie.trade}`,
+                        taskLabel: `${milestone.name} - ${bookingTrade(schedule)}`,
                         durationDays: schedule.durationDays,
                         updatedAt: new Date(schedule.updatedAt).toISOString(),
                         contact: {

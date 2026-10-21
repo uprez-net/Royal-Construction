@@ -308,6 +308,44 @@ export async function deleteTradeType(
 }
 
 /**
+ * A trade typed by a caller, as the list spells it — or as typed when the list
+ * has no such trade. For a lookup, not a write: `Tradie.trades` holds listed
+ * spellings and matches exactly, so "gas fitting" has to become "Gas Fitting"
+ * before it can find a secondary trade. Never refuses; `resolveTradeLabel` is
+ * the strict one, for giving a tradie a trade.
+ */
+export async function canonicalTradeLabel(
+  trade: string,
+  db: DomainDb,
+): Promise<string> {
+  const requested = trade.trim();
+  const row = await db.tradeType.findFirst({
+    select: { label: true },
+    where: { label: { equals: requested, mode: "insensitive" } },
+  });
+  return row?.label ?? requested;
+}
+
+/**
+ * Every listed trade whose name contains this text, archived ones included —
+ * a tradie keeps a trade after it is archived. How a search reaches secondary
+ * trades: a scalar list has no `contains`, so the text becomes the labels it
+ * matches and those go to `hasSome`.
+ */
+export async function tradeLabelsMatching(
+  text: string,
+  db: DomainDb,
+): Promise<string[]> {
+  const query = text.trim();
+  if (!query) return [];
+  const rows = await db.tradeType.findMany({
+    select: { label: true },
+    where: { label: { contains: query, mode: "insensitive" } },
+  });
+  return rows.map((row) => row.label);
+}
+
+/**
  * The trade a tradie is being given, as the list spells it.
  *
  * "plumbing" becomes "Plumbing". A name the list does not have, or one that is
