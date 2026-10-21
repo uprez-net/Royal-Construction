@@ -398,8 +398,8 @@ export const DEVELOPER_APPROVAL_DOCUMENT =
 /**
  * The trade each party is picked from in the tradie directory.
  *
- * Labels: `Tradie.trade` stores "Surveying", which is what TradeTypeCombobox
- * writes. The trade list itself is the `TradeType` table, which an admin can
+ * Labels: `Tradie.trades` stores "Surveying", which is what
+ * TradeTypeMultiCombobox writes. The trade list itself is the `TradeType` table, which an admin can
  * edit; every label here is seeded there and locked against rename, archive
  * and delete (`DIRECTORY_PICKED_TRADE_LABELS`), because a party whose trade
  * matches nothing gets a contact picker that comes back empty however many

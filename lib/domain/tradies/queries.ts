@@ -14,6 +14,7 @@ import {
   type DomainPrincipal,
 } from "../principal";
 import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
+import { tradieInTradeWhere } from "./request-rules";
 
 /** Read fresh at request/review time, including overdue unfinished bookings. */
 export async function getTradieRemovalImpact(
@@ -58,19 +59,21 @@ export async function searchTradies(
   return db.tradie.findMany({
     where: {
       archivedAt: null,
-      trade: input.trade
-        ? { equals: input.trade, mode: "insensitive" }
-        : undefined,
       isFavourite: input.favouriteOnly ? true : undefined,
-      ...(query
-        ? {
-            OR: [
-              { name: { contains: query, mode: "insensitive" as const } },
-              { trade: { contains: query, mode: "insensitive" as const } },
-              { abn: { contains: query, mode: "insensitive" as const } },
-            ],
-          }
-        : {}),
+      AND: [
+        // Any of their categories: a plumber who also does gas is a gasfitter.
+        input.trade ? tradieInTradeWhere(input.trade) : {},
+        query
+          ? {
+              OR: [
+                { name: { contains: query, mode: "insensitive" as const } },
+                { trade: { contains: query, mode: "insensitive" as const } },
+                { trades: { has: query } },
+                { abn: { contains: query, mode: "insensitive" as const } },
+              ],
+            }
+          : {},
+      ],
     },
     orderBy: [{ isFavourite: "desc" }, { name: "asc" }],
     take: input.limit,
@@ -78,6 +81,7 @@ export async function searchTradies(
       id: true,
       name: true,
       trade: true,
+      trades: true,
       abn: true,
       email: true,
       phone: true,

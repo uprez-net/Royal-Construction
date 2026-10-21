@@ -34,6 +34,7 @@ import {
 import { reportTradieIncident as reportTradieIncidentDomain } from "@/lib/domain/tradies/incidents";
 import { userPrincipal } from "@/lib/domain/principal";
 import { getTradieRemovalImpact } from "@/lib/domain/tradies/queries";
+import { tradieTrades } from "@/lib/domain/tradies/request-rules";
 import { domainActionFailure } from "@/lib/http/domain-response";
 
 export async function fetchTradieRemovalImpact(tradieId: string) {
@@ -105,6 +106,7 @@ export async function createTradie(
       id: res.id,
       name: res.name,
       trade: res.trade,
+      trades: tradieTrades(res),
       isFavourite: res.isFavourite,
       lastQuotedPrice: res.lastQuotedPrice
         ? res.lastQuotedPrice.toString()
@@ -483,6 +485,7 @@ export async function getTradieGroupedByCategory(): Promise<
         id: tradie.id,
         name: tradie.name,
         trade: tradie.trade,
+        trades: tradieTrades(tradie),
         isFavourite: tradie.isFavourite,
         lastQuotedPrice: tradie.lastQuotedPrice?.toString() ?? null,
         lastQuotedPriceUnit: tradie.lastQuotedPriceUnit,
@@ -499,13 +502,16 @@ export async function getTradieGroupedByCategory(): Promise<
         },
       };
 
-      const category = tradeCategory(tradie.trade);
-      const existing = grouped.get(category);
-
-      if (existing) {
-        existing.push(row);
-      } else {
-        grouped.set(category, [row]);
+      // Under every category they work in, so a plumber who also does gas
+      // is offered for gas work too.
+      const categories = tradieTrades(tradie).map(tradeCategory);
+      for (const category of categories.length > 0 ? categories : ["Others"]) {
+        const existing = grouped.get(category);
+        if (existing) {
+          existing.push(row);
+        } else {
+          grouped.set(category, [row]);
+        }
       }
     }
 
@@ -600,6 +606,7 @@ export async function fetchFilteredTradies(
             OR: [
               { name: { contains: input.search, mode: "insensitive" } },
               { trade: { contains: input.search, mode: "insensitive" } },
+              { trades: { has: input.search.trim() } },
               { abn: { contains: input.search, mode: "insensitive" } },
             ],
           }
@@ -637,14 +644,17 @@ export async function fetchFilteredTradies(
     // same key the tiles group by, blank and untrimmed trades included. This
     // listing is not paginated, so nothing is lost by filtering after.
     const inCategory = input.category
-      ? tradies.filter(
-          (tradie) => tradeCategory(tradie.trade) === input.category,
+      ? tradies.filter((tradie) =>
+          tradieTrades(tradie).some(
+            (trade) => tradeCategory(trade) === input.category,
+          ),
         )
       : tradies;
 
     return inCategory.map((tradie) => {
       return {
         ...tradie,
+        trades: tradieTrades(tradie),
         lastQuotedPrice: tradie.lastQuotedPrice?.toString() ?? null,
         lastQuotedPriceUnit: tradie.lastQuotedPriceUnit,
         rating: tradie.rating?.toString() ?? null,
@@ -949,6 +959,7 @@ export async function updateTradie(
       | "phone"
       | "location"
       | "note"
+      | "trades"
     >
   >,
 ): Promise<TradieDetails> {

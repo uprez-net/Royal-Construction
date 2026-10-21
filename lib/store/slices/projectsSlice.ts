@@ -347,7 +347,7 @@ export const recordManualQuote = tradieTabAction(
 
 export const selectTradeQuote = tradieTabAction(
   "tradies/selectTradeQuote",
-  (payload: { projectId: string; tradieId: string }) =>
+  (payload: { projectId: string; tradieId: string; trade?: string }) =>
     selectTradeQuoteForProject(payload),
   "Failed to select the quote",
 );
@@ -1934,6 +1934,7 @@ const projectsSlice = createSlice({
               location: null,
               archivedAt: null,
               trade: schedule.tradeType,
+              trades: [schedule.tradeType],
               abn: schedule.abn,
               isFavourite: schedule.isFavourite,
               note: null,
@@ -1952,6 +1953,7 @@ const projectsSlice = createSlice({
             requestRecipientId: null,
             quoteId: null,
             refToken: schedule.refToken ?? null,
+            trade: schedule.tradeType,
           });
         }
       })

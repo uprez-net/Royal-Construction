@@ -144,7 +144,7 @@ export async function sendTradieReminders(): Promise<{
           tradieId: schedule.tradieId,
           tradieName: schedule.tradie.name,
           lastQuotedPriceUnit: schedule.tradie.lastQuotedPriceUnit,
-          tradeType: schedule.tradie.trade,
+          tradeType: schedule.trade?.trim() || schedule.tradie.trade,
           projectId: schedule.projectId,
           projectName: schedule.project.name,
           taskLabel: schedule.milestone?.name ?? "General Task",

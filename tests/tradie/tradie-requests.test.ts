@@ -838,3 +838,30 @@ test("the AI draft refuses an activity that is not on the project", async () => 
     DomainNotFoundError,
   );
 });
+
+// ---------------------------------------------------------------------------
+// Tradies in several trades
+// ---------------------------------------------------------------------------
+
+test("a request is for the trade the office chose, and its bookings say so", async () => {
+  const recorder = database();
+  const { ports, rendered } = mail();
+  await sendTradieRequests(
+    adminPrincipal(),
+    { ...REQUEST, trade: "plumbing", tradieIds: ["t_abc"] },
+    recorder.transactionalDb,
+    ports,
+  );
+  // As the tradie's entry spells it: this is what the email says.
+  assert.ok(rendered.every((message) => message.trade === "Plumbing"));
+  for (const call of writesTo(recorder, "tradieSchedule.create")) {
+    assert.equal(call.data.trade, "Plumbing");
+  }
+});
+
+test("a tradie not listed under the request's trade is refused, naming the trades they are under", async () => {
+  await assertRefusedWithoutEffects(
+    { trade: "Gas Fitting", tradieIds: ["t_abc"] } as Partial<typeof REQUEST>,
+    /ABC Plumbing Co\. is listed under Plumbing, not Gas Fitting/,
+  );
+});

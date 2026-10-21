@@ -1,6 +1,7 @@
 import { CERTIFIER_TRADE_LABEL } from "@/constants/complianceDocuments";
 
 import type { DomainDb } from "../db";
+import { tradieInTradeWhere } from "../tradies/request-rules";
 
 type DirectoryEntry = {
   readonly email: string;
@@ -67,7 +68,7 @@ export async function certifierCopyAddresses(
 ): Promise<string[]> {
   const directory = await db.tradie.findMany({
     select: { additionalEmails: true, email: true },
-    where: { trade: { equals: CERTIFIER_TRADE_LABEL, mode: "insensitive" } },
+    where: tradieInTradeWhere(CERTIFIER_TRADE_LABEL),
   });
   return certifierCopyList(to, directory, officeCc);
 }

@@ -99,6 +99,8 @@ export type CreateTradieScheduleInput = z.infer<
 export const sendTradieRequestsSchema = z.object({
   /** QUOTE asks for prices; BOOKING books one tradie and asks them to confirm. */
   kind: z.enum(["QUOTE", "BOOKING"]).default("QUOTE"),
+  /** The trade, when the tradie works in several; their primary otherwise. */
+  trade: z.string().trim().min(1).max(120).optional(),
   projectId: z.string().trim().min(1, "Project ID is required"),
   tradieIds: z.array(z.string().trim().min(1)).min(1, "Choose a tradie"),
   activities: z
@@ -128,6 +130,8 @@ export const retryTradieRequestEmailSchema = z.object({
 
 /** A quote the office received some other way, priced per activity. */
 export const manualTradieQuoteSchema = z.object({
+  /** The trade, when the tradie works in several; their primary otherwise. */
+  trade: z.string().trim().min(1).max(120).optional(),
   projectId: z.string().trim().min(1, "Project ID is required"),
   tradieId: z.string().trim().min(1, "Choose the tradie who quoted"),
   lines: z
@@ -157,6 +161,8 @@ export type ManualTradieQuoteFormInput = z.input<
 export const selectTradeQuoteSchema = z.object({
   projectId: z.string().trim().min(1),
   tradieId: z.string().trim().min(1),
+  /** The trade, when the tradie works in several; their primary otherwise. */
+  trade: z.string().trim().min(1).max(120).optional(),
 });
 
 /** Ask the admins to release the tradie selected for a trade. */

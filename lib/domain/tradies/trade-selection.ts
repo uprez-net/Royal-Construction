@@ -21,9 +21,12 @@ import { authorizeProject } from "../access/projects";
 import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
 import {
   activityAcceptsTrade,
+  bookingTrade,
   isRequestableMilestone,
   MAX_REQUEST_ACTIVITIES,
+  sameTrade,
   tradeList,
+  tradieTradeLabel,
 } from "./request-rules";
 import { createTradieSchedule, transitionTradieSchedule } from "./schedules";
 import {
@@ -78,6 +81,19 @@ function money(amount: number): string {
   return amount.toFixed(2);
 }
 
+/** `bookingTrade` as a query: the booking's trade, else its tradie's. */
+function bookingInTradeWhere(trade: string): Prisma.TradieScheduleWhereInput {
+  return {
+    OR: [
+      { trade: { equals: trade.trim(), mode: "insensitive" } },
+      {
+        trade: null,
+        tradie: { trade: { equals: trade.trim(), mode: "insensitive" } },
+      },
+    ],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Manual quote
 // ---------------------------------------------------------------------------
@@ -85,6 +101,8 @@ function money(amount: number): string {
 export type ManualQuoteInput = {
   readonly projectId: string;
   readonly tradieId: string;
+  /** The trade quoted for; the tradie's primary trade when omitted. */
+  readonly trade?: string;
   readonly lines: readonly {
     readonly milestoneId: string;
     /** Dollars, as the tradie priced it under `gstTreatment`. */
@@ -162,10 +180,16 @@ export async function recordManualQuote(
 
   const project = await authorizeProject(principal, input.projectId, db);
   const tradie = await requireActiveTradie(input.tradieId, db);
-  const trade = tradie.trade.trim();
-  if (!trade) {
+  const asked = input.trade?.trim() || tradie.trade.trim();
+  if (!asked) {
     throw new DomainValidationError(
       `${tradie.name} has no trade in the directory, so the quote has nothing to price.`,
+    );
+  }
+  const trade = tradieTradeLabel(tradie, asked);
+  if (!trade) {
+    throw new DomainValidationError(
+      `${tradie.name} is not listed under ${asked}, so they cannot quote for it.`,
     );
   }
 
@@ -298,6 +322,7 @@ export async function recordManualQuote(
             requiresQuote: true,
             scheduledDate:
               sibling?.scheduledDate ?? new Date(`${day}T00:00:00.000Z`),
+            trade,
             tradieId: tradie.id,
           },
           tx,
@@ -412,12 +437,23 @@ export type SelectedTradeQuote = {
  */
 export async function selectTradeQuote(
   principal: DomainPrincipal,
-  input: { readonly projectId: string; readonly tradieId: string },
+  input: {
+    readonly projectId: string;
+    readonly tradieId: string;
+    /** The trade being chosen for; the tradie's primary trade when omitted. */
+    readonly trade?: string;
+  },
   db: DomainDb,
 ): Promise<SelectedTradeQuote> {
   const project = await authorizeProject(principal, input.projectId, db);
   const tradie = await requireActiveTradie(input.tradieId, db);
-  const trade = tradie.trade.trim();
+  const asked = input.trade?.trim() || tradie.trade.trim();
+  const trade = tradieTradeLabel(tradie, asked);
+  if (!trade) {
+    throw new DomainValidationError(
+      `${tradie.name} is not listed under ${asked}.`,
+    );
+  }
   const key = tradeKey(trade);
 
   return serializable(db, async (tx) => {
@@ -436,6 +472,7 @@ export async function selectTradeQuote(
         milestoneId: true,
         quotedPrice: true,
         status: true,
+        trade: true,
         tradie: { select: { name: true, trade: true } },
         tradieId: true,
       },
@@ -444,7 +481,7 @@ export async function selectTradeQuote(
     const asRule = (booking: (typeof bookings)[number]) => ({
       ...booking,
       milestoneName: booking.milestone?.name ?? null,
-      trade: booking.tradie.trade,
+      trade: bookingTrade(booking),
       tradieName: booking.tradie.name,
     });
     const own = bookings
@@ -472,6 +509,7 @@ export async function selectTradeQuote(
     const approvals: { scheduleId: string; approvalId: string }[] = [];
     for (const booking of own) {
       if (booking.status !== TradieScheduleStatus.QUOTE_RECEIVED) continue;
+      if (!sameTrade(booking.trade, trade)) continue;
       const moved = await transitionTradieSchedule(
         principal,
         {
@@ -605,6 +643,7 @@ export async function requestTradeCancellation(
   return serializable(db, async (tx) => {
     const openBookings = await tx.tradieSchedule.count({
       where: {
+        ...bookingInTradeWhere(selection.trade),
         projectId: project.id,
         status: { notIn: INACTIVE_SCHEDULE_STATUSES },
         tradieId: selection.tradie.id,
@@ -720,9 +759,14 @@ export async function settleTradeCancellation(
       "This selection is no longer waiting on a cancellation.",
     );
   }
+  // The trade they were selected for. A tradie who also works in another
+  // trade on this job keeps those bookings.
+  const trade =
+    typeof approval.payload?.trade === "string" ? approval.payload.trade : "";
   const bookings = await tx.tradieSchedule.findMany({
     select: { id: true },
     where: {
+      ...(trade ? bookingInTradeWhere(trade) : {}),
       projectId,
       status: { notIn: INACTIVE_SCHEDULE_STATUSES },
       tradieId: approval.tradieId,

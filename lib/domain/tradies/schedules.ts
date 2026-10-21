@@ -25,6 +25,7 @@ import {
   type RescheduleNotice,
 } from "./reschedule-rules";
 import { generateTradieRefToken } from "./reply-reference";
+import { tradieTradeLabel } from "./request-rules";
 import { canTransitionSchedule } from "./schedule-transitions";
 import {
   normalizeQuoteBasis,
@@ -61,6 +62,11 @@ export type CreateScheduleInput = {
   readonly requiresQuote: boolean;
   /** The request email this booking is part of, when it is. */
   readonly requestRecipientId?: string | null;
+  /**
+   * The trade it is for, when the tradie works in several. Defaults to their
+   * primary trade.
+   */
+  readonly trade?: string | null;
 };
 
 /**
@@ -259,6 +265,17 @@ export async function createTradieSchedule(
     );
 
     const tradie = await requireActiveTradie(input.tradieId, transactionDb);
+    // Checked only when a trade is named. Booked under their primary trade,
+    // a tradie the directory has no trade for can still be booked, as before.
+    const asked = input.trade?.trim();
+    const listed = asked ? tradieTradeLabel(tradie, asked) : null;
+    if (asked && !listed) {
+      throw new DomainValidationError(
+        `${tradie.name} is not listed under ${asked}.`,
+        "trade",
+      );
+    }
+    const trade = listed ?? tradie.trade;
 
     if (input.milestoneId) {
       await assertMilestoneOnProject(
@@ -291,6 +308,7 @@ export async function createTradieSchedule(
         status: input.requiresQuote
           ? TradieScheduleStatus.AWAITING_QUOTE
           : TradieScheduleStatus.PENDING,
+        trade,
         tradieId: tradie.id,
       },
       select: {
@@ -451,7 +469,7 @@ async function applyScheduleTransition(
             principal.kind === "system"
               ? TradieQuoteSource.EMAIL
               : TradieQuoteSource.MANUAL,
-          trade: existing.tradie.trade,
+          trade: existing.trade?.trim() || existing.tradie.trade,
           tradieId: existing.tradieId,
         },
         select: { id: true },
@@ -868,6 +886,7 @@ async function findSchedule(scheduleId: string, db: DomainDb) {
       quotedPrice: true,
       scheduledDate: true,
       status: true,
+      trade: true,
       tradie: {
         select: {
           id: true,

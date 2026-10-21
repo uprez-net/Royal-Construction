@@ -13,7 +13,10 @@ import { TradieScheduleStatus } from "@prisma/client";
 export interface TradieRow {
   id: string;
   name: string;
+  /** The primary category. */
   trade: string;
+  /** Every category, the primary first. */
+  trades: string[];
   isFavourite: boolean;
   lastQuotedPrice: string | null;
   lastQuotedPriceUnit: TradiePriceUnit;
@@ -48,7 +51,8 @@ export interface TradieDetails extends SafeTradie {
 
 export interface CreateTradieInput {
   name: string;
-  trade: string;
+  /** Every category, the primary first; the primary is also `trade`. */
+  trades: string[];
   // Matches the column. `createTradie` passes this object straight to
   // `prisma.tradie.create({ data: input })`, so a field the schema does not
   // have is an unknown-argument failure at runtime — and because `data`

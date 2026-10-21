@@ -729,7 +729,12 @@ model Material {
 model Tradie {
   id                  String          @id @default(uuid())
   name                String
+  /// The primary category: trades[0]. Kept because a tradie is shown, and Eve
+  /// names one, by a single trade.
   trade               String
+  /// Every category the tradie works in, the primary first. Whether a tradie
+  /// can be asked for a trade is "is it in here" (`tradieCoversTrade`).
+  trades              String[]        @default([])
   abn                 String          @unique
   phone               String          @unique
   email               String          @unique
@@ -928,6 +933,10 @@ model TradieSchedule {
   /// while the booking is still in that status and returns once it moves.
   alertDismissedStatus TradieScheduleStatus?
   alertDismissedAt     DateTime?
+  /// The trade this booking is for. A tradie can work in several, so it is
+  /// not the tradie's trade: a plumber-and-gasfitter booked for gas work is a
+  /// Gas booking. Null only on a row older than this column and not backfilled.
+  trade                String?
   /// The request email this booking was asked for in, when it came from one.
   requestRecipientId   String?
   /// "RCTBK-…": quoted on every email about this one booking, so a reply is

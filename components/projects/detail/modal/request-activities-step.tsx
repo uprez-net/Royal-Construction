@@ -22,7 +22,12 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { TradeIcon } from "@/components/tradie-management/trade-icon";
 import { cn } from "@/lib/utils";
-import { sameTrade, tradeList } from "@/lib/domain/tradies/request-rules";
+import {
+  bookingTrade,
+  sameTrade,
+  tradeList,
+  tradieCoversTrade,
+} from "@/lib/domain/tradies/request-rules";
 import { PROJECT_STAGE_LABELS } from "@/types/project";
 import type { TradieRow } from "@/types/tradie";
 import { formatQuotedPrice } from "@/utils/calculations";
@@ -41,6 +46,7 @@ type ScheduleRef = {
   readonly tradieId: string;
   readonly milestoneId: string | null;
   readonly status: Parameters<typeof isActiveSchedule>[0];
+  readonly trade?: string | null;
   readonly tradie: { readonly name: string; readonly trade: string };
 };
 
@@ -207,7 +213,7 @@ export function RequestActivitiesStep({
   const tradeTradies = useMemo(() => {
     const query = tradieQuery.trim().toLowerCase();
     return tradies
-      .filter((tradie) => trade && sameTrade(tradie.trade, trade))
+      .filter((tradie) => trade && tradieCoversTrade(tradie, trade))
       .filter((tradie) => !query || tradie.name.toLowerCase().includes(query))
       .sort(
         (a, b) =>
@@ -224,7 +230,7 @@ export function RequestActivitiesStep({
           schedule.milestoneId === milestoneId
           && isActiveSchedule(schedule.status)
           && trade !== null
-          && sameTrade(schedule.tradie.trade, trade),
+          && sameTrade(bookingTrade(schedule), trade),
       )
       .map((schedule) => schedule.tradie.name);
 

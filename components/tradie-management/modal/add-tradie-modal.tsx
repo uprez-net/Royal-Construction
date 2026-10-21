@@ -31,7 +31,7 @@ import { SearchableSelect } from "@/components/common/searchable-select";
 import { fetchJson } from "@/utils/fetch";
 import { cn } from "@/lib/utils";
 import { EmailListInput } from "./forms/EmailLIstInput";
-import { TradeTypeField } from "./forms/TradieTypeInput";
+import { TradeTypesField } from "./forms/TradieTypeInput";
 import { NORMAL_WORKING_HOURS } from "@/utils/calculations";
 
 interface AddTradieModalProps {
@@ -41,7 +41,7 @@ interface AddTradieModalProps {
 
 const initialState: CreateTradieInput = {
   name: "",
-  trade: "",
+  trades: [],
   lastQuotedPrice: 0,
   lastQuotedPriceUnit: "HOURLY",
   abn: "",
@@ -63,7 +63,7 @@ const normalizeAbn = (value: string) => value.replace(/\s/g, "");
 
 const tradieSchema = z.object({
   name: z.string().min(2, "Enter a name with at least 2 characters"),
-  trade: z.string().min(1, "Select a trade type"),
+  trades: z.array(z.string().min(1)).min(1, "Select at least one trade type"),
   phone: z
     .string()
     .min(1, "Phone number is required")
@@ -176,7 +176,7 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
     if (!isValid) {
       setTouched({
         name: true,
-        trade: true,
+        trades: true,
         phone: true,
         location: true,
         lastQuotedPrice: true,
@@ -264,12 +264,12 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   </p>
                 )}
               </div>
-              <TradeTypeField
-                id="tradie-trade"
-                value={formData.trade}
-                onChange={(value) => updateField("trade", value)}
-                onBlur={() => markTouched("trade")}
-                error={fieldError("trade")}
+              <TradeTypesField
+                id="tradie-trades"
+                value={formData.trades}
+                onChange={(value) => updateField("trades", value)}
+                onBlur={() => markTouched("trades")}
+                error={fieldError("trades")}
                 requiredMark={<RequiredMark />}
               />
               <div className="space-y-2">

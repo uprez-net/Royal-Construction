@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getTradieGroupedByCategoryCached } from "@/lib/data/tradie-management";
-import { sameTrade } from "@/lib/domain/tradies/request-rules";
+import { bookingTrade, sameTrade } from "@/lib/domain/tradies/request-rules";
 import { quoteEntryFor } from "@/lib/domain/tradies/selection-rules";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { recordManualQuote } from "@/lib/store/slices/projectsSlice";
@@ -112,7 +112,7 @@ export function ManualQuoteDialog({
   const tradieOptions = useMemo(() => {
     const seen = new Map<string, string>();
     for (const schedule of project.tradieSchedules) {
-      if (sameTrade(schedule.tradie.trade, trade)) {
+      if (sameTrade(bookingTrade(schedule), trade)) {
         seen.set(schedule.tradieId, schedule.tradie.name);
       }
     }
@@ -208,6 +208,7 @@ export function ManualQuoteDialog({
           notes: notes.trim() || undefined,
           projectId: project.id,
           quotedAt,
+          trade,
           tradieId,
           validUntil: validUntil || undefined,
         }),

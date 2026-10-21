@@ -37,11 +37,14 @@ import {
 } from "./request-delivery";
 import {
   activityAcceptsTrade,
+  bookingTrade,
   isRequestableMilestone,
   MAX_REQUEST_ACTIVITIES,
   MAX_REQUEST_TRADIES,
-  sameTrade,
   tradeList,
+  tradieCoversTrade,
+  tradieTradeLabel,
+  tradieTrades,
 } from "./request-rules";
 import { createTradieSchedules, type CreatedSchedule } from "./schedules";
 import {
@@ -101,6 +104,11 @@ export type TradieRequestActivityInput = {
 export type SendTradieRequestsInput = {
   /** QUOTE when omitted. */
   readonly kind?: TradieRequestKind;
+  /**
+   * The trade the request is for. A tradie can work in several, so it cannot
+   * be read off them; omitted, it is the first tradie's primary trade.
+   */
+  readonly trade?: string;
   readonly projectId: string;
   readonly tradieIds: readonly string[];
   readonly activities: readonly TradieRequestActivityInput[];
@@ -235,11 +243,14 @@ export async function sendTradieRequests(
   for (const tradieId of input.tradieIds) {
     tradies.push(await requireActiveTradie(tradieId, db));
   }
-  const trade = tradies[0].trade.trim();
-  const otherTrade = tradies.find((tradie) => !sameTrade(tradie.trade, trade));
+  const asked = input.trade?.trim() || tradies[0].trade.trim();
+  const trade = tradieTradeLabel(tradies[0], asked) ?? asked;
+  const otherTrade = tradies.find(
+    (tradie) => !tradieCoversTrade(tradie, trade),
+  );
   if (otherTrade) {
     throw new DomainValidationError(
-      `${otherTrade.name} is listed under ${otherTrade.trade.trim() || "no trade"}, not ${trade}. Send each trade as its own request.`,
+      `${otherTrade.name} is listed under ${tradieTrades(otherTrade).join(", ") || "no trade"}, not ${trade}. Send each trade as its own request.`,
       "tradieIds",
     );
   }
@@ -376,6 +387,7 @@ export async function sendTradieRequests(
           requestRecipientId: recipientByTradie.get(tradie.id) ?? null,
           requiresQuote: !booking,
           scheduledDate: activity.scheduledDate,
+          trade,
           tradieId: tradie.id,
         })),
       ),
@@ -483,6 +495,7 @@ async function claimTradeForBooking(
       milestoneId: true,
       quotedPrice: true,
       status: true,
+      trade: true,
       tradie: { select: { name: true, trade: true } },
     },
     where: { projectId: input.projectId, tradieId: { not: input.tradie.id } },
@@ -493,7 +506,7 @@ async function claimTradeForBooking(
     milestoneName: row.milestone?.name ?? null,
     quotedPrice: row.quotedPrice,
     status: row.status,
-    trade: row.tradie.trade,
+    trade: bookingTrade(row),
     tradieName: row.tradie.name,
   }));
 

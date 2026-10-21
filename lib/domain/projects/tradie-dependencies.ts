@@ -1,6 +1,6 @@
 import { MilestoneStatus, TradieScheduleStatus } from "@prisma/client";
 
-import { sameTrade } from "../tradies/request-rules";
+import { bookingTrade, sameTrade } from "../tradies/request-rules";
 
 type DependentMilestone = {
   id: string;
@@ -10,6 +10,8 @@ type DependentMilestone = {
 type Booking = {
   milestoneId: string | null;
   status: TradieScheduleStatus;
+  /** The trade it is for; see `bookingTrade`. */
+  trade?: string | null;
   tradie: { trade: string };
 };
 
@@ -31,7 +33,7 @@ export function missingMilestoneTrades(
           (booking) =>
             booking.milestoneId === milestone.id
             && booking.status === TradieScheduleStatus.CONFIRMED
-            && sameTrade(booking.tradie.trade, label),
+            && sameTrade(bookingTrade(booking), label),
         ),
     );
 }

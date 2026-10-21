@@ -25,7 +25,7 @@ function matchesTradieQuery(tradie: TradieRow, query: TradieTableQuery) {
     return false;
   }
 
-  if (query.category && tradie.trade !== query.category) {
+  if (query.category && !tradie.trades.includes(query.category)) {
     return false;
   }
 

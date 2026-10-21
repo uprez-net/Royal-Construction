@@ -82,8 +82,12 @@ export function selectionRefusal(input: {
     };
   }
 
+  // Only this trade's bookings: a tradie working in several trades is
+  // selected for one, and their bookings in another are not part of it.
   const open = input.own.filter(
-    (booking) => !INACTIVE_SCHEDULE_STATUSES.includes(booking.status),
+    (booking) =>
+      !INACTIVE_SCHEDULE_STATUSES.includes(booking.status)
+      && sameTrade(booking.trade, trade),
   );
   if (open.length === 0) {
     return {
@@ -237,13 +241,20 @@ export function quoteEntryFor(booking: {
 export function bookingsDisplacedBySelection<
   T extends Pick<SelectionBooking, "status" | "milestoneId" | "trade">,
 >(
-  own: readonly Pick<SelectionBooking, "status" | "milestoneId">[],
+  own: readonly (Pick<SelectionBooking, "status" | "milestoneId"> & {
+    /** Omitted for bookings about to be made in `trade`. */
+    readonly trade?: string;
+  })[],
   others: readonly T[],
   trade: string,
 ): T[] {
   const milestoneIds = new Set(
     own
-      .filter((booking) => !INACTIVE_SCHEDULE_STATUSES.includes(booking.status))
+      .filter(
+        (booking) =>
+          !INACTIVE_SCHEDULE_STATUSES.includes(booking.status)
+          && (booking.trade === undefined || sameTrade(booking.trade, trade)),
+      )
       .map((booking) => booking.milestoneId)
       .filter((id): id is string => id !== null),
   );

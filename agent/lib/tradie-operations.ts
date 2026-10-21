@@ -483,7 +483,7 @@ export async function listAuthorizedTradieSchedules(
         id: schedule.id,
         tradieId: schedule.tradie.id,
         tradieName: schedule.tradie.name,
-        trade: schedule.tradie.trade,
+        trade: schedule.trade?.trim() || schedule.tradie.trade,
         projectId: schedule.project.id,
         projectName: schedule.project.name,
         milestoneId: schedule.milestone?.id ?? null,

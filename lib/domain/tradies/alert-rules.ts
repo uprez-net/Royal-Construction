@@ -1,6 +1,7 @@
 import { MilestoneStatus, TradieScheduleStatus } from "@prisma/client";
 
 import { INACTIVE_SCHEDULE_STATUSES } from "./lifecycle";
+import { bookingTrade, sameTrade } from "./request-rules";
 
 // When a tradie booking is still worth an alert.
 //
@@ -22,6 +23,8 @@ export type AlertBooking = {
   readonly milestoneId: string | null;
   readonly alertDismissedStatus?: TradieScheduleStatus | null;
   readonly milestone?: { readonly status: MilestoneStatus } | null;
+  /** The trade it is for; see `bookingTrade`. */
+  readonly trade?: string | null;
   readonly tradie: { readonly trade: string };
 };
 
@@ -52,7 +55,7 @@ export function hasReplacementBooking(
     (other) =>
       other.id !== booking.id
       && other.milestoneId === booking.milestoneId
-      && other.tradie.trade === booking.tradie.trade
+      && sameTrade(bookingTrade(other), bookingTrade(booking))
       && !INACTIVE_SCHEDULE_STATUSES.includes(other.status),
   );
 }

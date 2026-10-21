@@ -16,6 +16,7 @@ const tradieScheduleInclude = {
   milestone: true,
 } as const;
 import { CACHE_PROFILES } from "@/types/cache";
+import { tradieInTradeWhere } from "@/lib/domain/tradies/request-rules";
 import { getTradieCoordinationDashboard } from "./tradie-dashboard";
 import { ProjectRequirementsPayload } from "@/types/project-flow";
 
@@ -228,13 +229,11 @@ export async function getTradiesForLookup(limit = 20, search = "", trade = "") {
       : undefined;
 
     // ANDed with the search rather than replacing it, so a compliance picker
-    // can narrow to surveyors and still let the user type a name. Exact,
-    // because `trade` stores the label the combobox wrote.
-    const where = trade
-      ? {
-          ...(search_ ?? {}),
-          trade: { equals: trade, mode: Prisma.QueryMode.insensitive },
-        }
+    // can narrow to surveyors and still let the user type a name. Any of the
+    // tradie's categories counts: a firm that surveys among other things is
+    // still a surveyor.
+    const where: Prisma.TradieWhereInput | undefined = trade
+      ? { AND: [search_ ?? {}, tradieInTradeWhere(trade)] }
       : search_;
 
     const tradies = await prisma.tradie.findMany({

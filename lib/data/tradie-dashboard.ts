@@ -231,6 +231,7 @@ function buildWhere(
     parts.push(Prisma.sql`(
       t.name         ILIKE ${pattern}
       OR t.trade     ILIKE ${pattern}
+      OR ts.trade    ILIKE ${pattern}
       OR p.name      ILIKE ${pattern}
       OR m.name      ILIKE ${pattern}
     )`);
@@ -408,7 +409,7 @@ export async function getTradieCoordinationDashboard(
           t."isFavourite"       AS isFavourite,
           t.note              AS note,
           t.abn               AS abn,
-          t.trade             AS trade_type,
+          COALESCE(NULLIF(btrim(ts.trade), ''), t.trade) AS trade_type,
           ts."projectId"      AS project_id,
           p.name              AS project_name,
           sm.name             AS site_manager_name,
@@ -452,10 +453,11 @@ export async function getTradieCoordinationDashboard(
 
       // 3. Distinct trade types for filter dropdown
       prisma.$queryRaw<TradeOptionRow[]>(Prisma.sql`
-        SELECT DISTINCT "trade" AS trade_type
-        FROM "Tradie"
-        WHERE "archivedAt" IS NULL AND "trade" IS NOT NULL
-        ORDER BY "trade" ASC
+        SELECT DISTINCT trade_type
+        FROM "Tradie",
+          unnest(array_append("trades", "trade")) AS trade_type
+        WHERE "archivedAt" IS NULL AND btrim(trade_type) <> ''
+        ORDER BY trade_type ASC
       `),
 
       // 4. Total registered tradies
@@ -670,7 +672,7 @@ export async function getTradieCoordinationDashboard(
         SELECT
           ts.id,
           t.name              AS tradie_name,
-          t.trade             AS trade_type,
+          COALESCE(NULLIF(btrim(ts.trade), ''), t.trade) AS trade_type,
           t.abn               AS abn,
           p.name              AS project_name,
           sm.name             AS site_manager_name,

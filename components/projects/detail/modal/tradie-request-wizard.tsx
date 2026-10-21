@@ -18,6 +18,7 @@ import { TRADIE_REF_PREVIEW } from "@/lib/domain/tradies/reply-reference";
 import {
   MAX_REQUEST_ACTIVITIES,
   MAX_REQUEST_TRADIES,
+  bookingTrade,
   sameTrade,
 } from "@/lib/domain/tradies/request-rules";
 import {
@@ -167,7 +168,15 @@ export default function TradieRequestWizard({
   );
 
   const tradies = useMemo(
-    () => tradiesByCategory.flatMap((category) => category.tradies),
+    // A tradie in several trades is listed under each; the picker wants them
+    // once.
+    () => [
+      ...new Map(
+        tradiesByCategory
+          .flatMap((category) => category.tradies)
+          .map((tradie) => [tradie.id, tradie]),
+      ).values(),
+    ],
     [tradiesByCategory],
   );
   // The trade it was opened on is always an option, even when only a past
@@ -229,7 +238,7 @@ export default function TradieRequestWizard({
         milestoneName: schedule.milestone?.name ?? null,
         quotedPrice: schedule.quotedPrice,
         status: schedule.status,
-        trade: schedule.tradie.trade,
+        trade: bookingTrade(schedule),
         tradieName: schedule.tradie.name,
       }));
     const live = project.tradeSelections.find(
@@ -517,6 +526,7 @@ export default function TradieRequestWizard({
           kind,
           note: note.trim() || undefined,
           projectId: project.id,
+          trade,
           subject: effectiveSubject.trim(),
           tradieIds,
         }),

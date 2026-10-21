@@ -191,6 +191,7 @@ export async function sendTradieRequestsForProject(
         note: input.note,
         projectId: input.projectId,
         subject: input.subject,
+        trade: input.trade,
         tradieIds: input.tradieIds,
       },
       prisma,
@@ -305,6 +306,7 @@ export async function recordManualTradieQuote(
         notes: input.notes,
         projectId: input.projectId,
         quotedAt: new Date(`${input.quotedAt}T00:00:00.000Z`),
+        trade: input.trade,
         tradieId: input.tradieId,
         validUntil: input.validUntil
           ? new Date(`${input.validUntil}T00:00:00.000Z`)
@@ -347,6 +349,7 @@ export type SelectedTradeQuoteResult = WithProject<{
 export async function selectTradeQuoteForProject(raw: {
   projectId: string;
   tradieId: string;
+  trade?: string;
 }): Promise<SelectedTradeQuoteResult | DomainActionFailure> {
   try {
     const { principal } = await staff();

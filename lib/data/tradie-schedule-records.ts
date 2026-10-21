@@ -57,7 +57,7 @@ export async function recordScheduleCreated(schedule: CreatedScheduleRecord) {
       ? schedule.milestone.name
       : "General Task",
     projectId: schedule.projectId,
-    tradieTrade: schedule.tradie.trade,
+    tradieTrade: schedule.trade?.trim() || schedule.tradie.trade,
     scheduleDate: dateFormat.format(schedule.scheduledDate),
   });
   const activityLogEntry = createActivityLogEntry("tradieScheduleCreated", {
@@ -65,7 +65,7 @@ export async function recordScheduleCreated(schedule: CreatedScheduleRecord) {
     scheduleId: schedule.id,
     tradieId: schedule.tradieId,
     tradieName: schedule.tradie.name,
-    trade: schedule.tradie.trade,
+    trade: schedule.trade?.trim() || schedule.tradie.trade,
     scheduleDate: dateFormat.format(schedule.scheduledDate),
     durationDays: schedule.durationDays,
     cost:
@@ -110,7 +110,7 @@ export async function recordApprovalRaised(
       projectId: schedule.projectId,
       scheduleDate: dateFormat.format(schedule.scheduledDate),
       scheduleId: schedule.id,
-      trade: schedule.tradie.trade,
+      trade: schedule.trade?.trim() || schedule.tradie.trade,
       tradieId: schedule.tradieId,
       tradieName: schedule.tradie.name,
     }),
@@ -127,7 +127,7 @@ export async function recordApprovalRaised(
       projectName: schedule.project.name,
       scheduleId: schedule.id,
       scheduledDate: dateFormat.format(schedule.scheduledDate),
-      trade: schedule.tradie.trade,
+      trade: schedule.trade?.trim() || schedule.tradie.trade,
       tradieId: schedule.tradieId,
       tradieName: schedule.tradie.name,
     }),

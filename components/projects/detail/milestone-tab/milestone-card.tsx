@@ -316,7 +316,7 @@ export function MilestoneCard({
                 {milestone.tradieSchedules
                   .map(
                     (schedule) =>
-                      `${schedule.tradie.name} — ${schedule.tradie.trade}`,
+                      `${schedule.tradie.name} — ${schedule.trade?.trim() || schedule.tradie.trade}`,
                   )
                   .join(", ")}
               </MetaItem>
@@ -352,7 +352,8 @@ export function MilestoneCard({
                   />
                   <span className="text-foreground">
                     <span className="font-medium">
-                      Booked: {schedule.tradie.name} ({schedule.tradie.trade})
+                      Booked: {schedule.tradie.name} (
+                      {schedule.trade?.trim() || schedule.tradie.trade})
                     </span>{" "}
                     <span className="text-muted-foreground">
                       ·{" "}
@@ -380,13 +381,14 @@ export function MilestoneCard({
                         ).toISOString(),
                         abn: schedule.tradie.abn,
                         status: schedule.status,
-                        tradeType: schedule.tradie.trade,
+                        tradeType:
+                          schedule.trade?.trim() || schedule.tradie.trade,
                         tradieName: schedule.tradie.name,
                         lastQuotedPriceUnit:
                           schedule.tradie.lastQuotedPriceUnit,
                         projectId: schedule.projectId,
                         projectName: project.name,
-                        taskLabel: `${milestone.name} - ${schedule.tradie.trade}`,
+                        taskLabel: `${milestone.name} - ${schedule.trade?.trim() || schedule.tradie.trade}`,
                         durationDays: schedule.durationDays,
                         updatedAt: new Date(schedule.updatedAt).toISOString(),
                         contact: {

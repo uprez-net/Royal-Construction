@@ -58,7 +58,7 @@ export const convertToTradieScheduleListItem = (
     tradieId: schedule.tradieId,
     tradieName: schedule.tradie.name,
     lastQuotedPriceUnit: schedule.tradie.lastQuotedPriceUnit,
-    tradeType: schedule.tradie.trade,
+    tradeType: schedule.trade?.trim() || schedule.tradie.trade,
     projectId: schedule.projectId,
     projectName: schedule.project.name,
     taskLabel: schedule.milestone ? schedule.milestone.name : "General Task",
@@ -192,7 +192,7 @@ export async function applyTradieScheduleUpdate(
             ),
             tradieId: schedule.tradieId,
             tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
+            trade: schedule.trade?.trim() || schedule.tradie.trade,
           },
         );
         const activityLogEntry = createActivityLogEntry(
@@ -202,7 +202,7 @@ export async function applyTradieScheduleUpdate(
             scheduleId: schedule.id,
             tradieId: schedule.tradieId,
             tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
+            trade: schedule.trade?.trim() || schedule.tradie.trade,
             scheduleDate: dateFormat.format(schedule.scheduledDate),
             durationDays: schedule.durationDays,
             cost: currency.format(
@@ -230,7 +230,7 @@ export async function applyTradieScheduleUpdate(
             scheduleId: schedule.id,
             tradieId: schedule.tradieId,
             tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
+            trade: schedule.trade?.trim() || schedule.tradie.trade,
             scheduleDate: dateFormat.format(schedule.scheduledDate),
             durationDays: schedule.durationDays,
             quote: currency.format(
@@ -255,7 +255,7 @@ export async function applyTradieScheduleUpdate(
             scheduleId: schedule.id,
             tradieId: schedule.tradieId,
             tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
+            trade: schedule.trade?.trim() || schedule.tradie.trade,
             scheduleDate: dateFormat.format(schedule.scheduledDate),
             durationDays: schedule.durationDays,
             cost: currency.format(
@@ -290,7 +290,7 @@ export async function applyTradieScheduleUpdate(
             ),
             tradieId: schedule.tradieId,
             tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
+            trade: schedule.trade?.trim() || schedule.tradie.trade,
           },
         );
         await logAction(activityLogPayload);
@@ -308,7 +308,7 @@ export async function applyTradieScheduleUpdate(
             scheduleId: schedule.id,
             tradieId: schedule.tradieId,
             tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
+            trade: schedule.trade?.trim() || schedule.tradie.trade,
             scheduleDate: dateFormat.format(schedule.scheduledDate),
             durationDays: schedule.durationDays,
             cost: currency.format(
@@ -343,7 +343,7 @@ export async function applyTradieScheduleUpdate(
             ),
             tradieId: schedule.tradieId,
             tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
+            trade: schedule.trade?.trim() || schedule.tradie.trade,
           },
         );
         await triggerNotification(
@@ -368,7 +368,7 @@ export async function applyTradieScheduleUpdate(
               ? schedule.milestone.name
               : "General Task",
             projectId: schedule.projectId,
-            tradieTrade: schedule.tradie.trade,
+            tradieTrade: schedule.trade?.trim() || schedule.tradie.trade,
             scheduleDate: dateFormat.format(schedule.scheduledDate),
             status: statusLabel,
           },
