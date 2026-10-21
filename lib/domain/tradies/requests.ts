@@ -543,6 +543,9 @@ async function claimTradeForBooking(
   };
 }
 
+const WITHDRAWN_REQUEST_EMAIL =
+  "Not sent: every booking this email asked about has since been cancelled.";
+
 /**
  * Make one attempt at one tradie's request email, and record where it stands.
  *
@@ -659,6 +662,42 @@ export async function deliverTradieRequest(
         );
       }
       break;
+    }
+  }
+
+  // Every booking this email asked about may have been cancelled since — by a
+  // direct booking or a selected quote taking the activities, a cancelled
+  // trade, a settled milestone. Checked here, the one door every send goes
+  // through, rather than at each of those: an email about work that is no
+  // longer offered must not reach the tradie, by robot or by Retry. The
+  // initial send is exempt: its bookings were written in the same request.
+  if (input.trigger !== "initial") {
+    const open = await db.tradieSchedule.count({
+      where: {
+        requestRecipientId: recipient.id,
+        status: { notIn: INACTIVE_SCHEDULE_STATUSES },
+      },
+    });
+    if (open === 0) {
+      if (input.trigger === "manual") {
+        throw new DomainTransitionError(WITHDRAWN_REQUEST_EMAIL);
+      }
+      // Terminal: FAILED with no next attempt, so the retry workflow stops.
+      // No alert follows — attention skips emails on closed bookings.
+      const withdrawn = {
+        deliveryStatus: TradieRequestDeliveryStatus.FAILED,
+        lastError: WITHDRAWN_REQUEST_EMAIL,
+        nextAttemptAt: null,
+      };
+      await db.tradieRequestRecipient.updateMany({
+        data: withdrawn,
+        where: {
+          attempts: recipient.attempts,
+          deliveryStatus: recipient.deliveryStatus,
+          id: recipient.id,
+        },
+      });
+      return describe({ ...withdrawn, attempts: recipient.attempts });
     }
   }
 

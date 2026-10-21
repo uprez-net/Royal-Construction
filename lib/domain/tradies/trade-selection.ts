@@ -332,14 +332,18 @@ export async function recordManualQuote(
       }
 
       // A booked tradie's price lands where the booking already is; it is not
-      // in a comparison, and "quote received" would undo a confirmation.
+      // in a comparison, and "quote received" would undo a confirmation. It
+      // also stays a booking that was not asked to quote, so `quoteEntryFor`
+      // still lets the office correct the price before approval.
       const written = await tx.tradieSchedule.updateMany({
         data: {
           quoteId: quote.id,
           quotedPrice: money(line.amount),
-          requiresQuote: true,
           ...(entry === "quote"
-            ? { status: TradieScheduleStatus.QUOTE_RECEIVED }
+            ? {
+                requiresQuote: true,
+                status: TradieScheduleStatus.QUOTE_RECEIVED,
+              }
             : {}),
         },
         where:

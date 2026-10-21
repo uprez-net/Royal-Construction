@@ -629,7 +629,11 @@ test("a direct booking names exactly one tradie", async () => {
 const NOW = new Date("2026-10-20T01:00:00.000Z");
 const SYSTEM = { kind: "system", reason: "test" } as const;
 
-function oneRecipient(state: Record<string, unknown>) {
+function oneRecipient(
+  state: Record<string, unknown>,
+  /** The email's bookings still open; 0 once they are all cancelled. */
+  openBookings = 1,
+) {
   return recordingDb({
     ...OUTBOX,
     "project.findUnique": PROJECT,
@@ -637,6 +641,7 @@ function oneRecipient(state: Record<string, unknown>) {
       ...recipientRow("r_t_abc"),
       ...state,
     },
+    "tradieSchedule.count": openBookings,
   });
 }
 
@@ -744,6 +749,49 @@ test("a person cannot retry a sent email, or race a retry that is still on time"
   }
 });
 
+test("an email whose bookings were all cancelled is never sent, by the robot or by Retry", async () => {
+  // Waiting on an automatic retry when a direct booking took the activities.
+  const automatic = oneRecipient(
+    {
+      attempts: 1,
+      deliveryStatus: "RETRYING",
+      nextAttemptAt: new Date(NOW.getTime() - 1000),
+    },
+    0,
+  );
+  const { ports, sent } = mail();
+  const outcome = await deliverTradieRequest(
+    SYSTEM,
+    { now: NOW, recipientId: "r_t_abc", trigger: "automatic" },
+    automatic.db,
+    ports,
+  );
+  assert.equal(outcome.status, "FAILED");
+  assert.equal(outcome.nextAttemptAt, null);
+  assert.match(outcome.reason ?? "", /has since been cancelled/);
+  // Settled without an attempt or an outbox row.
+  assert.deepEqual(
+    writesTo(automatic, "tradieRequestRecipient.updateMany")[0].where,
+    { attempts: 1, deliveryStatus: "RETRYING", id: "r_t_abc" },
+  );
+  assert.equal(writesTo(automatic, "outboxEvent.upsert").length, 0);
+
+  const manual = oneRecipient({ attempts: 2, deliveryStatus: "FAILED" }, 0);
+  await assert.rejects(
+    deliverTradieRequest(
+      adminPrincipal(),
+      { now: NOW, recipientId: "r_t_abc", trigger: "manual" },
+      manual.db,
+      ports,
+    ),
+    (error: unknown) =>
+      error instanceof DomainTransitionError
+      && /has since been cancelled/.test(error.message),
+  );
+  assert.deepEqual(manual.writes(), []);
+  assert.equal(sent.length, 0);
+});
+
 test("a retry that lost the claim to another one does not send", async () => {
   const recorder = recordingDb({
     ...OUTBOX,
@@ -754,6 +802,7 @@ test("a retry that lost the claim to another one does not send", async () => {
       deliveryStatus: "FAILED",
     },
     "tradieRequestRecipient.updateMany": { count: 0 },
+    "tradieSchedule.count": 1,
   });
   const { ports, sent } = mail();
   await assert.rejects(

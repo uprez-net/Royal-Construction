@@ -21,7 +21,14 @@ export async function requireActiveTradie(tradieId: string, db: DomainDb) {
   return tradie;
 }
 
-/** Removed bookings remain in history but cannot inflate milestone spend. */
+/**
+ * What a booking costs the milestone. Removed bookings remain in history but
+ * cannot inflate it.
+ *
+ * A recorded price wins: a quote, or the price the office entered for a tradie
+ * booked without one. Only a booking with no price at all is costed from the
+ * tradie's rate, and a booking still waiting on its quote costs nothing yet.
+ */
 export function tradieScheduleSpend(schedule: {
   status: TradieScheduleStatus;
   requiresQuote: boolean;
@@ -33,8 +40,9 @@ export function tradieScheduleSpend(schedule: {
   };
 }): number {
   if (schedule.status === TradieScheduleStatus.CANCELLED) return 0;
+  if (schedule.quotedPrice) return parseFloat(schedule.quotedPrice);
   return schedule.requiresQuote
-    ? parseFloat(schedule.quotedPrice ?? "0")
+    ? 0
     : scheduleTotalCost(
         parseFloat(schedule.tradie.lastQuotedPrice ?? "0"),
         schedule.durationDays,

@@ -151,15 +151,20 @@ async function handleTradieReply(input: {
     ? `${reference.token} (${reference.projectName})`
     : `Tradie ${tradie.id}`;
 
-  const openBookings = await prisma.tradieSchedule.count({
-    where: {
-      status: { in: [...AWAITING_TRADIE_REPLY] },
-      tradieId: tradie.id,
-    },
-  });
-  if (openBookings === 0) {
-    console.log(`  ${label}: no booking awaiting a reply. Skipping.`);
-    return;
+  // Without a reference, a tradie with nothing open is skipped before the
+  // model is asked. With one, the reply is about a job we can name, so it is
+  // read and, if its bookings are closed, put in front of the office below.
+  if (!reference) {
+    const openBookings = await prisma.tradieSchedule.count({
+      where: {
+        status: { in: [...AWAITING_TRADIE_REPLY] },
+        tradieId: tradie.id,
+      },
+    });
+    if (openBookings === 0) {
+      console.log(`  ${label}: no booking awaiting a reply. Skipping.`);
+      return;
+    }
   }
 
   const tradieInfo = await extractTradieScheduleInfoFromMessage(
@@ -181,7 +186,17 @@ async function handleTradieReply(input: {
     prisma,
   );
   if (match.kind === "none") {
-    console.log(`  ${label}: no booking awaiting a reply. Skipping.`);
+    if (reference) {
+      // A late quote or a change of mind on a closed or cancelled booking:
+      // dropping it is the silent failure nobody here would notice.
+      await notifyTradieReplyNeedsReview(
+        tradie,
+        subject,
+        `The reply to ${label} arrived, but none of the bookings it is about are waiting on an answer any more. Read it and update the booking by hand if it changes anything.`,
+      );
+    } else {
+      console.log(`  ${label}: no booking awaiting a reply. Skipping.`);
+    }
     return;
   }
 

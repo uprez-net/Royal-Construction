@@ -504,9 +504,10 @@ test("a directly booked tradie's price lands on the booking without moving it", 
   const priced = recorder
     .writes()
     .find((w) => w.operation === "tradieSchedule.updateMany");
-  // No status: "quote received" would put it back into a comparison.
+  // No status: "quote received" would put it back into a comparison. And no
+  // requiresQuote: it stays a direct booking, so its price stays editable.
   assert.deepEqual(priced?.args, {
-    data: { quoteId: "q_1", quotedPrice: "450.00", requiresQuote: true },
+    data: { quoteId: "q_1", quotedPrice: "450.00" },
     where: { id: "s_abc", quotedPrice: null, status: "PENDING_RESPONSE" },
   });
 });
@@ -519,7 +520,7 @@ test("an approved direct booking with no price yet can have it filled in, and it
     "tradie.findUnique": ABC,
     "tradieApproval.findFirst": {
       id: "ap_1",
-      updationData: { cost: "$0.00", scheduleId: "s_abc" },
+      updationData: { cost: "$0", scheduleId: "s_abc" },
     },
     "tradieQuote.create": { id: "q_1" },
     "tradieSchedule.findFirst": {
