@@ -1,5 +1,5 @@
 import type { TradieRequestKind } from "@prisma/client";
-import { Loader2, Plus, Sparkles, X } from "lucide-react";
+import { Loader2, Plus, RotateCcw, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,45 @@ function useFitZoom() {
   return { ref, zoom };
 }
 
+/** How the preview shows which text can be edited. Preview only, never sent. */
+const EDITABLE_STYLE = `[data-copy]{outline:none;border-radius:2px;cursor:text}
+[data-copy]:hover{box-shadow:0 0 0 1px rgba(201,162,39,.6)}
+[data-copy]:focus{box-shadow:0 0 0 2px #c9a227;background:rgba(201,162,39,.08)}`;
+
+/**
+ * An edited region's text, back in the form the email template writes it:
+ * plain text with `**bold**`, line breaks, and `{tradie}` / `{reference}` for
+ * what differs per recipient (`utils/generate-email.ts`).
+ *
+ * Node types, not `instanceof`: these nodes belong to the iframe's window.
+ */
+function regionText(region: Node): string {
+  const walk = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return (node.textContent ?? "").replace(/\s+/g, " ");
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return "";
+    const element = node as Element;
+    const token = element.getAttribute("data-token");
+    if (token) return `{${token}}`;
+    const tag = element.tagName.toLowerCase();
+    if (tag === "br") return "\n";
+    const inner = Array.from(element.childNodes).map(walk).join("");
+    if (tag === "strong" || tag === "b") {
+      return inner.trim() ? `**${inner}**` : inner;
+    }
+    if (tag === "div" || tag === "p") return `\n${inner}`;
+    return inner;
+  };
+  return Array.from(region.childNodes)
+    .map(walk)
+    .join("")
+    .split("\n")
+    .map((line) => line.replace(/ +/g, " ").trim())
+    .join("\n")
+    .trim();
+}
+
 export type RequestEmailActivity = {
   readonly milestoneId: string;
   readonly name: string;
@@ -65,6 +104,11 @@ export interface RequestEmailStepProps {
   previewTradieId: string;
   onPreviewTradieChange: (tradieId: string) => void;
   previewHtml: string;
+  /** How many regions of the email the office has reworded. */
+  editedCopy: number;
+  /** A region of the email reworded in the preview. */
+  onCopyEdit: (key: string, text: string) => void;
+  onCopyReset: () => void;
   subjectError?: string;
 }
 
@@ -84,6 +128,9 @@ export function RequestEmailStep({
   previewTradieId,
   onPreviewTradieChange,
   previewHtml,
+  editedCopy,
+  onCopyEdit,
+  onCopyReset,
   subjectError,
 }: RequestEmailStepProps) {
   const empty = activities
@@ -93,8 +140,76 @@ export function RequestEmailStep({
   const { ref: previewRef, zoom } = useFitZoom();
   const scaledHtml = previewHtml.replace(
     "<head>",
-    `<head><style>html{zoom:${zoom.toFixed(3)}}</style>`,
+    `<head><style>html{zoom:${zoom.toFixed(3)}}${EDITABLE_STYLE}</style>`,
   );
+
+  // The preview is edited in place, so the frame is not re-rendered for a
+  // change that came from typing in it: that would throw away the caret.
+  // Every other change (the note, a work line in the list, the recipient)
+  // renders the email again, with the edits already in it.
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const editedInFrame = useRef(false);
+  useEffect(() => {
+    if (editedInFrame.current) return;
+    if (frameRef.current) frameRef.current.srcdoc = scaledHtml;
+  }, [scaledHtml]);
+  useEffect(() => {
+    editedInFrame.current = false;
+  });
+
+  const edit = useRef({ onCopyEdit, onWorkLinesChange, workLines });
+  useEffect(() => {
+    edit.current = { onCopyEdit, onWorkLinesChange, workLines };
+  });
+
+  const attachEditor = () => {
+    const doc = frameRef.current?.contentDocument;
+    if (!doc) return;
+    const regionOf = (target: EventTarget | null) =>
+      (target as Element | null)?.closest?.("[data-copy]") ?? null;
+
+    doc.addEventListener("input", (event) => {
+      const region = regionOf(event.target);
+      const key = region?.getAttribute("data-copy");
+      if (!region || !key) return;
+      editedInFrame.current = true;
+      const { onCopyEdit, onWorkLinesChange, workLines } = edit.current;
+      // A work line is the same line as in the list on the left.
+      const work = /^work:(.+):(\d+)$/.exec(key);
+      if (work) {
+        const [, milestoneId, index] = work;
+        const text = regionText(region).replace(/\n/g, " ").slice(0, 300);
+        onWorkLinesChange(
+          milestoneId,
+          (workLines[milestoneId] ?? []).map((line, i) =>
+            i === Number(index) ? text : line,
+          ),
+        );
+        return;
+      }
+      onCopyEdit(key, regionText(region));
+    });
+    // A line break, not the paragraph the browser would invent; none in a
+    // work line, which is one line of the list.
+    doc.addEventListener("keydown", (event) => {
+      const region = regionOf(event.target);
+      if (!region || event.key !== "Enter") return;
+      event.preventDefault();
+      if (!region.getAttribute("data-copy")?.startsWith("work:")) {
+        doc.execCommand("insertLineBreak");
+      }
+    });
+    // Pasted text arrives as text, not as another page's markup.
+    doc.addEventListener("paste", (event) => {
+      if (!regionOf(event.target)) return;
+      event.preventDefault();
+      doc.execCommand(
+        "insertText",
+        false,
+        event.clipboardData?.getData("text/plain") ?? "",
+      );
+    });
+  };
 
   return (
     <div className="grid min-h-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -325,13 +440,33 @@ export function RequestEmailStep({
             between them.
           </p>
         ) : null}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            Click any text in the email to change it. The note is edited in the
+            Note field.
+          </p>
+          {editedCopy > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={onCopyReset}
+            >
+              <RotateCcw className="mr-1 size-3" aria-hidden="true" />
+              Undo {editedCopy} {editedCopy === 1 ? "edit" : "edits"}
+            </Button>
+          ) : null}
+        </div>
         {/* The email is a whole HTML document with its own styles; an iframe
-            keeps them out of the app and the app's out of it. No scripts. */}
+            keeps them out of the app and the app's out of it. No scripts run
+            in it: same-origin only so the app can listen to its edits. */}
         <div ref={previewRef} className="flex min-h-0 flex-1">
           <iframe
+            ref={frameRef}
             title="Request email preview"
-            sandbox=""
-            srcDoc={scaledHtml}
+            sandbox="allow-same-origin"
+            onLoad={attachEditor}
             className="h-[28rem] w-full flex-1 rounded-lg border border-border/70 bg-white lg:h-auto lg:min-h-[32rem]"
           />
         </div>

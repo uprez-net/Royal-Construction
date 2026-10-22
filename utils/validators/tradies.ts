@@ -116,6 +116,14 @@ export const sendTradieRequestsSchema = z.object({
     .min(1, "Choose an activity"),
   subject: z.string().trim().min(1, "Email subject is required").max(200),
   note: z.string().trim().max(2000).optional(),
+  /**
+   * The office's rewording of the email, by region, from the wizard's
+   * preview. Not trimmed: a region's line breaks are part of it.
+   */
+  copy: z
+    .record(z.string().min(1).max(120), z.string().max(4000))
+    .refine((copy) => Object.keys(copy).length <= 400, "Too many edits.")
+    .optional(),
 });
 
 export type SendTradieRequestsFormInput = z.input<

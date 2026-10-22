@@ -80,6 +80,28 @@ interface TradieRequestWizardProps {
   initialKind?: TradieRequestKind;
 }
 
+/**
+ * An edit the office made in the email preview, with the text it replaced.
+ * It holds only while the template still writes that text: change an
+ * activity's date after rewording its line and the new date comes back,
+ * rather than the old one going out.
+ */
+type CopyEdit = { from: string; to: string };
+
+/** The edits that still apply to the email the template now writes. */
+function liveCopy(
+  edits: Readonly<Record<string, CopyEdit>>,
+  defaults: Readonly<Record<string, string>>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(edits)
+      .filter(
+        ([key, edit]) => defaults[key] === edit.from && edit.to !== edit.from,
+      )
+      .map(([key, edit]) => [key, edit.to]),
+  );
+}
+
 /** "Tue 20 Oct 2026 · 3 days" for a `YYYY-MM-DD` day. */
 function activityDateLabel(draft: RequestActivityDraft): string {
   if (!draft.scheduledDate) return "No date yet";
@@ -129,6 +151,7 @@ export default function TradieRequestWizard({
   const [subject, setSubject] = useState("");
   const [subjectEdited, setSubjectEdited] = useState(false);
   const [note, setNote] = useState("");
+  const [copyEdits, setCopyEdits] = useState<Record<string, CopyEdit>>({});
   const [workLines, setWorkLines] = useState<Record<string, string[]>>({});
   const [drafting, setDrafting] = useState<ReadonlySet<string>>(new Set());
   const [draftError, setDraftError] = useState<string | null>(null);
@@ -468,29 +491,41 @@ export default function TradieRequestWizard({
     [activities, selected],
   );
 
-  const previewHtml = useMemo(() => {
-    if (step !== "email" || !trade) return "";
+  const preview = useMemo(() => {
+    if (step !== "email" || !trade) return null;
     const recipient =
       recipients.find((item) => item.id === previewTradieId) ?? recipients[0];
-    return (booking ? generateTradieBookingEmail : generateTradieRequestEmail)({
-      activities: emailActivities.map((activity) => ({
-        ...activity,
-        workLines: workLines[activity.milestoneId] ?? [],
-      })),
-      note,
-      projectName: project.name,
-      reference: TRADIE_REF_PREVIEW,
-      siteManager: {
-        email: project.siteManager?.email ?? "",
-        name: project.siteManager?.name ?? "",
-        phone: project.siteManager?.phone ?? "",
-      },
-      subject: effectiveSubject,
-      trade,
-      tradieName: recipient?.name ?? "Tradie",
-    }).html;
+    const render = (copy?: Record<string, string>) =>
+      (booking ? generateTradieBookingEmail : generateTradieRequestEmail)({
+        activities: emailActivities.map((activity) => ({
+          ...activity,
+          workLines: workLines[activity.milestoneId] ?? [],
+        })),
+        copy,
+        editable: true,
+        note,
+        projectName: project.name,
+        reference: TRADIE_REF_PREVIEW,
+        siteManager: {
+          email: project.siteManager?.email ?? "",
+          name: project.siteManager?.name ?? "",
+          phone: project.siteManager?.phone ?? "",
+        },
+        subject: effectiveSubject,
+        trade,
+        tradieName: recipient?.name ?? "Tradie",
+      });
+    // The template's own text first, to tell which edits still apply.
+    const template = render();
+    const copy = liveCopy(copyEdits, template.copy);
+    return {
+      copy,
+      defaults: template.copy,
+      html: Object.keys(copy).length > 0 ? render(copy).html : template.html,
+    };
   }, [
     booking,
+    copyEdits,
     effectiveSubject,
     emailActivities,
     note,
@@ -523,6 +558,7 @@ export default function TradieRequestWizard({
               .map((line) => line.trim())
               .filter(Boolean),
           })),
+          copy: preview?.copy,
           kind,
           note: note.trim() || undefined,
           projectId: project.id,
@@ -582,6 +618,7 @@ export default function TradieRequestWizard({
     setSubject("");
     setSubjectEdited(false);
     setNote("");
+    setCopyEdits({});
     setWorkLines({});
     setDraftError(null);
     setResult(null);
@@ -707,7 +744,17 @@ export default function TradieRequestWizard({
               recipients={recipients}
               previewTradieId={previewTradieId || recipients[0]?.id || ""}
               onPreviewTradieChange={setPreviewTradieId}
-              previewHtml={previewHtml}
+              previewHtml={preview?.html ?? ""}
+              editedCopy={Object.keys(preview?.copy ?? {}).length}
+              onCopyEdit={(key, text) => {
+                const from = preview?.defaults[key];
+                if (from === undefined) return;
+                setCopyEdits((previous) => ({
+                  ...previous,
+                  [key]: { from, to: text },
+                }));
+              }}
+              onCopyReset={() => setCopyEdits({})}
               subjectError={stepErrors.subject}
             />
           ) : result ? (
