@@ -5,7 +5,7 @@
     "node": ">=24"
   },
   "private": true,
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@9.15.9",
   "scripts": {
     "dev": "next dev",
     "dev:webpack": "next dev --webpack",
@@ -138,7 +138,8 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.22.0",
     "typescript": "^5",
-    "vitest": "^5.0.1"
+    "vite": "^8.3.3",
+    "vitest": "^5.0.5"
   },
   "pnpm": {
     "overrides": {
@@ -175,7 +176,10 @@
       "http-cache-semantics@^4": "^4.3.0",
       "seroval": "^1.6.8",
       "seroval-plugins": "^1.6.8",
-      "katex@^0.16": "^0.18.2"
+      "katex@^0.16": "^0.18.2",
+      "sharp@^0.35": "^0.35.5",
+      "@modelcontextprotocol/sdk@^1": "^1.32.1",
+      "follow-redirects@^1": "^1.16.1"
     },
     "auditConfig": {
       "ignoreCves": [
