@@ -40,6 +40,64 @@ function durationLabel(days: number): string {
   return `${days} day${days > 1 ? "s" : ""}`;
 }
 
+/** Template text written across several source lines, as one line. */
+const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
+
+/**
+ * The text of one region of an email: plain text with `**bold**`, line
+ * breaks, and `{tradie}` / `{reference}` for what differs per recipient. It is
+ * the form the request wizard's preview edits a region in, so an edit made for
+ * one tradie reads right for every tradie it goes to.
+ */
+type CopyTokens = { readonly tradie?: string; readonly reference?: string };
+
+function copyHtml(text: string, tokens: CopyTokens, editable: boolean): string {
+  const token = (name: keyof CopyTokens, html: string) =>
+    editable
+      ? `<span data-token="${name}" contenteditable="false">${html}</span>`
+      : html;
+  return escapeHtml(text)
+    .replace(/\*\*([\s\S]+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\{(tradie|reference)\}/g, (match, name: keyof CopyTokens) => {
+      const value = tokens[name];
+      if (value === undefined) return match;
+      return token(
+        name,
+        name === "reference"
+          ? `<strong style="font-family:Consolas,Menlo,monospace;letter-spacing:0.5px;">${escapeHtml(value)}</strong>`
+          : escapeHtml(value),
+      );
+    })
+    .replace(/\r?\n/g, "<br>");
+}
+
+/**
+ * Writes an email's text regions, with the office's edits in place of the
+ * template's words. `defaults` collects what the template wrote for each
+ * region, so the preview can tell an edit from the text it replaced.
+ */
+function copyWriter(options: {
+  readonly tokens: CopyTokens;
+  readonly copy?: Readonly<Record<string, string>>;
+  readonly editable?: boolean;
+}) {
+  const defaults: Record<string, string> = {};
+  const write = (key: string, text: string): string => {
+    defaults[key] = text;
+    const html = copyHtml(
+      options.copy?.[key] ?? text,
+      options.tokens,
+      Boolean(options.editable),
+    );
+    return options.editable
+      ? `<span data-copy="${escapeHtml(key)}" contenteditable="true">${html}</span>`
+      : html;
+  };
+  return { defaults, write };
+}
+
+type CopyWrite = ReturnType<typeof copyWriter>["write"];
+
 const paragraph = (html: string, last = false) =>
   `<p style="margin:${last ? "0" : "0 0 16px"};color:${RC_COLORS.text};font-size:16px;line-height:26px;">${html}</p>`;
 
@@ -56,7 +114,7 @@ type SiteManager = TradieScheduleListItem["siteManager"];
  * subject without them noticing it. The note is for the ones who start a fresh
  * email, or forward the job to their office.
  */
-function referenceNote(reference: string): string {
+function referenceNote(copy: CopyWrite): string {
   return `
             <div
             style="
@@ -67,13 +125,16 @@ function referenceNote(reference: string): string {
             border-radius:8px;">
 
             <p style="margin:0 0 6px;color:${RC_COLORS.text};font-size:15px;line-height:24px;">
-            Our reference: <strong style="font-family:Consolas,Menlo,monospace;letter-spacing:0.5px;">${escapeHtml(reference)}</strong>
+            ${copy("reference", "Our reference: {reference}")}
             </p>
 
             <p style="margin:0;color:${RC_COLORS.muted};font-size:14px;line-height:22px;">
-            Please reply directly to this email and keep this reference in the
+            ${copy(
+              "reference:note",
+              oneLine(`Please reply directly to this email and keep this reference in the
             subject line, so your response is matched to this job straight away.
-            If you write to us separately, include the reference in your message.
+            If you write to us separately, include the reference in your message.`),
+            )}
             </p>
 
             </div>`;
@@ -107,7 +168,13 @@ function renderTradieEmail(input: {
   readonly sections?: string;
   /** What the tradie's reply is matched on; shown under the action. */
   readonly reference?: string | null;
+  /** Writes the frame's own words; the template's, unless given. */
+  readonly copy?: CopyWrite;
 }): string {
+  const copy =
+    input.copy
+    ?? copyWriter({ tokens: { reference: input.reference ?? undefined } })
+      .write;
   const rows = input.rows
     .map(
       (row, index) => `
@@ -132,13 +199,14 @@ function renderTradieEmail(input: {
             border-left:4px solid ${RC_COLORS.gold};">
 
             <p style="margin:0 0 12px;color:${RC_COLORS.text};font-weight:bold;">
-            Site Manager
+            ${copy("siteManager:heading", "Site Manager")}
             </p>
 
             <p style="margin:0;color:${RC_COLORS.text};line-height:26px;">
-            <strong>${escapeHtml(input.siteManager.name)}</strong><br>
-            ${escapeHtml(input.siteManager.email)}<br>
-            ${escapeHtml(input.siteManager.phone)}
+            ${copy(
+              "siteManager",
+              `**${input.siteManager.name}**\n${input.siteManager.email}\n${input.siteManager.phone}`,
+            )}
             </p>
 
             </div>`
@@ -204,7 +272,7 @@ function renderTradieEmail(input: {
             color:${RC_COLORS.dark};
             font-weight:bold;
             font-size:18px;">
-            Project Details
+            ${copy("details:heading", "Project Details")}
             </td>
             </tr>
 ${rows}
@@ -214,7 +282,7 @@ ${input.sections ?? ""}
             <p style="margin:0 0 24px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
             ${input.action}
             </p>
-${input.reference ? referenceNote(input.reference) : ""}
+${input.reference ? referenceNote(copy) : ""}
 ${siteManager}
 
             <p style="
@@ -240,13 +308,10 @@ ${siteManager}
             line-height:24px;
             color:${RC_COLORS.muted};">
 
-            <strong style="color:${RC_COLORS.text};">Royal Constructions</strong><br><br>
-
-            Phone: ${RC_URLS.phoneDisplay}<br>
-
-            Email: ${RC_URLS.email}<br><br>
-
-            © ${new Date().getFullYear()} Royal Constructions. All rights reserved.
+            ${copy(
+              "footer",
+              `**Royal Constructions**\n\nPhone: ${RC_URLS.phoneDisplay}\nEmail: ${RC_URLS.email}\n\n© ${new Date().getFullYear()} Royal Constructions. All rights reserved.`,
+            )}
 
             </td>
             </tr>
@@ -568,6 +633,8 @@ export function generateTradieFinalConfirmationEmail(
 
 /** One activity in a tradie request, as the email lists it. */
 export type TradieRequestEmailActivity = {
+  /** Keys the activity's edited text, so an edit follows its activity. */
+  readonly milestoneId?: string;
   readonly name: string;
   /** Display label, e.g. "Lock Up". */
   readonly stage: string;
@@ -592,6 +659,22 @@ export type TradieRequestEmailInput = {
    * the wizard's preview passes `TRADIE_REF_PREVIEW`.
    */
   readonly reference?: string | null;
+  /**
+   * The office's rewording of the email, by region, as edited in the wizard's
+   * preview. Every region but the note may be reworded; the note is the
+   * office's own text already.
+   */
+  readonly copy?: Readonly<Record<string, string>>;
+  /** Marks every editable region, for the wizard's preview. Never sent. */
+  readonly editable?: boolean;
+};
+
+/** What a request email renders to, and the template's text for each region. */
+export type TradieRequestEmail = {
+  subject: string;
+  html: string;
+  /** What the template wrote for each region, before the office's edits. */
+  copy: Readonly<Record<string, string>>;
 };
 
 /** "Tue 20 Oct 2026". Request dates are calendar days, stored at UTC midnight. */
@@ -632,9 +715,14 @@ export function tradieBookingSubject(input: {
  * The activity table and office note a request and a booking share. A booking
  * names its dates as planned rather than approximate: the office has chosen
  * them, and the tradie is being asked to hold them.
+ *
+ * A work line is edited in place in the preview as well as in the wizard's
+ * list, so it is marked with its index in that list rather than written as
+ * copy: both edit the same line.
  */
 function requestedWorksSections(
-  input: Pick<TradieRequestEmailInput, "activities" | "note">,
+  input: Pick<TradieRequestEmailInput, "activities" | "note" | "editable">,
+  copy: CopyWrite,
   wording: {
     readonly heading: string;
     readonly startLabel: string;
@@ -643,13 +731,20 @@ function requestedWorksSections(
 ): string {
   const activityRows = input.activities
     .map((activity, index) => {
+      const key = `activity:${activity.milestoneId ?? index}`;
       const lines = activity.workLines
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
+        .map((line, lineIndex) => ({ line: line.trim(), lineIndex }))
+        .filter(({ line }) => line.length > 0);
       const work =
         lines.length > 0
           ? `<ul style="margin:10px 0 0;padding:0 0 0 20px;color:${RC_COLORS.text};font-size:15px;line-height:24px;">
-              ${lines.map((line) => `<li style="margin:0 0 4px;">${escapeHtml(line)}</li>`).join("\n")}
+              ${lines
+                .map(({ line, lineIndex }) =>
+                  input.editable && activity.milestoneId
+                    ? `<li style="margin:0 0 4px;"><span data-copy="work:${escapeHtml(activity.milestoneId)}:${lineIndex}" contenteditable="true">${escapeHtml(line)}</span></li>`
+                    : `<li style="margin:0 0 4px;">${escapeHtml(line)}</li>`,
+                )
+                .join("\n")}
               </ul>`
           : "";
       return `
@@ -658,9 +753,9 @@ function requestedWorksSections(
             ${index + 1}
             </td>
             <td style="padding:16px 20px 16px 0;border-top:1px solid ${RC_COLORS.border};vertical-align:top;">
-            <strong style="color:${RC_COLORS.text};font-size:16px;">${escapeHtml(activity.name)}</strong>
+            <strong style="color:${RC_COLORS.text};font-size:16px;">${copy(`${key}:name`, activity.name)}</strong>
             <div style="margin-top:4px;color:${RC_COLORS.muted};font-size:14px;line-height:22px;">
-            ${escapeHtml(activity.stage)} stage · ${wording.startLabel} ${shortRequestDate(activity.scheduledDate)} · ${durationLabel(activity.durationDays)}
+            ${copy(`${key}:dates`, `${activity.stage} stage · ${wording.startLabel} ${shortRequestDate(activity.scheduledDate)} · ${durationLabel(activity.durationDays)}`)}
             </div>
             ${work}
             </td>
@@ -668,6 +763,7 @@ function requestedWorksSections(
     })
     .join("\n");
 
+  // The note stays the office's own words, edited in the wizard's Note field.
   const note = input.note?.trim()
     ? `
             <div style="margin:0 0 32px;padding:20px;background:${RC_COLORS.card};border:1px solid ${RC_COLORS.border};border-radius:8px;">
@@ -693,7 +789,7 @@ function requestedWorksSections(
             color:${RC_COLORS.dark};
             font-weight:bold;
             font-size:18px;">
-            ${wording.heading}
+            ${copy("works:heading", wording.heading)}
             </td>
             </tr>
 ${activityRows}
@@ -701,9 +797,72 @@ ${activityRows}
             </table>
 
             <p style="margin:0 0 32px;color:${RC_COLORS.muted};font-size:14px;line-height:22px;">
-            ${wording.datesNote}
+            ${copy("works:dates", wording.datesNote)}
             </p>
 ${note}`;
+}
+
+/**
+ * The words that differ between a request and a booking. Everything else in
+ * the two emails is the same.
+ */
+type RequestEmailWording = {
+  readonly heading: string;
+  readonly intro: string;
+  readonly action: string;
+  readonly works: {
+    readonly heading: string;
+    readonly startLabel: string;
+    readonly datesNote: string;
+  };
+};
+
+function renderTradieRequest(
+  input: TradieRequestEmailInput,
+  wording: (facts: { count: string }) => RequestEmailWording,
+): TradieRequestEmail {
+  const count = activityCountLabel(input.activities.length);
+  const subject = subjectWithTradieRef(input.subject, input.reference);
+  const words = wording({ count });
+  const writer = copyWriter({
+    copy: input.copy,
+    editable: input.editable,
+    tokens: {
+      reference: input.reference ?? undefined,
+      tradie: input.tradieName,
+    },
+  });
+  const copy = writer.write;
+
+  const html = renderTradieEmail({
+    action: copy("action", words.action),
+    closing: copy("closing", oneLine(QUESTIONS_CLOSING)),
+    copy,
+    heading: copy("heading", words.heading),
+    intro: [
+      paragraph(copy("greeting", "Dear {tradie},")),
+      paragraph(copy("intro", words.intro), true),
+    ].join("\n"),
+    reference: input.reference,
+    rows: [
+      {
+        label: copy("row:project:label", "Project"),
+        value: copy("row:project", input.projectName),
+      },
+      {
+        label: copy("row:trade:label", "Trade"),
+        value: copy("row:trade", input.trade),
+      },
+      {
+        label: copy("row:activities:label", "Activities"),
+        value: copy("row:activities", count),
+      },
+    ],
+    sections: requestedWorksSections(input, copy, words.works),
+    siteManager: input.siteManager,
+    subject,
+  });
+  return { copy: writer.defaults, html, subject };
 }
 
 /**
@@ -716,51 +875,27 @@ ${note}`;
  * The preview in the request wizard renders this same function, so what the
  * office reviews is what the tradie reads.
  */
-export function generateTradieRequestEmail(input: TradieRequestEmailInput): {
-  subject: string;
-  html: string;
-} {
-  const tradieName = escapeHtml(input.tradieName);
-  const project = escapeHtml(input.projectName);
-  const trade = escapeHtml(input.trade);
-  const count = activityCountLabel(input.activities.length);
-  const subject = subjectWithTradieRef(input.subject, input.reference);
-  const sections = requestedWorksSections(input, {
-    datesNote: `Dates are approximate and may move with the build programme. We will
-            confirm exact dates with you before work starts.`,
-    heading: "Requested Works",
-    startLabel: "Approx. start",
-  });
-
-  return {
-    subject,
-    html: renderTradieEmail({
-      action: `Please reply with <strong>one quotation covering all ${count}</strong>,
+export function generateTradieRequestEmail(
+  input: TradieRequestEmailInput,
+): TradieRequestEmail {
+  return renderTradieRequest(input, ({ count }) => ({
+    action: oneLine(`Please reply with **one quotation covering all ${count}**,
         itemised per activity, including labour, materials (where applicable),
         exclusions and any assumptions behind your pricing. Please also let us know
-        whether the approximate dates suit you.`,
-      closing: QUESTIONS_CLOSING,
-      heading: "Request for Quotation",
-      intro: [
-        paragraph(`Dear ${tradieName},`),
-        paragraph(
-          `Royal Constructions is inviting you to quote for ${trade} works on
-        ${project}. This request covers ${count}, listed below with the work
-        involved in each and when we expect it to start.`,
-          true,
-        ),
-      ].join("\n"),
-      rows: [
-        { label: "Project", value: project },
-        { label: "Trade", value: trade },
-        { label: "Activities", value: count },
-      ],
-      reference: input.reference,
-      sections,
-      siteManager: input.siteManager,
-      subject,
-    }),
-  };
+        whether the approximate dates suit you.`),
+    heading: "Request for Quotation",
+    intro:
+      oneLine(`Royal Constructions is inviting you to quote for ${input.trade} works on
+        ${input.projectName}. This request covers ${count}, listed below with the work
+        involved in each and when we expect it to start.`),
+    works: {
+      datesNote:
+        oneLine(`Dates are approximate and may move with the build programme. We will
+            confirm exact dates with you before work starts.`),
+      heading: "Requested Works",
+      startLabel: "Approx. start",
+    },
+  }));
 }
 
 /**
@@ -773,47 +908,24 @@ export function generateTradieRequestEmail(input: TradieRequestEmailInput): {
  *
  * Previewed in the request wizard from this same function.
  */
-export function generateTradieBookingEmail(input: TradieRequestEmailInput): {
-  subject: string;
-  html: string;
-} {
-  const tradieName = escapeHtml(input.tradieName);
-  const project = escapeHtml(input.projectName);
-  const trade = escapeHtml(input.trade);
-  const count = activityCountLabel(input.activities.length);
-  const subject = subjectWithTradieRef(input.subject, input.reference);
-
-  return {
-    subject,
-    html: renderTradieEmail({
-      action: `Please reply to this email to <strong>confirm you are available</strong>
+export function generateTradieBookingEmail(
+  input: TradieRequestEmailInput,
+): TradieRequestEmail {
+  return renderTradieRequest(input, ({ count }) => ({
+    action: oneLine(`Please reply to this email to **confirm you are available**
         for all ${count} on the dates above. If any date does not suit, tell us which
-        one and when you could start instead, so we can adjust the programme.`,
-      closing: QUESTIONS_CLOSING,
-      heading: "Booking – Please Confirm Availability",
-      intro: [
-        paragraph(`Dear ${tradieName},`),
-        paragraph(
-          `Royal Constructions would like to book you for ${trade} works on
-        ${project}. This booking covers ${count}, listed below with the work
-        involved in each and the date we have planned for it to start.`,
-          true,
-        ),
-      ].join("\n"),
-      reference: input.reference,
-      rows: [
-        { label: "Project", value: project },
-        { label: "Trade", value: trade },
-        { label: "Activities", value: count },
-      ],
-      sections: requestedWorksSections(input, {
-        datesNote: `These are the dates we have planned. If the build programme moves,
-            we will contact you before work starts.`,
-        heading: "Booked Works",
-        startLabel: "Planned start",
-      }),
-      siteManager: input.siteManager,
-      subject,
-    }),
-  };
+        one and when you could start instead, so we can adjust the programme.`),
+    heading: "Booking – Please Confirm Availability",
+    intro:
+      oneLine(`Royal Constructions would like to book you for ${input.trade} works on
+        ${input.projectName}. This booking covers ${count}, listed below with the work
+        involved in each and the date we have planned for it to start.`),
+    works: {
+      datesNote:
+        oneLine(`These are the dates we have planned. If the build programme moves,
+            we will contact you before work starts.`),
+      heading: "Booked Works",
+      startLabel: "Planned start",
+    },
+  }));
 }

@@ -270,3 +270,70 @@ test("a quote request carries the tradie's reference when it has one", () => {
   assert.match(withRef.html, /keep this reference in the\s+subject line/);
   assert.equal(generateTradieRequestEmail(EMAIL).subject, EMAIL.subject);
 });
+
+// The wizard's preview is edited in place, and what the office rewords there
+// is what each tradie receives.
+
+test("the office's rewording replaces the template's, and each tradie keeps their own name and reference", () => {
+  const copy = {
+    greeting: "G'day {tradie},",
+    heading: "Quote wanted",
+    intro: "Line one with **bold** <b>\nLine two",
+    "reference:note": "Quote {reference} when you reply.",
+  };
+  const forAbc = generateTradieRequestEmail({
+    ...EMAIL,
+    copy,
+    reference: "RCTRQ-AAAAAAAAAAAA",
+  });
+  const forXyz = generateTradieRequestEmail({
+    ...EMAIL,
+    copy,
+    reference: "RCTRQ-BBBBBBBBBBBB",
+    tradieName: "XYZ Pty Ltd",
+  });
+
+  assert.match(forAbc.html, /G&#39;day ABC &amp; Sons,/);
+  assert.match(forXyz.html, /G&#39;day XYZ Pty Ltd,/);
+  assert.match(forAbc.html, /Quote wanted/);
+  assert.doesNotMatch(forAbc.html, /Request for Quotation\s*<\/h1>/);
+  // Plain text with **bold** and line breaks; anything else is escaped.
+  assert.match(
+    forAbc.html,
+    /Line one with <strong>bold<\/strong> &lt;b&gt;<br>Line two/,
+  );
+  assert.match(forXyz.html, /Quote <strong[^>]*>RCTRQ-BBBBBBBBBBBB<\/strong>/);
+  // The template's own words, for the preview to tell an edit from them.
+  assert.equal(forAbc.copy.greeting, "Dear {tradie},");
+  assert.equal(forAbc.copy.heading, "Request for Quotation");
+});
+
+test("only the preview marks the email editable, and never the note", () => {
+  const sent = generateTradieRequestEmail(EMAIL).html;
+  assert.doesNotMatch(sent, /contenteditable|data-copy|data-token/);
+
+  const preview = generateTradieRequestEmail({
+    ...EMAIL,
+    activities: EMAIL.activities.map((activity, index) => ({
+      ...activity,
+      milestoneId: `m${index}`,
+    })),
+    editable: true,
+  }).html;
+  assert.match(preview, /data-copy="heading" contenteditable="true"/);
+  assert.match(preview, /data-copy="activity:m0:dates"/);
+  // A work line keeps its index in the office's list, blanks included.
+  assert.match(
+    preview,
+    /data-copy="work:m0:0" contenteditable="true">Supply and install/,
+  );
+  assert.match(
+    preview,
+    /data-token="tradie" contenteditable="false">ABC &amp; Sons/,
+  );
+  const note = preview.slice(preview.indexOf("Notes from Royal Constructions"));
+  assert.doesNotMatch(
+    note.slice(0, note.indexOf("</div>")),
+    /contenteditable="true"/,
+  );
+});

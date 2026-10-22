@@ -156,7 +156,7 @@ export type SentTradieRequestsResult = WithProject<{
  *
  * The email is rendered from the copy the office reviewed, with the same
  * `generateTradieRequestEmail` / `generateTradieBookingEmail` the wizard
- * previews, stored, and sent before this returns, so the answer says who
+ * previews and with the wording the office edited there, stored, and sent before this returns, so the answer says who
  * received it. A send that clearly did not go out is retried by the workflow;
  * anything else waits for a person.
  */
@@ -211,11 +211,13 @@ export async function sendTradieRequestsForProject(
             : generateTradieRequestEmail)({
             activities: activities.map((activity) => ({
               durationDays: activity.durationDays,
+              milestoneId: activity.milestoneId,
               name: activity.name,
               scheduledDate: activity.scheduledDate.toISOString(),
               stage: PROJECT_STAGE_LABELS[activity.projectStage],
               workLines: workLines.get(activity.milestoneId) ?? [],
             })),
+            copy: input.copy,
             note: input.note,
             projectName: project.name,
             reference,
