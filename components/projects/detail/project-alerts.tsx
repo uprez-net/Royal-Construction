@@ -23,6 +23,7 @@ import {
 import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { COMPLIANCE_ALERT_PARTY } from "@/lib/domain/compliance/alert-parties";
 import { missingMilestoneTrades } from "@/lib/domain/projects/tradie-dependencies";
+import { bookingTrade } from "@/lib/domain/tradies/request-rules";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import {
@@ -277,7 +278,7 @@ function TradieAlertRow({
       <div className="min-w-0 flex-1 break-words">
         <p className="text-sm font-medium text-foreground">{title}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          {schedule.tradie.trade} ·{" "}
+          {bookingTrade(schedule)} ·{" "}
           {schedule.milestone?.name ?? "General works"} · {detail}
         </p>
       </div>

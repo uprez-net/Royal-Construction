@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { INACTIVE_SCHEDULE_STATUSES } from "@/lib/domain/tradies/lifecycle";
 import {
   activityAcceptsTrade,
+  bookingTrade,
   isRequestableMilestone,
   sameTrade,
 } from "@/lib/domain/tradies/request-rules";
@@ -206,7 +207,7 @@ export function projectTrades(
 ): string[] {
   return requestTradeOptions(
     project.milestones,
-    project.tradieSchedules.map((schedule) => schedule.tradie.trade),
+    project.tradieSchedules.map(bookingTrade),
   );
 }
 
@@ -216,7 +217,7 @@ export function schedulesForTrade(
   trade: string | null,
 ): Schedule[] {
   return trade
-    ? schedules.filter((schedule) => sameTrade(schedule.tradie.trade, trade))
+    ? schedules.filter((schedule) => sameTrade(bookingTrade(schedule), trade))
     : [...schedules];
 }
 
@@ -228,7 +229,7 @@ function asSelectionBooking(schedule: Schedule): SelectionBooking & {
     milestoneName: schedule.milestone?.name ?? null,
     quotedPrice: schedule.quotedPrice,
     status: schedule.status,
-    trade: schedule.tradie.trade,
+    trade: bookingTrade(schedule),
     tradieId: schedule.tradieId,
     tradieName: schedule.tradie.name,
   };

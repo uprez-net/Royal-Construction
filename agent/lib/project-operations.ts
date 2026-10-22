@@ -312,7 +312,7 @@ export async function getAuthorizedProject(
         status: schedule.status,
         tradie: {
           name: schedule.tradie.name,
-          trade: schedule.tradie.trade,
+          trade: schedule.trade?.trim() || schedule.tradie.trade,
           email: schedule.tradie.email,
         },
       })),

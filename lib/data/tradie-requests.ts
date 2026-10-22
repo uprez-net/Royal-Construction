@@ -1,6 +1,6 @@
 "use server";
 
-import type { User } from "@prisma/client";
+import { TradieRequestKind, type User } from "@prisma/client";
 import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 import { start } from "workflow/api";
@@ -34,7 +34,10 @@ import { retryTradieRequestEmail } from "@/lib/workflow/tradie-request-retry";
 import { CACHE_PROFILES } from "@/types/cache";
 import { createNotification } from "@/types/notification";
 import { PROJECT_STAGE_LABELS, type ProjectDetail } from "@/types/project";
-import { generateTradieRequestEmail } from "@/utils/generate-email";
+import {
+  generateTradieBookingEmail,
+  generateTradieRequestEmail,
+} from "@/utils/generate-email";
 import {
   manualTradieQuoteSchema,
   retryTradieRequestEmailSchema,
@@ -139,18 +142,23 @@ function failure(error: unknown, what: string): DomainActionFailure {
 // ---------------------------------------------------------------------------
 
 export type SentTradieRequestsResult = WithProject<{
+  kind: TradieRequestKind;
   trade: string;
   deliveries: TradieRequestDelivery[];
+  /** A direct booking: how many other tradies' open bookings it cancelled. */
+  cancelled: number;
 }>;
 
 /**
  * Sends a tradie request: one trade, several activities, one or more
- * companies, each of which receives one email covering every activity.
+ * companies, each of which receives one email covering every activity. A
+ * direct booking is the same with one company and the booking email.
  *
  * The email is rendered from the copy the office reviewed, with the same
- * `generateTradieRequestEmail` the wizard previews, stored, and sent before
- * this returns, so the answer says who received it. A send that clearly did
- * not go out is retried by the workflow; anything else waits for a person.
+ * `generateTradieRequestEmail` / `generateTradieBookingEmail` the wizard
+ * previews, stored, and sent before this returns, so the answer says who
+ * received it. A send that clearly did not go out is retried by the workflow;
+ * anything else waits for a person.
  */
 export async function sendTradieRequestsForProject(
   raw: SendTradieRequestsFormInput,
@@ -179,16 +187,28 @@ export async function sendTradieRequestsForProject(
           milestoneId: activity.milestoneId,
           scheduledDate: new Date(`${activity.scheduledDate}T00:00:00.000Z`),
         })),
+        kind: input.kind,
         note: input.note,
         projectId: input.projectId,
         subject: input.subject,
+        trade: input.trade,
         tradieIds: input.tradieIds,
       },
       prisma,
       {
         ...tradieRequestMail,
-        render: ({ activities, project, subject, trade, tradieName }) =>
-          generateTradieRequestEmail({
+        render: ({
+          activities,
+          kind,
+          project,
+          reference,
+          subject,
+          trade,
+          tradieName,
+        }) =>
+          (kind === TradieRequestKind.BOOKING
+            ? generateTradieBookingEmail
+            : generateTradieRequestEmail)({
             activities: activities.map((activity) => ({
               durationDays: activity.durationDays,
               name: activity.name,
@@ -198,6 +218,7 @@ export async function sendTradieRequestsForProject(
             })),
             note: input.note,
             projectName: project.name,
+            reference,
             siteManager: {
               email: siteManager?.siteManager?.email ?? "",
               name: siteManager?.siteManager?.name ?? "",
@@ -220,7 +241,9 @@ export async function sendTradieRequestsForProject(
     });
 
     return {
+      cancelled: sent.cancelled.length,
       deliveries: [...sent.deliveries],
+      kind: sent.kind,
       ok: true,
       project: await freshProject(principal, input.projectId),
       trade: sent.trade,
@@ -283,6 +306,7 @@ export async function recordManualTradieQuote(
         notes: input.notes,
         projectId: input.projectId,
         quotedAt: new Date(`${input.quotedAt}T00:00:00.000Z`),
+        trade: input.trade,
         tradieId: input.tradieId,
         validUntil: input.validUntil
           ? new Date(`${input.validUntil}T00:00:00.000Z`)
@@ -325,6 +349,7 @@ export type SelectedTradeQuoteResult = WithProject<{
 export async function selectTradeQuoteForProject(raw: {
   projectId: string;
   tradieId: string;
+  trade?: string;
 }): Promise<SelectedTradeQuoteResult | DomainActionFailure> {
   try {
     const { principal } = await staff();

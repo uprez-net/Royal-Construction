@@ -5,6 +5,7 @@ import {
   errorResponse,
 } from "@/utils/validators";
 import { getTradiesForLookup } from "@/lib/data/tradies";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import { connection, type NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -24,6 +25,8 @@ export async function GET(request: NextRequest) {
 
     return successResponse(tradies);
   } catch (error) {
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
     console.error("/api/tradies GET error", error);
     return errorResponse("Failed to fetch tradies", {
       status: 500,

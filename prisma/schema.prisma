@@ -257,6 +257,15 @@ enum TradieRequestDeliveryStatus {
   FAILED
 }
 
+/// What a tradie request email asks of the tradie.
+enum TradieRequestKind {
+  /// Price the activities, so several tradies' quotes can be compared.
+  QUOTE
+  /// The office has chosen this tradie: confirm availability for the dates.
+  /// A price can be recorded later without moving the bookings.
+  BOOKING
+}
+
 enum TradieQuoteSource {
   /// Read from the tradie's emailed reply.
   EMAIL
@@ -613,6 +622,7 @@ model Project {
   tradieSchedules     TradieSchedule[]
   files               File[]               @relation("ProjectFiles")
   activityLogs        ActivityLog[]
+  tradieActivityLogs  TradieActivityLog[]
   materials           Material[]
   tradies             Tradie[]             @relation("ProjectTradies")
   certifierEngagement CertifierEngagement? @relation("ProjectCertifierEngagement")
@@ -669,6 +679,7 @@ model Milestone {
   siteUpdates        SiteUpdate[]
   tradieSchedules    TradieSchedule[]
   activityLogs       ActivityLog[]
+  tradieActivityLogs TradieActivityLog[]
   project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   files              File[]           @relation("MilestoneFiles")
   tradies            Tradie[]         @relation("TradieMilestones")
@@ -720,7 +731,12 @@ model Material {
 model Tradie {
   id                  String          @id @default(uuid())
   name                String
+  /// The primary category: trades[0]. Kept because a tradie is shown, and Eve
+  /// names one, by a single trade.
   trade               String
+  /// Every category the tradie works in, the primary first. Whether a tradie
+  /// can be asked for a trade is "is it in here" (`tradieCoversTrade`).
+  trades              String[]        @default([])
   abn                 String          @unique
   phone               String          @unique
   email               String          @unique
@@ -750,6 +766,7 @@ model Tradie {
   requestRecipients TradieRequestRecipient[]
   quotes            TradieQuote[]
   tradeSelections   TradeSelection[]
+  activityLogs      TradieActivityLog[]
 
   complianceOutreaches ComplianceOutreach[] @relation("TradieComplianceOutreaches")
 
@@ -919,8 +936,15 @@ model TradieSchedule {
   /// while the booking is still in that status and returns once it moves.
   alertDismissedStatus TradieScheduleStatus?
   alertDismissedAt     DateTime?
+  /// The trade this booking is for. A tradie can work in several, so it is
+  /// not the tradie's trade: a plumber-and-gasfitter booked for gas work is a
+  /// Gas booking. Null only on a row older than this column and not backfilled.
+  trade                String?
   /// The request email this booking was asked for in, when it came from one.
   requestRecipientId   String?
+  /// "RCTBK-…": quoted on every email about this one booking, so a reply is
+  /// matched to it rather than guessed from the tradie's open bookings.
+  refToken             String?               @unique
   /// Where quotedPrice came from. The amount itself stays on the booking,
   /// because milestone spend is counted per booking.
   quoteId              String?
@@ -947,10 +971,11 @@ model TradieRequest {
   projectId   String
   /// The trade label as the request named it.
   trade       String
+  kind        TradieRequestKind @default(QUOTE)
   subject     String
-  note        String?  @db.Text
+  note        String?           @db.Text
   createdById String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime          @default(now())
 
   project    Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy  User?                    @relation("TradieRequestCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -969,6 +994,9 @@ model TradieRequestRecipient {
   tradieId       String
   toAddress      String
   ccAddresses    String[]                    @default([])
+  /// "RCTRQ-…": this tradie's copy's reference, in its subject and body, so a
+  /// reply is matched to the bookings this email asked about.
+  refToken       String?                     @unique
   subject        String
   html           String                      @db.Text
   deliveryStatus TradieRequestDeliveryStatus @default(SENDING)
@@ -1066,6 +1094,36 @@ model ActivityLog {
   @@index([createdAt])
 }
 
+/// A tradie's own history: every booking, quote, request email, selection,
+/// cancellation and incident, across every project. Written by the domain
+/// commands through lib/domain/audit/tradie-activity-log.ts, from the
+/// templates in types/tradieActivityLog.ts. The project's ActivityLog is the
+/// job's story; this is the tradie's.
+model TradieActivityLog {
+  id          String   @id @default(uuid())
+  tradieId    String
+  /// Null for an entry about the tradie rather than a job, or once the
+  /// project is deleted: the history outlives it.
+  projectId   String?
+  milestoneId String?
+  /// Not a relation: a deleted booking keeps the history of what happened to it.
+  scheduleId  String?
+  /// Who did it. Null for the system — the email-reply webhook, a cron.
+  authorId    String?
+  type        String
+  message     String   @db.Text
+  createdAt   DateTime @default(now())
+
+  tradie    Tradie     @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  project   Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  milestone Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  author    User?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([tradieId, createdAt])
+  @@index([projectId])
+  @@index([scheduleId])
+}
+
 model Customer {
   id      String  @id @default(uuid())
   name    String
@@ -1108,6 +1166,7 @@ model User {
   siteManagerProjects Project[]          @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
+  tradieActivityLogs  TradieActivityLog[]
   assignedLeads       Lead[]             @relation("LeadAssignee")
   leadHistories       LeadHistory[]      @relation("LeadHistoryAuthor")
   leadTasks           LeadTask[]         @relation("LeadTaskAssignee")

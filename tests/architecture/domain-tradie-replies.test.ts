@@ -7,9 +7,16 @@ import { test } from "vitest";
 
 import {
   AWAITING_TRADIE_REPLY,
+  findTradieReplyReference,
+  isReplyFromTradie,
   matchTradieReplyToSchedule,
+  referencedReplyTargets,
   tradieReplyStatus,
 } from "@/lib/domain/tradies/replies";
+import {
+  extractTradieRefToken,
+  subjectWithTradieRef,
+} from "@/lib/domain/tradies/reply-reference";
 import { REPO_ROOT } from "../support/repo-root";
 import { recordingDb } from "./domain-harness";
 
@@ -136,6 +143,160 @@ test("a reply's status follows the booking it answers", () => {
   assert.equal(
     tradieReplyStatus(TradieScheduleStatus.PENDING_RESPONSE, false),
     TradieScheduleStatus.DECLINED,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// References: "[RCTRQ-…]" on a request email, "[RCTBK-…]" on one booking
+// ---------------------------------------------------------------------------
+
+test("a reference is found in a mangled subject, or in the body when the subject lost it", () => {
+  assert.equal(
+    extractTradieRefToken(
+      "RE: re: booking – please confirm [rctrq-0a1b2c3d4e5f]",
+      "",
+    ),
+    "RCTRQ-0A1B2C3D4E5F",
+  );
+  assert.equal(
+    extractTradieRefToken("Quote for Wheat St", "Our ref RCTBK-AABBCCDDEEFF"),
+    "RCTBK-AABBCCDDEEFF",
+  );
+  // The subject wins over an older thread quoted in the body.
+  assert.equal(
+    extractTradieRefToken(
+      "Re: x [RCTBK-111111111111]",
+      "> [RCTRQ-222222222222]",
+    ),
+    "RCTBK-111111111111",
+  );
+  assert.equal(extractTradieRefToken("Re: [RCCERT-0A1B2C3D4E5F]", ""), null);
+  assert.equal(
+    subjectWithTradieRef("Booking – Wheat St", "RCTRQ-0A1B2C3D4E5F"),
+    "Booking – Wheat St [RCTRQ-0A1B2C3D4E5F]",
+  );
+  // Once, even when the office left it on.
+  assert.equal(
+    subjectWithTradieRef("Booking [rctrq-0a1b2c3d4e5f]", "RCTRQ-0A1B2C3D4E5F"),
+    "Booking [rctrq-0a1b2c3d4e5f]",
+  );
+});
+
+const ABC = {
+  additionalEmails: ["Office@ABC.example"],
+  email: "quotes@abc.example",
+  id: "t_abc",
+  name: "ABC Plumbing",
+};
+
+test("a request reference names that email's bookings; a booking reference names one", async () => {
+  const request = await findTradieReplyReference(
+    "RCTRQ-0A1B2C3D4E5F",
+    recordingDb({
+      "tradieRequestRecipient.findUnique": {
+        id: "r_1",
+        request: { project: { name: "11 Wheat Street" } },
+        tradie: ABC,
+      },
+    }).db,
+  );
+  assert.deepEqual(request?.scope, { requestRecipientId: "r_1" });
+  assert.equal(request?.projectName, "11 Wheat Street");
+
+  const booking = await findTradieReplyReference(
+    "RCTBK-0A1B2C3D4E5F",
+    recordingDb({
+      "tradieSchedule.findUnique": {
+        id: "s_1",
+        project: { name: "11 Wheat Street" },
+        tradie: ABC,
+      },
+    }).db,
+  );
+  assert.deepEqual(booking?.scope, { scheduleId: "s_1" });
+
+  // Nothing behind it: the caller falls back to matching on the sender.
+  assert.equal(
+    await findTradieReplyReference(
+      "RCTBK-0A1B2C3D4E5F",
+      recordingDb({ "tradieSchedule.findUnique": null }).db,
+    ),
+    null,
+  );
+});
+
+test("a referenced reply counts only from an address the tradie is on file with", () => {
+  const reference = { tradie: ABC };
+  assert.ok(isReplyFromTradie(reference, "quotes@abc.example"));
+  assert.ok(isReplyFromTradie(reference, " office@abc.example "));
+  assert.ok(!isReplyFromTradie(reference, "someone@else.example"));
+  assert.ok(!isReplyFromTradie(reference, ""));
+});
+
+test("a reference narrows the match to the bookings it names", async () => {
+  const recorder = recordingDb({
+    "tradieSchedule.findMany": [booking("s_1", "2026-10-12", ORION)],
+  });
+  await matchTradieReplyToSchedule(
+    {
+      hints: {},
+      scope: { requestRecipientId: "r_1" },
+      tradieId: "t_1",
+    },
+    recorder.db,
+  );
+  const where = (recorder.calls[0]?.args as { where: Record<string, unknown> })
+    .where;
+  assert.equal(where.requestRecipientId, "r_1");
+  assert.equal(where.tradieId, "t_1");
+});
+
+test("a reply to several referenced bookings applies to all only when it means the same for each", () => {
+  const direct = [
+    booking("s_1", "2026-10-12", ORION),
+    booking("s_2", "2026-10-20", ORION),
+  ];
+  const quoting = direct.map((row) => ({
+    ...row,
+    status: TradieScheduleStatus.AWAITING_QUOTE,
+  }));
+
+  // Turning the email down turns down every booking on it.
+  assert.equal(
+    referencedReplyTargets(quoting, { confirmed: false, quoted: false }),
+    quoting,
+  );
+  // A yes to a booking email confirms the dates it listed.
+  assert.equal(
+    referencedReplyTargets(direct, { confirmed: true, quoted: false }),
+    direct,
+  );
+  // A price cannot be split by a guess.
+  assert.equal(
+    referencedReplyTargets(direct, { confirmed: true, quoted: true }),
+    null,
+  );
+  // A yes with no price to a quote request is not an answer to it.
+  assert.equal(
+    referencedReplyTargets(quoting, { confirmed: true, quoted: false }),
+    null,
+  );
+});
+
+test("the Graph webhook matches a referenced reply before falling back to the sender", () => {
+  const route = readFileSync(
+    join(REPO_ROOT, "app/api/graph/notifications/route.ts"),
+    "utf8",
+  );
+  const referenced = route.indexOf("findTradieReplyReference(");
+  const bySender = route.indexOf("isTradieMessage(message.from)");
+  assert.ok(referenced > 0 && bySender > referenced);
+  assert.match(route, /isReplyFromTradie\(/);
+  // A reply to a request email that also covers cancelled or declined work
+  // goes to the office: the tradie was never told it is off.
+  assert.match(
+    route,
+    /requestRecipientId: reference\.scope\.requestRecipientId,\s*status: \{\s*in: \[TradieScheduleStatus\.CANCELLED, TradieScheduleStatus\.DECLINED\]/,
   );
 });
 

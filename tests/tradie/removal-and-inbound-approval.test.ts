@@ -73,13 +73,34 @@ test("cancelled bookings contribute no spend while completed quoted and hourly w
     tradieScheduleSpend({ ...priced, status: TradieScheduleStatus.COMPLETED }),
     950,
   );
+  // Hourly work with no price recorded is costed from the tradie's rate.
+  assert.equal(
+    tradieScheduleSpend({
+      ...priced,
+      quotedPrice: null,
+      requiresQuote: false,
+      status: TradieScheduleStatus.COMPLETED,
+    }),
+    1600,
+  );
+  // A tradie booked without a quote, whose price the office then recorded,
+  // costs that price.
   assert.equal(
     tradieScheduleSpend({
       ...priced,
       requiresQuote: false,
       status: TradieScheduleStatus.COMPLETED,
     }),
-    1600,
+    950,
+  );
+  // Still waiting on a quote: nothing yet.
+  assert.equal(
+    tradieScheduleSpend({
+      ...priced,
+      quotedPrice: null,
+      status: TradieScheduleStatus.AWAITING_QUOTE,
+    }),
+    0,
   );
 });
 

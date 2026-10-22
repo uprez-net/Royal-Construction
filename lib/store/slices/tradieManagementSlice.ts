@@ -112,6 +112,7 @@ export const updateTradieThunk = createAsyncThunk<
         | "phone"
         | "location"
         | "note"
+        | "trades"
       >
     >;
   }

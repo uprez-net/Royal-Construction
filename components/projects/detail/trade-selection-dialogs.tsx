@@ -55,7 +55,7 @@ export function SelectQuoteDialog({
     setBusy(true);
     try {
       const result = await dispatch(
-        selectTradeQuote({ projectId, tradieId: tradie.tradieId }),
+        selectTradeQuote({ projectId, trade, tradieId: tradie.tradieId }),
       ).unwrap();
       toast.success(
         `${result.tradieName} selected for ${result.trade}. ${result.approvals} ${result.approvals === 1 ? "booking is" : "bookings are"} waiting on admin approval.`,

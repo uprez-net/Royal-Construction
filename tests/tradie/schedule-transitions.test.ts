@@ -17,6 +17,8 @@ test("a tradie's reply to a quote booking is an edge the command allows", () => 
   for (const status of [
     TradieScheduleStatus.AWAITING_QUOTE,
     TradieScheduleStatus.QUOTE_RECEIVED,
+    // A direct booking: the tradie confirming or turning down the dates.
+    TradieScheduleStatus.PENDING,
   ]) {
     for (const confirmed of [true, false]) {
       const to = tradieReplyStatus(status, confirmed);

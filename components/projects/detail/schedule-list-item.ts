@@ -1,5 +1,7 @@
 import { differenceInDays } from "date-fns";
 
+import { bookingTrade } from "@/lib/domain/tradies/request-rules";
+
 import type {
   ProjectDetail,
   TradieScheduleListItem,
@@ -26,15 +28,15 @@ export function toScheduleListItem(
     tradieId: tradie.tradie.id,
     tradieName: tradie.tradie.name,
     lastQuotedPriceUnit: tradie.tradie.lastQuotedPriceUnit,
-    tradeType: tradie.tradie.trade,
+    tradeType: bookingTrade(tradie),
     abn: tradie.tradie.abn,
     projectId: project.id,
     projectName: project.name,
     milestoneId: tradie.milestone?.id,
     milestoneName: tradie.milestone?.name,
     taskLabel: tradie.milestone?.name
-      ? `${tradie.tradie.trade} for ${tradie.milestone.name}`
-      : tradie.tradie.trade,
+      ? `${bookingTrade(tradie)} for ${tradie.milestone.name}`
+      : bookingTrade(tradie),
     scheduledDate: new Date(tradie.scheduledDate).toISOString(),
     durationDays: tradie.durationDays,
     status: tradie.status,
@@ -59,6 +61,7 @@ export function toScheduleListItem(
     quotedPrice: options.includeQuote
       ? (tradie.quotedPrice ?? undefined)
       : undefined,
+    refToken: tradie.refToken,
   };
 }
 
@@ -72,16 +75,17 @@ export function toScheduleDetailsItem(
     id: tradie.id,
     tradieName: tradie.tradie.name,
     lastQuotedPriceUnit: tradie.tradie.lastQuotedPriceUnit,
-    tradeType: tradie.tradie.trade,
+    tradeType: bookingTrade(tradie),
     abn: tradie.tradie.abn,
     projectName: project.name,
     milestoneName: tradie.milestone?.name,
     taskLabel: tradie.milestone?.name
-      ? `${tradie.tradie.trade} for ${tradie.milestone.name}`
-      : tradie.tradie.trade,
+      ? `${bookingTrade(tradie)} for ${tradie.milestone.name}`
+      : bookingTrade(tradie),
     scheduledDate: new Date(tradie.scheduledDate).toISOString(),
     daysLeft: differenceInDays(new Date(tradie.scheduledDate), now),
     status: tradie.status,
+    refToken: tradie.refToken,
     reminderSentAt: tradie.reminderSentAt
       ? new Date(tradie.reminderSentAt).toISOString()
       : undefined,

@@ -5,6 +5,12 @@ import { DomainNotFoundError, DomainTransitionError } from "../errors";
 import { isInternalPrincipal, type DomainPrincipal } from "../principal";
 import { runOutboxEffectWithOutcome } from "../outbox";
 import { INACTIVE_SCHEDULE_STATUSES } from "./lifecycle";
+import { subjectWithTradieRef } from "./reply-reference";
+import {
+  noteTradieActivity,
+  recordTradieActivity,
+} from "../audit/tradie-activity-log";
+import { TRADIE_REMINDER_CRON } from "@/types/tradieActivityLog";
 
 const NON_ACTIONABLE_STATUSES = new Set<TradieScheduleStatus>(
   INACTIVE_SCHEDULE_STATUSES,
@@ -27,6 +33,10 @@ export type TradieReminderEmailPort = (input: {
  * enough to cover the double-click and the retry-after-timeout this guard is
  * actually for, and short enough that a deliberate resend goes out. A replay
  * inside that day is reported as one rather than as a fresh send.
+ *
+ * The subject always leaves with the booking's reference on it, whatever the
+ * office typed over the modal's suggestion: the tradie's reply is matched on
+ * it, and losing it puts the reply back to being guessed.
  */
 export async function sendTradieScheduleReminder(
   principal: DomainPrincipal,
@@ -48,8 +58,12 @@ export async function sendTradieScheduleReminder(
   }
   const schedule = await db.tradieSchedule.findUnique({
     select: {
+      milestoneId: true,
+      projectId: true,
+      refToken: true,
       status: true,
       tradie: { select: { email: true, archivedAt: true } },
+      tradieId: true,
     },
     where: { id: input.scheduleId },
   });
@@ -65,6 +79,7 @@ export async function sendTradieScheduleReminder(
   const to = schedule.tradie.email.trim();
   if (!to) throw new DomainTransitionError("This tradie has no email address.");
 
+  const subject = subjectWithTradieRef(input.subject, schedule.refToken);
   const day = (input.now ?? new Date()).toISOString().slice(0, 10);
   const { replayed } = await runOutboxEffectWithOutcome(
     db,
@@ -74,15 +89,31 @@ export async function sendTradieScheduleReminder(
       payload: {
         body: input.body,
         scheduleId: input.scheduleId,
-        subject: input.subject,
+        subject,
         to,
       },
     },
     async () => {
-      await send({ body: input.body, subject: input.subject, to });
+      await send({ body: input.body, subject, to });
       return { to };
     },
   );
+  if (!replayed) {
+    await noteTradieActivity(
+      {
+        data: {
+          milestoneId: schedule.milestoneId,
+          projectId: schedule.projectId,
+          scheduleId: input.scheduleId,
+          subject,
+          tradieId: schedule.tradieId,
+        },
+        principal,
+        type: "bookingEmailSent",
+      },
+      db,
+    );
+  }
   return { alreadySent: replayed, to };
 }
 
@@ -121,7 +152,13 @@ export async function markTradieReminderSent(
   sentAt = new Date(),
 ): Promise<{ alreadySent: boolean; status: TradieScheduleStatus }> {
   const schedule = await db.tradieSchedule.findUnique({
-    select: { reminderSentAt: true, status: true },
+    select: {
+      milestoneId: true,
+      projectId: true,
+      reminderSentAt: true,
+      status: true,
+      tradieId: true,
+    },
     where: { id: scheduleId },
   });
   if (!schedule) throw new DomainNotFoundError("Schedule not found.");
@@ -140,11 +177,38 @@ export async function markTradieReminderSent(
       : schedule.status === TradieScheduleStatus.PENDING
         ? TradieScheduleStatus.PENDING_RESPONSE
         : schedule.status;
-  const updated = await db.tradieSchedule.updateMany({
-    data: { reminderSentAt: sentAt, status },
-    where: { id: scheduleId, reminderSentAt: null },
-  });
-  if (updated.count === 1) return { alreadySent: false, status };
+  // The move and its history entry commit together. Recorded, not noted: a
+  // swallowed failure inside a caller's transaction would abort it while this
+  // reported the reminder as recorded.
+  const advance = async (tx: DomainDb): Promise<boolean> => {
+    const updated = await tx.tradieSchedule.updateMany({
+      data: { reminderSentAt: sentAt, status },
+      where: { id: scheduleId, reminderSentAt: null },
+    });
+    if (updated.count !== 1) return false;
+    if (status !== schedule.status) {
+      await recordTradieActivity(
+        {
+          data: {
+            from: schedule.status,
+            milestoneId: schedule.milestoneId,
+            projectId: schedule.projectId,
+            scheduleId,
+            to: status,
+            tradieId: schedule.tradieId,
+            via: TRADIE_REMINDER_CRON,
+          },
+          principal: null,
+          type: "bookingStatusChanged",
+        },
+        tx,
+      );
+    }
+    return true;
+  };
+  const advanced =
+    "$transaction" in db ? await db.$transaction(advance) : await advance(db);
+  if (advanced) return { alreadySent: false, status };
 
   const current = await db.tradieSchedule.findUnique({
     select: { reminderSentAt: true, status: true },

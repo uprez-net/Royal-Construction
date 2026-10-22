@@ -7,12 +7,13 @@ import {
   ShieldCheckIcon,
   Wrench,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { dateFormat, formatStatus } from "@/utils/formatters";
 import { useAppSelector } from "@/lib/store/hooks";
 import { cn } from "@/lib/utils";
+
+import { CollapsibleCard } from "./collapsible-card";
 
 type IncidentType =
   | "SAFETY"
@@ -102,97 +103,88 @@ export function TradieIncidentsCard() {
     (incident) => incident.status === "OPEN",
   ).length;
 
+  // Open by default: an open incident is what someone here has to act on.
   return (
-    <Card>
-      <CardHeader className="pb-4">
-        <CardTitle as="h2">
-          Incidents ({incidents.length}
-          {openCount > 0 ? `, ${openCount} open` : ""})
-        </CardTitle>
-      </CardHeader>
+    <CollapsibleCard
+      defaultOpen
+      title={`Incidents (${incidents.length}${openCount > 0 ? `, ${openCount} open` : ""})`}
+    >
+      {incidents.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-3 px-6 pb-8 pt-2 text-sm text-muted-foreground">
+          <ShieldCheckIcon className="size-10" aria-hidden="true" />
+          No incidents reported
+        </div>
+      ) : (
+        <ScrollArea className="max-h-100 px-6 pb-6">
+          <div className="space-y-4">
+            {incidents.map((incident) => {
+              const type =
+                typeConfig[incident.type as IncidentType] ?? typeConfig.OTHER;
+              const TypeIcon = type.icon;
+              // Unmapped severities used to throw here and take the whole page
+              // down via the error boundary.
+              const severity =
+                severityConfig[incident.severity as keyof typeof severityConfig]
+                ?? severityConfig.MEDIUM;
+              const isOpen = incident.status === "OPEN";
+              const reportedOn = formatReportedDate(incident.createdAt);
 
-      <CardContent className="p-0">
-        {incidents.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 px-6 pb-8 pt-2 text-sm text-muted-foreground">
-            <ShieldCheckIcon className="size-10" aria-hidden="true" />
-            No incidents reported
-          </div>
-        ) : (
-          <ScrollArea className="max-h-100 px-6 pb-6">
-            <div className="space-y-4">
-              {incidents.map((incident) => {
-                const type =
-                  typeConfig[incident.type as IncidentType] ?? typeConfig.OTHER;
-                const TypeIcon = type.icon;
-                // Unmapped severities used to throw here and take the whole page
-                // down via the error boundary.
-                const severity =
-                  severityConfig[
-                    incident.severity as keyof typeof severityConfig
-                  ] ?? severityConfig.MEDIUM;
-                const isOpen = incident.status === "OPEN";
-                const reportedOn = formatReportedDate(incident.createdAt);
+              return (
+                <div
+                  key={incident.id}
+                  className="rounded-lg border border-border/70 p-4"
+                >
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className="gap-1 border-border/70 bg-muted text-foreground"
+                    >
+                      <TypeIcon className="h-3 w-3" aria-hidden="true" />
+                      {type.label}
+                    </Badge>
 
-                return (
-                  <div
-                    key={incident.id}
-                    className="rounded-lg border border-border/70 p-4"
-                  >
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <Badge
-                        variant="outline"
-                        className="gap-1 border-border/70 bg-muted text-foreground"
-                      >
-                        <TypeIcon className="h-3 w-3" aria-hidden="true" />
-                        {type.label}
-                      </Badge>
-
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
-                          severity.chip,
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "h-1.5 w-1.5 rounded-full",
-                            severity.dot,
-                          )}
-                          aria-hidden="true"
-                        />
-                        {formatStatus(incident.severity)} severity
-                      </span>
-
-                      <Badge variant={isOpen ? "destructive" : "secondary"}>
-                        {formatStatus(incident.status)}
-                      </Badge>
-                    </div>
-
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      {incident.description}
-                    </p>
-
-                    {/* The mono slot is reserved for a real value; the
-                        placeholder reads as prose. */}
-                    <div className="mt-3 text-xs text-muted-foreground">
-                      {reportedOn ? (
-                        <>
-                          Reported on{" "}
-                          <span className="font-mono tabular-nums">
-                            {reportedOn}
-                          </span>
-                        </>
-                      ) : (
-                        "Report date not recorded"
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
+                        severity.chip,
                       )}
-                    </div>
+                    >
+                      <span
+                        className={cn("h-1.5 w-1.5 rounded-full", severity.dot)}
+                        aria-hidden="true"
+                      />
+                      {formatStatus(incident.severity)} severity
+                    </span>
+
+                    <Badge variant={isOpen ? "destructive" : "secondary"}>
+                      {formatStatus(incident.status)}
+                    </Badge>
                   </div>
-                );
-              })}
-            </div>
-          </ScrollArea>
-        )}
-      </CardContent>
-    </Card>
+
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {incident.description}
+                  </p>
+
+                  {/* The mono slot is reserved for a real value; the
+                        placeholder reads as prose. */}
+                  <div className="mt-3 text-xs text-muted-foreground">
+                    {reportedOn ? (
+                      <>
+                        Reported on{" "}
+                        <span className="font-mono tabular-nums">
+                          {reportedOn}
+                        </span>
+                      </>
+                    ) : (
+                      "Report date not recorded"
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      )}
+    </CollapsibleCard>
   );
 }

@@ -185,9 +185,9 @@ const statusWrites = (writes: readonly Write[]) =>
     .map((write) => {
       const args = write.args as {
         data: { status: TradieScheduleStatus };
-        where: { id: { in: string[] } };
+        where: { id: string };
       };
-      return [args.data.status, args.where.id.in];
+      return [args.data.status, args.where.id];
     });
 
 test("settling a milestone writes each booking's settled status", async () => {
@@ -209,8 +209,9 @@ test("settling a milestone writes each booking's settled status", async () => {
     completed: ["s_confirmed", "s_approved"],
   });
   assert.deepEqual(statusWrites(recorder.writes()), [
-    [COMPLETED, ["s_confirmed", "s_approved"]],
-    [CANCELLED, ["s_unanswered"]],
+    [COMPLETED, "s_confirmed"],
+    [CANCELLED, "s_unanswered"],
+    [COMPLETED, "s_approved"],
   ]);
 
   // The approvals waiting on them are closed in the same breath.
@@ -307,7 +308,34 @@ test("the daily run completes confirmed bookings whose last day has passed", asy
   );
 
   assert.equal(result.completed, 1);
-  assert.deepEqual(statusWrites(recorder.writes()), [[COMPLETED, ["s_done"]]]);
+  assert.deepEqual(statusWrites(recorder.writes()), [[COMPLETED, "s_done"]]);
+});
+
+test("a booking settled elsewhere since the read is not reported or logged", async () => {
+  const recorder = recordingDb({
+    "tradieSchedule.findMany": [
+      { id: "s_moved", projectId: "p_1", status: CONFIRMED, tradieId: "t_1" },
+      { id: "s_open", projectId: "p_1", status: CONFIRMED, tradieId: "t_2" },
+    ],
+    "tradieSchedule.updateMany": (args: unknown) => ({
+      count: (args as { where: { id: string } }).where.id === "s_moved" ? 0 : 1,
+    }),
+  });
+
+  const result = await settleMilestoneBookings(
+    { milestoneId: "m_1", settlement: "DONE" },
+    recorder.db,
+  );
+
+  assert.deepEqual(result, { cancelled: [], completed: ["s_open"] });
+  const logged = recorder
+    .writes()
+    .filter((write) => write.operation === "tradieActivityLog.create")
+    .map(
+      (write) =>
+        (write.args as { data: { scheduleId: string } }).data.scheduleId,
+    );
+  assert.deepEqual(logged, ["s_open"]);
 });
 
 /* ---------------------------------------------------------------- dismissal */

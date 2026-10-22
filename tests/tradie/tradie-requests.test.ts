@@ -422,13 +422,235 @@ test("a tradie already holding the booking refuses the whole request, before any
 });
 
 // ---------------------------------------------------------------------------
+// Reply references
+// ---------------------------------------------------------------------------
+
+test("each tradie's copy carries its own reference, on the subject and to the template; each booking has one too", async () => {
+  const recorder = database();
+  const { ports, rendered } = mail();
+
+  await sendTradieRequests(
+    adminPrincipal(),
+    REQUEST,
+    recorder.transactionalDb,
+    ports,
+  );
+
+  const references = rendered.map((message) => message.reference);
+  assert.equal(new Set(references).size, 2);
+  for (const reference of references) {
+    assert.match(reference, /^RCTRQ-[0-9A-F]{12}$/);
+  }
+  const recipients = writesTo(recorder, "tradieRequestRecipient.create");
+  assert.deepEqual(
+    recipients.map((call) => call.data.refToken),
+    references,
+  );
+  // The template here ignored the reference; the command added it to what is
+  // stored, which is what every send and retry reads back.
+  assert.deepEqual(
+    recipients.map((call) => call.data.subject),
+    references.map((reference) => `Request for Quotation [${reference}]`),
+  );
+  for (const call of writesTo(recorder, "tradieSchedule.create")) {
+    assert.match(String(call.data.refToken), /^RCTBK-[0-9A-F]{12}$/);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Booking directly
+// ---------------------------------------------------------------------------
+
+const BOOKING = { ...REQUEST, kind: "BOOKING" as const, tradieIds: ["t_abc"] };
+
+/** `database()`, plus what a direct booking reads about the trade. */
+function bookingDatabase(state: {
+  selection?: Record<string, unknown> | null;
+  others?: Record<string, unknown>[];
+}) {
+  return recordingDb({
+    ...OUTBOX,
+    "milestone.findFirst": (args: unknown) => {
+      const id = (args as { where: { id: string } }).where.id;
+      return { id };
+    },
+    "milestone.findMany": (args: unknown) => {
+      const ids = (args as { where: { id: { in: string[] } } }).where.id.in;
+      return MILESTONES.filter((milestone) => ids.includes(milestone.id));
+    },
+    "project.findUnique": PROJECT,
+    "tradeSelection.findFirst": state.selection ?? null,
+    "tradie.findUnique": (args: unknown) =>
+      TRADIES[(args as { where: { id: string } }).where.id] ?? null,
+    "tradieRequest.create": { id: "req_1" },
+    "tradieRequestRecipient.create": (args: unknown) => {
+      const data = (args as { data: { tradieId: string } }).data;
+      return { id: `r_${data.tradieId}`, tradieId: data.tradieId };
+    },
+    "tradieRequestRecipient.findUnique": (args: unknown) =>
+      recipientRow((args as { where: { id: string } }).where.id),
+    "tradieSchedule.create": (args: unknown) => {
+      const data = (args as { data: Record<string, unknown> }).data;
+      return { ...data, id: `s_${data.tradieId}_${data.milestoneId}` };
+    },
+    "tradieSchedule.findFirst": null,
+    "tradieSchedule.findMany": state.others ?? [],
+  });
+}
+
+const XYZ_ROUGH_REQUEST = {
+  id: "s_xyz_rough",
+  milestone: { name: "Rough-in plumbing" },
+  milestoneId: "m_rough",
+  quotedPrice: null,
+  status: "AWAITING_QUOTE",
+  tradie: { name: "XYZ Plumbing Services", trade: " plumbing " },
+  tradieId: "t_xyz",
+};
+
+test("a direct booking books one tradie without a quote, selects them, and cancels the others' requests", async () => {
+  const recorder = bookingDatabase({ others: [XYZ_ROUGH_REQUEST] });
+  const { ports, rendered } = mail();
+
+  const result = await sendTradieRequests(
+    adminPrincipal(),
+    BOOKING,
+    recorder.transactionalDb,
+    ports,
+  );
+
+  assert.equal(result.kind, "BOOKING");
+  assert.ok(rendered.every((message) => message.kind === "BOOKING"));
+  assert.equal(
+    writesTo(recorder, "tradieRequest.create")[0].data.kind,
+    "BOOKING",
+  );
+  const bookings = writesTo(recorder, "tradieSchedule.create");
+  assert.equal(bookings.length, 2);
+  for (const call of bookings) {
+    assert.equal(call.data.status, "PENDING");
+    assert.equal(call.data.requiresQuote, false);
+  }
+  const cancel = writesTo(recorder, "tradieSchedule.updateMany");
+  assert.deepEqual(cancel[0].where.id, { in: ["s_xyz_rough"] });
+  assert.deepEqual(cancel[0].data, { status: "CANCELLED" });
+  assert.deepEqual(result.cancelled, [
+    {
+      milestoneName: "Rough-in plumbing",
+      scheduleId: "s_xyz_rough",
+      tradieName: "XYZ Plumbing Services",
+    },
+  ]);
+  assert.deepEqual(writesTo(recorder, "tradeSelection.create")[0].data, {
+    projectId: "p_1",
+    selectedById: "user_admin",
+    trade: "Plumbing",
+    tradeKey: "plumbing",
+    tradieId: "t_abc",
+  });
+  // Each tradie's own history says what happened to them, and why.
+  const history = writesTo(recorder, "tradieActivityLog.create").map(
+    (call) => call.data,
+  );
+  const cancelled = history.find((row) => row.type === "bookingCancelled");
+  assert.equal(cancelled?.tradieId, "t_xyz");
+  assert.equal(cancelled?.scheduleId, "s_xyz_rough");
+  assert.match(
+    String(cancelled?.message),
+    /ABC Plumbing Co\. was booked directly for Plumbing/,
+  );
+  assert.ok(
+    history.some(
+      (row) => row.type === "selectedForTrade" && row.tradieId === "t_abc",
+    ),
+  );
+});
+
+test("booking a tradie already selected for the trade adds to their bookings without a second selection", async () => {
+  const recorder = bookingDatabase({
+    selection: {
+      status: "ACTIVE",
+      tradie: { name: "ABC Plumbing Co." },
+      tradieId: "t_abc",
+    },
+  });
+  const { ports } = mail();
+  await sendTradieRequests(
+    adminPrincipal(),
+    BOOKING,
+    recorder.transactionalDb,
+    ports,
+  );
+  assert.equal(writesTo(recorder, "tradeSelection.create").length, 0);
+  assert.equal(writesTo(recorder, "tradieSchedule.create").length, 2);
+});
+
+test("a direct booking is refused before anything is written or sent", async () => {
+  const cases: [Parameters<typeof bookingDatabase>[0], RegExp][] = [
+    [
+      {
+        selection: {
+          status: "ACTIVE",
+          tradie: { name: "XYZ Plumbing Services" },
+          tradieId: "t_xyz",
+        },
+      },
+      /XYZ Plumbing Services is already selected for Plumbing/,
+    ],
+    [
+      {
+        selection: {
+          status: "CANCELLATION_PENDING",
+          tradie: { name: "ABC Plumbing Co." },
+          tradieId: "t_abc",
+        },
+      },
+      /cancellation for Plumbing is waiting on an admin/,
+    ],
+    [
+      { others: [{ ...XYZ_ROUGH_REQUEST, status: "CONFIRMED" }] },
+      /XYZ Plumbing Services is already confirmed for Rough-in plumbing/,
+    ],
+  ];
+  for (const [state, message] of cases) {
+    const recorder = bookingDatabase(state);
+    const { ports, sent } = mail();
+    await assert.rejects(
+      sendTradieRequests(
+        adminPrincipal(),
+        BOOKING,
+        recorder.transactionalDb,
+        ports,
+      ),
+      (error: unknown) =>
+        error instanceof DomainTransitionError && message.test(error.message),
+    );
+    assert.deepEqual(recorder.writes(), []);
+    assert.equal(sent.length, 0);
+  }
+});
+
+test("a direct booking names exactly one tradie", async () => {
+  await assertRefusedWithoutEffects(
+    { kind: "BOOKING", tradieIds: ["t_abc", "t_xyz"] } as Partial<
+      typeof REQUEST
+    >,
+    /Book one tradie at a time/,
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Retrying one email
 // ---------------------------------------------------------------------------
 
 const NOW = new Date("2026-10-20T01:00:00.000Z");
 const SYSTEM = { kind: "system", reason: "test" } as const;
 
-function oneRecipient(state: Record<string, unknown>) {
+function oneRecipient(
+  state: Record<string, unknown>,
+  /** The email's bookings still open; 0 once they are all cancelled. */
+  openBookings = 1,
+) {
   return recordingDb({
     ...OUTBOX,
     "project.findUnique": PROJECT,
@@ -436,6 +658,7 @@ function oneRecipient(state: Record<string, unknown>) {
       ...recipientRow("r_t_abc"),
       ...state,
     },
+    "tradieSchedule.count": openBookings,
   });
 }
 
@@ -543,6 +766,49 @@ test("a person cannot retry a sent email, or race a retry that is still on time"
   }
 });
 
+test("an email whose bookings were all cancelled is never sent, by the robot or by Retry", async () => {
+  // Waiting on an automatic retry when a direct booking took the activities.
+  const automatic = oneRecipient(
+    {
+      attempts: 1,
+      deliveryStatus: "RETRYING",
+      nextAttemptAt: new Date(NOW.getTime() - 1000),
+    },
+    0,
+  );
+  const { ports, sent } = mail();
+  const outcome = await deliverTradieRequest(
+    SYSTEM,
+    { now: NOW, recipientId: "r_t_abc", trigger: "automatic" },
+    automatic.db,
+    ports,
+  );
+  assert.equal(outcome.status, "FAILED");
+  assert.equal(outcome.nextAttemptAt, null);
+  assert.match(outcome.reason ?? "", /has since been cancelled/);
+  // Settled without an attempt or an outbox row.
+  assert.deepEqual(
+    writesTo(automatic, "tradieRequestRecipient.updateMany")[0].where,
+    { attempts: 1, deliveryStatus: "RETRYING", id: "r_t_abc" },
+  );
+  assert.equal(writesTo(automatic, "outboxEvent.upsert").length, 0);
+
+  const manual = oneRecipient({ attempts: 2, deliveryStatus: "FAILED" }, 0);
+  await assert.rejects(
+    deliverTradieRequest(
+      adminPrincipal(),
+      { now: NOW, recipientId: "r_t_abc", trigger: "manual" },
+      manual.db,
+      ports,
+    ),
+    (error: unknown) =>
+      error instanceof DomainTransitionError
+      && /has since been cancelled/.test(error.message),
+  );
+  assert.deepEqual(manual.writes(), []);
+  assert.equal(sent.length, 0);
+});
+
 test("a retry that lost the claim to another one does not send", async () => {
   const recorder = recordingDb({
     ...OUTBOX,
@@ -553,6 +819,7 @@ test("a retry that lost the claim to another one does not send", async () => {
       deliveryStatus: "FAILED",
     },
     "tradieRequestRecipient.updateMany": { count: 0 },
+    "tradieSchedule.count": 1,
   });
   const { ports, sent } = mail();
   await assert.rejects(
@@ -635,5 +902,32 @@ test("the AI draft refuses an activity that is not on the project", async () => 
       },
     ),
     DomainNotFoundError,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Tradies in several trades
+// ---------------------------------------------------------------------------
+
+test("a request is for the trade the office chose, and its bookings say so", async () => {
+  const recorder = database();
+  const { ports, rendered } = mail();
+  await sendTradieRequests(
+    adminPrincipal(),
+    { ...REQUEST, trade: "plumbing", tradieIds: ["t_abc"] },
+    recorder.transactionalDb,
+    ports,
+  );
+  // As the tradie's entry spells it: this is what the email says.
+  assert.ok(rendered.every((message) => message.trade === "Plumbing"));
+  for (const call of writesTo(recorder, "tradieSchedule.create")) {
+    assert.equal(call.data.trade, "Plumbing");
+  }
+});
+
+test("a tradie not listed under the request's trade is refused, naming the trades they are under", async () => {
+  await assertRefusedWithoutEffects(
+    { trade: "Gas Fitting", tradieIds: ["t_abc"] } as Partial<typeof REQUEST>,
+    /ABC Plumbing Co\. is listed under Plumbing, not Gas Fitting/,
   );
 });

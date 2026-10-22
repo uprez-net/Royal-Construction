@@ -112,3 +112,21 @@ test("a project with no site manager prints no empty site manager panel", () => 
   assert.doesNotMatch(email.html, />\s*Site Manager\s*</);
   assert.doesNotMatch(email.html, /Unassigned/);
 });
+
+test("every email about a booking carries its reference, on the subject and in a reply note", () => {
+  const referenced = { ...SCHEDULE, refToken: "RCTBK-0A1B2C3D4E5F" };
+  for (const email of [
+    generateTradieOutreachEmail(referenced),
+    generateTradieReminderEmail(referenced),
+    generateTradieRescheduleEmail(referenced, PREVIOUS, "confirm-availability"),
+  ]) {
+    assert.match(email.subject, /\[RCTBK-0A1B2C3D4E5F\]$/);
+    assert.match(email.html, /Our reference: <strong[^>]*>RCTBK-0A1B2C3D4E5F/);
+    assert.match(email.html, /reply directly to this email/);
+  }
+  // A booking from before references existed still renders, without one.
+  assert.doesNotMatch(
+    generateTradieReminderEmail(SCHEDULE).html,
+    /Our reference/,
+  );
+});

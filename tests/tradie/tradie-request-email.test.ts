@@ -12,7 +12,9 @@ import {
 } from "@/components/projects/detail/tradie-requests";
 import type { ProjectDetail } from "@/types/project";
 import {
+  generateTradieBookingEmail,
   generateTradieRequestEmail,
+  tradieBookingSubject,
   tradieRequestSubject,
 } from "@/utils/generate-email";
 
@@ -235,4 +237,36 @@ test("the trade overview compares quotes and counts covered activities", () => {
   );
   assert.equal(overview.stats.covered, 2);
   assert.equal(overview.stats.activityCount, 2);
+});
+
+test("a direct booking asks the tradie to confirm the dates, never to quote", () => {
+  const { html, subject } = generateTradieBookingEmail({
+    ...EMAIL,
+    reference: "RCTRQ-0A1B2C3D4E5F",
+    subject: tradieBookingSubject({
+      activityCount: 2,
+      projectName: "11 Wheat Street",
+      trade: "Plumbing",
+    }),
+  });
+  assert.equal(
+    subject,
+    "Booking – Please Confirm Availability – 11 Wheat Street | Plumbing (2 activities) [RCTRQ-0A1B2C3D4E5F]",
+  );
+  assert.match(html, /confirm you are available/);
+  assert.match(html, /Planned start/);
+  assert.doesNotMatch(html, /quot(e|ation)/i);
+  assert.match(html, /Our reference: <strong[^>]*>RCTRQ-0A1B2C3D4E5F/);
+  // Same activity table, escaped the same way.
+  assert.match(html, /Fit-off &lt;wet areas&gt;/);
+});
+
+test("a quote request carries the tradie's reference when it has one", () => {
+  const withRef = generateTradieRequestEmail({
+    ...EMAIL,
+    reference: "RCTRQ-0A1B2C3D4E5F",
+  });
+  assert.match(withRef.subject, /\[RCTRQ-0A1B2C3D4E5F\]$/);
+  assert.match(withRef.html, /keep this reference in the\s+subject line/);
+  assert.equal(generateTradieRequestEmail(EMAIL).subject, EMAIL.subject);
 });

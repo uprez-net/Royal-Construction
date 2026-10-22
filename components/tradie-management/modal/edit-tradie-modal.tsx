@@ -31,7 +31,9 @@ import { AddressSuggestion } from "@/types/data";
 import { fetchJson } from "@/utils/fetch";
 import { cn } from "@/lib/utils";
 import { EmailListInput } from "./forms/EmailLIstInput";
+import { TradeTypesField } from "./forms/TradieTypeInput";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { tradieTrades } from "@/lib/domain/tradies/request-rules";
 
 interface EditTradieModalProps {
   open: boolean;
@@ -47,6 +49,8 @@ interface TradieUpdateInput {
   location?: string;
   note?: string;
   additionalEmails?: string[];
+  /** Every category, the primary first. */
+  trades?: string[];
 }
 
 // Strips spaces, dashes, and parens so "04 1234 5678" / "(02) 1234-5678" normalize cleanly.
@@ -70,6 +74,10 @@ const updateTradieSchema = z.object({
       "Enter a valid Australian number, e.g. 04XX XXX XXX or 02 XXXX XXXX",
     ),
   location: z.string().min(2, "Location is required").optional(),
+  trades: z
+    .array(z.string().min(1))
+    .min(1, "Select at least one trade type")
+    .optional(),
   note: z.string().max(500, "Notes cannot exceed 500 characters").optional(),
 });
 
@@ -97,14 +105,29 @@ export default function EditTradieModal({
     location: tradie.location ?? "",
     note: tradie.note ?? "",
     additionalEmails: tradie.additionalEmails ?? [],
+    trades: tradieTrades(tradie),
   });
 
   const changes = useMemo(() => {
+    const original: Record<string, unknown> = {
+      ...tradie,
+      trades: tradieTrades(tradie),
+    };
     return Object.fromEntries(
       Object.entries(formData).filter(([key, value]) => {
+        // Lists compare by contents and order: the order of `trades` says
+        // which one is primary.
+        if (Array.isArray(value)) {
+          const before = original[key];
+          return (
+            !Array.isArray(before)
+            || before.length !== value.length
+            || before.some((item, index) => item !== value[index])
+          );
+        }
         const newValue =
           typeof value === "string" ? value?.trim() || null : value;
-        const oldValue = tradie[key as keyof TradieDetails] || null;
+        const oldValue = original[key] || null;
 
         return newValue !== oldValue;
       }),
@@ -254,7 +277,7 @@ export default function EditTradieModal({
           </DialogTitle>
 
           <DialogDescription>
-            Update the name, contact information and internal notes for{" "}
+            Update the name, trades, contact information and internal notes for{" "}
             {tradie.name}. Fields marked with an asterisk are required.
           </DialogDescription>
         </DialogHeader>
@@ -289,6 +312,20 @@ export default function EditTradieModal({
                 </FieldError>
               ) : null}
             </Field>
+            <div className="md:col-span-2">
+              <TradeTypesField
+                id="tradie-edit-trades"
+                value={formData.trades ?? []}
+                disabled={isPending}
+                onChange={(trades) => handleInputChange("trades", trades)}
+                error={errors.trades}
+                requiredMark={
+                  <span className="text-destructive">
+                    *<span className="sr-only"> required</span>
+                  </span>
+                }
+              />
+            </div>
             {fields.map(({ key, label, icon: Icon, placeholder, mono }) => {
               if (key === "additionalEmails") {
                 return (

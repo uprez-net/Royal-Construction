@@ -16,6 +16,11 @@ import {
   DomainValidationError,
 } from "../errors";
 import { attributionUserId, type DomainPrincipal } from "../principal";
+import {
+  noteTradieActivity,
+  recordTradieActivity,
+  viaOf,
+} from "../audit/tradie-activity-log";
 import { authorizeProject, canManageProject } from "../access/projects";
 import { assertCanReadTradieDirectory } from "../access/tradies";
 import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
@@ -24,13 +29,20 @@ import {
   rescheduleOutcome,
   type RescheduleNotice,
 } from "./reschedule-rules";
+import { generateTradieRefToken } from "./reply-reference";
+import { tradieTradeLabel } from "./request-rules";
 import { canTransitionSchedule } from "./schedule-transitions";
 import {
   normalizeQuoteBasis,
   parseQuotedAmount,
   scheduleTotalCost,
 } from "../../../utils/calculations";
-import { currency } from "../../../utils/formatters";
+import { currency, rateCurrency } from "../../../utils/formatters";
+
+/** `YYYY-MM-DD`: schedule dates are calendar days stored at UTC midnight. */
+function isoDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
 
 // Booking a tradie onto a project.
 //
@@ -60,6 +72,11 @@ export type CreateScheduleInput = {
   readonly requiresQuote: boolean;
   /** The request email this booking is part of, when it is. */
   readonly requestRecipientId?: string | null;
+  /**
+   * The trade it is for, when the tradie works in several. Defaults to their
+   * primary trade.
+   */
+  readonly trade?: string | null;
 };
 
 /**
@@ -258,6 +275,17 @@ export async function createTradieSchedule(
     );
 
     const tradie = await requireActiveTradie(input.tradieId, transactionDb);
+    // Checked only when a trade is named. Booked under their primary trade,
+    // a tradie the directory has no trade for can still be booked, as before.
+    const asked = input.trade?.trim();
+    const listed = asked ? tradieTradeLabel(tradie, asked) : null;
+    if (asked && !listed) {
+      throw new DomainValidationError(
+        `${tradie.name} is not listed under ${asked}.`,
+        "trade",
+      );
+    }
+    const trade = listed ?? tradie.trade;
 
     if (input.milestoneId) {
       await assertMilestoneOnProject(
@@ -276,17 +304,21 @@ export async function createTradieSchedule(
       transactionDb,
     );
 
-    return transactionDb.tradieSchedule.create({
+    const created = await transactionDb.tradieSchedule.create({
       data: {
         durationDays: input.durationDays,
         milestoneId: input.milestoneId ?? null,
         projectId: project.id,
+        // Minted here, the one place a booking is created, so every email
+        // about it can quote the same reference.
+        refToken: generateTradieRefToken("booking"),
         requestRecipientId: input.requestRecipientId ?? null,
         requiresQuote: input.requiresQuote,
         scheduledDate: input.scheduledDate,
         status: input.requiresQuote
           ? TradieScheduleStatus.AWAITING_QUOTE
           : TradieScheduleStatus.PENDING,
+        trade,
         tradieId: tradie.id,
       },
       select: {
@@ -300,6 +332,25 @@ export async function createTradieSchedule(
         tradieId: true,
       },
     });
+    await recordTradieActivity(
+      {
+        data: {
+          asksForQuote: input.requiresQuote,
+          durationDays: created.durationDays,
+          milestoneId: created.milestoneId,
+          projectId: created.projectId,
+          scheduleId: created.id,
+          scheduledDate: isoDay(created.scheduledDate),
+          trade,
+          tradieId: created.tradieId,
+          via: viaOf(principal),
+        },
+        principal,
+        type: "bookingCreated",
+      },
+      transactionDb,
+    );
+    return created;
   };
 
   return "$transaction" in db
@@ -447,7 +498,7 @@ async function applyScheduleTransition(
             principal.kind === "system"
               ? TradieQuoteSource.EMAIL
               : TradieQuoteSource.MANUAL,
-          trade: existing.tradie.trade,
+          trade: existing.trade?.trim() || existing.tradie.trade,
           tradieId: existing.tradieId,
         },
         select: { id: true },
@@ -480,6 +531,31 @@ async function applyScheduleTransition(
         "The schedule changed before this transition was applied.",
       );
     }
+    await recordTradieActivity(
+      {
+        data: {
+          from: existing.status,
+          milestoneId: existing.milestoneId,
+          projectId: existing.projectId,
+          quote: normalized
+            ? rateCurrency.format(
+                scheduleTotalCost(
+                  normalized.amount,
+                  existing.durationDays,
+                  normalized.unit,
+                ),
+              )
+            : null,
+          scheduleId: existing.id,
+          to: input.toStatus,
+          tradieId: existing.tradieId,
+          via: viaOf(principal),
+        },
+        principal,
+        type: "bookingStatusChanged",
+      },
+      db,
+    );
 
     if (
       input.toStatus === TradieScheduleStatus.DECLINED
@@ -720,6 +796,29 @@ export async function rescheduleTradieSchedule(
         "The schedule changed before it could be rescheduled.",
       );
     }
+    if (datesChanged) {
+      await recordTradieActivity(
+        {
+          data: {
+            durationDays,
+            milestoneId:
+              input.milestoneId !== undefined
+                ? input.milestoneId
+                : existing.milestoneId,
+            previousDate: isoDay(existing.scheduledDate),
+            previousDurationDays: existing.durationDays,
+            projectId: existing.projectId,
+            scheduleId: existing.id,
+            scheduledDate: isoDay(input.scheduledDate),
+            tradieId: existing.tradieId,
+            via: viaOf(principal),
+          },
+          principal,
+          type: "bookingRescheduled",
+        },
+        transactionDb,
+      );
+    }
 
     let withdrewApproval = false;
     if (datesChanged && outcome.withdrawsApproval) {
@@ -841,6 +940,20 @@ export async function requestTradieScheduleDeletion(
     },
     select: { id: true },
   });
+  await noteTradieActivity(
+    {
+      data: {
+        milestoneId: schedule.milestoneId,
+        projectId: schedule.projectId,
+        reason: input.reason.trim(),
+        scheduleId: schedule.id,
+        tradieId: schedule.tradieId,
+      },
+      principal,
+      type: "bookingDeletionRequested",
+    },
+    db,
+  );
   return {
     approvalId: approval.id,
     projectId: schedule.projectId,
@@ -864,6 +977,7 @@ async function findSchedule(scheduleId: string, db: DomainDb) {
       quotedPrice: true,
       scheduledDate: true,
       status: true,
+      trade: true,
       tradie: {
         select: {
           id: true,

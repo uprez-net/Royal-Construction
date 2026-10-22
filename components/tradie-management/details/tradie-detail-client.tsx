@@ -10,6 +10,7 @@ import {
   TradieBusinessDetailsCard,
   TradiePriorityCard,
 } from "./tradie-details-body";
+import { TradieActivityLogCard } from "./tradie-activity-log-card";
 import { TradieIncidentsCard } from "./tradie-incident-card";
 import Link from "next/link";
 
@@ -42,6 +43,7 @@ export function TradieDetailClient({ tradie }: { tradie: TradieDetails }) {
         </div>
       </div>
       <TradieIncidentsCard />
+      <TradieActivityLogCard />
     </div>
   );
 }

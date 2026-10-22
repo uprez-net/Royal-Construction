@@ -7,6 +7,12 @@ import {
 import { sydneyDateOnly } from "@/lib/dates/sydney";
 
 import type { DomainDb } from "../db";
+import type { DomainPrincipal } from "../principal";
+import {
+  noteTradieActivity,
+  recordTradieActivity,
+} from "../audit/tradie-activity-log";
+import { TRADIE_REMINDER_CRON } from "@/types/tradieActivityLog";
 
 import {
   INACTIVE_SCHEDULE_STATUSES,
@@ -25,6 +31,12 @@ import { bookingLastDay } from "./alert-rules";
 export type SettledBookings = {
   readonly completed: readonly string[];
   readonly cancelled: readonly string[];
+};
+
+/** Why each booking closed, on the tradie's history. */
+const SETTLED_BOOKING_REASON: Record<MilestoneSettlement, string> = {
+  DONE: "the activity was marked done",
+  NOT_REQUIRED: "the activity was marked not required",
 };
 
 const SETTLEMENT_REASON: Record<MilestoneSettlement, string> = {
@@ -47,11 +59,13 @@ export async function settleMilestoneBookings(
   input: {
     readonly milestoneId: string;
     readonly settlement: MilestoneSettlement;
+    /** Who settled the milestone, for the tradies' histories. */
+    readonly principal?: DomainPrincipal | null;
   },
   db: DomainDb,
 ): Promise<SettledBookings> {
   const open = await db.tradieSchedule.findMany({
-    select: { id: true, status: true },
+    select: { id: true, projectId: true, status: true, tradieId: true },
     where: {
       milestoneId: input.milestoneId,
       status: { notIn: INACTIVE_SCHEDULE_STATUSES },
@@ -91,28 +105,47 @@ export async function settleMilestoneBookings(
     });
   }
 
-  // Conditional on the status still being open: a booking another request
-  // settled a moment ago keeps what that request gave it.
-  if (completed.length > 0) {
-    await db.tradieSchedule.updateMany({
-      data: { status: TradieScheduleStatus.COMPLETED },
+  // One booking at a time, conditional on its status still being open: a
+  // booking another request settled a moment ago keeps what that request gave
+  // it, and is not put on the tradie's history a second time.
+  const reason = SETTLED_BOOKING_REASON[input.settlement];
+  const principal = input.principal ?? null;
+  const settled: { completed: string[]; cancelled: string[] } = {
+    cancelled: [],
+    completed: [],
+  };
+  for (const booking of open) {
+    const done = completed.includes(booking.id);
+    if (!done && !cancelled.includes(booking.id)) continue;
+    const updated = await db.tradieSchedule.updateMany({
+      data: {
+        status: done
+          ? TradieScheduleStatus.COMPLETED
+          : TradieScheduleStatus.CANCELLED,
+      },
       where: {
-        id: { in: completed },
+        id: booking.id,
         status: { notIn: INACTIVE_SCHEDULE_STATUSES },
       },
     });
-  }
-  if (cancelled.length > 0) {
-    await db.tradieSchedule.updateMany({
-      data: { status: TradieScheduleStatus.CANCELLED },
-      where: {
-        id: { in: cancelled },
-        status: { notIn: INACTIVE_SCHEDULE_STATUSES },
-      },
-    });
+    if (updated.count !== 1) continue;
+    (done ? settled.completed : settled.cancelled).push(booking.id);
+    const data = {
+      milestoneId: input.milestoneId,
+      projectId: booking.projectId,
+      reason,
+      scheduleId: booking.id,
+      tradieId: booking.tradieId,
+    };
+    await recordTradieActivity(
+      done
+        ? { data, principal, type: "bookingCompleted" }
+        : { data, principal, type: "bookingCancelled" },
+      db,
+    );
   }
 
-  return { cancelled, completed };
+  return settled;
 }
 
 /**
@@ -131,21 +164,51 @@ export async function completeElapsedBookings(
   const today = sydneyDateOnly(now);
 
   const candidates = await db.tradieSchedule.findMany({
-    select: { durationDays: true, id: true, scheduledDate: true },
+    select: {
+      durationDays: true,
+      id: true,
+      milestoneId: true,
+      projectId: true,
+      scheduledDate: true,
+      tradieId: true,
+    },
     where: {
       // Started before today, or it cannot have finished before today.
       scheduledDate: { lt: new Date(`${today}T00:00:00.000Z`) },
       status: TradieScheduleStatus.CONFIRMED,
     },
   });
-  const elapsed = candidates
-    .filter((booking) => bookingLastDay(booking) < today)
-    .map((booking) => booking.id);
-  if (elapsed.length === 0) return { completed: 0 };
+  const elapsedBookings = candidates.filter(
+    (booking) => bookingLastDay(booking) < today,
+  );
+  if (elapsedBookings.length === 0) return { completed: 0 };
 
-  const result = await db.tradieSchedule.updateMany({
-    data: { status: TradieScheduleStatus.COMPLETED },
-    where: { id: { in: elapsed }, status: TradieScheduleStatus.CONFIRMED },
-  });
-  return { completed: result.count };
+  // One booking at a time, so only a booking this run actually moved goes on
+  // the tradie's history: one someone changed since the read keeps theirs.
+  let completed = 0;
+  for (const booking of elapsedBookings) {
+    const updated = await db.tradieSchedule.updateMany({
+      data: { status: TradieScheduleStatus.COMPLETED },
+      where: { id: booking.id, status: TradieScheduleStatus.CONFIRMED },
+    });
+    if (updated.count !== 1) continue;
+    completed += 1;
+    // A cron with no transaction around it: noted, never thrown.
+    await noteTradieActivity(
+      {
+        data: {
+          milestoneId: booking.milestoneId,
+          projectId: booking.projectId,
+          reason: "its last day on site has passed",
+          scheduleId: booking.id,
+          tradieId: booking.tradieId,
+          via: TRADIE_REMINDER_CRON,
+        },
+        principal: null,
+        type: "bookingCompleted",
+      },
+      db,
+    );
+  }
+  return { completed };
 }

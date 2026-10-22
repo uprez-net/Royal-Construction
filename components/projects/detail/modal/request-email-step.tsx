@@ -1,3 +1,4 @@
+import type { TradieRequestKind } from "@prisma/client";
 import { Loader2, Plus, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -48,6 +49,7 @@ export type RequestEmailActivity = {
 };
 
 export interface RequestEmailStepProps {
+  kind: TradieRequestKind;
   activities: readonly RequestEmailActivity[];
   workLines: Readonly<Record<string, readonly string[]>>;
   onWorkLinesChange: (milestoneId: string, lines: string[]) => void;
@@ -67,6 +69,7 @@ export interface RequestEmailStepProps {
 }
 
 export function RequestEmailStep({
+  kind,
   activities,
   workLines,
   onWorkLinesChange,
@@ -117,6 +120,11 @@ export function RequestEmailStep({
               {subjectError}
             </p>
           ) : null}
+          <p className="text-xs text-muted-foreground">
+            Each email gets its own reference, added to the end of the subject
+            when it is sent. Replies are matched to this{" "}
+            {kind === "BOOKING" ? "booking" : "request"} by it.
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -148,9 +156,9 @@ export function RequestEmailStep({
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            What the tradie is asked to price under each activity. AI drafts are
-            a starting point: check every line before sending, because the
-            tradie quotes against it.
+            {kind === "BOOKING"
+              ? "What the tradie is booked to do under each activity. AI drafts are a starting point: check every line before sending, because the tradie confirms against it."
+              : "What the tradie is asked to price under each activity. AI drafts are a starting point: check every line before sending, because the tradie quotes against it."}
           </p>
           {draftError ? (
             <p
@@ -267,7 +275,11 @@ export function RequestEmailStep({
             value={note}
             maxLength={2000}
             rows={3}
-            placeholder="Site access, plans to follow, a date you need the quote by…"
+            placeholder={
+              kind === "BOOKING"
+                ? "Site access, who to report to on the day, plans to follow…"
+                : "Site access, plans to follow, a date you need the quote by…"
+            }
             onChange={(event) => onNoteChange(event.target.value)}
           />
         </div>

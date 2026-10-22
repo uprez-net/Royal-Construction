@@ -17,22 +17,29 @@ import {
   DomainValidationError,
 } from "../errors";
 import { attributionUserId, type DomainPrincipal } from "../principal";
+import { recordTradieActivity } from "../audit/tradie-activity-log";
 import { authorizeProject } from "../access/projects";
 import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
 import {
   activityAcceptsTrade,
+  bookingTrade,
   isRequestableMilestone,
   MAX_REQUEST_ACTIVITIES,
+  sameTrade,
   tradeList,
+  tradieTradeLabel,
 } from "./request-rules";
 import { createTradieSchedule, transitionTradieSchedule } from "./schedules";
 import {
   bookingsDisplacedBySelection,
   LIVE_SELECTION_STATUSES,
   QUOTABLE_STATUSES,
+  quoteEntryFor,
   selectionRefusal,
   tradeKey,
+  type QuoteEntry,
 } from "./selection-rules";
+import { currency, rateCurrency } from "../../../utils/formatters";
 
 // Choosing one tradie for a whole trade on a project, and the quotes that
 // choice is made from.
@@ -75,6 +82,19 @@ function money(amount: number): string {
   return amount.toFixed(2);
 }
 
+/** `bookingTrade` as a query: the booking's trade, else its tradie's. */
+function bookingInTradeWhere(trade: string): Prisma.TradieScheduleWhereInput {
+  return {
+    OR: [
+      { trade: { equals: trade.trim(), mode: "insensitive" } },
+      {
+        trade: null,
+        tradie: { trade: { equals: trade.trim(), mode: "insensitive" } },
+      },
+    ],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Manual quote
 // ---------------------------------------------------------------------------
@@ -82,6 +102,8 @@ function money(amount: number): string {
 export type ManualQuoteInput = {
   readonly projectId: string;
   readonly tradieId: string;
+  /** The trade quoted for; the tradie's primary trade when omitted. */
+  readonly trade?: string;
   readonly lines: readonly {
     readonly milestoneId: string;
     /** Dollars, as the tradie priced it under `gstTreatment`. */
@@ -159,10 +181,16 @@ export async function recordManualQuote(
 
   const project = await authorizeProject(principal, input.projectId, db);
   const tradie = await requireActiveTradie(input.tradieId, db);
-  const trade = tradie.trade.trim();
-  if (!trade) {
+  const asked = input.trade?.trim() || tradie.trade.trim();
+  if (!asked) {
     throw new DomainValidationError(
       `${tradie.name} has no trade in the directory, so the quote has nothing to price.`,
+    );
+  }
+  const trade = tradieTradeLabel(tradie, asked);
+  if (!trade) {
+    throw new DomainValidationError(
+      `${tradie.name} is not listed under ${asked}, so they cannot quote for it.`,
     );
   }
 
@@ -237,8 +265,17 @@ export async function recordManualQuote(
     for (const line of input.lines) {
       const milestone = milestoneById.get(line.milestoneId)!;
       const existing = await tx.tradieSchedule.findFirst({
-        select: { id: true, status: true },
+        select: {
+          id: true,
+          quotedPrice: true,
+          requestRecipient: { select: { request: { select: { kind: true } } } },
+          requiresQuote: true,
+          status: true,
+        },
         where: {
+          // This trade's booking. A tradie doing two trades on one activity
+          // must not have a Gas quote written onto their Plumbing booking.
+          ...bookingInTradeWhere(trade),
           milestoneId: milestone.id,
           projectId: project.id,
           status: { notIn: INACTIVE_SCHEDULE_STATUSES },
@@ -248,8 +285,16 @@ export async function recordManualQuote(
 
       let scheduleId: string;
       let created = false;
+      // A new booking is made to hold a quote, so it is always one.
+      let entry: QuoteEntry = "quote";
       if (existing) {
-        if (!QUOTABLE_STATUSES.includes(existing.status)) {
+        entry = quoteEntryFor({
+          quotedPrice: existing.quotedPrice,
+          requestKind: existing.requestRecipient?.request.kind ?? null,
+          requiresQuote: existing.requiresQuote,
+          status: existing.status,
+        });
+        if (entry === "locked") {
           throw new DomainTransitionError(
             `${tradie.name}'s booking for ${milestone.name} is ${STATUS_WORDS[existing.status] ?? existing.status.toLowerCase()}, so its price cannot be changed here.`,
           );
@@ -281,6 +326,7 @@ export async function recordManualQuote(
             requiresQuote: true,
             scheduledDate:
               sibling?.scheduledDate ?? new Date(`${day}T00:00:00.000Z`),
+            trade,
             tradieId: tradie.id,
           },
           tx,
@@ -289,24 +335,97 @@ export async function recordManualQuote(
         created = true;
       }
 
+      // A booked tradie's price lands where the booking already is; it is not
+      // in a comparison, and "quote received" would undo a confirmation. It
+      // also stays a booking that was not asked to quote, so `quoteEntryFor`
+      // still lets the office correct the price before approval.
       const written = await tx.tradieSchedule.updateMany({
         data: {
           quoteId: quote.id,
           quotedPrice: money(line.amount),
-          requiresQuote: true,
-          status: TradieScheduleStatus.QUOTE_RECEIVED,
+          ...(entry === "quote"
+            ? {
+                requiresQuote: true,
+                status: TradieScheduleStatus.QUOTE_RECEIVED,
+              }
+            : {}),
         },
-        where: { id: scheduleId, status: { in: [...QUOTABLE_STATUSES] } },
+        where:
+          entry === "quote" || !existing
+            ? { id: scheduleId, status: { in: [...QUOTABLE_STATUSES] } }
+            : {
+                id: scheduleId,
+                quotedPrice: existing.quotedPrice,
+                status: existing.status,
+              },
       });
       if (written.count !== 1) {
         throw new DomainTransitionError(
           `${tradie.name}'s booking for ${milestone.name} changed while the quote was being saved. Refresh and try again.`,
         );
       }
+      await recordTradieActivity(
+        {
+          data: {
+            amount: rateCurrency.format(line.amount),
+            milestoneId: milestone.id,
+            priceOnly: entry === "price",
+            projectId: project.id,
+            scheduleId,
+            tradieId: tradie.id,
+          },
+          principal,
+          type: "quoteRecorded",
+        },
+        tx,
+      );
+      // The admin decides a waiting approval from the cost it shows; it was
+      // worked out before this price existed.
+      if (
+        existing
+        && existing.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL
+      ) {
+        await refreshPendingApprovalCost(
+          { amount: line.amount, scheduleId, tradieId: tradie.id },
+          tx,
+        );
+      }
       bookings.push({ created, scheduleId });
     }
 
     return { bookings, quoteId: quote.id, trade, tradieName: tradie.name };
+  });
+}
+
+async function refreshPendingApprovalCost(
+  input: {
+    readonly scheduleId: string;
+    readonly tradieId: string;
+    readonly amount: number;
+  },
+  tx: DomainDb,
+): Promise<void> {
+  const approval = await tx.tradieApproval.findFirst({
+    select: { id: true, updationData: true },
+    where: {
+      actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
+      status: TradieApprovalStatus.PENDING,
+      tradieId: input.tradieId,
+      updationData: { equals: input.scheduleId, path: ["scheduleId"] },
+    },
+  });
+  const payload = approval?.updationData;
+  if (
+    !approval
+    || !payload
+    || typeof payload !== "object"
+    || Array.isArray(payload)
+  ) {
+    return;
+  }
+  await tx.tradieApproval.update({
+    data: { updationData: { ...payload, cost: currency.format(input.amount) } },
+    where: { id: approval.id },
   });
 }
 
@@ -341,12 +460,23 @@ export type SelectedTradeQuote = {
  */
 export async function selectTradeQuote(
   principal: DomainPrincipal,
-  input: { readonly projectId: string; readonly tradieId: string },
+  input: {
+    readonly projectId: string;
+    readonly tradieId: string;
+    /** The trade being chosen for; the tradie's primary trade when omitted. */
+    readonly trade?: string;
+  },
   db: DomainDb,
 ): Promise<SelectedTradeQuote> {
   const project = await authorizeProject(principal, input.projectId, db);
   const tradie = await requireActiveTradie(input.tradieId, db);
-  const trade = tradie.trade.trim();
+  const asked = input.trade?.trim() || tradie.trade.trim();
+  const trade = tradieTradeLabel(tradie, asked);
+  if (!trade) {
+    throw new DomainValidationError(
+      `${tradie.name} is not listed under ${asked}.`,
+    );
+  }
   const key = tradeKey(trade);
 
   return serializable(db, async (tx) => {
@@ -365,6 +495,7 @@ export async function selectTradeQuote(
         milestoneId: true,
         quotedPrice: true,
         status: true,
+        trade: true,
         tradie: { select: { name: true, trade: true } },
         tradieId: true,
       },
@@ -373,7 +504,7 @@ export async function selectTradeQuote(
     const asRule = (booking: (typeof bookings)[number]) => ({
       ...booking,
       milestoneName: booking.milestone?.name ?? null,
-      trade: booking.tradie.trade,
+      trade: bookingTrade(booking),
       tradieName: booking.tradie.name,
     });
     const own = bookings
@@ -401,6 +532,7 @@ export async function selectTradeQuote(
     const approvals: { scheduleId: string; approvalId: string }[] = [];
     for (const booking of own) {
       if (booking.status !== TradieScheduleStatus.QUOTE_RECEIVED) continue;
+      if (!sameTrade(booking.trade, trade)) continue;
       const moved = await transitionTradieSchedule(
         principal,
         {
@@ -427,6 +559,37 @@ export async function selectTradeQuote(
         },
       });
     }
+    // On each displaced tradie's own history, so their page says why work
+    // they were asked about went away.
+    for (const booking of displaced) {
+      await recordTradieActivity(
+        {
+          data: {
+            milestoneId: booking.milestoneId,
+            projectId: project.id,
+            reason: `${tradie.name} was selected for ${trade}`,
+            scheduleId: booking.id,
+            tradieId: booking.tradieId,
+          },
+          principal,
+          type: "bookingCancelled",
+        },
+        tx,
+      );
+    }
+    await recordTradieActivity(
+      {
+        data: {
+          fromQuote: true,
+          projectId: project.id,
+          trade,
+          tradieId: tradie.id,
+        },
+        principal,
+        type: "selectedForTrade",
+      },
+      tx,
+    );
 
     const selection = await tx.tradeSelection.create({
       data: {
@@ -534,6 +697,7 @@ export async function requestTradeCancellation(
   return serializable(db, async (tx) => {
     const openBookings = await tx.tradieSchedule.count({
       where: {
+        ...bookingInTradeWhere(selection.trade),
         projectId: project.id,
         status: { notIn: INACTIVE_SCHEDULE_STATUSES },
         tradieId: selection.tradie.id,
@@ -568,6 +732,19 @@ export async function requestTradeCancellation(
         "This selection changed while the request was being made. Refresh and try again.",
       );
     }
+    await recordTradieActivity(
+      {
+        data: {
+          projectId: project.id,
+          reason,
+          trade: selection.trade,
+          tradieId: selection.tradie.id,
+        },
+        principal,
+        type: "tradeCancellationRequested",
+      },
+      tx,
+    );
     return {
       approvalId: approval.id,
       projectId: project.id,
@@ -636,6 +813,16 @@ export async function settleTradeCancellation(
     return { ...described, status: TradeSelectionStatus.ACTIVE };
   }
 
+  // The trade they were selected for. A tradie who also works in another
+  // trade on this job keeps those bookings — so without one, nothing can say
+  // which bookings to cancel, and cancelling all of them is the wrong guess.
+  const trade = described.trade.trim();
+  if (!trade) {
+    throw new DomainValidationError(
+      "This cancellation request does not say which trade it is for.",
+    );
+  }
+
   const ended = await tx.tradeSelection.updateMany({
     data: { cancelledAt: now, status: TradeSelectionStatus.CANCELLED },
     where: {
@@ -652,6 +839,7 @@ export async function settleTradeCancellation(
   const bookings = await tx.tradieSchedule.findMany({
     select: { id: true },
     where: {
+      ...bookingInTradeWhere(trade),
       projectId,
       status: { notIn: INACTIVE_SCHEDULE_STATUSES },
       tradieId: approval.tradieId,

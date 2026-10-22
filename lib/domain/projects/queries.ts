@@ -189,7 +189,9 @@ const projectDetailInclude = {
           lastError: true,
           toAddress: true,
           createdAt: true,
-          request: { select: { id: true, createdAt: true, subject: true } },
+          request: {
+            select: { id: true, createdAt: true, subject: true, kind: true },
+          },
         },
       },
       quote: {

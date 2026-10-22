@@ -34,6 +34,11 @@ import {
   DomainValidationError,
 } from "../errors";
 import { runOutboxEffectWithOutcome } from "../outbox";
+import {
+  tradieCoversTrade,
+  tradieInTradeWhere,
+  tradieTrades,
+} from "../tradies/request-rules";
 import type { DomainPrincipal } from "../principal";
 
 export type ComplianceAttachment = {
@@ -384,7 +389,7 @@ async function outreachCandidates(party: CompliancePartyType, db: DomainDb) {
     orderBy: [{ isFavourite: "desc" }, { name: "asc" }],
     select: { additionalEmails: true, email: true, id: true, name: true },
     take: 25,
-    where: { archivedAt: null, trade: { equals: trade, mode: "insensitive" } },
+    where: { archivedAt: null, ...tradieInTradeWhere(trade) },
   });
 }
 
@@ -460,15 +465,16 @@ async function resolveOutreachRecipient(
       name: true,
       phone: true,
       trade: true,
+      trades: true,
     },
     where: { id: input.tradieId },
   });
   if (!tradie || tradie.archivedAt) {
     throw new DomainNotFoundError("That tradie is not in the directory.");
   }
-  if (tradie.trade.trim().toLowerCase() !== trade.toLowerCase()) {
+  if (!tradieCoversTrade(tradie, trade)) {
     throw new DomainValidationError(
-      `${tradie.name} is listed under ${tradie.trade}, not ${trade}. Choose the ${label.toLowerCase()} from the ${trade} list.`,
+      `${tradie.name} is listed under ${tradieTrades(tradie).join(", ") || "no trade"}, not ${trade}. Choose the ${label.toLowerCase()} from the ${trade} list.`,
       "tradieId",
     );
   }

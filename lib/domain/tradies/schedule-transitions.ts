@@ -17,8 +17,11 @@ import { TradieScheduleStatus } from "@prisma/client";
 export const SCHEDULE_TRANSITIONS: Readonly<
   Record<TradieScheduleStatus, readonly TradieScheduleStatus[]>
 > = {
+  // DECLINED for the same reason AWAITING_QUOTE carries it: a direct booking
+  // starts here, and a tradie answering "can't make it" must land.
   [TradieScheduleStatus.PENDING]: [
     TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.DECLINED,
     TradieScheduleStatus.NO_RESPONSE,
     TradieScheduleStatus.PENDING_RESPONSE,
   ],

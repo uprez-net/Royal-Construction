@@ -1,4 +1,4 @@
-import { MilestoneStatus } from "@prisma/client";
+import { MilestoneStatus, type Prisma } from "@prisma/client";
 
 // The pure half of a tradie request's rules, shared by the command
 // (requests.ts) and the request wizard, so the picker never offers what the
@@ -27,6 +27,76 @@ export function isRequestableMilestone(status: MilestoneStatus): boolean {
  */
 export function sameTrade(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
+ * Every category a tradie works in, the primary first.
+ *
+ * `trades` is the list; a row from before it existed, or one a caller built
+ * from `trade` alone, falls back to the single trade.
+ */
+export function tradieTrades(tradie: {
+  readonly trade: string;
+  readonly trades?: readonly string[] | null;
+}): string[] {
+  const listed = (tradie.trades ?? [])
+    .map((trade) => trade.trim())
+    .filter(Boolean);
+  if (listed.length > 0) return listed;
+  return tradie.trade.trim() ? [tradie.trade.trim()] : [];
+}
+
+/** May this tradie be asked for this trade? Any of their categories will do. */
+export function tradieCoversTrade(
+  tradie: {
+    readonly trade: string;
+    readonly trades?: readonly string[] | null;
+  },
+  trade: string,
+): boolean {
+  return tradieTradeLabel(tradie, trade) !== null;
+}
+
+/**
+ * The trade as this tradie's entry spells it, or null when they are not listed
+ * under it. A command names a trade with this, so "plumbing" typed by a caller
+ * reaches the tradie's email as "Plumbing".
+ */
+export function tradieTradeLabel(
+  tradie: {
+    readonly trade: string;
+    readonly trades?: readonly string[] | null;
+  },
+  trade: string,
+): string | null {
+  return tradieTrades(tradie).find((own) => sameTrade(own, trade)) ?? null;
+}
+
+/**
+ * `tradieCoversTrade` as a query: the primary trade, compared as people type
+ * it, or any listed category. `trades` holds labels as the trade list spells
+ * them (`resolveTradeLabel`), so an exact `has` is enough there.
+ */
+export function tradieInTradeWhere(trade: string): Prisma.TradieWhereInput {
+  return {
+    OR: [
+      { trade: { equals: trade.trim(), mode: "insensitive" } },
+      { trades: { has: trade.trim() } },
+    ],
+  };
+}
+
+/**
+ * The trade a booking is for.
+ *
+ * Its own `trade` — a tradie with several categories is booked for one of
+ * them — and, for a row that predates that column, the tradie's.
+ */
+export function bookingTrade(booking: {
+  readonly trade?: string | null;
+  readonly tradie: { readonly trade: string };
+}): string {
+  return booking.trade?.trim() || booking.tradie.trade;
 }
 
 /**

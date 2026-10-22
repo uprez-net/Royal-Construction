@@ -582,6 +582,7 @@ export async function updateMilestone(
     const result = await settleMilestoneBookings(
       {
         milestoneId,
+        principal,
         settlement: status === MilestoneStatus.DONE ? "DONE" : "NOT_REQUIRED",
       },
       db,
