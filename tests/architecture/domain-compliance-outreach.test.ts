@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import {
+  ComplianceAlertStatus,
+  ComplianceAlertType,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
   CompliancePartyType,
@@ -58,12 +60,14 @@ function script(
   tradie: unknown = basixAssessor,
   sent: unknown[] = [],
   outreaches: readonly unknown[] = [],
+  alerts: readonly unknown[] = [],
 ) {
   return {
     "certifierEngagement.findUnique": {
-      alerts: [],
+      alerts,
       documents,
       emails: [],
+      externalApplications: [],
       id: "engagement_1",
       outreaches,
       subjectAddress: "Lot 9028 Sommerville Drive, Catherine Field NSW 2557",
@@ -133,7 +137,7 @@ test("a consultant no checklist line asks for is not engaged", async () => {
     ),
     (error) =>
       error instanceof DomainTransitionError
-      && /Nothing on this project's certifier checklist asks for the basix consultant/.test(
+      && /Nothing on this project's certifier checklist or development application asks for the basix consultant/.test(
         error.message,
       ),
   );
@@ -370,4 +374,98 @@ test("an outreach already sent reports who it went to, not who was asked for", a
     neverSend,
   );
   assert.equal(noAddress.recipient, "");
+});
+
+// Staging: the DA list offered "Engage" on its "Tap-in or Water Servicing
+// Coordinator approval" row and every send came back 409, because the rule read
+// only the certifier checklist and the DA list has no checklist line to name.
+
+const waterCoordinator = {
+  additionalEmails: [],
+  email: "wsc@water.example",
+  id: "tradie_wsc",
+  name: "Water Servicing Co",
+  phone: "0400000001",
+  trade: "Sydney Water",
+};
+
+const daRequired = {
+  id: "alert_da",
+  status: ComplianceAlertStatus.OPEN,
+  type: ComplianceAlertType.DA_APPROVAL_REQUIRED,
+};
+
+function waterSend(): SendComplianceOutreachInput {
+  return basixSend({
+    party: CompliancePartyType.WATER_AUTHORITY,
+    tradieId: waterCoordinator.id,
+  });
+}
+
+test("a consultant the development application asks for is engaged off the DA list", async () => {
+  const recorder = recordingDb(
+    script([], waterCoordinator, [], [], [daRequired]),
+  );
+
+  const result = await sendComplianceOutreach(
+    adminPrincipal(),
+    waterSend(),
+    recorder.transactionalDb,
+    async () => undefined,
+  );
+
+  assert.equal(result.recipient, "wsc@water.example");
+});
+
+test("a DA row marked not required does not count", async () => {
+  const recorder = recordingDb(
+    script(
+      [
+        {
+          detail: null,
+          documentType: ComplianceDocumentType.WATER_SERVICING_APPROVAL,
+          files: [],
+          id: "row_water",
+          status: ComplianceDocumentStatus.NOT_REQUIRED,
+        },
+        {
+          detail: null,
+          documentType: ComplianceDocumentType.SECTION_73_NOTICE,
+          files: [],
+          id: "row_s73",
+          status: ComplianceDocumentStatus.NOT_REQUIRED,
+        },
+      ],
+      waterCoordinator,
+      [],
+      [],
+      [daRequired],
+    ),
+  );
+
+  await assert.rejects(
+    sendComplianceOutreach(
+      adminPrincipal(),
+      waterSend(),
+      recorder.transactionalDb,
+      neverSend,
+    ),
+    DomainTransitionError,
+  );
+  assert.deepEqual(recorder.writes(), []);
+});
+
+test("without a development application the DA list asks for nothing", async () => {
+  const recorder = recordingDb(script([], waterCoordinator));
+
+  await assert.rejects(
+    sendComplianceOutreach(
+      adminPrincipal(),
+      waterSend(),
+      recorder.transactionalDb,
+      neverSend,
+    ),
+    DomainTransitionError,
+  );
+  assert.deepEqual(recorder.writes(), []);
 });
