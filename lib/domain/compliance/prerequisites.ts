@@ -9,6 +9,7 @@ import {
 import {
   complianceDocumentLabel,
   CONSULTANT_DELIVERABLES,
+  DA_DOCUMENTS,
   DEVELOPER_APPROVAL_DOCUMENT,
   documentTypesForParty,
   isApprovalParty,
@@ -20,6 +21,7 @@ import {
 import { applicableRequiredDocuments } from "./required-pack";
 import {
   checklistItemDetail,
+  hasDevelopmentApplication,
   hasOpenAlert,
   isPartyEngaged,
   outreachForParty,
@@ -261,9 +263,19 @@ export function packSendBlockedReason(
  * or when the send names one of this file's own live checklist lines — the
  * tab's "engaged off this row" case, which also covers a line the extraction
  * could not label.
+ *
+ * Or when the job is going through as a development application and the DA
+ * list asks for something they produce. That list offers the same engage
+ * button as the checklist, off the same `DA_DOCUMENTS` rows, and sends no line
+ * id because there is no checklist line behind it — so a rule that read only the
+ * checklist refused every send the DA list offered. A DA row marked not
+ * required is written off the same way a checklist line is.
  */
 export function consultantNotAskedForReason(
-  engagement: Pick<CertifierEngagementDetail, "documents">,
+  engagement: Pick<
+    CertifierEngagementDetail,
+    "alerts" | "documents" | "externalApplications"
+  >,
   party: CompliancePartyType,
   namedChecklistIds: readonly string[] = [],
 ): string | null {
@@ -281,7 +293,21 @@ export function consultantNotAskedForReason(
   });
   if (asked) return null;
 
-  return `Nothing on this project's certifier checklist asks for the ${PARTY_LABEL[
+  const askedByDa =
+    hasDevelopmentApplication(engagement)
+    && DA_DOCUMENTS.some(
+      (entry) =>
+        entry.source === "consultant"
+        && produces.has(entry.type)
+        && !engagement.documents.some(
+          (document) =>
+            document.documentType === entry.type
+            && isNotRequired(document.status),
+        ),
+    );
+  if (askedByDa) return null;
+
+  return `Nothing on this project's certifier checklist or development application asks for the ${PARTY_LABEL[
     party
-  ].toLowerCase()}'s work, so there is nothing to engage them for. Engage them from the checklist line that needs it.`;
+  ].toLowerCase()}'s work, so there is nothing to engage them for. Engage them from the line that needs it.`;
 }
