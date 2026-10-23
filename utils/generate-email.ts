@@ -51,13 +51,23 @@ const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
  */
 type CopyTokens = { readonly tradie?: string; readonly reference?: string };
 
-function copyHtml(text: string, tokens: CopyTokens, editable: boolean): string {
+function copyHtml(
+  text: string,
+  tokens: CopyTokens,
+  editable: boolean,
+  strongStyle?: string,
+): string {
   const token = (name: keyof CopyTokens, html: string) =>
     editable
       ? `<span data-token="${name}" contenteditable="false">${html}</span>`
       : html;
   return escapeHtml(text)
-    .replace(/\*\*([\s\S]+?)\*\*/g, "<strong>$1</strong>")
+    .replace(
+      /\*\*([\s\S]+?)\*\*/g,
+      strongStyle
+        ? `<strong style="${strongStyle}">$1</strong>`
+        : "<strong>$1</strong>",
+    )
     .replace(/\{(tradie|reference)\}/g, (match, name: keyof CopyTokens) => {
       const value = tokens[name];
       if (value === undefined) return match;
@@ -82,12 +92,14 @@ function copyWriter(options: {
   readonly editable?: boolean;
 }) {
   const defaults: Record<string, string> = {};
-  const write = (key: string, text: string): string => {
+  /** `strongStyle` styles the region's `**bold**`, edited or not. */
+  const write = (key: string, text: string, strongStyle?: string): string => {
     defaults[key] = text;
     const html = copyHtml(
       options.copy?.[key] ?? text,
       options.tokens,
       Boolean(options.editable),
+      strongStyle,
     );
     return options.editable
       ? `<span data-copy="${escapeHtml(key)}" contenteditable="true">${html}</span>`
@@ -729,6 +741,8 @@ function requestedWorksSections(
     readonly datesNote: string;
   },
 ): string {
+  // The start date and duration are what the tradie checks first.
+  const dateStyle = `display:inline-block;padding:2px 8px;background:${RC_COLORS.dark};border:1px solid ${RC_COLORS.gold};border-radius:4px;color:${RC_COLORS.ctaText};font-size:15px;`;
   const activityRows = input.activities
     .map((activity, index) => {
       const key = `activity:${activity.milestoneId ?? index}`;
@@ -754,8 +768,8 @@ function requestedWorksSections(
             </td>
             <td style="padding:16px 20px 16px 0;border-top:1px solid ${RC_COLORS.border};vertical-align:top;">
             <strong style="color:${RC_COLORS.text};font-size:16px;">${copy(`${key}:name`, activity.name)}</strong>
-            <div style="margin-top:4px;color:${RC_COLORS.muted};font-size:14px;line-height:22px;">
-            ${copy(`${key}:dates`, `${activity.stage} stage · ${wording.startLabel} ${shortRequestDate(activity.scheduledDate)} · ${durationLabel(activity.durationDays)}`)}
+            <div style="margin-top:6px;color:${RC_COLORS.muted};font-size:14px;line-height:28px;">
+            ${copy(`${key}:dates`, `${activity.stage} stage · ${wording.startLabel} **${shortRequestDate(activity.scheduledDate)}** · **${durationLabel(activity.durationDays)}**`, dateStyle)}
             </div>
             ${work}
             </td>

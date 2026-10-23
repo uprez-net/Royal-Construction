@@ -68,8 +68,14 @@ test("one request lists every activity with its work and asks for one itemised q
 
 test("dates are calendar days, said to be approximate", () => {
   const { html } = generateTradieRequestEmail(EMAIL);
-  assert.match(html, /Approx\. start Mon, 2 Nov 2026 · 2 days/);
-  assert.match(html, /Approx\. start Mon, 7 Dec 2026 · 1 day/);
+  assert.match(
+    html,
+    /Approx\. start <strong[^>]*>Mon, 2 Nov 2026<\/strong> · <strong[^>]*>2 days<\/strong>/,
+  );
+  assert.match(
+    html,
+    /Approx\. start <strong[^>]*>Mon, 7 Dec 2026<\/strong> · <strong[^>]*>1 day<\/strong>/,
+  );
   assert.match(html, /Dates are approximate/);
 });
 
