@@ -42,6 +42,12 @@ export type OfferAreaCalculator = {
   readonly bricksFirstFloor: number;
   readonly bricksPillar: number;
   readonly tieCost: number;
+  // ── Tile inputs ──
+  // The estimator's figure for a tile area, in place of the calculated one.
+  // Absent means "use the calculation". Never stored as null: the persisted
+  // calculator is a plain number record, so clearing removes the key.
+  readonly groundFloorTilesSqm?: number;
+  readonly bathroomTilesSqm?: number;
 };
 
 // Calculated results per section. Every value is derived from the calculator
@@ -342,6 +348,8 @@ export function calculateBricks(
   };
 }
 
+type TileOverrideKey = "groundFloorTilesSqm" | "bathroomTilesSqm";
+
 export function calculateTiles(
   basis: Pick<
     OfferAreaBasis,
@@ -352,6 +360,9 @@ export function calculateTiles(
     | "porchSqm"
   >,
   bathrooms: number,
+  // The estimator's own tile areas, where entered. Waste and the total are
+  // always worked from whichever figure is in force.
+  overrides: Pick<OfferAreaCalculator, TileOverrideKey> = {},
 ): {
   readonly groundFloorTilesSqm: number;
   readonly bathroomTilesSqm: number;
@@ -359,13 +370,16 @@ export function calculateTiles(
   readonly totalTilesRequired: number;
 } {
   const groundFloorTilesSqm = roundCurrency(
-    basis.groundFloorSqm +
-      basis.alfrescoSqm +
-      basis.balconySqm +
-      basis.grannyFlatSqm +
-      basis.porchSqm,
+    overrides.groundFloorTilesSqm
+      ?? basis.groundFloorSqm
+        + basis.alfrescoSqm
+        + basis.balconySqm
+        + basis.grannyFlatSqm
+        + basis.porchSqm,
   );
-  const bathroomTilesSqm = roundCurrency(bathrooms * 35);
+  const bathroomTilesSqm = roundCurrency(
+    overrides.bathroomTilesSqm ?? bathrooms * 35,
+  );
   const baseTiles = roundCurrency(groundFloorTilesSqm + bathroomTilesSqm);
   const tilesWasted = roundCurrency(baseTiles * 0.1);
   const totalTilesRequired = roundCurrency(baseTiles + tilesWasted);
@@ -389,7 +403,7 @@ export function calculateOfferArea(
   const slab = calculateSlab(basis, area, rates);
   const frame = calculateFrame(basis, area, rates, calcVersion);
   const bricks = calculateBricks(area, rates);
-  const tiles = calculateTiles(basis, bathrooms);
+  const tiles = calculateTiles(basis, bathrooms, area);
 
   return {
     ...slab,
@@ -397,4 +411,55 @@ export function calculateOfferArea(
     ...bricks,
     ...tiles,
   };
+}
+
+// Bathrooms across the whole build: the granny flat's count only while the
+// build has one. The tile areas and the cost formulas both price on this.
+export function offerTotalBathrooms(
+  job: Pick<
+    OfferWorkspaceJob,
+    "bathrooms" | "hasGrannyHome" | "grannyBathrooms"
+  >,
+): number {
+  return job.bathrooms + (job.hasGrannyHome ? job.grannyBathrooms : 0);
+}
+
+type TileJobInputs = Parameters<typeof offerAreaBasisFromJob>[0]
+  & Parameters<typeof offerTotalBathrooms>[0];
+
+// An entered tile area holds only until the figures it replaced move. Once a
+// floor area or bathroom count changes the calculated value, the entry is
+// dropped and the field follows the calculation again — otherwise a stale
+// figure would keep pricing the tiles after the plan changed underneath it.
+// Returns `area` itself when nothing needs clearing.
+export function reconcileTileOverrides(
+  area: OfferAreaCalculator,
+  previousJob: TileJobInputs,
+  nextJob: TileJobInputs,
+): OfferAreaCalculator {
+  const before = calculateTiles(
+    offerAreaBasisFromJob(previousJob),
+    offerTotalBathrooms(previousJob),
+  );
+  const after = calculateTiles(
+    offerAreaBasisFromJob(nextJob),
+    offerTotalBathrooms(nextJob),
+  );
+  const stale = (["groundFloorTilesSqm", "bathroomTilesSqm"] as const).filter(
+    (key) => area[key] !== undefined && before[key] !== after[key],
+  );
+  return stale.length === 0 ? area : withoutTileOverrides(area, stale);
+}
+
+// Remove tile overrides by deleting their keys, never by writing undefined:
+// the snapshot schema accepts numbers only.
+export function withoutTileOverrides(
+  area: OfferAreaCalculator,
+  keys: readonly TileOverrideKey[],
+): OfferAreaCalculator {
+  const next: Record<string, number | undefined> = { ...area };
+  for (const key of keys) {
+    delete next[key];
+  }
+  return next as OfferAreaCalculator;
 }

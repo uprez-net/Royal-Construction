@@ -34,6 +34,8 @@ import {
   INITIAL_AREA_CALCULATOR,
   getAreaBasisTotalSqm,
   offerAreaBasisFromJob,
+  reconcileTileOverrides,
+  withoutTileOverrides,
   type OfferAreaCalculator,
 } from "@/lib/offer/workspace-area";
 import type { OfferWorkbookImportResult } from "@/lib/offer/workspace-import";
@@ -45,6 +47,7 @@ import {
   resolveOptionalPriceInput,
   resolveTargetMarkupPct,
   withDerivedHbcfPremium,
+  withDerivedTotalContractValue,
   type OfferWorkspacePricingSettings,
   type RateCardProduct,
   type RateCardTier,
@@ -125,6 +128,7 @@ import {
 import { OfferWorkspacePrintTemplate } from "./offer-workspace-print-template";
 import {
   canCreateRevision,
+  isOfferBuildStepEditable,
   isWorkspaceSaveStatus,
 } from "@/lib/offer/offer-editability";
 import {
@@ -266,7 +270,9 @@ export function NewOfferWorkspace({
   const [areaCalculator, setAreaCalculator] = useState<OfferAreaCalculator>(
     adminPrefill?.areaCalculator ?? INITIAL_AREA_CALCULATOR,
   );
-  const [workspacePricingSettings, setWorkspacePricingSettings] =
+  // What the estimator has set. The settings in force are derived from these
+  // below, once the cost lines are known (Total Contract Value follows them).
+  const [pricingSettingsInput, setPricingSettingsInput] =
     useState<OfferWorkspacePricingSettings>({
       ...DEFAULT_WORKSPACE_PRICING_SETTINGS,
       loadingChargePercentage: adminPrefill?.loadingChargePercentage ?? 0,
@@ -440,6 +446,18 @@ export function NewOfferWorkspace({
     [],
   );
   const directTotal = useMemo(() => calculateDirectTotal(lines), [lines]);
+  // Total Contract Value is the build-up's own contract value inc GST, not a
+  // typed figure, so the HBCF premium priced on it moves with the cost lines
+  // and markups. Only while pricing is editable: an issued offer's premium is
+  // part of the price the customer was quoted, and stays as stored. Everything
+  // downstream — the price, the screen and the saved snapshot — reads this.
+  const workspacePricingSettings = useMemo(
+    () =>
+      isOfferBuildStepEditable("pricing", status)
+        ? withDerivedTotalContractValue(pricingSettingsInput, directTotal)
+        : pricingSettingsInput,
+    [directTotal, pricingSettingsInput, status],
+  );
   const contractParticularDefaults = useMemo(
     () => contractDefaultsFromWorkspace(job, workspacePricingSettings),
     [job, workspacePricingSettings],
@@ -558,6 +576,11 @@ export function NewOfferWorkspace({
     const nextJob = { ...job, ...patch };
     setJob(nextJob);
     dropGrannyExclusionsFor(nextJob);
+    // A tile area the estimator typed over gives way once the floor areas or
+    // bathrooms it was worked from change.
+    setAreaCalculator((current) =>
+      reconcileTileOverrides(current, job, nextJob),
+    );
     if (status === "contract_draft") {
       setContractParticulars((current) =>
         reconcileContractParticularDefaults(
@@ -735,8 +758,14 @@ export function NewOfferWorkspace({
   }
 
   function updateAreaCalculator(patch: Partial<OfferAreaCalculator>) {
-    // Rates/measurements only — floor areas are owned by Job setup.
-    setAreaCalculator((current) => ({ ...current, ...patch }));
+    // Rates/measurements only — floor areas are owned by Job setup. A tile area
+    // patched to undefined goes back to following the calculation.
+    const cleared = (
+      ["groundFloorTilesSqm", "bathroomTilesSqm"] as const
+    ).filter((key) => key in patch && patch[key] === undefined);
+    setAreaCalculator((current) =>
+      withoutTileOverrides({ ...current, ...patch }, cleared),
+    );
   }
 
   function updateWorkspacePricingSettings(
@@ -746,7 +775,7 @@ export function NewOfferWorkspace({
       ...workspacePricingSettings,
       ...patch,
     });
-    setWorkspacePricingSettings(nextSettings);
+    setPricingSettingsInput(nextSettings);
     if (status === "contract_draft") {
       setContractParticulars((current) =>
         reconcileContractParticularDefaults(
@@ -765,7 +794,7 @@ export function NewOfferWorkspace({
     // The workbook has no loading-charge cell, so the import parser can only
     // report the default. Keep the admin-configured percentage (and re-derive
     // the premium with it) instead of silently zeroing it on import.
-    setWorkspacePricingSettings((current) => {
+    setPricingSettingsInput((current) => {
       const imported = {
         ...result.workspacePricingSettings,
         loadingChargePercentage:
@@ -1030,7 +1059,7 @@ export function NewOfferWorkspace({
       setExclusions(s.exclusions);
       setDraft(s.draft);
       setAreaCalculator(s.areaCalculator);
-      setWorkspacePricingSettings({
+      setPricingSettingsInput({
         ...s.workspacePricingSettings,
         loadingChargePercentage:
           status === "pending"

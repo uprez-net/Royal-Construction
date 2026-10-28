@@ -17,6 +17,7 @@ import {
   INITIAL_AREA_CALCULATOR,
   calculateOfferArea,
   offerAreaBasisFromJob,
+  offerTotalBathrooms,
   rawTotalAreaSqm,
   type AreaRateConstants,
   type OfferAreaCalculator,
@@ -309,8 +310,7 @@ export function reevaluateFormulaCostLines(
 ): readonly OfferWorkspaceCostLine[] {
   const resolvedRates = resolveAreaRateConstants(rateConstants);
   const basis = offerAreaBasisFromJob(job);
-  const totalBathrooms =
-    job.bathrooms + (job.hasGrannyHome ? job.grannyBathrooms : 0);
+  const totalBathrooms = offerTotalBathrooms(job);
   const calc = calculateOfferArea(
     basis,
     area,

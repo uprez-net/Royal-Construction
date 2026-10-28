@@ -9,11 +9,13 @@ import type {
 } from "@/lib/offer/workspace-area";
 import {
   calculateOfferArea,
+  calculateTiles,
   getAreaBasisTotalSqm,
+  offerTotalBathrooms,
 } from "@/lib/offer/workspace-area";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
-import { Info, Layers } from "lucide-react";
-import type { PropsWithChildren } from "react";
+import { Info, Layers, RotateCcw } from "lucide-react";
+import { useState, type PropsWithChildren } from "react";
 import { isSupportedCalcVersion } from "@/lib/offer/calc-version";
 import {
   CountField,
@@ -92,8 +94,7 @@ export function AreaCalculatorPanel({
     );
   }
 
-  const totalBathrooms =
-    job.bathrooms + (job.hasGrannyHome ? job.grannyBathrooms : 0);
+  const totalBathrooms = offerTotalBathrooms(job);
   const calc = calculateOfferArea(
     basis,
     area,
@@ -101,6 +102,9 @@ export function AreaCalculatorPanel({
     calcVersion,
     totalBathrooms,
   );
+  // What the tile areas would be without the estimator's figures, shown
+  // beside an entered value so the difference is visible.
+  const calculatedTiles = calculateTiles(basis, totalBathrooms);
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -308,15 +312,23 @@ export function AreaCalculatorPanel({
 
           <HelperSection title="Tiles">
             <div className="flex flex-col gap-2 mb-auto">
-              <CalculatedSqmField
+              <TileSqmField
                 label="Ground floor tiles required (sqm)"
-                value={calc.groundFloorTilesSqm}
+                value={area.groundFloorTilesSqm}
+                calculatedValue={calculatedTiles.groundFloorTilesSqm}
                 helperText="Ground floor + alfresco + balcony + granny flat + porch"
+                onChange={(groundFloorTilesSqm) =>
+                  onAreaChange({ groundFloorTilesSqm })
+                }
               />
-              <CalculatedSqmField
+              <TileSqmField
                 label="Bathroom tiles required (sqm)"
-                value={calc.bathroomTilesSqm}
+                value={area.bathroomTilesSqm}
+                calculatedValue={calculatedTiles.bathroomTilesSqm}
                 helperText={`${totalBathrooms} bathroom${totalBathrooms === 1 ? "" : "s"} × 35 sqm`}
+                onChange={(bathroomTilesSqm) =>
+                  onAreaChange({ bathroomTilesSqm })
+                }
               />
             </div>
             <ResultRows
@@ -393,34 +405,85 @@ function NumberField({
   );
 }
 
-function CalculatedSqmField({
+// A tile area that starts at its calculated value and can be typed over. An
+// entered figure holds until the floor areas or bathrooms behind it change
+// (see reconcileTileOverrides), or until Reset hands it back to the
+// calculation. Clearing the field does the same.
+function TileSqmField({
+  calculatedValue,
   helperText,
   label,
+  onChange,
   value,
 }: {
+  readonly calculatedValue: number;
   readonly helperText: string;
   readonly label: string;
-  readonly value: number;
+  readonly onChange: (value: number | undefined) => void;
+  readonly value: number | undefined;
 }) {
+  const overridden = value !== undefined;
+  // The text being typed, held while the field has focus. Without it,
+  // backspacing an entry to blank would refill the calculated value under the
+  // caret before the new figure could be typed.
+  const [editingText, setEditingText] = useState<string | null>(null);
+  const shownValue =
+    editingText
+    // An entered 0 is a real answer (no tiles there), so it shows as 0 rather
+    // than falling back to the blank the other fields use.
+    ?? (overridden ? String(value) : numberInputValue(calculatedValue));
   return (
-    <label className="block">
-      <FieldLabel>{label}</FieldLabel>
-      <div className="relative mt-1">
-        <Input
-          aria-readonly="true"
-          className="bg-muted/50 pr-14 font-mono tabular-nums text-muted-foreground"
-          readOnly
-          type="text"
-          value={value.toFixed(2)}
-        />
-        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          sqm
+    <div>
+      <label className="block">
+        <FieldLabel>{label}</FieldLabel>
+        <div className="relative mt-1">
+          <Input
+            className="pr-14 font-mono tabular-nums"
+            min="0"
+            placeholder="0"
+            step="0.01"
+            type="number"
+            value={shownValue}
+            onBlur={() => setEditingText(null)}
+            onChange={(event) => {
+              setEditingText(event.target.value);
+              if (event.target.value.trim() === "") {
+                onChange(undefined);
+                return;
+              }
+              const parsed = parseNonNegativeNumberInput(event.target.value);
+              if (parsed !== null) {
+                onChange(parsed);
+              }
+            }}
+          />
+          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            sqm
+          </span>
+        </div>
+      </label>
+      <div className="mt-1 flex items-start justify-between gap-2 text-[11px] leading-4 text-muted-foreground">
+        <span>
+          {overridden
+            ? `Entered · calculated ${calculatedValue.toFixed(2)} sqm`
+            : helperText}
         </span>
+        {overridden ? (
+          <button
+            type="button"
+            className="inline-flex shrink-0 items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            aria-label={`Reset ${label} to the calculated value`}
+            onClick={() => {
+              setEditingText(null);
+              onChange(undefined);
+            }}
+          >
+            <RotateCcw className="size-3" aria-hidden="true" />
+            Reset
+          </button>
+        ) : null}
       </div>
-      <span className="mt-1 block text-[11px] leading-4 text-muted-foreground">
-        {helperText}
-      </span>
-    </label>
+    </div>
   );
 }
 
