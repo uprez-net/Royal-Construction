@@ -8,7 +8,7 @@ import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
 
 export default defineTool({
   description:
-    "Email the Offer document PDF for one exact authorized live offer to every customer signatory on it, and mark the offer Sent, which locks its build steps. The client receives it. Show the offer reference, the contract price and every recipient for owner approval.",
+    "Email the Offer document PDF for one exact authorized live offer to every customer signatory on it, and mark the offer Sent, which freezes its internal price inputs (Job setup, Cost schedule, Pricing) while the customer-facing Offer document and Scope stay editable through negotiation. The client receives it. Show the offer reference, the contract price and every recipient for owner approval.",
   inputSchema: emailOfferProposalInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),

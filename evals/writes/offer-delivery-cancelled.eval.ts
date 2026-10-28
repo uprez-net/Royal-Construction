@@ -16,6 +16,7 @@ export default defineEval({
     await expectGateThenCancel(t, {
       prompt: `Send the offer "${offer}" to the client now.`,
       tools: ["email_offer_proposal", "send_offer_for_signature"],
+      requireParked: true,
     });
 
     t.judge(

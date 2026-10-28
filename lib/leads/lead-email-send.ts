@@ -189,26 +189,41 @@ export async function sendComposedLeadEmail(
 </html>
     `;
 
-  // Generate a subject line using AI for the body
-  const aiSubject = input.replyingTo
+  // A reply keeps its thread's subject. A new thread's is generated, and only
+  // once a send is actually going to happen.
+  const replySubject = input.replyingTo
     ? `Re: ${input.replyingTo.subject}`
-    : await ports.generateSubject(escapeEmailHtml(signedBody));
+    : null;
+  const siteSuffix = location.trim();
 
   // The send and the thread record are one durable effect, keyed on the lead,
   // the recipient and the body. A double-click, or a retry after a slow Graph
-  // call, used to send the client the same message twice.
+  // call, used to send the client the same message twice. The key holds only
+  // what the caller sent: the generated subject differs on every call, so
+  // keying on it let a retry through as a new message.
   const { alreadySent, result } = await sendLeadEmailOnce(
     authorized,
     {
       bodyFingerprint: createHash("sha256")
-        .update(`${aiSubject}\u0000${location}\u0000${signedBody}`)
+        .update(
+          `${replySubject === null ? "new" : `reply:${replySubject}`}\u0000${location}\u0000${signedBody}`,
+        )
         .digest("hex"),
     },
     db,
     async () => {
+      // One subject for the message and every record of it. A reply's never
+      // carried the site; a new thread's does when the lead has one.
+      let subject = replySubject;
+      if (subject === null) {
+        const aiSubject = await ports.generateSubject(
+          escapeEmailHtml(signedBody),
+        );
+        subject = siteSuffix ? `${aiSubject} - ${siteSuffix}` : aiSubject;
+      }
       await ports.sendMail({
         to,
-        subject: input.replyingTo ? aiSubject : `${aiSubject} - ${location}`,
+        subject,
         body: signedBody,
       });
       const strippedEmailBody = getAllEmailThreads(signedBody, {
@@ -216,7 +231,7 @@ export async function sendComposedLeadEmail(
           process.env.BUSINESS_EMAIL ?? "info@royalconstructions.com.au",
         ),
         to: normalizeEmailAddress(to),
-        subject: `${aiSubject} - ${location}`,
+        subject,
         sentAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
       });
       let lastId: string | null = null;
@@ -230,7 +245,7 @@ export async function sendComposedLeadEmail(
         const emailRecord = await db.leadEmails.create({
           data: {
             leadId,
-            subject: `${aiSubject} - ${location}`,
+            subject,
             body: thread.body,
             emailTo: normalizeEmailAddress(thread.to),
             emailFrom: normalizeEmailAddress(thread.from),

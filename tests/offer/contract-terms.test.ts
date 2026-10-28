@@ -490,7 +490,7 @@ test("a status reached without a load asks for the terms once", () => {
 
   assert.match(
     workspace,
-    /contractTerms !== null \|\|\s*!hasContractTerms\(status\)/,
+    /contractTerms !== null\s*\|\|\s*!hasContractTerms\(status\)/,
   );
   assert.match(
     workspace,

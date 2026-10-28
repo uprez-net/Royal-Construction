@@ -15,7 +15,7 @@ import {
 } from "@/lib/offer/workspace-area";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { Info, Layers, RotateCcw } from "lucide-react";
-import { useState, type PropsWithChildren } from "react";
+import { useRef, useState, type PropsWithChildren } from "react";
 import { isSupportedCalcVersion } from "@/lib/offer/calc-version";
 import {
   CountField,
@@ -427,6 +427,7 @@ function TileSqmField({
   // backspacing an entry to blank would refill the calculated value under the
   // caret before the new figure could be typed.
   const [editingText, setEditingText] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const shownValue =
     editingText
     // An entered 0 is a real answer (no tiles there), so it shows as 0 rather
@@ -438,6 +439,7 @@ function TileSqmField({
         <FieldLabel>{label}</FieldLabel>
         <div className="relative mt-1">
           <Input
+            ref={inputRef}
             className="pr-14 font-mono tabular-nums"
             min="0"
             placeholder="0"
@@ -474,6 +476,9 @@ function TileSqmField({
             className="inline-flex shrink-0 items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             aria-label={`Reset ${label} to the calculated value`}
             onClick={() => {
+              // Reset removes this button, which would drop focus to the page.
+              // Hand it to the field it reset instead.
+              inputRef.current?.focus();
               setEditingText(null);
               onChange(undefined);
             }}

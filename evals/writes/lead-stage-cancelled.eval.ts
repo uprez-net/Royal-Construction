@@ -14,6 +14,7 @@ export default defineEval({
     await expectGateThenCancel(t, {
       prompt: `Move the lead "${lead}" to Qualified.`,
       tools: ["update_lead"],
+      requireParked: true,
     });
 
     t.judge(

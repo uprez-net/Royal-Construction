@@ -47,6 +47,7 @@ import { buildAdminOfferPrefill } from "@/lib/offer/admin-offer-prefill";
 import {
   applyLeadPrefill,
   buildInitialOfferWorkspaceSnapshot,
+  priceFormulaCostLines,
 } from "@/lib/offer/initial-workspace";
 import { generateOfferPrefillDraft } from "@/lib/offer/offer-prefill-ai";
 import { sendOfferAcceptanceEnvelope } from "@/lib/offer/sends/acceptance-envelope";
@@ -923,6 +924,10 @@ export async function startAuthorizedOffer(
     }
   }
 
+  // After the prefill: a formula prices on the bathrooms and floor areas the
+  // lead just filled in, not on the defaults it replaced.
+  snapshot = priceFormulaCostLines(snapshot, adminPrefill.rateConstants);
+
   const saved = await saveOfferWorkspace(
     principal,
     {
@@ -996,7 +1001,7 @@ export async function emailAuthorizedOfferProposal(
       recipients: [...result.recipients],
       reference: result.reference,
     },
-    summary: `Offer ${result.reference} emailed to ${result.recipients.join(", ")}. It is now Sent and its build steps are locked.`,
+    summary: `Offer ${result.reference} emailed to ${result.recipients.join(", ")}. It is now Sent: its price inputs are frozen, and the Offer document and Scope stay editable while it is negotiated.`,
     title: "Offer sent",
   });
 }

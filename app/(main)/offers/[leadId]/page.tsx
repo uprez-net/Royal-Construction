@@ -71,6 +71,12 @@ export default async function OfferWorkspacePage({
   if (parsedLeadId === null) {
     notFound();
   }
+  // The admin defaults are read under the system principal, so this page is
+  // what decides whether the caller sees them for this lead.
+  const access = await authorizeLeadAccess(parsedLeadId);
+  if (!access.ok) {
+    notFound();
+  }
 
   const adminPrefill = buildAdminOfferPrefill(await getAdminOfferContent());
 

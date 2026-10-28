@@ -20,9 +20,7 @@ import {
   type OfferWorkspaceStatus,
   getIncludedOfferTenderLineItems,
 } from "@/lib/offer/workspace-model";
-import {
-  type OfferPaymentScheduleRow,
-} from "@/lib/offer/workspace-payment-schedule";
+import { type OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import {
   INITIAL_AREA_CALCULATOR,
   getAreaBasisTotalSqm,
@@ -307,9 +305,9 @@ export function NewOfferWorkspace({
   // untouched, so manual edits are never clobbered.
   useEffect(() => {
     if (
-      leadId === undefined ||
-      job.reference === INITIAL_OFFER_JOB.reference ||
-      areaCalculator === INITIAL_AREA_CALCULATOR
+      leadId === undefined
+      || job.reference === INITIAL_OFFER_JOB.reference
+      || areaCalculator === INITIAL_AREA_CALCULATOR
     ) {
       return;
     }
@@ -590,8 +588,8 @@ export function NewOfferWorkspace({
       return;
     }
     if (
-      draft.inclusionHighlights.length > 0 &&
-      !window.confirm(
+      draft.inclusionHighlights.length > 0
+      && !window.confirm(
         `Replace all ${draft.inclusionHighlights.length} selling lines with a fresh draft from the schedule?`,
       )
     ) {
@@ -719,14 +717,14 @@ export function NewOfferWorkspace({
       const imported = {
         ...result.workspacePricingSettings,
         loadingChargePercentage:
-          adminPrefill?.loadingChargePercentage ??
-          current.loadingChargePercentage,
+          adminPrefill?.loadingChargePercentage
+          ?? current.loadingChargePercentage,
       };
       // Only re-derive when a loading charge actually applies — with none, the
       // workbook's own dollar premium is kept rather than re-grossed from the
       // reverse-filled TCV, which lands a cent off it.
-      return (adminPrefill?.loadingChargePercentage ??
-        current.loadingChargePercentage > 0)
+      return (adminPrefill?.loadingChargePercentage
+        ?? current.loadingChargePercentage > 0)
         ? withDerivedHbcfPremium(imported)
         : imported;
     });
@@ -960,6 +958,23 @@ export function NewOfferWorkspace({
     statusRef.current = status;
   }, [status]);
 
+  // A lead prefill can set the bathroom count, so an entered tile area worked
+  // from the old count gives way, as it does on an edit (updateJob). Both
+  // callers apply it after awaiting the prefill, so it reads the job as last
+  // rendered rather than a render's copy that the wait has left behind, and
+  // applyPrefillPatch still keeps identity the estimator entered meanwhile.
+  const applyLeadJobPrefill = useCallback(
+    (patch: Partial<OfferWorkspaceJob>) => {
+      const previousJob = snapshotRef.current.job;
+      const nextJob = applyPrefillPatch(previousJob, patch);
+      setJob(nextJob);
+      setAreaCalculator((current) =>
+        reconcileTileOverrides(current, previousJob, nextJob),
+      );
+    },
+    [],
+  );
+
   const hydrateSnapshot = useCallback(
     (s: OfferWorkspaceSnapshot, status: OfferWorkspaceStatus) => {
       setJob(s.job);
@@ -984,8 +999,8 @@ export function NewOfferWorkspace({
         ...s.workspacePricingSettings,
         loadingChargePercentage:
           status === "pending"
-            ? (adminPrefill?.loadingChargePercentage ??
-              s.workspacePricingSettings.loadingChargePercentage)
+            ? (adminPrefill?.loadingChargePercentage
+              ?? s.workspacePricingSettings.loadingChargePercentage)
             : s.workspacePricingSettings.loadingChargePercentage,
       });
       setPaymentSchedule(s.paymentSchedule);
@@ -1089,9 +1104,9 @@ export function NewOfferWorkspace({
               return "error";
             }
             if (
-              result.reason === "stale" ||
-              result.reason === "superseded" ||
-              result.reason === "locked"
+              result.reason === "stale"
+              || result.reason === "superseded"
+              || result.reason === "locked"
             ) {
               // A different tab moved on (single-flight rules out our own
               // overlap) — reconcile to the live copy rather than clobber it.
@@ -1248,7 +1263,7 @@ export function NewOfferWorkspace({
           setPrefillResult(result);
           if (result.ok) {
             if (Object.keys(result.job).length > 0) {
-              setJob((current) => applyPrefillPatch(current, result.job));
+              applyLeadJobPrefill(result.job);
             }
             if (Object.keys(result.draft).length > 0) {
               setDraft((current) => ({ ...current, ...result.draft }));
@@ -1264,7 +1279,7 @@ export function NewOfferWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [leadId, hydrateSnapshot, adoptOffer]);
+  }, [leadId, hydrateSnapshot, adoptOffer, applyLeadJobPrefill]);
 
   // Every load brings the Contract step's terms. A status reached without one,
   // a signing poll that saw the Tender signed or a lifecycle click, asks once:
@@ -1272,9 +1287,9 @@ export function NewOfferWorkspace({
   // not re-read the terms.
   useEffect(() => {
     if (
-      leadId === undefined ||
-      contractTerms !== null ||
-      !hasContractTerms(status)
+      leadId === undefined
+      || contractTerms !== null
+      || !hasContractTerms(status)
     ) {
       return;
     }
@@ -1288,10 +1303,10 @@ export function NewOfferWorkspace({
         // The same identity check as the signing poll: a revision forked
         // meanwhile must not take this offer's terms.
         if (
-          !cancelled &&
-          offerIdRef.current === offerId &&
-          result.ok &&
-          result.contractTerms
+          !cancelled
+          && offerIdRef.current === offerId
+          && result.ok
+          && result.contractTerms
         ) {
           setContractTerms(result.contractTerms);
         }
@@ -1320,9 +1335,9 @@ export function NewOfferWorkspace({
       return;
     }
     if (
-      status !== "offer_sent" &&
-      status !== "tender_sent" &&
-      status !== "contract_sent"
+      status !== "offer_sent"
+      && status !== "tender_sent"
+      && status !== "contract_sent"
     ) {
       return;
     }
@@ -1424,9 +1439,9 @@ export function NewOfferWorkspace({
   useEffect(() => {
     const offerId = offerIdRef.current;
     if (
-      leadId === undefined ||
-      offerId === null ||
-      status !== "contract_draft"
+      leadId === undefined
+      || offerId === null
+      || status !== "contract_draft"
     ) {
       return;
     }
@@ -1547,6 +1562,15 @@ export function NewOfferWorkspace({
             );
           }
           // Only advance the UI once the server transition has committed.
+          if (
+            isOfferBuildStepEditable("pricing", statusRef.current)
+            && !isOfferBuildStepEditable("pricing", next)
+          ) {
+            // See the send below: keep the derived settings that were saved.
+            setPricingSettingsInput(
+              snapshotRef.current.workspacePricingSettings,
+            );
+          }
           setStatus(next);
         } catch (error) {
           console.error("[offer] status transition failed:", error);
@@ -1738,6 +1762,14 @@ export function NewOfferWorkspace({
             sendAttemptId,
           });
           if (result.ok) {
+            // Pricing stops deriving once the offer leaves pending, and falls
+            // back to the estimator's inputs. Those still hold the Total
+            // Contract Value and HBCF premium from before the derivation, so
+            // the screen, and the next autosave, would revert the quoted price.
+            // Hold the derived settings the flush above saved instead.
+            setPricingSettingsInput(
+              snapshotRef.current.workspacePricingSettings,
+            );
             setStatus("sent");
             // Report exactly who the server emailed (every signatory), not just
             // the primary/secondary the dialog passed in.
@@ -1973,7 +2005,7 @@ export function NewOfferWorkspace({
         setPrefillResult(result);
         if (result.ok) {
           if (Object.keys(result.job).length > 0) {
-            setJob((current) => applyPrefillPatch(current, result.job));
+            applyLeadJobPrefill(result.job);
           }
           if (Object.keys(result.draft).length > 0) {
             setDraft((current) => ({ ...current, ...result.draft }));
@@ -1989,7 +2021,7 @@ export function NewOfferWorkspace({
         setPrefilling(false);
       }
     })();
-  }, [leadId]);
+  }, [leadId, applyLeadJobPrefill]);
 
   return (
     <>

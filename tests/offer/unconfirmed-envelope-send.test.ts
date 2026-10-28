@@ -45,8 +45,16 @@ const code = (path: string) =>
 // pass while the ordering was wrong.
 const SEND_PATHS: [string, string, string][] = [
   ["lib/offer/sends/tender-envelope.ts", "TENDER", "tenderEnvelopePort.send("],
-  ["lib/offer/sends/contract-envelope.ts", "CONTRACT", "contractEnvelopePort.send("],
-  ["lib/offer/sends/acceptance-envelope.ts", "OFFER", "acceptanceEnvelopePort.send("],
+  [
+    "lib/offer/sends/contract-envelope.ts",
+    "CONTRACT",
+    "contractEnvelopePort.send(",
+  ],
+  [
+    "lib/offer/sends/acceptance-envelope.ts",
+    "OFFER",
+    "acceptanceEnvelopePort.send(",
+  ],
 ];
 
 test("all three send paths record the attempt before calling DocuSign", () => {

@@ -448,6 +448,13 @@ export function OfferWorkspaceScreen({
     currentOfferStepId(status, tenderGateStatus),
   );
   const paneRef = useRef<HTMLDivElement>(null);
+  // While a programmatic scroll is running (a rail click's, or the jump to the
+  // hydrated step), the sections it passes must not each take a turn as the
+  // active step. Released when the scroll ends, or by the timer where it never
+  // starts (already in place) or `scrollend` is not supported.
+  const scrollTargetRef = useRef<OfferStepId | null>(null);
+  const releaseScrollTargetRef =
+    useRef<ReturnType<typeof setTimeout>>(undefined);
   const syncedToHydratedStatusRef = useRef(false);
   useEffect(() => {
     if (hydrated && !syncedToHydratedStatusRef.current) {
@@ -456,18 +463,18 @@ export function OfferWorkspaceScreen({
       setActiveStepId(stepId);
       // No animation and no focus: page load must not steal either.
       if (paneRef.current) {
+        // A short step near the bottom may not reach the reading line, and the
+        // scroll-spy would then name a neighbour instead of the step jumped to.
+        scrollTargetRef.current = stepId;
+        clearTimeout(releaseScrollTargetRef.current);
+        releaseScrollTargetRef.current = setTimeout(() => {
+          scrollTargetRef.current = null;
+        }, 1000);
         scrollPaneToStep(paneRef.current, stepId, "instant");
       }
     }
   }, [hydrated, status, tenderGateStatus]);
 
-  // While a rail click's smooth scroll is running, the sections it passes must
-  // not each take a turn as the active step. Released when the scroll ends, or
-  // by the timer where it never starts (already in place) or `scrollend` is
-  // not supported.
-  const scrollTargetRef = useRef<OfferStepId | null>(null);
-  const releaseScrollTargetRef =
-    useRef<ReturnType<typeof setTimeout>>(undefined);
   const navigateToStep = useCallback((stepId: OfferStepId) => {
     setActiveStepId(stepId);
     const pane = paneRef.current;
@@ -516,13 +523,21 @@ export function OfferWorkspaceScreen({
         });
       }
     };
+    // The last scroll event's sync is still queued for the next frame. Release
+    // the guard a frame later, so that sync sees it and leaves the target be.
+    let releaseFrame = 0;
     const onScrollEnd = () => {
-      scrollTargetRef.current = null;
+      cancelAnimationFrame(releaseFrame);
+      releaseFrame = requestAnimationFrame(() => {
+        releaseFrame = 0;
+        scrollTargetRef.current = null;
+      });
     };
     pane.addEventListener("scroll", onScroll, { passive: true });
     pane.addEventListener("scrollend", onScrollEnd);
     return () => {
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(releaseFrame);
       clearTimeout(releaseScrollTargetRef.current);
       pane.removeEventListener("scroll", onScroll);
       pane.removeEventListener("scrollend", onScrollEnd);

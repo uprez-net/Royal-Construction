@@ -1,12 +1,8 @@
 import "server-only";
 import { signBookConsultationToken } from "@/lib/leads/book-consultation-token";
 
-
 import prisma from "@/lib/prisma";
-import {
-  mapLead,
-  LeadAnalyticsData,
-} from "@/types/lead";
+import { mapLead, LeadAnalyticsData } from "@/types/lead";
 import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
@@ -100,8 +96,8 @@ async function sendLeadMentionEmails(input: {
   const config = getGraphConfig();
   const graphClient = await createGraphContext(config);
   const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "https://royal-construction-chi.vercel.app";
+    process.env.NEXT_PUBLIC_APP_URL
+    || "https://royal-construction-chi.vercel.app";
   const crmUrl = `${baseUrl}/leads`;
   const leadName = escapeEmailHtml(input.leadName);
   const selectedText = escapeEmailHtml(input.selectedText);
@@ -258,9 +254,9 @@ export async function getLeads(
   // Current date in Sydney
   const sydneyNow = toZonedTime(new Date(), timeZone);
   const isMeetingScheduledFilterActive =
-    pendingMeetings !== undefined ||
-    upcomingMeetings !== undefined ||
-    (status?.includes("MEETING_SCHEDULED") && status?.length === 1);
+    pendingMeetings !== undefined
+    || upcomingMeetings !== undefined
+    || (status?.includes("MEETING_SCHEDULED") && status?.length === 1);
 
   if (hasTimingFilter) {
     let startSydney: Date;
@@ -702,10 +698,10 @@ export async function createLead(
   await triggerNotification([], notificationPayload);
 
   if (
-    !options?.skipWelcomeEmail &&
-    created.email &&
-    created.name &&
-    input.stage !== "In Follow-up"
+    !options?.skipWelcomeEmail
+    && created.email
+    && created.name
+    && input.stage !== "In Follow-up"
   ) {
     await sendLeadWelcomeEmail(created);
   }
@@ -879,7 +875,9 @@ export async function updateLead(
         customerEmail: res.email ?? "Not specified",
         customerPhone: res.phone ?? "Not specified",
         status: res.stage,
-        change: outcome.stageChanged ? undefined : "updated with more information",
+        change: outcome.stageChanged
+          ? undefined
+          : "updated with more information",
       }),
     );
   }

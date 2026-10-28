@@ -1,4 +1,7 @@
-import type { AdminOfferPrefill } from "@/lib/offer/admin-offer-prefill";
+import {
+  reevaluateFormulaCostLines,
+  type AdminOfferPrefill,
+} from "@/lib/offer/admin-offer-prefill";
 import { CURRENT_CALC_VERSION } from "@/lib/offer/calc-version";
 import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
 import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
@@ -171,5 +174,38 @@ export function applyLeadPrefill(
       Object.keys(prefill.draft).length > 0
         ? { ...snapshot.draft, ...prefill.draft }
         : snapshot.draft,
+  };
+}
+
+/**
+ * Price a starting snapshot's formula cost lines on its own job and area
+ * calculator, and re-derive Total Contract Value from the result.
+ *
+ * The screen does this in an effect as soon as an editable offer opens. An
+ * offer started anywhere else has to do it before saving, or the saved schedule
+ * and the lead's deal value carry the admin defaults' figures rather than the
+ * ones the lead's own job prices to.
+ */
+export function priceFormulaCostLines(
+  snapshot: OfferWorkspaceSnapshot,
+  rateConstants: AdminOfferPrefill["rateConstants"],
+): OfferWorkspaceSnapshot {
+  if (!snapshot.lines.some((line) => line.formula)) {
+    return snapshot;
+  }
+  const lines = reevaluateFormulaCostLines(
+    snapshot.lines,
+    rateConstants,
+    snapshot.job,
+    snapshot.areaCalculator,
+    snapshot.calcVersion,
+  );
+  return {
+    ...snapshot,
+    lines,
+    workspacePricingSettings: withDerivedTotalContractValue(
+      snapshot.workspacePricingSettings,
+      calculateDirectTotal(lines),
+    ),
   };
 }

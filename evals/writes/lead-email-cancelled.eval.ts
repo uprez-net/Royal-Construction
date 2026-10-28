@@ -15,6 +15,7 @@ export default defineEval({
     await expectGateThenCancel(t, {
       prompt: `Email the lead "${lead}" at their email on file: "Thanks for your time today, we will be in touch next week."`,
       tools: ["send_lead_email"],
+      requireParked: true,
     });
 
     t.judge(

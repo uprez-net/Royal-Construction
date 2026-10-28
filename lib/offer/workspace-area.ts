@@ -163,27 +163,27 @@ export function offerAreaBasisFromJob(
 // term order below exactly as it is.
 export function rawTotalAreaSqm(basis: OfferAreaBasis): number {
   return (
-    basis.groundFloorSqm +
-    basis.firstFloorSqm +
-    basis.garageSqm +
-    basis.alfrescoSqm +
-    basis.porchSqm +
-    basis.grannyFlatSqm +
-    basis.balconySqm +
-    basis.voidSqm
+    basis.groundFloorSqm
+    + basis.firstFloorSqm
+    + basis.garageSqm
+    + basis.alfrescoSqm
+    + basis.porchSqm
+    + basis.grannyFlatSqm
+    + basis.balconySqm
+    + basis.voidSqm
   );
 }
 
 export function getAreaBasisTotalSqm(basis: OfferAreaBasis): number {
   return roundCurrency(
-    basis.groundFloorSqm +
-      basis.firstFloorSqm +
-      basis.alfrescoSqm +
-      basis.porchSqm +
-      basis.garageSqm +
-      basis.voidSqm +
-      basis.grannyFlatSqm +
-      basis.balconySqm,
+    basis.groundFloorSqm
+      + basis.firstFloorSqm
+      + basis.alfrescoSqm
+      + basis.porchSqm
+      + basis.garageSqm
+      + basis.voidSqm
+      + basis.grannyFlatSqm
+      + basis.balconySqm,
   );
 }
 
@@ -212,12 +212,12 @@ export function calculateSlab(
     area.numberOfTrucks * rates.priceOfEachTruck,
   );
   const slabCost = roundCurrency(
-    (basis.groundFloorSqm +
-      basis.alfrescoSqm +
-      basis.porchSqm +
-      basis.garageSqm +
-      basis.grannyFlatSqm) *
-      rates.slabCostPerSqm,
+    (basis.groundFloorSqm
+      + basis.alfrescoSqm
+      + basis.porchSqm
+      + basis.garageSqm
+      + basis.grannyFlatSqm)
+      * rates.slabCostPerSqm,
   );
   const totalSlabCost = roundCurrency(
     slabCost + totalDropEdgeBeamCost + totalTruckPrice,
@@ -278,11 +278,11 @@ export function calculateFrame(
   readonly totalFrameCost: number;
 } {
   const totalGroundFloorArea = roundCurrency(
-    basis.groundFloorSqm +
-      basis.alfrescoSqm +
-      basis.porchSqm +
-      basis.garageSqm +
-      basis.grannyFlatSqm,
+    basis.groundFloorSqm
+      + basis.alfrescoSqm
+      + basis.porchSqm
+      + basis.garageSqm
+      + basis.grannyFlatSqm,
   );
   const totalGroundFloorFrameCost = roundCurrency(
     totalGroundFloorArea * rates.groundFloorFramePricePerSqm,
@@ -292,11 +292,11 @@ export function calculateFrame(
     totalFirstFloorArea * rates.firstFloorFramePricePerSqm,
   );
   const totalFrameCost = roundCurrency(
-    totalGroundFloorFrameCost +
-      totalFirstFloorFrameCost +
-      area.steel +
-      area.installer +
-      area.eaves,
+    totalGroundFloorFrameCost
+      + totalFirstFloorFrameCost
+      + area.steel
+      + area.installer
+      + area.eaves,
   );
   return {
     totalGroundFloorArea,

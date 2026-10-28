@@ -417,6 +417,15 @@ export async function sendContractEnvelope(
     locked("ownerPrintName", primaryOwner),
   ];
 
+  // Chosen once: the envelope is sent on it and the Contract row records it, so
+  // a dispute reads the template the customer actually signed.
+  const templateId =
+    ownerSigners.length === 1
+      ? config.contractTemplateId
+      : ownerSigners.length === 2
+        ? config.contractDefaultTemplateId
+        : config.contractMultipleOwnersTemplateId;
+
   const sendAttemptId = `${offer.id}.${randomUUID()}`;
   const attemptStarted = new Date();
   // Before the send, not after it goes wrong (issue #321). Written in the
@@ -454,12 +463,7 @@ export async function sendContractEnvelope(
     envelope = await contractEnvelopePort.send({
       context: docusignContext,
       config,
-      templateId:
-        ownerSigners.length === 1
-          ? config.contractTemplateId
-          : ownerSigners.length === 2
-            ? config.contractDefaultTemplateId
-            : config.contractMultipleOwnersTemplateId,
+      templateId,
       emailSubject: `Residential Building Contract (BC4) — ${reference}`,
       builder: {
         name: config.builderSignerName,
@@ -554,7 +558,7 @@ export async function sendContractEnvelope(
   }
 
   const documentData = {
-    templateId: config.contractTemplateId,
+    templateId,
     tabs: Object.fromEntries(ownerTextTabs.map((t) => [t.tabLabel, t.value])),
     // Which copy of the schedule the contract went out on, for a dispute.
     paymentScheduleSource: payment.source,

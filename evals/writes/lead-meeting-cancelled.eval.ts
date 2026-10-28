@@ -16,6 +16,7 @@ export default defineEval({
     await expectGateThenCancel(t, {
       prompt: `Schedule a meeting with the lead "${lead}" for next Tuesday at 10am.`,
       tools: ["create_lead_task", "update_lead"],
+      requireParked: true,
     });
 
     t.judge(
