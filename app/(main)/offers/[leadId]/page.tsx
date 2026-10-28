@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { NewOfferWorkspace } from "@/components/offers/new-workflow/new-offer-workspace";
 import { buildAdminOfferPrefill } from "@/lib/offer/admin-offer-prefill";
+import { getAdminOfferContent } from "@/lib/data/admin-offer-content";
 import { authorizeLeadAccess } from "@/lib/data/offer-access";
 import prisma from "@/lib/prisma";
 import type { Metadata } from "next";
@@ -70,8 +71,14 @@ export default async function OfferWorkspacePage({
   if (parsedLeadId === null) {
     notFound();
   }
+  // The admin defaults are read under the system principal, so this page is
+  // what decides whether the caller sees them for this lead.
+  const access = await authorizeLeadAccess(parsedLeadId);
+  if (!access.ok) {
+    notFound();
+  }
 
-  const adminPrefill = await buildAdminOfferPrefill();
+  const adminPrefill = buildAdminOfferPrefill(await getAdminOfferContent());
 
   return (
     <NewOfferWorkspace leadId={parsedLeadId} adminPrefill={adminPrefill} />

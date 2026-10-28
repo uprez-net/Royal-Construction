@@ -63,15 +63,23 @@ export const WRITE_TOOLS = {
     "update_team_role",
   ],
   "lead-operations": [
+    "archive_lead",
     "complete_lead_task",
+    "create_lead",
     "create_lead_task",
     "reopen_lead_task",
+    "send_lead_email",
+    "update_lead",
   ],
   "offer-operations": [
     "create_offer_revision",
+    "create_project_from_offer",
+    "email_offer_proposal",
     "log_change_request",
     "recall_offer_envelope",
     "save_contract_particulars",
+    "send_offer_for_signature",
+    "start_offer",
     "transition_offer_status",
     "update_offer_details",
   ],
@@ -114,11 +122,6 @@ export const ALL_WRITE_TOOLS: readonly string[] =
  * boundary case.
  */
 export const UNAVAILABLE_CAPABILITIES = {
-  leadEmail: "sending or drafting-and-sending email to a lead",
-  leadMeeting: "booking or rescheduling a meeting with a lead",
-  leadStage: "moving a lead between pipeline stages",
   leadFiles: "uploading, renaming or deleting lead files",
-  offerDocumentDelivery: "sending an offer document or DocuSign envelope",
-  projectHandoff: "handing a won offer over into a project",
   variations: "creating, pricing or approving project variations",
 } as const;

@@ -17,6 +17,7 @@ import {
   resolveTargetMarkupPct,
   reverseHbcfTotalContractValue,
   withDerivedHbcfPremium,
+  withDerivedTotalContractValue,
   type OfferWorkspacePricingSettings,
 } from "@/lib/offer/workspace-pricing";
 
@@ -505,4 +506,66 @@ test("reversing a loaded premium divides the loading back out", () => {
     Math.round(reverseHbcfTotalContractValue(7528.52, 0.00966)),
     650000,
   );
+});
+
+// ─── Derived Total Contract Value ───
+
+test("Total Contract Value equals the contract value inc GST it produces", () => {
+  const settings = withDerivedTotalContractValue(
+    { ...SETTINGS, impactFeeFixed: 5000 },
+    500000,
+  );
+  const pricing = calculateOfferWorkspacePricing({
+    directTotal: 500000,
+    totalAreaSqm: 200,
+    settings,
+  });
+  assert.equal(settings.hbcfTotalContractValue, pricing.contractValueIncGst);
+  // The premium is the one icare would charge on that value.
+  assert.equal(
+    settings.homeWarrantyHbcfFixed,
+    calculateHbcfPremium(pricing.contractValueIncGst, settings.hbcfRate),
+  );
+  assert.ok(settings.homeWarrantyHbcfFixed > 0);
+});
+
+test("the derived value carries the loading charge into the premium", () => {
+  const settings = withDerivedTotalContractValue(
+    { ...SETTINGS, loadingChargePercentage: 5 },
+    500000,
+  );
+  const pricing = calculateOfferWorkspacePricing({
+    directTotal: 500000,
+    totalAreaSqm: 0,
+    settings,
+  });
+  assert.equal(settings.hbcfTotalContractValue, pricing.contractValueIncGst);
+  assert.equal(
+    settings.homeWarrantyHbcfFixed,
+    calculateHbcfPremium(pricing.contractValueIncGst, settings.hbcfRate, 5),
+  );
+});
+
+test("a typed Total Contract Value is replaced by the derived one", () => {
+  const derived = withDerivedTotalContractValue(SETTINGS, 400000);
+  const fromTyped = withDerivedTotalContractValue(
+    withDerivedHbcfPremium({ ...SETTINGS, hbcfTotalContractValue: 650000 }),
+    400000,
+  );
+  assert.equal(
+    fromTyped.hbcfTotalContractValue,
+    derived.hbcfTotalContractValue,
+  );
+  assert.equal(fromTyped.homeWarrantyHbcfFixed, derived.homeWarrantyHbcfFixed);
+});
+
+test("settings already in step come back as the same object", () => {
+  const derived = withDerivedTotalContractValue(SETTINGS, 400000);
+  assert.equal(withDerivedTotalContractValue(derived, 400000), derived);
+});
+
+test("nothing priced yet derives a zero contract value and no premium", () => {
+  const derived = withDerivedTotalContractValue(SETTINGS, 0);
+  assert.equal(derived.hbcfTotalContractValue, 0);
+  assert.equal(derived.homeWarrantyHbcfFixed, 0);
 });

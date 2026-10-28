@@ -15,7 +15,7 @@ const sharedPersistence = read("lib/domain/offers/envelope-send.ts");
 
 const SENDS = [
   {
-    file: "lib/data/offer-accept-sign.ts",
+    file: "lib/offer/sends/acceptance-envelope.ts",
     envelope: "envelope = await acceptanceEnvelopePort.send(",
     action: "sendOfferForSignature({ offerId })",
     showsError: "setOfferSignError(result.error)",
@@ -25,7 +25,7 @@ const SENDS = [
           }`,
   },
   {
-    file: "lib/data/offer-tender-sign.ts",
+    file: "lib/offer/sends/tender-envelope.ts",
     envelope: "envelope = await tenderEnvelopePort.send(",
     action: "sendTenderForSignature({ offerId })",
     showsError: "setTenderSendError(result.error)",
@@ -35,7 +35,7 @@ const SENDS = [
           }`,
   },
   {
-    file: "lib/data/offer-contract-sign.ts",
+    file: "lib/offer/sends/contract-envelope.ts",
     envelope: "envelope = await contractEnvelopePort.send(",
     action: "sendContractForSignature({ offerId })",
     showsError: "setContractSendError(result.error)",
@@ -64,6 +64,22 @@ function afterEnvelope(source: string, envelope: string): string {
   return stripComments(source.slice(start, end));
 }
 
+test("the app's send effects expire the offer and sync the lead", () => {
+  const effects = read("lib/data/offer-send-effects.ts");
+  assert.match(effects, /revalidateTag\(`offer-\$\{offerId\}`/);
+  assert.match(effects, /syncLeadStageForOffer\(offerId\)/);
+  for (const send of SENDS) {
+    const action = read(
+      send.action.startsWith("sendOfferForSignature")
+        ? "lib/data/offer-accept-sign.ts"
+        : send.action.startsWith("sendTender")
+          ? "lib/data/offer-tender-sign.ts"
+          : "lib/data/offer-contract-sign.ts",
+    );
+    assert.match(action, /\bappOfferSendEffects,?\s*\)/);
+  }
+});
+
 for (const send of SENDS) {
   test(`${send.file} returns, never throws, once the envelope exists`, () => {
     const body = afterEnvelope(read(send.file), send.envelope);
@@ -73,8 +89,10 @@ for (const send of SENDS) {
     // An unrecorded send still committed the claim, so the caller must be
     // told the status it left behind and the screen and lead must follow it.
     assert.match(body, new RegExp(`status: ${send.sentStatus}`));
-    assert.match(body, /revalidateTag\(`offer-\$\{offer\.id\}`/);
-    assert.match(body, /await syncLeadStageForOffer\(offer\.id\)/);
+    // The caller's effects expire the offer and bring the lead along: the
+    // app's are lib/data/offer-send-effects.ts, Eve's the lead-stage rule.
+    assert.match(body, /effects\.offerChanged\(offer\.id\)/);
+    assert.match(body, /await effects\.statusChanged\(offer\.id\)/);
     // The operator log line moved with the persistence rule, and stays shared.
     assert.match(sharedPersistence, /sent but persisting it failed:/);
   });

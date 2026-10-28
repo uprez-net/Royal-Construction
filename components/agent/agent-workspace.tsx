@@ -91,7 +91,9 @@ export function AgentWorkspace({
   const [stalled, setStalled] = useState(false);
   // Rails are the wide-screen panes; `sheet` is the narrow-screen drawer. Kept
   // apart so a phone never mounts a drawer just because a rail defaults open.
-  const [rails, setRails] = useState({ history: true, inspector: true });
+  // The inspector (session usage and cost) starts closed; the header toggle
+  // opens it.
+  const [rails, setRails] = useState({ history: true, inspector: false });
   const [sheet, setSheet] = useState<"history" | "inspector" | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);

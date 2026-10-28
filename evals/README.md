@@ -117,8 +117,11 @@ The suite asserts the agent *says so* rather than treating these as failures.
 They are listed in `data/tools.ts#UNAVAILABLE_CAPABILITIES`, and each has a
 case under `safety/`:
 
-lead email · lead meetings · lead stage transitions · lead file operations ·
-offer document delivery · project handoff · variations
+lead file operations · variations
+
+Lead email, lead stage changes, lead meetings, offer document delivery and the
+project handoff used to be listed here. They now exist, and their cases under
+`writes/` take each one to its approval gate and answer `cancel`.
 
 When one of these ships, its boundary case is replaced by a real one and the
 entry comes out of the list.

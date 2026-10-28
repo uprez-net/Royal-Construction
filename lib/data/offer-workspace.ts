@@ -4,15 +4,18 @@ import { OfferStatus, Prisma } from "@prisma/client";
 import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { revalidateTag, updateTag } from "next/cache";
 import prisma from "@/lib/prisma";
+import { getAdminOfferContent } from "@/lib/data/admin-offer-content";
+import { createDocusignEnvelopeControl } from "@/lib/docusign/envelope-control-port";
+import {
+  mintOfferReference,
+  openOfferForLead,
+} from "@/lib/domain/offers/start";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
   authorizeLeadAccess,
   authorizeOfferAccess,
   type OfferAccess,
 } from "@/lib/data/offer-access";
-import { getDocusignConfig } from "@/lib/docusign/config";
-import { createDocusignContext } from "@/lib/docusign/client";
-import { getEnvelopeStatus, voidEnvelope } from "@/lib/docusign/void-envelope";
 import {
   deserializeWorkspace,
   parseWorkspaceState,
@@ -51,7 +54,6 @@ import {
   listOfferRevisionHistory,
   loadOfferRevisionSnapshot as loadOfferRevisionSnapshotDomain,
 } from "@/lib/domain/offers/queries";
-import type { EnvelopeControlPort } from "@/lib/domain/ports/envelope-control";
 
 // The active offer for a lead, ready to hydrate the workspace. `snapshot` is
 // null when the offer has no saved working-state yet (client uses defaults).
@@ -158,9 +160,9 @@ async function reapplyAdminContentIfStale(
     return loaded;
   }
 
-  let prefill: Awaited<ReturnType<typeof buildAdminOfferPrefill>>;
+  let prefill: ReturnType<typeof buildAdminOfferPrefill>;
   try {
-    prefill = await buildAdminOfferPrefill();
+    prefill = buildAdminOfferPrefill(await getAdminOfferContent());
   } catch (error) {
     // Opening the workspace must not fail because the admin row could not be
     // read; the offer's own saved content is still perfectly usable.
@@ -288,19 +290,6 @@ async function attachContractTerms(
   };
 }
 
-// Mint the next base reference (RC-Q-YYYY-NNN) inside a transaction.
-async function mintOfferReference(
-  tx: Prisma.TransactionClient,
-  year: number,
-): Promise<string> {
-  const counter = await tx.offerReferenceCounter.upsert({
-    where: { year },
-    create: { year, lastSeq: 1 },
-    update: { lastSeq: { increment: 1 } },
-  });
-  return `RC-Q-${year}-${String(counter.lastSeq).padStart(3, "0")}`;
-}
-
 // No actor argument on this or any action below: each is a Server Action, so a
 // caller-supplied id could put anyone's name on the offer or its audit trail.
 // The actor is always the user the access check signed in.
@@ -312,11 +301,14 @@ export async function loadActiveOfferWorkspace(
     throw new Error(access.error);
   }
 
-  const existing = await prisma.offer.findFirst({
-    where: { leadId, isActive: true },
-    orderBy: { createdAt: "desc" },
-  });
-  if (existing) {
+  // Finding the live offer, or creating the lead's first one, is
+  // lib/domain/offers/start.ts, which Eve's start_offer calls too.
+  const { created, offer: existing } = await openOfferForLead(
+    userPrincipal(access.user),
+    { leadId },
+    prisma,
+  );
+  if (!created) {
     // Heal legacy/seed rows that were created without a minted base reference
     // (which render as a bare "-R1"). Mint one and persist it so the reference
     // is correct from here on. Idempotent: only runs while the base is blank.
@@ -355,26 +347,9 @@ export async function loadActiveOfferWorkspace(
     );
   }
 
-  // First offer for this lead — create it with a freshly minted reference.
-  const created = await prisma.$transaction(async (tx) => {
-    const year = new Date().getFullYear();
-    const baseReference = await mintOfferReference(tx, year);
-    return tx.offer.create({
-      data: {
-        leadId,
-        baseReference,
-        revisionNumber: 1,
-        isActive: true,
-        createdById: access.user.id,
-        offerStatus: OfferStatus.PENDING,
-        amount: new Prisma.Decimal(0),
-        gstAmount: new Prisma.Decimal(0),
-        totalAmount: new Prisma.Decimal(0),
-      },
-    });
-  });
+  // First offer for this lead, created above with a freshly minted reference.
   revalidateTag(`offer-lead-${leadId}`, CACHE_PROFILES.SHORT);
-  return toLoaded(created);
+  return toLoaded(existing);
 }
 
 type SaveResult =
@@ -509,9 +484,9 @@ export async function transitionOfferStatus(input: {
   // (issue #90). It is a local-development testing aid only, so refuse a manual
   // jump into a signed state anywhere but local dev.
   const isManualSignedJump =
-    input.toStatus === OfferStatus.OFFER_SIGNED ||
-    input.toStatus === OfferStatus.TENDER_SIGNED ||
-    input.toStatus === OfferStatus.CONTRACT_SIGNED;
+    input.toStatus === OfferStatus.OFFER_SIGNED
+    || input.toStatus === OfferStatus.TENDER_SIGNED
+    || input.toStatus === OfferStatus.CONTRACT_SIGNED;
   if (isManualSignedJump && process.env.NODE_ENV !== "development") {
     throw new Error(
       "Manual 'mark signed' is disabled outside local development — complete signing via DocuSign.",
@@ -704,20 +679,6 @@ export type CreateOfferRevisionResult =
   // thrown message in production and `error` is what the estimator acts on.
   | { ok: false; reason: "refused"; error: string };
 
-function createEnvelopeControlPort(): EnvelopeControlPort {
-  let context: ReturnType<typeof createDocusignContext> | null = null;
-  const getContext = () => {
-    context ??= createDocusignContext(getDocusignConfig());
-    return context;
-  };
-  return {
-    getStatus: async (envelopeId) =>
-      getEnvelopeStatus(await getContext(), envelopeId),
-    void: async (envelopeId, reason) =>
-      voidEnvelope(await getContext(), envelopeId, reason),
-  };
-}
-
 /**
  * Recall a document that is out for signature: void the live DocuSign envelope
  * AND step the offer back to its editable status.
@@ -754,7 +715,7 @@ export async function recallOfferEnvelope(input: {
     userPrincipal(access.user),
     input,
     prisma,
-    createEnvelopeControlPort(),
+    createDocusignEnvelopeControl(),
   );
 }
 
@@ -774,7 +735,7 @@ export async function createOfferRevision(input: {
     userPrincipal(access.user),
     input,
     prisma,
-    createEnvelopeControlPort(),
+    createDocusignEnvelopeControl(),
   );
   if (!created.ok) return created;
 

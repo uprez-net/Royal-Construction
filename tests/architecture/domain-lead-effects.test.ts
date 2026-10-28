@@ -366,10 +366,15 @@ test("a genuinely new message still goes out", async () => {
   assert.notEqual(keys[0], keys[2]);
 });
 
-test("the composer action reaches the shared rules", () => {
+test("the composer action and Eve reach the shared rules", () => {
+  // The composer's pipeline is lib/leads/lead-email-send.ts, which the app's
+  // action and Eve's send_lead_email both call.
+  const pipeline = read("lib/leads/lead-email-send.ts");
+  assert.match(pipeline, /authorizeLeadEmail\(/);
+  assert.match(pipeline, /sendLeadEmailOnce\(/);
   const adapter = read("lib/data/leads.ts");
-  assert.match(adapter, /authorizeLeadEmail\(/);
-  assert.match(adapter, /sendLeadEmailOnce\(/);
+  assert.match(adapter, /sendComposedLeadEmail\(/);
+  assert.match(read("agent/lib/lead-operations.ts"), /sendComposedLeadEmail\(/);
   // Its own "is the caller signed in" check, which said nothing about the
   // lead or the recipient, is gone.
   assert.doesNotMatch(

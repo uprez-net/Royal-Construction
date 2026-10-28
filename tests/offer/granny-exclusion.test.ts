@@ -211,10 +211,10 @@ test("every document filters the line", () => {
 
 test("no send path refuses the offer over the line any more", () => {
   for (const path of [
-    "lib/data/offer-send.ts",
-    "lib/data/offer-accept-sign.ts",
-    "lib/data/offer-tender-sign.ts",
-    "lib/data/offer-contract-sign.ts",
+    "lib/offer/sends/proposal-email.ts",
+    "lib/offer/sends/acceptance-envelope.ts",
+    "lib/offer/sends/tender-envelope.ts",
+    "lib/offer/sends/contract-envelope.ts",
     "lib/offer/offer-readiness.ts",
   ]) {
     const text = source(path);

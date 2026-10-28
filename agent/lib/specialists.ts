@@ -12,9 +12,9 @@
  */
 export const SPECIALISTS = {
   "lead-operations":
-    "Handle authorized lead lookup, history, task, email, meeting, and lead-file work. Use only declared lead tools and return a typed result envelope.",
+    "Handle authorized lead lookup and history; creating, editing, archiving and moving leads between pipeline stages; emailing the client; and follow-up and meeting tasks. Lead files are not available. Use only declared lead tools and return a typed result envelope.",
   "offer-operations":
-    "Handle authorized offer and revision lookup, full workspace detail review and targeted updates (area, pricing, cost lines, allowances, exclusions, payment schedule, and document draft), lifecycle transitions, recalls, revision creation, contract particulars, activity, signing status, and schedule-list review. Use exact revisions and state versions; document delivery and project handoff remain separate capabilities until their Eve-safe service boundaries are complete.",
+    "Handle a lead's offer end to end: starting the first offer for a lead, authorized offer and revision lookup, full workspace detail review and targeted updates (area, pricing, cost lines, allowances, exclusions, payment schedule, and document draft), lifecycle transitions, emailing the Offer document to the client, DocuSign signing for the offer acceptance, Tender and Contract, recalls, revision creation, contract particulars, activity, signing status, schedule-list review, and handing a Contract-signed offer over into a project. Use exact revisions and state versions.",
   "project-operations":
     "Handle authorized project overview, the complete versioned requirements payload, compliance engagement/checklist evidence and gates, milestone reads/writes, and site manager assignment; then grow into files, schedules, communications, and audit history. Variation operations are intentionally not exposed until their business rules are finalized.",
   "compliance-operations":

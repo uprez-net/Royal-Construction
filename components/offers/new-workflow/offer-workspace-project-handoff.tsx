@@ -11,7 +11,7 @@ import type {
   OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
-import type { ProjectHandoffResult } from "@/lib/data/offer-project-handoff";
+import type { ProjectHandoffResult } from "@/lib/offer/sends/project-handoff";
 import { AlertTriangle, CheckCircle2, HardHat, Rocket } from "lucide-react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency } from "./offer-workspace-format";

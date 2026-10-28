@@ -6,9 +6,10 @@ description: Use for offer status, workspace content, revisions, version conflic
 
 ## Canonical sources
 
-Use `lib/data/offer-access.ts`, `lib/data/offers.ts`, `lib/offer`, offer
-validators, revision helpers, `OfferStatusEvent`, and the existing project
-handoff service. Preserve the current lead-scope guard.
+Use `lib/domain/offers` (start, status, revisions, recall, workspace save),
+`lib/offer/sends` (the proposal email, the three DocuSign sends and the project
+handoff, shared with the app), `lib/offer`, offer validators and
+`OfferStatusEvent`. Preserve the current lead-scope guard.
 
 ## Lookup order and contracts
 
@@ -32,4 +33,4 @@ must pass the existing signature/document/access gates.
 
 - A stale edit returns a comparison and asks the user to review current data.
 - A signed offer edit proposes an explicit revision rather than unlocking it.
-- A project is created only through `createProjectFromOffer` after all gates pass.
+- A project is created only through `create_project_from_offer` after all gates pass.

@@ -1,4 +1,3 @@
-import { getAdminOfferContent } from "@/lib/data/admin-offer-content";
 import {
   inferOfferStageCode,
   type OfferDocumentDraft,
@@ -17,6 +16,7 @@ import {
   INITIAL_AREA_CALCULATOR,
   calculateOfferArea,
   offerAreaBasisFromJob,
+  offerTotalBathrooms,
   rawTotalAreaSqm,
   type AreaRateConstants,
   type OfferAreaCalculator,
@@ -309,8 +309,7 @@ export function reevaluateFormulaCostLines(
 ): readonly OfferWorkspaceCostLine[] {
   const resolvedRates = resolveAreaRateConstants(rateConstants);
   const basis = offerAreaBasisFromJob(job);
-  const totalBathrooms =
-    job.bathrooms + (job.hasGrannyHome ? job.grannyBathrooms : 0);
+  const totalBathrooms = offerTotalBathrooms(job);
   const calc = calculateOfferArea(
     basis,
     area,
@@ -410,11 +409,13 @@ export function applyAdminPrefillToSnapshot(
   };
 }
 
-// The entry point. Fetches AdminOfferContent from the DB, joins it against
-// the static sequence mappings, and returns the runtime initial state for a
-// new offer. Called server-side from the offer page.
-export async function buildAdminOfferPrefill(): Promise<AdminOfferPrefill> {
-  const adminContent = await getAdminOfferContent();
+// The entry point. Joins AdminOfferContent against the static sequence
+// mappings and returns the runtime initial state for a new offer. The caller
+// reads the content: the offer page through its cached read, Eve through
+// lib/domain/admin/offer-content.ts, so this module reaches no Next cache.
+export function buildAdminOfferPrefill(
+  adminContent: AdminOfferContent,
+): AdminOfferPrefill {
   const mappingByKey = indexMappingsByKey();
 
   return {

@@ -58,11 +58,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { toast } from "sonner";
-import {
-  attachOfferBoundaryScroll,
-  type ScrollDirection,
-} from "./shell/offer-boundary-scroll";
 import { AreaCalculatorPanel } from "./offer-workspace-area";
 import { CostSchedulePanel } from "./offer-workspace-cost-schedule";
 import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
@@ -265,7 +260,7 @@ type OfferWorkspaceScreenProps = {
   readonly onCreateProject: () => void;
   readonly projectCreating?: boolean;
   readonly projectResult?:
-    | import("@/lib/data/offer-project-handoff").ProjectHandoffResult
+    | import("@/lib/offer/sends/project-handoff").ProjectHandoffResult
     | null;
   readonly projectId?: string | null;
   readonly onOverrideReasonChange: (value: string) => void;
@@ -441,53 +436,113 @@ export function OfferWorkspaceScreen({
     isOfferPhaseUnlocked(status, "tender")
     && (status !== "agreed" || gateUnlocked);
 
-  // Open on the step the offer is actually at, rather than on ten collapsed
-  // headers with no "you are here".
+  // Every step is on the page at once, one under the other, in a single
+  // scrolling pane. The active step is whichever one the reader has scrolled
+  // to; the rail follows it, and a rail click scrolls the pane to its step.
   //
   // The lazy initializer runs on first render, when `status` is still the
-  // "pending" seed, so every agreed/tender/contract offer used to land on a
-  // fully disabled Job setup pane. Correct it exactly once, when the real
-  // status arrives — and only once: the DocuSign poll calls setStatus on its own
+  // "pending" seed. Once the real status arrives, jump to the step the offer is
+  // actually at — exactly once: the DocuSign poll calls setStatus on its own
   // schedule and following it would yank the pane out from under a typing user.
   const [activeStepId, setActiveStepId] = useState<OfferStepId>(() =>
     currentOfferStepId(status, tenderGateStatus),
   );
+  const paneRef = useRef<HTMLDivElement>(null);
+  // While a programmatic scroll is running (a rail click's, or the jump to the
+  // hydrated step), the sections it passes must not each take a turn as the
+  // active step. Released when the scroll ends, or by the timer where it never
+  // starts (already in place) or `scrollend` is not supported.
+  const scrollTargetRef = useRef<OfferStepId | null>(null);
+  const releaseScrollTargetRef =
+    useRef<ReturnType<typeof setTimeout>>(undefined);
   const syncedToHydratedStatusRef = useRef(false);
   useEffect(() => {
     if (hydrated && !syncedToHydratedStatusRef.current) {
       syncedToHydratedStatusRef.current = true;
-      setActiveStepId(currentOfferStepId(status, tenderGateStatus));
+      const stepId = currentOfferStepId(status, tenderGateStatus);
+      setActiveStepId(stepId);
+      // No animation and no focus: page load must not steal either.
+      if (paneRef.current) {
+        // A short step near the bottom may not reach the reading line, and the
+        // scroll-spy would then name a neighbour instead of the step jumped to.
+        scrollTargetRef.current = stepId;
+        clearTimeout(releaseScrollTargetRef.current);
+        releaseScrollTargetRef.current = setTimeout(() => {
+          scrollTargetRef.current = null;
+        }, 1000);
+        scrollPaneToStep(paneRef.current, stepId, "instant");
+      }
     }
   }, [hydrated, status, tenderGateStatus]);
 
-  // A step change replaces the whole pane. Move focus to it and reset its
-  // scroll, but only for changes the user made: a boundary scroll, a rail click, or a send blocker
-  // that selected the step which resolves it (that button unmounts itself in the
-  // same commit, which used to drop focus onto <body>). Page load and the
-  // hydration correction above must not steal focus. Backward scrolling enters
-  // the previous pane at its bottom; all other navigation starts at the top.
-  const paneRef = useRef<HTMLDivElement>(null);
-  const userNavigatedRef = useRef<"top" | "bottom" | null>(null);
-  const navigateToStep = useCallback(
-    (stepId: OfferStepId, edge: "top" | "bottom" = "top") => {
-      userNavigatedRef.current = edge;
-      setActiveStepId(stepId);
-    },
-    [],
-  );
-  useEffect(() => {
-    if (!userNavigatedRef.current) {
-      return;
-    }
-    const edge = userNavigatedRef.current;
-    userNavigatedRef.current = null;
+  const navigateToStep = useCallback((stepId: OfferStepId) => {
+    setActiveStepId(stepId);
     const pane = paneRef.current;
     if (!pane) {
       return;
     }
-    pane.scrollTop = edge === "bottom" ? pane.scrollHeight : 0;
-    pane.focus({ preventScroll: true });
-  }, [activeStepId]);
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    scrollTargetRef.current = stepId;
+    clearTimeout(releaseScrollTargetRef.current);
+    releaseScrollTargetRef.current = setTimeout(() => {
+      scrollTargetRef.current = null;
+    }, 1000);
+    const section = scrollPaneToStep(
+      pane,
+      stepId,
+      reduceMotion ? "instant" : "smooth",
+    );
+    // A user's own navigation moves focus to the step it opened, so keyboard
+    // and screen-reader users land where they asked to go.
+    section?.focus({ preventScroll: true });
+  }, []);
+
+  const syncActiveStepToScroll = useEffectEvent(() => {
+    const pane = paneRef.current;
+    if (!pane || scrollTargetRef.current !== null) {
+      return;
+    }
+    const stepId = stepInView(pane);
+    if (stepId) {
+      setActiveStepId(stepId);
+    }
+  });
+  useEffect(() => {
+    const pane = paneRef.current;
+    if (!pane) {
+      return;
+    }
+    let frame = 0;
+    const onScroll = () => {
+      if (frame === 0) {
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          syncActiveStepToScroll();
+        });
+      }
+    };
+    // The last scroll event's sync is still queued for the next frame. Release
+    // the guard a frame later, so that sync sees it and leaves the target be.
+    let releaseFrame = 0;
+    const onScrollEnd = () => {
+      cancelAnimationFrame(releaseFrame);
+      releaseFrame = requestAnimationFrame(() => {
+        releaseFrame = 0;
+        scrollTargetRef.current = null;
+      });
+    };
+    pane.addEventListener("scroll", onScroll, { passive: true });
+    pane.addEventListener("scrollend", onScrollEnd);
+    return () => {
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(releaseFrame);
+      clearTimeout(releaseScrollTargetRef.current);
+      pane.removeEventListener("scroll", onScroll);
+      pane.removeEventListener("scrollend", onScrollEnd);
+    };
+  }, []);
 
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [mobileCostLineId, setMobileCostLineId] = useState<string | null>(null);
@@ -511,9 +566,9 @@ export function OfferWorkspaceScreen({
   // load instead.
   const awaitingOffer = leadId !== undefined && !hydrated;
 
-  // Panel state that must outlive its panel. Only the active step is mounted,
-  // so anything a panel kept in local useState was wiped on every step change.
-  // The screen stays mounted for the life of the page, so it holds these.
+  // Panel state that must outlive its panel. Every step is mounted now, but the
+  // panels still unmount while the offer reloads, so the screen — mounted for
+  // the life of the page — keeps holding these.
   const [expandedLineIds, setExpandedLineIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -536,10 +591,6 @@ export function OfferWorkspaceScreen({
       setAiBusy((current) => ({ ...current, [key]: busy })),
     [],
   );
-  const activeStepIsOfferPhase =
-    OFFER_WORKFLOW_STEPS.find((step) => step.id === activeStepId)?.phase
-    === "offer";
-
   const phaseUnlocked = useMemo(
     () => ({
       "tender-gate": isOfferPhaseUnlocked(status, "tender"),
@@ -624,37 +675,6 @@ export function OfferWorkspaceScreen({
     return states;
   }, [reviewSections, status, tenderGateStatus, phaseUnlocked]);
 
-  const [blockedStepId, setBlockedStepId] = useState<OfferStepId | null>(null);
-  useEffect(() => {
-    if (blockedStepId === null) return;
-    const timer = setTimeout(() => setBlockedStepId(null), 450);
-    return () => clearTimeout(timer);
-  }, [blockedStepId]);
-
-  const handleScrollBoundary = useEffectEvent((direction: ScrollDirection) => {
-    if (awaitingOffer || transitioning || pendingConfirm !== null) return false;
-    const index = OFFER_WORKFLOW_STEPS.findIndex(
-      (step) => step.id === activeStepId,
-    );
-    const adjacent = OFFER_WORKFLOW_STEPS[index + direction];
-    if (!adjacent) return false;
-    if (stepStates[adjacent.id] === "locked") {
-      setBlockedStepId(adjacent.id);
-      toast.warning(`${adjacent.label} is locked`, {
-        id: "offer-step-blocked",
-        description: digests[adjacent.id],
-      });
-    } else {
-      navigateToStep(adjacent.id, direction < 0 ? "bottom" : "top");
-    }
-    return true;
-  });
-  useEffect(() => {
-    const pane = paneRef.current;
-    if (!pane) return;
-    return attachOfferBoundaryScroll(pane, handleScrollBoundary);
-  }, []);
-
   return (
     // One app-height frame: the command bar and the summary strip are fixed
     // rows, the rail and the pane share what is left, and only the pane
@@ -678,7 +698,6 @@ export function OfferWorkspaceScreen({
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <OfferStepRail
           activeStepId={activeStepId}
-          blockedStepId={blockedStepId}
           collapsed={railCollapsed}
           // Seeded digests read as this offer's progress ("3 allowances", a
           // price) while it is still loading. Blank them until it is here.
@@ -687,401 +706,413 @@ export function OfferWorkspaceScreen({
           onSelect={navigateToStep}
           onToggleCollapsed={() => setRailCollapsed((current) => !current)}
         />
-        {/* Not <main>: the app shell already provides the page's single main
-            landmark, and nesting one inside another is invalid and gives screen
-            readers two "main" regions to choose between. */}
-        <div
-          ref={paneRef}
-          role="region"
-          aria-labelledby="offer-pane-title"
-          aria-busy={transitioning}
-          tabIndex={-1}
-          className="@container/pane min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain p-3 outline-none md:px-5 md:py-5"
-        >
-          <div className="space-y-5">
-            {awaitingOffer ? (
-              <OfferPaneLoadState failed={loadFailed} />
-            ) : (
-              <>
-                {transitioning ? (
-                  <p
-                    role="status"
-                    className="flex items-center gap-2 text-xs text-muted-foreground"
-                  >
-                    <Loader2
-                      className="size-3.5 animate-spin motion-reduce:animate-none"
-                      aria-hidden="true"
-                    />
-                    Working…
-                  </p>
-                ) : null}
-                {/* Transition and recall errors used to render only inside the Send
-              panel, which is unmounted on every other step, so a refused
-              Tender or Contract recall said nothing. Send keeps its own slot. */}
-                {transitionError && activeStepId !== "send" ? (
-                  <p
-                    role="alert"
-                    className="rounded-lg border border-destructive/40 bg-destructive-light px-4 py-3 text-xs font-medium text-destructive-ink"
-                  >
-                    {transitionError}
-                  </p>
-                ) : null}
-                {/* On the offer-build steps the lock banner below carries it. */}
-                {revisionNotice && !(offerIssued && activeStepIsOfferPhase) ? (
-                  <p
-                    role="status"
-                    className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 px-4 py-3 text-xs font-medium text-foreground/80"
-                  >
-                    {revisionNotice}
-                  </p>
-                ) : null}
-                {/* The banner names the offer-build steps; it has no business above
-              Tender, Contract or Project. */}
-                {offerIssued && activeStepIsOfferPhase ? (
-                  <OfferLockBanner
-                    canRevise={canRevise}
-                    revising={revising}
-                    lifecycleBusy={lifecycleBusy}
-                    executed={revisionExecuted}
-                    documentsEditable={documentsStillEditable}
-                    notice={
-                      revisionNotice
-                      // Create revision is disabled from the signed Tender on. The
-                      // server's refusal used to be what said why.
-                      ?? (!canRevise
-                      && !revisionExecuted
-                      && status !== "superseded"
-                        ? "The Tender is signed, so a change now is a contract variation, not a new offer revision."
-                        : null)
-                    }
-                    onCreateRevision={onCreateRevision}
-                  />
-                ) : null}
-                <StepPane
-                  active={activeStepId === "job-setup"}
-                  locked={jobSetupLocked}
-                  title="Job setup"
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* Messages about the offer as a whole stay pinned above the steps,
+              so they are seen from whichever step the reader has scrolled to. */}
+          {!awaitingOffer
+          && (transitioning
+            || revisionNotice
+            || (transitionError && activeStepId !== "send")) ? (
+            <div className="shrink-0 space-y-2 border-b border-border/70 px-3 py-2 md:px-5">
+              {transitioning ? (
+                <p
+                  role="status"
+                  className="flex items-center gap-2 text-xs text-muted-foreground"
                 >
-                  <JobSetupPanel
-                    calcVersion={calcVersion}
-                    job={job}
-                    onJobChange={onJobChange}
-                    onPrefillFromLead={onPrefillFromLead}
-                    canPrefill={canPrefill}
-                    prefilling={prefilling}
-                    prefillResult={prefillResult}
+                  <Loader2
+                    className="size-3.5 animate-spin motion-reduce:animate-none"
+                    aria-hidden="true"
                   />
-                </StepPane>
-
-                <StepPane
-                  active={activeStepId === "cost-schedule"}
-                  locked={costScheduleLocked}
-                  title="Cost schedule"
-                  navigation={
-                    <div className="flex flex-col gap-3 md:hidden">
-                      <MobileFilterSelect
-                        label={
-                          costScheduleLocked
-                            ? "Cost task to view"
-                            : "Cost task to edit"
-                        }
-                        value={selectedMobileCostLine}
-                        options={[
-                          {
-                            value: "all",
-                            label: "All cost tasks",
-                            count: lines.length,
-                          },
-                          ...lines.map((line, index) => ({
-                            value: line.id,
-                            label: `${index + 1}. ${line.itemName || "Unnamed task"}`,
-                          })),
-                        ]}
-                        onChange={setMobileCostLineId}
-                      />
-                      {costScheduleLocked
-                      && selectedMobileCostLine !== "all" ? (
-                        <details className="rounded-lg border bg-card p-3">
-                          <summary className="min-h-11 cursor-pointer text-sm font-medium">
-                            Building sequence
-                          </summary>
-                          <ul className="flex flex-col gap-2 text-sm">
-                            {selectedMobileCostTasks.map((task, index) => (
-                              <li
-                                key={`${task}-${index}`}
-                                className="break-words"
-                              >
-                                {task}
-                              </li>
-                            ))}
-                          </ul>
-                          {selectedMobileCostTasks.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">
-                              No building sequence tasks for this cost item.
-                            </p>
-                          ) : null}
-                        </details>
-                      ) : null}
-                    </div>
-                  }
+                  Working…
+                </p>
+              ) : null}
+              {/* The Send step shows transition errors in its own slot. */}
+              {transitionError && activeStepId !== "send" ? (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-destructive/40 bg-destructive-light px-4 py-3 text-xs font-medium text-destructive-ink"
                 >
-                  <AreaCalculatorPanel
-                    calcVersion={calcVersion}
-                    job={job}
-                    basis={areaBasis}
-                    area={areaCalculator}
-                    rateConstants={rateConstants}
-                    onAreaChange={onAreaChange}
-                    onJobChange={onJobChange}
-                  />
-                  <CostSchedulePanel
-                    mobileLineId={selectedMobileCostLine}
-                    expandedLineIds={expandedLineIds}
-                    onToggleLineExpanded={toggleLineExpanded}
-                    importResult={importResult}
-                    lines={lines}
-                    onAddLine={() => {
-                      onAddLine();
-                      setMobileCostLineId("latest");
-                    }}
-                    onImported={onImported}
-                    onLineChange={onLineChange}
-                    onIncludeAll={onIncludeAll}
-                    onRemoveLine={onRemoveLine}
-                  />
-                </StepPane>
-
-                <StepPane
-                  active={activeStepId === "pricing"}
-                  locked={pricingLocked}
-                  title="Pricing"
+                  {transitionError}
+                </p>
+              ) : null}
+              {revisionNotice ? (
+                <p
+                  role="status"
+                  className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 px-4 py-3 text-xs font-medium text-foreground/80"
                 >
-                  <PriceBuildupPanel
-                    directTotal={directTotal}
-                    settings={workspacePricingSettings}
-                    pricing={pricing}
-                    totalAreaSqm={getAreaBasisTotalSqm(areaBasis)}
-                    onSettingsChange={onWorkspacePricingSettingsChange}
-                  />
-                  <PricingDecisionPanel
-                    customerPrice={customerPrice}
-                    overrideReason={overrideReason}
-                    priceAdjustmentLabel={priceAdjustmentLabel}
-                    selectedPriceInput={selectedPriceInput}
-                    standardPriceInput={standardPriceInput}
-                    onOverrideReasonChange={onOverrideReasonChange}
-                    onPriceAdjustmentLabelChange={onPriceAdjustmentLabelChange}
-                    onSelectedPriceInputChange={onSelectedPriceInputChange}
-                    onStandardPriceInputChange={onStandardPriceInputChange}
-                  />
-                </StepPane>
-
-                <StepPane
-                  active={activeStepId === "scope"}
-                  locked={scopeLocked}
-                  title="Scope"
-                >
-                  <ScopePanel
-                    allowances={allowances}
-                    exclusions={exclusions}
-                    onAllowanceChange={onAllowanceChange}
-                    onExclusionChange={onExclusionChange}
-                    onAddAllowance={onAddAllowance}
-                    onRemoveAllowance={onRemoveAllowance}
-                    onAddExclusion={onAddExclusion}
-                    onRemoveExclusion={onRemoveExclusion}
-                  />
-                </StepPane>
-
-                <StepPane
-                  active={activeStepId === "offer-document"}
-                  locked={offerDocumentLocked}
-                  title="Offer document"
-                >
-                  <div className="space-y-6">
-                    <OfferDocumentCanvas
-                      customerPrice={customerPrice}
-                      draft={draft}
-                      exclusions={exclusions}
-                      job={job}
-                      onDraftChange={onDraftChange}
-                      onDraftHighlights={onDraftHighlights}
-                      onCheckConsistency={onCheckConsistency}
-                      draftingHighlights={draftingHighlights}
-                      checking={checking}
-                      copyError={copyError}
-                      findings={findings}
-                      checkedClean={checkedClean}
-                    />
-                    <OfferWorkspaceImages
-                      aiBusy={aiBusy}
-                      onAiBusyChange={setAiBusyFor}
-                      images={images}
-                      onImageChange={onImageChange}
-                      leadId={leadId}
-                      buildType={job.buildType}
-                      finishContexts={imageFinishContexts}
-                    />
-                  </div>
-                </StepPane>
-
-                <StepPane
-                  active={activeStepId === "send"}
-                  locked={false}
-                  title="Send & negotiate"
-                >
-                  <SendNegotiatePanel
-                    // A blocker names the step that fixes it; selecting that step is
-                    // the new equivalent of the old scroll-to-section.
-                    onNavigateToStep={(sectionId) => {
-                      const target = stepIdForSectionId(sectionId);
-                      if (target) {
-                        navigateToStep(target);
+                  {revisionNotice}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {/* Not <main>: the app shell already provides the page's single main
+              landmark, and nesting one inside another is invalid and gives
+              screen readers two "main" regions to choose between. */}
+          <div
+            ref={paneRef}
+            role="region"
+            aria-label="Offer steps"
+            aria-busy={transitioning}
+            // `relative` makes the pane its sections' offsetParent, which is
+            // what the scroll helpers below measure against.
+            className="@container/pane relative min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain p-3 outline-none md:px-5 md:py-5"
+          >
+            <div className="space-y-5">
+              {awaitingOffer ? (
+                <OfferPaneLoadState failed={loadFailed} />
+              ) : (
+                <>
+                  {/* Names the offer-build steps, so it sits above the first. */}
+                  {offerIssued ? (
+                    <OfferLockBanner
+                      canRevise={canRevise}
+                      revising={revising}
+                      lifecycleBusy={lifecycleBusy}
+                      executed={revisionExecuted}
+                      documentsEditable={documentsStillEditable}
+                      notice={
+                        // Create revision is disabled from the signed Tender on.
+                        // The server's refusal used to be what said why. A
+                        // revision notice of its own is pinned above instead.
+                        !revisionNotice
+                        && !canRevise
+                        && !revisionExecuted
+                        && status !== "superseded"
+                          ? "The Tender is signed, so a change now is a contract variation, not a new offer revision."
+                          : null
                       }
-                    }}
-                    status={status}
-                    canRevise={canRevise}
-                    revising={revising}
-                    // Recipients = every customer signatory (individual owners + company
-                    // directors), the SAME set sendOfferDocument emails server-side.
-                    // Shown read-only so the confirmed list can't diverge from where the
-                    // proposal actually goes (PR #124 review); edit emails in Job setup.
-                    recipients={collectOfferSigners(job.owners).map(
-                      (signer) => ({
-                        email: signer.signatory.email.trim(),
-                        label: offerSignerLabel(signer),
-                      }),
-                    )}
-                    contractValueIncGst={
-                      customerPrice.selectedContractValueIncGst
-                    }
-                    offerReference={formatOfferReference(
-                      job.reference,
-                      job.revision,
-                    )}
-                    sendBlockers={sendBlockers}
-                    canSend={canSend}
-                    sending={sending}
-                    sendError={sendError}
-                    sentInfo={sentInfo}
-                    transitionError={transitionError}
-                    canMarkSent={canMarkSent}
-                    onSendOffer={onSendOffer}
-                    onMarkSent={onMarkSent}
-                    onCreateRevision={onCreateRevision}
-                    onMarkAgreed={onMarkAgreed}
-                    canMarkAgreed={canMarkAgreed}
-                    onMarkRejected={onMarkRejected}
-                    // Offer-acceptance DocuSign signing (ADR 0004). The recipient set is
-                    // the same customer signatories already shown above.
-                    signerStatuses={signerStatuses}
-                    onSendForSignature={onSendOfferForSignature}
-                    offerSignSending={offerSignSending}
-                    offerSignError={offerSignError}
-                    onRecallOffer={onRecallOffer}
-                    onMarkOfferSigned={onMarkOfferSigned}
-                    lifecycleBusy={lifecycleBusy}
-                  />
-                  <OfferWorkspaceActivity leadId={leadId} status={status} />
-                </StepPane>
+                      onCreateRevision={onCreateRevision}
+                    />
+                  ) : null}
+                  <div className="space-y-8">
+                    <StepPane
+                      stepId="job-setup"
+                      locked={jobSetupLocked}
+                      title="Job setup"
+                    >
+                      <JobSetupPanel
+                        calcVersion={calcVersion}
+                        job={job}
+                        onJobChange={onJobChange}
+                        onPrefillFromLead={onPrefillFromLead}
+                        canPrefill={canPrefill}
+                        prefilling={prefilling}
+                        prefillResult={prefillResult}
+                      />
+                    </StepPane>
 
-                <StepPane
-                  active={activeStepId === "tender-gate"}
-                  unlocked={isOfferPhaseUnlocked(status, "tender")}
-                  unlockHint={
-                    "Unlocks once the Offer is agreed. Decide whether tender access unlocks immediately or is held pending an architectural-plan fee and upload."
-                  }
-                  title="Tender access"
-                >
-                  <TenderGatePanel
-                    status={status}
-                    tenderGate={tenderGate}
-                    leadId={leadId}
-                    onTenderGateChange={onTenderGateChange}
-                    onCreateRevision={onCreateRevision}
-                    canRevise={canRevise}
-                    revising={revising}
-                    lifecycleBusy={lifecycleBusy}
-                  />
-                </StepPane>
+                    <StepPane
+                      stepId="cost-schedule"
+                      locked={costScheduleLocked}
+                      title="Cost schedule"
+                      navigation={
+                        <div className="flex flex-col gap-3 md:hidden">
+                          <MobileFilterSelect
+                            label={
+                              costScheduleLocked
+                                ? "Cost task to view"
+                                : "Cost task to edit"
+                            }
+                            value={selectedMobileCostLine}
+                            options={[
+                              {
+                                value: "all",
+                                label: "All cost tasks",
+                                count: lines.length,
+                              },
+                              ...lines.map((line, index) => ({
+                                value: line.id,
+                                label: `${index + 1}. ${line.itemName || "Unnamed task"}`,
+                              })),
+                            ]}
+                            onChange={setMobileCostLineId}
+                          />
+                          {costScheduleLocked
+                          && selectedMobileCostLine !== "all" ? (
+                            <details className="rounded-lg border bg-card p-3">
+                              <summary className="min-h-11 cursor-pointer text-sm font-medium">
+                                Building sequence
+                              </summary>
+                              <ul className="flex flex-col gap-2 text-sm">
+                                {selectedMobileCostTasks.map((task, index) => (
+                                  <li
+                                    key={`${task}-${index}`}
+                                    className="break-words"
+                                  >
+                                    {task}
+                                  </li>
+                                ))}
+                              </ul>
+                              {selectedMobileCostTasks.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">
+                                  No building sequence tasks for this cost item.
+                                </p>
+                              ) : null}
+                            </details>
+                          ) : null}
+                        </div>
+                      }
+                    >
+                      <AreaCalculatorPanel
+                        calcVersion={calcVersion}
+                        job={job}
+                        basis={areaBasis}
+                        area={areaCalculator}
+                        rateConstants={rateConstants}
+                        onAreaChange={onAreaChange}
+                        onJobChange={onJobChange}
+                      />
+                      <CostSchedulePanel
+                        mobileLineId={selectedMobileCostLine}
+                        expandedLineIds={expandedLineIds}
+                        onToggleLineExpanded={toggleLineExpanded}
+                        importResult={importResult}
+                        lines={lines}
+                        onAddLine={() => {
+                          onAddLine();
+                          setMobileCostLineId("latest");
+                        }}
+                        onImported={onImported}
+                        onLineChange={onLineChange}
+                        onIncludeAll={onIncludeAll}
+                        onRemoveLine={onRemoveLine}
+                      />
+                    </StepPane>
 
-                <StepPane
-                  active={activeStepId === "tender"}
-                  unlocked={tenderPanelUnlocked}
-                  unlockHint={
-                    gateUnlocked
-                      ? "Unlocks once the Offer is agreed. Decide the payment schedule, generate the Tender, and send it for signature via DocuSign."
-                      : "Complete the Tender access step to unlock the Tender."
-                  }
-                  title="Tender"
-                >
-                  <TenderPanel
-                    signerStatuses={signerStatuses}
-                    customerPrice={customerPrice}
-                    draft={draft}
-                    exclusions={exclusions}
-                    job={job}
-                    paymentSchedule={paymentSchedule}
-                    status={status}
-                    onGenerateTender={onGenerateTender}
-                    onMarkTenderSigned={onMarkTenderSigned}
-                    onPaymentScheduleChange={onPaymentScheduleChange}
-                    onRecallTender={onRecallTender}
-                    onSendTender={onSendTender}
-                    tenderSending={tenderSending}
-                    tenderSendError={tenderSendError}
-                    lifecycleBusy={lifecycleBusy}
-                  />
-                </StepPane>
+                    <StepPane
+                      stepId="pricing"
+                      locked={pricingLocked}
+                      title="Pricing"
+                    >
+                      <PriceBuildupPanel
+                        directTotal={directTotal}
+                        settings={workspacePricingSettings}
+                        pricing={pricing}
+                        totalAreaSqm={getAreaBasisTotalSqm(areaBasis)}
+                        totalContractValueDerived={!pricingLocked}
+                        onSettingsChange={onWorkspacePricingSettingsChange}
+                      />
+                      <PricingDecisionPanel
+                        customerPrice={customerPrice}
+                        overrideReason={overrideReason}
+                        priceAdjustmentLabel={priceAdjustmentLabel}
+                        selectedPriceInput={selectedPriceInput}
+                        standardPriceInput={standardPriceInput}
+                        onOverrideReasonChange={onOverrideReasonChange}
+                        onPriceAdjustmentLabelChange={
+                          onPriceAdjustmentLabelChange
+                        }
+                        onSelectedPriceInputChange={onSelectedPriceInputChange}
+                        onStandardPriceInputChange={onStandardPriceInputChange}
+                      />
+                    </StepPane>
 
-                <StepPane
-                  active={activeStepId === "contract"}
-                  unlocked={isOfferPhaseUnlocked(status, "contract")}
-                  unlockHint="Unlocks once the Tender is signed. Generate the Contract from the Tender data and send it via DocuSign for both parties to sign."
-                  title="Contract"
-                >
-                  <ContractPanel
-                    signerStatuses={signerStatuses}
-                    customerPrice={customerPrice}
-                    draft={draft}
-                    job={job}
-                    contractTerms={contractTerms}
-                    status={status}
-                    contractParticulars={contractParticulars}
-                    onContractParticularsChange={onContractParticularsChange}
-                    onGenerateContract={onGenerateContract}
-                    onMarkContractSigned={onMarkContractSigned}
-                    onRecallContract={onRecallContract}
-                    onSendContract={onSendContract}
-                    contractSending={contractSending}
-                    contractSendError={contractSendError}
-                    lifecycleBusy={lifecycleBusy}
-                  />
-                </StepPane>
+                    <StepPane stepId="scope" locked={scopeLocked} title="Scope">
+                      <ScopePanel
+                        allowances={allowances}
+                        exclusions={exclusions}
+                        onAllowanceChange={onAllowanceChange}
+                        onExclusionChange={onExclusionChange}
+                        onAddAllowance={onAddAllowance}
+                        onRemoveAllowance={onRemoveAllowance}
+                        onAddExclusion={onAddExclusion}
+                        onRemoveExclusion={onRemoveExclusion}
+                      />
+                    </StepPane>
 
-                <StepPane
-                  active={activeStepId === "project"}
-                  unlocked={isOfferPhaseUnlocked(status, "handoff")}
-                  unlockHint={
-                    "Unlocks once the Contract is signed. Create the Project and seed the costing report from the internal cost lines."
-                  }
-                  title="Project"
-                >
-                  <ProjectHandoffPanel
-                    customerPrice={customerPrice}
-                    job={job}
-                    lines={lines}
-                    paymentSchedule={paymentSchedule}
-                    status={status}
-                    onCreateProject={onCreateProject}
-                    projectCreating={projectCreating}
-                    projectResult={projectResult}
-                    projectId={projectId}
-                    lifecycleBusy={lifecycleBusy}
-                  />
-                </StepPane>
-              </>
-            )}
+                    <StepPane
+                      stepId="offer-document"
+                      locked={offerDocumentLocked}
+                      title="Offer document"
+                    >
+                      <div className="space-y-6">
+                        <OfferDocumentCanvas
+                          customerPrice={customerPrice}
+                          draft={draft}
+                          exclusions={exclusions}
+                          job={job}
+                          onDraftChange={onDraftChange}
+                          onDraftHighlights={onDraftHighlights}
+                          onCheckConsistency={onCheckConsistency}
+                          draftingHighlights={draftingHighlights}
+                          checking={checking}
+                          copyError={copyError}
+                          findings={findings}
+                          checkedClean={checkedClean}
+                        />
+                        <OfferWorkspaceImages
+                          aiBusy={aiBusy}
+                          onAiBusyChange={setAiBusyFor}
+                          images={images}
+                          onImageChange={onImageChange}
+                          leadId={leadId}
+                          buildType={job.buildType}
+                          finishContexts={imageFinishContexts}
+                        />
+                      </div>
+                    </StepPane>
+
+                    <StepPane
+                      stepId="send"
+                      locked={false}
+                      title="Send & negotiate"
+                    >
+                      <SendNegotiatePanel
+                        // A blocker names the step that fixes it; selecting that step is
+                        // the new equivalent of the old scroll-to-section.
+                        onNavigateToStep={(sectionId) => {
+                          const target = stepIdForSectionId(sectionId);
+                          if (target) {
+                            navigateToStep(target);
+                          }
+                        }}
+                        status={status}
+                        canRevise={canRevise}
+                        revising={revising}
+                        // Recipients = every customer signatory (individual owners + company
+                        // directors), the SAME set sendOfferDocument emails server-side.
+                        // Shown read-only so the confirmed list can't diverge from where the
+                        // proposal actually goes (PR #124 review); edit emails in Job setup.
+                        recipients={collectOfferSigners(job.owners).map(
+                          (signer) => ({
+                            email: signer.signatory.email.trim(),
+                            label: offerSignerLabel(signer),
+                          }),
+                        )}
+                        contractValueIncGst={
+                          customerPrice.selectedContractValueIncGst
+                        }
+                        offerReference={formatOfferReference(
+                          job.reference,
+                          job.revision,
+                        )}
+                        sendBlockers={sendBlockers}
+                        canSend={canSend}
+                        sending={sending}
+                        sendError={sendError}
+                        sentInfo={sentInfo}
+                        transitionError={transitionError}
+                        canMarkSent={canMarkSent}
+                        onSendOffer={onSendOffer}
+                        onMarkSent={onMarkSent}
+                        onCreateRevision={onCreateRevision}
+                        onMarkAgreed={onMarkAgreed}
+                        canMarkAgreed={canMarkAgreed}
+                        onMarkRejected={onMarkRejected}
+                        // Offer-acceptance DocuSign signing (ADR 0004). The recipient set is
+                        // the same customer signatories already shown above.
+                        signerStatuses={signerStatuses}
+                        onSendForSignature={onSendOfferForSignature}
+                        offerSignSending={offerSignSending}
+                        offerSignError={offerSignError}
+                        onRecallOffer={onRecallOffer}
+                        onMarkOfferSigned={onMarkOfferSigned}
+                        lifecycleBusy={lifecycleBusy}
+                      />
+                      <OfferWorkspaceActivity leadId={leadId} status={status} />
+                    </StepPane>
+
+                    <StepPane
+                      stepId="tender-gate"
+                      unlocked={isOfferPhaseUnlocked(status, "tender")}
+                      unlockHint={
+                        "Unlocks once the Offer is agreed. Decide whether tender access unlocks immediately or is held pending an architectural-plan fee and upload."
+                      }
+                      title="Tender access"
+                    >
+                      <TenderGatePanel
+                        status={status}
+                        tenderGate={tenderGate}
+                        leadId={leadId}
+                        onTenderGateChange={onTenderGateChange}
+                        onCreateRevision={onCreateRevision}
+                        canRevise={canRevise}
+                        revising={revising}
+                        lifecycleBusy={lifecycleBusy}
+                      />
+                    </StepPane>
+
+                    <StepPane
+                      stepId="tender"
+                      unlocked={tenderPanelUnlocked}
+                      unlockHint={
+                        gateUnlocked
+                          ? "Unlocks once the Offer is agreed. Decide the payment schedule, generate the Tender, and send it for signature via DocuSign."
+                          : "Complete the Tender access step to unlock the Tender."
+                      }
+                      title="Tender"
+                    >
+                      <TenderPanel
+                        signerStatuses={signerStatuses}
+                        customerPrice={customerPrice}
+                        draft={draft}
+                        exclusions={exclusions}
+                        job={job}
+                        paymentSchedule={paymentSchedule}
+                        status={status}
+                        onGenerateTender={onGenerateTender}
+                        onMarkTenderSigned={onMarkTenderSigned}
+                        onPaymentScheduleChange={onPaymentScheduleChange}
+                        onRecallTender={onRecallTender}
+                        onSendTender={onSendTender}
+                        tenderSending={tenderSending}
+                        tenderSendError={tenderSendError}
+                        lifecycleBusy={lifecycleBusy}
+                      />
+                    </StepPane>
+
+                    <StepPane
+                      stepId="contract"
+                      unlocked={isOfferPhaseUnlocked(status, "contract")}
+                      unlockHint="Unlocks once the Tender is signed. Generate the Contract from the Tender data and send it via DocuSign for both parties to sign."
+                      title="Contract"
+                    >
+                      <ContractPanel
+                        signerStatuses={signerStatuses}
+                        customerPrice={customerPrice}
+                        draft={draft}
+                        job={job}
+                        contractTerms={contractTerms}
+                        status={status}
+                        contractParticulars={contractParticulars}
+                        onContractParticularsChange={
+                          onContractParticularsChange
+                        }
+                        onGenerateContract={onGenerateContract}
+                        onMarkContractSigned={onMarkContractSigned}
+                        onRecallContract={onRecallContract}
+                        onSendContract={onSendContract}
+                        contractSending={contractSending}
+                        contractSendError={contractSendError}
+                        lifecycleBusy={lifecycleBusy}
+                      />
+                    </StepPane>
+
+                    <StepPane
+                      stepId="project"
+                      unlocked={isOfferPhaseUnlocked(status, "handoff")}
+                      unlockHint={
+                        "Unlocks once the Contract is signed. Create the Project and seed the costing report from the internal cost lines."
+                      }
+                      title="Project"
+                    >
+                      <ProjectHandoffPanel
+                        customerPrice={customerPrice}
+                        job={job}
+                        lines={lines}
+                        paymentSchedule={paymentSchedule}
+                        status={status}
+                        onCreateProject={onCreateProject}
+                        projectCreating={projectCreating}
+                        projectResult={projectResult}
+                        projectId={projectId}
+                        lifecycleBusy={lifecycleBusy}
+                      />
+                    </StepPane>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1186,10 +1217,10 @@ const SEND_COMPLETE_STATUSES: ReadonlySet<OfferWorkspaceStatus> = new Set([
   "project",
 ]);
 
-// One step's content. Only the selected step mounts, so the page holds one
-// step's controls instead of all 384 at once.
+// One step's section in the scrolling pane. `data-offer-step` is what the
+// scroll-spy and the rail's scroll target look for.
 function StepPane({
-  active,
+  stepId,
   locked = false,
   unlocked,
   unlockHint,
@@ -1197,7 +1228,7 @@ function StepPane({
   children,
   navigation,
 }: {
-  readonly active: boolean;
+  readonly stepId: OfferStepId;
   readonly locked?: boolean;
   readonly unlocked?: boolean;
   readonly unlockHint?: string;
@@ -1205,40 +1236,99 @@ function StepPane({
   readonly children: ReactNode;
   readonly navigation?: ReactNode;
 }) {
-  if (!active) {
-    return null;
-  }
-  // A later-phase step that has not unlocked shows why, not an empty panel.
-  if (unlocked === false) {
-    return (
-      <section aria-labelledby="offer-pane-title" className="space-y-4">
-        <PaneHeading locked={false} title={title} />
-        <OfferPhaseLockNotice hint={unlockHint ?? ""} />
-      </section>
-    );
-  }
+  const titleId = `offer-step-${stepId}-title`;
   return (
-    <section aria-labelledby="offer-pane-title" className="space-y-4">
-      <PaneHeading locked={locked} title={title} />
-      {navigation}
-      <OfferStepBody locked={locked}>{children}</OfferStepBody>
+    <section
+      data-offer-step={stepId}
+      aria-labelledby={titleId}
+      tabIndex={-1}
+      className="space-y-4 border-t border-border/70 pt-6 outline-none first:border-t-0 first:pt-0"
+    >
+      {/* A later-phase step that has not unlocked shows why, not an empty
+          panel. */}
+      {unlocked === false ? (
+        <>
+          <PaneHeading id={titleId} locked={false} title={title} />
+          <OfferPhaseLockNotice hint={unlockHint ?? ""} />
+        </>
+      ) : (
+        <>
+          <PaneHeading id={titleId} locked={locked} title={title} />
+          {navigation}
+          <OfferStepBody locked={locked}>{children}</OfferStepBody>
+        </>
+      )}
     </section>
   );
 }
 
+// The space kept above a step scrolled to the top of the pane, matching the
+// pane's own top padding so the heading does not sit flush against the edge.
+const STEP_SCROLL_OFFSET_PX = 12;
+
+// Scroll the pane, and only the pane, so a step's section starts at its top.
+// scrollIntoView would also scroll every scrollable ancestor, the window
+// included. Measured with offsetTop (the pane is the sections' offsetParent)
+// rather than client rects: rects carry the app's CSS zoom, and converting them
+// back drifted by a dozen pixels over a long pane. Returns the section, or null
+// when it is not rendered.
+function scrollPaneToStep(
+  pane: HTMLElement,
+  stepId: OfferStepId,
+  behavior: ScrollBehavior,
+): HTMLElement | null {
+  const section = pane.querySelector<HTMLElement>(
+    `[data-offer-step="${stepId}"]`,
+  );
+  if (!section) {
+    return null;
+  }
+  pane.scrollTo({
+    top: Math.max(0, section.offsetTop - STEP_SCROLL_OFFSET_PX),
+    behavior,
+  });
+  return section;
+}
+
+// The step being read: the last section whose top has passed a reading line a
+// little below the pane's top edge. At the very bottom the last step wins,
+// since a short final step may never reach that line.
+function stepInView(pane: HTMLElement): OfferStepId | null {
+  const sections = Array.from(
+    pane.querySelectorAll<HTMLElement>("[data-offer-step]"),
+  );
+  if (sections.length === 0) {
+    return null;
+  }
+  const atBottom =
+    pane.scrollTop > 0
+    && pane.scrollTop + pane.clientHeight >= pane.scrollHeight - 2;
+  if (atBottom) {
+    return sections.at(-1)?.dataset.offerStep as OfferStepId;
+  }
+  const readingLine = pane.scrollTop + Math.min(pane.clientHeight * 0.3, 200);
+  let current = sections[0];
+  for (const section of sections) {
+    if (section.offsetTop > readingLine) {
+      break;
+    }
+    current = section;
+  }
+  return current.dataset.offerStep as OfferStepId;
+}
+
 function PaneHeading({
+  id,
   locked,
   title,
 }: {
+  readonly id: string;
   readonly locked: boolean;
   readonly title: string;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <h2
-        id="offer-pane-title"
-        className="font-heading text-lg font-semibold leading-tight"
-      >
+      <h2 id={id} className="font-heading text-lg font-semibold leading-tight">
         {title}
       </h2>
       {locked ? (
@@ -1264,8 +1354,8 @@ const PENDING_STEP_STATES = Object.fromEntries(
 
 function OfferPaneLoadState({ failed }: { readonly failed: boolean }) {
   return (
-    <section aria-labelledby="offer-pane-title" className="space-y-4">
-      <h2 id="offer-pane-title" className="sr-only">
+    <section aria-labelledby="offer-pane-load-title" className="space-y-4">
+      <h2 id="offer-pane-load-title" className="sr-only">
         Offer
       </h2>
       {failed ? (

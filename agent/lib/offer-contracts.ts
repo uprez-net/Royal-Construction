@@ -209,3 +209,26 @@ export const draftOfferHighlightsInputSchema = z.object({
 export const pollOfferSigningStatusInputSchema = z.object({
   offerId: offerIdSchema,
 });
+
+export const startOfferInputSchema = z.object({
+  leadId: z.number().int().positive(),
+  // The workspace fills a new offer's Job setup from the lead in the browser;
+  // this is the same model call, opted out of when the user says not to.
+  prefillFromLead: z.boolean().default(true),
+});
+
+export const emailOfferProposalInputSchema = z.object({
+  offerId: offerIdSchema,
+});
+
+/** The three documents that go out for DocuSign signature, in lifecycle order. */
+export const signatureDocumentSchema = z.enum(["offer", "tender", "contract"]);
+
+export const sendOfferForSignatureInputSchema = z.object({
+  offerId: offerIdSchema,
+  document: signatureDocumentSchema,
+});
+
+export const createProjectFromOfferInputSchema = z.object({
+  offerId: offerIdSchema,
+});

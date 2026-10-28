@@ -21,6 +21,9 @@ type PriceBuildupPanelProps = {
   readonly settings: OfferWorkspacePricingSettings;
   readonly pricing: OfferWorkspacePricing;
   readonly totalAreaSqm: number;
+  // False once the offer is issued: Total Contract Value then stays at the
+  // figure the premium was quoted on, and may no longer match the build-up.
+  readonly totalContractValueDerived: boolean;
   readonly onSettingsChange: (
     patch: Partial<OfferWorkspacePricingSettings>,
   ) => void;
@@ -32,6 +35,7 @@ type PriceBuildupPanelProps = {
 export function PriceBuildupPanel({
   settings,
   pricing,
+  totalContractValueDerived,
   onSettingsChange,
 }: PriceBuildupPanelProps) {
   const hbcfRatePercent = Math.round(settings.hbcfRate * 100000) / 1000;
@@ -72,11 +76,16 @@ export function PriceBuildupPanel({
               onSettingsChange({ royalConstructionFeePct })
             }
           />
-          <MoneyField
+          {/* Derived, not typed: the contract value inc GST below, solved
+              together with the HBCF premium it prices (see
+              withDerivedTotalContractValue). */}
+          <DerivedMoneyField
             label="Total Contract Value"
             value={settings.hbcfTotalContractValue}
-            onChange={(hbcfTotalContractValue) =>
-              onSettingsChange({ hbcfTotalContractValue })
+            helperText={
+              totalContractValueDerived
+                ? "Same as contract value inc GST"
+                : "As quoted when the offer was issued"
             }
           />
           <MoneyField
@@ -221,6 +230,32 @@ function MoneyField({
           }
         }}
       />
+    </label>
+  );
+}
+
+function DerivedMoneyField({
+  helperText,
+  label,
+  value,
+}: {
+  readonly helperText: string;
+  readonly label: string;
+  readonly value: number;
+}) {
+  return (
+    <label>
+      <FieldLabel>{label}</FieldLabel>
+      <Input
+        aria-readonly="true"
+        className="bg-muted/50 font-mono tabular-nums text-muted-foreground"
+        readOnly
+        type="text"
+        value={formatCurrency(value)}
+      />
+      <span className="mt-1 block text-[11px] leading-4 text-muted-foreground">
+        {helperText}
+      </span>
     </label>
   );
 }

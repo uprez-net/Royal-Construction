@@ -6,9 +6,10 @@ description: Use for lead lookup, stage and history questions, lead tasks, email
 
 ## Canonical sources
 
-Use `lib/data/leads.ts`, lead validators, lead task services, Graph email and
-calendar services, `LeadHistory`, `LeadTask`, `LeadEmails`, and polymorphic lead
-files after their reusable caller-authorized seams are confirmed.
+Use `lib/domain/leads` (create, update, archive, tasks, email rules),
+`lib/leads/lead-email-send.ts` (the composer's send, shared with the app), lead
+validators, `LeadHistory`, `LeadTask` and `LeadEmails`. Lead files are not
+exposed.
 
 ## Lookup order and contracts
 
