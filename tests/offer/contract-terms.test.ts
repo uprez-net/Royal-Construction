@@ -423,7 +423,7 @@ test("no terms before the Tender is signed, resolved until the BC4 is sent, read
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
 test("the contract send reads the offer and refuses through the shared terms", () => {
-  const send = read("lib/data/offer-contract-sign.ts");
+  const send = read("lib/offer/sends/contract-envelope.ts");
 
   assert.match(send, /const termsInput = contractTermsInput\(offer\);/);
   assert.match(send, /resolveContractTerms\(termsInput\)/);

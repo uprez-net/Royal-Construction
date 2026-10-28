@@ -14,6 +14,7 @@ import {
 import { agentDb } from "@/agent/lib/db";
 import {
   applyOfferWorkspacePatch,
+  saveOfferWorkspace,
   syncLeadDealValue,
 } from "@/lib/domain/offers/workspace-save";
 import { commitOfferStatusTransition } from "@/lib/domain/offers/status";
@@ -33,8 +34,28 @@ import {
 } from "@/lib/domain/offers/queries";
 import { createOfferRevision } from "@/lib/domain/offers/revisions";
 import { recallOfferEnvelope } from "@/lib/domain/offers/recall";
-import { authorizeOffer } from "@/lib/domain/access/offers";
-import type { EnvelopeControlPort } from "@/lib/domain/ports/envelope-control";
+import {
+  authorizeOffer,
+  OfferSupersededError,
+} from "@/lib/domain/access/offers";
+import { getAdminOfferContent } from "@/lib/domain/admin/offer-content";
+import { isDomainError } from "@/lib/domain/errors";
+import { generateOfferPrefill } from "@/lib/domain/offers/prefill";
+import { openOfferForLead } from "@/lib/domain/offers/start";
+import { createProjectFromLead } from "@/lib/domain/projects/creation";
+import { buildAdminOfferPrefill } from "@/lib/offer/admin-offer-prefill";
+import {
+  applyLeadPrefill,
+  buildInitialOfferWorkspaceSnapshot,
+} from "@/lib/offer/initial-workspace";
+import { generateOfferPrefillDraft } from "@/lib/offer/offer-prefill-ai";
+import { sendOfferAcceptanceEnvelope } from "@/lib/offer/sends/acceptance-envelope";
+import { sendContractEnvelope } from "@/lib/offer/sends/contract-envelope";
+import type { OfferSendEffects } from "@/lib/offer/sends/effects";
+import { handOffOfferToProject } from "@/lib/offer/sends/project-handoff";
+import { emailOfferProposal } from "@/lib/offer/sends/proposal-email";
+import { sendTenderEnvelope } from "@/lib/offer/sends/tender-envelope";
+import { createDocusignEnvelopeControl } from "@/lib/docusign/envelope-control-port";
 import { syncLeadStageForOffer } from "@/lib/domain/leads/stage-sync";
 import { userPrincipal } from "@/lib/domain/principal";
 import { resolveOfferPriceSplit } from "@/lib/offer/offer-contract-value";
@@ -59,15 +80,6 @@ import {
 } from "@/lib/offer/contract-particulars";
 
 type OfferDb = Prisma.TransactionClient | typeof agentDb;
-
-const unavailableEnvelopeControl: EnvelopeControlPort = {
-  getStatus: async () => {
-    throw new Error("DocuSign envelope control is unavailable in Eve.");
-  },
-  void: async () => {
-    throw new Error("DocuSign envelope control is unavailable in Eve.");
-  },
-};
 
 const inclusionAi = {
   checkConsistency: checkOfferConsistency,
@@ -560,7 +572,7 @@ export async function recallAuthorizedOfferEnvelope(
         userPrincipal(actor),
         input,
         tx ?? agentDb,
-        unavailableEnvelopeControl,
+        createDocusignEnvelopeControl(),
       );
       recalled = result.ok;
       return result.ok
@@ -604,7 +616,7 @@ export async function createAuthorizedOfferRevision(
         userPrincipal(actor),
         input,
         agentDb,
-        unavailableEnvelopeControl,
+        createDocusignEnvelopeControl(),
       );
       return result.ok
         ? actionEnvelope({
@@ -791,4 +803,336 @@ export async function draftAuthorizedOfferHighlights(
         title: "Offer highlights draft",
       })
     : failedAction("Offer highlights unavailable", result.message);
+}
+
+/**
+ * The send and handoff commands are handed an already-authorized user, and
+ * every one of them writes, so the offer must be the lead's live revision —
+ * the app's send actions refuse a superseded one the same way. The reason is
+ * returned for the operator rather than a bare access error: "a newer revision
+ * replaced this one" is the whole answer.
+ */
+async function authorizeLiveOffer(
+  actor: Pick<User, "id" | "role">,
+  offerId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await authorizeOffer(userPrincipal(actor), offerId, agentDb);
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof OfferSupersededError) {
+      return { ok: false, error: error.message };
+    }
+    throw new AgentAuthorizationError();
+  }
+}
+
+// Eve has no request to expire Next caches in, so the offer screen and the
+// offers list catch up on their own short cache lifetimes, as they already do
+// for every other Eve offer write. The lead stage cannot wait: it moves with
+// the status, through the same rule the app runs.
+const eveOfferSendEffects: OfferSendEffects = {
+  offerChanged: () => undefined,
+  statusChanged: (offerId) => syncLeadStageForOffer(offerId, agentDb),
+};
+
+function offerHref(leadId: number) {
+  return `/offers/${leadId}`;
+}
+
+/**
+ * Start the lead's first offer, or name the one it already has.
+ *
+ * lib/domain/offers/start.ts creates the row exactly as opening the offer page
+ * does. The contents are lib/offer/initial-workspace.ts's starting snapshot,
+ * from the admin defaults, with Job setup filled from the lead by the same
+ * prefill the workspace runs, saved through the workspace's own save command.
+ */
+export async function startAuthorizedOffer(
+  ctx: ToolContext,
+  input: { leadId: number; prefillFromLead: boolean },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const principal = userPrincipal(actor);
+
+  let opened;
+  try {
+    opened = await openOfferForLead(
+      principal,
+      { leadId: input.leadId },
+      agentDb,
+    );
+  } catch (error) {
+    if (isDomainError(error)) {
+      return failedAction("Offer was not started", error.message);
+    }
+    throw error;
+  }
+  const { offer } = opened;
+  const entityRef = offerReference(offer);
+  const links = [{ label: "Open offer", href: offerHref(offer.leadId) }];
+
+  // Already has contents: an existing offer is never reseeded.
+  if (offer.workspaceState !== null) {
+    return actionEnvelope({
+      data: {
+        created: false,
+        offerId: offer.id,
+        stateVersion: offer.stateVersion,
+        status: offer.offerStatus,
+      },
+      entityRef,
+      links,
+      summary: `Lead ${offer.leadId} already has offer ${entityRef.display.label} (${OfferStatusLabels[offer.offerStatus]}). Nothing was created; review it with get_offer_details.`,
+      title: "Offer already exists",
+    });
+  }
+
+  const adminPrefill = buildAdminOfferPrefill(
+    await getAdminOfferContent(principal, agentDb),
+  );
+  let snapshot = buildInitialOfferWorkspaceSnapshot(adminPrefill);
+  snapshot = {
+    ...snapshot,
+    job: {
+      ...snapshot.job,
+      reference: offer.baseReference,
+      revision: `R${offer.revisionNumber}`,
+    },
+  };
+
+  const warnings: string[] = [];
+  let prefillNotes: string | null = null;
+  if (input.prefillFromLead) {
+    const prefill = await generateOfferPrefill(
+      principal,
+      offer.leadId,
+      agentDb,
+      generateOfferPrefillDraft,
+    ).catch((error: unknown) => ({
+      ok: false as const,
+      error: error instanceof Error ? error.message : "Prefill failed.",
+    }));
+    if (prefill.ok) {
+      snapshot = applyLeadPrefill(snapshot, prefill);
+      prefillNotes = prefill.notes || null;
+    } else {
+      warnings.push(
+        `Job setup was not filled from the lead (${prefill.error}). Enter the client and site details with update_offer_details.`,
+      );
+    }
+  }
+
+  const saved = await saveOfferWorkspace(
+    principal,
+    {
+      expectedStateVersion: offer.stateVersion,
+      offerId: offer.id,
+      snapshot,
+    },
+    agentDb,
+  );
+  if (!saved.ok) {
+    return failedAction(
+      "Offer was created but its starting contents were not saved",
+      `Offer ${entityRef.display.label} exists but is empty (${saved.reason}). Open it on screen to start it there.`,
+    );
+  }
+  await syncLeadDealValue(offer.id, saved.contractValueIncGst, agentDb);
+
+  return actionEnvelope({
+    data: {
+      created: opened.created,
+      offerId: offer.id,
+      prefilledFromLead: input.prefillFromLead && warnings.length === 0,
+      prefillNotes,
+      stateVersion: saved.stateVersion,
+      status: offer.offerStatus,
+      totalIncGst: saved.totalIncGst,
+    },
+    entityRef,
+    links,
+    summary: `Started offer ${entityRef.display.label} for lead ${offer.leadId} from the admin defaults. Review Job setup, floor areas and pricing before it goes to the client.`,
+    title: "Offer started",
+    warnings: [
+      ...warnings,
+      "Prefilled details come from the lead and a model reading it. Check every client and site detail before sending.",
+    ],
+  });
+}
+
+/**
+ * Email the Offer document PDF to every customer signatory.
+ *
+ * lib/offer/sends/proposal-email.ts is the app's Send offer button: every
+ * gate (owner details, floor areas, the override reason, recipient domains)
+ * and the once-per-attempt key are the same. The attempt id is the tool call,
+ * so a retried call is the same attempt.
+ */
+export async function emailAuthorizedOfferProposal(
+  ctx: ToolContext,
+  input: { offerId: string },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const access = await authorizeLiveOffer(actor, input.offerId);
+  if (!access.ok) return failedAction("Offer was not sent", access.error);
+
+  const result = await emailOfferProposal(
+    actor,
+    {
+      offerId: input.offerId,
+      // Only a legacy offer with no owner emails falls back to this, and one
+      // the user has not named must not be guessed at.
+      recipientEmail: "",
+      sendAttemptId: `eve:${ctx.session.id}:${ctx.callId}`,
+    },
+    agentDb,
+    eveOfferSendEffects,
+  );
+  if (!result.ok) return failedAction("Offer was not sent", result.error);
+  return actionEnvelope({
+    data: {
+      offerId: input.offerId,
+      recipients: [...result.recipients],
+      reference: result.reference,
+    },
+    summary: `Offer ${result.reference} emailed to ${result.recipients.join(", ")}. It is now Sent and its build steps are locked.`,
+    title: "Offer sent",
+  });
+}
+
+const SIGNATURE_LABEL = {
+  contract: "Contract",
+  offer: "Offer acceptance",
+  tender: "Tender",
+} as const;
+
+/**
+ * Put one document out for DocuSign signature.
+ *
+ * The same three sends as the workspace's buttons, in
+ * lib/offer/sends/*-envelope.ts: the claim on the status, the send-attempt
+ * record written before DocuSign is called, the reconcile-on-timeout and the
+ * persisted envelope. An "outcome unknown" answer must not be retried, and
+ * says so.
+ */
+export async function sendAuthorizedOfferForSignature(
+  ctx: ToolContext,
+  input: { document: "offer" | "tender" | "contract"; offerId: string },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const label = SIGNATURE_LABEL[input.document];
+  const access = await authorizeLiveOffer(actor, input.offerId);
+  if (!access.ok) {
+    return failedAction(`${label} was not sent for signature`, access.error);
+  }
+
+  const send =
+    input.document === "offer"
+      ? sendOfferAcceptanceEnvelope
+      : input.document === "tender"
+        ? sendTenderEnvelope
+        : sendContractEnvelope;
+  const result = await send(
+    actor,
+    { offerId: input.offerId },
+    agentDb,
+    eveOfferSendEffects,
+  );
+  if (!result.ok) {
+    return actionEnvelope({
+      data: {
+        document: input.document,
+        offerId: input.offerId,
+        // Set when the envelope reached the client but recording it failed:
+        // the offer is out for signature and must not be sent again.
+        status: result.status ?? null,
+      },
+      kind: "error",
+      summary: result.error,
+      title: `${label} was not sent for signature`,
+      warnings: result.status
+        ? ["Do not resend. The client already has this envelope."]
+        : [],
+    });
+  }
+  return actionEnvelope({
+    data: {
+      document: input.document,
+      envelopeId: result.envelopeId,
+      offerId: input.offerId,
+      reference: result.reference,
+    },
+    summary: `${label} ${result.reference} is out for DocuSign signature (envelope ${result.envelopeId}).`,
+    title: `${label} sent for signature`,
+  });
+}
+
+/**
+ * Turn a fully signed offer into a project.
+ *
+ * lib/offer/sends/project-handoff.ts is the workspace's Create project: the
+ * executed-PDF gate, the atomic claim, the rollback that asks the database
+ * before it deletes anything, and the PROJECT status event. The project is
+ * created by the same domain command the app's adapter runs. What the app adds
+ * after it — the project's Xero contact and the "project created"
+ * notification — is not done here; the Xero contact is created with the
+ * project's first claim instead.
+ */
+export async function createAuthorizedProjectFromOffer(
+  ctx: ToolContext,
+  input: { offerId: string },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const access = await authorizeLiveOffer(actor, input.offerId);
+  if (!access.ok) return failedAction("Project was not created", access.error);
+
+  const principal = userPrincipal(actor);
+  let result;
+  try {
+    result = await handOffOfferToProject(actor, input, agentDb, {
+      createProject: async (projectInput) => {
+        const created = await agentDb.$transaction(
+          (tx) => createProjectFromLead(principal, projectInput, tx),
+          // The same ceiling the app's adapter uses: the template insert needs
+          // more than the default five seconds on a cold connection.
+          { timeout: 30_000 },
+        );
+        return {
+          milestoneCount: created.milestonesCreated,
+          projectId: created.projectId,
+        };
+      },
+      handedOff: () => undefined,
+    });
+  } catch (error) {
+    if (isDomainError(error)) {
+      return failedAction("Project was not created", error.message);
+    }
+    throw error;
+  }
+  if (!result.ok) return failedAction("Project was not created", result.error);
+
+  return actionEnvelope({
+    data: {
+      milestoneCount: result.milestoneCount,
+      projectId: result.projectId,
+      projectName: result.projectName,
+    },
+    entityRef: {
+      type: "project",
+      id: result.projectId,
+      display: {
+        label: result.projectName,
+        href: `/projects/${result.projectId}`,
+      },
+    },
+    links: [{ label: "Open project", href: `/projects/${result.projectId}` }],
+    summary: `Project ${result.projectName} was created with ${result.milestoneCount} milestones, and the offer is now Project.`,
+    title: "Project created",
+    warnings: [
+      ...result.warnings,
+      "The project's Xero contact was not created now; it is created with the first progress claim.",
+    ],
+  });
 }

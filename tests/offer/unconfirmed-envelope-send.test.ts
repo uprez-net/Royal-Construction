@@ -44,9 +44,9 @@ const code = (path: string) =>
 // is written. Anchoring on that name would compare the wrong two positions and
 // pass while the ordering was wrong.
 const SEND_PATHS: [string, string, string][] = [
-  ["lib/data/offer-tender-sign.ts", "TENDER", "tenderEnvelopePort.send("],
-  ["lib/data/offer-contract-sign.ts", "CONTRACT", "contractEnvelopePort.send("],
-  ["lib/data/offer-accept-sign.ts", "OFFER", "acceptanceEnvelopePort.send("],
+  ["lib/offer/sends/tender-envelope.ts", "TENDER", "tenderEnvelopePort.send("],
+  ["lib/offer/sends/contract-envelope.ts", "CONTRACT", "contractEnvelopePort.send("],
+  ["lib/offer/sends/acceptance-envelope.ts", "OFFER", "acceptanceEnvelopePort.send("],
 ];
 
 test("all three send paths record the attempt before calling DocuSign", () => {
@@ -57,7 +57,7 @@ test("all three send paths record the attempt before calling DocuSign", () => {
   // dying mid-send.
   for (const [file, docType, sendCall] of SEND_PATHS) {
     const source = code(file);
-    const begin = source.indexOf("beginEnvelopeSendAttempt(prisma, {");
+    const begin = source.indexOf("beginEnvelopeSendAttempt(db, {");
     const send = source.indexOf(sendCall);
 
     assert.ok(begin > 0, `${file} does not record the send attempt at all`);
@@ -128,7 +128,7 @@ test("every definitive outcome resolves the attempt, and only the unknown one do
     // rejected: DocuSign refused, nothing is out there.
     assert.match(
       source.slice(unknownEnd),
-      /resolveEnvelopeSendAttempt\(prisma, sendAttemptRecordId\)/,
+      /resolveEnvelopeSendAttempt\(db, sendAttemptRecordId\)/,
       `${file} leaves a rejected send blocking a recall forever`,
     );
 
@@ -159,7 +159,7 @@ test("a successful send settles the attempt with the Envelope row that replaces 
   // It must be the transaction client, never the ambient one: settling on a
   // separate connection would commit even when the envelope write rolls back.
   assert.ok(
-    !/resolveEnvelopeSendAttempt\(prisma,/.test(source),
+    !/resolveEnvelopeSendAttempt\(db,/.test(source),
     "persistSentEnvelope settles the attempt outside its own transaction",
   );
 });
@@ -170,13 +170,13 @@ test("the outcome-unknown audit event reads fromStatus off the offer, not a lite
   // A regression within a regression: this was reported fixed once already
   // and the fix never actually landed. Verified against the literal absence
   // of the old hardcoded values, not just the presence of the new ones.
-  const tender = code("lib/data/offer-tender-sign.ts");
+  const tender = code("lib/offer/sends/tender-envelope.ts");
   assert.ok(
     !/fromStatus:\s*OfferStatus\.TENDER_DRAFT,/.test(tender),
-    "offer-tender-sign.ts still hardcodes TENDER_DRAFT — a direct send from AGREED records a transition that never happened",
+    "tender-envelope.ts still hardcodes TENDER_DRAFT — a direct send from AGREED records a transition that never happened",
   );
 
-  const accept = code("lib/data/offer-accept-sign.ts");
+  const accept = code("lib/offer/sends/acceptance-envelope.ts");
   assert.ok(
     !/fromStatus:\s*OfferStatus\.SENT,/.test(accept),
     "offer-accept-sign.ts still hardcodes SENT",

@@ -260,7 +260,7 @@ type OfferWorkspaceScreenProps = {
   readonly onCreateProject: () => void;
   readonly projectCreating?: boolean;
   readonly projectResult?:
-    | import("@/lib/data/offer-project-handoff").ProjectHandoffResult
+    | import("@/lib/offer/sends/project-handoff").ProjectHandoffResult
     | null;
   readonly projectId?: string | null;
   readonly onOverrideReasonChange: (value: string) => void;

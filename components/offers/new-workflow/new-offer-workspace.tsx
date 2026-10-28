@@ -7,13 +7,7 @@ import {
 import { getOfferDocumentExclusions } from "@/lib/offer/workspace-print-template";
 import type { ConsistencyFinding } from "@/lib/offer/inclusion-consistency-ai";
 import {
-  INITIAL_ALLOWANCES,
-  INITIAL_COST_LINES,
-  INITIAL_EXCLUSIONS,
-  INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
-  DEFAULT_WORKSPACE_PRICING_SETTINGS,
-  defaultOfferValidUntil,
   applyTaskMappingToCostLine,
   collectOwnerIssues,
   createOfferScopeItem,
@@ -27,7 +21,6 @@ import {
   getIncludedOfferTenderLineItems,
 } from "@/lib/offer/workspace-model";
 import {
-  INITIAL_PAYMENT_SCHEDULE,
   type OfferPaymentScheduleRow,
 } from "@/lib/offer/workspace-payment-schedule";
 import {
@@ -76,10 +69,8 @@ import {
   type ContractParticularKey,
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
-import {
-  createProjectFromOffer,
-  type ProjectHandoffResult,
-} from "@/lib/data/offer-project-handoff";
+import { createProjectFromOffer } from "@/lib/data/offer-project-handoff";
+import type { ProjectHandoffResult } from "@/lib/offer/sends/project-handoff";
 import {
   generateOfferPrefillFromLead,
   type OfferPrefillResult,
@@ -94,11 +85,11 @@ import type {
   OfferWorkspaceSnapshot,
   TenderGateState,
 } from "@/lib/offer/workspace-persistence";
-import { INITIAL_TENDER_GATE } from "@/lib/offer/workspace-persistence";
 import {
-  CURRENT_CALC_VERSION,
-  isSupportedCalcVersion,
-} from "@/lib/offer/calc-version";
+  applyPrefillPatch,
+  buildInitialOfferWorkspaceSnapshot,
+} from "@/lib/offer/initial-workspace";
+import { isSupportedCalcVersion } from "@/lib/offer/calc-version";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
 import type { ContractPreviewTerms } from "@/lib/offer/contract-terms";
 import { hasContractTerms } from "@/lib/offer/contract-terms-status";
@@ -119,7 +110,6 @@ import {
   withoutGrannyOutOfScopeLines,
 } from "@/lib/offer/granny-exclusion";
 import {
-  EMPTY_OFFER_IMAGES,
   setOfferImage,
   type OfferImage,
   type OfferImageMap,
@@ -152,79 +142,6 @@ function contractDefaultsFromWorkspace(
 // open tab reflects it. 8s is responsive without hammering the server.
 const SIGNING_POLL_INTERVAL_MS = 8000;
 
-// Identity fields carrying estimator-entered owner/address data. The lead only
-// ever has individual contacts, so re-running "Pre-fill from lead" over an
-// already-populated offer would wipe a company / directors / Current Location.
-// A manual prefill preserves these and only refreshes the rest (codex #4).
-const PREFILL_IDENTITY_KEYS: readonly (keyof OfferWorkspaceJob)[] = [
-  "owners",
-  "clientNames",
-  "secondaryCustomerName",
-  "clientEmail",
-  "secondaryCustomerEmail",
-  "clientPhone",
-  "currentLocation",
-  "siteAddress",
-  "siteCouncil",
-  "siteState",
-  "sitePostcode",
-];
-
-// True once the estimator has entered any owner/site identity — a brand-new
-// (pristine) offer returns false so auto-prefill fills everything. Inspects
-// EVERY owner-carried field, not just the first owner's name: an estimator who
-// typed only an email, phone, ABN, Current Location, or a director's name before
-// the async prefill resolved must not have that work wiped by the full patch
-// (codex #4). owners is the source of truth, so its deep scan subsumes the flat
-// client* projection; only the site fields live outside it.
-function jobHasEnteredIdentity(job: OfferWorkspaceJob): boolean {
-  const ownerEntered = job.owners.some(
-    (owner) =>
-      // Structural choices count as "entered" too, not just typed text: switching
-      // a pristine owner to a company, or adding a second signatory/director,
-      // configures the party set and must not be wiped by a late prefill (codex
-      // #3). A pristine owner is one blank individual with exactly one signatory.
-      owner.kind === "company" ||
-      owner.signatories.length !== 1 ||
-      owner.displayName.trim().length > 0 ||
-      owner.abn.trim().length > 0 ||
-      owner.currentLocation.trim().length > 0 ||
-      owner.signatories.some(
-        (signatory) =>
-          signatory.name.trim().length > 0 ||
-          signatory.email.trim().length > 0 ||
-          signatory.phone.trim().length > 0,
-      ),
-  );
-  return (
-    ownerEntered ||
-    job.owners.length > 1 ||
-    job.siteAddress.trim().length > 0 ||
-    job.siteCouncil.trim().length > 0 ||
-    job.siteState.trim().length > 0 ||
-    job.sitePostcode.trim().length > 0
-  );
-}
-
-// Apply a lead-prefill patch without destroying identity already entered: a
-// pristine offer takes the full patch; a populated one keeps its owner/address
-// identity and only refreshes non-identity fields (build type, scope, façade).
-function applyPrefillPatch(
-  current: OfferWorkspaceJob,
-  patch: Partial<OfferWorkspaceJob>,
-): OfferWorkspaceJob {
-  if (!jobHasEnteredIdentity(current)) {
-    return { ...current, ...patch };
-  }
-  const preserved: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(patch)) {
-    if (!PREFILL_IDENTITY_KEYS.includes(key as keyof OfferWorkspaceJob)) {
-      preserved[key] = value;
-    }
-  }
-  return { ...current, ...(preserved as Partial<OfferWorkspaceJob>) };
-}
-
 // Embed with a leadId to persist to the DB (ADR 0002). The standalone
 // /offers/new-workflow demo route passes none and stays in-memory.
 export function NewOfferWorkspace({
@@ -234,72 +151,76 @@ export function NewOfferWorkspace({
   readonly leadId?: number;
   readonly adminPrefill?: AdminOfferPrefill;
 }) {
-  // Lazy-seed validUntil to now + 30 days (same calendar day on the server pass
-  // and hydration, so it matches) so a brand-new offer is never born expired.
-  const [job, setJob] = useState<OfferWorkspaceJob>(() => ({
-    ...INITIAL_OFFER_JOB,
-    validUntil: defaultOfferValidUntil(),
-    ...(adminPrefill?.buildScope.length
-      ? { buildScope: adminPrefill.buildScope }
-      : {}),
-  }));
+  // What a brand-new offer starts as: lib/offer/initial-workspace.ts, which
+  // Eve's start_offer seeds from too. Lazy, so validUntil is now + 30 days on
+  // the same calendar day for the server pass and hydration, and a brand-new
+  // offer is never born expired.
+  const [initial] = useState(() =>
+    buildInitialOfferWorkspaceSnapshot(adminPrefill),
+  );
+  const [job, setJob] = useState<OfferWorkspaceJob>(initial.job);
   const [lines, setLines] = useState<readonly OfferWorkspaceCostLine[]>(
-    adminPrefill?.costLines ?? INITIAL_COST_LINES,
+    initial.lines,
   );
   const [allowances, setAllowances] = useState<
     readonly OfferWorkspaceScopeItem[]
-  >(adminPrefill?.allowances ?? INITIAL_ALLOWANCES);
+  >(initial.allowances);
   const [exclusions, setExclusions] = useState<
     readonly OfferWorkspaceScopeItem[]
-  >(adminPrefill?.exclusions ?? INITIAL_EXCLUSIONS);
-  const [draft, setDraft] = useState<OfferDocumentDraft>(
-    adminPrefill?.draft ?? INITIAL_OFFER_DRAFT,
-  );
+  >(initial.exclusions);
+  const [draft, setDraft] = useState<OfferDocumentDraft>(initial.draft);
   const rateConstantsRef = useRef<Partial<Record<RateConstantKey, number>>>(
     adminPrefill?.rateConstants ?? {},
   );
-  const [overrideReason, setOverrideReason] = useState("");
-  const [selectedPriceInput, setSelectedPriceInput] = useState("");
-  const [standardPriceInput, setStandardPriceInput] = useState("");
-  const [priceAdjustmentLabel, setPriceAdjustmentLabel] = useState("");
+  const [overrideReason, setOverrideReason] = useState(initial.overrideReason);
+  const [selectedPriceInput, setSelectedPriceInput] = useState(
+    initial.selectedPriceInput,
+  );
+  const [standardPriceInput, setStandardPriceInput] = useState(
+    initial.standardPriceInput,
+  );
+  const [priceAdjustmentLabel, setPriceAdjustmentLabel] = useState(
+    initial.priceAdjustmentLabel,
+  );
   const [status, setStatus] = useState<OfferWorkspaceStatus>("pending");
   // Flips once the server has told us what this offer actually is. The screen
   // seeds "pending" until then, so anything derived from status at first render
   // (which step to open on) is a guess that has to be corrected exactly once.
   const [hydrated, setHydrated] = useState(false);
   const [areaCalculator, setAreaCalculator] = useState<OfferAreaCalculator>(
-    adminPrefill?.areaCalculator ?? INITIAL_AREA_CALCULATOR,
+    initial.areaCalculator,
   );
   // What the estimator has set. The settings in force are derived from these
   // below, once the cost lines are known (Total Contract Value follows them).
   const [pricingSettingsInput, setPricingSettingsInput] =
-    useState<OfferWorkspacePricingSettings>({
-      ...DEFAULT_WORKSPACE_PRICING_SETTINGS,
-      loadingChargePercentage: adminPrefill?.loadingChargePercentage ?? 0,
-    });
+    useState<OfferWorkspacePricingSettings>(initial.workspacePricingSettings);
   const [importResult, setImportResult] =
     useState<OfferWorkbookImportResult | null>(null);
-  const [rateCardProduct, setRateCardProduct] =
-    useState<RateCardProduct>("DOUBLE_STOREY");
-  const [rateCardTier, setRateCardTier] = useState<RateCardTier>("MID");
+  const [rateCardProduct, setRateCardProduct] = useState<RateCardProduct>(
+    initial.rateCardProduct,
+  );
+  const [rateCardTier, setRateCardTier] = useState<RateCardTier>(
+    initial.rateCardTier,
+  );
   const [paymentSchedule, setPaymentSchedule] = useState<
     readonly OfferPaymentScheduleRow[]
-  >(INITIAL_PAYMENT_SCHEDULE);
-  const [images, setImages] = useState<OfferImageMap>(EMPTY_OFFER_IMAGES);
-  const [tenderGate, setTenderGate] =
-    useState<TenderGateState>(INITIAL_TENDER_GATE);
+  >(initial.paymentSchedule);
+  const [images, setImages] = useState<OfferImageMap>(initial.images);
+  const [tenderGate, setTenderGate] = useState<TenderGateState>(
+    initial.tenderGate,
+  );
   // The AdminOfferContent version this workspace's admin-derived content came
   // from, persisted in the snapshot. A brand-new offer is seeded from the live
   // prefill the page passed in; a saved offer takes whatever the loader hands
   // back (which the server already refreshed if the offer was editable).
   const [adminContentVersion, setAdminContentVersion] = useState(
-    adminPrefill?.adminVersion ?? 0,
+    initial.adminContentVersion,
   );
   // The calculation rules this offer prices under. A fresh offer seeds at the
   // current version; a saved offer overwrites this from its stored pin in
   // hydrateSnapshot. The SERVER stamp is authoritative — this seed only matters
   // for the window before the first save.
-  const [calcVersion, setCalcVersion] = useState<number>(CURRENT_CALC_VERSION);
+  const [calcVersion, setCalcVersion] = useState<number>(initial.calcVersion);
   // Admin content changed after this offer was frozen (agreed/sent), so the
   // server left the snapshot alone. Surfaced as an advisory send blocker.
   const [adminContentStale, setAdminContentStale] = useState(false);

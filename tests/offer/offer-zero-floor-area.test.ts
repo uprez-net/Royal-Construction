@@ -104,10 +104,10 @@ test("every send path refuses a zero-area offer, not just the proposal", () => {
   // were not, so an offer blocked from emailing could still be sent for
   // signature with the same missing area.
   const paths = [
-    ["lib/data/offer-send.ts", "the proposal email"],
-    ["lib/data/offer-tender-sign.ts", "the Tender"],
-    ["lib/data/offer-contract-sign.ts", "the Contract"],
-    ["lib/data/offer-accept-sign.ts", "accept-for-signature"],
+    ["lib/offer/sends/proposal-email.ts", "the proposal email"],
+    ["lib/offer/sends/tender-envelope.ts", "the Tender"],
+    ["lib/offer/sends/contract-envelope.ts", "the Contract"],
+    ["lib/offer/sends/acceptance-envelope.ts", "accept-for-signature"],
   ];
   for (const [file, label] of paths) {
     const source = readFileSync(join(process.cwd(), file), "utf8");

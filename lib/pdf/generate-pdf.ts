@@ -1,5 +1,8 @@
-import "server-only";
-
+// Headless Chromium from HTML. Not a "use server" module: exported from one,
+// it would be an endpoint that renders arbitrary HTML for anyone who calls it
+// (tests/offer/use-server-surface.test.ts). Not "server-only" either, because
+// Eve's offer sends render the same documents and "server-only" throws outside
+// a React bundler. Chromium cannot load in a browser bundle regardless.
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 import puppeteerDev from "puppeteer";
