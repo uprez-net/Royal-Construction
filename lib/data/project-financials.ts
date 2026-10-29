@@ -31,7 +31,9 @@ import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
   allocateTradieInvoiceSchema,
+  previewInvoiceRecheckSchema,
   recordTradieInvoiceSchema,
+  sendInvoiceRecheckSchema,
   voidTradieInvoiceSchema,
   type RecordTradieInvoiceFormInput,
 } from "@/utils/validators/tradie-invoices";
@@ -174,11 +176,8 @@ export async function previewInvoiceRecheckAction(raw: {
 }): Promise<InvoiceRecheckPreviewResult> {
   try {
     const principal = await caller();
-    const recheck = await prepareTradieInvoiceRecheck(
-      principal,
-      { projectId: raw.projectId, scheduleId: raw.scheduleId },
-      prisma,
-    );
+    const input = parse(previewInvoiceRecheckSchema.safeParse(raw));
+    const recheck = await prepareTradieInvoiceRecheck(principal, input, prisma);
     return { ok: true, recheck };
   } catch (error) {
     const failure = domainActionFailure(error);
@@ -207,17 +206,14 @@ export async function sendInvoiceRecheckAction(raw: {
 }): Promise<InvoiceRecheckSendResult> {
   try {
     const principal = await caller();
+    const input = parse(sendInvoiceRecheckSchema.safeParse(raw));
     const sent = await requestTradieInvoiceRecheck(
       principal,
-      {
-        attemptKey: raw.attemptKey,
-        projectId: raw.projectId,
-        scheduleId: raw.scheduleId,
-      },
+      input,
       prisma,
       (message) => sendEmail(message),
     );
-    revalidateTag(`project-${raw.projectId}`, CACHE_PROFILES.MEDIUM);
+    revalidateTag(`project-${input.projectId}`, CACHE_PROFILES.MEDIUM);
     return { alreadySent: sent.alreadySent, ok: true, to: sent.to };
   } catch (error) {
     const failure = domainActionFailure(error);

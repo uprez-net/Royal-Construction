@@ -46,3 +46,12 @@ export const voidTradieInvoiceSchema = z.object({
     .min(1, "Say why the invoice is being voided")
     .max(500),
 });
+
+export const previewInvoiceRecheckSchema = z.object({
+  projectId: id("Project ID is required"),
+  scheduleId: id("Choose the booking to recheck"),
+});
+
+export const sendInvoiceRecheckSchema = previewInvoiceRecheckSchema.extend({
+  attemptKey: id("Missing request key; close the dialog and open it again."),
+});
