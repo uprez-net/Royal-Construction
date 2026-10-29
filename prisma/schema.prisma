@@ -630,6 +630,7 @@ model Project {
   tradieRequests      TradieRequest[]
   tradieQuotes        TradieQuote[]
   tradeSelections     TradeSelection[]
+  tradieInvoices      TradieInvoice[]
 
   @@index([name])
   @@index([customerId])
@@ -680,11 +681,11 @@ model Milestone {
   tradieSchedules    TradieSchedule[]
   activityLogs       ActivityLog[]
   tradieActivityLogs TradieActivityLog[]
-  project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  files              File[]           @relation("MilestoneFiles")
-  tradies            Tradie[]         @relation("TradieMilestones")
-  parentMilestone    Milestone?       @relation("MilestoneHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  childrenMilestones Milestone[]      @relation("MilestoneHierarchy")
+  project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  files              File[]              @relation("MilestoneFiles")
+  tradies            Tradie[]            @relation("TradieMilestones")
+  parentMilestone    Milestone?          @relation("MilestoneHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  childrenMilestones Milestone[]         @relation("MilestoneHierarchy")
 
   @@unique([projectId, order])
   @@index([projectId])
@@ -767,6 +768,7 @@ model Tradie {
   quotes            TradieQuote[]
   tradeSelections   TradeSelection[]
   activityLogs      TradieActivityLog[]
+  invoices          TradieInvoice[]
 
   complianceOutreaches ComplianceOutreach[] @relation("TradieComplianceOutreaches")
 
@@ -956,6 +958,7 @@ model TradieSchedule {
   milestone        Milestone?              @relation(fields: [milestoneId], references: [id])
   requestRecipient TradieRequestRecipient? @relation(fields: [requestRecipientId], references: [id], onDelete: SetNull)
   quote            TradieQuote?            @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  invoices         TradieInvoice[]
 
   @@index([tradieId])
   @@index([projectId])
@@ -967,7 +970,7 @@ model TradieSchedule {
 
 /// One request: a trade and its activities, emailed to one or more tradies.
 model TradieRequest {
-  id          String   @id @default(uuid())
+  id          String            @id @default(uuid())
   projectId   String
   /// The trade label as the request named it.
   trade       String
@@ -1162,21 +1165,22 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  files               File[]             @relation("UserFiles")
-  siteManagerProjects Project[]          @relation("SiteManagerProjects")
+  files               File[]              @relation("UserFiles")
+  siteManagerProjects Project[]           @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
   tradieActivityLogs  TradieActivityLog[]
-  assignedLeads       Lead[]             @relation("LeadAssignee")
-  leadHistories       LeadHistory[]      @relation("LeadHistoryAuthor")
-  leadTasks           LeadTask[]         @relation("LeadTaskAssignee")
+  assignedLeads       Lead[]              @relation("LeadAssignee")
+  leadHistories       LeadHistory[]       @relation("LeadHistoryAuthor")
+  leadTasks           LeadTask[]          @relation("LeadTaskAssignee")
   reviews             TradieRating[]
   approvalRequests    TradieApproval[]
-  tradieRequests      TradieRequest[]    @relation("TradieRequestCreatedBy")
-  tradieQuotes        TradieQuote[]      @relation("TradieQuoteEnteredBy")
-  tradeSelections     TradeSelection[]   @relation("TradeSelectionSelectedBy")
-  createdOffers       Offer[]            @relation("OfferCreatedBy")
-  xeroConnections     XeroConnection[]   @relation("XeroConnections")
+  tradieRequests      TradieRequest[]     @relation("TradieRequestCreatedBy")
+  tradieQuotes        TradieQuote[]       @relation("TradieQuoteEnteredBy")
+  tradieInvoices      TradieInvoice[]     @relation("TradieInvoiceEnteredBy")
+  tradeSelections     TradeSelection[]    @relation("TradeSelectionSelectedBy")
+  createdOffers       Offer[]             @relation("OfferCreatedBy")
+  xeroConnections     XeroConnection[]    @relation("XeroConnections")
   agentSessions       AgentSession[]
   agentActionAudits   AgentActionAudit[]
   agentOperations     AgentOperation[]
@@ -3100,8 +3104,10 @@ model ComplianceAlert {
   @@index([engagementId, status])
 }
 
-/// Lifecycle of a progress claim, mirroring Xero's own invoice status codes so
-/// the webhook can map one to one without inventing intermediate states.
+/// Lifecycle of an invoice, mirroring Xero's own invoice status codes so the
+/// webhook can map one to one without inventing intermediate states. Shared by
+/// the progress claims we raise (Invoice) and the bills tradies raise on us
+/// (TradieInvoice): Xero gives both the same codes.
 enum InvoiceStatus {
   DRAFT
   SUBMITTED
@@ -3194,4 +3200,76 @@ model Invoice {
   @@unique([projectId, projectStage])
   @@index([projectId])
   @@index([status])
+}
+
+/// Where a tradie's invoice reached us from.
+enum TradieInvoiceSource {
+  /// Typed in by the office from an invoice that arrived by email or post.
+  MANUAL
+  /// A bill (ACCPAY) in Xero, mirrored by the invoice webhook.
+  XERO
+}
+
+/// A bill a tradie raised on us: what the work actually cost.
+///
+/// The cost side of a project's profit and loss. A booking's quote
+/// (TradieSchedule.quotedPrice) is what the work was agreed at; the invoices
+/// against it are what it is charged at, and a tradie may send several — a
+/// deposit, progress claims, a final — so one booking holds many.
+///
+/// `scheduleId` is null while an invoice is known to be this tradie's on this
+/// project but not which booking it bills: a Xero bill with no RCTBK reference
+/// and more than one booking it could be. The Financials tab lists those for
+/// the office to allocate, and they count towards no activity until it does.
+///
+/// Amounts are ex GST in `subTotal`, which is what is compared with the tender
+/// (Milestone.budget is ex GST). Not related to Invoice: that is the money the
+/// owner owes us, this is the money we owe the tradie.
+model TradieInvoice {
+  id         String              @id @default(uuid())
+  projectId  String
+  tradieId   String
+  scheduleId String?
+  source     TradieInvoiceSource
+  status     InvoiceStatus       @default(AUTHORISED)
+
+  /// The tradie's own invoice number, as printed on it.
+  invoiceNumber String?
+  reference     String?
+  currencyCode  String  @default("AUD")
+
+  subTotal   Decimal @db.Decimal(12, 2)
+  totalTax   Decimal @db.Decimal(12, 2)
+  total      Decimal @db.Decimal(12, 2)
+  amountPaid Decimal @default(0) @db.Decimal(12, 2)
+
+  issuedDate DateTime
+  dueDate    DateTime?
+  notes      String?   @db.Text
+
+  /// The Xero InvoiceID of the bill this mirrors. Unique, so a replayed or
+  /// repeated webhook updates the one row instead of adding a second invoice.
+  xeroInvoiceId String?   @unique
+  /// Xero's `updatedDateUTC` for the version this row reflects, so an older
+  /// delivery cannot overwrite a newer one.
+  xeroUpdatedAt DateTime?
+
+  /// Who typed it in, or allocated it to its booking. Null for the webhook.
+  enteredById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tradie    Tradie          @relation(fields: [tradieId], references: [id])
+  schedule  TradieSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  enteredBy User?           @relation("TradieInvoiceEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
+
+  // NOTE: one live invoice per tradie and invoice number (case-insensitive) is
+  // enforced via a partial unique index (TradieInvoice_one_live_number_per_tradie,
+  // WHERE invoiceNumber IS NOT NULL and status is not VOIDED or DELETED) added
+  // in the migration, since Prisma cannot express a filtered unique in the schema.
+  @@index([projectId])
+  @@index([tradieId])
+  @@index([scheduleId])
 }

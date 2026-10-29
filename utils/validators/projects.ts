@@ -390,6 +390,7 @@ export const projectTabsValidator = z.enum([
   "overview",
   "milestones",
   "payments",
+  "financials",
   "tradies",
   "docs",
   "history",

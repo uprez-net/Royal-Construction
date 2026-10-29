@@ -1,7 +1,10 @@
 import { TradieScheduleStatus } from "@prisma/client";
 import type { DomainDb } from "../db";
 import { DomainNotFoundError, DomainTransitionError } from "../errors";
-import { scheduleTotalCost } from "../../../utils/calculations";
+import {
+  parseQuotedAmount,
+  scheduleTotalCost,
+} from "../../../utils/calculations";
 
 /** Completed, declined and cancelled bookings no longer reserve work. */
 export const INACTIVE_SCHEDULE_STATUSES: TradieScheduleStatus[] = [
@@ -28,6 +31,10 @@ export async function requireActiveTradie(tradieId: string, db: DomainDb) {
  * A recorded price wins: a quote, or the price the office entered for a tradie
  * booked without one. Only a booking with no price at all is costed from the
  * tradie's rate, and a booking still waiting on its quote costs nothing yet.
+ *
+ * The recorded price is read with `parseQuotedAmount`, not `parseFloat`: a
+ * price written before quotes were normalised can still read "$4,500", which
+ * `parseFloat` makes NaN, and "1,200.00", which it makes 1.
  */
 export function tradieScheduleSpend(schedule: {
   status: TradieScheduleStatus;
@@ -40,7 +47,7 @@ export function tradieScheduleSpend(schedule: {
   };
 }): number {
   if (schedule.status === TradieScheduleStatus.CANCELLED) return 0;
-  if (schedule.quotedPrice) return parseFloat(schedule.quotedPrice);
+  if (schedule.quotedPrice) return parseQuotedAmount(schedule.quotedPrice) ?? 0;
   return schedule.requiresQuote
     ? 0
     : scheduleTotalCost(

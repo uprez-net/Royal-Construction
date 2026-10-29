@@ -1,0 +1,223 @@
+"use server";
+
+import { revalidateTag } from "next/cache";
+
+import { auth } from "@clerk/nextjs/server";
+import { sendEmail } from "@/lib/azureClient";
+import {
+  DomainAuthorizationError,
+  DomainValidationError,
+} from "@/lib/domain/errors";
+import { userPrincipal, type DomainPrincipal } from "@/lib/domain/principal";
+import {
+  getProjectFinancials,
+  type ProjectFinancials,
+} from "@/lib/domain/projects/financials";
+import {
+  prepareTradieInvoiceRecheck,
+  requestTradieInvoiceRecheck,
+  type TradieInvoiceRecheck,
+} from "@/lib/domain/tradies/invoice-recheck";
+import {
+  allocateTradieInvoice,
+  recordTradieInvoice,
+  voidTradieInvoice,
+} from "@/lib/domain/tradies/invoices";
+import {
+  domainActionFailure,
+  type DomainActionFailure,
+} from "@/lib/http/domain-response";
+import prisma from "@/lib/prisma";
+import { CACHE_PROFILES } from "@/types/cache";
+import {
+  allocateTradieInvoiceSchema,
+  previewInvoiceRecheckSchema,
+  recordTradieInvoiceSchema,
+  sendInvoiceRecheckSchema,
+  voidTradieInvoiceSchema,
+  type RecordTradieInvoiceFormInput,
+} from "@/utils/validators/tradie-invoices";
+
+import { getUserByClerkIdCached } from "./user";
+
+// The Financials tab's door. Every export is a Server Action — a POST anyone
+// signed in can send with arguments of their choosing — so each resolves its
+// caller here and hands the domain a principal; the domain commands refuse
+// anyone who is not an admin before they read a figure.
+
+export type ProjectFinancialsResult =
+  | { readonly ok: true; readonly report: ProjectFinancials }
+  | DomainActionFailure;
+
+/**
+ * The signed-in caller. No session is refused outright rather than mapped to
+ * the system principal `currentPrincipal` gives a request without one: that
+ * is right for a cron, and would be full access here.
+ */
+async function caller(): Promise<DomainPrincipal> {
+  const { userId } = await auth();
+  if (!userId) throw new DomainAuthorizationError("Sign in to continue.");
+  const user = await getUserByClerkIdCached(userId);
+  if (!user) throw new DomainAuthorizationError("Sign in to continue.");
+  return userPrincipal(user);
+}
+
+function parse<T>(
+  result:
+    | { success: true; data: T }
+    | { success: false; error: { issues: { message: string }[] } },
+): T {
+  if (!result.success) {
+    throw new DomainValidationError(
+      result.error.issues[0]?.message ?? "Some details are missing.",
+    );
+  }
+  return result.data;
+}
+
+/** `YYYY-MM-DD` as the calendar day it names, at UTC midnight. */
+function day(value: string): Date {
+  return new Date(`${value}T00:00:00.000Z`);
+}
+
+/** The project page reads milestone spend and tradie lists from its cache. */
+function expireProject(projectId: string) {
+  revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+  revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
+}
+
+async function answer(
+  run: (principal: DomainPrincipal) => Promise<string>,
+): Promise<ProjectFinancialsResult> {
+  try {
+    const principal = await caller();
+    const projectId = await run(principal);
+    return {
+      ok: true,
+      report: await getProjectFinancials(principal, { projectId }, prisma),
+    };
+  } catch (error) {
+    const failure = domainActionFailure(error);
+    if (failure) return failure;
+    throw error;
+  }
+}
+
+export async function fetchProjectFinancials(
+  projectId: string,
+): Promise<ProjectFinancialsResult> {
+  return answer(async () => projectId);
+}
+
+export async function recordTradieInvoiceAction(
+  raw: RecordTradieInvoiceFormInput,
+): Promise<ProjectFinancialsResult> {
+  return answer(async (principal) => {
+    const input = parse(recordTradieInvoiceSchema.safeParse(raw));
+    const recorded = await prisma.$transaction((tx) =>
+      recordTradieInvoice(
+        principal,
+        {
+          dueDate: input.dueDate ? day(input.dueDate) : null,
+          invoiceNumber: input.invoiceNumber,
+          issuedDate: day(input.issuedDate),
+          notes: input.notes,
+          projectId: input.projectId,
+          scheduleId: input.scheduleId,
+          subTotal: input.subTotal,
+          totalTax: input.totalTax,
+        },
+        tx,
+      ),
+    );
+    expireProject(recorded.projectId);
+    return recorded.projectId;
+  });
+}
+
+export async function allocateTradieInvoiceAction(raw: {
+  projectId: string;
+  invoiceId: string;
+  scheduleId: string;
+}): Promise<ProjectFinancialsResult> {
+  return answer(async (principal) => {
+    const input = parse(allocateTradieInvoiceSchema.safeParse(raw));
+    const allocated = await prisma.$transaction((tx) =>
+      allocateTradieInvoice(principal, input, tx),
+    );
+    expireProject(allocated.projectId);
+    return allocated.projectId;
+  });
+}
+
+export async function voidTradieInvoiceAction(raw: {
+  projectId: string;
+  invoiceId: string;
+  reason: string;
+}): Promise<ProjectFinancialsResult> {
+  return answer(async (principal) => {
+    const input = parse(voidTradieInvoiceSchema.safeParse(raw));
+    const voided = await prisma.$transaction((tx) =>
+      voidTradieInvoice(principal, input, tx),
+    );
+    expireProject(voided.projectId);
+    return voided.projectId;
+  });
+}
+
+export type InvoiceRecheckPreviewResult =
+  | { readonly ok: true; readonly recheck: TradieInvoiceRecheck }
+  | DomainActionFailure;
+
+/** The recheck email exactly as it would go, for the dialog to show first. */
+export async function previewInvoiceRecheckAction(raw: {
+  projectId: string;
+  scheduleId: string;
+}): Promise<InvoiceRecheckPreviewResult> {
+  try {
+    const principal = await caller();
+    const input = parse(previewInvoiceRecheckSchema.safeParse(raw));
+    const recheck = await prepareTradieInvoiceRecheck(principal, input, prisma);
+    return { ok: true, recheck };
+  } catch (error) {
+    const failure = domainActionFailure(error);
+    if (failure) return failure;
+    throw error;
+  }
+}
+
+export type InvoiceRecheckSendResult =
+  | {
+      readonly ok: true;
+      readonly to: string;
+      /** This attempt had already gone out; nothing was sent again. */
+      readonly alreadySent: boolean;
+    }
+  | DomainActionFailure;
+
+/**
+ * Email the tradie the recheck. The dialog holds `attemptKey` until a send
+ * succeeds (`useIdempotencyKey`), so a retry is the same email, not a second.
+ */
+export async function sendInvoiceRecheckAction(raw: {
+  projectId: string;
+  scheduleId: string;
+  attemptKey: string;
+}): Promise<InvoiceRecheckSendResult> {
+  try {
+    const principal = await caller();
+    const input = parse(sendInvoiceRecheckSchema.safeParse(raw));
+    const sent = await requestTradieInvoiceRecheck(
+      principal,
+      input,
+      prisma,
+      (message) => sendEmail(message),
+    );
+    revalidateTag(`project-${input.projectId}`, CACHE_PROFILES.MEDIUM);
+    return { alreadySent: sent.alreadySent, ok: true, to: sent.to };
+  } catch (error) {
+    const failure = domainActionFailure(error);
+    if (failure) return failure;
+    throw error;
+  }
+}

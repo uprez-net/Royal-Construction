@@ -29,6 +29,7 @@ import {
   syncInvoiceFromExternal,
 } from "@/lib/domain/invoices/sync";
 import { createStageInvoice as createStageInvoiceDomain } from "@/lib/domain/invoices/stage-creation";
+import { syncTradieBillFromXero } from "@/lib/data/tradie-bills";
 import { CACHE_PROFILES } from "@/types/cache";
 import { PROJECT_STAGE_LABELS } from "@/types/project";
 
@@ -265,6 +266,7 @@ export async function createStageInvoice(
  */
 export async function syncInvoiceFromXero(
   xeroInvoiceId: string,
+  options: { readonly created?: boolean } = {},
 ): Promise<void> {
   const context = await getXeroContext();
   const result = await syncInvoiceFromExternal(
@@ -284,6 +286,15 @@ export async function syncInvoiceFromXero(
       };
     },
   );
+
+  // Not one of our claims: it may be a tradie's bill, which is the cost side
+  // of the project's profit and loss.
+  if (result.kind === "unknown") {
+    await syncTradieBillFromXero(context, xeroInvoiceId, {
+      created: options.created ?? false,
+    });
+    return;
+  }
 
   if (result.kind === "updated") {
     const invoice = await prisma.invoice.findUnique({

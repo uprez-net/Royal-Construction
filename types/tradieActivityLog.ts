@@ -70,6 +70,7 @@ const STATUS_WORDS: Record<TradieScheduleStatus, string> = {
 const VIA_WORDS: Record<string, string> = {
   "graph:tradie-email-reply": "from the tradie's emailed reply",
   "workflow:tradie-request-retry": "by the automatic retry",
+  "xero:bill-webhook": "from Xero",
   [TRADIE_REMINDER_CRON]: "by the daily reminder run",
 };
 
@@ -150,6 +151,21 @@ export const tradieActivityLogTemplates: TradieActivityLogTemplateFactory = {
     message: data.priceOnly
       ? `Price of ${data.amount} recorded for a direct booking; the booking kept its status${via(data.via)}`
       : `Quote of ${data.amount} recorded by the office${via(data.via)}`,
+  }),
+
+  invoiceRecorded: (data) => ({
+    ...bookingRef(data),
+    message: `Invoice${data.invoiceNumber ? ` ${data.invoiceNumber}` : ""} for ${data.amount} ex GST ${data.source === "XERO" ? "received from Xero" : "recorded by the office"}${via(data.via)}`,
+  }),
+
+  invoiceAllocated: (data) => ({
+    ...bookingRef(data),
+    message: `Invoice${data.invoiceNumber ? ` ${data.invoiceNumber}` : ""} for ${data.amount} ex GST allocated to this booking${via(data.via)}`,
+  }),
+
+  invoiceVoided: (data) => ({
+    ...bookingRef(data),
+    message: `Invoice${data.invoiceNumber ? ` ${data.invoiceNumber}` : ""} for ${data.amount} ex GST voided: ${data.reason}${via(data.via)}`,
   }),
 
   requestEmailSent: (data) => ({

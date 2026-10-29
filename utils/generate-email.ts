@@ -943,3 +943,169 @@ export function generateTradieBookingEmail(
     },
   }));
 }
+
+/** A tradie's invoice, as the recheck email lists it. */
+export type TradieInvoiceRecheckLine = {
+  readonly invoiceNumber: string | null;
+  /** ISO date. */
+  readonly issuedDate: string;
+  readonly subTotalCents: number;
+};
+
+export type TradieInvoiceRecheckEmailInput = {
+  readonly tradieName: string;
+  readonly projectName: string;
+  readonly trade: string;
+  readonly activityName: string;
+  /** The approved price for the booking, ex GST. */
+  readonly quotedCents: number;
+  /**
+   * False when the quote never said whether it included GST. The email then
+   * gives the amount "as quoted" rather than telling the tradie it was ex GST,
+   * which we do not know.
+   */
+  readonly quoteGstStated: boolean;
+  /** Every invoice still counted against the booking, ex GST. */
+  readonly invoices: readonly TradieInvoiceRecheckLine[];
+  readonly siteManager: SiteManager;
+  readonly reference?: string | null;
+};
+
+/** Money to the cent: an invoice is checked against the tradie's own figure. */
+const invoiceMoney = new Intl.NumberFormat("en-AU", {
+  currency: "AUD",
+  maximumFractionDigits: 2,
+  minimumFractionDigits: 2,
+  style: "currency",
+});
+const centsLabel = (cents: number) => invoiceMoney.format(cents / 100);
+
+/** The subject a recheck goes out with; the booking's reference is added. */
+export function tradieInvoiceRecheckSubject(input: {
+  readonly projectName: string;
+  readonly trade: string;
+}): string {
+  return `Invoice query – please review – ${input.projectName} | ${input.trade}`;
+}
+
+/**
+ * Ask a tradie to check invoices that come to more than the quote approved
+ * for their booking.
+ *
+ * On the booking emails' layout, and about the tradie's own figures only: the
+ * approved quote and their invoices against it. Never the tender or the
+ * margin, which are Royal Constructions' business and not the tradie's. It
+ * asks rather than accuses — the difference may be agreed extra work that is
+ * owed as a variation — and says what reply settles it either way.
+ */
+export function generateTradieInvoiceRecheckEmail(
+  input: TradieInvoiceRecheckEmailInput,
+): { subject: string; html: string } {
+  const subject = subjectWithTradieRef(
+    tradieInvoiceRecheckSubject(input),
+    input.reference,
+  );
+  const invoicedCents = input.invoices.reduce(
+    (total, invoice) => total + invoice.subTotalCents,
+    0,
+  );
+  const overCents = invoicedCents - input.quotedCents;
+  const project = escapeHtml(input.projectName);
+  const trade = escapeHtml(input.trade);
+
+  const invoiceRows = input.invoices
+    .map(
+      (invoice) => `
+            <tr>
+            <td style="padding:12px 20px;border-top:1px solid ${RC_COLORS.border};color:${RC_COLORS.text};">
+            ${escapeHtml(invoice.invoiceNumber ?? "No number")}
+            </td>
+            <td style="padding:12px 20px;border-top:1px solid ${RC_COLORS.border};color:${RC_COLORS.muted};">
+            ${shortRequestDate(invoice.issuedDate)}
+            </td>
+            <td style="padding:12px 20px;border-top:1px solid ${RC_COLORS.border};color:${RC_COLORS.text};text-align:right;">
+            ${centsLabel(invoice.subTotalCents)}
+            </td>
+            </tr>`,
+    )
+    .join("\n");
+
+  const invoicesTable = `
+            <table width="100%" cellpadding="0" cellspacing="0"
+            style="
+            margin:0 0 32px;
+            border-collapse:collapse;
+            background:${RC_COLORS.card};
+            border:1px solid ${RC_COLORS.border};
+            border-radius:8px;">
+
+            <tr>
+            <td colspan="3"
+            style="
+            padding:16px 20px;
+            background:${RC_COLORS.gold};
+            color:${RC_COLORS.dark};
+            font-weight:bold;
+            font-size:18px;">
+            Invoices Received
+            </td>
+            </tr>
+${invoiceRows}
+            <tr>
+            <td colspan="2" style="padding:14px 20px;border-top:1px solid ${RC_COLORS.border};color:${RC_COLORS.text};font-weight:bold;">
+            Total invoiced (ex GST)
+            </td>
+            <td style="padding:14px 20px;border-top:1px solid ${RC_COLORS.border};color:${RC_COLORS.text};font-weight:bold;text-align:right;">
+            ${centsLabel(invoicedCents)}
+            </td>
+            </tr>
+
+            </table>`;
+
+  return {
+    subject,
+    html: renderTradieEmail({
+      action:
+        oneLine(`Please reply to this email to let us know whether the invoiced
+        amount is correct. If it covers additional work, tell us what that work was
+        and who on our side requested it, so it can be reviewed as a variation. If it
+        is a mistake, please send a corrected invoice or a credit note. We will hold
+        the difference until we hear from you.`),
+      closing: oneLine(`If you have any questions about this, please contact the
+        assigned site manager.`),
+      heading: "Invoice Query – Please Review",
+      intro: [
+        paragraph(`Dear ${escapeHtml(input.tradieName)},`),
+        paragraph(
+          oneLine(`Thank you for your invoices for ${trade} works on ${project}.
+          Together they come to more than the quote we approved for this booking, so
+          before we process the difference we would like you to check them.`),
+          true,
+        ),
+      ].join("\n"),
+      reference: input.reference,
+      rows: [
+        { label: "Project", value: project },
+        { label: "Trade", value: trade },
+        { label: "Activity", value: escapeHtml(input.activityName) },
+        {
+          label: "Approved Quote",
+          value: input.quoteGstStated
+            ? `${centsLabel(input.quotedCents)} ex GST`
+            : `${centsLabel(input.quotedCents)} (as quoted)`,
+        },
+        {
+          label: "Invoiced to Date",
+          value: `${centsLabel(invoicedCents)} ex GST`,
+        },
+        {
+          label: "Difference",
+          value: `<strong>${centsLabel(overCents)} over the approved quote</strong>`,
+        },
+      ],
+      sections: invoicesTable,
+      siteManager: input.siteManager,
+      subject,
+    }),
+  };
+}
