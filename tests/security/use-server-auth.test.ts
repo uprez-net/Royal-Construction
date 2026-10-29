@@ -154,8 +154,6 @@ const ALLOWLIST: Record<string, string> = {
   "lib/data/tradies.ts#getTradiesForLookup": TRADIE_SCHEDULES,
   "lib/notification/novu.ts#triggerNotification":
     "sends in-app notifications; only server code calls it, so it wants server-only (follow-up)",
-  "utils/generate-email-subject.ts#generateEmailSubject":
-    "drafts a subject line from text with the model; reads no data, spends tokens (follow-up)",
 };
 
 type Check = "caller" | "signed-in" | "none";

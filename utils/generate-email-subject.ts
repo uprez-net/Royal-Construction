@@ -1,4 +1,8 @@
-"use server";
+// Not "use server". The directive made this a Server Action: a public POST
+// endpoint that ran a model call on whatever text any signed-in caller sent,
+// with no check on who they were. Nothing in the browser calls it — the lead
+// adapter (server-only) and Eve's lead tools do — so it is a plain server
+// function. Nor "server-only", which throws when Eve's bundle loads it.
 import { generateText } from "ai";
 import { gateway, TEXT_MODEL_ID } from "@/lib/model";
 
