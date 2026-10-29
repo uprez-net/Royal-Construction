@@ -52,6 +52,7 @@ const ICONS: Record<TradieActivityLogType, LucideIcon> = {
   invoiceAllocated: ReceiptText,
   invoiceRecorded: ReceiptText,
   invoiceVoided: Ban,
+  outlookEmailSent: Mail,
   quoteRecorded: CircleDollarSign,
   removedFromDirectory: Ban,
   requestEmailNotSent: AlertTriangle,

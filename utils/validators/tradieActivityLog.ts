@@ -165,4 +165,10 @@ export const tradieActivityLogSchemas = {
     tradieId: z.string().min(1),
     resolution: z.string(),
   }),
+
+  /** Typed in Outlook rather than sent by the app; copied by the daily sync. */
+  outlookEmailSent: z.object({
+    tradieId: z.string().min(1),
+    subject: z.string(),
+  }),
 };

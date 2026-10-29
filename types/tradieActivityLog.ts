@@ -221,6 +221,11 @@ export const tradieActivityLogTemplates: TradieActivityLogTemplateFactory = {
     tradieId: data.tradieId,
     message: `Incident resolved: ${data.resolution}`,
   }),
+
+  outlookEmailSent: (data) => ({
+    tradieId: data.tradieId,
+    message: `Emailed from Outlook: "${data.subject}"`,
+  }),
 };
 
 /**
