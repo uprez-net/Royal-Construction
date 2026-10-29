@@ -1,6 +1,11 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   functionalUpdate,
   type ExpandedState,
@@ -121,8 +126,23 @@ function bookingOptions(report: ProjectFinancials): BookingOption[] {
  * onto its bookings and their invoices, a parent onto its sub-activities too.
  * The filter on top applies to every stage at once. Figures come from the
  * domain report whole — this screen adds nothing up itself.
+ *
+ * It brings its own QueryClient. The app shell's provider wraps only the
+ * notifications bell, not the page, so without this every `useQuery` below
+ * threw "No QueryClient set" and the project page's error boundary showed
+ * "This project could not be loaded" for every project. The modal manager
+ * gives its modals their own client for the same reason.
  */
 export function ProjectFinancialsTab({ project }: { project: ProjectDetail }) {
+  const [queryClient] = useState(() => new QueryClient());
+  return (
+    <QueryClientProvider client={queryClient}>
+      <FinancialsTab project={project} />
+    </QueryClientProvider>
+  );
+}
+
+function FinancialsTab({ project }: { project: ProjectDetail }) {
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: financialsKey(project.id),
