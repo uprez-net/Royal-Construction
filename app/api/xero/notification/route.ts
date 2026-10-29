@@ -65,14 +65,21 @@ export async function POST(request: Request): Promise<Response> {
   // several for the same invoice in one delivery. Keep the invoice events and
   // collapse them — the handler re-reads current state from Xero, so processing
   // the same id twice in one batch would just be a wasted API call.
+  const invoiceEvents = (payload.events ?? []).filter(
+    (event): event is XeroWebhookEvent & { resourceId: string } =>
+      event.eventCategory?.toUpperCase() === "INVOICE"
+      && Boolean(event.resourceId),
+  );
   const invoiceIds = [
-    ...new Set(
-      (payload.events ?? [])
-        .filter((event) => event.eventCategory?.toUpperCase() === "INVOICE")
-        .map((event) => event.resourceId)
-        .filter((resourceId): resourceId is string => Boolean(resourceId)),
-    ),
+    ...new Set(invoiceEvents.map((event) => event.resourceId)),
   ];
+  // Which of them Xero reported as new. A tradie's bill the office has to
+  // place is announced once, on creation, not on every edit after it.
+  const createdIds = new Set(
+    invoiceEvents
+      .filter((event) => event.eventType?.toUpperCase() === "CREATE")
+      .map((event) => event.resourceId),
+  );
 
   if (invoiceIds.length > 0) {
     after(async () => {
@@ -81,7 +88,9 @@ export async function POST(request: Request): Promise<Response> {
       // with no retry behind it.
       for (const invoiceId of invoiceIds) {
         try {
-          await syncInvoiceFromXero(invoiceId);
+          await syncInvoiceFromXero(invoiceId, {
+            created: createdIds.has(invoiceId),
+          });
         } catch (error) {
           // One bad invoice must not strand the rest of the batch. The next
           // event for it will try again.

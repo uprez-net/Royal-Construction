@@ -74,6 +74,12 @@ const CALLER_CHECKS = new Set([
   "selectTradeQuote",
   "requestTradeCancellation",
   "draftTradieRequestWorkDetails",
+  // The Financials tab (issue #405). Each calls requireAdminPrincipal and
+  // authorizeProject before it reads a figure or writes an invoice.
+  "getProjectFinancials",
+  "recordTradieInvoice",
+  "allocateTradieInvoice",
+  "voidTradieInvoice",
 ]);
 
 // auth() alone passes every signed-in user, customers included. An export

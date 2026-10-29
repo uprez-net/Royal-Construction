@@ -13,6 +13,7 @@ import {
 import { ProjectMilestonesTab } from "./project-milestones-tab";
 import { ProjectOverviewTab } from "./project-overview-tab";
 import { ProjectPaymentsTab } from "./project-payments-tab";
+import { ProjectFinancialsTab } from "./financials-tab/project-financials-tab";
 import { ProjectDocumentsTab } from "./project-documents-tab";
 import {
   ProjectTabNavigation,
@@ -103,6 +104,9 @@ export function ProjectDetailTabs({
         ) : null}
         {activeTab === "payments" && isAdmin ? (
           <ProjectPaymentsTab project={project} />
+        ) : null}
+        {activeTab === "financials" && isAdmin ? (
+          <ProjectFinancialsTab project={project} />
         ) : null}
         {activeTab === "tradies" ? (
           <ProjectTradiesTab project={project} />

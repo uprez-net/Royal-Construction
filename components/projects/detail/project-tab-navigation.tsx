@@ -19,6 +19,7 @@ import {
   LayoutGrid,
   CalendarCheck,
   CreditCard,
+  Scale,
   Wrench,
   FileText,
   History,
@@ -41,6 +42,7 @@ export const VISIBLE_PROJECT_DETAIL_TABS = [
   "overview",
   "milestones",
   "payments",
+  "financials",
   "tradies",
   "docs",
   "history",
@@ -66,6 +68,7 @@ const TabIcons: Record<VisibleProjectDetailTabKey, React.ElementType> = {
   overview: LayoutGrid,
   milestones: CalendarCheck,
   payments: CreditCard,
+  financials: Scale,
   tradies: Wrench,
   history: History,
   docs: FileText,
@@ -333,6 +336,9 @@ const generateProjectDetailTabs = (
           }
         : {}),
     },
+    // Profit and loss per activity: the tender against what each tradie is
+    // paid, which is the margin, so admin only like Payments.
+    { key: "financials", label: "Financials", isAdminOnly: true },
     {
       key: "tradies",
       label: "Tradies",

@@ -82,6 +82,29 @@ export const tradieActivityLogSchemas = {
     priceOnly: z.boolean(),
   }),
 
+  invoiceRecorded: z.object({
+    ...booking,
+    /** The tradie's own number, when the invoice carries one. */
+    invoiceNumber: z.string().nullish(),
+    /** Formatted ex GST, e.g. "$4,500.00". */
+    amount: z.string(),
+    /** "MANUAL" or "XERO". */
+    source: z.string(),
+  }),
+
+  invoiceAllocated: z.object({
+    ...booking,
+    invoiceNumber: z.string().nullish(),
+    amount: z.string(),
+  }),
+
+  invoiceVoided: z.object({
+    ...booking,
+    invoiceNumber: z.string().nullish(),
+    amount: z.string(),
+    reason: z.string().min(1),
+  }),
+
   requestEmailSent: z.object({
     tradieId: z.string().min(1),
     projectId: z.string().min(1),

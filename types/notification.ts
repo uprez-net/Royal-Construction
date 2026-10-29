@@ -118,6 +118,18 @@ export const notificationTemplates: NotificationTemplateFactory = {
     url: `/tradie-management/${data.tradieId}`,
   }),
 
+  tradieInvoiceNeedsAllocation: (data) => ({
+    title: `Tradie invoice to allocate: ${data.projectName}`,
+    message: `${data.tradieName}'s invoice${data.invoiceNumber ? ` ${data.invoiceNumber}` : ""} for ${data.amount} ex GST came in from Xero but could not be matched to one booking. Allocate it on the Financials tab.`,
+    url: `/projects/${data.projectId}?activeTab=financials`,
+  }),
+
+  tradieInvoiceUnmatched: (data) => ({
+    title: `Xero bill not matched: ${data.tradieName}`,
+    message: `A bill${data.invoiceNumber ? ` ${data.invoiceNumber}` : ""} for ${data.amount} ex GST from ${data.tradieName} could not be matched to a project. Add the booking's RCTBK reference to the bill in Xero, or record it on the project's Financials tab.`,
+    url: `/tradie-management/${data.tradieId}`,
+  }),
+
   tradieScheduleUpdated: (data) => ({
     title: `Tradie Schedule Updated: ${data.projectName}`,
     message: `${data.tradieName}'s schedule is now ${data.status}`,
