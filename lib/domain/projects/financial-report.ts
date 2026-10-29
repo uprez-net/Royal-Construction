@@ -316,6 +316,12 @@ export function buildProjectFinancialReport(input: {
   const sumBookings = (bookings: readonly FinancialBooking[]) =>
     bookings.map(bookingSums).reduce(add, ZERO);
 
+  // Profit to date, gathered activity by activity on each one's OWN figures:
+  // a parent with one invoiced child must not bring its uninvoiced children's
+  // tender along, or work nobody has billed yet reads as profit.
+  let profitTender = 0;
+  let profitInvoiced = 0;
+
   const toActivity = (
     node: WithChildren<ReportMilestone>,
   ): { activity: FinancialActivity; sums: Sums } => {
@@ -336,6 +342,10 @@ export function buildProjectFinancialReport(input: {
       tender: Math.max(0, node.budgetCents - childTender),
     };
     const sums = children.map((child) => child.sums).reduce(add, ownSums);
+    if (ownSums.invoiced > 0) {
+      profitTender += ownSums.tender;
+      profitInvoiced += ownSums.invoiced;
+    }
     return {
       activity: {
         bookings,
@@ -356,8 +366,6 @@ export function buildProjectFinancialReport(input: {
   // them: a child tagged with another stage stays under its parent's.
   const byStage = groupRootsByStage(buildMilestoneTree(input.milestones));
   let stageTotals = ZERO;
-  let profitTender = 0;
-  let profitInvoiced = 0;
   const stages: FinancialStage[] = [];
   for (const stage of Object.values(ProjectStage)) {
     const roots = byStage[stage];
@@ -365,11 +373,6 @@ export function buildProjectFinancialReport(input: {
     const built = roots.map(toActivity);
     const sums = built.map((root) => root.sums).reduce(add, ZERO);
     stageTotals = add(stageTotals, sums);
-    for (const root of built) {
-      if (root.sums.invoiced <= 0) continue;
-      profitTender += root.sums.tender;
-      profitInvoiced += root.sums.invoiced;
-    }
     stages.push({
       activities: built.map((root) => root.activity),
       figures: figuresOf(sums),

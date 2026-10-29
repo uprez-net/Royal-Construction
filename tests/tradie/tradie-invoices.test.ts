@@ -420,6 +420,48 @@ describe("syncTradieBillFromExternal", () => {
     );
   });
 
+  test("a typed-in invoice gives the project when the tradie works on several", async () => {
+    const recorder = recordingDb({
+      "tradie.findMany": [ACE],
+      "tradieInvoice.findFirst": {
+        id: "typed-in",
+        projectId: PROJECT.id,
+        scheduleId: SCHEDULE.id,
+      },
+      "tradieInvoice.findUnique": null,
+      "tradieInvoice.update": {
+        project: { name: PROJECT.name },
+        projectId: PROJECT.id,
+        scheduleId: SCHEDULE.id,
+      },
+      // No usable reference, and committed bookings on two projects.
+      "tradieSchedule.findMany": [
+        {
+          id: "a",
+          projectId: PROJECT.id,
+          status: TradieScheduleStatus.CONFIRMED,
+        },
+        {
+          id: "b",
+          projectId: "project-2",
+          status: TradieScheduleStatus.CONFIRMED,
+        },
+      ],
+    });
+    const result = await syncTradieBillFromExternal(
+      XERO,
+      { ...BILL, reference: null },
+      recorder.db,
+    );
+    assert.equal(result.kind, "adopted");
+    assert.ok("projectId" in result);
+    assert.equal(result.projectId, PROJECT.id);
+    assert.deepEqual(
+      recorder.writes().map((call) => call.operation),
+      ["tradieInvoice.update"],
+    );
+  });
+
   test("an older delivery does not overwrite a newer one", async () => {
     const recorder = recordingDb({
       "tradieInvoice.findUnique": {

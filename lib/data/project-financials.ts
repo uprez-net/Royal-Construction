@@ -3,6 +3,7 @@
 import { revalidateTag } from "next/cache";
 
 import { auth } from "@clerk/nextjs/server";
+import { sendEmail } from "@/lib/azureClient";
 import {
   DomainAuthorizationError,
   DomainValidationError,
@@ -12,6 +13,11 @@ import {
   getProjectFinancials,
   type ProjectFinancials,
 } from "@/lib/domain/projects/financials";
+import {
+  prepareTradieInvoiceRecheck,
+  requestTradieInvoiceRecheck,
+  type TradieInvoiceRecheck,
+} from "@/lib/domain/tradies/invoice-recheck";
 import {
   allocateTradieInvoice,
   recordTradieInvoice,
@@ -155,4 +161,67 @@ export async function voidTradieInvoiceAction(raw: {
     expireProject(voided.projectId);
     return voided.projectId;
   });
+}
+
+export type InvoiceRecheckPreviewResult =
+  | { readonly ok: true; readonly recheck: TradieInvoiceRecheck }
+  | DomainActionFailure;
+
+/** The recheck email exactly as it would go, for the dialog to show first. */
+export async function previewInvoiceRecheckAction(raw: {
+  projectId: string;
+  scheduleId: string;
+}): Promise<InvoiceRecheckPreviewResult> {
+  try {
+    const principal = await caller();
+    const recheck = await prepareTradieInvoiceRecheck(
+      principal,
+      { projectId: raw.projectId, scheduleId: raw.scheduleId },
+      prisma,
+    );
+    return { ok: true, recheck };
+  } catch (error) {
+    const failure = domainActionFailure(error);
+    if (failure) return failure;
+    throw error;
+  }
+}
+
+export type InvoiceRecheckSendResult =
+  | {
+      readonly ok: true;
+      readonly to: string;
+      /** This attempt had already gone out; nothing was sent again. */
+      readonly alreadySent: boolean;
+    }
+  | DomainActionFailure;
+
+/**
+ * Email the tradie the recheck. The dialog holds `attemptKey` until a send
+ * succeeds (`useIdempotencyKey`), so a retry is the same email, not a second.
+ */
+export async function sendInvoiceRecheckAction(raw: {
+  projectId: string;
+  scheduleId: string;
+  attemptKey: string;
+}): Promise<InvoiceRecheckSendResult> {
+  try {
+    const principal = await caller();
+    const sent = await requestTradieInvoiceRecheck(
+      principal,
+      {
+        attemptKey: raw.attemptKey,
+        projectId: raw.projectId,
+        scheduleId: raw.scheduleId,
+      },
+      prisma,
+      (message) => sendEmail(message),
+    );
+    revalidateTag(`project-${raw.projectId}`, CACHE_PROFILES.MEDIUM);
+    return { alreadySent: sent.alreadySent, ok: true, to: sent.to };
+  } catch (error) {
+    const failure = domainActionFailure(error);
+    if (failure) return failure;
+    throw error;
+  }
 }

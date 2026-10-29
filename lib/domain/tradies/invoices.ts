@@ -684,19 +684,11 @@ export async function syncTradieBillFromExternal(
 
   const placement = await placeBill(bill, db);
   if (!placement) return { kind: "not-a-tradie" };
-  if (!placement.projectId) {
-    return {
-      kind: "unmatched",
-      subTotalCents,
-      tradieId: placement.tradie.id,
-      tradieName: placement.tradie.name,
-    };
-  }
-  const project = await db.project.findUniqueOrThrow({
-    select: { name: true },
-    where: { id: placement.projectId },
-  });
 
+  // The office may already have typed this invoice in. Looked up before
+  // giving up on a bill whose tradie works on several projects: the typed-in
+  // row says which project it is, so it is adopted rather than reported as
+  // unmatched.
   const invoiceNumber = invoiceNumberKey(bill.invoiceNumber);
   const typedIn = invoiceNumber
     ? await db.tradieInvoice.findFirst({
@@ -710,10 +702,17 @@ export async function syncTradieBillFromExternal(
       })
     : null;
   if (typedIn) {
+    // The office's booking stands. Failing that, the matcher's, but only when
+    // it found the same project the office put the invoice on.
+    const scheduleId =
+      typedIn.scheduleId
+      ?? (placement.projectId === typedIn.projectId
+        ? placement.scheduleId
+        : null);
     const adopted = await db.tradieInvoice.update({
       data: {
         ...billFields(bill),
-        scheduleId: typedIn.scheduleId ?? placement.scheduleId,
+        scheduleId,
         source: TradieInvoiceSource.XERO,
       },
       select: { project: projectSelect, projectId: true, scheduleId: true },
@@ -729,6 +728,19 @@ export async function syncTradieBillFromExternal(
       tradieName: placement.tradie.name,
     };
   }
+
+  if (!placement.projectId) {
+    return {
+      kind: "unmatched",
+      subTotalCents,
+      tradieId: placement.tradie.id,
+      tradieName: placement.tradie.name,
+    };
+  }
+  const project = await db.project.findUniqueOrThrow({
+    select: { name: true },
+    where: { id: placement.projectId },
+  });
 
   const created = await db.tradieInvoice.create({
     data: {

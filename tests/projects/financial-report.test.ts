@@ -328,6 +328,40 @@ describe("project totals", () => {
   });
 });
 
+describe("profit to date under a parent", () => {
+  test("an uninvoiced child's tender is not profit because its sibling was invoiced", () => {
+    const report = buildProjectFinancialReport({
+      bookings: [
+        booking({
+          id: "b-billed",
+          milestoneId: "billed",
+          price: priced(300_00),
+        }),
+        booking({ id: "b-open", milestoneId: "open", price: priced(500_00) }),
+      ],
+      invoices: [invoice({ scheduleId: "b-billed", subTotalCents: 300_00 })],
+      milestones: [
+        milestone({ budgetCents: 1_000_00, id: "parent", order: 1 }),
+        milestone({
+          budgetCents: 400_00,
+          id: "billed",
+          order: 2,
+          parentId: "parent",
+        }),
+        milestone({
+          budgetCents: 600_00,
+          id: "open",
+          order: 3,
+          parentId: "parent",
+        }),
+      ],
+    });
+    // Only the invoiced child: 400 − 300. The other child's 600 is not in it.
+    assert.equal(report.totals.profitCents, 100_00);
+    assert.equal(report.totals.profitPercent, 25);
+  });
+});
+
 describe("booking price and billing state", () => {
   test("a GST-inclusive quote is brought back to ex GST", () => {
     const price = bookingPrice({

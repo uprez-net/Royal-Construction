@@ -61,6 +61,7 @@ import {
   type BookingOption,
 } from "./record-invoice-dialog";
 import { StageFinancialsCard } from "./stage-financials-card";
+import { RecheckInvoiceDialog } from "./recheck-invoice-dialog";
 import { VoidInvoiceDialog } from "./void-invoice-dialog";
 
 // The filter lives in the URL, so a filtered view can be shared and survives
@@ -162,6 +163,7 @@ export function ProjectFinancialsTab({ project }: { project: ProjectDetail }) {
     undefined,
   );
   const [voiding, setVoiding] = useState<FinancialInvoice | null>(null);
+  const [recheckFor, setRecheckFor] = useState<string | null>(null);
 
   // The browser's replaceState rather than router.replace: the tab loads its
   // own data, so a keystroke must not re-render the server page. Next keeps
@@ -249,6 +251,7 @@ export function ProjectFinancialsTab({ project }: { project: ProjectDetail }) {
   const actions = {
     onRecord: (scheduleId: string) => setRecordFor(scheduleId),
     onVoid: (invoice: FinancialInvoice) => setVoiding(invoice),
+    onRecheck: (scheduleId: string) => setRecheckFor(scheduleId),
   };
 
   const onExpandedChange = (updater: Updater<ExpandedState>) =>
@@ -556,6 +559,13 @@ export function ProjectFinancialsTab({ project }: { project: ProjectDetail }) {
         onRecorded={(result) => {
           applyResult(result);
           toast.success("Invoice recorded.");
+        }}
+      />
+      <RecheckInvoiceDialog
+        projectId={project.id}
+        scheduleId={recheckFor}
+        onOpenChange={(open) => {
+          if (!open) setRecheckFor(null);
         }}
       />
       <VoidInvoiceDialog

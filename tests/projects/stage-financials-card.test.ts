@@ -94,7 +94,7 @@ function render(
 ) {
   return renderToStaticMarkup(
     createElement(StageFinancialsCard, {
-      actions: { onRecord: noop, onVoid: noop },
+      actions: { onRecheck: noop, onRecord: noop, onVoid: noop },
       expanded,
       filter,
       onExpandedChange: noop,
@@ -124,6 +124,10 @@ describe("StageFinancialsCard", () => {
     assert.match(html, /Top Roofing/);
     assert.match(html, /TR-77/);
     assert.match(html, /Invoiced exceeds quoted/);
+    // The over-invoiced booking offers both follow-ups; variations are not
+    // live yet, so that one is shown and held.
+    assert.match(html, /Request recheck/);
+    assert.match(html, /disabled=""[^>]*>[\s\S]*?Raise variation/);
     // The roof lost money: −$100.00 on a $200.00 tender.
     assert.match(html, /−\$100\.00/);
   });

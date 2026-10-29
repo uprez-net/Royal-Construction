@@ -1,6 +1,12 @@
 "use client";
 
-import { AlertTriangle, Ban, Plus } from "lucide-react";
+import {
+  AlertTriangle,
+  Ban,
+  FilePlus2,
+  MailQuestion,
+  Plus,
+} from "lucide-react";
 
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
@@ -52,6 +58,8 @@ function priceNote(booking: FinancialBooking): string | null {
 export type InvoiceActions = {
   readonly onRecord: (scheduleId: string) => void;
   readonly onVoid: (invoice: FinancialInvoice) => void;
+  /** Email the tradie to recheck invoices over their approved quote. */
+  readonly onRecheck: (scheduleId: string) => void;
 };
 
 export function InvoiceList({
@@ -204,16 +212,55 @@ export function ActivityDetail({
               </span>
             </div>
             {booking.billing === "OVER_INVOICED" ? (
-              <p
+              <div
                 role="note"
-                className="flex items-center gap-2 rounded-md bg-destructive-light px-3 py-2 text-sm font-medium text-destructive-ink"
+                className="space-y-2 rounded-md bg-destructive-light px-3 py-2 text-sm text-destructive-ink"
               >
-                <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
-                Invoiced exceeds quoted by{" "}
-                <span className="font-mono tabular-nums">
-                  {formatCents(booking.invoicedCents - booking.agreedCents)}
-                </span>
-              </p>
+                <p className="flex items-center gap-2 font-medium">
+                  <AlertTriangle
+                    className="size-4 shrink-0"
+                    aria-hidden="true"
+                  />
+                  Invoiced exceeds quoted by{" "}
+                  <span className="font-mono tabular-nums">
+                    {formatCents(booking.invoicedCents - booking.agreedCents)}
+                  </span>
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="bg-card"
+                    onClick={() => actions.onRecheck(booking.id)}
+                    // A rate estimate is our number, not one the tradie gave.
+                    disabled={booking.priceBasis !== "QUOTE"}
+                  >
+                    <MailQuestion className="size-4" aria-hidden="true" />
+                    Request recheck
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="bg-card"
+                    disabled
+                    aria-describedby={`variation-unavailable-${booking.id}`}
+                  >
+                    <FilePlus2 className="size-4" aria-hidden="true" />
+                    Raise variation
+                  </Button>
+                  <span
+                    id={`variation-unavailable-${booking.id}`}
+                    className="text-xs text-muted-foreground"
+                  >
+                    {booking.priceBasis !== "QUOTE"
+                      ? "Record the agreed price to request a recheck. "
+                      : ""}
+                    Variations open here once the Variations module is live.
+                  </span>
+                </div>
+              </div>
             ) : null}
             {note ? (
               <p className="text-xs text-muted-foreground">{note}</p>

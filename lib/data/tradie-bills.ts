@@ -52,10 +52,12 @@ export async function syncTradieBillFromXero(
   const status = toInvoiceStatus(invoice.status);
   if (!status) return null;
 
-  const result = await syncTradieBillFromExternal(
-    XERO_BILL,
-    await billFromXero(context, xeroInvoiceId, invoice, status),
-    prisma,
+  // Every Xero read first, outside the transaction: a transaction held open
+  // across an API call holds its connection for as long as Xero takes. The
+  // mirrored bill and its line on the tradie's history then commit together.
+  const bill = await billFromXero(context, xeroInvoiceId, invoice, status);
+  const result = await prisma.$transaction((tx) =>
+    syncTradieBillFromExternal(XERO_BILL, bill, tx),
   );
 
   if ("projectId" in result) {

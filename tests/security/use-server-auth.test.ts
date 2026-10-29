@@ -80,6 +80,10 @@ const CALLER_CHECKS = new Set([
   "recordTradieInvoice",
   "allocateTradieInvoice",
   "voidTradieInvoice",
+  // Request recheck: both call requireAdminPrincipal and authorizeProject
+  // before they read the booking or send anything.
+  "prepareTradieInvoiceRecheck",
+  "requestTradieInvoiceRecheck",
 ]);
 
 // auth() alone passes every signed-in user, customers included. An export
