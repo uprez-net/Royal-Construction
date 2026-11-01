@@ -140,8 +140,14 @@ export async function issueVariation(
   // Chosen before anything is sent, so a typo'd selection fails on the
   // screen rather than after the invoice is already in Xero.
   const owners = context.owners;
-  const wanted = input.recipients?.length
-    ? input.recipients.map((email) => email.trim().toLowerCase())
+  // Who the office chose: this call's list, else the one saved when it was
+  // raised — so a retry after a failed invoice still emails only them — and
+  // every owner only for a variation that never had a choice made.
+  const chosen = input.recipients?.length
+    ? input.recipients
+    : (row.recipients ?? []);
+  const wanted = chosen.length
+    ? chosen.map((email) => email.trim().toLowerCase())
     : owners.map((owner) => owner.email.toLowerCase());
   const recipients = owners
     .map((owner) => owner.email)

@@ -145,7 +145,11 @@ export async function previewVariationAction(
 }
 
 const raiseSchema = draftSchema.extend({
-  recipients: z.array(z.string().trim().min(1)).max(20),
+  // At least one: an empty list would fall back to every owner.
+  recipients: z
+    .array(z.email())
+    .min(1, "Choose at least one owner to email")
+    .max(20),
   requestKey: id("A request key is required"),
 });
 
@@ -173,7 +177,11 @@ export async function raiseVariationAction(
     input = parse(raiseSchema, raw);
     const raised = await raiseVariation(
       principal,
-      { ...input, raisedDate: day(input.raisedDate) },
+      {
+        ...input,
+        raisedDate: day(input.raisedDate),
+        recipients: input.recipients,
+      },
       prisma,
     );
     variationId = raised.id;

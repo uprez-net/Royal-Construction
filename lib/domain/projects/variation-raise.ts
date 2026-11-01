@@ -450,7 +450,11 @@ function isUniqueViolation(error: unknown): boolean {
  */
 export async function raiseVariation(
   principal: DomainPrincipal,
-  input: VariationDraftInput & { readonly requestKey: string },
+  input: VariationDraftInput & {
+    readonly requestKey: string;
+    /** The owners chosen to email; kept, so a retry sends to the same. */
+    readonly recipients?: readonly string[];
+  },
   db: DomainDb,
   now: Date = new Date(),
 ): Promise<RaisedVariation> {
@@ -492,6 +496,7 @@ export async function raiseVariation(
           previousPrice: new Prisma.Decimal(draft.previousPriceCents / 100),
           projectId: input.projectId,
           raisedById: attributionUserId(principal),
+          recipients: [...(input.recipients ?? [])],
           requestKey,
           requestedDate: draft.raisedDate,
           status: VariationStatus.APPROVED,

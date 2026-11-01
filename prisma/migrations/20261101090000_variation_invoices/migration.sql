@@ -28,6 +28,7 @@ ADD COLUMN     "raisedById" TEXT,
 ADD COLUMN     "requestKey" TEXT,
 ADD COLUMN     "sentAt" TIMESTAMP(3),
 ADD COLUMN     "sentTo" TEXT[] DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN     "recipients" TEXT[] DEFAULT ARRAY[]::TEXT[],
 ADD COLUMN     "xeroInvoiceId" TEXT,
 ADD COLUMN     "xeroInvoiceNumber" TEXT,
 ADD COLUMN     "xeroUpdatedAt" TIMESTAMP(3);

@@ -956,6 +956,9 @@ model Variation {
   /// When the client was last emailed it, and who it went to.
   sentAt      DateTime?
   sentTo      String[]  @default([])
+  /// The owners the office chose to email when it raised it. A retry sends to
+  /// these, not to every owner on the contract.
+  recipients  String[]  @default([])
   /// The last step that failed while issuing it, in words an operator can
   /// act on. Cleared once every step has landed.
   issueError  String?

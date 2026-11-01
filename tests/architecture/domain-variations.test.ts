@@ -524,6 +524,54 @@ describe("issuing a variation", () => {
     assert.deepEqual(sent?.sentTo, ["jane@example.com", "john@example.com"]);
   });
 
+  test("a retry emails the owners chosen when it was raised, not every owner", async () => {
+    // The wizard picked Jane only; the invoice step then failed, so nothing
+    // was sent. A Retry passes no list and must not widen it to John.
+    const steps: string[] = [];
+    const recorder = recordingDb({
+      ...outbox,
+      "project.findUnique": projectRow,
+      "variation.findFirst": {
+        ...row("PROMOTIONAL"),
+        recipients: ["jane@example.com"],
+      },
+    });
+    await issueVariation(
+      adminPrincipal(),
+      { emailAttemptKey: "k_3", projectId: "p_1", variationId: "v_new" },
+      recorder.db,
+      ports(steps),
+    );
+    assert.deepEqual(
+      steps.filter((step) => step.startsWith("email:")),
+      ["email:jane@example.com:-"],
+    );
+  });
+
+  test("raising one keeps the owners chosen to email", async () => {
+    const recorder = recordingDb({
+      "project.findUnique": projectRow,
+      "variation.create": {
+        cost: decimal(1_500),
+        description: draft.reason,
+        id: "v_new",
+        kind: "CHARGEABLE",
+        number: 3,
+        projectId: "p_1",
+      },
+      "variation.findUnique": null,
+    });
+    await raiseVariation(
+      adminPrincipal(),
+      { ...draft, recipients: ["jane@example.com"], requestKey: "k_9" },
+      recorder.db,
+    );
+    const data = (
+      recorder.writes()[0].args as { data: Record<string, unknown> }
+    ).data;
+    assert.deepEqual(data.recipients, ["jane@example.com"]);
+  });
+
   test("an address that is not an owner's is refused before anything is sent", async () => {
     const steps: string[] = [];
     const recorder = recordingDb({
