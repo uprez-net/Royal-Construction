@@ -44,6 +44,21 @@ import type { ClientPayload } from "@/utils/validators";
 
 import { formatCents } from "./money";
 
+/** An emailed invoice the dialog opens on, to check and record. */
+export type RecordInvoicePrefill = {
+  readonly inboxId: string;
+  readonly scheduleId: string | null;
+  readonly invoiceNumber: string | null;
+  /** YYYY-MM-DD. */
+  readonly issuedDate: string | null;
+  readonly dueDate: string | null;
+  readonly subTotalCents: number | null;
+  readonly totalTaxCents: number | null;
+  readonly document: { readonly name: string; readonly url: string };
+  /** ISO: when the email arrived. */
+  readonly receivedAt: string;
+};
+
 export type BookingOption = {
   readonly id: string;
   readonly label: string;
@@ -109,6 +124,7 @@ export function RecordInvoiceDialog({
   projectId,
   bookings,
   initialScheduleId,
+  prefill = null,
   onRecorded,
 }: {
   open: boolean;
@@ -116,6 +132,8 @@ export function RecordInvoiceDialog({
   projectId: string;
   bookings: readonly BookingOption[];
   initialScheduleId: string | null;
+  /** Opened from an emailed invoice: its fields, its document, its entry. */
+  prefill?: RecordInvoicePrefill | null;
   onRecorded: (result: Extract<ProjectFinancialsResult, { ok: true }>) => void;
 }) {
   const [scheduleId, setScheduleId] = useState("");
@@ -158,6 +176,28 @@ export function RecordInvoiceDialog({
       setNotes("");
       setError(null);
       setDocument({ status: "none" });
+      if (prefill) {
+        setScheduleId(prefill.scheduleId ?? initialScheduleId ?? "");
+        setInvoiceNumber(prefill.invoiceNumber ?? "");
+        if (prefill.issuedDate) setIssuedDate(prefill.issuedDate);
+        setDueDate(prefill.dueDate ?? "");
+        setSubTotal(
+          prefill.subTotalCents === null
+            ? ""
+            : (prefill.subTotalCents / 100).toFixed(2),
+        );
+        if (prefill.totalTaxCents !== null) {
+          setGst((prefill.totalTaxCents / 100).toFixed(2));
+          setGstTouched(true);
+        }
+        setDocument({
+          filled: true,
+          name: prefill.document.name,
+          note: `Read from the email of ${format(new Date(prefill.receivedAt), "d MMM yyyy")}. Check every field against the document before recording.`,
+          status: "ready",
+          url: prefill.document.url,
+        });
+      }
     }
   }
 
@@ -315,6 +355,7 @@ export function RecordInvoiceDialog({
     try {
       const result = await recordTradieInvoiceAction({
         document: attached,
+        inboxId: prefill?.inboxId,
         dueDate: dueDate || undefined,
         invoiceNumber,
         issuedDate,
@@ -345,10 +386,15 @@ export function RecordInvoiceDialog({
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <DialogHeader>
-            <DialogTitle>Record a tradie invoice</DialogTitle>
+            <DialogTitle>
+              {prefill
+                ? "Confirm an emailed invoice"
+                : "Record a tradie invoice"}
+            </DialogTitle>
             <DialogDescription>
-              For an invoice that came by email or on paper. Bills entered in
-              Xero come through on their own.
+              {prefill
+                ? "Read off the tradie's email. It counts once you record it."
+                : "For an invoice that came by email or on paper. Bills entered in Xero come through on their own."}
             </DialogDescription>
           </DialogHeader>
 

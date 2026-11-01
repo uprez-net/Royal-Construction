@@ -130,6 +130,18 @@ export const notificationTemplates: NotificationTemplateFactory = {
     url: `/projects/${data.projectId}?activeTab=financials`,
   }),
 
+  tradieInvoiceEmailed: (data) => ({
+    title: `Invoice by email to confirm: ${data.projectName}`,
+    message: `${data.tradieName} emailed ${data.count === 1 ? "an invoice" : `${data.count} invoices`}. Check what was read and record ${data.count === 1 ? "it" : "them"} on the Financials tab; nothing counts until confirmed.`,
+    url: `/projects/${data.projectId}?activeTab=financials`,
+  }),
+
+  tradieInvoiceEmailUnmatched: (data) => ({
+    title: `Invoice by email not matched: ${data.tradieName}`,
+    message: `${data.tradieName} emailed an invoice ("${data.subject}") that could not be matched to one project. Record it by hand on the right project's Financials tab.`,
+    url: `/tradie-management/${data.tradieId}`,
+  }),
+
   tradieInvoiceUnmatched: (data) => ({
     title: `Xero bill not matched: ${data.tradieName}`,
     message: `A bill${data.invoiceNumber ? ` ${data.invoiceNumber}` : ""} for ${data.amount} ex GST from ${data.tradieName} could not be matched to a project. Add the booking's RCTBK reference to the bill in Xero, or record it on the project's Financials tab.`,

@@ -646,6 +646,7 @@ model Project {
   tradieQuotes        TradieQuote[]
   tradeSelections     TradeSelection[]
   tradieInvoices      TradieInvoice[]
+  emailedInvoices     TradieInvoiceInbox[]
 
   @@index([name])
   @@index([customerId])
@@ -785,6 +786,7 @@ model Tradie {
   tradeSelections   TradeSelection[]
   activityLogs      TradieActivityLog[]
   invoices          TradieInvoice[]
+  emailedInvoices   TradieInvoiceInbox[]
 
   complianceOutreaches ComplianceOutreach[] @relation("TradieComplianceOutreaches")
 
@@ -1018,6 +1020,7 @@ model TradieSchedule {
   requestRecipient TradieRequestRecipient? @relation(fields: [requestRecipientId], references: [id], onDelete: SetNull)
   quote            TradieQuote?            @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   invoices         TradieInvoice[]
+  emailedInvoices  TradieInvoiceInbox[]
 
   @@index([tradieId])
   @@index([projectId])
@@ -1224,23 +1227,24 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  files               File[]              @relation("UserFiles")
-  siteManagerProjects Project[]           @relation("SiteManagerProjects")
+  files               File[]               @relation("UserFiles")
+  siteManagerProjects Project[]            @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
   tradieActivityLogs  TradieActivityLog[]
-  assignedLeads       Lead[]              @relation("LeadAssignee")
-  leadHistories       LeadHistory[]       @relation("LeadHistoryAuthor")
-  leadTasks           LeadTask[]          @relation("LeadTaskAssignee")
+  assignedLeads       Lead[]               @relation("LeadAssignee")
+  leadHistories       LeadHistory[]        @relation("LeadHistoryAuthor")
+  leadTasks           LeadTask[]           @relation("LeadTaskAssignee")
   reviews             TradieRating[]
   approvalRequests    TradieApproval[]
-  tradieRequests      TradieRequest[]     @relation("TradieRequestCreatedBy")
-  tradieQuotes        TradieQuote[]       @relation("TradieQuoteEnteredBy")
-  tradieInvoices      TradieInvoice[]     @relation("TradieInvoiceEnteredBy")
-  variationsRaised    Variation[]         @relation("VariationRaisedBy")
-  tradeSelections     TradeSelection[]    @relation("TradeSelectionSelectedBy")
-  createdOffers       Offer[]             @relation("OfferCreatedBy")
-  xeroConnections     XeroConnection[]    @relation("XeroConnections")
+  tradieRequests      TradieRequest[]      @relation("TradieRequestCreatedBy")
+  tradieQuotes        TradieQuote[]        @relation("TradieQuoteEnteredBy")
+  tradieInvoices      TradieInvoice[]      @relation("TradieInvoiceEnteredBy")
+  inboxDecisions      TradieInvoiceInbox[] @relation("TradieInvoiceInboxDecidedBy")
+  variationsRaised    Variation[]          @relation("VariationRaisedBy")
+  tradeSelections     TradeSelection[]     @relation("TradeSelectionSelectedBy")
+  createdOffers       Offer[]              @relation("OfferCreatedBy")
+  xeroConnections     XeroConnection[]     @relation("XeroConnections")
   agentSessions       AgentSession[]
   agentActionAudits   AgentActionAudit[]
   agentOperations     AgentOperation[]
@@ -3324,10 +3328,11 @@ model TradieInvoice {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tradie    Tradie          @relation(fields: [tradieId], references: [id])
-  schedule  TradieSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
-  enteredBy User?           @relation("TradieInvoiceEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
+  project   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tradie    Tradie              @relation(fields: [tradieId], references: [id])
+  schedule  TradieSchedule?     @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  enteredBy User?               @relation("TradieInvoiceEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
+  emailedAs TradieInvoiceInbox?
 
   // NOTE: one live invoice per tradie and invoice number (case-insensitive) is
   // enforced via a partial unique index (TradieInvoice_one_live_number_per_tradie,
@@ -3336,4 +3341,66 @@ model TradieInvoice {
   @@index([projectId])
   @@index([tradieId])
   @@index([scheduleId])
+}
+
+/// Where an emailed tradie invoice is up to.
+enum TradieInvoiceInboxStatus {
+  /// Read and matched, waiting for the office. Counts nowhere yet.
+  PENDING
+  /// Recorded as a tradie invoice; `invoiceId` is that invoice.
+  CONFIRMED
+  /// Not an invoice to record — a duplicate, or not this project's.
+  DISMISSED
+}
+
+/// A tradie invoice that arrived by email, read off its attachment and
+/// matched to a project, waiting for the office to confirm it. Nothing here
+/// counts in what a job has been invoiced until it is confirmed, which records
+/// a TradieInvoice through the same command as typing one in.
+model TradieInvoiceInbox {
+  id         String                   @id @default(uuid())
+  projectId  String
+  tradieId   String
+  /// The booking it was matched to, when one could be.
+  scheduleId String?
+  status     TradieInvoiceInboxStatus @default(PENDING)
+
+  /// The email it came on, and which of its attachments this is. Unique
+  /// together, so a redelivered notification queues it once.
+  graphMessageId String
+  attachmentId   String
+  mailbox        GraphMailbox
+  fromAddress    String
+  subject        String
+  receivedAt     DateTime
+
+  /// The attachment, archived in Blob under the project's invoice folder.
+  documentUrl  String
+  documentName String
+
+  /// What was read off it. Suggestions only: the office checks them.
+  invoiceNumber String?
+  issuedDate    DateTime?
+  dueDate       DateTime?
+  subTotal      Decimal?  @db.Decimal(12, 2)
+  totalTax      Decimal?  @db.Decimal(12, 2)
+  total         Decimal?  @db.Decimal(12, 2)
+
+  /// The invoice it was recorded as, once confirmed.
+  invoiceId   String?   @unique
+  decidedById String?
+  decidedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tradie    Tradie          @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  schedule  TradieSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  invoice   TradieInvoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  decidedBy User?           @relation("TradieInvoiceInboxDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@unique([graphMessageId, attachmentId])
+  @@index([projectId, status])
+  @@index([tradieId])
 }

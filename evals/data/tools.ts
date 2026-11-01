@@ -44,6 +44,7 @@ export const READ_TOOLS = {
   "project-operations": [
     "get_compliance",
     "get_project",
+    "get_project_financials",
     "get_project_requirements",
     "list_site_managers",
     "prepare_compliance_outreach",

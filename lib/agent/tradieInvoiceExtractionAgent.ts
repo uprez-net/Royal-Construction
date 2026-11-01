@@ -37,6 +37,12 @@ const isoDay = (description: string) =>
     );
 
 export const tradieInvoiceExtractionSchema = z.object({
+  documentKind: z
+    .enum(["INVOICE", "QUOTE", "STATEMENT", "OTHER"])
+    .default("OTHER")
+    .describe(
+      "What the document is. INVOICE only for a tax invoice asking to be paid for work or materials. A quote or estimate is QUOTE; an account statement listing several invoices is STATEMENT; a receipt, remittance, plan, photo of work or anything else is OTHER.",
+    ),
   invoiceNumber: z
     .string()
     .nullable()
@@ -89,10 +95,16 @@ async function invoiceText(input: {
   });
 }
 
-export const readTradieInvoiceWithAi: TradieInvoiceDocumentReader = async (
-  input,
-): Promise<TradieInvoiceDocumentFields> => {
-  const text = (await invoiceText(input)).slice(0, MAX_OCR_CHARS);
+export type TradieInvoiceReading = z.infer<
+  typeof tradieInvoiceExtractionSchema
+>;
+
+/** The structured read of an invoice's OCR text, bounded like the OCR. */
+async function readInvoiceText(
+  ocrText: string,
+  fileName: string,
+): Promise<TradieInvoiceReading> {
+  const text = ocrText.slice(0, MAX_OCR_CHARS);
   if (!text.trim()) {
     throw new Error("No text could be read from the invoice.");
   }
@@ -100,8 +112,32 @@ export const readTradieInvoiceWithAi: TradieInvoiceDocumentReader = async (
     abortSignal: AbortSignal.timeout(OCR_TIMEOUT_MS),
     model: gateway(TEXT_MODEL_ID),
     output: Output.object({ schema: tradieInvoiceExtractionSchema }),
-    prompt: `Extract the invoice details from this OCR text of "${input.fileName}".\n\n<invoice>\n${text}\n</invoice>`,
+    prompt: `Extract the invoice details from this OCR text of "${fileName}".\n\n<invoice>\n${text}\n</invoice>`,
     system: SYSTEM_PROMPT,
   });
   return tradieInvoiceExtractionSchema.parse(output);
-};
+}
+
+export const readTradieInvoiceWithAi: TradieInvoiceDocumentReader = async (
+  input,
+): Promise<TradieInvoiceDocumentFields> =>
+  readInvoiceText(await invoiceText(input), input.fileName);
+
+/**
+ * Read an email attachment we already hold the bytes of: what the document
+ * is, and the invoice's details if it is one.
+ */
+export async function readTradieInvoiceBytes(input: {
+  readonly data: Buffer;
+  readonly fileName: string;
+  readonly contentType: string;
+}): Promise<TradieInvoiceReading> {
+  const text = await ocrFile({
+    data: input.data,
+    isImage: input.contentType.startsWith("image/"),
+    mediaType: input.contentType,
+    name: input.fileName,
+    timeoutMs: OCR_TIMEOUT_MS,
+  });
+  return readInvoiceText(text, input.fileName);
+}

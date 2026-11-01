@@ -25,6 +25,8 @@ export const recordTradieInvoiceSchema = z.object({
   subTotal: money("Enter the amount ex GST"),
   totalTax: money("Enter the GST, or 0"),
   notes: z.string().trim().max(2000).optional(),
+  /** The emailed invoice this records, when it was confirmed from one. */
+  inboxId: z.string().trim().min(1).optional(),
   /** The tradie's own invoice, uploaded with it. */
   document: z
     .object({
@@ -43,6 +45,11 @@ export const readTradieInvoiceDocumentSchema = z.object({
   name: z.string().trim().min(1).max(255),
   url: z.url(),
   contentType: z.string().trim().min(1),
+});
+
+export const dismissEmailedInvoiceSchema = z.object({
+  projectId: id("Project ID is required"),
+  inboxId: id("Choose the emailed invoice"),
 });
 
 export const allocateTradieInvoiceSchema = z.object({

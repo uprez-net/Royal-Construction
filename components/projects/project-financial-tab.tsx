@@ -1,5 +1,7 @@
 import type { ProjectStage } from "@prisma/client";
-import { ReceiptText } from "lucide-react";
+import { ArrowRight, ReceiptText } from "lucide-react";
+import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import { PROJECT_STAGE_LABELS, ProjectWithStats } from "@/types/project";
 import {
@@ -12,9 +14,38 @@ import { invoiceTone } from "@/lib/projects/invoice-display";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 import { DataTable } from "../common/data-table";
 import { StatusPill } from "../common/status-pill";
+import { Button } from "../ui/button";
+import { projectDetailHref } from "./projects-list-url";
 
 interface FinancialTabProps {
   project: ProjectWithStats;
+  /** Closes the quick view, so the link does not leave it open behind. */
+  onClose?: () => void;
+}
+
+/** The project page's Financials tab, keeping the list the user came from. */
+function ProfitLossLink({
+  projectId,
+  onClose,
+}: {
+  projectId: string;
+  onClose?: () => void;
+}) {
+  const searchParams = useSearchParams();
+  const fromList = usePathname() === "/projects";
+  const base = projectDetailHref(
+    projectId,
+    fromList ? searchParams.toString() : "",
+  );
+  const href = `${base}${base.includes("?") ? "&" : "?"}activeTab=financials`;
+  return (
+    <Button asChild variant="outline" size="sm" onClick={onClose}>
+      <Link href={href}>
+        View profit/loss
+        <ArrowRight aria-hidden="true" />
+      </Link>
+    </Button>
+  );
 }
 
 function MoneyTile({
@@ -52,7 +83,7 @@ function MoneyTile({
   );
 }
 
-export function FinancialTab({ project }: FinancialTabProps) {
+export function FinancialTab({ project, onClose }: FinancialTabProps) {
   // One reference date for the whole render, so two claims falling either side
   // of the same instant cannot disagree about what "overdue" means.
   const today = new Date();
@@ -98,6 +129,13 @@ export function FinancialTab({ project }: FinancialTabProps) {
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">
+          The contract&apos;s money in and out. Activity-by-activity profit and
+          loss is on the project&apos;s Financials tab.
+        </p>
+        <ProfitLossLink projectId={project.id} onClose={onClose} />
+      </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <MoneyTile label="Total budget" value={budget} />
         <MoneyTile label="Actual spend" value={spent} />

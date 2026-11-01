@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "vitest";
 import {
   assignSiteManagerInputSchema,
+  getProjectFinancialsInputSchema,
   getProjectRequirementsInputSchema,
   listSiteManagersInputSchema,
   prepareComplianceOutreachInputSchema,
@@ -112,4 +113,25 @@ test("site manager reassignment takes an id from the lookup and goes through the
     "utf8",
   );
   assert.match(tool, /approval: ownerOnlyApproval\(\)/);
+});
+
+test("the profit-and-loss tool reads the Financials tab's report, not a copy of it", async () => {
+  assert.equal(
+    getProjectFinancialsInputSchema.safeParse({ projectId }).success,
+    true,
+  );
+  assert.equal(
+    getProjectFinancialsInputSchema.safeParse({ projectId: "job X" }).success,
+    false,
+  );
+  const source = await readFile("agent/lib/project-operations.ts", "utf8");
+  // One margin, shared with the screen: the agent formats it and decides
+  // nothing, so the office is never told two different figures.
+  assert.match(source, /getProjectFinancials\(/);
+  assert.doesNotMatch(source, /prisma\.tradieInvoice|agentDb\.tradieInvoice/);
+  const tool = await readFile(
+    "agent/subagents/project-operations/tools/get_project_financials.ts",
+    "utf8",
+  );
+  assert.match(tool, /getAuthorizedProjectFinancials/);
 });

@@ -34,6 +34,7 @@ import {
   shortDateFormat,
 } from "@/utils/formatters";
 
+import { BillingPill } from "./financials-tab/activity-detail";
 import { ManualQuoteDialog } from "./manual-quote-dialog";
 import { RequestDeliveryStatus } from "./request-delivery-status";
 import {
@@ -351,6 +352,7 @@ function SelectedBookingRow({
           <StatusPill tone={scheduleStatusTone(status)}>
             {scheduleStatusText(status)}
           </StatusPill>
+          {booking.billing ? <BillingPill state={booking.billing} /> : null}
           {/* Its tone is a second signal only: "follow up" is always spelled
               out, so colour never carries the meaning alone. */}
           {!closed ? (

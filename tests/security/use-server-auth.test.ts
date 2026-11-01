@@ -85,6 +85,7 @@ const CALLER_CHECKS = new Set([
   "prepareTradieInvoiceRecheck",
   "requestTradieInvoiceRecheck",
   "readTradieInvoiceDocument",
+  "dismissEmailedTradieInvoice",
   "getVariationOptions",
   "draftVariation",
   "raiseVariation",

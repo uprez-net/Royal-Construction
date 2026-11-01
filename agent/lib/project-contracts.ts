@@ -46,6 +46,10 @@ export const getProjectRequirementsInputSchema = z.object({
   projectId: projectIdSchema,
 });
 
+export const getProjectFinancialsInputSchema = z.object({
+  projectId: projectIdSchema,
+});
+
 export const updateProjectRequirementsInputSchema = z.object({
   projectId: projectIdSchema,
   expectedUpdatedAt: z.iso.datetime(),

@@ -16,8 +16,7 @@ import {
   type DomainPrincipal,
 } from "../principal";
 import {
-  bookingBillingState,
-  bookingPrice,
+  bookingBilling,
   isCommittedBooking,
   isCountedInvoice,
   toCents,
@@ -74,20 +73,7 @@ async function billingOf(
     },
     where: { id: scheduleId },
   });
-  const price = bookingPrice({
-    ...schedule,
-    quoteGst: schedule.quote?.gstTreatment ?? null,
-    tradie: {
-      lastQuotedPrice: schedule.tradie.lastQuotedPrice?.toString() ?? null,
-      lastQuotedPriceUnit: schedule.tradie.lastQuotedPriceUnit,
-    },
-  });
-  return bookingBillingState({
-    agreedCents: isCommittedBooking(schedule.status) ? price.exGstCents : 0,
-    invoicedCents: schedule.invoices
-      .filter((invoice) => isCountedInvoice(invoice.status))
-      .reduce((total, invoice) => total + toCents(invoice.subTotal), 0),
-  });
+  return bookingBilling(schedule) ?? "NOT_INVOICED";
 }
 
 /** A booking on this project, or a refusal that says which. */
@@ -539,7 +525,7 @@ async function tradieForContact(
   });
 }
 
-type Placement = {
+export type Placement = {
   readonly tradie: { readonly id: string; readonly name: string };
   readonly projectId: string | null;
   readonly scheduleId: string | null;
@@ -558,8 +544,30 @@ async function placeBill(
   bill: ExternalTradieBill,
   db: DomainDb,
 ): Promise<Placement | null> {
-  const contactTradie = await tradieForContact(bill.contact, db);
-  const token = extractTradieRefToken(bill.reference, bill.invoiceNumber);
+  return placeTradieInvoice(
+    {
+      token: extractTradieRefToken(bill.reference, bill.invoiceNumber),
+      tradie: await tradieForContact(bill.contact, db),
+    },
+    db,
+  );
+}
+
+/**
+ * The project and booking an invoice from a tradie is for: the rule above,
+ * for any invoice whose tradie is already known (or not) and whose reference
+ * token, if any, has been read off it. A Xero bill and an emailed invoice are
+ * placed by this one rule.
+ */
+export async function placeTradieInvoice(
+  input: {
+    readonly tradie: { readonly id: string; readonly name: string } | null;
+    readonly token: string | null;
+  },
+  db: DomainDb,
+): Promise<Placement | null> {
+  const contactTradie = input.tradie;
+  const token = input.token;
 
   if (token && tradieRefKind(token) === "booking") {
     const schedule = await db.tradieSchedule.findUnique({

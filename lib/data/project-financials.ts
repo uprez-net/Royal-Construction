@@ -24,6 +24,10 @@ import {
   type TradieInvoiceDocumentFields,
 } from "@/lib/domain/tradies/invoice-document";
 import {
+  confirmEmailedTradieInvoice,
+  dismissEmailedTradieInvoice,
+} from "@/lib/domain/tradies/invoice-inbox";
+import {
   allocateTradieInvoice,
   recordTradieInvoice,
   voidTradieInvoice,
@@ -36,6 +40,7 @@ import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
   allocateTradieInvoiceSchema,
+  dismissEmailedInvoiceSchema,
   previewInvoiceRecheckSchema,
   readTradieInvoiceDocumentSchema,
   recordTradieInvoiceSchema,
@@ -120,8 +125,8 @@ export async function recordTradieInvoiceAction(
 ): Promise<ProjectFinancialsResult> {
   return answer(async (principal) => {
     const input = parse(recordTradieInvoiceSchema.safeParse(raw));
-    const recorded = await prisma.$transaction((tx) =>
-      recordTradieInvoice(
+    const recorded = await prisma.$transaction(async (tx) => {
+      const result = await recordTradieInvoice(
         principal,
         {
           document: input.document ?? null,
@@ -138,8 +143,22 @@ export async function recordTradieInvoiceAction(
           totalTax: input.totalTax,
         },
         tx,
-      ),
-    );
+      );
+      // Confirming an emailed invoice: the entry settles with the invoice in
+      // one transaction, so it can never be both recorded and still waiting.
+      if (input.inboxId) {
+        await confirmEmailedTradieInvoice(
+          principal,
+          {
+            inboxId: input.inboxId,
+            invoiceId: result.invoiceId,
+            projectId: input.projectId,
+          },
+          tx,
+        );
+      }
+      return result;
+    });
     expireProject(recorded.projectId);
     return recorded.projectId;
   });
@@ -183,6 +202,22 @@ export async function readTradieInvoiceDocumentAction(raw: {
     if (failure) return failure;
     throw error;
   }
+}
+
+/** Set an emailed invoice aside without recording it. */
+export async function dismissEmailedInvoiceAction(raw: {
+  projectId: string;
+  inboxId: string;
+}): Promise<ProjectFinancialsResult> {
+  return answer(async (principal) => {
+    const input = parse(dismissEmailedInvoiceSchema.safeParse(raw));
+    const dismissed = await dismissEmailedTradieInvoice(
+      principal,
+      input,
+      prisma,
+    );
+    return dismissed.projectId;
+  });
 }
 
 export async function allocateTradieInvoiceAction(raw: {

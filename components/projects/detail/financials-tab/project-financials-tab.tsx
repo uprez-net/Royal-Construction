@@ -40,9 +40,11 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   allocateTradieInvoiceAction,
+  dismissEmailedInvoiceAction,
   fetchProjectFinancials,
   type ProjectFinancialsResult,
 } from "@/lib/data/project-financials";
+import type { EmailedTradieInvoice } from "@/lib/domain/tradies/invoice-inbox";
 import type {
   FinancialActivity,
   FinancialBooking,
@@ -68,9 +70,11 @@ import {
   Money,
   ProfitLoss,
 } from "./money";
+import { EmailedInvoices } from "./emailed-invoices";
 import {
   RecordInvoiceDialog,
   type BookingOption,
+  type RecordInvoicePrefill,
 } from "./record-invoice-dialog";
 import { StageFinancialsCard } from "./stage-financials-card";
 import { RecheckInvoiceDialog } from "./recheck-invoice-dialog";
@@ -191,6 +195,7 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
   );
   const [voiding, setVoiding] = useState<FinancialInvoice | null>(null);
   const [recheckFor, setRecheckFor] = useState<string | null>(null);
+  const [prefill, setPrefill] = useState<RecordInvoicePrefill | null>(null);
   // `undefined` is closed; a milestone id opens the wizard on that activity.
   const [variationFor, setVariationFor] = useState<string | undefined>(
     undefined,
@@ -259,6 +264,38 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
 
   function applyResult(result: Extract<ProjectFinancialsResult, { ok: true }>) {
     queryClient.setQueryData(financialsKey(project.id), result.report);
+  }
+
+  function confirmEmailed(entry: EmailedTradieInvoice) {
+    setPrefill({
+      document: { name: entry.documentName, url: entry.documentUrl },
+      dueDate: entry.dueDate,
+      inboxId: entry.id,
+      invoiceNumber: entry.invoiceNumber,
+      issuedDate: entry.issuedDate,
+      receivedAt: entry.receivedAt,
+      scheduleId: entry.scheduleId,
+      subTotalCents: entry.subTotalCents,
+      totalTaxCents: entry.totalTaxCents,
+    });
+    setRecordFor(entry.scheduleId);
+  }
+
+  async function dismissEmailed(entry: EmailedTradieInvoice) {
+    try {
+      const result = await dismissEmailedInvoiceAction({
+        inboxId: entry.id,
+        projectId: project.id,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      applyResult(result);
+      toast.success("Emailed invoice set aside.");
+    } catch {
+      toast.error("The emailed invoice could not be set aside. Try again.");
+    }
   }
 
   async function allocate(invoice: FinancialInvoice, scheduleId: string) {
@@ -417,6 +454,15 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
           ) : null}
         </div>
       </Card>
+
+      {report.emailedInvoices.length > 0 ? (
+        <EmailedInvoices
+          invoices={report.emailedInvoices}
+          bookings={options}
+          onConfirm={confirmEmailed}
+          onDismiss={(entry) => void dismissEmailed(entry)}
+        />
+      ) : null}
 
       {report.unallocatedInvoices.length > 0 ? (
         <SectionCard
@@ -582,14 +628,20 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
       <RecordInvoiceDialog
         open={recordFor !== undefined}
         onOpenChange={(open) => {
-          if (!open) setRecordFor(undefined);
+          if (!open) {
+            setRecordFor(undefined);
+            setPrefill(null);
+          }
         }}
         projectId={project.id}
         bookings={options}
         initialScheduleId={recordFor ?? null}
+        prefill={prefill}
         onRecorded={(result) => {
           applyResult(result);
-          toast.success("Invoice recorded.");
+          toast.success(
+            prefill ? "Emailed invoice recorded." : "Invoice recorded.",
+          );
         }}
       />
       <RecheckInvoiceDialog

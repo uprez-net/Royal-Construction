@@ -2,6 +2,10 @@ import type { DomainDb } from "../db";
 import { authorizeProject } from "../access/projects";
 import { requireAdminPrincipal, type DomainPrincipal } from "../principal";
 import { bookingPrice, toCents } from "../tradies/billing-rules";
+import {
+  listPendingEmailedInvoices,
+  type EmailedTradieInvoice,
+} from "../tradies/invoice-inbox";
 import { bookingTrade } from "../tradies/request-rules";
 
 import {
@@ -11,6 +15,11 @@ import {
 
 export type ProjectFinancials = ProjectFinancialReport & {
   readonly projectId: string;
+  /**
+   * Tradie invoices that arrived by email, read and waiting for the office to
+   * confirm. Counted nowhere in the report until they are.
+   */
+  readonly emailedInvoices: readonly EmailedTradieInvoice[];
 };
 
 /**
@@ -150,5 +159,9 @@ export async function getProjectFinancials(
     })),
   });
 
-  return { ...report, projectId: project.id };
+  return {
+    ...report,
+    emailedInvoices: await listPendingEmailedInvoices(project.id, db),
+    projectId: project.id,
+  };
 }
