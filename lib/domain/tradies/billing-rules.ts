@@ -4,6 +4,7 @@ import {
   TradieScheduleStatus,
 } from "@prisma/client";
 
+import { parseQuotedAmount } from "../../../utils/calculations";
 import { tradieScheduleSpend } from "./lifecycle";
 import { APPROVED_STATUSES } from "./selection-rules";
 
@@ -91,11 +92,14 @@ export function bookingPrice(schedule: {
   readonly quoteGst: TradieQuoteGst | null;
 }): BookingPrice {
   const spend = tradieScheduleSpend(schedule);
-  const basis: PriceBasis = schedule.quotedPrice
-    ? "QUOTE"
-    : spend > 0
-      ? "RATE"
-      : "NONE";
+  // A stored price that does not read as one amount is a missing quote, not a
+  // $0 one: it must show as "Quote missing", not as a price of nothing.
+  const basis: PriceBasis =
+    parseQuotedAmount(schedule.quotedPrice) !== null
+      ? "QUOTE"
+      : spend > 0
+        ? "RATE"
+        : "NONE";
   const cents = toCents(spend);
   return {
     basis,

@@ -63,7 +63,11 @@ export async function syncTradieBillFromXero(
   if ("projectId" in result) {
     revalidateTag(`project-${result.projectId}`, CACHE_PROFILES.MEDIUM);
   }
-  if (options.created) await notifyIfUnplaced(result, invoice);
+  // A duplicate number is told on every delivery, not only the first: a
+  // second bill for the same work is money that could be paid twice.
+  if (options.created || result.kind === "duplicate-number") {
+    await notifyIfUnplaced(result, invoice);
+  }
   return result;
 }
 
@@ -122,22 +126,29 @@ async function notifyIfUnplaced(
   invoice: Invoice,
 ): Promise<void> {
   const notification =
-    result.kind === "unmatched"
-      ? createNotification("tradieInvoiceUnmatched", {
+    result.kind === "duplicate-number"
+      ? createNotification("tradieInvoiceDuplicateNumber", {
           amount: rateCurrency.format(result.subTotalCents / 100),
-          invoiceNumber: invoice.invoiceNumber ?? null,
-          tradieId: result.tradieId,
+          invoiceNumber: result.invoiceNumber,
+          projectId: result.projectId,
           tradieName: result.tradieName,
         })
-      : result.kind === "created" && !result.scheduleId
-        ? createNotification("tradieInvoiceNeedsAllocation", {
+      : result.kind === "unmatched"
+        ? createNotification("tradieInvoiceUnmatched", {
             amount: rateCurrency.format(result.subTotalCents / 100),
             invoiceNumber: invoice.invoiceNumber ?? null,
-            projectId: result.projectId,
-            projectName: result.projectName,
+            tradieId: result.tradieId,
             tradieName: result.tradieName,
           })
-        : null;
+        : result.kind === "created" && !result.scheduleId
+          ? createNotification("tradieInvoiceNeedsAllocation", {
+              amount: rateCurrency.format(result.subTotalCents / 100),
+              invoiceNumber: invoice.invoiceNumber ?? null,
+              projectId: result.projectId,
+              projectName: result.projectName,
+              tradieName: result.tradieName,
+            })
+          : null;
   if (!notification) return;
   try {
     const admins = await findAdminUserIds(prisma);
