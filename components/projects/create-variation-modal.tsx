@@ -70,6 +70,13 @@ function cents(value: string): number | null {
 
 const STEPS = ["Details", "Document", "Email & send"] as const;
 
+// The widths the previews are laid out at: the document is an A4 page
+// (210mm), the email a 640px column with a margin of its background either
+// side. Both are shown at full size when the dialog has room, and scroll
+// inside their panel rather than being shrunk to fit its height.
+const DOCUMENT_WIDTH = 794;
+const EMAIL_WIDTH = 720;
+
 type Preview = Extract<VariationPreviewResult, { ok: true }>;
 
 export type CreateVariationModalProps = {
@@ -279,7 +286,7 @@ function VariationWizard({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FilePlus2
@@ -554,14 +561,17 @@ function VariationWizard({
                 : ". The Xero invoice number is added when it is raised"}
               .
             </p>
-            <div className="rounded-lg border border-border bg-muted/30 p-2">
-              <EmailPreviewFrame
-                html={preview.documentHtml}
-                title="Variation document preview"
-                editable={false}
-                maxHeight={620}
-                minScale={0.4}
-              />
+            <div className="max-h-[62vh] overflow-y-auto rounded-lg border border-border bg-muted/50 p-3">
+              <div className="mx-auto" style={{ maxWidth: DOCUMENT_WIDTH }}>
+                <EmailPreviewFrame
+                  html={preview.documentHtml}
+                  title="Variation document preview"
+                  editable={false}
+                  layoutWidth={DOCUMENT_WIDTH}
+                  maxHeight={Infinity}
+                  minScale={0.4}
+                />
+              </div>
             </div>
             <DialogFooter>
               <Button
@@ -628,13 +638,17 @@ function VariationWizard({
                 {preview.subject}
               </span>
             </div>
-            <div className="rounded-lg border border-border bg-muted/30 p-2">
-              <EmailPreviewFrame
-                html={preview.emailHtml}
-                title="Variation email preview"
-                editable={false}
-                maxHeight={480}
-              />
+            <div className="max-h-[52vh] overflow-y-auto rounded-lg border border-border bg-muted/50 p-3">
+              <div className="mx-auto" style={{ maxWidth: EMAIL_WIDTH }}>
+                <EmailPreviewFrame
+                  html={preview.emailHtml}
+                  title="Variation email preview"
+                  editable={false}
+                  layoutWidth={EMAIL_WIDTH}
+                  maxHeight={Infinity}
+                  minScale={0.4}
+                />
+              </div>
             </div>
             <ul className="space-y-1 rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
               <li>

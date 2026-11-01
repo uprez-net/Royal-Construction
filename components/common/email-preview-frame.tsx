@@ -42,6 +42,11 @@ function withoutEditableBody(html: string): string {
  * `transform: scale()` to fit the panel width and `maxHeight`. The wrapper
  * reserves only the scaled footprint so the dialog around it stays compact.
  *
+ * `layoutWidth` lays a fluid email out at that width instead of the iframe's
+ * default 300px, which would otherwise squeeze it into a narrow column. Pass
+ * `maxHeight={Infinity}` to fit the width only, so the text stays readable and
+ * the caller scrolls the panel.
+ *
  * Remount it (`key`) to throw away in-place edits; changing `html` reloads it
  * too.
  */
@@ -53,9 +58,17 @@ export const EmailPreviewFrame = forwardRef<
     editable?: boolean;
     maxHeight?: number;
     minScale?: number;
+    layoutWidth?: number;
   }
 >(function EmailPreviewFrame(
-  { html, title, editable = true, maxHeight = 560, minScale = 0.7 },
+  {
+    html,
+    title,
+    editable = true,
+    maxHeight = 560,
+    minScale = 0.7,
+    layoutWidth,
+  },
   ref,
 ) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -87,7 +100,7 @@ export const EmailPreviewFrame = forwardRef<
     const contentW = Math.max(
       doc.documentElement.scrollWidth,
       doc.body.scrollWidth,
-      0,
+      layoutWidth ?? 0,
     );
     const contentH = Math.max(
       doc.documentElement.scrollHeight,
@@ -105,7 +118,7 @@ export const EmailPreviewFrame = forwardRef<
       1,
     );
     setSize({ contentH, scale: Math.max(scale, minScale) });
-  }, [maxHeight, minScale]);
+  }, [layoutWidth, maxHeight, minScale]);
 
   const handleLoad = useCallback(() => {
     const doc = iframeRef.current?.contentDocument;
@@ -155,6 +168,7 @@ export const EmailPreviewFrame = forwardRef<
         sandbox="allow-same-origin allow-scripts"
         onLoad={handleLoad}
         style={{
+          width: layoutWidth,
           transformOrigin: "top left",
           transform: size ? `scale(${size.scale})` : undefined,
         }}
