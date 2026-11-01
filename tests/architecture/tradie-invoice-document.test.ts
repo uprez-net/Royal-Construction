@@ -52,6 +52,9 @@ describe("reading an uploaded tradie invoice", () => {
       `https://evil.public.blob.vercel-storage.com/projects/p_1/tradie-invoices/a.pdf`,
       `https://${STORE}.public.blob.vercel-storage.com/projects/p_2/tradie-invoices/a.pdf`,
       "http://169.254.169.254/latest/meta-data",
+      // A malformed escape, and an encoded ".." out of the project's folder.
+      `https://${STORE}.public.blob.vercel-storage.com/projects/p_1/tradie-invoices/%E0%A4%A.pdf`,
+      `https://${STORE}.public.blob.vercel-storage.com/projects/p_1/tradie-invoices/%2e%2e/%2e%2e/p_2/a.pdf`,
     ]) {
       const attempt = read(url);
       await assert.rejects(() => attempt.run, DomainValidationError);

@@ -13,6 +13,8 @@ import { ocrFile, ocrPagesToText, processPDFWithMistral } from "@/lib/ocr";
 // then a structured read of the text. Every field is a suggestion the office
 // reviews; a blank is the right answer for anything not printed.
 
+// Every outside call is bounded: the office is watching a "Reading the
+// invoice…" spinner, and a hung provider must give up rather than hold it.
 const OCR_TIMEOUT_MS = 45_000;
 const MAX_OCR_CHARS = 40_000;
 
@@ -66,9 +68,13 @@ async function invoiceText(input: {
   contentType: string;
 }): Promise<string> {
   if (input.contentType === "application/pdf") {
-    return ocrPagesToText(await processPDFWithMistral(input.url));
+    return ocrPagesToText(
+      await processPDFWithMistral(input.url, { timeoutMs: OCR_TIMEOUT_MS }),
+    );
   }
-  const response = await fetch(input.url);
+  const response = await fetch(input.url, {
+    signal: AbortSignal.timeout(OCR_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw new Error(
       `The uploaded invoice could not be fetched (${response.status}).`,
@@ -91,6 +97,7 @@ export const readTradieInvoiceWithAi: TradieInvoiceDocumentReader = async (
     throw new Error("No text could be read from the invoice.");
   }
   const { output } = await generateText({
+    abortSignal: AbortSignal.timeout(OCR_TIMEOUT_MS),
     model: gateway(TEXT_MODEL_ID),
     output: Output.object({ schema: tradieInvoiceExtractionSchema }),
     prompt: `Extract the invoice details from this OCR text of "${input.fileName}".\n\n<invoice>\n${text}\n</invoice>`,

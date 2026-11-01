@@ -12,7 +12,10 @@ import type {
   VariationInvoiceFields,
   VariationIssuePorts,
 } from "@/lib/domain/ports/variation";
-import { issueVariation } from "@/lib/domain/projects/variation-issue";
+import {
+  issueVariation,
+  variationInvoiceReference,
+} from "@/lib/domain/projects/variation-issue";
 import {
   draftVariation,
   raiseVariation,
@@ -315,6 +318,7 @@ describe("issuing a variation", () => {
     projectId: "p_1",
     requestedDate: new Date("2026-11-01T00:00:00.000Z"),
     sentAt: null,
+    sentTo: [] as string[],
     status: "APPROVED",
     xeroInvoiceId: null,
     xeroInvoiceNumber: null,
@@ -351,16 +355,20 @@ describe("issuing a variation", () => {
   function ports(
     steps: string[],
     fail?: "xero" | "email",
+    failFor?: string,
   ): VariationIssuePorts {
     return {
       raiseInvoice: async (input) => {
         steps.push(`xero:${input.amountExGstCents}`);
+        steps.push(`reference:${input.reference}`);
         if (fail === "xero") throw new Error("Xero is down");
         return invoice;
       },
       sendEmail: async (input) => {
         steps.push(`email:${input.to}:${input.document.invoiceNumber ?? "-"}`);
-        if (fail === "email") throw new Error("Graph refused");
+        if (fail === "email" && (!failFor || failFor === input.to)) {
+          throw new Error("Graph refused");
+        }
       },
       storeDocument: async (input) => {
         steps.push(`document:${input.document.chargeIncGstCents}`);
@@ -384,6 +392,7 @@ describe("issuing a variation", () => {
     );
     assert.deepEqual(steps, [
       "xero:150000",
+      `reference:${variationInvoiceReference("V-003", "v_new")}`,
       "document:165000",
       "email:jane@example.com:INV-0042",
       "email:john@example.com:INV-0042",
@@ -432,7 +441,8 @@ describe("issuing a variation", () => {
         ),
       DomainSideEffectError,
     );
-    assert.deepEqual(steps, ["xero:150000"]);
+    assert.deepEqual(steps.slice(0, 1), ["xero:150000"]);
+    assert.equal(steps.length, 2);
     const issueError = recorder
       .writes()
       .filter((call) => call.operation === "variation.update")
@@ -442,6 +452,76 @@ describe("issuing a variation", () => {
       )
       .find(Boolean);
     assert.match(issueError ?? "", /Xero invoice was not raised: Xero is down/);
+  });
+
+  test("the invoice reference is the variation's own, not the project's name", () => {
+    const a = variationInvoiceReference(
+      "V-003",
+      "0f1e2d3c-4b5a-6978-8a9b-acbdcedfe0f1",
+    );
+    const b = variationInvoiceReference(
+      "V-003",
+      "9a8b7c6d-5e4f-4031-8a2b-1c0d9e8f7a6b",
+    );
+    assert.equal(a, "Variation V-003 RCV-0F1E2D3C4B5A");
+    assert.notEqual(a, b);
+  });
+
+  test("a send that fails part-way records who has it, and does not mark it sent", async () => {
+    const steps: string[] = [];
+    const recorder = recordingDb({
+      ...outbox,
+      "project.findUnique": projectRow,
+      "variation.findFirst": row("PROMOTIONAL"),
+    });
+    await assert.rejects(
+      () =>
+        issueVariation(
+          adminPrincipal(),
+          { emailAttemptKey: "k_1", projectId: "p_1", variationId: "v_new" },
+          recorder.db,
+          ports(steps, "email", "john@example.com"),
+        ),
+      DomainSideEffectError,
+    );
+    const updates = recorder
+      .writes()
+      .filter((call) => call.operation === "variation.update")
+      .map((call) => (call.args as { data: Record<string, unknown> }).data);
+    assert.ok(
+      updates.some(
+        (data) =>
+          JSON.stringify(data.sentTo) === JSON.stringify(["jane@example.com"]),
+      ),
+    );
+    assert.ok(updates.every((data) => !("sentAt" in data)));
+  });
+
+  test("a retry emails only the owners the failed send did not reach", async () => {
+    const steps: string[] = [];
+    const recorder = recordingDb({
+      ...outbox,
+      "project.findUnique": projectRow,
+      "variation.findFirst": {
+        ...row("PROMOTIONAL"),
+        documentUrl: "https://store.public.blob.vercel-storage.com/v.pdf",
+        issueError: "The email to the client was not sent.",
+        sentTo: ["jane@example.com"],
+      },
+    });
+    await issueVariation(
+      adminPrincipal(),
+      { emailAttemptKey: "k_2", projectId: "p_1", variationId: "v_new" },
+      recorder.db,
+      ports(steps),
+    );
+    assert.deepEqual(steps, ["email:john@example.com:-"]);
+    const sent = recorder
+      .writes()
+      .filter((call) => call.operation === "variation.update")
+      .map((call) => (call.args as { data: Record<string, unknown> }).data)
+      .find((data) => "sentAt" in data);
+    assert.deepEqual(sent?.sentTo, ["jane@example.com", "john@example.com"]);
   });
 
   test("an address that is not an owner's is refused before anything is sent", async () => {

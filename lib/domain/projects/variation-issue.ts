@@ -169,6 +169,14 @@ export async function issueVariation(
       "recipients",
     );
   }
+  // A retry finishes a send that failed part-way: owners it already reached
+  // are not emailed a second time. A resend is deliberate, and goes to
+  // everyone chosen.
+  const reached = input.resend ? [] : row.sentTo;
+  const reachedKeys = new Set(reached.map((email) => email.toLowerCase()));
+  const toSend = recipients.filter(
+    (email) => !reachedKeys.has(email.toLowerCase()),
+  );
 
   // 1. Xero.
   let invoice: {
@@ -206,7 +214,7 @@ export async function issueVariation(
             issuedDate: row.approvedDate ?? now,
             lineDescription: `Variation ${number} — ${document.activityName}: ${document.reason}`,
             projectId: row.projectId,
-            reference: `${context.project.name} / Variation ${number}`,
+            reference: variationInvoiceReference(number, row.id),
             variationId: row.id,
           });
           await db.variation.update({
@@ -274,22 +282,39 @@ export async function issueVariation(
     });
   }
 
-  // 3. The email.
+  // 3. The email. `sentAt` is set only once every chosen owner has it; until
+  // then the variation reads as not sent, and `sentTo` says who has.
   let emailedTo: readonly string[] = [];
   let emailReplayed = false;
-  if (needsEmail) {
+  const reachedNow = (delivered: readonly string[]) => {
+    const all = [...reached];
+    for (const email of delivered) {
+      if (!all.some((had) => had.toLowerCase() === email.toLowerCase())) {
+        all.push(email);
+      }
+    }
+    return all;
+  };
+  if (needsEmail && toSend.length === 0) {
+    // An earlier attempt reached everyone before failing to record it.
+    await db.variation.update({
+      data: { sentAt: now, sentTo: reachedNow([]) },
+      where: { id: row.id },
+    });
+  } else if (needsEmail) {
     const subject = variationEmailSubject(document);
     const delivered: string[] = [];
+    let landed: readonly string[] = [];
     try {
       const { result, replayed } = await runOutboxEffectWithOutcome(
         db,
         {
           key: `variation-email:${row.id}:${emailAttemptKey}`,
           kind: OutboxEventKind.VARIATION_EMAIL_SEND,
-          payload: { recipients, subject, variationId: row.id },
+          payload: { recipients: toSend, subject, variationId: row.id },
         },
         async () => {
-          for (const to of recipients) {
+          for (const to of toSend) {
             await ports.sendEmail({
               document,
               documentUrl: documentUrl as string,
@@ -301,6 +326,7 @@ export async function issueVariation(
           return { recipients: delivered };
         },
       );
+      landed = result.recipients;
       emailedTo = replayed ? [] : result.recipients;
       emailReplayed = replayed;
     } catch (error) {
@@ -310,7 +336,7 @@ export async function issueVariation(
           : "";
       if (delivered.length > 0) {
         await db.variation.update({
-          data: { sentAt: now, sentTo: delivered },
+          data: { sentTo: reachedNow(delivered) },
           where: { id: row.id },
         });
       }
@@ -322,12 +348,10 @@ export async function issueVariation(
         error,
       );
     }
-    if (!emailReplayed) {
-      await db.variation.update({
-        data: { sentAt: now, sentTo: [...emailedTo] },
-        where: { id: row.id },
-      });
-    }
+    await db.variation.update({
+      data: { sentAt: now, sentTo: reachedNow(landed) },
+      where: { id: row.id },
+    });
   }
 
   await db.variation.update({
@@ -345,6 +369,20 @@ export async function issueVariation(
     number,
     projectId: row.projectId,
   };
+}
+
+/**
+ * The Xero reference on a variation's invoice, and the key a retry finds it
+ * by: "Variation V-003 RCV-1A2B3C4D5E6F". The token comes from the variation's
+ * own id, so it is unique even between two projects billed to one Xero
+ * contact, and nothing a person can rename changes it.
+ */
+export function variationInvoiceReference(
+  number: string,
+  variationId: string,
+): string {
+  const token = variationId.replace(/-/g, "").slice(0, 12).toUpperCase();
+  return `Variation ${number} RCV-${token}`;
 }
 
 /** "Variation V-003 — 12 Smith St: Roof framing". */

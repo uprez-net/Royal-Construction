@@ -43,11 +43,22 @@ export function assertTradieInvoiceDocument(
     "document",
   );
   if (!isBlobStoreUrl(document.url, input.storeId)) throw refused;
-  const path = decodeURIComponent(new URL(document.url).pathname).replace(
-    /^\/+/,
-    "",
-  );
-  if (!path.startsWith(tradieInvoiceDocumentFolder(input.projectId))) {
+  let path: string;
+  try {
+    path = decodeURIComponent(new URL(document.url).pathname).replace(
+      /^\/+/,
+      "",
+    );
+  } catch {
+    // A malformed escape is not a file we uploaded.
+    throw refused;
+  }
+  // The URL parser resolves a literal "..", but not an encoded one, which
+  // only appears once decoded: refuse it rather than trust the prefix.
+  if (
+    path.split("/").some((segment) => segment === "..")
+    || !path.startsWith(tradieInvoiceDocumentFolder(input.projectId))
+  ) {
     throw refused;
   }
   return { name, url: document.url };

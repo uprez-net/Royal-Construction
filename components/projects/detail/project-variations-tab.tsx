@@ -193,7 +193,15 @@ function SentCell({ variation }: { variation: VariationListRow }) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
   if (!variation.sentAt) {
-    return <StatusPill tone="danger">Not sent</StatusPill>;
+    // A send that failed part-way: some owners have it, and Retry emails
+    // only the rest.
+    return variation.sentTo.length > 0 ? (
+      <span title={`Reached ${variation.sentTo.join(", ")}`}>
+        <StatusPill tone="warning">Partly sent</StatusPill>
+      </span>
+    ) : (
+      <StatusPill tone="danger">Not sent</StatusPill>
+    );
   }
   return (
     <span
@@ -438,6 +446,12 @@ function VariationsTab({ projectId }: { projectId: string }) {
       const result = await issueVariationAction({
         attemptKey: crypto.randomUUID(),
         projectId,
+        // A resend goes to whoever it went to before, as the confirmation
+        // says; a retry finishes with every owner.
+        recipients:
+          resend && variation.sentTo.length > 0
+            ? [...variation.sentTo]
+            : undefined,
         resend,
         variationId: variation.id,
       });

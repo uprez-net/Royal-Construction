@@ -215,6 +215,8 @@ export async function raiseVariationAction(
 const issueSchema = z.object({
   attemptKey: id("An attempt key is required"),
   projectId: id("Project ID is required"),
+  /** Owners to email, by address. Every owner when left out. */
+  recipients: z.array(z.email()).min(1).max(20).optional(),
   resend: z.boolean().optional(),
   variationId: id("Variation ID is required"),
 });
@@ -236,6 +238,7 @@ export async function issueVariationAction(
         {
           emailAttemptKey: input.attemptKey,
           projectId: input.projectId,
+          recipients: input.recipients,
           resend: input.resend,
           variationId: input.variationId,
         },

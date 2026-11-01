@@ -3,7 +3,13 @@
 import { upload } from "@vercel/blob/client";
 import { format } from "date-fns";
 import { FileText, Loader2, Sparkles, Upload, X } from "lucide-react";
-import { useRef, useState, type ChangeEvent, type SubmitEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type SubmitEvent,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -128,9 +134,13 @@ export function RecordInvoiceDialog({
   const [busy, setBusy] = useState(false);
   const [document, setDocument] = useState<DocumentState>({ status: "none" });
   const fileInput = useRef<HTMLInputElement>(null);
-  // Bumped on every new file, removal and opening, so a slow read of a file
-  // already replaced cannot fill the form with the wrong invoice.
+  // Bumped on every new file, removal, opening and closing, so a slow read of
+  // a file already replaced — or from before the dialog was closed — cannot
+  // fill the form with the wrong invoice or attach it.
   const documentRun = useRef(0);
+  useEffect(() => {
+    documentRun.current += 1;
+  }, [open]);
 
   // Each opening starts clean, on the booking it was opened from. Adjusted
   // while rendering, on the change of `open`, rather than in an effect.
