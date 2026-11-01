@@ -89,6 +89,13 @@ export const notificationSchemas = {
     invoiceNumber: z.string().nullish(),
   }),
 
+  tradieInvoiceDuplicateNumber: z.object({
+    projectId: z.string(),
+    tradieName: z.string(),
+    amount: z.string(),
+    invoiceNumber: z.string(),
+  }),
+
   tradieInvoiceUnmatched: z.object({
     tradieId: z.string(),
     tradieName: z.string(),

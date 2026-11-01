@@ -479,6 +479,20 @@ export type TradieBillSyncResult =
       readonly subTotalCents: number;
     }
   | { readonly kind: "stale"; readonly invoiceId: string }
+  /**
+   * The tradie already has a live invoice with this number from another Xero
+   * bill — the bookkeeper entered the same bill twice, or the tradie reused a
+   * number. Not mirrored: the database keeps one live invoice per number, and
+   * guessing which is real would put a cost on the job twice or not at all.
+   */
+  | {
+      readonly kind: "duplicate-number";
+      readonly invoiceNumber: string;
+      readonly projectId: string;
+      readonly tradieId: string;
+      readonly tradieName: string;
+      readonly subTotalCents: number;
+    }
   | {
       readonly kind: "created" | "updated" | "adopted";
       readonly invoiceId: string;
@@ -759,16 +773,51 @@ export async function syncTradieBillFromExternal(
     where: { id: placement.projectId },
   });
 
-  const created = await db.tradieInvoice.create({
-    data: {
-      ...billFields(bill),
-      projectId: placement.projectId,
-      scheduleId: placement.scheduleId,
-      source: TradieInvoiceSource.XERO,
-      tradieId: placement.tradie.id,
-    },
-    select: { id: true },
-  });
+  const duplicate: TradieBillSyncResult | null = invoiceNumber
+    ? {
+        invoiceNumber,
+        kind: "duplicate-number",
+        projectId: placement.projectId,
+        subTotalCents,
+        tradieId: placement.tradie.id,
+        tradieName: placement.tradie.name,
+      }
+    : null;
+  // Another Xero bill already holds this number for this tradie. Read first,
+  // because hitting the unique index aborts the transaction it runs in; the
+  // catch below covers only two deliveries racing past this read.
+  if (duplicate) {
+    const clash = await db.tradieInvoice.findFirst({
+      select: { id: true },
+      where: {
+        invoiceNumber: { equals: invoiceNumber, mode: "insensitive" },
+        status: { notIn: [InvoiceStatus.VOIDED, InvoiceStatus.DELETED] },
+        tradieId: placement.tradie.id,
+      },
+    });
+    if (clash) return duplicate;
+  }
+
+  let created: { id: string };
+  try {
+    created = await db.tradieInvoice.create({
+      data: {
+        ...billFields(bill),
+        projectId: placement.projectId,
+        scheduleId: placement.scheduleId,
+        source: TradieInvoiceSource.XERO,
+        tradieId: placement.tradie.id,
+      },
+      select: { id: true },
+    });
+  } catch (error) {
+    // The only unique index a new bill can hit, with no invoice on this Xero
+    // id yet, is one live invoice per tradie and number. Answered rather than
+    // thrown: a throw fails the webhook with nothing on screen, and the second
+    // bill sits in Xero waiting to be paid twice.
+    if (isUniqueViolation(error) && duplicate) return duplicate;
+    throw error;
+  }
   if (placement.scheduleId) {
     await logPlacedBill(
       principal,

@@ -394,6 +394,18 @@ describe("booking price and billing state", () => {
     assert.equal(price.gstStated, false);
   });
 
+  test("a stored price that is not one amount is a missing quote, not $0", () => {
+    const price = bookingPrice({
+      durationDays: 1,
+      quoteGst: null,
+      quotedPrice: "TBC",
+      requiresQuote: true,
+      status: TradieScheduleStatus.CONFIRMED,
+      tradie: { lastQuotedPrice: null, lastQuotedPriceUnit: "FIXED" },
+    });
+    assert.deepEqual(price, { basis: "NONE", exGstCents: 0, gstStated: true });
+  });
+
   test("a price written before quotes were normalised still reads", () => {
     const schedule = {
       durationDays: 1,

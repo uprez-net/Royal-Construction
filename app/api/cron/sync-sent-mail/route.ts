@@ -1,6 +1,7 @@
 import { start } from "workflow/api";
 import { NextResponse } from "next/server";
 
+import { parseStrictIsoDateTime } from "@/lib/dates/iso-datetime";
 import { syncSentMail } from "@/lib/workflow/sent-mail-sync";
 
 /**
@@ -20,10 +21,16 @@ const MAX_WINDOW_MS = 31 * 24 * 60 * 60 * 1000;
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
+  // An unset secret refuses everyone, rather than letting "Bearer undefined"
+  // through.
   if (
     process.env.NODE_ENV === "production"
-    && authHeader !== `Bearer ${process.env.CRON_SECRET}`
+    && (!cronSecret || authHeader !== `Bearer ${cronSecret}`)
   ) {
+    if (!cronSecret) {
+      console.error("[sent-mail-sync] cron: CRON_SECRET is not configured.");
+    }
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -31,16 +38,17 @@ export async function GET(request: Request) {
   const requested = new URL(request.url).searchParams.get("since");
   let since = new Date(now - DEFAULT_WINDOW_MS);
   if (requested) {
-    const parsed = new Date(requested);
+    const parsed = parseStrictIsoDateTime(requested);
     if (
-      Number.isNaN(parsed.getTime())
+      !parsed
       || parsed.getTime() > now
       || now - parsed.getTime() > MAX_WINDOW_MS
     ) {
       return NextResponse.json(
         {
           success: false,
-          error: "since must be an ISO time within the last 31 days.",
+          error:
+            "since must be an ISO date and time with a zone (2026-11-01T00:00:00Z) within the last 31 days.",
         },
         { status: 400 },
       );

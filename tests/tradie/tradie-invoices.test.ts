@@ -420,6 +420,56 @@ describe("syncTradieBillFromExternal", () => {
     );
   });
 
+  describe("a second Xero bill with a number the tradie already used", () => {
+    const placed = {
+      "project.findUniqueOrThrow": { name: PROJECT.name },
+      "tradie.findMany": [ACE],
+      "tradieInvoice.findUnique": null,
+      "tradieSchedule.findUnique": {
+        id: SCHEDULE.id,
+        projectId: PROJECT.id,
+        tradie: SCHEDULE.tradie,
+      },
+    };
+    const expected = {
+      invoiceNumber: "INV-001",
+      kind: "duplicate-number",
+      projectId: PROJECT.id,
+      subTotalCents: 1000_00,
+      tradieId: "tradie-1",
+      tradieName: "Ace Carpentry",
+    };
+
+    test("is reported, not mirrored and not thrown", async () => {
+      const recorder = recordingDb({
+        ...placed,
+        // Not one the office typed in: it is already another Xero bill's.
+        "tradieInvoice.findFirst": (args: unknown) =>
+          (args as { where: { xeroInvoiceId?: null } }).where.xeroInvoiceId
+          === null
+            ? null
+            : { id: "other-xero-bill" },
+      });
+      const result = await syncTradieBillFromExternal(XERO, BILL, recorder.db);
+      assert.deepEqual(result, expected);
+      assert.deepEqual(recorder.writes(), []);
+    });
+
+    test("is reported when a racing delivery hits the unique index", async () => {
+      const recorder = recordingDb({
+        ...placed,
+        "tradieInvoice.create": () => {
+          throw Object.assign(new Error("Unique constraint failed"), {
+            code: "P2002",
+          });
+        },
+        "tradieInvoice.findFirst": null,
+      });
+      const result = await syncTradieBillFromExternal(XERO, BILL, recorder.db);
+      assert.deepEqual(result, expected);
+    });
+  });
+
   test("a typed-in invoice gives the project when the tradie works on several", async () => {
     const recorder = recordingDb({
       "tradie.findMany": [ACE],

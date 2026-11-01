@@ -124,6 +124,12 @@ export const notificationTemplates: NotificationTemplateFactory = {
     url: `/projects/${data.projectId}?activeTab=financials`,
   }),
 
+  tradieInvoiceDuplicateNumber: (data) => ({
+    title: `Duplicate Xero bill: ${data.tradieName} ${data.invoiceNumber}`,
+    message: `Xero has a second bill numbered ${data.invoiceNumber} from ${data.tradieName} (${data.amount} ex GST). It was not added to the project. Check Xero for a duplicate before it is paid twice.`,
+    url: `/projects/${data.projectId}?activeTab=financials`,
+  }),
+
   tradieInvoiceUnmatched: (data) => ({
     title: `Xero bill not matched: ${data.tradieName}`,
     message: `A bill${data.invoiceNumber ? ` ${data.invoiceNumber}` : ""} for ${data.amount} ex GST from ${data.tradieName} could not be matched to a project. Add the booking's RCTBK reference to the bill in Xero, or record it on the project's Financials tab.`,
