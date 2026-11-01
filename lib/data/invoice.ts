@@ -30,6 +30,7 @@ import {
 } from "@/lib/domain/invoices/sync";
 import { createStageInvoice as createStageInvoiceDomain } from "@/lib/domain/invoices/stage-creation";
 import { syncTradieBillFromXero } from "@/lib/data/tradie-bills";
+import { syncVariationInvoiceFromXero } from "@/lib/data/variations";
 import { CACHE_PROFILES } from "@/types/cache";
 import { PROJECT_STAGE_LABELS } from "@/types/project";
 
@@ -287,9 +288,14 @@ export async function syncInvoiceFromXero(
     },
   );
 
-  // Not one of our claims: it may be a tradie's bill, which is the cost side
-  // of the project's profit and loss.
+  // Not one of our claims: it may be a variation billed to the client, or a
+  // tradie's bill, which is the cost side of the project's profit and loss.
   if (result.kind === "unknown") {
+    const variation = await syncVariationInvoiceFromXero(
+      context,
+      xeroInvoiceId,
+    );
+    if (variation.kind !== "unknown") return;
     await syncTradieBillFromXero(context, xeroInvoiceId, {
       created: options.created ?? false,
     });

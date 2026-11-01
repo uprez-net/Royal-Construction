@@ -4,6 +4,7 @@ import { revalidateTag } from "next/cache";
 
 import { auth } from "@clerk/nextjs/server";
 import { sendEmail } from "@/lib/azureClient";
+import { blobStoreIdFromToken } from "@/lib/blob-url";
 import {
   DomainAuthorizationError,
   DomainValidationError,
@@ -19,6 +20,14 @@ import {
   type TradieInvoiceRecheck,
 } from "@/lib/domain/tradies/invoice-recheck";
 import {
+  readTradieInvoiceDocument,
+  type TradieInvoiceDocumentFields,
+} from "@/lib/domain/tradies/invoice-document";
+import {
+  confirmEmailedTradieInvoice,
+  dismissEmailedTradieInvoice,
+} from "@/lib/domain/tradies/invoice-inbox";
+import {
   allocateTradieInvoice,
   recordTradieInvoice,
   voidTradieInvoice,
@@ -31,7 +40,9 @@ import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
   allocateTradieInvoiceSchema,
+  dismissEmailedInvoiceSchema,
   previewInvoiceRecheckSchema,
+  readTradieInvoiceDocumentSchema,
   recordTradieInvoiceSchema,
   sendInvoiceRecheckSchema,
   voidTradieInvoiceSchema,
@@ -114,10 +125,14 @@ export async function recordTradieInvoiceAction(
 ): Promise<ProjectFinancialsResult> {
   return answer(async (principal) => {
     const input = parse(recordTradieInvoiceSchema.safeParse(raw));
-    const recorded = await prisma.$transaction((tx) =>
-      recordTradieInvoice(
+    const recorded = await prisma.$transaction(async (tx) => {
+      const result = await recordTradieInvoice(
         principal,
         {
+          document: input.document ?? null,
+          documentStoreId: blobStoreIdFromToken(
+            process.env.BLOB_READ_WRITE_TOKEN,
+          ),
           dueDate: input.dueDate ? day(input.dueDate) : null,
           invoiceNumber: input.invoiceNumber,
           issuedDate: day(input.issuedDate),
@@ -128,10 +143,80 @@ export async function recordTradieInvoiceAction(
           totalTax: input.totalTax,
         },
         tx,
-      ),
-    );
+      );
+      // Confirming an emailed invoice: the entry settles with the invoice in
+      // one transaction, so it can never be both recorded and still waiting.
+      if (input.inboxId) {
+        await confirmEmailedTradieInvoice(
+          principal,
+          {
+            inboxId: input.inboxId,
+            invoiceId: result.invoiceId,
+            projectId: input.projectId,
+          },
+          tx,
+        );
+      }
+      return result;
+    });
     expireProject(recorded.projectId);
     return recorded.projectId;
+  });
+}
+
+export type TradieInvoiceDocumentResult =
+  | { readonly ok: true; readonly fields: TradieInvoiceDocumentFields }
+  | DomainActionFailure;
+
+/**
+ * Read an uploaded tradie invoice to fill in the Record invoice form. Writes
+ * nothing: the document is attached when the invoice is recorded.
+ */
+export async function readTradieInvoiceDocumentAction(raw: {
+  projectId: string;
+  name: string;
+  url: string;
+  contentType: string;
+}): Promise<TradieInvoiceDocumentResult> {
+  try {
+    const principal = await caller();
+    const input = parse(readTradieInvoiceDocumentSchema.safeParse(raw));
+    // Loaded here, not at the top: the model module throws on import without
+    // its gateway key, and that must not take every other action down too.
+    const { readTradieInvoiceWithAi } =
+      await import("@/lib/agent/tradieInvoiceExtractionAgent");
+    const fields = await readTradieInvoiceDocument(
+      principal,
+      {
+        contentType: input.contentType,
+        document: { name: input.name, url: input.url },
+        projectId: input.projectId,
+        storeId: blobStoreIdFromToken(process.env.BLOB_READ_WRITE_TOKEN),
+      },
+      prisma,
+      readTradieInvoiceWithAi,
+    );
+    return { fields, ok: true };
+  } catch (error) {
+    const failure = domainActionFailure(error);
+    if (failure) return failure;
+    throw error;
+  }
+}
+
+/** Set an emailed invoice aside without recording it. */
+export async function dismissEmailedInvoiceAction(raw: {
+  projectId: string;
+  inboxId: string;
+}): Promise<ProjectFinancialsResult> {
+  return answer(async (principal) => {
+    const input = parse(dismissEmailedInvoiceSchema.safeParse(raw));
+    const dismissed = await dismissEmailedTradieInvoice(
+      principal,
+      input,
+      prisma,
+    );
+    return dismissed.projectId;
   });
 }
 

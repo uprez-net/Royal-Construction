@@ -15,7 +15,6 @@ import {
   AlertTriangle,
   ChevronsDownUp,
   ChevronsUpDown,
-  Loader2,
   Plus,
   Search,
 } from "lucide-react";
@@ -24,10 +23,12 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { SectionCard } from "@/components/common/section-card";
+import { CreateVariationModal } from "@/components/projects/create-variation-modal";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -39,9 +40,11 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   allocateTradieInvoiceAction,
+  dismissEmailedInvoiceAction,
   fetchProjectFinancials,
   type ProjectFinancialsResult,
 } from "@/lib/data/project-financials";
+import type { EmailedTradieInvoice } from "@/lib/domain/tradies/invoice-inbox";
 import type {
   FinancialActivity,
   FinancialBooking,
@@ -60,10 +63,18 @@ import { PROJECT_STAGE_LABELS, type ProjectDetail } from "@/types/project";
 import type { ProjectStage } from "@prisma/client";
 
 import { ActivityDetail, InvoiceList } from "./activity-detail";
-import { formatCents, Money, ProfitLoss } from "./money";
+import {
+  forecastToneClass,
+  formatCents,
+  formatSignedCents,
+  Money,
+  ProfitLoss,
+} from "./money";
+import { EmailedInvoices } from "./emailed-invoices";
 import {
   RecordInvoiceDialog,
   type BookingOption,
+  type RecordInvoicePrefill,
 } from "./record-invoice-dialog";
 import { StageFinancialsCard } from "./stage-financials-card";
 import { RecheckInvoiceDialog } from "./recheck-invoice-dialog";
@@ -184,6 +195,11 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
   );
   const [voiding, setVoiding] = useState<FinancialInvoice | null>(null);
   const [recheckFor, setRecheckFor] = useState<string | null>(null);
+  const [prefill, setPrefill] = useState<RecordInvoicePrefill | null>(null);
+  // `undefined` is closed; a milestone id opens the wizard on that activity.
+  const [variationFor, setVariationFor] = useState<string | undefined>(
+    undefined,
+  );
 
   // The browser's replaceState rather than router.replace: the tab loads its
   // own data, so a keystroke must not re-render the server page. Next keeps
@@ -250,6 +266,38 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
     queryClient.setQueryData(financialsKey(project.id), result.report);
   }
 
+  function confirmEmailed(entry: EmailedTradieInvoice) {
+    setPrefill({
+      document: { name: entry.documentName, url: entry.documentUrl },
+      dueDate: entry.dueDate,
+      inboxId: entry.id,
+      invoiceNumber: entry.invoiceNumber,
+      issuedDate: entry.issuedDate,
+      receivedAt: entry.receivedAt,
+      scheduleId: entry.scheduleId,
+      subTotalCents: entry.subTotalCents,
+      totalTaxCents: entry.totalTaxCents,
+    });
+    setRecordFor(entry.scheduleId);
+  }
+
+  async function dismissEmailed(entry: EmailedTradieInvoice) {
+    try {
+      const result = await dismissEmailedInvoiceAction({
+        inboxId: entry.id,
+        projectId: project.id,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      applyResult(result);
+      toast.success("Emailed invoice set aside.");
+    } catch {
+      toast.error("The emailed invoice could not be set aside. Try again.");
+    }
+  }
+
   async function allocate(invoice: FinancialInvoice, scheduleId: string) {
     try {
       const result = await allocateTradieInvoiceAction({
@@ -272,22 +320,13 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
     onRecord: (scheduleId: string) => setRecordFor(scheduleId),
     onVoid: (invoice: FinancialInvoice) => setVoiding(invoice),
     onRecheck: (scheduleId: string) => setRecheckFor(scheduleId),
+    onVariation: (milestoneId: string) => setVariationFor(milestoneId),
   };
 
   const onExpandedChange = (updater: Updater<ExpandedState>) =>
     setExpanded((previous) => functionalUpdate(updater, previous));
 
-  if (query.isPending) {
-    return (
-      <p
-        role="status"
-        className="flex items-center gap-2 py-10 text-sm text-muted-foreground"
-      >
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        Working out the project&apos;s profit and loss…
-      </p>
-    );
-  }
+  if (query.isPending) return <FinancialsSkeleton />;
   if (query.isError || !report) {
     return (
       <Alert variant="destructive">
@@ -416,6 +455,15 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
         </div>
       </Card>
 
+      {report.emailedInvoices.length > 0 ? (
+        <EmailedInvoices
+          invoices={report.emailedInvoices}
+          bookings={options}
+          onConfirm={confirmEmailed}
+          onDismiss={(entry) => void dismissEmailed(entry)}
+        />
+      ) : null}
+
       {report.unallocatedInvoices.length > 0 ? (
         <SectionCard
           title="Invoices to allocate"
@@ -512,19 +560,31 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
         <h3 className="sr-only">Project totals</h3>
         <dl className="grid grid-cols-2 gap-4 text-sm lg:grid-cols-5">
           <div>
-            <dt className="text-muted-foreground">Total quoted (A)</dt>
+            <dt className="text-muted-foreground">Quoted price</dt>
             <dd className="mt-1 text-lg">
               <Money cents={totals.tenderCents} />
             </dd>
+            {totals.chargeableVariationCents > 0 ? (
+              <dd className="text-xs text-muted-foreground">
+                incl. {formatCents(totals.chargeableVariationCents)} in
+                variations
+              </dd>
+            ) : null}
+            {totals.promotionalVariationCents > 0 ? (
+              <dd className="text-xs text-destructive-ink">
+                {formatCents(totals.promotionalVariationCents)} promotional,
+                borne by the builder
+              </dd>
+            ) : null}
           </div>
           <div>
-            <dt className="text-muted-foreground">Tradie quoted (B)</dt>
+            <dt className="text-muted-foreground">Tradie quoted</dt>
             <dd className="mt-1 text-lg">
               <Money cents={totals.quotedCents} />
             </dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Total invoiced (C)</dt>
+            <dt className="text-muted-foreground">Total invoiced</dt>
             <dd className="mt-1 text-lg">
               <Money cents={totals.invoicedCents} />
             </dd>
@@ -547,13 +607,9 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
             <dt className="text-muted-foreground">Forecast at completion</dt>
             <dd className="mt-1 text-lg">
               <span
-                className={
-                  totals.forecastProfitCents < 0
-                    ? "font-mono tabular-nums text-destructive-ink"
-                    : "font-mono tabular-nums text-foreground"
-                }
+                className={`font-mono font-medium tabular-nums ${forecastToneClass(totals.forecastProfitCents)}`}
               >
-                {formatCents(totals.forecastProfitCents)}
+                {formatSignedCents(totals.forecastProfitCents)}
               </span>
               {totals.forecastPercent !== null ? (
                 <span className="ml-1 font-mono text-sm tabular-nums text-muted-foreground">
@@ -562,7 +618,8 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
               ) : null}
             </dd>
             <dd className="text-xs text-muted-foreground">
-              A less each booking&apos;s quote or invoices, whichever is more
+              Quoted price less each booking&apos;s quote or invoices, whichever
+              is more
             </dd>
           </div>
         </dl>
@@ -571,14 +628,20 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
       <RecordInvoiceDialog
         open={recordFor !== undefined}
         onOpenChange={(open) => {
-          if (!open) setRecordFor(undefined);
+          if (!open) {
+            setRecordFor(undefined);
+            setPrefill(null);
+          }
         }}
         projectId={project.id}
         bookings={options}
         initialScheduleId={recordFor ?? null}
+        prefill={prefill}
         onRecorded={(result) => {
           applyResult(result);
-          toast.success("Invoice recorded.");
+          toast.success(
+            prefill ? "Emailed invoice recorded." : "Invoice recorded.",
+          );
         }}
       />
       <RecheckInvoiceDialog
@@ -587,6 +650,19 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
         onOpenChange={(open) => {
           if (!open) setRecheckFor(null);
         }}
+      />
+      <CreateVariationModal
+        projectId={project.id}
+        open={variationFor !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setVariationFor(undefined);
+        }}
+        initialMilestoneId={variationFor}
+        onSuccess={() =>
+          void queryClient.invalidateQueries({
+            queryKey: financialsKey(project.id),
+          })
+        }
       />
       <VoidInvoiceDialog
         invoice={voiding}
@@ -599,6 +675,75 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
           toast.success("Invoice voided.");
         }}
       />
+    </div>
+  );
+}
+
+/** The tab's shape while its figures load: filter bar, two stages, totals. */
+function FinancialsSkeleton() {
+  return (
+    <div
+      className="space-y-4"
+      role="status"
+      aria-label="Loading the project's profit and loss"
+    >
+      <Card className="gap-3 bg-card p-3 shadow-sm sm:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <Skeleton className="h-9 flex-1" />
+          <Skeleton className="h-9 w-full lg:w-56" />
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-9 w-36" />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {Array.from({ length: 4 }, (_, index) => (
+            <Skeleton key={index} className="h-8 w-24" />
+          ))}
+        </div>
+      </Card>
+      {Array.from({ length: 2 }, (_, stage) => (
+        <Card
+          key={stage}
+          className="gap-0 overflow-hidden bg-card py-0 shadow-sm"
+        >
+          <div className="flex flex-wrap items-center gap-4 px-4 py-3 sm:px-5">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="ml-auto h-4 w-72" />
+          </div>
+          <div className="border-t border-border/70">
+            <div className="flex gap-4 bg-muted/40 px-3 py-3">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="ml-auto h-3 w-20" />
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            {Array.from({ length: 4 }, (_, row) => (
+              <div
+                key={row}
+                className="flex items-center gap-4 border-t border-border/70 px-3 py-3"
+              >
+                <Skeleton className="h-4 w-56" />
+                <Skeleton className="ml-auto h-4 w-20" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-28" />
+              </div>
+            ))}
+          </div>
+        </Card>
+      ))}
+      <Card className="bg-card p-4 shadow-sm sm:p-5">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+          {Array.from({ length: 5 }, (_, index) => (
+            <div key={index} className="space-y-2">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-6 w-28" />
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }

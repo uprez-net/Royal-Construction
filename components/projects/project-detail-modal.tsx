@@ -172,7 +172,9 @@ export function ProjectDetailModal({
 
           {effectiveTab === "milestones" && <MilestoneTab project={project} />}
 
-          {effectiveTab === "financials" && <FinancialTab project={project} />}
+          {effectiveTab === "financials" && (
+            <FinancialTab project={project} onClose={onClose} />
+          )}
 
           {effectiveTab === "team" && <TeamTab project={project} />}
         </div>

@@ -134,6 +134,49 @@ export function bookingBillingState(input: {
   return "OVER_INVOICED";
 }
 
+/**
+ * Where one booking is up to with its invoices, from the booking as stored.
+ * Null for a booking that is neither committed nor billed — a quote never
+ * chosen, or one declined before anyone invoiced — which has no billing to
+ * speak of. The Financials tab leaves those out for the same reason.
+ */
+export function bookingBilling(schedule: {
+  readonly status: TradieScheduleStatus;
+  readonly requiresQuote: boolean;
+  readonly quotedPrice: string | null;
+  readonly durationDays: number;
+  readonly tradie: {
+    readonly lastQuotedPrice?: { toString(): string } | string | null;
+    readonly lastQuotedPriceUnit: "HOURLY" | "FIXED";
+  };
+  readonly quote?: { readonly gstTreatment: TradieQuoteGst | null } | null;
+  readonly invoices: readonly {
+    readonly status: InvoiceStatus;
+    readonly subTotal: number | string | { toString(): string };
+  }[];
+}): BookingBillingState | null {
+  const counted = schedule.invoices.filter((invoice) =>
+    isCountedInvoice(invoice.status),
+  );
+  const committed = isCommittedBooking(schedule.status);
+  if (!committed && counted.length === 0) return null;
+  const price = bookingPrice({
+    ...schedule,
+    quoteGst: schedule.quote?.gstTreatment ?? null,
+    tradie: {
+      lastQuotedPrice: schedule.tradie.lastQuotedPrice?.toString() ?? null,
+      lastQuotedPriceUnit: schedule.tradie.lastQuotedPriceUnit,
+    },
+  });
+  return bookingBillingState({
+    agreedCents: committed ? price.exGstCents : 0,
+    invoicedCents: counted.reduce(
+      (total, invoice) => total + toCents(invoice.subTotal),
+      0,
+    ),
+  });
+}
+
 export const BILLING_STATE_LABELS: Record<BookingBillingState, string> = {
   INVOICED: "Fully invoiced",
   INVOICED_UNPRICED: "Invoiced, no quote",

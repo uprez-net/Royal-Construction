@@ -4,6 +4,8 @@ import {
   ProjectStage,
   TradieInvoiceSource,
   TradieScheduleStatus,
+  type VariationKind,
+  type VariationStatus,
 } from "@prisma/client";
 
 import {
@@ -21,6 +23,7 @@ import {
   type Cents,
   type PriceBasis,
 } from "../tradies/billing-rules";
+import { countsTowardsClientPrice } from "./variation-rules";
 
 // A project's profit and loss, activity by activity. Pure: the query in
 // `financials.ts` loads the rows and this decides every figure, so the rule is
@@ -28,9 +31,13 @@ import {
 //
 // Three amounts per activity, as issue #405 names them:
 //
-//   A  tender    — what the activity was priced at in the offer. The
+//   A  tender    — what the activity is priced at to the client: the
 //                  milestone's budget, which the handoff set from the offer's
-//                  cost lines, ex GST.
+//                  cost lines, plus every chargeable variation raised on it
+//                  since. Ex GST. A promotional variation does not move it:
+//                  the client pays nothing more, and the extra cost the
+//                  builder absorbs is already in B and C, so counting it
+//                  again here would take it off the profit twice.
 //   B  quoted    — what the tradies booked on it agreed to do it for: the sum
 //                  of its committed bookings' prices, ex GST.
 //   C  invoiced  — what those tradies have actually billed: the sum of the
@@ -84,6 +91,9 @@ export type FinancialInvoice = {
   readonly totalCents: Cents;
   readonly amountPaidCents: Cents;
   readonly notes: string | null;
+  /** The tradie's own invoice document, when one was uploaded with it. */
+  readonly documentUrl: string | null;
+  readonly documentName: string | null;
 };
 
 export type FinancialBooking = {
@@ -110,6 +120,8 @@ export type FinancialActivity = {
   readonly order: number;
   readonly stage: ProjectStage;
   readonly status: MilestoneStatus;
+  /** Chargeable variations raised on this activity itself, ex GST. In A. */
+  readonly variationCents: Cents;
   /** This activity alone: its own tender share and its own bookings. */
   readonly own: FinancialFigures;
   /** With every activity beneath it. Equal to `own` for a leaf. */
@@ -127,6 +139,10 @@ export type FinancialStage = {
 export type FinancialTotals = FinancialFigures & {
   /** Invoices known to be on this project but not yet put against a booking. */
   readonly unallocatedCents: Cents;
+  /** Variations billed to the client, ex GST. Already inside A. */
+  readonly chargeableVariationCents: Cents;
+  /** Variations the builder absorbed, ex GST. Shown, not subtracted again. */
+  readonly promotionalVariationCents: Cents;
 };
 
 export type ProjectFinancialReport = {
@@ -148,6 +164,14 @@ export type ReportMilestone = {
   readonly projectStage: ProjectStage;
   readonly status: MilestoneStatus;
   readonly budgetCents: Cents;
+};
+
+/** A raised variation, as the report counts it. */
+export type ReportVariation = {
+  readonly milestoneId: string | null;
+  readonly kind: VariationKind;
+  readonly status: VariationStatus;
+  readonly costCents: Cents;
 };
 
 export type ReportBooking = {
@@ -255,7 +279,28 @@ export function buildProjectFinancialReport(input: {
   readonly milestones: readonly ReportMilestone[];
   readonly bookings: readonly ReportBooking[];
   readonly invoices: readonly ReportInvoice[];
+  readonly variations?: readonly ReportVariation[];
 }): ProjectFinancialReport {
+  // Variations are counted on the activity they reprice. One logged before
+  // variations named an activity has no tender to join, so it is left out
+  // rather than guessed onto one.
+  const variationsByMilestone = new Map<string, Cents>();
+  let chargeableVariationCents = 0;
+  let promotionalVariationCents = 0;
+  for (const variation of input.variations ?? []) {
+    if (!variation.milestoneId || variation.status !== "APPROVED") continue;
+    if (countsTowardsClientPrice(variation)) {
+      chargeableVariationCents += variation.costCents;
+      variationsByMilestone.set(
+        variation.milestoneId,
+        (variationsByMilestone.get(variation.milestoneId) ?? 0)
+          + variation.costCents,
+      );
+    } else {
+      promotionalVariationCents += variation.costCents;
+    }
+  }
+
   const invoicesBySchedule = new Map<string, FinancialInvoice[]>();
   const unallocatedInvoices: FinancialInvoice[] = [];
   const scheduleIds = new Set(input.bookings.map((booking) => booking.id));
@@ -337,9 +382,10 @@ export function buildProjectFinancialReport(input: {
       (total, child) => total + child.budgetCents,
       0,
     );
+    const variationCents = variationsByMilestone.get(node.id) ?? 0;
     const ownSums: Sums = {
       ...sumBookings(bookings),
-      tender: Math.max(0, node.budgetCents - childTender),
+      tender: Math.max(0, node.budgetCents - childTender) + variationCents,
     };
     const sums = children.map((child) => child.sums).reduce(add, ownSums);
     if (ownSums.invoiced > 0) {
@@ -357,6 +403,7 @@ export function buildProjectFinancialReport(input: {
         own: figuresOf(ownSums),
         stage: node.projectStage,
         status: node.status,
+        variationCents,
       },
       sums,
     };
@@ -411,8 +458,10 @@ export function buildProjectFinancialReport(input: {
               ? "LOSS"
               : "EVEN",
       profitCents: profitToDate,
+      chargeableVariationCents,
       profitPercent:
         profitToDate === null ? null : percentOf(profitToDate, profitTender),
+      promotionalVariationCents,
       unallocatedCents,
     },
     unallocatedInvoices: [...unallocatedInvoices].sort((a, b) =>

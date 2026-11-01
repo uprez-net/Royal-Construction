@@ -58,6 +58,8 @@ const invoice = (
   overrides: Partial<ReportInvoice> & { scheduleId: string | null },
 ): ReportInvoice => ({
   amountPaidCents: 0,
+  documentName: null,
+  documentUrl: null,
   dueDate: null,
   id: `invoice-${++invoiceCount}`,
   invoiceNumber: `INV-${invoiceCount}`,
@@ -448,5 +450,43 @@ describe("booking price and billing state", () => {
     assert.equal(toCents("1234.565"), 123457);
     assert.equal(toCents(0.1 + 0.2), 30);
     assert.equal(toCents("not money"), 0);
+  });
+});
+
+describe("variations", () => {
+  test("a chargeable variation raises the quoted price; a promotional one does not", () => {
+    // The promotional cost is already in what the tradie invoiced, so taking
+    // it off the quoted price as well would count it against profit twice.
+    const report = buildProjectFinancialReport({
+      bookings: [],
+      invoices: [],
+      milestones: [milestone({ budgetCents: 1_000_000, id: "roof" })],
+      variations: [
+        {
+          costCents: 250_000,
+          kind: "CHARGEABLE",
+          milestoneId: "roof",
+          status: "APPROVED",
+        },
+        {
+          costCents: 80_000,
+          kind: "PROMOTIONAL",
+          milestoneId: "roof",
+          status: "APPROVED",
+        },
+        {
+          costCents: 999_999,
+          kind: "CHARGEABLE",
+          milestoneId: "roof",
+          status: "REJECTED",
+        },
+      ],
+    });
+    const [roof] = report.stages[0].activities;
+    assert.equal(roof.figures.tenderCents, 1_250_000);
+    assert.equal(roof.variationCents, 250_000);
+    assert.equal(report.totals.tenderCents, 1_250_000);
+    assert.equal(report.totals.chargeableVariationCents, 250_000);
+    assert.equal(report.totals.promotionalVariationCents, 80_000);
   });
 });

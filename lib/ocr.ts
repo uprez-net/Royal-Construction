@@ -17,19 +17,26 @@ export function isOcrConfigured(): boolean {
   return Boolean(process.env.MISTRAL_AI_KEY);
 }
 
-export async function processPDFWithMistral(pdfLink: string) {
+export async function processPDFWithMistral(
+  pdfLink: string,
+  /** Abandons the call rather than letting one slow scan hold the caller open. */
+  options: { readonly timeoutMs?: number } = {},
+) {
   const client = new Mistral({ apiKey: requireApiKey() });
 
   try {
-    const response = await client.ocr.process({
-      model: "mistral-ocr-latest",
-      document: {
-        type: "document_url",
-        documentUrl: pdfLink,
+    const response = await client.ocr.process(
+      {
+        model: "mistral-ocr-latest",
+        document: {
+          type: "document_url",
+          documentUrl: pdfLink,
+        },
+        includeImageBase64: false,
+        tableFormat: "markdown",
       },
-      includeImageBase64: false,
-      tableFormat: "markdown",
-    });
+      options.timeoutMs ? { timeoutMs: options.timeoutMs } : undefined,
+    );
 
     return response.pages;
   } catch (error) {

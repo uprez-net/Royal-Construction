@@ -84,6 +84,13 @@ const CALLER_CHECKS = new Set([
   // before they read the booking or send anything.
   "prepareTradieInvoiceRecheck",
   "requestTradieInvoiceRecheck",
+  "readTradieInvoiceDocument",
+  "dismissEmailedTradieInvoice",
+  "getVariationOptions",
+  "draftVariation",
+  "raiseVariation",
+  "issueVariation",
+  "getProjectVariations",
 ]);
 
 // auth() alone passes every signed-in user, customers included. An export

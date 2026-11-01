@@ -13,7 +13,6 @@ import {
   paginationSchema,
   sortOrderSchema,
   isoDateStringSchema,
-  hasAtMostTwoDecimalPlaces,
 } from "./common";
 /**
  * Project-related validators
@@ -309,29 +308,6 @@ export const projectNestedParamSchema = projectParamSchema.extend({
 
 export type ProjectNestedParam = z.infer<typeof projectNestedParamSchema>;
 
-// ============================================================================
-// Variations
-// ============================================================================
-
-/**
- * Create project variation
- */
-export const createVariationSchema = z.object({
-  description: z
-    .string()
-    .trim()
-    .min(1, "Description is required")
-    .max(2000, "Description is too long"),
-
-  cost: nonNegativeSchema.refine(hasAtMostTwoDecimalPlaces, {
-    message: "Cost must have at most two decimal places.",
-  }),
-
-  requestedDate: isoDateStringSchema.optional(),
-});
-
-export type CreateVariationInput = z.infer<typeof createVariationSchema>;
-
 /**
  * Variation route params
  */
@@ -380,17 +356,19 @@ export type MilestoneParam = z.infer<typeof milestoneParamSchema>;
 /**
  * The project detail tabs that actually exist.
  *
- * This previously also accepted "materials", "updates", "workers" and
- * "variations" — tabs whose nav entries and render branches have both been
- * removed. Because the validator was the gate for the `?activeTab=` URL param,
- * `?activeTab=variations` validated successfully and put the store into a state
- * with no panel to render and no tab to navigate back from. Narrowed to reality.
+ * This previously also accepted "materials", "updates" and "workers" — tabs
+ * whose nav entries and render branches have both been removed. Because the
+ * validator was the gate for the `?activeTab=` URL param, an unrendered tab
+ * validated successfully and put the store into a state with no panel to
+ * render and no tab to navigate back from. Narrowed to reality. "variations"
+ * is back now that it renders again.
  */
 export const projectTabsValidator = z.enum([
   "overview",
   "milestones",
   "payments",
   "financials",
+  "variations",
   "tradies",
   "docs",
   "history",

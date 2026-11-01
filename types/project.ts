@@ -26,6 +26,7 @@ import {
 } from "@prisma/client";
 import { ProjectRequirementsPayload } from "./project-flow";
 import type { CertifierEngagementDetail } from "./compliance";
+import type { BookingBillingState } from "@/lib/domain/tradies/billing-rules";
 
 export interface SafeProject extends Omit<
   Project,
@@ -132,8 +133,21 @@ export interface SafeTradie extends Omit<Tradie, "lastQuotedPrice" | "rating"> {
   rating?: string;
 }
 
-export interface SafeVariation extends Omit<Variation, "cost"> {
+export interface SafeVariation extends Omit<
+  Variation,
+  | "cost"
+  | "invoiceAmountPaid"
+  | "invoiceTax"
+  | "invoiceTotal"
+  | "newPrice"
+  | "previousPrice"
+> {
   cost: string;
+  invoiceAmountPaid: string | null;
+  invoiceTax: string | null;
+  invoiceTotal: string | null;
+  newPrice: string | null;
+  previousPrice: string | null;
 }
 
 export interface SiteUpdateWithAuthor extends SiteUpdate {
@@ -183,6 +197,11 @@ export type TradieQuoteSummary = {
 
 export interface TradieScheduleWithTradieAndMilestone extends TradieScheduleWithTradie {
   milestone?: SafeMilestone;
+  /**
+   * Where the booking is up to with its invoices. Null when it is neither
+   * committed nor billed; absent on a row the store built itself.
+   */
+  billing?: BookingBillingState | null;
   requestRecipient?: TradieRequestDeliverySummary | null;
   quote?: TradieQuoteSummary | null;
 }
@@ -546,13 +565,6 @@ export type CreateProjectRequest = {
   estimatedEndDate?: string | null;
   notes?: string;
   quoteFile?: File | null;
-};
-
-export type CreateVariationRequest = {
-  projectId: string;
-  description: string;
-  cost: number;
-  requestedDate?: string;
 };
 
 export type AddProjectUpdateRequest = {

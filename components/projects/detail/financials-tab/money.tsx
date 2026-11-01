@@ -55,6 +55,19 @@ export function outcomeRowClass(outcome: FinancialOutcome): string {
   }
 }
 
+/**
+ * A forecast's colour: green for a forecast profit, red for a forecast loss,
+ * plain at break-even. The sign carries the same meaning, so colour is never
+ * the only signal.
+ */
+export function forecastToneClass(cents: number): string {
+  return cents > 0
+    ? "text-success-ink"
+    : cents < 0
+      ? "text-destructive-ink"
+      : "text-muted-foreground";
+}
+
 /** A money figure in a table cell: mono, right-aligned by the column. */
 export function Money({
   cents,
@@ -101,7 +114,12 @@ export function ProfitLoss({
         {hasForecast ? (
           <span className="text-xs text-muted-foreground">
             Forecast{" "}
-            <span className="font-mono tabular-nums">
+            <span
+              className={cn(
+                "font-mono font-medium tabular-nums",
+                forecastToneClass(figures.forecastProfitCents),
+              )}
+            >
               {formatSignedCents(figures.forecastProfitCents)}
             </span>
           </span>
@@ -134,7 +152,12 @@ export function ProfitLoss({
       {stillBilling ? (
         <span className="text-xs text-muted-foreground">
           Forecast{" "}
-          <span className="font-mono tabular-nums">
+          <span
+            className={cn(
+              "font-mono font-medium tabular-nums",
+              forecastToneClass(figures.forecastProfitCents),
+            )}
+          >
             {formatSignedCents(figures.forecastProfitCents)}
           </span>
         </span>

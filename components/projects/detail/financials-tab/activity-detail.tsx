@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Ban,
   FilePlus2,
+  FileText,
   MailQuestion,
   Plus,
 } from "lucide-react";
@@ -45,7 +46,7 @@ function day(value: string | null) {
   return value ? dateFormat.format(new Date(value)) : null;
 }
 
-/** What B is made of, when it is not simply a quote. */
+/** What the tradie's quoted figure is made of, when it is not simply a quote. */
 function priceNote(booking: FinancialBooking): string | null {
   if (!booking.committed)
     return "Not committed: billed without an approved booking";
@@ -60,6 +61,8 @@ export type InvoiceActions = {
   readonly onVoid: (invoice: FinancialInvoice) => void;
   /** Email the tradie to recheck invoices over their approved quote. */
   readonly onRecheck: (scheduleId: string) => void;
+  /** Raise a variation on an activity, opened on that activity. */
+  readonly onVariation: (milestoneId: string) => void;
 };
 
 export function InvoiceList({
@@ -99,6 +102,18 @@ export function InvoiceList({
               ) : null}
             </span>
           </span>
+          {invoice.documentUrl ? (
+            <a
+              href={invoice.documentUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-2 hover:underline"
+              title={invoice.documentName ?? undefined}
+            >
+              <FileText className="size-3.5" aria-hidden="true" />
+              Invoice document
+            </a>
+          ) : null}
           <StatusPill tone={invoice.source === "XERO" ? "purple" : "neutral"}>
             {invoice.source === "XERO" ? "Xero" : "Recorded by hand"}
           </StatusPill>
@@ -244,21 +259,27 @@ export function ActivityDetail({
                     size="sm"
                     variant="outline"
                     className="bg-card"
-                    disabled
-                    aria-describedby={`variation-unavailable-${booking.id}`}
+                    // A booking on no activity has no price to vary.
+                    disabled={!booking.milestoneId}
+                    onClick={() => {
+                      if (booking.milestoneId) {
+                        actions.onVariation(booking.milestoneId);
+                      }
+                    }}
                   >
                     <FilePlus2 className="size-4" aria-hidden="true" />
                     Raise variation
                   </Button>
-                  <span
-                    id={`variation-unavailable-${booking.id}`}
-                    className="text-xs text-muted-foreground"
-                  >
-                    {booking.priceBasis !== "QUOTE"
-                      ? "Record the agreed price to request a recheck. "
-                      : ""}
-                    Variations open here once the Variations module is live.
-                  </span>
+                  {booking.priceBasis !== "QUOTE" || !booking.milestoneId ? (
+                    <span className="text-xs text-muted-foreground">
+                      {booking.priceBasis !== "QUOTE"
+                        ? "Record the agreed price to request a recheck. "
+                        : ""}
+                      {!booking.milestoneId
+                        ? "Book it against an activity to raise a variation."
+                        : ""}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             ) : null}

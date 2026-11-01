@@ -35,6 +35,8 @@ const report = buildProjectFinancialReport({
   invoices: [
     {
       amountPaidCents: 0,
+      documentName: null,
+      documentUrl: null,
       dueDate: null,
       id: "i1",
       invoiceNumber: "TR-77",
