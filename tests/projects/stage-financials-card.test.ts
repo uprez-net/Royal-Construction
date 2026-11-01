@@ -39,6 +39,8 @@ const report = buildProjectFinancialReport({
   invoices: [
     {
       amountPaidCents: 0,
+      documentName: null,
+      documentUrl: null,
       dueDate: null,
       id: "i1",
       invoiceNumber: "TR-77",
@@ -94,7 +96,12 @@ function render(
 ) {
   return renderToStaticMarkup(
     createElement(StageFinancialsCard, {
-      actions: { onRecheck: noop, onRecord: noop, onVoid: noop },
+      actions: {
+        onRecheck: noop,
+        onRecord: noop,
+        onVariation: noop,
+        onVoid: noop,
+      },
       expanded,
       filter,
       onExpandedChange: noop,
@@ -124,10 +131,13 @@ describe("StageFinancialsCard", () => {
     assert.match(html, /Top Roofing/);
     assert.match(html, /TR-77/);
     assert.match(html, /Invoiced exceeds quoted/);
-    // The over-invoiced booking offers both follow-ups; variations are not
-    // live yet, so that one is shown and held.
+    // The over-invoiced booking offers both follow-ups, and a variation can
+    // be raised on the activity it is booked against.
     assert.match(html, /Request recheck/);
-    assert.match(html, /disabled=""[^>]*>[\s\S]*?Raise variation/);
+    assert.match(
+      html,
+      /<button(?![^>]*disabled="")[^>]*>(?:(?!<\/button>)[\s\S])*Raise variation/,
+    );
     // The roof lost money: −$100.00 on a $200.00 tender.
     assert.match(html, /−\$100\.00/);
   });

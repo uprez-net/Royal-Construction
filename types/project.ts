@@ -132,8 +132,21 @@ export interface SafeTradie extends Omit<Tradie, "lastQuotedPrice" | "rating"> {
   rating?: string;
 }
 
-export interface SafeVariation extends Omit<Variation, "cost"> {
+export interface SafeVariation extends Omit<
+  Variation,
+  | "cost"
+  | "invoiceAmountPaid"
+  | "invoiceTax"
+  | "invoiceTotal"
+  | "newPrice"
+  | "previousPrice"
+> {
   cost: string;
+  invoiceAmountPaid: string | null;
+  invoiceTax: string | null;
+  invoiceTotal: string | null;
+  newPrice: string | null;
+  previousPrice: string | null;
 }
 
 export interface SiteUpdateWithAuthor extends SiteUpdate {
@@ -546,13 +559,6 @@ export type CreateProjectRequest = {
   estimatedEndDate?: string | null;
   notes?: string;
   quoteFile?: File | null;
-};
-
-export type CreateVariationRequest = {
-  projectId: string;
-  description: string;
-  cost: number;
-  requestedDate?: string;
 };
 
 export type AddProjectUpdateRequest = {

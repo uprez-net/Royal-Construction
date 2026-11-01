@@ -62,6 +62,15 @@ enum VariationStatus {
   REJECTED
 }
 
+/// Who pays for a variation.
+enum VariationKind {
+  /// The client pays the difference: it is invoiced to them through Xero.
+  CHARGEABLE
+  /// Royal Constructions absorbs the difference. The client is shown the new
+  /// price and a total of $0, and no Xero invoice is raised.
+  PROMOTIONAL
+}
+
 enum TradieScheduleStatus {
   PENDING
   AWAITING_QUOTE
@@ -558,6 +567,12 @@ enum OutboxEventKind {
   /// One attempt at one tradie request email. Keyed per attempt, so a retry
   /// someone pressed is a new effect and a replayed attempt is not resent.
   TRADIE_REQUEST_SEND
+  /// The Xero invoice for one chargeable variation. Keyed on the variation:
+  /// one invoice per variation is the rule.
+  VARIATION_INVOICE_ISSUE
+  /// One attempt at emailing a variation to the client. Keyed per attempt,
+  /// like TRADIE_REQUEST_SEND, so a resend is something somebody pressed.
+  VARIATION_EMAIL_SEND
 }
 
 enum AgentMemoryProvenance {
@@ -679,6 +694,7 @@ model Milestone {
 
   siteUpdates        SiteUpdate[]
   tradieSchedules    TradieSchedule[]
+  variations         Variation[]
   activityLogs       ActivityLog[]
   tradieActivityLogs TradieActivityLog[]
   project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -907,19 +923,62 @@ model SiteUpdate {
 model Variation {
   id            String          @id @default(uuid())
   projectId     String
+  /// The reason for the variation, as the client reads it on the document.
   description   String
+  /// The change to the activity's price, ex GST: new price less previous.
+  /// For a promotional variation this is the cost the builder absorbs.
   cost          Decimal         @db.Decimal(10, 2)
   requestedDate DateTime        @default(now())
   approvedDate  DateTime?
   delayDays     Int             @default(0)
   status        VariationStatus @default(PENDING)
 
+  /// "V-001" is number 1. Per project, in the order variations were raised.
+  /// Null only on a row older than this column and not backfilled.
+  number        Int?
+  kind          VariationKind @default(CHARGEABLE)
+  /// The activity it reprices. Null on a variation raised before one could be
+  /// chosen.
+  milestoneId   String?
+  /// The activity's price to the client before this variation, ex GST.
+  previousPrice Decimal?      @db.Decimal(12, 2)
+  /// The activity's price as this variation states it, ex GST.
+  newPrice      Decimal?      @db.Decimal(12, 2)
+  raisedById    String?
+  /// The browser's key for one press of Send, so a retry after a timeout
+  /// returns the variation it already raised instead of raising a second.
+  requestKey    String?       @unique
+
+  /// The variation document, archived in Blob.
+  documentUrl String?
+  /// When the client was last emailed it, and who it went to.
+  sentAt      DateTime?
+  sentTo      String[]  @default([])
+  /// The last step that failed while issuing it, in words an operator can
+  /// act on. Cleared once every step has landed.
+  issueError  String?
+
+  /// The Xero invoice billing a chargeable variation. Never set on a
+  /// promotional one.
+  xeroInvoiceId     String?        @unique
+  xeroInvoiceNumber String?
+  invoiceStatus     InvoiceStatus?
+  /// Inc GST, as Xero totalled it.
+  invoiceTotal      Decimal?       @db.Decimal(12, 2)
+  invoiceTax        Decimal?       @db.Decimal(12, 2)
+  invoiceAmountPaid Decimal?       @db.Decimal(12, 2)
+  xeroUpdatedAt     DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  raisedBy  User?      @relation("VariationRaisedBy", fields: [raisedById], references: [id], onDelete: SetNull)
 
+  @@unique([projectId, number])
   @@index([projectId])
+  @@index([milestoneId])
   @@index([status])
 }
 
@@ -1178,6 +1237,7 @@ model User {
   tradieRequests      TradieRequest[]     @relation("TradieRequestCreatedBy")
   tradieQuotes        TradieQuote[]       @relation("TradieQuoteEnteredBy")
   tradieInvoices      TradieInvoice[]     @relation("TradieInvoiceEnteredBy")
+  variationsRaised    Variation[]         @relation("VariationRaisedBy")
   tradeSelections     TradeSelection[]    @relation("TradeSelectionSelectedBy")
   createdOffers       Offer[]             @relation("OfferCreatedBy")
   xeroConnections     XeroConnection[]    @relation("XeroConnections")
@@ -3256,6 +3316,10 @@ model TradieInvoice {
 
   /// Who typed it in, or allocated it to its booking. Null for the webhook.
   enteredById String?
+
+  /// The tradie's own invoice document, uploaded when it was recorded.
+  documentUrl  String?
+  documentName String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

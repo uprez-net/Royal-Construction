@@ -19,6 +19,7 @@ import {
   LayoutGrid,
   CalendarCheck,
   CreditCard,
+  FileDiff,
   Scale,
   Wrench,
   FileText,
@@ -32,9 +33,9 @@ import { ProjectDetailTabKey } from "@/utils/validators/projects";
 
 /**
  * The tabs that are actually navigable. `projectTabsValidator` still accepts
- * `materials`, `updates`, `workers` and `variations` because those tab bodies
- * exist, but they were deliberately hidden (commit 230c35e) as unfinished
- * surfaces. This list is the single source of truth for what a user can reach,
+ * `materials`, `updates` and `workers` because those tab bodies exist, but
+ * they were deliberately hidden (commit 230c35e) as unfinished surfaces.
+ * Variations came back once raising one invoiced and emailed the client. This list is the single source of truth for what a user can reach,
  * and `project-detail-tabs.tsx` narrows the URL parameter against it so a
  * hidden key can no longer render a panel with no way back.
  */
@@ -43,6 +44,7 @@ export const VISIBLE_PROJECT_DETAIL_TABS = [
   "milestones",
   "payments",
   "financials",
+  "variations",
   "tradies",
   "docs",
   "history",
@@ -69,6 +71,7 @@ const TabIcons: Record<VisibleProjectDetailTabKey, React.ElementType> = {
   milestones: CalendarCheck,
   payments: CreditCard,
   financials: Scale,
+  variations: FileDiff,
   tradies: Wrench,
   history: History,
   docs: FileText,
@@ -280,6 +283,12 @@ const generateProjectDetailTabs = (
   ).length;
   const tradieAlerts = blockedTradies + awaitingTradies;
   const compliance = calcComplianceOverviewData(project.certifierEngagement);
+  const unsentVariations = project.variations.filter(
+    (variation) =>
+      variation.status === "APPROVED"
+      && variation.newPrice !== null
+      && (variation.issueError !== null || variation.sentAt === null),
+  ).length;
   // One reference date for the whole calculation — see `invoice-display`.
   const { pending: pendingInvoices, overdue: overdueInvoices } =
     countPendingInvoices(project.invoices, new Date());
@@ -339,6 +348,23 @@ const generateProjectDetailTabs = (
     // Profit and loss per activity: the tender against what each tradie is
     // paid, which is the margin, so admin only like Payments.
     { key: "financials", label: "Financials", isAdminOnly: true },
+    // Prices to the client and the Xero invoices behind them: admin only.
+    {
+      key: "variations",
+      label: "Variations",
+      isAdminOnly: true,
+      ...(unsentVariations > 0
+        ? {
+            badge: {
+              count: unsentVariations.toString(),
+              // Raised but not in front of the client: an invoice or an email
+              // that did not go, which nobody else is watching for.
+              tone: "danger",
+              description: `${unsentVariations} variations not fully sent to the client`,
+            } satisfies TabBadge,
+          }
+        : {}),
+    },
     {
       key: "tradies",
       label: "Tradies",

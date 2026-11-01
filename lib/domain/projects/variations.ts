@@ -1,17 +1,14 @@
-import { Prisma, VariationStatus } from "@prisma/client";
+import { VariationStatus } from "@prisma/client";
 import { addDays, differenceInCalendarDays } from "date-fns";
 
 import { authorizeProject } from "../access/projects";
 import type { DomainDb } from "../db";
-import {
-  DomainNotFoundError,
-  DomainTransitionError,
-  DomainValidationError,
-} from "../errors";
+import { DomainNotFoundError, DomainTransitionError } from "../errors";
 import type { DomainPrincipal } from "../principal";
 
-// Variations: raising one, deciding it, and what an approval does to the
-// schedule.
+// Variations: deciding one raised the old way, and what an approval does to
+// the schedule. Raising one now lives in `variation-raise.ts`, which raises it
+// already APPROVED, and issuing it in `variation-issue.ts`.
 //
 // Phase 4 of issue #301 asked for the shared variation service to be built
 // **first**, so the future Eve tool calls the same command as the App route
@@ -33,75 +30,6 @@ import type { DomainPrincipal } from "../principal";
 //     margin. A decided variation is now refused, and the delay is applied in
 //     the same transaction as the decision, guarded on `delayDays` being
 //     unset.
-
-export type CreateVariationInput = {
-  readonly projectId: string;
-  readonly description: string;
-  readonly cost: number;
-  readonly requestedDate?: Date | string | null;
-};
-
-export type CreatedVariation = {
-  readonly id: string;
-  readonly projectId: string;
-  readonly projectName: string;
-  readonly description: string;
-  readonly cost: string;
-  readonly status: VariationStatus;
-  readonly requestedDate: Date;
-  readonly siteManagerId: string | null;
-};
-
-/** Raise a variation against a project. Always PENDING; nothing decides here. */
-export async function createVariation(
-  principal: DomainPrincipal,
-  input: CreateVariationInput,
-  db: DomainDb,
-): Promise<CreatedVariation> {
-  const project = await authorizeProject(principal, input.projectId, db);
-
-  const description = input.description.trim();
-  if (!description) {
-    throw new DomainValidationError(
-      "A variation needs a description.",
-      "description",
-    );
-  }
-  if (!Number.isFinite(input.cost)) {
-    throw new DomainValidationError("Cost must be a number.", "cost");
-  }
-
-  const requestedDate = input.requestedDate
-    ? new Date(input.requestedDate)
-    : new Date();
-  if (Number.isNaN(requestedDate.getTime())) {
-    throw new DomainValidationError(
-      "requestedDate is not a calendar date.",
-      "requestedDate",
-    );
-  }
-
-  const variation = await db.variation.create({
-    data: {
-      projectId: input.projectId,
-      description,
-      cost: new Prisma.Decimal(input.cost),
-      requestedDate,
-      status: VariationStatus.PENDING,
-    },
-  });
-
-  return {
-    cost: variation.cost.toString(),
-    description: variation.description,
-    id: variation.id,
-    projectId: variation.projectId,
-    projectName: project.name,
-    requestedDate: variation.requestedDate,
-    siteManagerId: project.siteManagerId,
-    status: variation.status,
-  };
-}
 
 export type VariationDecision = "APPROVED" | "REJECTED";
 

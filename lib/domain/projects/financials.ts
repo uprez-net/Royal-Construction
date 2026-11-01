@@ -30,7 +30,7 @@ export async function getProjectFinancials(
   requireAdminPrincipal(principal);
   const project = await authorizeProject(principal, input.projectId, db);
 
-  const [milestones, schedules, invoices] = await Promise.all([
+  const [milestones, schedules, invoices, variations] = await Promise.all([
     db.milestone.findMany({
       select: {
         budget: true,
@@ -69,6 +69,8 @@ export async function getProjectFinancials(
     db.tradieInvoice.findMany({
       select: {
         amountPaid: true,
+        documentName: true,
+        documentUrl: true,
         dueDate: true,
         id: true,
         invoiceNumber: true,
@@ -83,6 +85,10 @@ export async function getProjectFinancials(
         totalTax: true,
         tradie: { select: { id: true, name: true } },
       },
+      where: { projectId: project.id },
+    }),
+    db.variation.findMany({
+      select: { cost: true, kind: true, milestoneId: true, status: true },
       where: { projectId: project.id },
     }),
   ]);
@@ -110,6 +116,8 @@ export async function getProjectFinancials(
     })),
     invoices: invoices.map((invoice) => ({
       amountPaidCents: toCents(invoice.amountPaid),
+      documentName: invoice.documentName,
+      documentUrl: invoice.documentUrl,
       dueDate: invoice.dueDate?.toISOString() ?? null,
       id: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
@@ -133,6 +141,12 @@ export async function getProjectFinancials(
       parentId: milestone.parentId,
       projectStage: milestone.projectStage,
       status: milestone.status,
+    })),
+    variations: variations.map((variation) => ({
+      costCents: toCents(variation.cost),
+      kind: variation.kind,
+      milestoneId: variation.milestoneId,
+      status: variation.status,
     })),
   });
 

@@ -35,9 +35,9 @@ import {
 // four different paragraph treatments.
 
 /** The light-theme hairline shared across the RC email templates. */
-const BORDER_ON_LIGHT = "#E2E8F0";
+export const BORDER_ON_LIGHT = "#E2E8F0";
 
-const TYPE = {
+export const TYPE = {
   /** Hero headline. One per email. */
   display: {
     fontFamily: FONTS.condensed,
@@ -108,14 +108,14 @@ const TYPE = {
 
 // A panel is always the OPPOSITE tint of the band it sits on, and always carries
 // the same hairline and radius — so a card reads as a card wherever it appears.
-const CARD = {
+export const CARD = {
   borderRadius: 6,
   border: `1px solid ${BORDER_ON_LIGHT}`,
 } as const;
 
 // Vertical rhythm. A band that changes colour opens with its own top padding; a
 // band continuing the colour above it opens flush, so the two read as one.
-const BAND = {
+export const BAND = {
   full: "2.5rem 1.5rem",
   continues: "0 1.5rem 2.5rem",
 } as const;

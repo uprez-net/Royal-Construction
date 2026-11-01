@@ -24,6 +24,10 @@ import {
   type BookingBillingState,
 } from "./billing-rules";
 import { extractTradieRefToken, tradieRefKind } from "./reply-reference";
+import {
+  assertTradieInvoiceDocument,
+  type TradieInvoiceDocument,
+} from "./invoice-document";
 import { rateCurrency } from "../../../utils/formatters";
 
 // The bills tradies raise on us, and how each reaches its booking.
@@ -117,6 +121,10 @@ export type RecordTradieInvoiceInput = {
   /** Dollars. Zero for a tradie not registered for GST. */
   readonly totalTax: number;
   readonly notes?: string | null;
+  /** The tradie's own invoice, uploaded with it. */
+  readonly document?: TradieInvoiceDocument | null;
+  /** This deployment's Blob store, which the document must be in. */
+  readonly documentStoreId?: string | null;
 };
 
 export type RecordedTradieInvoice = {
@@ -190,6 +198,13 @@ export async function recordTradieInvoice(
     );
   }
 
+  const document = input.document
+    ? assertTradieInvoiceDocument(input.document, {
+        projectId: input.projectId,
+        storeId: input.documentStoreId ?? null,
+      })
+    : null;
+
   const schedule = await bookingOnProject(input, db);
   const duplicate = await db.tradieInvoice.findFirst({
     select: { id: true },
@@ -209,6 +224,8 @@ export async function recordTradieInvoice(
   try {
     created = await db.tradieInvoice.create({
       data: {
+        documentName: document?.name ?? null,
+        documentUrl: document?.url ?? null,
         dueDate: input.dueDate ?? null,
         enteredById,
         invoiceNumber,

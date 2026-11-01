@@ -25,11 +25,25 @@ export const recordTradieInvoiceSchema = z.object({
   subTotal: money("Enter the amount ex GST"),
   totalTax: money("Enter the GST, or 0"),
   notes: z.string().trim().max(2000).optional(),
+  /** The tradie's own invoice, uploaded with it. */
+  document: z
+    .object({
+      name: z.string().trim().min(1).max(255),
+      url: z.url(),
+    })
+    .optional(),
 });
 
 export type RecordTradieInvoiceFormInput = z.input<
   typeof recordTradieInvoiceSchema
 >;
+
+export const readTradieInvoiceDocumentSchema = z.object({
+  projectId: id("Project ID is required"),
+  name: z.string().trim().min(1).max(255),
+  url: z.url(),
+  contentType: z.string().trim().min(1),
+});
 
 export const allocateTradieInvoiceSchema = z.object({
   projectId: id("Project ID is required"),

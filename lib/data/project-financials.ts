@@ -4,6 +4,7 @@ import { revalidateTag } from "next/cache";
 
 import { auth } from "@clerk/nextjs/server";
 import { sendEmail } from "@/lib/azureClient";
+import { blobStoreIdFromToken } from "@/lib/blob-url";
 import {
   DomainAuthorizationError,
   DomainValidationError,
@@ -19,6 +20,10 @@ import {
   type TradieInvoiceRecheck,
 } from "@/lib/domain/tradies/invoice-recheck";
 import {
+  readTradieInvoiceDocument,
+  type TradieInvoiceDocumentFields,
+} from "@/lib/domain/tradies/invoice-document";
+import {
   allocateTradieInvoice,
   recordTradieInvoice,
   voidTradieInvoice,
@@ -32,6 +37,7 @@ import { CACHE_PROFILES } from "@/types/cache";
 import {
   allocateTradieInvoiceSchema,
   previewInvoiceRecheckSchema,
+  readTradieInvoiceDocumentSchema,
   recordTradieInvoiceSchema,
   sendInvoiceRecheckSchema,
   voidTradieInvoiceSchema,
@@ -118,6 +124,10 @@ export async function recordTradieInvoiceAction(
       recordTradieInvoice(
         principal,
         {
+          document: input.document ?? null,
+          documentStoreId: blobStoreIdFromToken(
+            process.env.BLOB_READ_WRITE_TOKEN,
+          ),
           dueDate: input.dueDate ? day(input.dueDate) : null,
           invoiceNumber: input.invoiceNumber,
           issuedDate: day(input.issuedDate),
@@ -133,6 +143,46 @@ export async function recordTradieInvoiceAction(
     expireProject(recorded.projectId);
     return recorded.projectId;
   });
+}
+
+export type TradieInvoiceDocumentResult =
+  | { readonly ok: true; readonly fields: TradieInvoiceDocumentFields }
+  | DomainActionFailure;
+
+/**
+ * Read an uploaded tradie invoice to fill in the Record invoice form. Writes
+ * nothing: the document is attached when the invoice is recorded.
+ */
+export async function readTradieInvoiceDocumentAction(raw: {
+  projectId: string;
+  name: string;
+  url: string;
+  contentType: string;
+}): Promise<TradieInvoiceDocumentResult> {
+  try {
+    const principal = await caller();
+    const input = parse(readTradieInvoiceDocumentSchema.safeParse(raw));
+    // Loaded here, not at the top: the model module throws on import without
+    // its gateway key, and that must not take every other action down too.
+    const { readTradieInvoiceWithAi } =
+      await import("@/lib/agent/tradieInvoiceExtractionAgent");
+    const fields = await readTradieInvoiceDocument(
+      principal,
+      {
+        contentType: input.contentType,
+        document: { name: input.name, url: input.url },
+        projectId: input.projectId,
+        storeId: blobStoreIdFromToken(process.env.BLOB_READ_WRITE_TOKEN),
+      },
+      prisma,
+      readTradieInvoiceWithAi,
+    );
+    return { fields, ok: true };
+  } catch (error) {
+    const failure = domainActionFailure(error);
+    if (failure) return failure;
+    throw error;
+  }
 }
 
 export async function allocateTradieInvoiceAction(raw: {

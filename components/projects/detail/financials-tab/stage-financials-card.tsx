@@ -14,9 +14,15 @@ import {
   type FilterFn,
   type OnChangeFn,
 } from "@tanstack/react-table";
-import { AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  FilePlus2,
+} from "lucide-react";
 
 import { StatusPill } from "@/components/common/status-pill";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   Collapsible,
@@ -36,7 +42,7 @@ import { PROJECT_STAGE_LABELS } from "@/types/project";
 import { formatStatus } from "@/utils/formatters";
 
 import { ActivityDetail, type InvoiceActions } from "./activity-detail";
-import { Money, outcomeRowClass, ProfitLoss } from "./money";
+import { formatCents, Money, outcomeRowClass, ProfitLoss } from "./money";
 
 /** An activity as the table holds it: with the names above it, for search. */
 type FinancialRow = {
@@ -77,104 +83,141 @@ const motherFilter: FilterFn<typeof features, FinancialRow> = (
 
 const NUMERIC = "text-right whitespace-nowrap";
 
-const columns = helper.columns([
-  helper.accessor((row) => row.activity.name, {
-    id: "activity",
-    header: "Activity",
-    cell: ({ row }) => {
-      const { activity } = row.original;
-      const canExpand = row.getCanExpand();
-      const expanded = row.getIsExpanded();
-      return (
-        <div
-          className="flex items-start gap-2"
-          style={{ paddingLeft: `${row.depth * 1.25}rem` }}
-        >
-          {canExpand ? (
-            <button
-              type="button"
-              onClick={row.getToggleExpandedHandler()}
-              aria-expanded={expanded}
-              aria-label={`${expanded ? "Hide" : "Show"} ${activity.name} details`}
-              className="-m-1 mt-0 inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-            >
-              {expanded ? (
-                <ChevronDown className="size-4" aria-hidden="true" />
-              ) : (
-                <ChevronRight className="size-4" aria-hidden="true" />
-              )}
-            </button>
-          ) : (
-            <span className="size-5 shrink-0" aria-hidden="true" />
-          )}
-          <span className="min-w-0">
-            <span className="block font-medium text-foreground">
-              {activity.name}
+function columnsFor(onVariation: (milestoneId: string) => void) {
+  return helper.columns([
+    helper.accessor((row) => row.activity.name, {
+      id: "activity",
+      header: "Activity",
+      cell: ({ row }) => {
+        const { activity } = row.original;
+        const canExpand = row.getCanExpand();
+        const expanded = row.getIsExpanded();
+        return (
+          <div
+            className="flex items-start gap-2"
+            style={{ paddingLeft: `${row.depth * 1.25}rem` }}
+          >
+            {canExpand ? (
+              <button
+                type="button"
+                onClick={row.getToggleExpandedHandler()}
+                aria-expanded={expanded}
+                aria-label={`${expanded ? "Hide" : "Show"} ${activity.name} details`}
+                className="-m-1 mt-0 inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                {expanded ? (
+                  <ChevronDown className="size-4" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="size-4" aria-hidden="true" />
+                )}
+              </button>
+            ) : (
+              <span className="size-5 shrink-0" aria-hidden="true" />
+            )}
+            <span className="min-w-0">
+              <span className="block font-medium text-foreground">
+                {activity.name}
+              </span>
+              <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                {activity.children.length ? (
+                  <span>
+                    {activity.children.length} sub-activit
+                    {activity.children.length === 1 ? "y" : "ies"} ·
+                    consolidated
+                  </span>
+                ) : null}
+                {activity.status === "NOT_REQUIRED"
+                || activity.status === "DONE" ? (
+                  <span>{formatStatus(activity.status)}</span>
+                ) : null}
+                {activity.figures.overInvoiced ? (
+                  <span className="inline-flex items-center gap-1 font-medium text-destructive-ink">
+                    <AlertTriangle className="size-3.5" aria-hidden="true" />
+                    Invoiced exceeds quoted
+                  </span>
+                ) : null}
+                {activity.figures.quoteMissing ? (
+                  <span className="font-medium text-warning-ink">
+                    Quote missing
+                  </span>
+                ) : null}
+              </span>
             </span>
-            <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              {activity.children.length ? (
-                <span>
-                  {activity.children.length} sub-activit
-                  {activity.children.length === 1 ? "y" : "ies"} · consolidated
-                </span>
-              ) : null}
-              {activity.status === "NOT_REQUIRED"
-              || activity.status === "DONE" ? (
-                <span>{formatStatus(activity.status)}</span>
-              ) : null}
-              {activity.figures.overInvoiced ? (
-                <span className="inline-flex items-center gap-1 font-medium text-destructive-ink">
-                  <AlertTriangle className="size-3.5" aria-hidden="true" />
-                  Invoiced exceeds quoted
-                </span>
-              ) : null}
-              {activity.figures.quoteMissing ? (
-                <span className="font-medium text-warning-ink">
-                  Quote missing
-                </span>
-              ) : null}
-            </span>
+          </div>
+        );
+      },
+    }),
+    helper.display({
+      id: "tender",
+      header: "Quoted price",
+      cell: ({ row }) => {
+        const { activity } = row.original;
+        return (
+          <span className="flex flex-col items-end">
+            <Money cents={activity.figures.tenderCents} />
+            {activity.variationCents > 0 ? (
+              <span className="text-xs text-muted-foreground">
+                incl.{" "}
+                <span className="font-mono tabular-nums">
+                  +{formatCents(activity.variationCents)}
+                </span>{" "}
+                variations
+              </span>
+            ) : null}
           </span>
-        </div>
-      );
-    },
-  }),
-  helper.display({
-    id: "tender",
-    header: "Quoted price (A)",
-    cell: ({ row }) => (
-      <Money cents={row.original.activity.figures.tenderCents} />
-    ),
-  }),
-  helper.display({
-    id: "quoted",
-    header: "Tradie quoted (B)",
-    cell: ({ row }) => {
-      const { figures } = row.original.activity;
-      return (
-        <Money cents={figures.quotedCents} muted={figures.quotedCents === 0} />
-      );
-    },
-  }),
-  helper.display({
-    id: "invoiced",
-    header: "Total invoiced (C)",
-    cell: ({ row }) => {
-      const { figures } = row.original.activity;
-      return (
-        <Money
-          cents={figures.invoicedCents}
-          muted={figures.invoicedCents === 0}
-        />
-      );
-    },
-  }),
-  helper.display({
-    id: "profit",
-    header: "Profit/Loss",
-    cell: ({ row }) => <ProfitLoss figures={row.original.activity.figures} />,
-  }),
-]);
+        );
+      },
+    }),
+    helper.display({
+      id: "quoted",
+      header: "Tradie quoted",
+      cell: ({ row }) => {
+        const { figures } = row.original.activity;
+        return (
+          <Money
+            cents={figures.quotedCents}
+            muted={figures.quotedCents === 0}
+          />
+        );
+      },
+    }),
+    helper.display({
+      id: "invoiced",
+      header: "Total invoiced",
+      cell: ({ row }) => {
+        const { figures } = row.original.activity;
+        return (
+          <Money
+            cents={figures.invoicedCents}
+            muted={figures.invoicedCents === 0}
+          />
+        );
+      },
+    }),
+    helper.display({
+      id: "profit",
+      header: "Profit/Loss",
+      cell: ({ row }) => <ProfitLoss figures={row.original.activity.figures} />,
+    }),
+    helper.display({
+      id: "variation",
+      header: () => <span className="sr-only">Actions</span>,
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => onVariation(row.original.activity.id)}
+          aria-label={`Create a variation for ${row.original.activity.name}`}
+          title="Create variation"
+        >
+          <FilePlus2 className="size-4" aria-hidden="true" />
+          <span className="hidden xl:inline">Variation</span>
+        </Button>
+      ),
+    }),
+  ]);
+}
 
 const COLUMN_CLASS: Record<string, string> = {
   activity: "min-w-64",
@@ -182,6 +225,7 @@ const COLUMN_CLASS: Record<string, string> = {
   profit: `${NUMERIC} min-w-44`,
   quoted: NUMERIC,
   tender: NUMERIC,
+  variation: "w-0 text-right whitespace-nowrap",
 };
 
 /**
@@ -214,6 +258,10 @@ export function StageFinancialsCard({
   // the row has already toggled. TanStack's own guidance for the compiler.
   "use no memo";
   const data = useMemo(() => toRows(stage.activities), [stage.activities]);
+  const columns = useMemo(
+    () => columnsFor(actions.onVariation),
+    [actions.onVariation],
+  );
   const table = useTable({
     features,
     columns,
@@ -268,15 +316,15 @@ export function StageFinancialsCard({
             </span>
             <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               <span>
-                <span className="text-muted-foreground">A </span>
+                <span className="text-muted-foreground">Quoted price </span>
                 <Money cents={figures.tenderCents} />
               </span>
               <span>
-                <span className="text-muted-foreground">B </span>
+                <span className="text-muted-foreground">Tradie quoted </span>
                 <Money cents={figures.quotedCents} />
               </span>
               <span>
-                <span className="text-muted-foreground">C </span>
+                <span className="text-muted-foreground">Total invoiced </span>
                 <Money cents={figures.invoicedCents} />
               </span>
               <ProfitLoss figures={figures} />
@@ -287,8 +335,8 @@ export function StageFinancialsCard({
           <div className="overflow-x-auto border-t border-border/70">
             <table className="w-full caption-bottom text-sm">
               <caption className="sr-only">
-                {label} activities: tender, tradie quotes, invoices and profit
-                or loss
+                {label} activities: quoted price, tradie quotes, invoices and
+                profit or loss
               </caption>
               <thead className="bg-muted/40">
                 {table.getHeaderGroups().map((group) => (

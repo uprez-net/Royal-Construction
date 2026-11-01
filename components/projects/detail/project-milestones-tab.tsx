@@ -57,6 +57,8 @@ import {
 import { currency } from "@/utils/formatters";
 import { MilestoneStatus, ProjectStage } from "@prisma/client";
 
+import { CreateVariationModal } from "@/components/projects/create-variation-modal";
+
 import { MilestoneCard } from "./milestone-tab/milestone-card";
 
 interface LedgerStage {
@@ -227,6 +229,8 @@ export function ProjectMilestonesTab({
   const [stagesShowingDone, setStagesShowingDone] = useState<ProjectStage[]>(
     [],
   );
+  // The activity a variation is being raised on, while the wizard is open.
+  const [variationFor, setVariationFor] = useState<string | null>(null);
 
   const toggleStage = (stage: ProjectStage) =>
     setOpenStages((open) =>
@@ -657,6 +661,9 @@ export function ProjectMilestonesTab({
                                         onMarkasNotRequired={
                                           handleMarkAsNotRequired
                                         }
+                                        onCreateVariation={
+                                          isAdmin ? setVariationFor : undefined
+                                        }
                                       />
                                     ))}
                                   </ul>
@@ -736,6 +743,11 @@ export function ProjectMilestonesTab({
                                             onMarkasNotRequired={
                                               handleMarkAsNotRequired
                                             }
+                                            onCreateVariation={
+                                              isAdmin
+                                                ? setVariationFor
+                                                : undefined
+                                            }
                                           />
                                         ))}
                                       </ul>
@@ -771,6 +783,16 @@ export function ProjectMilestonesTab({
           )}
         </CardContent>
       </Card>
+      {isAdmin ? (
+        <CreateVariationModal
+          projectId={project.id}
+          open={variationFor !== null}
+          onOpenChange={(open) => {
+            if (!open) setVariationFor(null);
+          }}
+          initialMilestoneId={variationFor}
+        />
+      ) : null}
     </section>
   );
 }

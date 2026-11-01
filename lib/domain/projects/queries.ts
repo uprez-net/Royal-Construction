@@ -536,9 +536,16 @@ export async function getProjectDetail(
         },
       })),
     })),
+    // Every Decimal as a string: the detail crosses into client components,
+    // which cannot receive a Decimal.
     variations: project.variations.map((variation) => ({
       ...variation,
       cost: variation.cost.toString(),
+      invoiceAmountPaid: variation.invoiceAmountPaid?.toString() ?? null,
+      invoiceTax: variation.invoiceTax?.toString() ?? null,
+      invoiceTotal: variation.invoiceTotal?.toString() ?? null,
+      newPrice: variation.newPrice?.toString() ?? null,
+      previousPrice: variation.previousPrice?.toString() ?? null,
     })),
     tradieSchedules: project.tradieSchedules.map((schedule) => ({
       ...schedule,
