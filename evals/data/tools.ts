@@ -90,6 +90,7 @@ export const WRITE_TOOLS = {
     "resolve_compliance_document",
     "send_compliance_follow_up",
     "send_compliance_outreach",
+    "set_activity_price",
     "set_compliance_document_required",
     "start_compliance",
     "update_milestone",

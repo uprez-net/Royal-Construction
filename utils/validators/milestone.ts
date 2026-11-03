@@ -1,6 +1,8 @@
 import { MilestoneStatus, ProjectStage } from "@prisma/client";
 import { z } from "zod";
 
+import { hasAtMostTwoDecimalPlaces } from "./common";
+
 export const milestoneCreationSchema = z.object({
   name: z.string().min(1, "Milestone name is required"),
   description: z.string().optional(),
@@ -113,10 +115,7 @@ export const milestonePriceSchema = z.object({
   price: z
     .number({ error: "Enter a price" })
     .nonnegative("The price cannot be negative")
-    .refine(
-      (value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6,
-      "Enter the price to the cent",
-    ),
+    .refine(hasAtMostTwoDecimalPlaces, "Enter the price to the cent"),
   previousPriceCents: z.number().int().nonnegative(),
 });
 

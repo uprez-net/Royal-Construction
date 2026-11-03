@@ -49,9 +49,11 @@ import {
   getProjectFinancials,
   type ProjectFinancials,
 } from "@/lib/domain/projects/financials";
+import { setMilestonePrice } from "@/lib/domain/projects/milestone-price";
 import type {
   FinancialActivity,
   FinancialFigures,
+  FinancialStage,
 } from "@/lib/domain/projects/financial-report";
 import { listSiteManagersForDropdown } from "@/lib/domain/identity/site-managers";
 import {
@@ -417,6 +419,10 @@ function financialActivities(
   return activities.flatMap((activity) => [
     {
       activity: [...path, activity.name].join(" › "),
+      milestoneId: activity.id,
+      // The figure set_activity_price edits and expects back: ex GST, before
+      // variations, including any sub-activities.
+      price: activity.priceCents / 100,
       status: activity.status,
       ...financialFigures(activity.figures),
       variationsAdded:
@@ -424,6 +430,26 @@ function financialActivities(
     },
     ...financialActivities(activity.children, [...path, activity.name]),
   ]);
+}
+
+/** How a stage is priced: pegged to the contract, or its activities' sum. */
+function stagePricing(stage: FinancialStage) {
+  if (!stage.price) {
+    return {
+      priceSource: "activities",
+      allocatedToActivities: dollars(stage.allocatedCents),
+    };
+  }
+  const unallocated = stage.price.exGstCents - stage.allocatedCents;
+  return {
+    priceSource: "contract",
+    contractShare:
+      stage.price.percentage === null ? null : `${stage.price.percentage}%`,
+    contractClaim: `${dollars(stage.price.claimCents)}${stage.price.gstIncluded ? " inc GST" : ""}`,
+    allocatedToActivities: dollars(stage.allocatedCents),
+    unallocated: unallocated > 0 ? dollars(unallocated) : null,
+    activitiesOverBy: unallocated < 0 ? dollars(-unallocated) : null,
+  };
 }
 
 function signedMoney(cents: number, percent: number | null): string {
@@ -495,7 +521,7 @@ export async function getAuthorizedProjectFinancials(
     data: {
       projectId: report.projectId,
       basis:
-        "Ex GST. quotedPrice is what the client is charged for the activity, chargeable variations included; tradieQuoted is the committed tradie prices; totalInvoiced is what tradies have billed. profitToDate counts only the activities invoiced so far; forecastProfit is quotedPrice less each booking's quote or invoices, whichever is more.",
+        "Ex GST. quotedPrice is what the client is charged for the activity, chargeable variations included; tradieQuoted is the committed tradie prices; totalInvoiced is what tradies have billed. profitToDate counts only the activities invoiced so far; forecastProfit is quotedPrice less each booking's quote or invoices, whichever is more. A stage's quotedPrice is fixed to its share of the contract (priceSource 'contract') plus its variations; its activities divide that price, and unallocated / activitiesOverBy say how far their prices are from it. An activity's price is its own quoted price before variations — the figure set_activity_price changes.",
       totals: {
         ...financialFigures(report.totals),
         notYetAllocated: dollars(report.totals.unallocatedCents),
@@ -505,6 +531,7 @@ export async function getAuthorizedProjectFinancials(
       stages: report.stages.map((stage) => ({
         stage: stage.stage,
         ...financialFigures(stage.figures),
+        ...stagePricing(stage),
       })),
       needsAttention,
       activities,
@@ -516,6 +543,73 @@ export async function getAuthorizedProjectFinancials(
             `${unallocated} invoice(s) from Xero are on this project but not matched to a booking; they count in the totals but in no activity.`,
           ]
         : [],
+  });
+}
+
+/**
+ * Reprice one activity through the same command the Financials tab's inline
+ * edit uses: admin only, its parents move with it, a parent cannot go below
+ * its sub-activities, a price that moved since it was read is refused, and a
+ * repeated save is reported as unchanged. The stage price stays pegged to the
+ * contract.
+ */
+export async function setAuthorizedActivityPrice(
+  ctx: ToolContext,
+  input: { milestoneId: string; price: number; expectedPrice: number },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const milestone = await assertMilestoneAccess(actor, input.milestoneId);
+  const project = await assertProjectAccess(actor, milestone.projectId);
+  return runProjectMutation({
+    action: "project.milestone.price.set",
+    actor,
+    projectId: milestone.projectId,
+    ctx,
+    ownerUserId: actor.id,
+    targetId: input.milestoneId,
+    inputSummary: input,
+    transactional: true,
+    execute: async (tx) => {
+      try {
+        const outcome = await setMilestonePrice(
+          userPrincipal(actor),
+          {
+            milestoneId: input.milestoneId,
+            previousPriceCents: Math.round(input.expectedPrice * 100),
+            priceCents: Math.round(input.price * 100),
+          },
+          tx ?? agentDb,
+        );
+        const price = dollars(Math.round(input.price * 100));
+        const parents = outcome.ancestorIds.length;
+        return actionEnvelope({
+          entityRef: projectReference(project),
+          data: {
+            ancestorIds: outcome.ancestorIds,
+            changed: outcome.changed,
+            milestoneId: outcome.milestoneId,
+            price,
+            projectId: outcome.projectId,
+          },
+          summary: outcome.changed
+            ? `The activity is now priced at ${price} ex GST${parents ? `, and ${parents === 1 ? "its parent" : `its ${parents} parents`} moved by the same amount` : ""}. The stage price is unchanged; get_project_financials shows what is now unallocated.`
+            : `The activity was already priced at ${price}; nothing changed.`,
+          title: outcome.changed
+            ? "Activity price updated"
+            : "Activity price unchanged",
+          warnings: outcome.changed
+            ? [
+                "The project's Milestones tab may show the previous budget for a few minutes until its cache refreshes.",
+              ]
+            : [],
+        });
+      } catch (error) {
+        // Not an ADMIN, a parent below its children, or a price that moved
+        // since it was read: each is a reason to relay, not a tool crash.
+        if (!isDomainError(error)) throw error;
+        return failedAction("Activity price was not changed", error.message);
+      }
+    },
   });
 }
 
