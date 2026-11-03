@@ -1,3 +1,5 @@
+import type { ProjectRequirementsPayload } from "@/types/project-flow";
+
 import type { DomainDb } from "../db";
 import { authorizeProject } from "../access/projects";
 import { requireAdminPrincipal, type DomainPrincipal } from "../principal";
@@ -10,6 +12,7 @@ import { bookingTrade } from "../tradies/request-rules";
 
 import {
   buildProjectFinancialReport,
+  resolveStagePrices,
   type ProjectFinancialReport,
 } from "./financial-report";
 
@@ -39,68 +42,77 @@ export async function getProjectFinancials(
   requireAdminPrincipal(principal);
   const project = await authorizeProject(principal, input.projectId, db);
 
-  const [milestones, schedules, invoices, variations] = await Promise.all([
-    db.milestone.findMany({
-      select: {
-        budget: true,
-        id: true,
-        name: true,
-        order: true,
-        parentId: true,
-        projectStage: true,
-        status: true,
-      },
-      where: { projectId: project.id },
-    }),
-    db.tradieSchedule.findMany({
-      select: {
-        durationDays: true,
-        id: true,
-        milestoneId: true,
-        quote: { select: { gstTreatment: true } },
-        quotedPrice: true,
-        requiresQuote: true,
-        scheduledDate: true,
-        status: true,
-        trade: true,
-        tradie: {
-          select: {
-            id: true,
-            lastQuotedPrice: true,
-            lastQuotedPriceUnit: true,
-            name: true,
-            trade: true,
+  const [contract, milestones, schedules, invoices, variations] =
+    await Promise.all([
+      db.project.findUniqueOrThrow({
+        select: { requirements: true, totalBudget: true },
+        where: { id: project.id },
+      }),
+      db.milestone.findMany({
+        select: {
+          budget: true,
+          id: true,
+          name: true,
+          order: true,
+          parentId: true,
+          projectStage: true,
+          status: true,
+        },
+        where: { projectId: project.id },
+      }),
+      db.tradieSchedule.findMany({
+        select: {
+          durationDays: true,
+          id: true,
+          milestoneId: true,
+          quote: { select: { gstTreatment: true } },
+          quotedPrice: true,
+          requiresQuote: true,
+          scheduledDate: true,
+          status: true,
+          trade: true,
+          tradie: {
+            select: {
+              id: true,
+              lastQuotedPrice: true,
+              lastQuotedPriceUnit: true,
+              name: true,
+              trade: true,
+            },
           },
         },
-      },
-      where: { projectId: project.id },
-    }),
-    db.tradieInvoice.findMany({
-      select: {
-        amountPaid: true,
-        documentName: true,
-        documentUrl: true,
-        dueDate: true,
-        id: true,
-        invoiceNumber: true,
-        issuedDate: true,
-        notes: true,
-        reference: true,
-        scheduleId: true,
-        source: true,
-        status: true,
-        subTotal: true,
-        total: true,
-        totalTax: true,
-        tradie: { select: { id: true, name: true } },
-      },
-      where: { projectId: project.id },
-    }),
-    db.variation.findMany({
-      select: { cost: true, kind: true, milestoneId: true, status: true },
-      where: { projectId: project.id },
-    }),
-  ]);
+        where: { projectId: project.id },
+      }),
+      db.tradieInvoice.findMany({
+        select: {
+          amountPaid: true,
+          documentName: true,
+          documentUrl: true,
+          dueDate: true,
+          id: true,
+          invoiceNumber: true,
+          issuedDate: true,
+          notes: true,
+          reference: true,
+          scheduleId: true,
+          source: true,
+          status: true,
+          subTotal: true,
+          total: true,
+          totalTax: true,
+          tradie: { select: { id: true, name: true } },
+        },
+        where: { projectId: project.id },
+      }),
+      db.variation.findMany({
+        select: { cost: true, kind: true, milestoneId: true, status: true },
+        where: { projectId: project.id },
+      }),
+    ]);
+
+  const commercials = (
+    contract.requirements as ProjectRequirementsPayload | null
+  )?.commercialsAndClaims;
 
   const report = buildProjectFinancialReport({
     bookings: schedules.map((schedule) => ({
@@ -151,6 +163,12 @@ export async function getProjectFinancials(
       projectStage: milestone.projectStage,
       status: milestone.status,
     })),
+    // The stage prices the Milestones tab shows and the stage invoices bill.
+    stagePrices: resolveStagePrices({
+      gstIncluded: commercials?.gstIncluded,
+      paymentStages: commercials?.paymentStages,
+      totalBudget: Number(contract.totalBudget),
+    }),
     variations: variations.map((variation) => ({
       costCents: toCents(variation.cost),
       kind: variation.kind,

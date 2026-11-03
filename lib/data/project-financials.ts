@@ -14,6 +14,7 @@ import {
   getProjectFinancials,
   type ProjectFinancials,
 } from "@/lib/domain/projects/financials";
+import { setMilestonePrice } from "@/lib/domain/projects/milestone-price";
 import {
   prepareTradieInvoiceRecheck,
   requestTradieInvoiceRecheck,
@@ -38,6 +39,10 @@ import {
 } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
+import {
+  milestonePriceSchema,
+  type MilestonePriceInput,
+} from "@/utils/validators/milestone";
 import {
   allocateTradieInvoiceSchema,
   dismissEmailedInvoiceSchema,
@@ -247,6 +252,40 @@ export async function voidTradieInvoiceAction(raw: {
     );
     expireProject(voided.projectId);
     return voided.projectId;
+  });
+}
+
+/**
+ * Reprice one activity from its row. The stage price stays pegged to the
+ * contract; the milestone (and its parents) carry the new figure, and the
+ * Milestones tab reads it from the project cache expired here.
+ */
+export async function setMilestonePriceAction(
+  raw: MilestonePriceInput,
+): Promise<ProjectFinancialsResult> {
+  return answer(async (principal) => {
+    const input = parse(milestonePriceSchema.safeParse(raw));
+    const outcome = await prisma.$transaction(async (tx) => {
+      const result = await setMilestonePrice(
+        principal,
+        {
+          milestoneId: input.milestoneId,
+          previousPriceCents: input.previousPriceCents,
+          priceCents: Math.round(input.price * 100),
+        },
+        tx,
+      );
+      // The milestone named its own project; one named beside it from the
+      // client is not trusted to be the same.
+      if (result.projectId !== input.projectId) {
+        throw new DomainValidationError(
+          "That activity is not on this project.",
+        );
+      }
+      return result;
+    });
+    if (outcome.changed) expireProject(outcome.projectId);
+    return outcome.projectId;
   });
 }
 

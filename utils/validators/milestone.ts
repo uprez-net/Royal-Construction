@@ -79,9 +79,9 @@ export const milestoneUpdateSchema = z
 
       // Optional extra validation
       if (
-        startDate &&
-        actualDate &&
-        new Date(actualDate) < new Date(startDate)
+        startDate
+        && actualDate
+        && new Date(actualDate) < new Date(startDate)
       ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -101,3 +101,23 @@ export const milestonePictureUploadSchema = z.object({
 export type MilestonePictureUploadData = z.infer<
   typeof milestonePictureUploadSchema
 >;
+
+/**
+ * The Financials tab's inline price edit. Dollars as typed, to the cent; the
+ * action converts to cents. `previousPriceCents` is the figure on screen, so
+ * the command can refuse an edit made over a price that has since moved.
+ */
+export const milestonePriceSchema = z.object({
+  projectId: z.string().min(1, "Project ID is required"),
+  milestoneId: z.string().min(1, "Milestone ID is required"),
+  price: z
+    .number({ error: "Enter a price" })
+    .nonnegative("The price cannot be negative")
+    .refine(
+      (value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6,
+      "Enter the price to the cent",
+    ),
+  previousPriceCents: z.number().int().nonnegative(),
+});
+
+export type MilestonePriceInput = z.infer<typeof milestonePriceSchema>;

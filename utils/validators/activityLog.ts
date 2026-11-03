@@ -147,6 +147,14 @@ export const activityLogSchemas = {
     newStatus: z.string(),
   }),
 
+  milestonePriceChanged: z.object({
+    projectId: z.string(),
+    milestoneId: z.string(),
+    milestoneName: z.string(),
+    previousPrice: z.string(),
+    price: z.string(),
+  }),
+
   milestoneAdded: z.object({
     projectId: z.string(),
     milestoneId: z.string(),

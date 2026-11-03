@@ -42,6 +42,7 @@ import { PROJECT_STAGE_LABELS } from "@/types/project";
 import { formatStatus } from "@/utils/formatters";
 
 import { ActivityDetail, type InvoiceActions } from "./activity-detail";
+import { ActivityPriceCell } from "./activity-price-cell";
 import { formatCents, Money, outcomeRowClass, ProfitLoss } from "./money";
 
 /** An activity as the table holds it: with the names above it, for search. */
@@ -83,7 +84,10 @@ const motherFilter: FilterFn<typeof features, FinancialRow> = (
 
 const NUMERIC = "text-right whitespace-nowrap";
 
-function columnsFor(onVariation: (milestoneId: string) => void) {
+function columnsFor(
+  onVariation: InvoiceActions["onVariation"],
+  onPrice: InvoiceActions["onPrice"],
+) {
   return helper.columns([
     helper.accessor((row) => row.activity.name, {
       id: "activity",
@@ -150,23 +154,9 @@ function columnsFor(onVariation: (milestoneId: string) => void) {
     helper.display({
       id: "tender",
       header: "Quoted price",
-      cell: ({ row }) => {
-        const { activity } = row.original;
-        return (
-          <span className="flex flex-col items-end">
-            <Money cents={activity.figures.tenderCents} />
-            {activity.variationCents > 0 ? (
-              <span className="text-xs text-muted-foreground">
-                incl.{" "}
-                <span className="font-mono tabular-nums">
-                  +{formatCents(activity.variationCents)}
-                </span>{" "}
-                variations
-              </span>
-            ) : null}
-          </span>
-        );
-      },
+      cell: ({ row }) => (
+        <ActivityPriceCell activity={row.original.activity} onSave={onPrice} />
+      ),
     }),
     helper.display({
       id: "quoted",
@@ -259,8 +249,8 @@ export function StageFinancialsCard({
   "use no memo";
   const data = useMemo(() => toRows(stage.activities), [stage.activities]);
   const columns = useMemo(
-    () => columnsFor(actions.onVariation),
-    [actions.onVariation],
+    () => columnsFor(actions.onVariation, actions.onPrice),
+    [actions.onVariation, actions.onPrice],
   );
   const table = useTable({
     features,
@@ -279,7 +269,9 @@ export function StageFinancialsCard({
   if (filter && rows.length === 0) return null;
 
   const label = PROJECT_STAGE_LABELS[stage.stage];
-  const { figures } = stage;
+  const { figures, price } = stage;
+  // Positive: the activities leave part of the stage price unassigned.
+  const unallocatedCents = price ? price.exGstCents - stage.allocatedCents : 0;
   const contentId = `financials-stage-${stage.stage}`;
 
   return (
@@ -315,9 +307,42 @@ export function StageFinancialsCard({
               ) : null}
             </span>
             <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-              <span>
-                <span className="text-muted-foreground">Quoted price </span>
-                <Money cents={figures.tenderCents} />
+              <span className="flex flex-col">
+                <span>
+                  <span className="text-muted-foreground">Quoted price </span>
+                  <Money cents={figures.tenderCents} />
+                </span>
+                {price ? (
+                  <span className="text-xs text-muted-foreground">
+                    {price.percentage !== null
+                      ? `${price.percentage}% of contract`
+                      : "Contract claim"}
+                    {price.gstIncluded
+                      ? ` · ${formatCents(price.claimCents)} inc GST`
+                      : ""}
+                    {stage.variationCents > 0
+                      ? ` · incl. +${formatCents(stage.variationCents)} variations`
+                      : ""}
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    No contract claim · sum of activities
+                  </span>
+                )}
+                {price && unallocatedCents !== 0 ? (
+                  <span
+                    className={cn(
+                      "text-xs font-medium",
+                      unallocatedCents < 0
+                        ? "text-destructive-ink"
+                        : "text-warning-ink",
+                    )}
+                  >
+                    {unallocatedCents > 0
+                      ? `${formatCents(unallocatedCents)} not allocated to an activity`
+                      : `Activities over by ${formatCents(-unallocatedCents)}`}
+                  </span>
+                ) : null}
               </span>
               <span>
                 <span className="text-muted-foreground">Tradie quoted </span>

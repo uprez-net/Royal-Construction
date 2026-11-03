@@ -13,6 +13,8 @@ import {
   groupRootsByStage,
   type WithChildren,
 } from "@/lib/projects/milestone-tree";
+import { resolveStageClaims } from "@/lib/projects/stage-claim";
+import type { ProjectPaymentStage } from "@/types/project-flow";
 
 import {
   bookingBillingState,
@@ -23,7 +25,7 @@ import {
   type Cents,
   type PriceBasis,
 } from "../tradies/billing-rules";
-import { countsTowardsClientPrice } from "./variation-rules";
+import { countsTowardsClientPrice, GST_RATE } from "./variation-rules";
 
 // A project's profit and loss, activity by activity. Pure: the query in
 // `financials.ts` loads the rows and this decides every figure, so the rule is
@@ -42,6 +44,14 @@ import { countsTowardsClientPrice } from "./variation-rules";
 //                  of its committed bookings' prices, ex GST.
 //   C  invoiced  — what those tradies have actually billed: the sum of the
 //                  invoices against its bookings, ex GST.
+//
+// A stage's A is not the sum of its activities. It is pegged to the stage's
+// share of the contract — the same claim the Milestones tab shows and the
+// stage invoice bills (`resolveStageClaims`), brought to ex GST — plus the
+// chargeable variations raised inside it. The activities divide that price
+// between them, and `allocatedCents` says how much of it they account for, so
+// an activity priced up or down shows as an unallocated or over-allocated
+// stage rather than quietly moving the price the client agreed to.
 //
 // Profit/loss is A − C, as the issue specifies. Before anything is invoiced
 // that is just A, which reads as the whole tender being profit; so an activity
@@ -117,6 +127,12 @@ export type FinancialBooking = {
 export type FinancialActivity = {
   readonly id: string;
   readonly name: string;
+  /**
+   * The activity's own quoted price, ex variations: the stored milestone
+   * budget, which already includes its sub-activities. The figure the inline
+   * editor starts from and `setMilestonePrice` writes.
+   */
+  readonly priceCents: Cents;
   readonly order: number;
   readonly stage: ProjectStage;
   readonly status: MilestoneStatus;
@@ -130,10 +146,30 @@ export type FinancialActivity = {
   readonly children: readonly FinancialActivity[];
 };
 
+/** A stage's price, as the contract's claim schedule fixes it. */
+export type StagePrice = {
+  /** Percentage points of the contract (15 for 15%), as the Milestones tab shows. */
+  readonly percentage: number | null;
+  /** The claim as the contract states it: inc GST when `gstIncluded`. */
+  readonly claimCents: Cents;
+  readonly gstIncluded: boolean;
+  /** The claim ex GST — the stage's A before variations. */
+  readonly exGstCents: Cents;
+};
+
 export type FinancialStage = {
   readonly stage: ProjectStage;
   readonly figures: FinancialFigures;
   readonly activities: readonly FinancialActivity[];
+  /**
+   * The contract price `figures.tenderCents` is pegged to, or null when the
+   * contract says nothing for this stage — then A is the activities' sum.
+   */
+  readonly price: StagePrice | null;
+  /** What the activities' own prices add up to, ex variations. */
+  readonly allocatedCents: Cents;
+  /** Chargeable variations raised on the stage's activities. In A. */
+  readonly variationCents: Cents;
 };
 
 export type FinancialTotals = FinancialFigures & {
@@ -186,6 +222,41 @@ export type ReportBooking = {
 };
 
 export type ReportInvoice = Omit<FinancialInvoice, "counted">;
+
+/**
+ * Each stage's contract price, from the project's claim schedule.
+ *
+ * Resolved through `resolveStageClaims`, the one rule the Milestones tab and
+ * the stage invoice already share, so the Financials tab cannot price a stage
+ * differently from what the client is billed for it. The claim is converted to
+ * ex GST when the contract sum includes GST — the same `gstIncluded` reading
+ * the stage invoice uses for its line amounts — because every other figure in
+ * the report is ex GST. A stage with no knowable claim is left out, and its
+ * price falls back to the sum of its activities.
+ */
+export function resolveStagePrices(input: {
+  readonly paymentStages: readonly ProjectPaymentStage[] | null | undefined;
+  readonly totalBudget: number;
+  readonly gstIncluded: boolean | null | undefined;
+}): Partial<Record<ProjectStage, StagePrice>> {
+  const claims = resolveStageClaims(input.paymentStages, input.totalBudget);
+  const gstIncluded = Boolean(input.gstIncluded);
+  const prices: Partial<Record<ProjectStage, StagePrice>> = {};
+  for (const stage of Object.values(ProjectStage)) {
+    const { claim, percentage } = claims[stage];
+    if (claim === null || !Number.isFinite(claim) || claim <= 0) continue;
+    const claimCents = Math.round(claim * 100);
+    prices[stage] = {
+      claimCents,
+      exGstCents: gstIncluded
+        ? Math.round(claimCents / (1 + GST_RATE))
+        : claimCents,
+      gstIncluded,
+      percentage,
+    };
+  }
+  return prices;
+}
 
 /** The sums a set of figures is derived from. */
 type Sums = {
@@ -280,6 +351,8 @@ export function buildProjectFinancialReport(input: {
   readonly bookings: readonly ReportBooking[];
   readonly invoices: readonly ReportInvoice[];
   readonly variations?: readonly ReportVariation[];
+  /** From `resolveStagePrices`. A stage absent here is priced by its activities. */
+  readonly stagePrices?: Partial<Record<ProjectStage, StagePrice>>;
 }): ProjectFinancialReport {
   // Variations are counted on the activity they reprice. One logged before
   // variations named an activity has no tender to join, so it is left out
@@ -369,7 +442,7 @@ export function buildProjectFinancialReport(input: {
 
   const toActivity = (
     node: WithChildren<ReportMilestone>,
-  ): { activity: FinancialActivity; sums: Sums } => {
+  ): { activity: FinancialActivity; sums: Sums; variationCents: Cents } => {
     const children = node.childrenMilestones.map(toActivity);
     const bookings = [...(bookingsByMilestone.get(node.id) ?? [])].sort(
       (a, b) => a.scheduledDate.localeCompare(b.scheduledDate),
@@ -388,6 +461,10 @@ export function buildProjectFinancialReport(input: {
       tender: Math.max(0, node.budgetCents - childTender) + variationCents,
     };
     const sums = children.map((child) => child.sums).reduce(add, ownSums);
+    const subtreeVariationCents = children.reduce(
+      (total, child) => total + child.variationCents,
+      variationCents,
+    );
     if (ownSums.invoiced > 0) {
       profitTender += ownSums.tender;
       profitInvoiced += ownSums.invoiced;
@@ -401,11 +478,13 @@ export function buildProjectFinancialReport(input: {
         name: node.name,
         order: node.order,
         own: figuresOf(ownSums),
+        priceCents: sums.tender - subtreeVariationCents,
         stage: node.projectStage,
         status: node.status,
         variationCents,
       },
       sums,
+      variationCents: subtreeVariationCents,
     };
   };
 
@@ -418,12 +497,23 @@ export function buildProjectFinancialReport(input: {
     const roots = byStage[stage];
     if (!roots?.length) continue;
     const built = roots.map(toActivity);
-    const sums = built.map((root) => root.sums).reduce(add, ZERO);
+    const activitySums = built.map((root) => root.sums).reduce(add, ZERO);
+    const stageVariationCents = built.reduce(
+      (total, root) => total + root.variationCents,
+      0,
+    );
+    const price = input.stagePrices?.[stage] ?? null;
+    const sums: Sums = price
+      ? { ...activitySums, tender: price.exGstCents + stageVariationCents }
+      : activitySums;
     stageTotals = add(stageTotals, sums);
     stages.push({
       activities: built.map((root) => root.activity),
+      allocatedCents: activitySums.tender - stageVariationCents,
       figures: figuresOf(sums),
+      price,
       stage,
+      variationCents: stageVariationCents,
     });
   }
 

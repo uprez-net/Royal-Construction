@@ -12,6 +12,7 @@ import {
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
 import type {
+  FinancialActivity,
   FinancialBooking,
   FinancialInvoice,
 } from "@/lib/domain/projects/financial-report";
@@ -63,6 +64,11 @@ export type InvoiceActions = {
   readonly onRecheck: (scheduleId: string) => void;
   /** Raise a variation on an activity, opened on that activity. */
   readonly onVariation: (milestoneId: string) => void;
+  /** Save an activity's quoted price; resolves true once it is saved. */
+  readonly onPrice: (
+    activity: FinancialActivity,
+    price: number,
+  ) => Promise<boolean>;
 };
 
 export function InvoiceList({

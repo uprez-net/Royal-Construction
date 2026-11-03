@@ -42,6 +42,7 @@ import {
   allocateTradieInvoiceAction,
   dismissEmailedInvoiceAction,
   fetchProjectFinancials,
+  setMilestonePriceAction,
   type ProjectFinancialsResult,
 } from "@/lib/data/project-financials";
 import type { EmailedTradieInvoice } from "@/lib/domain/tradies/invoice-inbox";
@@ -316,7 +317,36 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
     }
   }
 
+  async function savePrice(
+    activity: FinancialActivity,
+    price: number,
+  ): Promise<boolean> {
+    try {
+      const result = await setMilestonePriceAction({
+        milestoneId: activity.id,
+        previousPriceCents: activity.priceCents,
+        price,
+        projectId: project.id,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        // A price moved under the operator: show them the figure it moved to.
+        void queryClient.invalidateQueries({
+          queryKey: financialsKey(project.id),
+        });
+        return false;
+      }
+      applyResult(result);
+      toast.success(`${activity.name} repriced.`);
+      return true;
+    } catch {
+      toast.error("The price could not be saved. Try again.");
+      return false;
+    }
+  }
+
   const actions = {
+    onPrice: savePrice,
     onRecord: (scheduleId: string) => setRecordFor(scheduleId),
     onVoid: (invoice: FinancialInvoice) => setVoiding(invoice),
     onRecheck: (scheduleId: string) => setRecheckFor(scheduleId),

@@ -80,6 +80,7 @@ const CALLER_CHECKS = new Set([
   "recordTradieInvoice",
   "allocateTradieInvoice",
   "voidTradieInvoice",
+  "setMilestonePrice",
   // Request recheck: both call requireAdminPrincipal and authorizeProject
   // before they read the booking or send anything.
   "prepareTradieInvoiceRecheck",

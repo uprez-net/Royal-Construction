@@ -230,6 +230,16 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
     milestoneId: data.milestoneId,
   }),
 
+  milestonePriceChanged: (data) => ({
+    id: uuidv4(),
+    type: "milestonePriceChanged",
+    message: `${data.milestoneName} quoted price changed from ${data.previousPrice} to ${data.price}`,
+    authorId: "system",
+    timestamp: new Date().toISOString(),
+    projectId: data.projectId,
+    milestoneId: data.milestoneId,
+  }),
+
   newMilestonePhotoUploaded: (data) => ({
     id: uuidv4(),
     type: "newMilestonePhotoUploaded",

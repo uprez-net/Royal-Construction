@@ -11,6 +11,7 @@ import { describe, test } from "vitest";
 
 import {
   buildProjectFinancialReport,
+  resolveStagePrices,
   type ReportBooking,
   type ReportInvoice,
   type ReportMilestone,
@@ -488,5 +489,92 @@ describe("variations", () => {
     assert.equal(report.totals.tenderCents, 1_250_000);
     assert.equal(report.totals.chargeableVariationCents, 250_000);
     assert.equal(report.totals.promotionalVariationCents, 80_000);
+  });
+});
+
+describe("stage price pegged to the contract", () => {
+  // A $110,000 contract inc GST: Frame is 25% of it by the standard schedule.
+  const prices = resolveStagePrices({
+    gstIncluded: true,
+    paymentStages: null,
+    totalBudget: 110_000,
+  });
+
+  test("the stage claim is the Milestones tab's, brought to ex GST", () => {
+    assert.deepEqual(prices.Frame, {
+      claimCents: 2_750_000,
+      exGstCents: 2_500_000,
+      gstIncluded: true,
+      percentage: 25,
+    });
+  });
+
+  test("the contract's own schedule wins over the standard one", () => {
+    const own = resolveStagePrices({
+      gstIncluded: false,
+      paymentStages: [{ amount: 30_000, label: "Frame 30%", percentage: 30 }],
+      totalBudget: 100_000,
+    });
+    assert.equal(own.Frame?.exGstCents, 3_000_000);
+    assert.equal(own.Frame?.percentage, 30);
+  });
+
+  test("no budget leaves every stage unpriced rather than at $0", () => {
+    assert.deepEqual(
+      resolveStagePrices({
+        gstIncluded: true,
+        paymentStages: null,
+        totalBudget: 0,
+      }),
+      {},
+    );
+  });
+
+  test("A is the claim plus variations, whatever the activities add up to", () => {
+    const report = buildProjectFinancialReport({
+      bookings: [],
+      invoices: [],
+      milestones: [
+        milestone({ budgetCents: 1_500_000, id: "frame" }),
+        milestone({ budgetCents: 500_000, id: "trusses", parentId: "frame" }),
+        milestone({ budgetCents: 300_000, id: "bracing" }),
+      ],
+      stagePrices: prices,
+      variations: [
+        {
+          costCents: 40_000,
+          kind: "CHARGEABLE",
+          milestoneId: "trusses",
+          status: "APPROVED",
+        },
+      ],
+    });
+    const [stage] = report.stages;
+    assert.equal(stage.price?.exGstCents, 2_500_000);
+    assert.equal(stage.figures.tenderCents, 2_540_000);
+    assert.equal(stage.variationCents, 40_000);
+    // The activities account for $18,000 of the $25,000 stage price.
+    assert.equal(stage.allocatedCents, 1_800_000);
+    assert.equal(report.totals.tenderCents, 2_540_000);
+
+    const [frame, bracing] = stage.activities;
+    // The editable price is the stored budget: ex variations, with children.
+    assert.equal(frame.priceCents, 1_500_000);
+    assert.equal(frame.figures.tenderCents, 1_540_000);
+    assert.equal(frame.children[0].priceCents, 500_000);
+    assert.equal(bracing.priceCents, 300_000);
+  });
+
+  test("a stage the contract does not price is the sum of its activities", () => {
+    const report = buildProjectFinancialReport({
+      bookings: [],
+      invoices: [],
+      milestones: [milestone({ budgetCents: 700_000, id: "frame" })],
+      stagePrices: {},
+    });
+    const [stage] = report.stages;
+    assert.equal(stage.price, null);
+    assert.equal(stage.figures.tenderCents, 700_000);
+    assert.equal(stage.allocatedCents, 700_000);
   });
 });

@@ -12,7 +12,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, test } from "vitest";
 
 import { StageFinancialsCard } from "@/components/projects/detail/financials-tab/stage-financials-card";
-import { buildProjectFinancialReport } from "@/lib/domain/projects/financial-report";
+import {
+  buildProjectFinancialReport,
+  type FinancialStage,
+} from "@/lib/domain/projects/financial-report";
 import {
   NO_FINANCIAL_FILTER,
   type FinancialFilter,
@@ -93,10 +96,12 @@ const noop = () => {};
 function render(
   expanded: ExpandedState,
   filter: FinancialFilter | undefined = undefined,
+  stage: FinancialStage = report.stages[0],
 ) {
   return renderToStaticMarkup(
     createElement(StageFinancialsCard, {
       actions: {
+        onPrice: async () => true,
         onRecheck: noop,
         onRecord: noop,
         onVariation: noop,
@@ -107,7 +112,7 @@ function render(
       onExpandedChange: noop,
       onOpenChange: noop,
       open: true,
-      stage: report.stages[0],
+      stage,
     }),
   );
 }
@@ -152,5 +157,41 @@ describe("StageFinancialsCard", () => {
   test("a stage with nothing matching renders nothing", () => {
     const html = render(true, { ...NO_FINANCIAL_FILTER, search: "plumbing" });
     assert.equal(html, "");
+  });
+});
+
+describe("StageFinancialsCard pricing", () => {
+  test("every activity row offers to edit its quoted price", () => {
+    const html = render(true);
+    assert.match(html, /aria-label="Edit the quoted price for Lock-up works"/);
+    assert.match(html, /aria-label="Edit the quoted price for Roof sheeting"/);
+  });
+
+  test("a pegged stage names its contract share and what is unallocated", () => {
+    const html = render({}, undefined, {
+      ...report.stages[0],
+      allocatedCents: 500_00,
+      price: {
+        claimCents: 880_00,
+        exGstCents: 800_00,
+        gstIncluded: true,
+        percentage: 25,
+      },
+    });
+    assert.match(html, /25% of contract · \$880\.00 inc GST/);
+    assert.match(html, /\$300\.00 not allocated to an activity/);
+  });
+
+  test("activities priced past the stage say by how much", () => {
+    const html = render({}, undefined, {
+      ...report.stages[0],
+      price: {
+        claimCents: 400_00,
+        exGstCents: 400_00,
+        gstIncluded: false,
+        percentage: 25,
+      },
+    });
+    assert.match(html, /Activities over by \$100\.00/);
   });
 });
