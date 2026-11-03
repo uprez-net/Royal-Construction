@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, type ReactNode } from "react";
 import {
   columnFilteringFeature,
   createColumnHelper,
@@ -209,14 +209,46 @@ function columnsFor(
   ]);
 }
 
+// The stage header's figures sit in the same fixed widths as these columns, so
+// a figure keeps its place whether a stage is open, closed or has long notes.
+const METRIC_WIDTH = {
+  tender: "lg:w-40",
+  quoted: "lg:w-36",
+  invoiced: "lg:w-36",
+  profit: "lg:w-48",
+  action: "lg:w-28",
+} as const;
+
 const COLUMN_CLASS: Record<string, string> = {
   activity: "min-w-64",
-  invoiced: NUMERIC,
-  profit: `${NUMERIC} min-w-44`,
-  quoted: NUMERIC,
-  tender: NUMERIC,
-  variation: "w-0 text-right whitespace-nowrap",
+  invoiced: `${NUMERIC} w-36`,
+  profit: `${NUMERIC} w-48`,
+  quoted: `${NUMERIC} w-36`,
+  tender: `${NUMERIC} w-40`,
+  variation: "w-28 text-right whitespace-nowrap",
 };
+
+function StageMetric({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      className={cn(
+        "flex flex-col gap-0.5 text-sm lg:items-end lg:text-right",
+        className,
+      )}
+    >
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="whitespace-nowrap">{children}</span>
+    </span>
+  );
+}
 
 /**
  * One stage of the build: a collapsible card holding its activities, each a
@@ -281,84 +313,93 @@ export function StageFinancialsCard({
           <button
             type="button"
             aria-controls={contentId}
-            className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 text-left hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:px-5"
+            className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 text-left hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:pl-5 sm:pr-3"
           >
-            <span className="flex min-w-0 flex-1 items-center gap-2">
-              {open ? (
-                <ChevronDown
-                  className="size-4 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              ) : (
-                <ChevronRight
-                  className="size-4 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              )}
-              <span className="font-heading text-lg font-semibold text-foreground">
-                {label}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                {stage.activities.length} activit
-                {stage.activities.length === 1 ? "y" : "ies"}
-              </span>
-              {figures.overInvoiced ? (
-                <StatusPill tone="danger">Invoiced exceeds quoted</StatusPill>
-              ) : null}
-            </span>
-            <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-              <span className="flex flex-col">
-                <span>
-                  <span className="text-muted-foreground">Quoted price </span>
-                  <Money cents={figures.tenderCents} />
-                </span>
-                {price ? (
-                  <span className="text-xs text-muted-foreground">
-                    {price.percentage !== null
-                      ? `${price.percentage}% of contract`
-                      : "Contract claim"}
-                    {price.gstIncluded
-                      ? ` · ${formatCents(price.claimCents)} inc GST`
-                      : ""}
-                    {stage.variationCents > 0
-                      ? ` · incl. +${formatCents(stage.variationCents)} variations`
-                      : ""}
-                  </span>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="flex min-w-0 flex-wrap items-center gap-2">
+                {open ? (
+                  <ChevronDown
+                    className="size-4 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 ) : (
-                  <span className="text-xs text-muted-foreground">
-                    No contract claim · sum of activities
-                  </span>
+                  <ChevronRight
+                    className="size-4 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 )}
-                {price && unallocatedCents !== 0 ? (
-                  <span
-                    className={cn(
-                      "text-xs font-medium",
-                      unallocatedCents < 0
-                        ? "text-destructive-ink"
-                        : "text-warning-ink",
-                    )}
-                  >
-                    {unallocatedCents > 0
-                      ? `${formatCents(unallocatedCents)} not allocated to an activity`
-                      : `Activities over by ${formatCents(-unallocatedCents)}`}
-                  </span>
+                <span className="font-heading text-lg font-semibold text-foreground">
+                  {label}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  {stage.activities.length} activit
+                  {stage.activities.length === 1 ? "y" : "ies"}
+                </span>
+                {figures.overInvoiced ? (
+                  <StatusPill tone="danger">Invoiced exceeds quoted</StatusPill>
                 ) : null}
               </span>
-              <span>
-                <span className="text-muted-foreground">Tradie quoted </span>
+              <span className="pl-6 text-xs text-muted-foreground">
+                {price
+                  ? `${
+                      price.percentage !== null
+                        ? `${price.percentage}% of contract`
+                        : "Contract claim"
+                    }${
+                      price.gstIncluded
+                        ? ` · ${formatCents(price.claimCents)} inc GST`
+                        : ""
+                    }${
+                      stage.variationCents > 0
+                        ? ` · incl. +${formatCents(stage.variationCents)} variations`
+                        : ""
+                    }`
+                  : "No contract claim · sum of activities"}
+              </span>
+              {price && unallocatedCents !== 0 ? (
+                <span
+                  className={cn(
+                    "pl-6 text-xs font-medium",
+                    unallocatedCents < 0
+                      ? "text-destructive-ink"
+                      : "text-warning-ink",
+                  )}
+                >
+                  {unallocatedCents > 0
+                    ? `${formatCents(unallocatedCents)} not allocated to an activity`
+                    : `Activities over by ${formatCents(-unallocatedCents)}`}
+                </span>
+              ) : null}
+            </span>
+            <span className="grid w-full grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:flex lg:w-auto lg:items-start lg:gap-x-0">
+              <StageMetric label="Quoted price" className={METRIC_WIDTH.tender}>
+                <Money cents={figures.tenderCents} />
+              </StageMetric>
+              <StageMetric
+                label="Tradie quoted"
+                className={METRIC_WIDTH.quoted}
+              >
                 <Money cents={figures.quotedCents} />
-              </span>
-              <span>
-                <span className="text-muted-foreground">Total invoiced </span>
+              </StageMetric>
+              <StageMetric
+                label="Total invoiced"
+                className={METRIC_WIDTH.invoiced}
+              >
                 <Money cents={figures.invoicedCents} />
-              </span>
-              <ProfitLoss figures={figures} />
+              </StageMetric>
+              <StageMetric label="Profit/Loss" className={METRIC_WIDTH.profit}>
+                <ProfitLoss figures={figures} />
+              </StageMetric>
+              <span
+                className={cn("hidden lg:block", METRIC_WIDTH.action)}
+                aria-hidden="true"
+              />
             </span>
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent id={contentId}>
           <div className="overflow-x-auto border-t border-border/70">
-            <table className="w-full caption-bottom text-sm">
+            <table className="w-full min-w-[64rem] table-fixed caption-bottom text-sm">
               <caption className="sr-only">
                 {label} activities: quoted price, tradie quotes, invoices and
                 profit or loss

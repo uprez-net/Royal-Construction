@@ -188,7 +188,8 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
   const debouncedSearch = useDebounce(searchBox, 250);
 
   const [expanded, setExpanded] = useState<ExpandedState>({});
-  const [closedStages, setClosedStages] = useState<ReadonlySet<ProjectStage>>(
+  // Every stage starts closed; the operator opens the ones they want.
+  const [openStages, setOpenStages] = useState<ReadonlySet<ProjectStage>>(
     () => new Set(),
   );
   const [recordFor, setRecordFor] = useState<string | null | undefined>(
@@ -381,6 +382,76 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
 
   return (
     <div className="space-y-4">
+      {/* The whole project, first thing on the tab, whatever the filter shows. */}
+      <Card className="bg-card p-4 shadow-sm sm:p-5">
+        <h3 className="sr-only">Project totals</h3>
+        <dl className="grid grid-cols-2 gap-4 text-sm lg:grid-cols-5">
+          <div>
+            <dt className="text-muted-foreground">Quoted price</dt>
+            <dd className="mt-1 text-lg">
+              <Money cents={totals.tenderCents} />
+            </dd>
+            {totals.chargeableVariationCents > 0 ? (
+              <dd className="text-xs text-muted-foreground">
+                incl. {formatCents(totals.chargeableVariationCents)} in
+                variations
+              </dd>
+            ) : null}
+            {totals.promotionalVariationCents > 0 ? (
+              <dd className="text-xs text-destructive-ink">
+                {formatCents(totals.promotionalVariationCents)} promotional,
+                borne by the builder
+              </dd>
+            ) : null}
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Tradie quoted</dt>
+            <dd className="mt-1 text-lg">
+              <Money cents={totals.quotedCents} />
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Total invoiced</dt>
+            <dd className="mt-1 text-lg">
+              <Money cents={totals.invoicedCents} />
+            </dd>
+            {totals.unallocatedCents > 0 ? (
+              <dd className="text-xs text-muted-foreground">
+                incl. {formatCents(totals.unallocatedCents)} not yet allocated
+              </dd>
+            ) : null}
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Profit/Loss to date</dt>
+            <dd className="mt-1 text-right text-base lg:text-left">
+              <ProfitLoss figures={totals} showForecast={false} />
+            </dd>
+            <dd className="text-xs text-muted-foreground">
+              On the activities invoiced so far
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Forecast at completion</dt>
+            <dd className="mt-1 text-lg">
+              <span
+                className={`font-mono font-medium tabular-nums ${forecastToneClass(totals.forecastProfitCents)}`}
+              >
+                {formatSignedCents(totals.forecastProfitCents)}
+              </span>
+              {totals.forecastPercent !== null ? (
+                <span className="ml-1 font-mono text-sm tabular-nums text-muted-foreground">
+                  {totals.forecastPercent.toFixed(1)}%
+                </span>
+              ) : null}
+            </dd>
+            <dd className="text-xs text-muted-foreground">
+              Quoted price less each booking&apos;s quote or invoices, whichever
+              is more
+            </dd>
+          </div>
+        </dl>
+      </Card>
+
       {/* The filter for every stage at once. */}
       <Card className="gap-3 bg-card p-3 shadow-sm sm:p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -550,12 +621,12 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
           key={stage.stage}
           stage={stage}
           filter={globalFilter}
-          open={active || !closedStages.has(stage.stage)}
+          open={active || openStages.has(stage.stage)}
           onOpenChange={(open) =>
-            setClosedStages((previous) => {
+            setOpenStages((previous) => {
               const next = new Set(previous);
-              if (open) next.delete(stage.stage);
-              else next.add(stage.stage);
+              if (open) next.add(stage.stage);
+              else next.delete(stage.stage);
               return next;
             })
           }
@@ -584,76 +655,6 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
           />
         </SectionCard>
       ) : null}
-
-      {/* The footer: the whole project, whatever the filter shows. */}
-      <Card className="bg-card p-4 shadow-sm sm:p-5">
-        <h3 className="sr-only">Project totals</h3>
-        <dl className="grid grid-cols-2 gap-4 text-sm lg:grid-cols-5">
-          <div>
-            <dt className="text-muted-foreground">Quoted price</dt>
-            <dd className="mt-1 text-lg">
-              <Money cents={totals.tenderCents} />
-            </dd>
-            {totals.chargeableVariationCents > 0 ? (
-              <dd className="text-xs text-muted-foreground">
-                incl. {formatCents(totals.chargeableVariationCents)} in
-                variations
-              </dd>
-            ) : null}
-            {totals.promotionalVariationCents > 0 ? (
-              <dd className="text-xs text-destructive-ink">
-                {formatCents(totals.promotionalVariationCents)} promotional,
-                borne by the builder
-              </dd>
-            ) : null}
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Tradie quoted</dt>
-            <dd className="mt-1 text-lg">
-              <Money cents={totals.quotedCents} />
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Total invoiced</dt>
-            <dd className="mt-1 text-lg">
-              <Money cents={totals.invoicedCents} />
-            </dd>
-            {totals.unallocatedCents > 0 ? (
-              <dd className="text-xs text-muted-foreground">
-                incl. {formatCents(totals.unallocatedCents)} not yet allocated
-              </dd>
-            ) : null}
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Profit/Loss to date</dt>
-            <dd className="mt-1 text-right text-base lg:text-left">
-              <ProfitLoss figures={totals} showForecast={false} />
-            </dd>
-            <dd className="text-xs text-muted-foreground">
-              On the activities invoiced so far
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Forecast at completion</dt>
-            <dd className="mt-1 text-lg">
-              <span
-                className={`font-mono font-medium tabular-nums ${forecastToneClass(totals.forecastProfitCents)}`}
-              >
-                {formatSignedCents(totals.forecastProfitCents)}
-              </span>
-              {totals.forecastPercent !== null ? (
-                <span className="ml-1 font-mono text-sm tabular-nums text-muted-foreground">
-                  {totals.forecastPercent.toFixed(1)}%
-                </span>
-              ) : null}
-            </dd>
-            <dd className="text-xs text-muted-foreground">
-              Quoted price less each booking&apos;s quote or invoices, whichever
-              is more
-            </dd>
-          </div>
-        </dl>
-      </Card>
 
       <RecordInvoiceDialog
         open={recordFor !== undefined}
