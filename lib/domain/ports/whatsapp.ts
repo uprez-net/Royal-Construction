@@ -37,6 +37,12 @@ export type WhatsAppChannel = {
    * token. Reads still work; a send is refused before anything is written.
    */
   readonly sendingAvailable: boolean;
+  /**
+   * WHATSAPP_GROUPS_ENABLED. Meta's Groups API is only open to Official
+   * Business Accounts, so project groups stay off until the account has that
+   * status and someone turns this on.
+   */
+  readonly groupsEnabled: boolean;
 };
 
 export type WhatsAppTextMessage = {
@@ -68,7 +74,105 @@ export type WhatsAppPort = {
   readonly sendTemplate: (
     message: WhatsAppTemplateMessage,
   ) => Promise<WhatsAppSendReceipt>;
+  /** Present only when `channel.groupsEnabled` and sending is available. */
+  readonly groups?: WhatsAppGroupsPort | null;
 };
+
+// ── Groups (Meta's Groups API) ────────────────────────────────────────
+//
+// Only groups the API itself created are visible to it: a group somebody made
+// on a phone cannot be listed, read or linked, whatever this port offers.
+
+export type WhatsAppGroupCreateRequest = {
+  readonly fromPhoneNumberId: string;
+  /** At most 100 characters, as WhatsApp shows it. */
+  readonly subject: string;
+  readonly description: string;
+};
+
+/**
+ * What Meta answered to a create. The group id and invite link normally
+ * arrive later, on the `group_lifecycle_update` webhook that names the same
+ * request id; either may be present here if Meta answered synchronously.
+ */
+export type WhatsAppGroupCreateReceipt = {
+  readonly requestId: string | null;
+  readonly groupId: string | null;
+  readonly inviteLink: string | null;
+};
+
+export type WhatsAppGroupSummary = {
+  readonly groupId: string;
+  readonly subject: string;
+  readonly createdAt: Date | null;
+};
+
+export type WhatsAppGroupInfo = {
+  readonly groupId: string;
+  readonly subject: string;
+  readonly suspended: boolean;
+  readonly participantWaIds: readonly string[];
+};
+
+export type WhatsAppGroupTextMessage = {
+  readonly fromPhoneNumberId: string;
+  readonly groupId: string;
+  readonly body: string;
+};
+
+export type WhatsAppGroupsPort = {
+  /** May throw WhatsAppSendError; `ambiguous` means a group may exist. */
+  readonly create: (
+    request: WhatsAppGroupCreateRequest,
+  ) => Promise<WhatsAppGroupCreateReceipt>;
+  readonly inviteLink: (groupId: string) => Promise<string>;
+  /** Active groups owned by one Royal number, newest first. */
+  readonly list: (
+    phoneNumberId: string,
+  ) => Promise<readonly WhatsAppGroupSummary[]>;
+  readonly info: (groupId: string) => Promise<WhatsAppGroupInfo>;
+  readonly sendText: (
+    message: WhatsAppGroupTextMessage,
+  ) => Promise<WhatsAppSendReceipt>;
+};
+
+// ── Media ─────────────────────────────────────────────────────────────
+
+export type WhatsAppMediaDownload = {
+  readonly bytes: Uint8Array;
+  readonly mimeType: string | null;
+  readonly byteSize: number;
+};
+
+/**
+ * Fetch one inbound file by Meta's media id. Meta's download URL lives for
+ * five minutes, so the adapter resolves and downloads in one call.
+ */
+export type WhatsAppMediaPort = (
+  providerMediaId: string,
+  options: { readonly maxBytes: number },
+) => Promise<WhatsAppMediaDownload>;
+
+/**
+ * Why a media download failed. `permanent` means retrying cannot help — the
+ * media expired at Meta (it keeps it thirty days), or it is too large to keep.
+ */
+export class WhatsAppMediaError extends Error {
+  constructor(
+    message: string,
+    readonly permanent: boolean,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = "WhatsAppMediaError";
+  }
+}
+
+export function isWhatsAppMediaError(
+  error: unknown,
+): error is WhatsAppMediaError {
+  return error instanceof WhatsAppMediaError;
+}
 
 /**
  * Why a send did not produce a receipt.

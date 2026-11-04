@@ -1,7 +1,7 @@
 import {
+  WhatsAppUnmatchedReason,
   WhatsAppUnmatchedStatus,
   type WhatsAppMessageKind,
-  type WhatsAppUnmatchedReason,
 } from "@prisma/client";
 
 import { authorizeLead } from "../../access/leads";
@@ -17,6 +17,11 @@ import {
   type DomainPrincipal,
   type UserPrincipal,
 } from "../../principal";
+import {
+  toWhatsAppMediaRecord,
+  WHATSAPP_MEDIA_SELECT,
+  type WhatsAppMediaRecord,
+} from "../../whatsapp/media";
 import { attachInbound } from "./inbound";
 import { isUniqueViolation } from "./records";
 
@@ -25,6 +30,16 @@ import { isUniqueViolation } from "./records";
 // A person decides. Attaching files the message on the chosen lead exactly as
 // the webhook would have (same conversation, window and unread effects);
 // dismissing keeps the row, marked, so "we looked at it" is on record.
+//
+// Messages posted in a WhatsApp group no project is linked to wait here too
+// (UNLINKED_GROUP), but not in this queue: they belong to a project, not a
+// lead, and are filed onto the project when someone links the group
+// (lib/domain/projects/whatsapp/groups.ts).
+
+/** The lead review queue: everything except messages from unlinked groups. */
+const LEAD_QUEUE = {
+  reason: { not: WhatsAppUnmatchedReason.UNLINKED_GROUP },
+} as const;
 
 export type UnmatchedWhatsAppRecord = {
   readonly id: string;
@@ -38,6 +53,7 @@ export type UnmatchedWhatsAppRecord = {
   readonly receivedAt: Date;
   readonly status: WhatsAppUnmatchedStatus;
   readonly candidates: readonly { id: number; name: string }[];
+  readonly media: WhatsAppMediaRecord | null;
 };
 
 function requireStaff(principal: DomainPrincipal): UserPrincipal {
@@ -59,12 +75,13 @@ export async function listUnmatchedWhatsAppMessages(
   const status = input.status ?? WhatsAppUnmatchedStatus.PENDING;
   const [rows, pendingCount] = await Promise.all([
     db.whatsAppUnmatchedMessage.findMany({
+      include: { media: { select: WHATSAPP_MEDIA_SELECT } },
       orderBy: { receivedAt: "desc" },
       take: Math.max(1, Math.min(input.limit ?? 50, 100)),
-      where: { status },
+      where: { ...LEAD_QUEUE, status },
     }),
     db.whatsAppUnmatchedMessage.count({
-      where: { status: WhatsAppUnmatchedStatus.PENDING },
+      where: { ...LEAD_QUEUE, status: WhatsAppUnmatchedStatus.PENDING },
     }),
   ]);
 
@@ -93,6 +110,7 @@ export async function listUnmatchedWhatsAppMessages(
       fromPhoneE164: row.fromPhoneE164,
       id: row.id,
       kind: row.kind,
+      media: toWhatsAppMediaRecord(row.media),
       profileName: row.profileName,
       reason: row.reason,
       receivedAt: row.receivedAt,
@@ -107,7 +125,12 @@ export async function attachUnmatchedWhatsAppMessage(
   input: { readonly unmatchedId: string; readonly leadId: number },
   db: TransactionalDomainDb,
   context: { readonly channel: WhatsAppChannel | null },
-): Promise<{ leadId: number; conversationId: string; messageId: string }> {
+): Promise<{
+  leadId: number;
+  conversationId: string;
+  messageId: string;
+  mediaId: string | null;
+}> {
   const staff = requireStaff(principal);
   await authorizeLead(staff, input.leadId, db);
 
@@ -120,6 +143,11 @@ export async function attachUnmatchedWhatsAppMessage(
       "This message has already been reviewed.",
       row.status,
       WhatsAppUnmatchedStatus.ATTACHED,
+    );
+  }
+  if (row.reason === WhatsAppUnmatchedReason.UNLINKED_GROUP) {
+    throw new DomainTransitionError(
+      "This was posted in a WhatsApp group. Link the group to its project and it is filed there.",
     );
   }
   const business = context.channel?.numbers.find(
@@ -153,6 +181,7 @@ export async function attachUnmatchedWhatsAppMessage(
         customerPhoneE164: row.fromPhoneE164,
         kind: row.kind,
         leadId: input.leadId,
+        media: { moveFromUnmatchedId: row.id },
         principal: staff,
         providerMessageId: row.providerMessageId,
         sentAt: row.receivedAt,

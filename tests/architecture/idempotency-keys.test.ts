@@ -143,10 +143,26 @@ const SEND_PATHS: ReadonlyArray<{
     evidence: /\.\.\.idempotencyHeader\(idempotencyKey\)/,
     route: "app/api/(data)/leads/[leadId]/whatsapp/messages/route.ts",
   },
+  {
+    // A message into a project's WhatsApp group: the same no-fallback rule.
+    caller: "lib/projects/whatsapp-service.ts",
+    evidence:
+      /\$\{base\(projectId\)\}\/messages`,\s*\{[\s\S]*?\.\.\.idempotencyHeader\(idempotencyKey\)/,
+    route: "app/api/(data)/projects/[projectId]/whatsapp/messages/route.ts",
+  },
+  {
+    // The email inviting a project's owners into its group.
+    caller: "lib/projects/whatsapp-service.ts",
+    evidence:
+      /\$\{base\(projectId\)\}\/invite`,\s*\{\s*body[\s\S]*?\.\.\.idempotencyHeader\(idempotencyKey\)/,
+    route: "app/api/(data)/projects/[projectId]/whatsapp/invite/route.ts",
+  },
 ];
 
-test("the WhatsApp modal holds one key per message and rotates only after success", () => {
-  const modal = read("components/leads/whatsapp/lead-whatsapp-modal.tsx");
+test("the WhatsApp conversation holds one key per message and rotates only after success", () => {
+  const modal = read(
+    "components/leads/whatsapp/lead-whatsapp-conversation.tsx",
+  );
   assert.match(modal, /useIdempotencyKey\(\)/);
   assert.match(
     modal,

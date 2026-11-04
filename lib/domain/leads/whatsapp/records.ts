@@ -7,6 +7,11 @@ import type {
 
 import type { DomainDb } from "../../db";
 import { attributionUserId, type DomainPrincipal } from "../../principal";
+import {
+  toWhatsAppMediaRecord,
+  WHATSAPP_MEDIA_SELECT,
+  type WhatsAppMediaRecord,
+} from "../../whatsapp/media";
 
 // The shapes every WhatsApp command and query hands back, and the one history
 // writer they share. Typed domain records, not view models: the modal and Eve
@@ -29,6 +34,7 @@ export const WHATSAPP_MESSAGE_SELECT = {
   id: true,
   kind: true,
   leadId: true,
+  media: { select: WHATSAPP_MEDIA_SELECT },
   needsReconciliation: true,
   occurredAt: true,
   providerErrorCode: true,
@@ -65,6 +71,8 @@ export type LeadWhatsAppMessageRecord = {
   readonly customerPhoneE164: string;
   /** The staff member who sent it; null for inbound and unattributed sends. */
   readonly authorName: string | null;
+  /** The attached file, for a MEDIA message. */
+  readonly media: WhatsAppMediaRecord | null;
 };
 
 export function toWhatsAppMessageRecord(
@@ -83,6 +91,7 @@ export function toWhatsAppMessageRecord(
     id: row.id,
     kind: row.kind,
     leadId: row.leadId,
+    media: toWhatsAppMediaRecord(row.media ?? null),
     needsReconciliation: row.needsReconciliation,
     occurredAt: row.occurredAt,
     providerErrorCode: row.providerErrorCode,

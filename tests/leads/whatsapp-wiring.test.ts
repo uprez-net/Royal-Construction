@@ -118,7 +118,10 @@ test("the open thread polls while visible so an inbound reply appears", () => {
 
 test("inbound bodies are never rendered as HTML", () => {
   for (const file of [
-    "components/leads/whatsapp/whatsapp-thread.tsx",
+    "components/whatsapp/whatsapp-chat.tsx",
+    "components/whatsapp/whatsapp-media.tsx",
+    "components/leads/whatsapp/lead-whatsapp-conversation.tsx",
+    "components/projects/detail/whatsapp/project-whatsapp-group-chat.tsx",
     "components/leads/whatsapp/unmatched-whatsapp-review.tsx",
   ]) {
     assert.doesNotMatch(read(file), /dangerouslySetInnerHTML/, file);

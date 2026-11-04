@@ -8,6 +8,14 @@ import {
   recordWhatsAppDeliveryStatus,
   type WhatsAppStatusOutcome,
 } from "@/lib/domain/leads/whatsapp/status";
+import {
+  applyWhatsAppGroupEvent,
+  type WhatsAppGroupEventOutcome,
+} from "@/lib/domain/projects/whatsapp/groups";
+import {
+  recordInboundProjectWhatsAppMessage,
+  type InboundProjectWhatsAppOutcome,
+} from "@/lib/domain/projects/whatsapp/inbound";
 import { systemPrincipal } from "@/lib/domain/principal";
 import {
   createFixedWindowRateLimiter,
@@ -59,6 +67,13 @@ export type WhatsAppWebhookDeps = {
   /** Injectable for tests; defaults to the module-scope limiter. */
   readonly allow?: (key: string) => boolean;
   readonly log?: Pick<Console, "info" | "warn" | "error">;
+  /**
+   * Called once the delivery is committed, with the attachments it recorded,
+   * to start copying them into Blob storage. Its failure never fails the
+   * delivery: the files are already on record as PENDING, and the daily sweep
+   * (app/api/cron/whatsapp-sweep) picks up anything that was not started.
+   */
+  readonly onMediaRecorded?: (mediaIds: readonly string[]) => Promise<void>;
 };
 
 function text(status: number, body: string, headers: HeadersInit = {}) {
@@ -153,6 +168,16 @@ export async function handleWhatsAppWebhookDelivery(
     duplicate: 0,
     unmatched: 0,
   };
+  const group: Record<InboundProjectWhatsAppOutcome["outcome"], number> = {
+    attached: 0,
+    duplicate: 0,
+    unlinked: 0,
+  };
+  const groupEvents: Record<WhatsAppGroupEventOutcome, number> = {
+    applied: 0,
+    unknown_group: 0,
+  };
+  const mediaIds: string[] = [];
   const statuses: Record<WhatsAppStatusOutcome, number> = {
     applied: 0,
     awaiting_message: 0,
@@ -164,6 +189,19 @@ export async function handleWhatsAppWebhookDelivery(
     // Sequentially: a delivery is small, and ordering keeps a message and its
     // own statuses in the order Meta sent them.
     for (const message of parsed.messages) {
+      if (message.groupId) {
+        // A group message is a project's, whatever number posted it.
+        const result = await recordInboundProjectWhatsAppMessage(
+          WHATSAPP_WEBHOOK_PRINCIPAL,
+          message,
+          deps.db,
+        );
+        group[result.outcome] += 1;
+        if (result.outcome !== "duplicate" && result.mediaId) {
+          mediaIds.push(result.mediaId);
+        }
+        continue;
+      }
       const result = await recordInboundLeadWhatsAppMessage(
         WHATSAPP_WEBHOOK_PRINCIPAL,
         message,
@@ -171,6 +209,9 @@ export async function handleWhatsAppWebhookDelivery(
         { channel: config.channel },
       );
       inbound[result.outcome] += 1;
+      if (result.outcome !== "duplicate" && result.mediaId) {
+        mediaIds.push(result.mediaId);
+      }
       if (result.outcome === "unmatched") {
         log.info(
           `[whatsapp-webhook] ${message.providerMessageId} held for review (${result.reason}).`,
@@ -190,6 +231,14 @@ export async function handleWhatsAppWebhookDelivery(
         );
       }
     }
+    for (const event of parsed.groupEvents) {
+      const result = await applyWhatsAppGroupEvent(
+        WHATSAPP_WEBHOOK_PRINCIPAL,
+        event,
+        deps.db,
+      );
+      groupEvents[result.outcome] += 1;
+    }
   } catch (error) {
     // A domain refusal here is a bug — the webhook is the system principal
     // every inbound command is written for — and it must not look like
@@ -203,8 +252,19 @@ export async function handleWhatsAppWebhookDelivery(
     return text(500, "Not recorded");
   }
 
+  if (mediaIds.length > 0 && deps.onMediaRecorded) {
+    try {
+      await deps.onMediaRecorded(mediaIds);
+    } catch (error) {
+      log.warn(
+        `[whatsapp-webhook] Could not start copying ${mediaIds.length} file(s); the daily sweep will.`,
+        error,
+      );
+    }
+  }
+
   log.info(
-    `[whatsapp-webhook] messages ${JSON.stringify(inbound)}; statuses ${JSON.stringify(statuses)}${
+    `[whatsapp-webhook] messages ${JSON.stringify(inbound)}; group messages ${JSON.stringify(group)}; group events ${JSON.stringify(groupEvents)}; media ${mediaIds.length}; statuses ${JSON.stringify(statuses)}${
       parsed.ignored.length
         ? `; ignored ${parsed.ignored.length}: ${parsed.ignored.join("; ")}`
         : ""

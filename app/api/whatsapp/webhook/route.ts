@@ -1,9 +1,12 @@
+import { start } from "workflow/api";
+
 import prisma from "@/lib/prisma";
 import { readWhatsAppConfig } from "@/lib/whatsapp/config";
 import {
   handleWhatsAppWebhookDelivery,
   handleWhatsAppWebhookVerification,
 } from "@/lib/whatsapp/webhook-handler";
+import { storeWhatsAppMediaFiles } from "@/lib/workflow/whatsapp-media";
 
 /**
  * Meta WhatsApp Cloud API webhook (issue #333).
@@ -31,5 +34,10 @@ export async function POST(request: Request): Promise<Response> {
   return handleWhatsAppWebhookDelivery(request, {
     config: readWhatsAppConfig(),
     db: prisma,
+    // Photos, voice notes and documents are copied into Blob storage by a
+    // workflow, after the delivery is committed (lib/workflow/whatsapp-media.ts).
+    onMediaRecorded: async (mediaIds) => {
+      await start(storeWhatsAppMediaFiles, [[...mediaIds]]);
+    },
   });
 }

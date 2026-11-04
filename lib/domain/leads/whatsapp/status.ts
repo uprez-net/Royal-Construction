@@ -154,15 +154,23 @@ async function applyStatus(
   db: DomainDb,
   input: WhatsAppStatusUpdate,
 ): Promise<Exclude<WhatsAppStatusOutcome, "duplicate">> {
-  const message = await db.leadWhatsAppMessage.findUnique({
-    select: {
-      deliveredAt: true,
-      id: true,
-      readAt: true,
-      status: true,
-    },
-    where: { providerMessageId: input.providerMessageId },
+  // A wamid is a lead's 1:1 message or a project group's message — the same
+  // forward-only rule applies to both, so it is written once here.
+  const select = {
+    deliveredAt: true,
+    id: true,
+    readAt: true,
+    status: true,
+  } as const;
+  const where = { providerMessageId: input.providerMessageId };
+  const leadMessage = await db.leadWhatsAppMessage.findUnique({
+    select,
+    where,
   });
+  const projectMessage = leadMessage
+    ? null
+    : await db.projectWhatsAppMessage.findUnique({ select, where });
+  const message = leadMessage ?? projectMessage;
   if (!message) return "awaiting_message";
 
   const next = nextWhatsAppStatus(message.status, input.status);
@@ -175,27 +183,30 @@ async function applyStatus(
 
   if (!next && !fillDelivered && !fillRead) return "stale";
 
+  const data = {
+    ...(next
+      ? {
+          status: next,
+          statusAt: input.occurredAt,
+          ...(next === WhatsAppMessageStatus.FAILED
+            ? {
+                failedAt: input.occurredAt,
+                providerErrorCode: input.errorCode ?? null,
+                providerErrorTitle: input.errorTitle ?? null,
+              }
+            : {}),
+        }
+      : {}),
+    ...(fillDelivered ? { deliveredAt: input.occurredAt } : {}),
+    ...(fillRead ? { readAt: input.occurredAt } : {}),
+  };
   // Guarded on the status just read, so two callbacks applied concurrently
   // cannot both move it: the loser matches no row and changes nothing.
-  await db.leadWhatsAppMessage.updateMany({
-    data: {
-      ...(next
-        ? {
-            status: next,
-            statusAt: input.occurredAt,
-            ...(next === WhatsAppMessageStatus.FAILED
-              ? {
-                  failedAt: input.occurredAt,
-                  providerErrorCode: input.errorCode ?? null,
-                  providerErrorTitle: input.errorTitle ?? null,
-                }
-              : {}),
-          }
-        : {}),
-      ...(fillDelivered ? { deliveredAt: input.occurredAt } : {}),
-      ...(fillRead ? { readAt: input.occurredAt } : {}),
-    },
-    where: { id: message.id, status: message.status },
-  });
+  const guard = { id: message.id, status: message.status };
+  if (leadMessage) {
+    await db.leadWhatsAppMessage.updateMany({ data, where: guard });
+  } else {
+    await db.projectWhatsAppMessage.updateMany({ data, where: guard });
+  }
   return next ? "applied" : "stale";
 }

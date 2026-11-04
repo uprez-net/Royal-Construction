@@ -16,6 +16,10 @@ short on purpose; the reasoning lives in the code it names.
 | Meta Cloud API adapter | `lib/whatsapp/cloud-api.ts` |
 | Webhook | `app/api/whatsapp/webhook/route.ts` → `lib/whatsapp/webhook-handler.ts` |
 | Phone backfill | `pnpm whatsapp:backfill-phones` (`scripts/backfill-lead-phone-e164.ts`) |
+| Media copied to Blob | `lib/domain/whatsapp/media.ts`, `lib/workflow/whatsapp-media.ts` |
+| Project groups | `lib/domain/projects/whatsapp/`, `lib/workflow/whatsapp-group.ts` |
+| Daily sweep (media, unconfirmed groups) | `app/api/cron/whatsapp-sweep/route.ts` |
+| Status page | Admin › WhatsApp (`app/(main)/admin/whatsapp/page.tsx`) |
 
 ---
 
@@ -199,3 +203,71 @@ the app, so every rule above applies unchanged, and:
   unavailable — send it from the app or reconcile the outbox" and never claims
   a message went out;
 - Eve cannot record consent; that comes from the person who heard it.
+
+## 10. Media (photos, voice notes, documents)
+
+Inbound media is copied into **Vercel Blob** so it can still be opened after
+Meta forgets it (the download address lasts five minutes, the media id thirty
+days).
+
+- The webhook records what arrived — Meta's media id, type, caption, file
+  name — with the message, then starts `storeWhatsAppMediaFiles`
+  (`lib/workflow/whatsapp-media.ts`). Each file is its own step; a replayed step
+  finds the file `STORED` and does nothing.
+- A transient failure is retried with back-off, up to five attempts. A
+  permanent one — the media expired at Meta, or it is over
+  `WHATSAPP_MEDIA_MAX_BYTES` (default 100 MB) — is marked `FAILED` with the
+  reason. The bubble says why and offers **Retry**.
+- Anything still `PENDING` an hour later is restarted by the daily sweep
+  (`/api/cron/whatsapp-sweep`, 19:30 UTC).
+- Files are stored at `whatsapp-media/<yyyy>/<mm>/<row id>.<ext>` with public,
+  unguessable URLs — the same model as email attachments.
+- Outbound stays text and templates; staff cannot attach files yet.
+
+## 11. Project WhatsApp groups
+
+One WhatsApp group per project, so the owners, the office and site talk in one
+place and the chat is kept with the project (Communications → WhatsApp).
+
+**Eligibility — check this first.** Meta's Groups API is only open to
+**Official Business Accounts**, on a number running on the Cloud API (not the
+WhatsApp Business app or coexistence). A group holds at most **8
+participants**, people join **only through the invite link**, and the API can
+only see groups **it created** — a group made on a phone can never be linked or
+read. Admin › WhatsApp shows whether Meta reports the number as an OBA.
+
+Turning it on:
+
+1. Confirm OBA status on Admin › WhatsApp.
+2. In the Meta app → WhatsApp → Configuration → Webhook, subscribe
+   `group_lifecycle_update`, `group_participants_update`,
+   `group_settings_update` and `group_status_update` as well as `messages`.
+3. Set `WHATSAPP_GROUPS_ENABLED="true"` and redeploy.
+
+How it behaves:
+
+- **New projects** ask for a group as soon as they are created (the wizard and
+  the offer handoff). Eve's handoff records the request; the App starts it the
+  first time anyone opens the project, or the daily sweep does.
+- **Ongoing projects**: the project header offers *Create WhatsApp group* and
+  *Link an existing group*. Linking lists only the business's own API-made
+  groups that no project has. Messages posted in a group before it was linked
+  wait as `UNLINKED_GROUP` and are filed onto the project when it is linked.
+- Creating is asynchronous: Meta answers with a request id and confirms on
+  `group_lifecycle_update` with the group id and invite link. If that webhook
+  never arrives, the workflow (`lib/workflow/whatsapp-group.ts`) looks for the
+  group by its subject (`Royal Constructions · <site>`) on a widening timer;
+  after 30 minutes unconfirmed it is marked **failed** with the reason, never
+  asked for twice. A create is one outbox intent per attempt
+  (`PROJECT_WHATSAPP_GROUP_CREATE`, key `project-whatsapp-group:<row>:<n>`).
+- **Inviting owners**: *Invite owners* opens an email pre-filled with the
+  owners on the contract and the link, which staff edit before sending. It only
+  goes to the contract's owners and must keep the group's current link; it is
+  sent once per intent and lands on the project's email trail. *Copy link* puts
+  the link on the clipboard.
+- **Sending** into the group follows the same once-only rules as a lead send
+  (§6): an unconfirmed send waits for *Mark sent / Mark not sent*. Meta does not
+  document a 24-hour window for groups, so the app does not apply one; a refusal
+  from Meta is shown as "Nothing was sent".
+- A **suspended** group is read-only until WhatsApp clears it; a **deleted**
+  group keeps its history and a new one can be created.

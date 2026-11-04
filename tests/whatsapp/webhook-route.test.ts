@@ -353,3 +353,115 @@ test("the handler verifies the signature before it parses", () => {
       < source.indexOf("JSON.parse(raw)"),
   );
 });
+
+// ── Media and groups ───────────────────────────────────────────────────────
+
+const PHOTO_DELIVERY = delivery({
+  contacts: [{ profile: { name: "Sam" }, wa_id: "61412345678" }],
+  messages: [
+    {
+      from: "61412345678",
+      id: "wamid.PHOTO",
+      image: { id: "media-1", mime_type: "image/jpeg" },
+      timestamp: "1758528000",
+      type: "image",
+    },
+  ],
+});
+
+function photoRecorder() {
+  return recordingDb({
+    "lead.findMany": [{ id: 42 }],
+    "leadWhatsAppConversation.upsert": {
+      id: "conv-1",
+      lastInboundAt: null,
+      lastMessageAt: null,
+    },
+    "leadWhatsAppMessage.create": { id: "msg-1", media: { id: "media-row-1" } },
+    "leadWhatsAppMessage.findUnique": null,
+    "whatsAppUnmatchedMessage.findUnique": null,
+  });
+}
+
+test("a photo is filed with its media, and the copy starts after the write", async () => {
+  const recorder = photoRecorder();
+  const started: string[][] = [];
+  const response = await handleWhatsAppWebhookDelivery(post(PHOTO_DELIVERY), {
+    allow: allowAll,
+    config,
+    db: recorder.transactionalDb,
+    log: quiet,
+    onMediaRecorded: async (ids) => void started.push([...ids]),
+  });
+  assert.equal(response.status, 200);
+  const created = recorder.calls.find(
+    (call) => call.operation === "leadWhatsAppMessage.create",
+  );
+  const data = (created?.args as { data: Record<string, unknown> }).data;
+  assert.equal(data.kind, "MEDIA");
+  assert.deepEqual(
+    (data.media as { create: { providerMediaId: string } }).create
+      .providerMediaId,
+    "media-1",
+  );
+  assert.deepEqual(started, [["media-row-1"]]);
+});
+
+test("a copy that cannot be started never fails the delivery", async () => {
+  const response = await handleWhatsAppWebhookDelivery(post(PHOTO_DELIVERY), {
+    allow: allowAll,
+    config,
+    db: photoRecorder().transactionalDb,
+    log: quiet,
+    onMediaRecorded: async () => {
+      throw new Error("workflow queue down");
+    },
+  });
+  // Recorded as PENDING; the daily sweep starts the copy. Meta must not retry.
+  assert.equal(response.status, 200);
+});
+
+test("a group message goes to the project that owns the group, not a lead", async () => {
+  const recorder = recordingDb({
+    "projectWhatsAppGroup.findUnique": {
+      id: "grp-row",
+      lastMessageAt: null,
+      projectId: "p1",
+      status: "ACTIVE",
+    },
+    "projectWhatsAppMessage.create": { id: "pmsg-1", media: null },
+    "projectWhatsAppMessage.findUnique": null,
+    "whatsAppUnmatchedMessage.findUnique": null,
+  });
+  const body = delivery({
+    contacts: [{ profile: { name: "Ann" }, wa_id: "61412345678" }],
+    messages: [
+      {
+        from: "61412345678",
+        group_id: "GROUP-1",
+        id: "wamid.GROUP",
+        text: { body: "Slab looks great" },
+        timestamp: "1758528000",
+        type: "text",
+      },
+    ],
+  });
+  const response = await handleWhatsAppWebhookDelivery(post(body), {
+    allow: allowAll,
+    config,
+    db: recorder.transactionalDb,
+    log: quiet,
+  });
+  assert.equal(response.status, 200);
+  assert.ok(
+    !recorder.calls.some((call) => call.operation === "lead.findMany"),
+    "a group message is never matched to a lead by phone",
+  );
+  const created = recorder.calls.find(
+    (call) => call.operation === "projectWhatsAppMessage.create",
+  );
+  const data = (created?.args as { data: Record<string, unknown> }).data;
+  assert.equal(data.projectId, "p1");
+  assert.equal(data.body, "Slab looks great");
+  assert.equal(data.senderName, "Ann");
+});

@@ -30,11 +30,35 @@ const UNIQUE_KEYS: Record<string, string[][]> = {
   whatsAppUnmatchedMessage: [["id"], ["providerMessageId"]],
   leadHistory: [["id"]],
   user: [["id"]],
+  whatsAppMedia: [
+    ["id"],
+    ["leadMessageId"],
+    ["projectMessageId"],
+    ["unmatchedMessageId"],
+  ],
+  project: [["id"], ["leadId"]],
+  projectWhatsAppGroup: [
+    ["id"],
+    ["projectId"],
+    ["providerGroupId"],
+    ["createRequestId"],
+  ],
+  projectWhatsAppMessage: [["id"], ["providerMessageId"], ["idempotencyKey"]],
+  projectWhatsAppParticipant: [["id"], ["groupId", "waId"]],
+  leadEmails: [["id"]],
+};
+
+/** `data: { media: { create } }` → a child row pointing back at the parent. */
+const NESTED_CREATES: Record<string, Record<string, [string, string]>> = {
+  leadWhatsAppMessage: { media: ["whatsAppMedia", "leadMessageId"] },
+  projectWhatsAppMessage: { media: ["whatsAppMedia", "projectMessageId"] },
+  whatsAppUnmatchedMessage: { media: ["whatsAppMedia", "unmatchedMessageId"] },
 };
 
 const COMPOUND_WHERE: Record<string, string> = {
   leadId_businessPhoneNumberId_customerPhoneE164: "compound",
   providerMessageId_status: "compound",
+  groupId_waId: "compound",
 };
 
 let sequence = 0;
@@ -185,21 +209,78 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
         (conversation) => conversation.leadId === row.id,
       );
     }
+    const mediaKey: Record<string, string> = {
+      leadWhatsAppMessage: "leadMessageId",
+      projectWhatsAppMessage: "projectMessageId",
+      whatsAppUnmatchedMessage: "unmatchedMessageId",
+    };
+    if (mediaKey[model]) {
+      out.media =
+        table("whatsAppMedia").find(
+          (media) => media[mediaKey[model]] === row.id,
+        ) ?? null;
+    }
+    if (model === "projectWhatsAppMessage") {
+      const author = table("user").find((user) => user.id === row.authorId);
+      out.author = author ? { name: author.name } : null;
+    }
+    if (model === "projectWhatsAppGroup") {
+      out.participants = table("projectWhatsAppParticipant").filter(
+        (participant) => participant.groupId === row.id,
+      );
+      out.project = table("project").find(
+        (project) => project.id === row.projectId,
+      );
+    }
+    if (model === "project") {
+      out.Lead = table("lead").find((lead) => lead.id === row.leadId);
+      out.customer = table("customer").find(
+        (customer) => customer.id === row.customerId,
+      );
+      out.customers = table("projectCustomer")
+        .filter((link) => link.projectId === row.id)
+        .sort((a, b) => compare(a.position, b.position))
+        .map((link) => ({
+          customer: table("customer").find(
+            (customer) => customer.id === link.customerId,
+          ),
+        }));
+      const group = table("projectWhatsAppGroup").find(
+        (candidate) => candidate.projectId === row.id,
+      );
+      out.whatsappGroup = group
+        ? withRelations("projectWhatsAppGroup", group)
+        : null;
+    }
     return out;
   };
 
   const create = (model: string, data: Row): Row => {
     const now = new Date();
+    const own: Row = { ...data };
+    const nested: [string, string, Row][] = [];
+    for (const [field, [child, fk]] of Object.entries(
+      NESTED_CREATES[model] ?? {},
+    )) {
+      const value = own[field] as Row | undefined;
+      if (value && typeof value === "object" && "create" in value) {
+        nested.push([child, fk, value.create as Row]);
+        delete own[field];
+      }
+    }
     const row = applyData(
       {
         createdAt: now,
         id: model === "lead" ? table(model).length + 1 : nextId(model),
         ...defaultsFor(model),
       },
-      data,
+      own,
     );
     assertUnique(model, row);
     table(model).push(row);
+    for (const [child, fk, childData] of nested) {
+      create(child, { ...childData, [fk]: row.id });
+    }
     return row;
   };
 
@@ -271,6 +352,16 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
               matches(candidate, args.where as Row),
             );
             return row ? withRelations(model, row) : null;
+          },
+          findUniqueOrThrow: async (args: Row) => {
+            const row = table(model).find((candidate) =>
+              matches(candidate, args.where as Row),
+            );
+            if (!row)
+              throw new Error(
+                `fake db: ${model}.findUniqueOrThrow found nothing`,
+              );
+            return withRelations(model, row);
           },
           update: async (args: Row) => {
             log.push(`${model}.update`);
@@ -361,10 +452,53 @@ function defaultsFor(model: string): Row {
       };
     case "whatsAppStatusEvent":
       return { appliedAt: null, errorCode: null, errorTitle: null };
+    case "whatsAppMedia":
+      return {
+        attempts: 0,
+        blobPathname: null,
+        blobUrl: null,
+        byteSize: null,
+        failureReason: null,
+        leadMessageId: null,
+        projectMessageId: null,
+        status: "PENDING",
+        storedAt: null,
+        unmatchedMessageId: null,
+      };
+    case "projectWhatsAppGroup":
+      return {
+        createAttempt: 0,
+        createRequestId: null,
+        failureReason: null,
+        inviteLink: null,
+        inviteLinkAt: null,
+        lastMessageAt: null,
+        providerGroupId: null,
+        requestedAt: null,
+        unreadCount: 0,
+      };
+    case "projectWhatsAppMessage":
+      return {
+        authorId: null,
+        deliveredAt: null,
+        failedAt: null,
+        idempotencyKey: null,
+        needsReconciliation: false,
+        providerErrorCode: null,
+        providerErrorTitle: null,
+        providerMessageId: null,
+        readAt: null,
+        senderName: null,
+        senderPhoneE164: null,
+        senderWaId: null,
+      };
+    case "projectWhatsAppParticipant":
+      return { joinedAt: null, leftAt: null, phoneE164: null };
     case "whatsAppUnmatchedMessage":
       return {
         resolvedAt: null,
         resolvedById: null,
+        providerGroupId: null,
         resolvedLeadId: null,
         status: "PENDING",
       };

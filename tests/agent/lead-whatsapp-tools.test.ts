@@ -47,6 +47,7 @@ function message(
   return {
     authorName: "Office",
     body: "Hi Sam, running ten minutes late.",
+    media: null,
     businessDisplayNumber: "+61280001234",
     businessPhoneNumberId: "109876543210987",
     conversationId: "conv_1",

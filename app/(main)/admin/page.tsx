@@ -13,6 +13,9 @@ import {
   Users,
 } from "lucide-react";
 import type { Metadata } from "next";
+import type { ComponentType } from "react";
+
+import { WhatsAppGlyph } from "@/components/whatsapp/whatsapp-logo";
 
 export const metadata: Metadata = {
   title: "Admin Dashboard",
@@ -23,7 +26,7 @@ export default function AdminPage() {
   const adminAction: {
     label: string;
     description: string;
-    icon: LucideIcon;
+    icon: LucideIcon | ComponentType<{ className?: string }>;
     href: string;
   }[] = [
     {
@@ -65,6 +68,13 @@ export default function AdminPage() {
         "Connect the Xero organisation that progress claims are raised in.",
       icon: Plug,
       href: "/admin/xero",
+    },
+    {
+      label: "WhatsApp",
+      description:
+        "See the connected WhatsApp number, where its webhook points, and which features are on.",
+      icon: WhatsAppGlyph,
+      href: "/admin/whatsapp",
     },
   ];
 

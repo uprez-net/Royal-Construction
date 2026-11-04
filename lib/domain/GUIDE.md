@@ -70,6 +70,7 @@ lib/domain/
   offers/         the quote: workspace, status, revisions, signing, sending
   projects/       projects, milestones, variations, materials, readiness
   tradies/        directory, schedules, incidents, approvals, reminders
+  whatsapp/       what leads and project groups share: inbound media
 ```
 
 Rules of thumb:

@@ -1,13 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { LeadEmails } from "@prisma/client";
-import { dataTimeFormat, stripEmailBody } from "@/utils/formatters";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Mail, Reply } from "lucide-react";
+import { ChevronDown, Inbox, Reply } from "lucide-react";
+
 import { cn } from "@/lib/utils";
+import {
+  chatDayKey,
+  chatDayLabel,
+  chatTime,
+  initials,
+} from "@/lib/whatsapp/chat-format";
+import { dataTimeFormat, stripEmailBody } from "@/utils/formatters";
+
 import { EmailComposer } from "./email-composer";
 
 interface LeadEmailSectionProps {
@@ -22,6 +27,117 @@ interface LeadEmailSectionProps {
 
 const ROYAL_DOMAIN = "@royalconstructions.com.au";
 
+/** Longer than this and the body starts folded, with "Show more". */
+const FOLD_AT = 420;
+
+function sentAtIso(email: LeadEmails): string {
+  return new Date(email.sentAt).toISOString();
+}
+
+function EmailMessage({
+  email,
+  sent,
+  expandedByDefault,
+  onReply,
+}: {
+  email: LeadEmails;
+  sent: boolean;
+  expandedByDefault: boolean;
+  onReply: () => void;
+}) {
+  const body = useMemo(() => stripEmailBody(email.body), [email.body]);
+  const long = body.length > FOLD_AT || body.split("\n").length > 8;
+  const [expanded, setExpanded] = useState(expandedByDefault || !long);
+  const counterpart = sent ? email.emailTo : email.emailFrom;
+  const iso = sentAtIso(email);
+
+  return (
+    <article
+      className={cn(
+        "group relative rounded-2xl border bg-card px-4 py-3.5 transition-shadow hover:shadow-sm",
+        sent ? "border-royal-gold/25" : "border-border/70",
+      )}
+      aria-label={`${sent ? "Sent" : "Received"} email: ${email.subject}`}
+    >
+      <header className="flex items-start gap-3">
+        <span
+          aria-hidden="true"
+          className={cn(
+            "inline-flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+            sent
+              ? "bg-royal-gold-light text-royal-gold-ink"
+              : "bg-muted text-muted-foreground",
+          )}
+        >
+          {sent
+            ? "RC"
+            : initials(counterpart.split("@")[0]?.replace(/[._-]+/g, " "))}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+            <p className="truncate text-sm font-semibold text-foreground">
+              {sent ? "Royal Constructions" : email.emailFrom}
+            </p>
+            <time
+              dateTime={iso}
+              title={dataTimeFormat.format(new Date(email.sentAt))}
+              className="shrink-0 text-xs tabular-nums text-muted-foreground"
+            >
+              {chatTime(iso)}
+            </time>
+          </div>
+          <p className="truncate text-xs text-muted-foreground">
+            to {sent ? email.emailTo : "Royal Constructions"}
+          </p>
+        </div>
+      </header>
+
+      <div className="mt-2.5 pl-12">
+        <h3 className="text-sm font-medium text-foreground">{email.subject}</h3>
+        <p
+          className={cn(
+            "mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/85",
+            !expanded && "line-clamp-4",
+          )}
+        >
+          {body}
+        </p>
+        <div className="mt-2 flex items-center gap-1">
+          {long ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              aria-expanded={expanded}
+              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <ChevronDown
+                className={cn(
+                  "size-3.5 transition-transform",
+                  expanded && "rotate-180",
+                )}
+                aria-hidden="true"
+              />
+              {expanded ? "Show less" : "Show more"}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onReply}
+            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+          >
+            <Reply className="size-3.5" aria-hidden="true" />
+            Reply
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/**
+ * A lead's (and its project's) email thread: the conversation as calm cards,
+ * oldest first with the newest open, and the composer underneath.
+ */
 export function LeadEmailSection({
   emails,
   leadId,
@@ -32,9 +148,10 @@ export function LeadEmailSection({
   appendEmailToLead,
 }: LeadEmailSectionProps) {
   const [replyTarget, setReplyTarget] = useState<LeadEmails | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  const [now] = useState(() => new Date());
 
-  // Chat reads oldest -> newest, top to bottom.
+  // Oldest → newest, top to bottom, like any conversation.
   const orderedEmails = useMemo(
     () =>
       [...emails].sort(
@@ -44,111 +161,90 @@ export function LeadEmailSection({
   );
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
+    const element = scroller.current;
+    if (element) element.scrollTop = element.scrollHeight;
   }, [orderedEmails.length]);
 
   return (
-    <Card
-      className="gap-0 h-full overflow-hidden py-0"
-      key={`${emails.length}-${leadId}`}
-    >
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 border-b px-3 py-3 sm:px-6">
-        <div className="flex items-center gap-2">
-          <Mail className="size-4 text-primary" />
-          <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Messages
-          </CardTitle>
+    <section className="overflow-hidden rounded-2xl border border-border/70 bg-background shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-card px-4 py-3 sm:px-5">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-foreground">Email</h2>
+          <p className="truncate text-xs text-muted-foreground">
+            {leadEmail ? `With ${leadEmail}` : "No email address on file"}
+          </p>
         </div>
+        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
+          {emails.length} {emails.length === 1 ? "email" : "emails"}
+        </span>
+      </div>
 
-        <Badge variant="secondary">
-          {emails.length} Message{emails.length !== 1 ? "s" : ""}
-        </Badge>
-      </CardHeader>
-
-      <CardContent className="p-0">
+      <div
+        ref={scroller}
+        className={cn(
+          "overflow-y-auto bg-muted/20 px-3 py-4 sm:px-5",
+          isFullScreen ? "h-[min(58vh,620px)]" : "h-80",
+        )}
+      >
         {orderedEmails.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <Mail className="mb-3 size-8 text-muted-foreground/40" />
-            <p className="text-sm font-medium text-muted-foreground">
-              No emails recorded
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <span className="inline-flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <Inbox className="size-5" aria-hidden="true" />
+            </span>
+            <p className="mt-3 text-sm font-medium text-foreground">
+              No emails yet
             </p>
-            <p className="mt-1 text-xs text-muted-foreground/70">
-              Incoming emails will automatically appear here.
+            <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+              Write the first one below. Replies from the client appear here
+              automatically.
             </p>
           </div>
         ) : (
-          <ScrollArea
-            className={cn("px-4", isFullScreen ? "h-[65vh]" : "h-72")}
-            key={orderedEmails.length}
-          >
-            <div className="flex flex-col py-4">
-              {orderedEmails.map((email, index) => {
-                const isSent = email.emailFrom.includes(ROYAL_DOMAIN);
-                const plainBody = stripEmailBody(email.body);
-                console.log("Email body (Plain):\n", plainBody);
-                return (
-                  <div
-                    key={`email-${index}-${email.id}`}
-                    className="mb-2 last:mb-0"
-                  >
-                    <div
-                      className={cn(
-                        "group flex items-end gap-1.5 py-0.5",
-                        isSent ? "flex-row-reverse" : "flex-row",
-                      )}
+          <ol className="space-y-3">
+            {orderedEmails.map((email, index) => {
+              const iso = sentAtIso(email);
+              const previous = orderedEmails[index - 1];
+              const newDay =
+                !previous
+                || chatDayKey(sentAtIso(previous)) !== chatDayKey(iso);
+              return (
+                <Fragment key={email.id}>
+                  {newDay ? (
+                    <li
+                      className="flex items-center gap-3 py-1"
+                      aria-hidden="false"
                     >
-                      <button
-                        type="button"
-                        onClick={() => setReplyTarget(email)}
-                        aria-label={`Reply to ${plainBody.slice(0, 30)}...`}
-                        className="mb-1 flex size-11 shrink-0 items-center justify-center rounded-full p-1.5 bg-muted text-foreground opacity-100 md:size-auto"
-                      >
-                        <Reply className="size-3.5" />
-                      </button>
-
-                      <div
-                        className={cn(
-                          "max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-5",
-                          isSent
-                            ? "bg-royal-gold-ink text-white rounded-br-sm"
-                            : "bg-muted text-foreground rounded-bl-sm",
-                        )}
-                      >
-                        <p className="text-[10px] font-medium uppercase tracking-wide text-muted">
-                          {email.subject}
-                        </p>
-                        <p className="whitespace-pre-wrap wrap-break-word">
-                          {plainBody}
-                        </p>
-                        <p
-                          className={cn(
-                            "mt-1.5 text-right text-[10px]",
-                            isSent ? "text-white/70" : "text-muted-foreground",
-                          )}
-                        >
-                          {dataTimeFormat.format(new Date(email.sentAt))}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              <div ref={bottomRef} />
-            </div>
-          </ScrollArea>
+                      <span className="h-px flex-1 bg-border/70" />
+                      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {chatDayLabel(iso, now)}
+                      </span>
+                      <span className="h-px flex-1 bg-border/70" />
+                    </li>
+                  ) : null}
+                  <li>
+                    <EmailMessage
+                      email={email}
+                      sent={email.emailFrom.includes(ROYAL_DOMAIN)}
+                      expandedByDefault={index === orderedEmails.length - 1}
+                      onReply={() => setReplyTarget(email)}
+                    />
+                  </li>
+                </Fragment>
+              );
+            })}
+          </ol>
         )}
+      </div>
 
-        <EmailComposer
-          leadId={leadId}
-          to={leadEmail}
-          replyTo={replyTarget}
-          onCancelReply={() => setReplyTarget(null)}
-          appendEmailToLead={appendEmailToLead}
-          projectType={projectType}
-          location={location}
-        />
-      </CardContent>
-    </Card>
+      <EmailComposer
+        leadId={leadId}
+        to={leadEmail}
+        replyTo={replyTarget}
+        onCancelReply={() => setReplyTarget(null)}
+        appendEmailToLead={appendEmailToLead}
+        projectType={projectType}
+        location={location}
+      />
+    </section>
   );
 }

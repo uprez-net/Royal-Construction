@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, SendHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { sendLeadEmail } from "@/lib/actions/leads";
 import { Button } from "@/components/ui/button";
@@ -157,7 +157,7 @@ export function EmailComposer({
 }: EmailComposerProps) {
   const [body, setBody] = useState<LeadRichTextDocument>();
   const [sending, startTransition] = useTransition();
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const surface = useRef<HTMLDivElement>(null);
 
   const isReply = !!replyTo;
   const recipient = replyTo ? getReplyRecipient(replyTo) : to;
@@ -199,8 +199,12 @@ export function EmailComposer({
     setBody(nextDocument);
   };
 
+  // Replying puts the cursor in the message, ready to type.
   useEffect(() => {
-    bodyRef.current?.focus();
+    if (!replyTo) return;
+    surface.current
+      ?.querySelector<HTMLElement>("[contenteditable='true']")
+      ?.focus();
   }, [replyTo]);
 
   async function handleSend() {
@@ -224,7 +228,9 @@ export function EmailComposer({
       );
 
       appendEmailToLead(leadId, email);
-      setBody(createLeadNotesDocument({ plainText: "" }));
+      // Clear the editor itself, not only the copy held in state: leaving the
+      // sent text in the box invites sending it a second time.
+      replaceNoteText("");
       onCancelReply?.();
       toast.success("Email sent.");
       onSent?.(email);
@@ -234,13 +240,33 @@ export function EmailComposer({
     }
   }
 
-  return (
-    <div className="border-t bg-background">
-      {replyTo && (
-        <ReplyBanner email={replyTo} onCancel={() => onCancelReply?.()} />
-      )}
+  const canSend = !sending && body !== undefined && Boolean(body?.html.trim());
 
-      <div className="relative z-10 mt-1 overflow-visible rounded-[6px] border border-[#d6d3d1] bg-white focus-within:border-[#0D9488] focus-within:ring-2 focus-within:ring-[#CCFBF1]">
+  return (
+    <div className="border-t border-border/70 bg-card p-3 sm:p-4">
+      <div
+        ref={surface}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            if (canSend) startTransition(handleSend);
+          }
+        }}
+        className="relative z-10 overflow-visible rounded-2xl border border-border bg-background shadow-xs transition focus-within:border-royal-gold/60 focus-within:ring-4 focus-within:ring-royal-gold/10"
+      >
+        <div className="flex items-center gap-2 border-b border-border/60 px-3.5 py-2 text-xs">
+          <span className="text-muted-foreground">To</span>
+          <span className="inline-flex min-w-0 items-center rounded-full bg-muted px-2.5 py-0.5 font-medium text-foreground">
+            <span className="truncate">
+              {recipient || "No address on file"}
+            </span>
+          </span>
+        </div>
+
+        {replyTo && (
+          <ReplyBanner email={replyTo} onCancel={() => onCancelReply?.()} />
+        )}
+
         <EditorToolbar
           editor={editor}
           onReplaceNoteText={replaceNoteText}
@@ -259,25 +285,38 @@ export function EmailComposer({
           <EditorContainer>
             <Editor
               aria-label={isReply ? "Reply message" : "Email message"}
-              placeholder="Write your message here..."
+              placeholder={isReply ? "Write your reply…" : "Write a message…"}
             />
           </EditorContainer>
         </Plate>
 
-        <div className="flex items-center justify-end border-t border-[#e7e5e4] bg-[#f8fafc] px-3 py-2">
+        <div className="flex items-center justify-between gap-3 border-t border-border/60 px-3.5 py-2">
+          <p className="hidden text-[11px] text-muted-foreground sm:block">
+            <kbd className="rounded border border-border bg-muted px-1 font-sans">
+              Ctrl
+            </kbd>{" "}
+            +{" "}
+            <kbd className="rounded border border-border bg-muted px-1 font-sans">
+              Enter
+            </kbd>{" "}
+            to send · signed with your name
+          </p>
           <Button
-            size="icon"
             variant="royal"
-            className="shrink-0"
+            className="ml-auto h-9 shrink-0 rounded-full px-4"
             aria-label={isReply ? "Send reply" : "Send email"}
-            disabled={sending || body === undefined || !body?.html.trim()}
+            disabled={!canSend}
             onClick={() => startTransition(handleSend)}
           >
             {sending ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2
+                className="mr-1.5 size-4 animate-spin"
+                aria-hidden="true"
+              />
             ) : (
-              <Send className="size-4" />
+              <SendHorizontal className="mr-1.5 size-4" aria-hidden="true" />
             )}
+            {isReply ? "Send reply" : "Send"}
           </Button>
         </div>
       </div>

@@ -17,6 +17,12 @@ import { waIdToE164 } from "@/lib/domain/leads/whatsapp/phone";
 
 export const DEFAULT_WHATSAPP_GRAPH_API_VERSION = "v23.0";
 
+/**
+ * Meta's own ceiling is 100 MB (documents); photos are 5 MB and video and
+ * voice notes 16 MB. A file over the limit is recorded but not copied.
+ */
+export const DEFAULT_WHATSAPP_MEDIA_MAX_BYTES = 100 * 1024 * 1024;
+
 export type WhatsAppConfig = {
   /** WHATSAPP_ENABLED === "true". Anything else leaves the channel off. */
   readonly enabled: boolean;
@@ -26,6 +32,8 @@ export type WhatsAppConfig = {
   readonly verifyToken: string | null;
   readonly businessAccountId: string | null;
   readonly apiVersion: string;
+  /** Largest inbound file copied into Blob storage. */
+  readonly mediaMaxBytes: number;
   /** Misconfigurations worth a log line, never containing a secret. */
   readonly problems: readonly string[];
 };
@@ -102,6 +110,11 @@ export function readWhatsAppConfig(env: Env = process.env): WhatsAppConfig {
   const appSecret = value(env, "WHATSAPP_APP_SECRET");
   const verifyToken = value(env, "WHATSAPP_WEBHOOK_VERIFY_TOKEN");
   const businessAccountId = value(env, "WHATSAPP_BUSINESS_ACCOUNT_ID");
+  const requestedMax = Number(value(env, "WHATSAPP_MEDIA_MAX_BYTES") ?? "");
+  const mediaMaxBytes =
+    Number.isInteger(requestedMax) && requestedMax > 0
+      ? requestedMax
+      : DEFAULT_WHATSAPP_MEDIA_MAX_BYTES;
 
   if (!enabled) {
     return {
@@ -111,6 +124,7 @@ export function readWhatsAppConfig(env: Env = process.env): WhatsAppConfig {
       businessAccountId: null,
       channel: null,
       enabled: false,
+      mediaMaxBytes,
       problems: [],
       verifyToken: null,
     };
@@ -149,6 +163,7 @@ export function readWhatsAppConfig(env: Env = process.env): WhatsAppConfig {
     );
 
   const templates = value(env, "WHATSAPP_ENABLED_TEMPLATES");
+  const groupsEnabled = env.WHATSAPP_GROUPS_ENABLED?.trim() === "true";
 
   return {
     accessToken,
@@ -167,10 +182,12 @@ export function readWhatsAppConfig(env: Env = process.env): WhatsAppConfig {
                   .map((name) => name.trim())
                   .filter(Boolean)
               : null,
+            groupsEnabled,
             numbers: parsed.numbers,
             sendingAvailable: Boolean(accessToken),
           },
     enabled,
+    mediaMaxBytes,
     problems,
     verifyToken,
   };

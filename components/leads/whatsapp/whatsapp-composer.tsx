@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, SendHorizontal } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { WA } from "@/components/whatsapp/whatsapp-chat";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -86,12 +86,13 @@ export function WhatsAppComposer({
     return (
       <div
         role="status"
-        className="rounded-lg border border-amber-200 bg-warning-light px-3.5 py-3 text-sm text-warning-ink"
+        className="shrink-0 px-4 py-3 text-center text-[13px]"
+        style={{ backgroundColor: WA.panel, color: WA.textMuted }}
       >
-        <p className="font-medium">
+        <p className="font-medium text-[#111b21]">
           You can&apos;t send a WhatsApp message to this lead right now.
         </p>
-        <p className="mt-1">
+        <p className="mt-0.5">
           {eligibility.template.reason ?? eligibility.text.reason}
         </p>
       </div>
@@ -142,74 +143,76 @@ export function WhatsAppComposer({
 
   return (
     <form
-      className="space-y-3"
+      className="shrink-0 space-y-2 px-3 py-2.5"
+      style={{ backgroundColor: WA.panel }}
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
       }}
     >
-      {!textAllowed ? (
-        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          {eligibility.text.reason}
+      <div className="flex flex-wrap items-center gap-2">
+        {textAllowed && templateAllowed ? (
+          <div
+            className="inline-flex rounded-full bg-white p-0.5 text-xs shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
+            role="tablist"
+            aria-label="Message type"
+          >
+            {(["text", "template"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={mode === value}
+                onClick={() => setChosenMode(value)}
+                className={cn(
+                  "rounded-full px-3 py-1 font-medium transition-colors",
+                  mode === value
+                    ? "bg-[#d9fdd3] text-[#005c4b]"
+                    : "text-[#54656f] hover:text-[#111b21]",
+                )}
+              >
+                {value === "text" ? "Message" : "Template"}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {senders.length > 1 ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Label htmlFor="whatsapp-sender" className="text-xs text-[#667781]">
+              From
+            </Label>
+            <select
+              id="whatsapp-sender"
+              value={senderId}
+              onChange={(event) => setSenderOverride(event.target.value)}
+              className="h-7 rounded-full border-0 bg-white px-2.5 text-xs shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
+            >
+              {senders.map((sender) => (
+                <option key={sender.phoneNumberId} value={sender.phoneNumberId}>
+                  {sender.label} ({sender.displayNumber})
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
+        {!textAllowed ? (
+          <p className="text-[12px] text-[#667781]">
+            {eligibility.text.reason}
+          </p>
+        ) : null}
+      </div>
+
+      {senderChoice ? (
+        <p className="text-[12px] text-[#667781]">
+          The reply window shown is for {eligibility.sender?.label}; WhatsApp
+          checks this number&apos;s own window when you send.
         </p>
       ) : null}
 
-      {textAllowed && templateAllowed ? (
-        <div
-          className="inline-flex rounded-lg border border-border p-0.5 text-xs"
-          role="tablist"
-        >
-          {(["text", "template"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={mode === value}
-              onClick={() => setChosenMode(value)}
-              className={cn(
-                "rounded-md px-3 py-1 font-medium transition-colors",
-                mode === value
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {value === "text" ? "Message" : "Template"}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {senders.length > 1 ? (
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Label
-            htmlFor="whatsapp-sender"
-            className="text-xs text-muted-foreground"
-          >
-            Send from
-          </Label>
-          <select
-            id="whatsapp-sender"
-            value={senderId}
-            onChange={(event) => setSenderOverride(event.target.value)}
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-          >
-            {senders.map((sender) => (
-              <option key={sender.phoneNumberId} value={sender.phoneNumberId}>
-                {sender.label} ({sender.displayNumber})
-              </option>
-            ))}
-          </select>
-          {senderChoice ? (
-            <span className="text-muted-foreground">
-              The service window shown above is for {eligibility.sender?.label};
-              WhatsApp checks this number&apos;s own window when you send.
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-
       {mode === "text" ? (
-        <div className="space-y-1.5">
+        <div className="flex items-end gap-2">
           <Label htmlFor="whatsapp-body" className="sr-only">
             Message
           </Label>
@@ -217,24 +220,45 @@ export function WhatsAppComposer({
             id="whatsapp-body"
             value={body}
             onChange={(event) => setBody(event.target.value)}
-            placeholder="Write a WhatsApp message…"
-            rows={3}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter"
+                && !event.shiftKey
+                && !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                if (canSubmit) void submit();
+              }
+            }}
+            placeholder="Type a message"
+            rows={1}
             maxLength={MAX_WHATSAPP_TEXT_LENGTH + 200}
             disabled={sending}
+            className="max-h-36 min-h-[42px] flex-1 resize-none rounded-lg border-0 bg-white px-3.5 py-2.5 text-[15px] leading-5 shadow-none placeholder:text-[#8696a0] focus-visible:ring-2 focus-visible:ring-[#00a884]/40"
           />
-          <p
-            className={cn(
-              "text-right text-[11px]",
-              textTooLong ? "text-destructive-ink" : "text-muted-foreground",
-            )}
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            aria-label="Send WhatsApp"
+            className="inline-flex size-[42px] shrink-0 items-center justify-center rounded-full text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ backgroundColor: WA.accent }}
           >
-            {body.length} / {MAX_WHATSAPP_TEXT_LENGTH}
-          </p>
+            {sending ? (
+              <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+            ) : (
+              <SendHorizontal className="size-5" aria-hidden="true" />
+            )}
+          </button>
         </div>
       ) : option ? (
-        <div className="space-y-3">
+        <div className="space-y-3 rounded-lg bg-white p-3 shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]">
           <div className="space-y-1.5">
-            <Label htmlFor="whatsapp-template">Approved template</Label>
+            <Label
+              htmlFor="whatsapp-template"
+              className="text-xs text-[#54656f]"
+            >
+              Approved template
+            </Label>
             <select
               id="whatsapp-template"
               value={option.name}
@@ -252,52 +276,70 @@ export function WhatsAppComposer({
               {option.description}
             </p>
           </div>
-          {option.parameters.map((parameter, index) => (
-            <div key={`${option.name}:${index}`} className="space-y-1">
-              <Label htmlFor={`whatsapp-param-${index}`} className="text-xs">
-                {parameter.label}
-              </Label>
-              <Input
-                id={`whatsapp-param-${index}`}
-                value={parameters[index] ?? ""}
-                placeholder={parameter.example}
-                disabled={sending}
-                onChange={(event) => {
-                  const next = [...parameters];
-                  next[index] = event.target.value;
-                  setEdited((prev) => ({ ...prev, [option.name]: next }));
-                }}
-              />
+          {option.parameters.length > 0 ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {option.parameters.map((parameter, index) => (
+                <div key={`${option.name}:${index}`} className="space-y-1">
+                  <Label
+                    htmlFor={`whatsapp-param-${index}`}
+                    className="text-xs"
+                  >
+                    {parameter.label}
+                  </Label>
+                  <Input
+                    id={`whatsapp-param-${index}`}
+                    value={parameters[index] ?? ""}
+                    placeholder={parameter.example}
+                    disabled={sending}
+                    onChange={(event) => {
+                      const next = [...parameters];
+                      next[index] = event.target.value;
+                      setEdited((prev) => ({ ...prev, [option.name]: next }));
+                    }}
+                  />
+                </div>
+              ))}
             </div>
-          ))}
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Preview — what the customer will read
+          ) : null}
+          <div>
+            <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#667781]">
+              What the customer will read
             </p>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
+            <p
+              className="whitespace-pre-wrap rounded-lg rounded-tr-none px-2.5 py-2 text-[14px] leading-[19px] text-[#111b21] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
+              style={{ backgroundColor: WA.bubbleOut }}
+            >
               {preview}
             </p>
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ backgroundColor: WA.accent }}
+            >
+              {sending ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <SendHorizontal className="size-4" aria-hidden="true" />
+              )}
+              {sending ? "Sending…" : "Send template"}
+            </button>
           </div>
         </div>
       ) : null}
 
-      <div className="flex justify-end">
-        <Button type="submit" disabled={!canSubmit}>
-          {sending ? (
-            <Loader2
-              className="mr-1.5 size-4 animate-spin"
-              aria-hidden="true"
-            />
-          ) : (
-            <Send className="mr-1.5 size-4" aria-hidden="true" />
+      {mode === "text" && body.length > MAX_WHATSAPP_TEXT_LENGTH * 0.8 ? (
+        <p
+          className={cn(
+            "text-right text-[11px]",
+            textTooLong ? "text-destructive-ink" : "text-[#667781]",
           )}
-          {sending
-            ? "Sending…"
-            : mode === "template"
-              ? "Send template"
-              : "Send WhatsApp"}
-        </Button>
-      </div>
+        >
+          {body.length} / {MAX_WHATSAPP_TEXT_LENGTH}
+        </p>
+      ) : null}
     </form>
   );
 }

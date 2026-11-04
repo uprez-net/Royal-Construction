@@ -55,6 +55,8 @@ test("an inbound text becomes one inbound message with the profile name", () => 
     {
       businessPhoneNumberId: "109876543210987",
       fromWaId: "61412345678",
+      groupId: null,
+      media: null,
       profileName: "Sam Customer",
       providerMessageId: "wamid.TEXT",
       sentAt: new Date(1758528000 * 1000),
@@ -227,4 +229,184 @@ test("a body that is not a WhatsApp Business Account webhook is refused outright
   assert.equal(parseWhatsAppWebhook({ entry: [], object: "page" }), null);
   assert.equal(parseWhatsAppWebhook("nonsense"), null);
   assert.equal(parseWhatsAppWebhook(null), null);
+});
+
+// ── Media and groups ───────────────────────────────────────────────────────
+
+test("a photo, a voice note and a document carry what the media copy needs", () => {
+  const parsed = parseWhatsAppWebhook(
+    delivery({
+      contacts: CONTACTS,
+      messages: [
+        {
+          from: "61412345678",
+          id: "wamid.IMAGE",
+          image: {
+            caption: "Crack above the door",
+            id: "media-image",
+            mime_type: "image/jpeg",
+            sha256: "abc",
+          },
+          timestamp: "1758528000",
+          type: "image",
+        },
+        {
+          audio: { id: "media-voice", mime_type: "audio/ogg", voice: true },
+          from: "61412345678",
+          id: "wamid.VOICE",
+          timestamp: "1758528001",
+          type: "audio",
+        },
+        {
+          document: {
+            filename: "plans.pdf",
+            id: "media-doc",
+            mime_type: "application/pdf",
+          },
+          from: "61412345678",
+          id: "wamid.DOC",
+          timestamp: "1758528002",
+          type: "document",
+        },
+      ],
+    }),
+  );
+  assert.ok(parsed);
+  assert.deepEqual(
+    parsed.messages.map((message) => message.media),
+    [
+      {
+        caption: "Crack above the door",
+        fileName: null,
+        mimeType: "image/jpeg",
+        providerMediaId: "media-image",
+        sha256: "abc",
+        type: "IMAGE",
+        voice: false,
+      },
+      {
+        caption: null,
+        fileName: null,
+        mimeType: "audio/ogg",
+        providerMediaId: "media-voice",
+        sha256: null,
+        type: "AUDIO",
+        voice: true,
+      },
+      {
+        caption: null,
+        fileName: "plans.pdf",
+        mimeType: "application/pdf",
+        providerMediaId: "media-doc",
+        sha256: null,
+        type: "DOCUMENT",
+        voice: false,
+      },
+    ],
+  );
+});
+
+test("a message posted in a group names its group", () => {
+  const parsed = parseWhatsAppWebhook(
+    delivery({
+      contacts: CONTACTS,
+      messages: [
+        {
+          from: "61412345678",
+          group_id: "GROUP-1",
+          id: "wamid.GROUP",
+          text: { body: "Slab looks great" },
+          timestamp: "1758528000",
+          type: "text",
+        },
+      ],
+    }),
+  );
+  assert.ok(parsed);
+  assert.equal(parsed.messages[0]?.groupId, "GROUP-1");
+  assert.equal(parsed.messages[0]?.media, null);
+});
+
+test("group lifecycle, participant and status webhooks become group events", () => {
+  const lifecycle = parseWhatsAppWebhook(
+    delivery(
+      {
+        groups: [
+          {
+            group_id: "GROUP-1",
+            invite_link: "https://chat.whatsapp.com/LINK",
+            request_id: "REQ-1",
+            subject: "Royal Constructions · 12 Smith St",
+            timestamp: "1758528000",
+            type: "group_create",
+          },
+          {
+            errors: [{ code: 131000, title: "Something went wrong" }],
+            request_id: "REQ-2",
+            timestamp: "1758528000",
+            type: "group_create",
+          },
+        ],
+      },
+      "group_lifecycle_update",
+    ),
+  );
+  assert.ok(lifecycle);
+  assert.equal(lifecycle.groupEvents.length, 2);
+  assert.deepEqual(lifecycle.groupEvents[0], {
+    at: new Date(1758528000 * 1000),
+    groupId: "GROUP-1",
+    inviteLink: "https://chat.whatsapp.com/LINK",
+    kind: "created",
+    requestId: "REQ-1",
+    subject: "Royal Constructions · 12 Smith St",
+  });
+  assert.equal(lifecycle.groupEvents[1]?.kind, "create_failed");
+
+  const participants = parseWhatsAppWebhook(
+    delivery(
+      {
+        groups: [
+          {
+            added_participants: [{ wa_id: "61412345678" }],
+            group_id: "GROUP-1",
+            reason: "invite_link",
+            timestamp: "1758528000",
+            type: "group_participants_add",
+          },
+          {
+            group_id: "GROUP-1",
+            initiated_by: "participant",
+            removed_participants: [{ wa_id: "61499999999" }],
+            timestamp: "1758528000",
+            type: "group_participants_remove",
+          },
+        ],
+      },
+      "group_participants_update",
+    ),
+  );
+  assert.ok(participants);
+  assert.deepEqual(
+    participants.groupEvents.map((event) => event.kind),
+    ["participants_added", "participants_removed"],
+  );
+
+  const status = parseWhatsAppWebhook(
+    delivery(
+      {
+        groups: [
+          {
+            group_id: "GROUP-1",
+            timestamp: "1758528000",
+            type: "group_suspend",
+          },
+        ],
+      },
+      "group_status_update",
+    ),
+  );
+  assert.equal(status?.groupEvents[0]?.kind, "suspended");
+  // Group fields carry no messages; nothing is mistaken for one.
+  assert.deepEqual(status?.messages, []);
 });

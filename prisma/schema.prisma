@@ -580,6 +580,13 @@ enum OutboxEventKind {
   /// One attempt at emailing a variation to the client. Keyed per attempt,
   /// like TRADIE_REQUEST_SEND, so a resend is something somebody pressed.
   VARIATION_EMAIL_SEND
+  /// Asking Meta to create a project's WhatsApp group. Keyed per request, so
+  /// a crashed create is never repeated into a second group.
+  PROJECT_WHATSAPP_GROUP_CREATE
+  /// One message sent into a project's WhatsApp group.
+  PROJECT_WHATSAPP_SEND
+  /// The email inviting a project's owners to join its WhatsApp group.
+  PROJECT_WHATSAPP_INVITE_SEND
 }
 
 enum AgentMemoryProvenance {
@@ -634,26 +641,27 @@ model Project {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
-  customer            Customer             @relation("CustomerProjects", fields: [customerId], references: [id])
+  customer            Customer              @relation("CustomerProjects", fields: [customerId], references: [id])
   customers           ProjectCustomer[]
-  siteManager         User?                @relation("SiteManagerProjects", fields: [siteManagerId], references: [id])
-  Lead                Lead                 @relation("LeadProject", fields: [leadId], references: [id], onDelete: Cascade)
+  siteManager         User?                 @relation("SiteManagerProjects", fields: [siteManagerId], references: [id])
+  Lead                Lead                  @relation("LeadProject", fields: [leadId], references: [id], onDelete: Cascade)
   milestones          Milestone[]
   siteUpdates         SiteUpdate[]
   variations          Variation[]
   tradieSchedules     TradieSchedule[]
-  files               File[]               @relation("ProjectFiles")
+  files               File[]                @relation("ProjectFiles")
   activityLogs        ActivityLog[]
   tradieActivityLogs  TradieActivityLog[]
   materials           Material[]
-  tradies             Tradie[]             @relation("ProjectTradies")
-  certifierEngagement CertifierEngagement? @relation("ProjectCertifierEngagement")
+  tradies             Tradie[]              @relation("ProjectTradies")
+  certifierEngagement CertifierEngagement?  @relation("ProjectCertifierEngagement")
   invoices            Invoice[]
   tradieRequests      TradieRequest[]
   tradieQuotes        TradieQuote[]
   tradeSelections     TradeSelection[]
   tradieInvoices      TradieInvoice[]
   emailedInvoices     TradieInvoiceInbox[]
+  whatsappGroup       ProjectWhatsAppGroup?
 
   @@index([name])
   @@index([customerId])
@@ -1248,6 +1256,8 @@ model User {
   whatsappMessages          LeadWhatsAppMessage[]      @relation("LeadWhatsAppMessageAuthor")
   whatsappConsentsRecorded  Lead[]                     @relation("LeadWhatsAppConsentRecorder")
   whatsappUnmatchedResolved WhatsAppUnmatchedMessage[] @relation("WhatsAppUnmatchedResolver")
+  projectWhatsAppGroups     ProjectWhatsAppGroup[]     @relation("ProjectWhatsAppGroupCreator")
+  projectWhatsAppMessages   ProjectWhatsAppMessage[]   @relation("ProjectWhatsAppMessageAuthor")
   reviews                   TradieRating[]
   approvalRequests          TradieApproval[]
   tradieRequests            TradieRequest[]            @relation("TradieRequestCreatedBy")
@@ -2013,9 +2023,13 @@ enum WhatsAppMessageDirection {
 enum WhatsAppMessageKind {
   TEXT
   TEMPLATE
-  /// Inbound media, reactions, locations… retained with a placeholder body so
-  /// the office knows something arrived and can look in WhatsApp itself.
+  /// Reactions, locations, contacts… retained with a placeholder body so the
+  /// office knows something arrived and can look in WhatsApp itself.
   UNSUPPORTED
+  /// A photo, video, voice note, document or sticker. The file itself is
+  /// copied into Blob storage by a workflow (WhatsAppMedia); the body is the
+  /// caption, or a short label when there is none.
+  MEDIA
 }
 
 /// QUEUED → SENT → DELIVERED → READ, or → FAILED. RECEIVED is inbound only.
@@ -2037,6 +2051,9 @@ enum WhatsAppUnmatchedReason {
   /// The message reached a business number this deployment is not configured
   /// for. Retained rather than dropped so a misconfiguration is visible.
   UNKNOWN_BUSINESS_NUMBER
+  /// Posted in a WhatsApp group no project is linked to. Filed onto the
+  /// project automatically when someone links that group.
+  UNLINKED_GROUP
 }
 
 enum WhatsAppUnmatchedStatus {
@@ -2112,6 +2129,7 @@ model LeadWhatsAppMessage {
   conversation LeadWhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   lead         Lead                     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   author       User?                    @relation("LeadWhatsAppMessageAuthor", fields: [authorId], references: [id])
+  media        WhatsAppMedia?
 
   @@index([conversationId, occurredAt])
   @@index([leadId, occurredAt])
@@ -2152,12 +2170,189 @@ model WhatsAppUnmatchedMessage {
   resolvedById          String?
   resolvedAt            DateTime?
   receivedAt            DateTime
+  /// Meta's group id when the message was posted in a group.
+  providerGroupId       String?
   createdAt             DateTime                @default(now())
 
-  resolvedBy User? @relation("WhatsAppUnmatchedResolver", fields: [resolvedById], references: [id])
+  resolvedBy User?          @relation("WhatsAppUnmatchedResolver", fields: [resolvedById], references: [id])
+  media      WhatsAppMedia?
 
   @@index([status, receivedAt])
   @@index([fromPhoneE164])
+  @@index([providerGroupId, status])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// WhatsApp media and project groups
+//
+// Media: the webhook records what arrived (Meta's media id, type, caption) in
+// the same transaction as the message, and a workflow copies the file into
+// Blob storage afterwards — Meta's download URL lasts five minutes and the
+// media id thirty days, so the copy is what the office can still open later.
+//
+// Groups: one WhatsApp group per project, created through Meta's Groups API
+// (Official Business Accounts only, so behind WHATSAPP_GROUPS_ENABLED). Rules
+// live in lib/domain/projects/whatsapp.
+// ─────────────────────────────────────────────────────────────────────
+
+enum WhatsAppMediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  STICKER
+}
+
+/// PENDING → STORED, or → FAILED once retrying cannot help (the media expired
+/// at Meta, or it is larger than the app keeps). FAILED can be retried by hand.
+enum WhatsAppMediaStatus {
+  PENDING
+  STORED
+  FAILED
+}
+
+/// One file attached to one WhatsApp message. Exactly one of the three
+/// message references is set; attaching an unmatched message to a lead moves
+/// its media row across rather than copying it.
+model WhatsAppMedia {
+  id                 String              @id @default(uuid())
+  /// Meta's media id, from the webhook. Used to fetch the file.
+  providerMediaId    String
+  type               WhatsAppMediaType
+  mimeType           String?
+  /// Meta's SHA-256 of the file, checked against what was downloaded.
+  sha256             String?
+  fileName           String?
+  caption            String?             @db.Text
+  /// A voice note recorded in WhatsApp rather than an audio file sent.
+  voice              Boolean             @default(false)
+  byteSize           Int?
+  status             WhatsAppMediaStatus @default(PENDING)
+  blobUrl            String?
+  blobPathname       String?
+  attempts           Int                 @default(0)
+  failureReason      String?
+  storedAt           DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  leadMessageId      String?             @unique
+  projectMessageId   String?             @unique
+  unmatchedMessageId String?             @unique
+
+  leadMessage      LeadWhatsAppMessage?      @relation(fields: [leadMessageId], references: [id], onDelete: Cascade)
+  projectMessage   ProjectWhatsAppMessage?   @relation(fields: [projectMessageId], references: [id], onDelete: Cascade)
+  unmatchedMessage WhatsAppUnmatchedMessage? @relation(fields: [unmatchedMessageId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+enum ProjectWhatsAppGroupStatus {
+  /// Asked Meta to create it; waiting for the group id and invite link.
+  CREATING
+  ACTIVE
+  /// Meta refused, or never confirmed. `failureReason` says which.
+  FAILED
+  /// WhatsApp suspended the group. Messages cannot be sent until it clears.
+  SUSPENDED
+  /// Deleted in WhatsApp. Kept so the history stays readable.
+  DELETED
+}
+
+enum ProjectWhatsAppGroupOrigin {
+  /// Created by the app for this project.
+  CREATED
+  /// An existing API-created group someone linked to this project.
+  LINKED
+}
+
+/// A project's WhatsApp group. One per project.
+model ProjectWhatsAppGroup {
+  id                    String                     @id @default(uuid())
+  projectId             String                     @unique
+  /// The Royal number that owns the group, as configured when it was made.
+  businessPhoneNumberId String
+  businessDisplayNumber String
+  /// Meta's group id. Null while CREATING.
+  providerGroupId       String?                    @unique
+  /// Meta's request id for the create call; the lifecycle webhook names it.
+  createRequestId       String?                    @unique
+  subject               String
+  inviteLink            String?
+  inviteLinkAt          DateTime?
+  status                ProjectWhatsAppGroupStatus
+  origin                ProjectWhatsAppGroupOrigin
+  failureReason         String?
+  /// When the current create request went to Meta.
+  requestedAt           DateTime?
+  /// Bumped by every create request, so each attempt is its own outbox
+  /// intent and a replayed step never asks Meta for a second group.
+  createAttempt         Int                        @default(0)
+  lastMessageAt         DateTime?
+  unreadCount           Int                        @default(0)
+  createdById           String?
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+
+  project      Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy    User?                        @relation("ProjectWhatsAppGroupCreator", fields: [createdById], references: [id])
+  messages     ProjectWhatsAppMessage[]
+  participants ProjectWhatsAppParticipant[]
+
+  @@index([status, requestedAt])
+}
+
+/// Who is in a project's group, as the participants webhook reported it.
+model ProjectWhatsAppParticipant {
+  id        String    @id @default(uuid())
+  groupId   String
+  /// The participant's WhatsApp id (digits with the country code).
+  waId      String
+  phoneE164 String?
+  joinedAt  DateTime?
+  leftAt    DateTime?
+  updatedAt DateTime  @updatedAt
+
+  group ProjectWhatsAppGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, waId])
+}
+
+model ProjectWhatsAppMessage {
+  id                  String                   @id @default(uuid())
+  groupId             String
+  /// Denormalised so a project's thread is one index scan.
+  projectId           String
+  direction           WhatsAppMessageDirection
+  kind                WhatsAppMessageKind
+  /// As the participant sent it, or as Royal sent it. Never HTML.
+  body                String                   @db.Text
+  /// Inbound: who in the group wrote it.
+  senderWaId          String?
+  senderPhoneE164     String?
+  senderName          String?
+  /// Meta's wamid. Unique so a replayed webhook cannot insert a second row.
+  providerMessageId   String?                  @unique
+  status              WhatsAppMessageStatus
+  statusAt            DateTime
+  providerErrorCode   String?
+  providerErrorTitle  String?
+  needsReconciliation Boolean                  @default(false)
+  /// The outbox key of an outbound send.
+  idempotencyKey      String?                  @unique
+  authorId            String?
+  occurredAt          DateTime
+  deliveredAt         DateTime?
+  readAt              DateTime?
+  failedAt            DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  group  ProjectWhatsAppGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author User?                @relation("ProjectWhatsAppMessageAuthor", fields: [authorId], references: [id])
+  media  WhatsAppMedia?
+
+  @@index([groupId, occurredAt])
+  @@index([projectId, occurredAt])
 }
 
 model AdminOfferContent {

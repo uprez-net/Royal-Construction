@@ -93,6 +93,7 @@ const SALES = {
 const channel: WhatsAppChannel = {
   defaultPhoneNumberId: OFFICE.phoneNumberId,
   enabledTemplateNames: null,
+  groupsEnabled: false,
   numbers: [OFFICE, SALES],
   sendingAvailable: true,
 };

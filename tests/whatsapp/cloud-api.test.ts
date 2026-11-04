@@ -181,3 +181,120 @@ test("no port is built while WhatsApp is off", () => {
     null,
   );
 });
+
+// ── Groups and media ─────────────────────────────────────────────────────────
+
+const groupsConfig = readWhatsAppConfig({
+  WHATSAPP_ACCESS_TOKEN: TOKEN,
+  WHATSAPP_APP_SECRET: "secret",
+  WHATSAPP_ENABLED: "true",
+  WHATSAPP_GROUPS_ENABLED: "true",
+  WHATSAPP_PHONE_NUMBERS: "109876543210987=+61280001234=Office",
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN: "verify",
+});
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json" },
+    status,
+  });
+}
+
+test("groups exist on the port only when WHATSAPP_GROUPS_ENABLED is on", () => {
+  assert.equal(createCloudApiWhatsAppPort(config)?.groups ?? null, null);
+  assert.ok(createCloudApiWhatsAppPort(groupsConfig)?.groups);
+});
+
+test("a group message is addressed to the group id with recipient_type group", async () => {
+  const calls: { url: string; body: Record<string, unknown> }[] = [];
+  const port = createCloudApiWhatsAppPort(groupsConfig, (async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    calls.push({ body: JSON.parse(String(init?.body)), url: String(url) });
+    return json({ messages: [{ id: "wamid.G" }] });
+  }) as typeof fetch);
+  const receipt = await port?.groups?.sendText({
+    body: "Pour is Friday",
+    fromPhoneNumberId: "109876543210987",
+    groupId: "GROUP-1",
+  });
+  assert.equal(receipt?.providerMessageId, "wamid.G");
+  assert.match(calls[0].url, /\/109876543210987\/messages$/);
+  assert.equal(calls[0].body.recipient_type, "group");
+  assert.equal(calls[0].body.to, "GROUP-1");
+});
+
+test("a group create answers with Meta's request id", async () => {
+  const port = createCloudApiWhatsAppPort(groupsConfig, (async () =>
+    json({
+      messaging_product: "whatsapp",
+      request_id: "REQ-1",
+    })) as typeof fetch);
+  const receipt = await port?.groups?.create({
+    description: "d",
+    fromPhoneNumberId: "109876543210987",
+    subject: "s",
+  });
+  assert.deepEqual(receipt, {
+    groupId: null,
+    inviteLink: null,
+    requestId: "REQ-1",
+  });
+});
+
+test("media larger than the limit is refused as permanent before downloading", async () => {
+  const { createCloudApiMediaPort } = await import("@/lib/whatsapp/cloud-api");
+  const urls: string[] = [];
+  const download = createCloudApiMediaPort(groupsConfig, (async (
+    url: string | URL | Request,
+  ) => {
+    urls.push(String(url));
+    return json({
+      file_size: 5_000_000,
+      mime_type: "video/mp4",
+      url: "https://lookaside.example/x",
+    });
+  }) as typeof fetch);
+  await assert.rejects(
+    download!("media-1", { maxBytes: 1_000_000 }),
+    (error: unknown) =>
+      error instanceof Error
+      && (error as { permanent?: boolean }).permanent === true,
+  );
+  assert.equal(urls.length, 1, "the file itself was never fetched");
+});
+
+test("expired media (code 100) is permanent; the token goes on the download too", async () => {
+  const { createCloudApiMediaPort } = await import("@/lib/whatsapp/cloud-api");
+  const expired = createCloudApiMediaPort(groupsConfig, (async () =>
+    json(
+      { error: { code: 100, message: "Unsupported get request" } },
+      400,
+    )) as typeof fetch);
+  await assert.rejects(
+    expired!("media-1", { maxBytes: 1_000_000 }),
+    (error: unknown) => (error as { permanent?: boolean }).permanent === true,
+  );
+
+  const auth: (string | null)[] = [];
+  const ok = createCloudApiMediaPort(groupsConfig, (async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    auth.push(new Headers(init?.headers).get("authorization"));
+    return String(url).includes("lookaside")
+      ? new Response(new Uint8Array([1, 2, 3]), {
+          headers: { "content-type": "image/jpeg" },
+        })
+      : json({
+          file_size: 3,
+          mime_type: "image/jpeg",
+          url: "https://lookaside.example/x",
+        });
+  }) as typeof fetch);
+  const file = await ok!("media-2", { maxBytes: 1_000_000 });
+  assert.equal(file.byteSize, 3);
+  assert.equal(file.mimeType, "image/jpeg");
+  assert.deepEqual(auth, [`Bearer ${TOKEN}`, `Bearer ${TOKEN}`]);
+});
