@@ -19,6 +19,15 @@ export interface DataPoint {
  * white: `--warning` only reaches 2.05:1 against white, so a white icon on it is
  * invisible. The -ink variants all clear 4.55:1.
  */
+/**
+ * A row of metric cards above a list. On a phone the cards scroll sideways,
+ * two and a bit in view, instead of stacking rows deep and pushing the list
+ * below the fold; from sm up the row is a grid, so add the `sm:grid-cols-*`
+ * and wider column counts the row needs.
+ */
+export const MOBILE_METRIC_STRIP_CLASS =
+  "-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-1 no-scrollbar *:w-[44%] *:min-w-36 *:shrink-0 *:snap-start sm:mx-0 sm:grid sm:overflow-visible sm:px-0 sm:pb-0 sm:*:w-auto sm:*:min-w-0";
+
 export const METRIC_TONES = {
   primary: "bg-primary",
   success: "bg-success-ink",
@@ -87,11 +96,11 @@ export function MetricCard({
     : (iconTone ?? METRIC_TONES.primary);
 
   return (
-    <Card className="overflow-hidden rounded-lg border-border/70 bg-white/95 shadow-sm">
-      <CardContent className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
+    <Card className="overflow-hidden rounded-lg border-border/70 bg-white/95 py-0 shadow-sm sm:py-4">
+      <CardContent className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)] items-center gap-2 px-3 py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-3 sm:px-4">
         <div
           className={cn(
-            "grid size-9 place-items-center rounded-lg text-white",
+            "grid size-7 place-items-center rounded-lg text-white sm:size-9",
             toneClass,
           )}
         >
@@ -101,15 +110,19 @@ export function MetricCard({
           <p className="font-heading text-2xl font-semibold leading-none tracking-tight text-foreground">
             {displayValue}
           </p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">{title}</p>
+          <p className="mt-1 text-xs text-muted-foreground sm:truncate">
+            {title}
+          </p>
           {caption ? (
-            <p className="mt-0.5 truncate font-mono text-[10.5px] tabular-nums text-muted-foreground">
+            <p className="mt-0.5 break-words font-mono text-[10.5px] tabular-nums text-muted-foreground sm:truncate">
               {caption}
             </p>
           ) : null}
         </div>
         {trendDelta !== undefined && trendDelta !== 0 && (
-          <TrendBadge value={trendDelta} isInverse={isInverse} />
+          <div className="col-start-2 sm:col-start-auto">
+            <TrendBadge value={trendDelta} isInverse={isInverse} />
+          </div>
         )}
       </CardContent>
     </Card>

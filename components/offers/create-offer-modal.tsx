@@ -71,7 +71,10 @@ export function CreateOfferFileModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-4xl">
+      <DialogContent
+        data-mobile-scroll="body"
+        className="grid h-[88dvh] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:h-[min(85dvh,48rem)] sm:max-w-4xl"
+      >
         <DialogHeader>
           <DialogTitle>Leads Directory</DialogTitle>
           <DialogDescription>
@@ -82,7 +85,7 @@ export function CreateOfferFileModal({
         {/* No scroller here: the card list is the only scroll area, sized to
             show at least two rows. A second one around it boxed the list into
             a 24vh strip inside a 60vh strip. */}
-        <div className="mt-4 flex flex-col gap-4">
+        <div className="mt-4 flex min-h-0 min-w-0 flex-col gap-4">
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -94,7 +97,7 @@ export function CreateOfferFileModal({
           />
 
           <LeadCardList
-            className="max-h-[min(60vh,34rem)]"
+            className="min-h-0 flex-1 max-h-none"
             loading={leadSearch.loading}
             items={leadSearch.items}
             selectedLeadId={selectedLeadId}

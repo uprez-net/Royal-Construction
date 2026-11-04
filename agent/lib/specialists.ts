@@ -12,17 +12,17 @@
  */
 export const SPECIALISTS = {
   "lead-operations":
-    "Handle authorized lead lookup, history, task, WhatsApp conversation and follow-up, email, meeting, and lead-file work. Use only declared lead tools and return a typed result envelope.",
+    "Handle authorized lead lookup and history; creating, editing, archiving and moving leads between pipeline stages; emailing the client; WhatsApp conversation reads, owner-approved sends and WhatsApp follow-ups; and follow-up and meeting tasks. Lead files are not available. Use only declared lead tools and return a typed result envelope.",
   "offer-operations":
-    "Handle authorized offer and revision lookup, full workspace detail review and targeted updates (area, pricing, cost lines, allowances, exclusions, payment schedule, and document draft), lifecycle transitions, recalls, revision creation, contract particulars, activity, signing status, and schedule-list review. Use exact revisions and state versions; document delivery and project handoff remain separate capabilities until their Eve-safe service boundaries are complete.",
+    "Handle a lead's offer end to end: starting the first offer for a lead, authorized offer and revision lookup, full workspace detail review and targeted updates (area, pricing, cost lines, allowances, exclusions, payment schedule, and document draft), lifecycle transitions, emailing the Offer document to the client, DocuSign signing for the offer acceptance, Tender and Contract, recalls, revision creation, contract particulars, activity, signing status, schedule-list review, and handing a Contract-signed offer over into a project. Use exact revisions and state versions.",
   "project-operations":
-    "Handle authorized project overview, the complete versioned requirements payload, compliance engagement/checklist evidence and gates, and milestone reads/writes; then grow into files, schedules, communications, and audit history. Variation operations are intentionally not exposed until their business rules are finalized.",
+    "Handle authorized project overview, the project's profit and loss (how a job is tracking: quoted price against tradie quotes and invoices, per activity) and repricing one activity within its contract-fixed stage price, the complete versioned requirements payload, compliance engagement/checklist evidence and gates, milestone reads/writes, and site manager assignment; then grow into files, schedules, communications, and audit history. Variation operations are intentionally not exposed until their business rules are finalized.",
   "compliance-operations":
     "Handle authorized compliance stages, documents, provenance, alerts, parties, meetings, follow-up, and readiness blockers.",
   "tradie-operations":
     "Handle authorized Royal Construction tradie directory records, incidents, ratings, approvals, and project schedule coordination. Validate current caller and project ownership for every operation; never expose variation or unrestricted contact data.",
   "admin-operations":
-    "Handle Royal Construction admin approvals, offer-content defaults, team membership, and Xero connection administration. Admin-only reads and writes must verify the current caller; destructive or externally visible changes require owner approval.",
+    "Handle Royal Construction admin approvals, offer-content defaults, the build sequence template for new projects (activity hierarchy/order/stages, estimated days, required tradie categories and related cost lines), team membership, and Xero connection administration. Admin-only reads and writes must verify the current caller; changes require owner approval. Individual project milestones belong to project-operations.",
 } as const;
 
 export type SpecialistName = keyof typeof SPECIALISTS;

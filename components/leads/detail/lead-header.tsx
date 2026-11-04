@@ -175,7 +175,7 @@ function LeadDealValuePanel({
         onClick={() => router.push(offerWorkspaceHref(lead))}
         disabled={action.disabled}
         title={action.disabledReason ?? undefined}
-        className="mt-4 rounded-lg"
+        className="mt-4 w-full rounded-lg sm:w-auto"
       >
         <FileSearch className="mr-2 size-4" aria-hidden="true" />
         Check with Offer
@@ -268,9 +268,9 @@ export function LeadHeader({
   };
 
   return (
-    <section className="rounded-xl border border-border/70 bg-card p-6 px-7 shadow-sm">
+    <section className="rounded-xl border border-border/70 bg-card p-4 shadow-sm sm:p-6 sm:px-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2 [&_a]:break-words">
           <Link
             href={backToListHref}
             className="inline-flex items-center gap-1 rounded-md text-sm font-medium text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -280,7 +280,7 @@ export function LeadHeader({
           </Link>
 
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-heading text-2xl leading-tight font-semibold tracking-tight text-foreground">
+            <h1 className="font-heading break-words text-xl leading-tight font-semibold tracking-tight text-foreground sm:text-2xl">
               {lead.name}
             </h1>
             <StageBadgeSelect
@@ -305,12 +305,14 @@ export function LeadHeader({
             ) : null}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 pt-1 text-sm text-muted-foreground">
+          <div className="flex flex-col items-start gap-1.5 pt-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
             <span className="inline-flex items-center gap-1">
               <MapPin className="size-3.5" aria-hidden="true" />
               {lead.location || NOT_SET}
             </span>
-            <span aria-hidden="true">|</span>
+            <span aria-hidden="true" className="hidden sm:inline">
+              |
+            </span>
             <span className="inline-flex items-center gap-1">
               <CalendarDays className="size-3.5" aria-hidden="true" />
               Created{" "}
@@ -320,14 +322,16 @@ export function LeadHeader({
                 NOT_SET
               )}
             </span>
-            <span aria-hidden="true">|</span>
+            <span aria-hidden="true" className="hidden sm:inline">
+              |
+            </span>
             <span className="inline-flex items-center gap-1">
               <UserRound className="size-3.5" aria-hidden="true" />
               {lead.assignedUser?.name ?? "Unassigned"}
             </span>
           </div>
 
-          <p className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground">
+          <p className="flex flex-col items-start gap-1.5 pt-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
             <span className="inline-flex items-center gap-1">
               <Phone className="size-3.5" aria-hidden="true" />
               {dialable ? (
@@ -341,13 +345,15 @@ export function LeadHeader({
                 NOT_SET
               )}
             </span>
-            <span aria-hidden="true">|</span>
-            <span className="inline-flex items-center gap-1">
-              <Mail className="size-3.5" aria-hidden="true" />
+            <span aria-hidden="true" className="hidden sm:inline">
+              |
+            </span>
+            <span className="inline-flex max-w-full min-w-0 items-center gap-1">
+              <Mail className="size-3.5 shrink-0" aria-hidden="true" />
               {lead.email ? (
                 <a
                   href={`mailto:${lead.email}`}
-                  className="rounded-md text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="min-w-0 rounded-md break-all text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                   {lead.email}
                 </a>
@@ -355,7 +361,9 @@ export function LeadHeader({
                 NOT_SET
               )}
             </span>
-            <span aria-hidden="true">|</span>
+            <span aria-hidden="true" className="hidden sm:inline">
+              |
+            </span>
             <span>Source {lead.sourceDetail || lead.source || NOT_SET}</span>
           </p>
 
@@ -370,7 +378,22 @@ export function LeadHeader({
         </div>
 
         <div className="flex w-full flex-col gap-4 pt-1 lg:w-96">
-          <div className="flex flex-wrap gap-2 lg:justify-end">
+          {/* On a phone the office is usually calling from the site, so the
+              call is the first thing within reach and every action is a full
+              half-width target instead of a wrapped row of small pills. */}
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap lg:justify-end">
+            {dialable ? (
+              <Button
+                asChild
+                variant="royal"
+                className="h-9 rounded-lg px-3.5 text-sm font-medium sm:hidden"
+              >
+                <a href={`tel:${dialable}`}>
+                  <Phone className="mr-1.5 size-4" aria-hidden="true" />
+                  Call
+                </a>
+              </Button>
+            ) : null}
             {actions.sendText.visible ? (
               <Button
                 type="button"
@@ -428,7 +451,7 @@ export function LeadHeader({
                 onClick={onArchiveClick}
                 disabled={actions.archive.disabled}
                 title={actions.archive.disabledReason ?? undefined}
-                className="h-9 rounded-lg px-3.5 text-sm font-medium"
+                className="col-span-2 h-9 rounded-lg px-3.5 text-sm font-medium sm:col-span-1"
               >
                 <Archive className="mr-1.5 size-4" aria-hidden="true" />
                 Delete Lead

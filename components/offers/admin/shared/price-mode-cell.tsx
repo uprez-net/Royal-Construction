@@ -39,7 +39,7 @@ export function PriceModeCell({
   const base = stripBase(row);
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
       <Select
         value={row.priceMode}
         onValueChange={(value) => onChange(withMode(row, value as PriceMode))}
@@ -96,11 +96,11 @@ export function PriceModeCell({
           }
           ariaLabel="Formula"
           showEmptyError
-          className="w-64"
+          className="w-full min-w-0 md:w-64"
         />
       )}
 
-      <div className="flex items-center gap-1.5 pl-2">
+      <div className="flex min-h-11 items-center gap-2 md:pl-2">
         <Switch
           id={`include-${row.id}`}
           checked={row.defaultInclude}
@@ -113,7 +113,7 @@ export function PriceModeCell({
           htmlFor={`include-${row.id}`}
           className="text-xs text-muted-foreground"
         >
-          Inc
+          Included by default
         </Label>
       </div>
     </div>

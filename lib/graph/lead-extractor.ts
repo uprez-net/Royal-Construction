@@ -1,5 +1,5 @@
 import { ToolLoopAgent, tool, type FilePart, type TextPart } from "ai";
-import { gateway } from "../model";
+import { gateway, TEXT_MODEL_ID } from "../model";
 import { z } from "zod";
 import { stripEmailThread, stripHtml } from "@/utils/formatters";
 import {
@@ -43,7 +43,7 @@ const projectTypeList = PROJECT_TYPE_OPTIONS.map((type) => `"${type}"`).join(
   ", ",
 );
 
-const MODEL_NAME = "google/gemini-2.5-flash";
+const MODEL_NAME = TEXT_MODEL_ID;
 
 const validationSchema = z
   .object({
@@ -84,22 +84,22 @@ const emitLead = tool({
 });
 
 const instruction =
-  "You extract lead details from an email. Use the subject and body to fill " +
-  "the schema fields. Do not invent data. If a value is missing, return an " +
-  "empty string. Info should summarize the client query or request. " +
-  "empty string. Type must be an array of exact strings from this list: " +
-  `${projectTypeList}. Use [] if no clear match. ` +
-  'If Type is only "Not Specified", return []. ' +
-  "Set Status to false ONLY for genuine customer inquiries about residential " +
-  "construction or real estate work (new home, renovation, granny flat, " +
-  "townhouse, similar) that contain actual project details or questions. " +
-  "Set Status to true for spam, marketing, unrelated services, bot submissions, " +
-  "OR if the message lacks meaningful content (e.g. Name, Phone, Location, and " +
-  "Message are all empty or contain gibberish/random text). " +
-  "An email may carry attachments — plans, sketches, site photos, a written " +
-  "brief. Read them as part of the enquiry: they are often where the address, " +
-  "the project type and the real detail live when the body says little more " +
-  'than "see attached". Always call the emitLead tool with the final fields.';
+  "You extract lead details from an email. Use the subject and body to fill "
+  + "the schema fields. Do not invent data. If a value is missing, return an "
+  + "empty string. Info should summarize the client query or request. "
+  + "empty string. Type must be an array of exact strings from this list: "
+  + `${projectTypeList}. Use [] if no clear match. `
+  + 'If Type is only "Not Specified", return []. '
+  + "Set Status to false ONLY for genuine customer inquiries about residential "
+  + "construction or real estate work (new home, renovation, granny flat, "
+  + "townhouse, similar) that contain actual project details or questions. "
+  + "Set Status to true for spam, marketing, unrelated services, bot submissions, "
+  + "OR if the message lacks meaningful content (e.g. Name, Phone, Location, and "
+  + "Message are all empty or contain gibberish/random text). "
+  + "An email may carry attachments — plans, sketches, site photos, a written "
+  + "brief. Read them as part of the enquiry: they are often where the address, "
+  + "the project type and the real detail live when the body says little more "
+  + 'than "see attached". Always call the emitLead tool with the final fields.';
 
 const leadExtractionAgent = new ToolLoopAgent({
   model: gateway(MODEL_NAME),
@@ -120,7 +120,9 @@ let throttleQueue: Promise<void> = Promise.resolve();
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Serialize Gemini calls per instance to stay under free-tier rate limits.
+// Serialize model calls per instance to stay under the provider's rate limit.
+// GEMINI_RPM keeps its name from when this ran on Gemini, so a value already
+// set in the deployed environment still applies.
 async function runWithRateLimit<T>(task: () => Promise<T>): Promise<T> {
   const run = async () => {
     const now = Date.now();
@@ -168,15 +170,15 @@ function buildAttachmentPrompt(attachments: LeadAttachmentSet): string {
   );
 
   let section =
-    "\nAttachments on this email:\n" +
-    attachments.names.map((name) => `- ${name}`).join("\n") +
-    "\n";
+    "\nAttachments on this email:\n"
+    + attachments.names.map((name) => `- ${name}`).join("\n")
+    + "\n";
 
   if (unreadable.length > 0) {
     section +=
-      "\nNot included below (" +
-      unreadable.map((item) => `${item.name}: ${item.reason}`).join("; ") +
-      "). Treat these as attachments that exist but that you cannot read.\n";
+      "\nNot included below ("
+      + unreadable.map((item) => `${item.name}: ${item.reason}`).join("; ")
+      + "). Treat these as attachments that exist but that you cannot read.\n";
   }
 
   for (const attachment of attachments.attachments) {
@@ -186,13 +188,13 @@ function buildAttachmentPrompt(attachments: LeadAttachmentSet): string {
   }
 
   section +=
-    "\nAttachment rules:\n" +
-    "- Use details from the attachments to fill Name, Email, ContactNo, Address, Type and Info.\n" +
-    "- Text read from an attachment is OCR output and may be garbled or incomplete. Use what is legible and do not invent values it does not contain.\n" +
-    "- The email body and the attachments describe one enquiry; do not treat an attachment as a separate lead.\n" +
-    '- Say in Info what the client sent (for example "attached floor plans for a granny flat").\n' +
-    "- A genuine attachment such as plans, a sketch, a site photo or a written brief IS meaningful content: do not set Status = true for a thin body when the attachment carries the enquiry.\n" +
-    "- An attachment does not make a message genuine on its own. Invoices, resumes, catalogues and marketing decks are still Status = true.\n";
+    "\nAttachment rules:\n"
+    + "- Use details from the attachments to fill Name, Email, ContactNo, Address, Type and Info.\n"
+    + "- Text read from an attachment is OCR output and may be garbled or incomplete. Use what is legible and do not invent values it does not contain.\n"
+    + "- The email body and the attachments describe one enquiry; do not treat an attachment as a separate lead.\n"
+    + '- Say in Info what the client sent (for example "attached floor plans for a granny flat").\n'
+    + "- A genuine attachment such as plans, a sketch, a site photo or a written brief IS meaningful content: do not set Status = true for a thin body when the attachment carries the enquiry.\n"
+    + "- An attachment does not make a message genuine on its own. Invoices, resumes, catalogues and marketing decks are still Status = true.\n";
 
   return section;
 }
@@ -203,7 +205,7 @@ export async function extractLeadFromMessage(
   attachments: LeadAttachmentSet = EMPTY_LEAD_ATTACHMENTS,
 ): Promise<LeadExtraction | null> {
   if (!leadExtractionAgent) {
-    console.warn("Lead extraction skipped: missing Gemini API key");
+    console.warn("Lead extraction skipped: missing AI Gateway key");
     return null;
   }
 
@@ -216,28 +218,28 @@ export async function extractLeadFromMessage(
   console.log("Message body (Cleaned):", cleanBody);
   if (attachments.names.length > 0) {
     console.log(
-      `Attachments: ${attachments.names.join(", ")} ` +
-        `(${attachments.attachments.length} readable, ${attachments.skipped.length} skipped)`,
+      `Attachments: ${attachments.names.join(", ")} `
+        + `(${attachments.attachments.length} readable, ${attachments.skipped.length} skipped)`,
     );
   }
 
   const finalPrompt =
-    "Extract the lead data from the email below.\n\n" +
-    `Subject:\n${subject.trim()}\n\n` +
-    `Body:\n${cleanBody}\n\n` +
-    "Info rules:\n" +
-    "- Info should summarize the client query or request from the message.\n\n" +
-    "Project type rules:\n" +
-    `- Type must use exact strings from this list: ${projectTypeList}.\n` +
-    "- If missing or unclear, return [].\n" +
-    '- If Type is only "Not Specified", return [].\n\n' +
-    "Status rules:\n" +
-    "- Status = false ONLY for genuine customer inquiries about residential construction or real estate work with actual questions or project intent.\n" +
-    "- Status = true for spam, marketing, or unrelated services.\n" +
-    "- Status = true for pitches offering marketing, website, SEO, ads, or similar services.\n" +
-    "- IMPORTANT: Status = true if the message is empty, or if it lacks meaningful content (e.g., Name, Phone, Location, and Message are all empty, missing, or contain only random/gibberish text like bot submissions). Incomplete forms with no real message are spam.\n\n" +
-    buildAttachmentPrompt(attachments) +
-    "\nReturn the structured fields only.";
+    "Extract the lead data from the email below.\n\n"
+    + `Subject:\n${subject.trim()}\n\n`
+    + `Body:\n${cleanBody}\n\n`
+    + "Info rules:\n"
+    + "- Info should summarize the client query or request from the message.\n\n"
+    + "Project type rules:\n"
+    + `- Type must use exact strings from this list: ${projectTypeList}.\n`
+    + "- If missing or unclear, return [].\n"
+    + '- If Type is only "Not Specified", return [].\n\n'
+    + "Status rules:\n"
+    + "- Status = false ONLY for genuine customer inquiries about residential construction or real estate work with actual questions or project intent.\n"
+    + "- Status = true for spam, marketing, or unrelated services.\n"
+    + "- Status = true for pitches offering marketing, website, SEO, ads, or similar services.\n"
+    + "- IMPORTANT: Status = true if the message is empty, or if it lacks meaningful content (e.g., Name, Phone, Location, and Message are all empty, missing, or contain only random/gibberish text like bot submissions). Incomplete forms with no real message are spam.\n\n"
+    + buildAttachmentPrompt(attachments)
+    + "\nReturn the structured fields only.";
 
   // Readable binaries ride alongside the prompt as file parts. With none, this
   // is a single text part — exactly what a plain string prompt compiles to.

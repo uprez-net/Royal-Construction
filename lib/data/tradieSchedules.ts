@@ -2,97 +2,46 @@
 
 import { createHash } from "node:crypto";
 import prisma from "@/lib/prisma";
-import {
-  TradieSchedule,
-  TradieScheduleStatus,
-  Tradie,
-  Project,
-  User,
-  Milestone,
-} from "@prisma/client";
+import { TradieScheduleStatus } from "@prisma/client";
 import type {
   CreateTradieScheduleInput,
   UpdateTradieScheduleInput,
 } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
-import { revalidateTag } from "next/cache";
+import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 import { triggerNotification } from "../notification/novu";
 import { createNotification } from "@/types/notification";
 import { currency, dateFormat } from "@/utils/formatters";
 import { after } from "next/server";
-import { TradieScheduleListItem } from "@/types/project";
 import { auth } from "@clerk/nextjs/server";
 import { requireInternalUser } from "@/lib/auth/require-internal-user";
 import { getAllAdminUsersIds, getUserByClerkIdCached } from "./user";
 import { authorizeProject } from "@/lib/domain/access/projects";
 import {
   createTradieSchedule as createTradieScheduleDomain,
-  createTradieSchedules as createTradieSchedulesDomain,
+  listTradieBookings,
+  type TradieBooking,
   requestTradieScheduleDeletion as requestTradieScheduleDeletionDomain,
-  transitionTradieSchedule as transitionTradieScheduleDomain,
+  rescheduleTradieSchedule as rescheduleTradieScheduleDomain,
 } from "@/lib/domain/tradies/schedules";
 import { sendTradieScheduleReminder as sendTradieScheduleReminderDomain } from "@/lib/domain/tradies/reminders";
 import { DomainNotFoundError, isDomainError } from "@/lib/domain/errors";
-import { userPrincipal } from "@/lib/domain/principal";
+import {
+  domainActionFailure,
+  type DomainActionFailure,
+} from "@/lib/http/domain-response";
+import { userPrincipal, type DomainPrincipal } from "@/lib/domain/principal";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { sendEmail } from "../azureClient";
-import {
-  DeleteScheduleInput,
-} from "@/types/tradie";
+import { DeleteScheduleInput } from "@/types/tradie";
 import { createActivityLogEntry } from "@/types/activityLog";
+import {
+  applyTradieScheduleUpdate,
+  convertToTradieScheduleListItem,
+} from "./tradie-schedule-updates";
 import { logAction } from "./actionLog";
 import { scheduleTotalCost } from "@/utils/calculations";
-import { get } from "@vercel/blob";
-
-interface TradieScheduleWithRelations extends TradieSchedule {
-  tradie: Tradie;
-  project: Project & { siteManager: User | null };
-  milestone: Milestone | null;
-}
-
-/**
- * Converts a Prisma tradie schedule with its related entities into a
- * UI-friendly {@link TradieScheduleListItem}.
- *
- * @param schedule - The schedule including tradie, project, site manager,
- * and milestone relations.
- * @returns A formatted tradie schedule list item ready for display.
- */
-const convertToTradieScheduleListItem = (
-  schedule: TradieScheduleWithRelations,
-): TradieScheduleListItem => {
-  const coverted = {
-    id: schedule.id,
-    abn: schedule.tradie.abn,
-    tradieId: schedule.tradieId,
-    tradieName: schedule.tradie.name,
-    lastQuotedPriceUnit: schedule.tradie.lastQuotedPriceUnit,
-    tradeType: schedule.tradie.trade,
-    projectId: schedule.projectId,
-    projectName: schedule.project.name,
-    taskLabel: schedule.milestone ? schedule.milestone.name : "General Task",
-    scheduledDate: dateFormat.format(schedule.scheduledDate),
-    durationDays: schedule.durationDays,
-    status: schedule.status,
-    isFavourite: schedule.tradie.isFavourite,
-    note: schedule.tradie.note,
-    updatedAt: dateFormat.format(schedule.updatedAt),
-    requiresQuote: schedule.requiresQuote,
-    quotedPrice: schedule.quotedPrice ?? undefined,
-    contact: {
-      email: schedule.tradie.email,
-      phone: schedule.tradie.phone,
-      additionalEmails: schedule.tradie.additionalEmails,
-    },
-    siteManager: {
-      name: schedule.project.siteManager?.name || "",
-      email: schedule.project.siteManager?.email || "",
-      phone: schedule.project.siteManager?.phone || "",
-    },
-  } satisfies TradieScheduleListItem;
-
-  return coverted;
-};
+import { recordScheduleCreated } from "./tradie-schedule-records";
 
 /**
  * Ensures the currently authenticated user is the site manager of the
@@ -152,10 +101,9 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
   try {
     const actingUser = await userHasAccessToSchedule(input.projectId);
     // The create itself is lib/domain/tradies/schedules.ts, shared with Eve's
-    // booking tool. Two checks arrive with it that this path never had: the
-    // milestone must belong to the project, and the tradie must not already
-    // hold an overlapping active booking. A double-booked tradie cannot show
-    // up to one of the two sites, and nothing here used to notice.
+    // booking tool: the milestone must belong to the project, and the tradie
+    // must not already hold an active booking on the same project and
+    // milestone. Overlapping days on different work are allowed.
     const created = await createTradieScheduleDomain(
       userPrincipal(actingUser),
       {
@@ -182,44 +130,7 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
       revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
       revalidateTag("projects", CACHE_PROFILES.MEDIUM);
       revalidateTag(`project-${schedule.projectId}`, CACHE_PROFILES.MEDIUM);
-      const siteManagerId = schedule.project.siteManagerId;
-      const notificationPayload = createNotification("tradieScheduleCreated", {
-        tradieName: schedule.tradie.name,
-        projectName: schedule.project.name,
-        milestoneName: schedule.milestone
-          ? schedule.milestone.name
-          : "General Task",
-        projectId: schedule.projectId,
-        tradieTrade: schedule.tradie.trade,
-        scheduleDate: dateFormat.format(schedule.scheduledDate),
-      });
-      const activityLogEntry = createActivityLogEntry("tradieScheduleCreated", {
-        projectId: schedule.projectId,
-        scheduleId: schedule.id,
-        tradieId: schedule.tradieId,
-        tradieName: schedule.tradie.name,
-        trade: schedule.tradie.trade,
-        scheduleDate: dateFormat.format(schedule.scheduledDate),
-        durationDays: schedule.durationDays,
-        cost:
-          schedule.quotedPrice ??
-          currency.format(
-            scheduleTotalCost(
-              parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"),
-              schedule.durationDays,
-              schedule.tradie.lastQuotedPriceUnit,
-            ),
-          ),
-        milestoneId: schedule.milestoneId ?? undefined,
-        milestoneName: schedule.milestone
-          ? schedule.milestone.name
-          : "General Task",
-      });
-      await logAction(activityLogEntry);
-      await triggerNotification(
-        siteManagerId ? [siteManagerId] : [],
-        notificationPayload,
-      );
+      await recordScheduleCreated(schedule);
       const emailContent = generateTradieOutreachEmail(result);
       await sendEmail({
         to: schedule.tradie.email,
@@ -231,184 +142,20 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
     return result;
   } catch (error) {
     console.error("Error creating tradie schedule:", error);
+    // A refusal keeps its own status and sentence for the route to answer with.
+    if (isDomainError(error)) throw error;
     throw new Error("Failed to create tradie schedule.");
   }
 }
 
 /**
- * Creates multiple tradie schedules in a single operation.
+ * Updates the status of an existing tradie schedule as the signed-in user.
  *
- * All schedules are created with a default status of `PENDING`. After
- * successful creation, cache tags are revalidated and notifications are
- * sent for each created schedule.
+ * The Server Action half: it resolves who is asking and hands over to
+ * `applyTradieScheduleUpdate`, which owns the transition and its effects.
  *
- * @param inputs - An array of schedule creation payloads.
- * @returns An array of formatted {@link TradieScheduleListItem} objects.
- * @throws {Error} If no inputs are provided.
- * @throws {Error} If the user does not have permission to create schedules
- * for the project or if the operation fails.
- */
-export async function bulkCreateTradieSchedules(
-  inputs: CreateTradieScheduleInput[],
-) {
-  try {
-    if (inputs.length === 0) {
-      throw new Error("No inputs provided for bulk creation.");
-    }
-    const projectId = inputs[0].projectId;
-    const actingUser = await userHasAccessToSchedule(projectId);
-    const created = await createTradieSchedulesDomain(
-      userPrincipal(actingUser),
-      inputs.map((input) => ({
-        durationDays: input.durationDays ?? 1,
-        milestoneId: input.milestoneId ?? null,
-        projectId: input.projectId,
-        requiresQuote: input.requiresQuote ?? false,
-        scheduledDate: new Date(input.scheduledDate),
-        tradieId: input.tradieId,
-      })),
-      prisma,
-    );
-    const stored = await prisma.tradieSchedule.findMany({
-      where: { id: { in: created.map((schedule) => schedule.id) } },
-      include: {
-        tradie: true,
-        project: { include: { siteManager: true } },
-        milestone: true,
-      },
-    });
-    const storedById = new Map(stored.map((schedule) => [schedule.id, schedule]));
-    const schedules = created.map((schedule) => {
-      const storedSchedule = storedById.get(schedule.id);
-      if (!storedSchedule) throw new Error("Schedule not found after creation.");
-      return storedSchedule;
-    });
-
-    after(async () => {
-      const projectIds = Array.from(
-        new Set(schedules.map((schedule) => schedule.projectId)),
-      );
-      revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
-      revalidateTag("projects", CACHE_PROFILES.MEDIUM);
-      for (const projectId of projectIds) {
-        revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
-      }
-      for (const schedule of schedules) {
-        const siteManagerId = schedule.project.siteManagerId;
-        const notificationPayload = createNotification(
-          "tradieScheduleCreated",
-          {
-            tradieName: schedule.tradie.name,
-            projectName: schedule.project.name,
-            milestoneName: schedule.milestone
-              ? schedule.milestone.name
-              : "General Task",
-            projectId: schedule.projectId,
-            tradieTrade: schedule.tradie.trade,
-            scheduleDate: dateFormat.format(schedule.scheduledDate),
-          },
-        );
-        const activityLogEntry = createActivityLogEntry(
-          "tradieScheduleCreated",
-          {
-            projectId: schedule.projectId,
-            scheduleId: schedule.id,
-            tradieId: schedule.tradieId,
-            tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
-            scheduleDate: dateFormat.format(schedule.scheduledDate),
-            durationDays: schedule.durationDays,
-            cost:
-              schedule.quotedPrice ??
-              currency.format(
-                scheduleTotalCost(
-                  parseFloat(
-                    schedule.tradie.lastQuotedPrice?.toString() ?? "0",
-                  ),
-                  schedule.durationDays,
-                  schedule.tradie.lastQuotedPriceUnit,
-                ),
-              ),
-            milestoneId: schedule.milestoneId ?? undefined,
-            milestoneName: schedule.milestone
-              ? schedule.milestone.name
-              : "General Task",
-          },
-        );
-        await logAction(activityLogEntry);
-        await triggerNotification(
-          siteManagerId ? [siteManagerId] : [],
-          notificationPayload,
-        );
-        const emailContent = inputs.find(
-          (input) => input.tradieId === schedule.tradieId,
-        )!.emailContent;
-        if (!emailContent) continue;
-        const attachments: { name: string; contentBytes: string }[] = [];
-        for (const attachment of emailContent.attachments) {
-          const blob = await get(attachment.url, { access: "public" });
-
-          if (!blob?.stream) continue;
-
-          const reader = blob.stream.getReader();
-          const chunks: Uint8Array[] = [];
-
-          while (true) {
-            const { done, value } = await reader.read();
-
-            if (done) break;
-            if (value) chunks.push(value);
-          }
-
-          const buffer = Buffer.concat(
-            chunks.map((chunk) => Buffer.from(chunk)),
-          );
-
-          attachments.push({
-            name: attachment.name,
-            contentBytes: buffer.toString("base64"),
-          });
-        }
-        await sendEmail({
-          to: schedule.tradie.email,
-          subject: emailContent.subject,
-          body: emailContent.body,
-          cc:
-            schedule.tradie.additionalEmails.length > 0
-              ? schedule.tradie.additionalEmails
-              : undefined,
-          attachments:
-            attachments.length > 0
-              ? attachments.map((att) => ({
-                  name: att.name,
-                  contentBytes: att.contentBytes,
-                }))
-              : undefined,
-        });
-      }
-    });
-
-    return schedules.map(convertToTradieScheduleListItem);
-  } catch (error) {
-    console.error("Error bulk creating tradie schedules:", error);
-    throw new Error("Failed to bulk create tradie schedules.");
-  }
-}
-
-/**
- * Updates the status of an existing tradie schedule.
- *
- * If the updated status is `DECLINED`, the returned result indicates that
- * the schedule requires a replacement tradie. After updating, cache tags
- * are revalidated and the project site manager is notified.
- *
- * @param scheduleId - The ID of the schedule to update.
- * @param updates - The schedule update payload.
- * @returns An object containing the updated schedule and a flag indicating
- * whether a replacement tradie is required.
- * @throws {Error} If the schedule does not exist.
- * @throws {Error} If the user does not have permission to update the schedule.
- * @throws {Error} If the update operation fails.
+ * @throws {Error} If the schedule does not exist, the user may not manage its
+ * project, or the update fails.
  */
 export async function updateTradieSchedule(
   scheduleId: string,
@@ -420,277 +167,24 @@ export async function updateTradieSchedule(
     approvalId?: string;
   } = {},
 ) {
+  let actingUser: Awaited<ReturnType<typeof userHasAccessToSchedule>>;
   try {
     const existingSchedule = await prisma.tradieSchedule.findUnique({
+      select: { projectId: true },
       where: { id: scheduleId },
-      include: { project: true },
     });
-    if (!existingSchedule) {
-      throw new Error("Schedule not found");
-    }
-    const actingUser = await userHasAccessToSchedule(existingSchedule.projectId);
-    const changed = await transitionTradieScheduleDomain(
-      userPrincipal(actingUser),
-      {
-        appliedStatus: options.appliedStatus,
-        quote: updates.quote,
-        quoteUnit: updates.quoteUnit,
-        scheduleId,
-        statusAlreadyApplied: options.statusAlreadyApplied,
-        toStatus: updates.status,
-      },
-      prisma,
-    );
-    const schedule = await prisma.tradieSchedule.findUnique({
-      where: { id: scheduleId },
-      include: {
-        tradie: true,
-        project: { include: { siteManager: true } },
-        milestone: true,
-      },
-    });
-    if (!schedule) throw new Error("Schedule not found after status update.");
-    const declinesPendingApproval =
-      changed.previousStatus === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL &&
-      updates.status === TradieScheduleStatus.DECLINED;
-    const requiresReplacement = updates.status === TradieScheduleStatus.DECLINED;
-    after(async () => {
-      revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
-      revalidateTag("projects", CACHE_PROFILES.MEDIUM);
-      revalidateTag(`project-${schedule.projectId}`, CACHE_PROFILES.MEDIUM);
-      if (declinesPendingApproval) {
-        revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
-        revalidateTag("approval-kpi", CACHE_PROFILES.MEDIUM);
-      }
-      // Numeric, deliberately. calculateScheduleTotalCost returns a FORMATTED
-      // string, so `parseFloat(totalCost.toString())` below was parsing "$4,800"
-      // and yielding NaN — every approval and activity entry without an explicit
-      // quote displayed "$NaN". Format at the point of display instead.
-      const totalCost = scheduleTotalCost(
-        parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"),
-        schedule.durationDays,
-        schedule.tradie.lastQuotedPriceUnit,
-      );
-
-      if (updates.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL) {
-        revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
-        revalidateTag(`approval-kpi`, CACHE_PROFILES.MEDIUM);
-        const notificationPayload = createNotification(
-          "tradieScheduleApproval",
-          {
-            approvalId: changed.approvalId ?? "",
-            scheduleId: schedule.id,
-            projectId: schedule.projectId,
-            projectName: schedule.project.name,
-            milestoneId: schedule.milestoneId ?? undefined,
-            milestoneName: schedule.milestone
-              ? schedule.milestone.name
-              : "General Task",
-            scheduledDate: dateFormat.format(schedule.scheduledDate),
-            durationDays: schedule.durationDays,
-            cost: currency.format(
-              schedule.quotedPrice
-                ? parseFloat(schedule.quotedPrice)
-                : totalCost,
-            ),
-            tradieId: schedule.tradieId,
-            tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
-          },
-        );
-        const activityLogEntry = createActivityLogEntry(
-          "tradieScheduleAvailable",
-          {
-            projectId: schedule.projectId,
-            scheduleId: schedule.id,
-            tradieId: schedule.tradieId,
-            tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
-            scheduleDate: dateFormat.format(schedule.scheduledDate),
-            durationDays: schedule.durationDays,
-            cost: currency.format(
-              schedule.quotedPrice
-                ? parseFloat(schedule.quotedPrice)
-                : totalCost,
-            ),
-            milestoneId: schedule.milestoneId ?? undefined,
-            milestoneName: schedule.milestone
-              ? schedule.milestone.name
-              : "General Task",
-          },
-        );
-        await logAction(activityLogEntry);
-        await triggerNotification(
-          await getAllAdminUsersIds(),
-          notificationPayload,
-        );
-      } else if (updates.status === TradieScheduleStatus.QUOTE_RECEIVED) {
-        const activityLogEntry = createActivityLogEntry(
-          "tradieScheduleQuoted",
-          {
-            projectId: schedule.projectId,
-            milestoneId: schedule.milestoneId ?? undefined,
-            scheduleId: schedule.id,
-            tradieId: schedule.tradieId,
-            tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
-            scheduleDate: dateFormat.format(schedule.scheduledDate),
-            durationDays: schedule.durationDays,
-            quote: currency.format(
-              schedule.quotedPrice
-                ? parseFloat(schedule.quotedPrice)
-                : totalCost,
-            ),
-            milestoneName: schedule.milestone
-              ? schedule.milestone.name
-              : "General Task",
-          },
-        );
-        await logAction(activityLogEntry);
-        await updateTradieSchedule(schedule.id, {
-          status: TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-        });
-      } else if (updates.status === TradieScheduleStatus.CONFIRMED) {
-        const activityLogPayload = createActivityLogEntry(
-          "tradieScheduleUpdated",
-          {
-            projectId: schedule.projectId,
-            scheduleId: schedule.id,
-            tradieId: schedule.tradieId,
-            tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
-            scheduleDate: dateFormat.format(schedule.scheduledDate),
-            durationDays: schedule.durationDays,
-            cost: currency.format(
-              schedule.quotedPrice
-                ? parseFloat(schedule.quotedPrice)
-                : totalCost,
-            ),
-            milestoneId: schedule.milestoneId ?? undefined,
-            milestoneName: schedule.milestone
-              ? schedule.milestone.name
-              : "General Task",
-            approved: true,
-          },
-        );
-        const notificationPayload = createNotification(
-          "tradieScheduleApproved",
-          {
-            approvalId: options.approvalId ?? "",
-            scheduleId: schedule.id,
-            projectId: schedule.projectId,
-            projectName: schedule.project.name,
-            milestoneId: schedule.milestoneId ?? undefined,
-            milestoneName: schedule.milestone
-              ? schedule.milestone.name
-              : "General Task",
-            scheduledDate: dateFormat.format(schedule.scheduledDate),
-            durationDays: schedule.durationDays,
-            cost: currency.format(
-              schedule.quotedPrice
-                ? parseFloat(schedule.quotedPrice)
-                : totalCost,
-            ),
-            tradieId: schedule.tradieId,
-            tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
-          },
-        );
-        await logAction(activityLogPayload);
-        await triggerNotification(
-          schedule.project.siteManagerId
-            ? [schedule.project.siteManagerId]
-            : [],
-          notificationPayload,
-        );
-      } else if (updates.status === TradieScheduleStatus.DECLINED) {
-        const activityLogPayload = createActivityLogEntry(
-          "tradieScheduleUpdated",
-          {
-            projectId: schedule.projectId,
-            scheduleId: schedule.id,
-            tradieId: schedule.tradieId,
-            tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
-            scheduleDate: dateFormat.format(schedule.scheduledDate),
-            durationDays: schedule.durationDays,
-            cost: currency.format(
-              schedule.quotedPrice
-                ? parseFloat(schedule.quotedPrice)
-                : totalCost,
-            ),
-            milestoneId: schedule.milestoneId ?? undefined,
-            milestoneName: schedule.milestone
-              ? schedule.milestone.name
-              : "General Task",
-            approved: false,
-          },
-        );
-        const notificationPayload = createNotification(
-          "tradieScheduleRejected",
-          {
-            approvalId: options.approvalId ?? "",
-            scheduleId: schedule.id,
-            projectId: schedule.projectId,
-            projectName: schedule.project.name,
-            milestoneId: schedule.milestoneId ?? undefined,
-            milestoneName: schedule.milestone
-              ? schedule.milestone.name
-              : "General Task",
-            scheduledDate: dateFormat.format(schedule.scheduledDate),
-            durationDays: schedule.durationDays,
-            cost: currency.format(
-              schedule.quotedPrice
-                ? parseFloat(schedule.quotedPrice)
-                : totalCost,
-            ),
-            tradieId: schedule.tradieId,
-            tradieName: schedule.tradie.name,
-            trade: schedule.tradie.trade,
-          },
-        );
-        await triggerNotification(
-          schedule.project.siteManagerId
-            ? [schedule.project.siteManagerId]
-            : [],
-          notificationPayload,
-        );
-        await logAction(activityLogPayload);
-      } else {
-        const statusLabel = schedule.status
-          .split("_")
-          .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-          .join(" ");
-        const siteManagerId = schedule.project.siteManagerId;
-        const notificationPayload = createNotification(
-          "tradieScheduleUpdated",
-          {
-            tradieName: schedule.tradie.name,
-            projectName: schedule.project.name,
-            milestoneName: schedule.milestone
-              ? schedule.milestone.name
-              : "General Task",
-            projectId: schedule.projectId,
-            tradieTrade: schedule.tradie.trade,
-            scheduleDate: dateFormat.format(schedule.scheduledDate),
-            status: statusLabel,
-          },
-        );
-        await triggerNotification(
-          siteManagerId ? [siteManagerId] : [],
-          notificationPayload,
-        );
-      }
-    });
-
-    return {
-      schedule: convertToTradieScheduleListItem(schedule),
-      requiresReplacement,
-    };
+    if (!existingSchedule) throw new Error("Schedule not found");
+    actingUser = await userHasAccessToSchedule(existingSchedule.projectId);
   } catch (error) {
     console.error("Error updating tradie schedule:", error);
     throw new Error("Failed to update tradie schedule.");
   }
+  return applyTradieScheduleUpdate(
+    userPrincipal(actingUser),
+    scheduleId,
+    updates,
+    options,
+  );
 }
 
 /**
@@ -762,7 +256,7 @@ export async function requestTradieScheduleDeletion(
           cost,
           tradieId: schedule.tradieId,
           tradieName: schedule.tradie.name,
-          trade: schedule.tradie.trade,
+          trade: schedule.trade?.trim() || schedule.tradie.trade,
           reason: input.reason,
           requestedBy: requester?.name ?? "A site manager",
         },
@@ -774,7 +268,7 @@ export async function requestTradieScheduleDeletion(
           scheduleId: schedule.id,
           tradieId: schedule.tradieId,
           tradieName: schedule.tradie.name,
-          trade: schedule.tradie.trade,
+          trade: schedule.trade?.trim() || schedule.tradie.trade,
           scheduleDate: scheduledDate,
           durationDays: schedule.durationDays,
           cost,
@@ -864,5 +358,204 @@ export async function sendTradieScheduleReminder({
     }
     console.error("Error sending tradie schedule reminder:", error);
     throw new Error("Failed to send tradie schedule reminder.");
+  }
+}
+
+export type RescheduleTradieScheduleResult =
+  | {
+      readonly ok: true;
+      readonly status: TradieScheduleStatus;
+      readonly scheduledDate: string;
+      readonly durationDays: number;
+      /** A pending approval for the old date was withdrawn. */
+      readonly withdrewApproval: boolean;
+      /**
+       * What happened to the tradie's email. `failed` is still `ok: true`:
+       * the booking did move, and the dialog has to say both things.
+       */
+      readonly email: "sent" | "already-sent" | "not-sent" | "failed";
+      readonly emailError?: string;
+    }
+  | DomainActionFailure
+  | { readonly ok: false; readonly error: string };
+
+const BOOKING_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Move a booking to new dates, then email its tradie about it.
+ *
+ * The status the booking lands in, and therefore which email it needs, is
+ * `rescheduleTradieSchedule`'s decision; the dialog previews the same one from
+ * `rescheduleOutcome` and sends `expectedStatus` so a reply landing in between
+ * is refused rather than answered with the wrong email.
+ *
+ * The move commits first and the email follows. A failed email does not undo
+ * the move — the date is what the office decided — but it is reported, in the
+ * result and in the activity log, because a booking quietly moved under a
+ * tradie who was never told is the failure nobody sees until the day.
+ *
+ * @param idempotencyKey Held by the dialog until a send succeeds, so a retry
+ * after a timeout lands on the same email rather than a second one.
+ */
+export async function rescheduleTradieScheduleAction(input: {
+  scheduleId: string;
+  scheduledDate: string;
+  durationDays: number;
+  expectedStatus: TradieScheduleStatus;
+  email: { subject: string; body: string } | null;
+  idempotencyKey: string;
+}): Promise<RescheduleTradieScheduleResult> {
+  const access = await requireInternalUser();
+  if (!access.ok) return { ok: false, error: access.error };
+
+  if (
+    !BOOKING_DAY.test(input.scheduledDate)
+    || !Number.isInteger(input.durationDays)
+    || input.durationDays < 1
+    || input.durationDays > 365
+  ) {
+    return { ok: false, error: "Pick a valid date and duration." };
+  }
+  if (
+    input.email
+    && (!input.email.subject.trim() || !input.email.body.trim())
+  ) {
+    return { ok: false, error: "The email needs a subject and a body." };
+  }
+  if (!input.idempotencyKey.trim()) {
+    return { ok: false, error: "Missing request key; reopen the dialog." };
+  }
+
+  const principal = userPrincipal(access.user);
+  let moved: Awaited<ReturnType<typeof rescheduleTradieScheduleDomain>>;
+  try {
+    moved = await rescheduleTradieScheduleDomain(
+      principal,
+      {
+        durationDays: input.durationDays,
+        expectedStatus: input.expectedStatus,
+        scheduleId: input.scheduleId,
+        scheduledDate: new Date(`${input.scheduledDate}T00:00:00.000Z`),
+      },
+      prisma,
+    );
+  } catch (error) {
+    const refused = domainActionFailure(error);
+    if (refused) return refused;
+    console.error("Error rescheduling tradie schedule:", error);
+    return { ok: false, error: "Could not reschedule this booking." };
+  }
+
+  let email: "sent" | "already-sent" | "not-sent" | "failed" = "not-sent";
+  let emailError: string | undefined;
+  if (moved.notice && input.email) {
+    try {
+      const sent = await sendTradieScheduleReminderDomain(
+        principal,
+        {
+          body: input.email.body,
+          // Scoped to the move as well as the attempt: moving the same
+          // booking twice in a day is two emails, not one.
+          idempotencyKey: `reschedule:${moved.scheduleId}:${input.scheduledDate}:${moved.durationDays}:${input.idempotencyKey}`,
+          scheduleId: moved.scheduleId,
+          subject: input.email.subject,
+        },
+        prisma,
+        (message) => sendEmail(message),
+      );
+      email = sent.alreadySent ? "already-sent" : "sent";
+    } catch (error) {
+      email = "failed";
+      emailError = isDomainError(error)
+        ? error.message
+        : "The email provider did not accept the message.";
+      console.error("Error emailing rescheduled tradie:", error);
+    }
+  }
+
+  after(async () => {
+    revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
+    revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+    revalidateTag(`project-${moved.projectId}`, CACHE_PROFILES.MEDIUM);
+    if (moved.withdrewApproval) {
+      revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
+      revalidateTag("approval-kpi", CACHE_PROFILES.MEDIUM);
+    }
+    await logAction(
+      createActivityLogEntry("tradieScheduleRescheduled", {
+        durationDays: moved.durationDays,
+        milestoneId: moved.milestoneId ?? undefined,
+        notice:
+          email === "sent" || email === "already-sent"
+            ? "emailed"
+            : email === "failed"
+              ? "email-failed"
+              : "not-emailed",
+        previousDate: dateFormat.format(moved.previousScheduledDate),
+        projectId: moved.projectId,
+        scheduleDate: dateFormat.format(moved.scheduledDate),
+        scheduleId: moved.scheduleId,
+        tradieName: moved.tradieName,
+      }),
+    );
+  });
+
+  return {
+    durationDays: moved.durationDays,
+    email,
+    ...(emailError ? { emailError } : {}),
+    ok: true,
+    scheduledDate: moved.scheduledDate.toISOString(),
+    status: moved.status,
+    withdrewApproval: moved.withdrewApproval,
+  };
+}
+
+async function cachedTradieBookings(
+  principal: DomainPrincipal,
+  tradieId: string,
+  fromDay: string,
+) {
+  "use cache";
+  // Every booking write in the app revalidates this tag. Eve's cannot, so a
+  // booking it makes can show as free here for up to the profile's lifetime —
+  // only a marker is missing; the booking command still refuses a duplicate.
+  cacheTag("tradies-schedules");
+  cacheLife(CACHE_PROFILES.SHORT);
+
+  return listTradieBookings(
+    principal,
+    { from: new Date(`${fromDay}T00:00:00.000Z`), tradieId },
+    prisma,
+  );
+}
+
+/**
+ * The bookings holding a tradie's time from today on, for the schedule modal
+ * to grey out those days and say what the tradie is booked on.
+ */
+export async function getTradieBookings(
+  tradieId: string,
+): Promise<
+  | { ok: true; bookings: TradieBooking[] }
+  | DomainActionFailure
+  | { ok: false; error: string }
+> {
+  const access = await requireInternalUser();
+  if (!access.ok) return { ok: false, error: access.error };
+
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const bookings = await cachedTradieBookings(
+      userPrincipal(access.user),
+      tradieId,
+      today,
+    );
+    return { ok: true, bookings };
+  } catch (error) {
+    const refused = domainActionFailure(error);
+    if (refused) return refused;
+    console.error("Error loading tradie bookings:", error);
+    return { ok: false, error: "Could not load this tradie's bookings." };
   }
 }

@@ -122,8 +122,6 @@ const AGENT_SESSIONS =
   "Eve's own channel, which maps DomainErrorCode rather than an HTTP status (agent/lib/result-contracts.ts)";
 const OAUTH_REDIRECT =
   "a browser navigation in an OAuth leg: it answers with a redirect carrying the failure, because a JSON body strands the operator on a blob of JSON with a spent authorization code";
-const PUBLIC_BOOKING =
-  "on the open internet with no session; a refusal is deliberately uninformative to an anonymous caller, and the booking page shows its own message";
 const UPLOAD =
   "answers the Vercel Blob client handshake, whose error shape the browser SDK owns";
 const ADMIN_CONTENT =
@@ -139,13 +137,13 @@ const UNMAPPED: Record<string, string> = {
   "app/api/cron/compliance-alerts/route.ts": MACHINE_CALLER,
   "app/api/cron/followup-lead-reminder/route.ts": MACHINE_CALLER,
   "app/api/cron/meeting-review-reminder/route.ts": MACHINE_CALLER,
+  "app/api/cron/sync-sent-mail/route.ts": MACHINE_CALLER,
   "app/api/cron/tradie-reminders/route.ts": MACHINE_CALLER,
   "app/api/graph/notifications/route.ts": MACHINE_CALLER,
   "app/api/webhook/clerk/route.ts": MACHINE_CALLER,
   "app/api/xero/notification/route.ts": MACHINE_CALLER,
   "app/api/agent/sessions/[sessionId]/context/route.ts": AGENT_SESSIONS,
   "app/api/docusign/connect/route.ts": OAUTH_REDIRECT,
-  "app/api/graph/book-consultant/route.ts": PUBLIC_BOOKING,
   "app/api/upload/route.ts": UPLOAD,
   "app/api/xero/connect/route.ts": OAUTH_REDIRECT,
   "lib/actions/admin-offer-content.ts": ADMIN_CONTENT,

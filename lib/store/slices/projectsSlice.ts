@@ -12,15 +12,13 @@ import type { RootState } from "@/lib/store";
 import {
   MilestoneWithFilesTradiesUpdates,
   SafeMaterial,
-  SafeVariation,
   TradieScheduleListItem,
   type AddProjectUpdateRequest,
-  type CreateVariationRequest,
   type ProjectDetail,
   type ProjectMutationState,
   type ProjectUploadRecord,
   type ProjectWithStats,
-  type SafeMilestone,
+  type MilestoneUpdateResult,
   type BudgetSummary,
   TradieScheduleWithTradieAndMilestone,
 } from "@/types/project";
@@ -69,6 +67,8 @@ import type {
   MilestonePictureUploadData,
   ProjectDetailTabKey,
   CreateTradieScheduleInput,
+  ManualTradieQuoteFormInput,
+  SendTradieRequestsFormInput,
 } from "@/utils/validators";
 import { createProjectWithLeadAction } from "@/lib/actions/projects";
 import type { CreateProjectWithLeadInput } from "@/lib/data/projectsWrite";
@@ -76,11 +76,18 @@ import {
   toCreateProjectFailure,
   type CreateProjectFailure,
 } from "@/lib/projects/create-project-errors";
-import { bulkCreateTradieSchedules } from "@/lib/data/tradieSchedules";
+import {
+  recordManualTradieQuote,
+  requestTradeCancellationForProject,
+  retryTradieRequestEmailForProject,
+  selectTradeQuoteForProject,
+  sendTradieRequestsForProject,
+} from "@/lib/data/tradie-requests";
+import type { DomainActionFailure } from "@/lib/http/domain-response";
+import { milestoneTargetDates } from "@/lib/domain/projects/milestone-schedule";
 
 type MutationKey =
   | "createProject"
-  | "createVariation"
   | "addUpdate"
   | "addMaterial"
   | "createTradieSchedule"
@@ -136,7 +143,6 @@ const defaultDetailUiState = {
 
 const initialMutationState = (): ProjectsMutationState => ({
   createProject: { status: "idle", error: null },
-  createVariation: { status: "idle", error: null },
   addUpdate: { status: "idle", error: null },
   addMaterial: { status: "idle", error: null },
   createTradieSchedule: { status: "idle", error: null },
@@ -214,30 +220,6 @@ export const addMaterialToProject = createAsyncThunk<
   }
 });
 
-export const createVariation = createAsyncThunk<
-  SafeVariation,
-  CreateVariationRequest,
-  { rejectValue: string }
->("projects/createVariation", async ({ projectId, ...payload }, thunkApi) => {
-  try {
-    const response = await fetchJson<SafeVariation>(
-      `/api/projects/${projectId}/variations`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      },
-      "Unable to create variation",
-    );
-
-    return response.data;
-  } catch (error) {
-    return thunkApi.rejectWithValue(
-      error instanceof Error ? error.message : "Unable to create variation",
-    );
-  }
-});
-
 export const addProjectUpdate = createAsyncThunk<
   ProjectDetail,
   AddProjectUpdateRequest,
@@ -279,22 +261,110 @@ export const createTradieScheduleForProject = createAsyncThunk<
   return response.data;
 });
 
-export const createBulkTradieScheduleForProject = createAsyncThunk<
-  TradieScheduleListItem[],
-  CreateTradieScheduleInput[]
->("tradies/createBulkSchedule", async (payload, thunkApi) => {
-  try {
-    const data = await bulkCreateTradieSchedules(payload);
+/**
+ * A Tradies-tab action that answers with the project as it now stands. The
+ * store takes that project whole (see `isTradieTabActionFulfilled`) instead of
+ * patching bookings in by hand, so the tab shows what the server committed.
+ * A refusal comes back as a value: a thrown Server Action message is a digest
+ * in production.
+ */
+function tradieTabAction<
+  Arg,
+  Result extends { ok: true; project: ProjectDetail },
+>(
+  type: string,
+  action: (arg: Arg) => Promise<Result | DomainActionFailure>,
+  fallback: string,
+) {
+  return createAsyncThunk<Result, Arg, { rejectValue: string }>(
+    type,
+    async (arg, thunkApi) => {
+      try {
+        const result = await action(arg);
+        if (!result.ok) return thunkApi.rejectWithValue(result.error);
+        return result;
+      } catch (error) {
+        return thunkApi.rejectWithValue(
+          error instanceof Error ? error.message : fallback,
+        );
+      }
+    },
+  );
+}
 
-    return data;
-  } catch (error) {
-    return thunkApi.rejectWithValue(
-      error instanceof Error
-        ? error.message
-        : "Failed to create tradie schedules",
-    );
-  }
-});
+/**
+ * Sends a tradie request (one trade, several activities, one or more
+ * companies). A saved request whose email failed is still a success here: the
+ * wizard reports the failed sends, and the tab keeps showing them with Retry.
+ */
+export const sendTradieRequests = tradieTabAction(
+  "tradies/sendRequests",
+  (payload: SendTradieRequestsFormInput) =>
+    sendTradieRequestsForProject(payload),
+  "Failed to send the request",
+);
+
+export const retryTradieRequestEmail = tradieTabAction(
+  "tradies/retryRequestEmail",
+  (payload: { projectId: string; recipientId: string }) =>
+    retryTradieRequestEmailForProject(payload),
+  "Failed to retry the email",
+);
+
+export const recordManualQuote = tradieTabAction(
+  "tradies/recordManualQuote",
+  (payload: ManualTradieQuoteFormInput) => recordManualTradieQuote(payload),
+  "Failed to record the quote",
+);
+
+export const selectTradeQuote = tradieTabAction(
+  "tradies/selectTradeQuote",
+  (payload: { projectId: string; tradieId: string; trade?: string }) =>
+    selectTradeQuoteForProject(payload),
+  "Failed to select the quote",
+);
+
+export const requestTradeCancellation = tradieTabAction(
+  "tradies/requestTradeCancellation",
+  (payload: { projectId: string; selectionId: string; reason: string }) =>
+    requestTradeCancellationForProject(payload),
+  "Failed to request the cancellation",
+);
+
+const isTradieTabActionFulfilled = isAnyOf(
+  sendTradieRequests.fulfilled,
+  retryTradieRequestEmail.fulfilled,
+  recordManualQuote.fulfilled,
+  selectTradeQuote.fulfilled,
+  requestTradeCancellation.fulfilled,
+);
+
+/** Dismisses tradie follow-up alerts until their bookings change status. */
+export const dismissTradieAlerts = createAsyncThunk<
+  { dismissed: string[] },
+  { projectId: string; scheduleIds: string[] },
+  { rejectValue: string }
+>(
+  "projects/dismissTradieAlerts",
+  async ({ projectId, scheduleIds }, thunkApi) => {
+    try {
+      const response = await fetchJson<{ dismissed: string[] }>(
+        `/api/projects/${projectId}/tradie-alerts/dismiss`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scheduleIds }),
+        },
+        "Unable to dismiss the alerts",
+      );
+      return response.data;
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error ? error.message : "Unable to dismiss the alerts",
+      );
+    }
+  },
+);
 
 export const addProjectMilestone = createAsyncThunk<
   MilestoneWithFilesTradiesUpdates,
@@ -323,14 +393,14 @@ export const addProjectMilestone = createAsyncThunk<
 });
 
 export const updateProjectMilestoneStatus = createAsyncThunk<
-  SafeMilestone,
+  MilestoneUpdateResult,
   MilestoneUpdateData & { projectId: string; milestoneId: string },
   { rejectValue: string }
 >(
   "projects/updateMilestoneStatus",
   async ({ projectId, milestoneId, ...payload }, thunkApi) => {
     try {
-      const response = await fetchJson<SafeMilestone>(
+      const response = await fetchJson<MilestoneUpdateResult>(
         `/api/projects/${projectId}/milestones/${milestoneId}/updates`,
         {
           method: "PATCH",
@@ -420,6 +490,8 @@ export const complianceScope = {
   signedCopies: "signed-copies" as ComplianceScope,
   /** The submission that closes collection. */
   review: "review" as ComplianceScope,
+  /** Ticked checklist rows going over early, as one email. */
+  earlyReview: "early-review" as ComplianceScope,
   /** One message on the thread. */
   reply: "reply" as ComplianceScope,
   /** A plain re-read. Writes nothing, so nothing should block on it. */
@@ -648,26 +720,50 @@ export const resolveComplianceDocument = createAsyncThunk<
   },
 );
 
-/** Sends one checklist item without waiting for the rest of the pack. */
-export const sendComplianceDocumentForReview = createAsyncThunk<
-  { projectId: string; engagement: CertifierEngagementDetail | null },
-  { projectId: string; documentId: string },
+/**
+ * Sends the ticked checklist rows to the certifier in one email, without
+ * waiting for the rest of the pack.
+ *
+ * Returns how many went and how many the certifier already had, so the tab can
+ * say which — "sent" for a set that was already on the thread would tell the
+ * office an email went out when none did.
+ */
+export const sendComplianceDocumentsForReview = createAsyncThunk<
+  {
+    projectId: string;
+    engagement: CertifierEngagementDetail | null;
+    sentCount: number;
+    alreadySentCount: number;
+  },
+  { projectId: string; documentIds: string[] },
   { rejectValue: string }
 >(
-  "projects/sendComplianceDocumentForReview",
-  async ({ projectId, documentId }, thunkApi) => {
+  "projects/sendComplianceDocumentsForReview",
+  async ({ projectId, documentIds }, thunkApi) => {
+    const fallback = "Unable to send the documents for verification";
     try {
-      return await replaceEngagement(
-        projectId,
-        `/documents/${documentId}/review`,
-        { method: "POST" },
-        "Unable to send the document for verification",
+      const sent = await fetchJson<{
+        sentCount: number;
+        alreadySentCount: number;
+      }>(
+        `/api/projects/${projectId}/compliance/early-review`,
+        jsonPost({ documentIds }),
+        fallback,
       );
+      const refreshed = await fetchJson<CertifierEngagementDetail | null>(
+        `/api/projects/${projectId}/compliance`,
+        { method: "GET" },
+        fallback,
+      );
+      return {
+        projectId,
+        engagement: reviveComplianceEngagementDates(refreshed.data),
+        sentCount: sent.data.sentCount,
+        alreadySentCount: sent.data.alreadySentCount,
+      };
     } catch (error) {
       return thunkApi.rejectWithValue(
-        error instanceof Error
-          ? error.message
-          : "Unable to send the document for verification",
+        error instanceof Error ? error.message : fallback,
       );
     }
   },
@@ -1275,11 +1371,24 @@ type ComplianceResult = {
  * accepting `never` so the table can hold nine differently-argued thunks — the
  * reducer only ever calls it with the argument that thunk was dispatched with.
  */
-function complianceOperation<Arg extends { projectId: string }>(
-  thunk: AsyncThunk<ComplianceResult, Arg, { rejectValue: string }>,
+function complianceOperation<
+  Arg extends { projectId: string },
+  Result extends ComplianceResult = ComplianceResult,
+>(
+  thunk: AsyncThunk<Result, Arg, { rejectValue: string }>,
   scope: (arg: Arg) => ComplianceScope,
 ) {
-  return { thunk, scope: scope as (arg: never) => ComplianceScope };
+  // A thunk may answer with more than the engagement — the early send also
+  // says how many documents went — but the table only ever reads the
+  // engagement, which every one of them carries.
+  return {
+    thunk: thunk as unknown as AsyncThunk<
+      ComplianceResult,
+      Arg,
+      { rejectValue: string }
+    >,
+    scope: scope as (arg: never) => ComplianceScope,
+  };
 }
 
 const complianceOperations = [
@@ -1292,8 +1401,8 @@ const complianceOperations = [
   complianceOperation(sendCertifierReply, () => complianceScope.reply),
   complianceOperation(resolveComplianceDocument, complianceScope.document),
   complianceOperation(
-    sendComplianceDocumentForReview,
-    complianceScope.document,
+    sendComplianceDocumentsForReview,
+    () => complianceScope.earlyReview,
   ),
   complianceOperation(
     setComplianceDocumentNotRequired,
@@ -1408,6 +1517,32 @@ const isComplianceThunkRejected = isAnyOf(
   ...complianceThunks.map((thunk) => thunk.rejected),
 );
 
+/**
+ * The store's copy of what `updateMilestone` does when the first activity
+ * starts: the project's start date becomes that day and every activity is
+ * re-dated from it, by the same `milestoneTargetDates` the server used.
+ */
+function startScheduleInStore(project: ProjectDetail, startDate: Date) {
+  if (new Date(project.startDate).getTime() === startDate.getTime()) return;
+
+  project.startDate = startDate;
+  const targetById = new Map<string, Date>();
+  const ordered = [...project.milestones].sort((a, b) => a.order - b.order);
+  const targets = milestoneTargetDates(startDate, ordered);
+  ordered.forEach((milestone, position) => {
+    milestone.targetDate = targets[position];
+    targetById.set(milestone.id, milestone.targetDate);
+  });
+  for (const schedule of project.tradieSchedules) {
+    const targetDate = schedule.milestoneId
+      ? targetById.get(schedule.milestoneId)
+      : undefined;
+    if (schedule.milestone && targetDate) {
+      schedule.milestone.targetDate = targetDate;
+    }
+  }
+}
+
 const projectsSlice = createSlice({
   name: "projects",
   initialState,
@@ -1471,6 +1606,31 @@ const projectsSlice = createSlice({
     ) {
       if (state.activeProject?.id === action.payload.projectId) {
         state.activeProject.files.push(action.payload.file);
+      }
+    },
+    removeFileFromProject(
+      state,
+      action: PayloadAction<{ projectId: string; fileId: string; url: string }>,
+    ) {
+      const project = state.activeProject;
+      if (!project || project.id !== action.payload.projectId) return;
+      project.files = project.files.filter(
+        (file) => file.id !== action.payload.fileId,
+      );
+      for (const update of project.siteUpdates) {
+        update.photoUrls = update.photoUrls.filter(
+          (url) => url !== action.payload.url,
+        );
+      }
+      for (const milestone of project.milestones) {
+        milestone.files = milestone.files.filter(
+          (file) => file.id !== action.payload.fileId,
+        );
+        for (const update of milestone.siteUpdates) {
+          update.photoUrls = update.photoUrls.filter(
+            (url) => url !== action.payload.url,
+          );
+        }
       }
     },
     registerProjectUpload(
@@ -1668,21 +1828,6 @@ const projectsSlice = createSlice({
             ?? "Unable to create project",
         };
       })
-      .addCase(createVariation.pending, (state) => {
-        state.mutations.createVariation = { status: "pending", error: null };
-      })
-      .addCase(createVariation.fulfilled, (state, action) => {
-        state.mutations.createVariation = { status: "succeeded", error: null };
-        if (state.activeProject?.id === action.payload.projectId) {
-          state.activeProject.variations.push(action.payload);
-        }
-      })
-      .addCase(createVariation.rejected, (state, action) => {
-        state.mutations.createVariation = {
-          status: "failed",
-          error: action.error.message ?? "Unable to create variation",
-        };
-      })
       .addCase(addProjectUpdate.pending, (state) => {
         state.mutations.addUpdate = { status: "pending", error: null };
       })
@@ -1730,6 +1875,8 @@ const projectsSlice = createSlice({
           state.activeProject.tradieSchedules.push({
             id: schedule.id,
             status: schedule.status,
+            alertDismissedStatus: null,
+            alertDismissedAt: null,
             scheduledDate: new Date(schedule.scheduledDate),
             durationDays: schedule.durationDays,
             tradieId: schedule.tradieId,
@@ -1742,7 +1889,9 @@ const projectsSlice = createSlice({
               email: schedule.contact.email,
               phone: schedule.contact.phone,
               location: null,
+              archivedAt: null,
               trade: schedule.tradeType,
+              trades: [schedule.tradeType],
               abn: schedule.abn,
               isFavourite: schedule.isFavourite,
               note: null,
@@ -1758,6 +1907,10 @@ const projectsSlice = createSlice({
             milestone: milestone,
             requiresQuote: schedule.requiresQuote,
             quotedPrice: schedule.quotedPrice ?? null,
+            requestRecipientId: null,
+            quoteId: null,
+            refToken: schedule.refToken ?? null,
+            trade: schedule.tradeType,
           });
         }
       })
@@ -1770,62 +1923,19 @@ const projectsSlice = createSlice({
             ?? "Failed to create tradie schedule",
         };
       })
-      .addCase(createBulkTradieScheduleForProject.pending, (state) => {
+      .addCase(sendTradieRequests.pending, (state) => {
         state.mutations.createTradieSchedule = {
           status: "pending",
           error: null,
         };
       })
-      .addCase(
-        createBulkTradieScheduleForProject.fulfilled,
-        (state, action) => {
-          state.mutations.createTradieSchedule = {
-            status: "succeeded",
-            error: null,
-          };
-          const schedules = action.payload;
-          if (state.activeProject !== null) {
-            schedules.forEach((schedule) => {
-              const milestone = state.activeProject!.milestones.find(
-                (m) => m.id === schedule.milestoneId,
-              );
-              state.activeProject!.tradieSchedules.push({
-                id: schedule.id,
-                status: schedule.status,
-                scheduledDate: new Date(schedule.scheduledDate),
-                durationDays: schedule.durationDays,
-                tradieId: schedule.tradieId,
-                tradie: {
-                  name: schedule.tradieName,
-                  id: schedule.tradieId,
-                  lastQuotedPriceUnit: schedule.lastQuotedPriceUnit,
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-                  email: schedule.contact.email,
-                  phone: schedule.contact.phone,
-                  trade: schedule.tradeType,
-                  location: null,
-                  abn: schedule.abn,
-                  isFavourite: schedule.isFavourite,
-                  note: null,
-                  additionalEmails: [],
-                },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                projectId: schedule.projectId,
-                milestoneId: schedule.milestoneId ?? null,
-                reminderSentAt: schedule.reminderSentAt
-                  ? new Date(schedule.reminderSentAt)
-                  : null,
-                milestone: milestone,
-                requiresQuote: false,
-                quotedPrice: null,
-              });
-            });
-          }
-        },
-      )
-      .addCase(createBulkTradieScheduleForProject.rejected, (state, action) => {
+      .addCase(sendTradieRequests.fulfilled, (state) => {
+        state.mutations.createTradieSchedule = {
+          status: "succeeded",
+          error: null,
+        };
+      })
+      .addCase(sendTradieRequests.rejected, (state, action) => {
         state.mutations.createTradieSchedule = {
           status: "failed",
           error:
@@ -1878,120 +1988,59 @@ const projectsSlice = createSlice({
       })
       .addCase(updateProjectMilestoneStatus.fulfilled, (state, action) => {
         state.mutations.updateMilestone = { status: "succeeded", error: null };
-        if (state.activeProject?.id === action.payload.projectId) {
-          const milestoneIndex = state.activeProject.milestones.findIndex(
-            (m) => m.id === action.meta.arg.milestoneId,
+        const project = state.activeProject;
+        if (project?.id !== action.payload.projectId) return;
+        const { effects, ...milestone } = action.payload;
+        const index = project.milestones.findIndex(
+          (row) => row.id === milestone.id,
+        );
+        if (index !== -1)
+          project.milestones[index] = {
+            ...project.milestones[index],
+            ...milestone,
+          };
+        for (const parent of effects.parents) {
+          const row = project.milestones.find(
+            (candidate) => candidate.id === parent.id,
           );
-          // The same rule `lib/data/milestones.ts` applies, rather than this
-          // reducer's own reading of it.
-          //
-          // It used to force ACTIVE on any project that still had pending
-          // milestones, which was harmless while every project was created
-          // ACTIVE and could only re-assert what was already true. Against the
-          // status ladder it is not: correcting the spend on a job whose
-          // certifier had just been engaged flipped COMPLIANCE_STARTED to
-          // ACTIVE on screen until the next refetch, and did the same to a
-          // NEEDS_ATTENTION somebody had set on purpose.
-          //
-          // So the two ends are stated separately and neither infers the other,
-          // exactly as the server states them: no pending milestones means the
-          // build is finished, a milestone actually being started means it has
-          // begun, and every other update leaves the status alone. Counted
-          // against the status this update carries, because the merge below has
-          // not happened yet.
-          const pendingAfterUpdate = state.activeProject.milestones.filter(
-            (m) =>
-              m.id === action.meta.arg.milestoneId
-                ? (action.payload.status ?? m.status) === "PENDING"
-                : m.status === "PENDING",
-          );
-          if (pendingAfterUpdate.length === 0) {
-            state.activeProject.status = "COMPLETED";
-          } else if (action.meta.arg.status === "ACTIVE") {
-            state.activeProject.status = "ACTIVE";
+          if (!row) continue;
+          row.status = parent.status;
+          if (parent.spend !== undefined) row.spend = parent.spend;
+          if (parent.startDate) row.startDate = new Date(parent.startDate);
+          if (parent.actualDate) row.actualDate = new Date(parent.actualDate);
+        }
+        project.spent = effects.projectSpent;
+        if (effects.projectStatus) project.status = effects.projectStatus;
+        if (effects.projectStartDate)
+          startScheduleInStore(project, new Date(effects.projectStartDate));
+        const completed = new Set(effects.settledBookings.completed);
+        const cancelled = new Set(effects.settledBookings.cancelled);
+        const statusById = new Map(
+          project.milestones.map((row) => [row.id, row.status]),
+        );
+        for (const schedule of project.tradieSchedules) {
+          if (completed.has(schedule.id)) schedule.status = "COMPLETED";
+          if (cancelled.has(schedule.id)) schedule.status = "CANCELLED";
+          const status = schedule.milestoneId
+            ? statusById.get(schedule.milestoneId)
+            : undefined;
+          if (schedule.milestone && status) schedule.milestone.status = status;
+        }
+        for (const row of project.milestones) {
+          for (const schedule of row.tradieSchedules) {
+            if (completed.has(schedule.id)) schedule.status = "COMPLETED";
+            if (cancelled.has(schedule.id)) schedule.status = "CANCELLED";
           }
-          if (milestoneIndex !== -1) {
-            // Captured before the merge: a milestone can be updated more than
-            // once while DONE (editing its target date, correcting the spend),
-            // and adding the full amount each time inflated the project's
-            // "Spent to date" by one milestone per edit. Apply the difference.
-            const spendBeforeUpdate =
-              Number(state.activeProject!.milestones[milestoneIndex].spend)
-              || 0;
-
-            state.activeProject!.milestones[milestoneIndex] = {
-              ...state.activeProject!.milestones[milestoneIndex],
-              ...action.payload,
-            };
-            const parentId =
-              state.activeProject!.milestones[milestoneIndex].parentId;
-            if (action.payload.status === "DONE") {
-              const spendAfterUpdate = Number(action.payload.spend) || 0;
-              state.activeProject!.spent = (
-                Number(state.activeProject!.spent)
-                - spendBeforeUpdate
-                + spendAfterUpdate
-              ).toString();
-            }
-            if (
-              parentId
-              && (action.payload.status === "DONE"
-                || action.payload.status === "NOT_REQUIRED")
-            ) {
-              const allChildrenMilestonesNotCompleted =
-                state.activeProject!.milestones.filter(
-                  (m) =>
-                    m.parentId === parentId
-                    && !["DONE", "NOT_REQUIRED"].includes(m.status),
-                );
-              const allChildrenWereNotRequired =
-                state.activeProject!.milestones.filter(
-                  (m) => m.parentId === parentId && m.status === "NOT_REQUIRED",
-                );
-              const allChildrenMilestone =
-                state.activeProject!.milestones.filter(
-                  (m) => m.parentId === parentId,
-                );
-              if (allChildrenMilestonesNotCompleted.length === 0) {
-                const parentIndex = state.activeProject!.milestones.findIndex(
-                  (m) => m.id === parentId,
-                );
-                const totalChildSpent = state
-                  .activeProject!.milestones.filter(
-                    (m) => m.parentId === parentId,
-                  )
-                  .reduce((sum, m) => sum + (Number(m.spend) || 0), 0);
-                if (parentIndex !== -1) {
-                  state.activeProject!.milestones[parentIndex] = {
-                    ...state.activeProject!.milestones[parentIndex],
-                    status:
-                      allChildrenWereNotRequired.length
-                      === allChildrenMilestone.length
-                        ? "NOT_REQUIRED"
-                        : "DONE",
-                    spend: totalChildSpent.toString(),
-                    actualDate: action.payload.actualDate,
-                  };
-                }
-              }
-            }
-            if (parentId && action.payload.status === "ACTIVE") {
-              const parentIndex = state.activeProject!.milestones.findIndex(
-                (m) => m.id === parentId,
-              );
-              if (
-                parentIndex !== -1
-                && state.activeProject!.milestones[parentIndex].status
-                  !== "ACTIVE"
-              ) {
-                state.activeProject!.milestones[parentIndex] = {
-                  ...state.activeProject!.milestones[parentIndex],
-                  status: "ACTIVE",
-                  startDate: action.payload.startDate,
-                };
-              }
-            }
-          }
+        }
+      })
+      .addCase(dismissTradieAlerts.fulfilled, (state, action) => {
+        if (state.activeProject?.id !== action.meta.arg.projectId) return;
+        const dismissed = new Set(action.payload.dismissed);
+        const now = new Date();
+        for (const schedule of state.activeProject.tradieSchedules) {
+          if (!dismissed.has(schedule.id)) continue;
+          schedule.alertDismissedStatus = schedule.status;
+          schedule.alertDismissedAt = now;
         }
       })
       .addCase(updateProjectMilestoneStatus.rejected, (state, action) => {
@@ -2035,6 +2084,17 @@ const projectsSlice = createSlice({
       // twenty-seven near-identical cases. What differs is where the status
       // goes: each request files under its own scope, so several can be in
       // flight at once without any of them speaking for the others.
+      .addMatcher(isTradieTabActionFulfilled, (state, action) => {
+        const project = action.payload.project;
+        if (state.activeProject?.id !== project.id) return;
+        state.activeProject = {
+          ...project,
+          milestones: project.milestones.map(reviveMilestoneDates),
+          certifierEngagement: reviveComplianceEngagementDates(
+            project.certifierEngagement,
+          ),
+        };
+      })
       .addMatcher(isComplianceThunkPending, (state, action) => {
         state.complianceMutations[complianceScopeOf(action)] = {
           status: "pending",
@@ -2088,6 +2148,7 @@ export const {
   resetProjectDetailUiState,
   resetProjects,
   appendFileToProject,
+  removeFileFromProject,
   updateProjectTradieSchedule,
 } = projectsSlice.actions;
 

@@ -7,6 +7,7 @@ import {
   Star,
 } from "lucide-react";
 import { rateCurrency, dateFormat } from "@/utils/formatters";
+import { tradieTrades } from "@/lib/domain/tradies/request-rules";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { Button } from "@/components/ui/button";
@@ -169,6 +170,7 @@ export function TradiePriorityCard() {
       id: tradieDetails.id,
       name: tradieDetails.name,
       trade: tradieDetails.trade,
+      trades: tradieTrades(tradieDetails),
       isFavourite: tradieDetails.isFavourite,
       lastQuotedPrice: tradieDetails.lastQuotedPrice ?? null,
       lastQuotedPriceUnit: tradieDetails.lastQuotedPriceUnit,

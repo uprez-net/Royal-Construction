@@ -161,6 +161,7 @@ export function TradieScheduleDetailsModal({
     isFavourite: false,
     note: null,
     requiresQuote: false,
+    refToken: schedule.refToken,
   } satisfies TradieScheduleListItem;
 
   const daysLeft = daysUntil(new Date(schedule.scheduledDate));
@@ -460,10 +461,11 @@ export function TradieScheduleDetailsModal({
 
             {/* Actions */}
             <div className="mt-5 flex flex-wrap gap-2">
-              {schedule.status !== "CONFIRMED" &&
-                schedule.status !== "AWAITING_ADMIN_APPROVAL" &&
-                schedule.status !== "COMPLETED" &&
-                schedule.status !== "DECLINED" && (
+              {schedule.status !== "CONFIRMED"
+                && schedule.status !== "AWAITING_ADMIN_APPROVAL"
+                && schedule.status !== "COMPLETED"
+                && schedule.status !== "CANCELLED"
+                && schedule.status !== "DECLINED" && (
                   <>
                     <Button
                       onClick={() => onMarkAsDone(item)}
@@ -499,11 +501,11 @@ export function TradieScheduleDetailsModal({
                   </>
                 )}
 
-              {(schedule.status === "NO_RESPONSE" ||
-                schedule.status === "PENDING" ||
-                schedule.status === "AWAITING_QUOTE" ||
-                schedule.status === "PENDING_RESPONSE" ||
-                schedule.status === "PENDING_FINAL_CONFIRMATION") && (
+              {(schedule.status === "NO_RESPONSE"
+                || schedule.status === "PENDING"
+                || schedule.status === "AWAITING_QUOTE"
+                || schedule.status === "PENDING_RESPONSE"
+                || schedule.status === "PENDING_FINAL_CONFIRMATION") && (
                 <Button
                   onClick={() => onCall(item)}
                   className={cn(
@@ -524,6 +526,7 @@ export function TradieScheduleDetailsModal({
                 variant="outline"
                 onClick={() => onSendReminder(item)}
                 disabled={[
+                  "CANCELLED",
                   "AWAITING_ADMIN_APPROVAL",
                   "DECLINED",
                   "CONFIRMED",

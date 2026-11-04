@@ -10,12 +10,23 @@ import {
   withStagePercentage,
 } from "@/lib/projects/payment-stages";
 import { currency } from "@/utils/formatters";
-import { fieldElementId } from "@/lib/projects/create-project-errors";
+import {
+  fieldElementId,
+  ownerElementId,
+  type CreateProjectFieldError,
+} from "@/lib/projects/create-project-errors";
+import {
+  PROJECT_OWNERS_FIELD,
+  projectOwnerProblems,
+  type ProjectOwnerField,
+  type ProjectOwnerProblem,
+} from "@/lib/domain/projects/owners";
 import {
   createEmptyProjectExtractionData,
   projectExtractionSchema,
   projectExtractionSections,
   type ProjectExtractionData,
+  type ProjectExtractionOwner,
   type ProjectExtractionSectionKey,
 } from "@/types/project-extraction";
 import {
@@ -30,6 +41,10 @@ import {
   X,
   Plus,
   AlertCircle,
+  UserRound,
+  GripVertical,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -82,9 +97,6 @@ const SECTION_META: Record<
 const BOOLEAN_FIELDS = new Set(["commercialsAndClaimsGstIncluded"]);
 
 const ARRAY_FIELDS = new Set([
-  "legalAdministrationOwnerNames",
-  "legalAdministrationOwnerEmails",
-  "legalAdministrationOwnerPhones",
   "commercialsAndClaimsPaymentStages",
   "inclusionsAndExclusionsInclusions",
   "inclusionsAndExclusionsExclusions",
@@ -93,6 +105,10 @@ const ARRAY_FIELDS = new Set([
 // Rendered by its own composite control (below the field grid), not by the
 // generic array/text primitives — a claim schedule needs label + % + $ per row.
 const PAYMENT_STAGES_FIELD = "commercialsAndClaimsPaymentStages";
+
+// Also its own control: one row per owner, name + email + phone together, so
+// an owner's details can never drift onto the next owner's row.
+const OWNERS_FIELD = PROJECT_OWNERS_FIELD;
 
 const CURRENCY_FIELDS = new Set([
   "commercialsAndClaimsTotalContractSum",
@@ -157,16 +173,6 @@ const FIELD_GROUPS: {
   caption: string;
   fields: string[];
 }[] = [
-  {
-    id: "ownerContacts",
-    heading: "Owner Contacts",
-    caption: "Names, emails and phone numbers on file for the owner",
-    fields: [
-      "legalAdministrationOwnerNames",
-      "legalAdministrationOwnerEmails",
-      "legalAdministrationOwnerPhones",
-    ],
-  },
   {
     id: "inclusionsExclusions",
     heading: "Inclusions & Exclusions",
@@ -944,6 +950,419 @@ function PaymentStagesControl({
   );
 }
 
+/* ------------------------------ OwnersControl ----------------------------- */
+/*                                                                            *
+ * One row per owner, in the contract's order. Each owner becomes a customer  *
+ * on the project; the first is the primary, the one invoices go to — so the *
+ * order matters, and the rows can be reordered: dragged by the grip, moved   *
+ * with the arrow keys while the grip has focus, or with the up/down buttons  *
+ * (which is also how a touch screen does it, where HTML drag does not).      *
+ *                                                                            *
+ * The inputs write straight through: the extraction schema keeps owner rows  *
+ * untrimmed and keeps blank rows (see `toOwnerRows`), so typing is never     *
+ * fought by the per-keystroke re-parse. The owner rule trims and ignores a   *
+ * blank row when the project is created.                                     *
+ *                                                                            *
+ * Messages come from two places and land on the row and input they are      *
+ * about. The rule the server applies (`projectOwnerProblems`) runs live once *
+ * a submit has flagged the owners, so fixing one row never hides another's  *
+ * problem. A refusal only the server can make — an owner whose email and    *
+ * phone belong to two different customers on file — arrives row-addressed   *
+ * (`CreateProjectFieldError.owner`) and shows until the owners are edited.   *
+ *                                                                            */
+
+const OWNER_GRID = "grid grid-cols-1 items-start gap-2 sm:grid-cols-2";
+
+const OWNER_INPUTS: readonly {
+  field: ProjectOwnerField;
+  placeholder: string;
+  type: string;
+}[] = [
+  { field: "name", placeholder: "Full name or company", type: "text" },
+  { field: "email", placeholder: "Email", type: "email" },
+  { field: "phone", placeholder: "Phone (optional)", type: "tel" },
+  {
+    field: "address",
+    placeholder: "Owner's own address (not the site)",
+    type: "text",
+  },
+];
+
+function emptyOwner(): ProjectExtractionOwner {
+  return { address: "", email: "", name: "", phone: "" };
+}
+
+function ownerHandleId(index: number): string {
+  return `${ownerElementId(index)}-handle`;
+}
+
+/**
+ * The message for the owner block as a whole: a problem with the list itself
+ * ("Add at least one owner"), or a count pointing at the rows. `undefined`
+ * when there is nothing to say.
+ */
+export function ownerBlockMessage(
+  live: readonly ProjectOwnerProblem[],
+  submitted: readonly CreateProjectFieldError[],
+): string | undefined {
+  const listLevel =
+    live.find((problem) => problem.index === null)?.message
+    ?? submitted.find((entry) => !entry.owner)?.message;
+  if (listLevel) return listLevel;
+
+  const rows = new Set<number>([
+    ...live.flatMap((problem) =>
+      problem.index === null ? [] : [problem.index],
+    ),
+    ...submitted.flatMap((entry) => (entry.owner ? [entry.owner.index] : [])),
+  ]);
+  if (rows.size === 0) return undefined;
+
+  return rows.size === 1
+    ? "One owner needs correcting — see the marked row below."
+    : `${rows.size} owners need correcting — see the marked rows below.`;
+}
+
+function OwnersControl({
+  owners,
+  liveProblems,
+  submittedErrors,
+  onChange,
+}: {
+  owners: readonly ProjectExtractionOwner[];
+  /** The owner rule over the current rows; empty until a submit flags them. */
+  liveProblems: readonly ProjectOwnerProblem[];
+  /** Owner errors from the last submit, client or server. */
+  submittedErrors: readonly CreateProjectFieldError[];
+  onChange: (owners: ProjectExtractionOwner[]) => void;
+}): React.JSX.Element {
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dropAt, setDropAt] = useState<number | null>(null);
+  // HTML drag is armed only while the grip is held, so selecting text inside
+  // an input never starts dragging the row.
+  const [armed, setArmed] = useState<number | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+
+  // Always offer a row to type into, even when nothing was extracted.
+  const rows = owners.length > 0 ? owners : [emptyOwner()];
+
+  const updateAt = (
+    index: number,
+    field: ProjectOwnerField,
+    value: string,
+  ): void =>
+    onChange(
+      rows.map((owner, i) =>
+        i === index ? { ...owner, [field]: value } : owner,
+      ),
+    );
+
+  const removeAt = (index: number): void =>
+    onChange(rows.filter((_, i) => i !== index));
+
+  const move = (from: number, to: number): void => {
+    if (from === to || to < 0 || to >= rows.length) return;
+    const next = [...rows];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onChange(next);
+
+    const name = moved.name.trim() || `Owner ${from + 1}`;
+    setAnnouncement(
+      to === 0
+        ? `${name} is now Owner 1, the primary owner.`
+        : `${name} is now Owner ${to + 1}.`,
+    );
+    // Rows are keyed by position, so focus follows the owner to its new row
+    // rather than staying on whoever now sits where it was.
+    window.requestAnimationFrame(() =>
+      document.getElementById(ownerHandleId(to))?.focus(),
+    );
+  };
+
+  const endDrag = (): void => {
+    setDragFrom(null);
+    setDropAt(null);
+    setArmed(null);
+  };
+
+  const messageFor = (
+    index: number,
+    field: ProjectOwnerField | null,
+  ): string | undefined =>
+    liveProblems.find(
+      (problem) => problem.index === index && problem.field === field,
+    )?.message
+    ?? submittedErrors.find(
+      (entry) => entry.owner?.index === index && entry.owner.field === field,
+    )?.message;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Owners
+          </p>
+          <p className="text-xs text-slate-400">
+            Everyone the contract names as an owner — never the builder. Each
+            becomes a customer on the project and needs a name, email and
+            address; a phone only if they have one. Drag the grip, or use the
+            arrows, to change the order; Owner 1 is the primary.
+          </p>
+        </div>
+        <Badge
+          variant="outline"
+          className="shrink-0 rounded-full border-slate-200 bg-white px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+        >
+          {owners.length} owner{owners.length === 1 ? "" : "s"}
+        </Badge>
+      </div>
+
+      <p className="sr-only" aria-live="polite">
+        {announcement}
+      </p>
+
+      <ol className="space-y-2" aria-label="Owners, in contract order">
+        {rows.map((owner, index) => (
+          <li
+            key={index}
+            id={ownerElementId(index)}
+            draggable={armed === index}
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = "move";
+              // Firefox starts no drag without data.
+              event.dataTransfer.setData("text/plain", String(index));
+              setDragFrom(index);
+            }}
+            onDragOver={(event) => {
+              if (dragFrom === null) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
+              if (dropAt !== index) setDropAt(index);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              if (dragFrom !== null) move(dragFrom, index);
+              endDrag();
+            }}
+            onDragEnd={endDrag}
+            className={cn(
+              "scroll-mt-24 rounded-lg transition-[opacity,box-shadow]",
+              dragFrom === index && "opacity-40",
+              dropAt === index
+                && dragFrom !== null
+                && dragFrom !== index
+                && "ring-2 ring-emerald-400 ring-offset-2",
+            )}
+          >
+            <OwnerRow
+              index={index}
+              count={rows.length}
+              owner={owner}
+              rowMessage={messageFor(index, null)}
+              problemFor={(field) => messageFor(index, field)}
+              onChange={(field, value) => updateAt(index, field, value)}
+              onRemove={() => removeAt(index)}
+              onMove={(to) => move(index, to)}
+              onArm={() => setArmed(index)}
+              onDisarm={() => {
+                if (dragFrom === null) setArmed(null);
+              }}
+            />
+          </li>
+        ))}
+      </ol>
+
+      <button
+        type="button"
+        onClick={() => onChange([...rows, emptyOwner()])}
+        className="flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
+      >
+        <Plus className="h-3 w-3 shrink-0" aria-hidden="true" />
+        Add another owner
+      </button>
+    </div>
+  );
+}
+
+const OWNER_ICON_BUTTON =
+  "flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:pointer-events-none disabled:opacity-30";
+
+function OwnerRow({
+  index,
+  count,
+  owner,
+  rowMessage,
+  problemFor,
+  onChange,
+  onRemove,
+  onMove,
+  onArm,
+  onDisarm,
+}: {
+  index: number;
+  count: number;
+  owner: ProjectExtractionOwner;
+  /** A message about the row as a whole rather than one of its inputs. */
+  rowMessage: string | undefined;
+  problemFor: (field: ProjectOwnerField) => string | undefined;
+  onChange: (field: ProjectOwnerField, value: string) => void;
+  onRemove: () => void;
+  onMove: (to: number) => void;
+  onArm: () => void;
+  onDisarm: () => void;
+}): React.JSX.Element {
+  const label = `Owner ${index + 1}`;
+  const isPrimary = index === 0;
+  const canReorder = count > 1;
+  const hasProblem =
+    Boolean(rowMessage)
+    || OWNER_INPUTS.some(({ field }) => Boolean(problemFor(field)));
+
+  return (
+    <div
+      data-invalid={hasProblem ? "true" : undefined}
+      className={cn(
+        "rounded-lg border p-3",
+        isPrimary
+          ? "border-emerald-300 bg-emerald-50"
+          : "border-slate-200 bg-white",
+        hasProblem && "border-destructive/60 ring-1 ring-destructive/40",
+      )}
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          {canReorder ? (
+            <button
+              type="button"
+              id={ownerHandleId(index)}
+              onPointerDown={onArm}
+              onPointerUp={onDisarm}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  onMove(index - 1);
+                } else if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  onMove(index + 1);
+                }
+              }}
+              className={cn(
+                OWNER_ICON_BUTTON,
+                "-ml-1 cursor-grab active:cursor-grabbing",
+              )}
+              aria-label={`Reorder ${label}. Drag, or press the up and down arrow keys.`}
+              title="Drag to reorder"
+            >
+              <GripVertical aria-hidden="true" className="h-4 w-4" />
+            </button>
+          ) : null}
+          <p
+            className={cn(
+              "flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide",
+              isPrimary ? "text-emerald-900" : "text-slate-500",
+            )}
+          >
+            <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
+            {label}
+            {isPrimary ? (
+              <Badge
+                variant="outline"
+                className="rounded-full border-emerald-300 bg-white px-2 py-0 text-[10px] font-semibold normal-case tracking-normal text-emerald-800"
+              >
+                Primary owner · Xero contact
+              </Badge>
+            ) : null}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center">
+          {canReorder ? (
+            <>
+              <button
+                type="button"
+                onClick={() => onMove(index - 1)}
+                disabled={index === 0}
+                className={OWNER_ICON_BUTTON}
+                aria-label={`Move ${label} up`}
+              >
+                <ChevronUp aria-hidden="true" className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onMove(index + 1)}
+                disabled={index === count - 1}
+                className={OWNER_ICON_BUTTON}
+                aria-label={`Move ${label} down`}
+              >
+                <ChevronDown aria-hidden="true" className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={onRemove}
+                className={OWNER_ICON_BUTTON}
+                aria-label={`Remove ${label}`}
+              >
+                <X aria-hidden="true" className="h-3.5 w-3.5" />
+              </button>
+            </>
+          ) : null}
+        </div>
+      </div>
+      {isPrimary ? (
+        <p className="mb-2 text-xs text-emerald-900/80">
+          The project&apos;s Xero contact is named after every owner, and uses
+          this owner&apos;s email, phone and address. Invoices are sent here;
+          the other owners are copied on invoice emails.
+        </p>
+      ) : null}
+      {rowMessage ? (
+        <p
+          role="alert"
+          className="mb-2 flex items-start gap-1 text-[11px] font-medium leading-snug text-destructive-ink"
+        >
+          <AlertCircle className="mt-px size-3 shrink-0" aria-hidden="true" />
+          <span>{rowMessage}</span>
+        </p>
+      ) : null}
+      <div className={OWNER_GRID}>
+        {OWNER_INPUTS.map(({ field, placeholder, type }) => {
+          const problem = problemFor(field);
+          const inputId = ownerElementId(index, field);
+          return (
+            <div key={field} className="space-y-1">
+              <Input
+                id={inputId}
+                aria-label={`${label} ${field}`}
+                aria-invalid={problem ? true : undefined}
+                aria-describedby={problem ? `${inputId}-error` : undefined}
+                type={type}
+                value={owner[field]}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  onChange(field, e.target.value)
+                }
+                placeholder={placeholder}
+                className={cn(
+                  "h-9 rounded-lg border-slate-200 bg-white text-sm",
+                  problem && "border-destructive/60",
+                )}
+              />
+              {problem ? (
+                <p
+                  id={`${inputId}-error`}
+                  className="text-[11px] font-medium leading-snug text-destructive-ink"
+                >
+                  {problem}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Single field renderer
 // ---------------------------------------------------------------------------
@@ -1037,8 +1456,8 @@ export function FieldErrorBoundaryShell({
       data-invalid={error ? "true" : undefined}
       className={cn(
         "scroll-mt-24 rounded-lg transition-shadow",
-        error &&
-          "bg-destructive-light/40 p-2 -m-2 ring-1 ring-destructive/60 ring-offset-0",
+        error
+          && "bg-destructive-light/40 p-2 -m-2 ring-1 ring-destructive/60 ring-offset-0",
       )}
     >
       <div
@@ -1062,7 +1481,7 @@ export function FieldErrorBoundaryShell({
 }
 
 // ---------------------------------------------------------------------------
-// Grouped composite panel (owner contacts / risk allocation)
+// Grouped composite panel (inclusions / exclusions)
 // ---------------------------------------------------------------------------
 
 function FieldGroupPanel({
@@ -1140,6 +1559,8 @@ export function ExtractionSectionCard({
   values,
   onChange,
   errors,
+  ownerErrors = [],
+  checkOwners = false,
 }: {
   sectionKey: ProjectExtractionSectionKey;
   title: string;
@@ -1149,13 +1570,20 @@ export function ExtractionSectionCard({
   onChange: (field: string, value: unknown) => void;
   /** Field key -> validation message, from client checks or the server. */
   errors?: FieldErrorMap;
+  /** Every owner error from the last submit, row-addressed where it can be. */
+  ownerErrors?: readonly CreateProjectFieldError[];
+  /** Run the owner rule live, because a submit has already flagged owners. */
+  checkOwners?: boolean;
 }) {
   const meta = SECTION_META[sectionKey];
   const Icon = meta.icon;
   const filledCount = countFilledFields(values, fields);
-  const errorCount = errors
-    ? fields.filter((field) => Boolean(errors[field])).length
-    : 0;
+  const owners = values.legalAdministrationOwners ?? [];
+  const liveOwnerProblems = checkOwners ? projectOwnerProblems(owners) : [];
+  const ownersMessage = ownerBlockMessage(liveOwnerProblems, ownerErrors);
+  const errorCount = fields.filter((field) =>
+    field === OWNERS_FIELD ? Boolean(ownersMessage) : Boolean(errors?.[field]),
+  ).length;
 
   const activeGroups = FIELD_GROUPS.filter((group) =>
     group.fields.every((field) => fields.includes(field)),
@@ -1165,9 +1593,12 @@ export function ExtractionSectionCard({
   );
   const standaloneFields = fields.filter(
     (field) =>
-      !groupedFieldsInSection.has(field) && field !== PAYMENT_STAGES_FIELD,
+      !groupedFieldsInSection.has(field)
+      && field !== PAYMENT_STAGES_FIELD
+      && field !== OWNERS_FIELD,
   );
   const hasPaymentStages = fields.includes(PAYMENT_STAGES_FIELD);
+  const hasOwners = fields.includes(OWNERS_FIELD);
 
   return (
     <div
@@ -1234,6 +1665,19 @@ export function ExtractionSectionCard({
           </div>
         ))}
       </div>
+
+      {hasOwners ? (
+        <div className="mt-4">
+          <FieldErrorBoundaryShell field={OWNERS_FIELD} error={ownersMessage}>
+            <OwnersControl
+              owners={owners}
+              liveProblems={liveOwnerProblems}
+              submittedErrors={ownerErrors}
+              onChange={(next) => onChange(OWNERS_FIELD, next)}
+            />
+          </FieldErrorBoundaryShell>
+        </div>
+      ) : null}
 
       {hasPaymentStages ? (
         <div className="mt-4">

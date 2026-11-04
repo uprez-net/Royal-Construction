@@ -62,6 +62,15 @@ enum VariationStatus {
   REJECTED
 }
 
+/// Who pays for a variation.
+enum VariationKind {
+  /// The client pays the difference: it is invoiced to them through Xero.
+  CHARGEABLE
+  /// Royal Constructions absorbs the difference. The client is shown the new
+  /// price and a total of $0, and no Xero invoice is raised.
+  PROMOTIONAL
+}
+
 enum TradieScheduleStatus {
   PENDING
   AWAITING_QUOTE
@@ -73,6 +82,7 @@ enum TradieScheduleStatus {
   NO_RESPONSE
   DECLINED
   COMPLETED
+  CANCELLED
 }
 
 enum MaterialStatus {
@@ -238,12 +248,58 @@ enum TradieApprovalActionType {
   TRADIE_REMOVAL
   SCHEDULE_APPROVAL
   SCHEDULE_DELETION
+  /// Release the tradie selected for a whole trade on a project. The selection
+  /// and its bookings stand until an admin approves.
+  TRADE_CANCELLATION
 }
 
 enum TradieApprovalStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+/// Where one tradie request email stands. "Sent" means the mail server
+/// accepted it; a later bounce is not tracked here.
+enum TradieRequestDeliveryStatus {
+  /// An attempt is in flight.
+  SENDING
+  SENT
+  /// The last attempt failed in a way that was clearly not a send (throttled,
+  /// service down). Another attempt is scheduled at nextAttemptAt.
+  RETRYING
+  /// Needs a person: refused, ambiguous, or the automatic attempts are spent.
+  FAILED
+}
+
+/// What a tradie request email asks of the tradie.
+enum TradieRequestKind {
+  /// Price the activities, so several tradies' quotes can be compared.
+  QUOTE
+  /// The office has chosen this tradie: confirm availability for the dates.
+  /// A price can be recorded later without moving the bookings.
+  BOOKING
+}
+
+enum TradieQuoteSource {
+  /// Read from the tradie's emailed reply.
+  EMAIL
+  /// Entered by the office.
+  MANUAL
+}
+
+enum TradieQuoteGst {
+  INCLUSIVE
+  EXCLUSIVE
+  /// The tradie is not registered for GST; the amount carries none.
+  NOT_REGISTERED
+}
+
+enum TradeSelectionStatus {
+  ACTIVE
+  /// A cancellation is waiting on an admin; the selection still stands.
+  CANCELLATION_PENDING
+  CANCELLED
 }
 
 enum ProjectStage {
@@ -515,6 +571,15 @@ enum OutboxEventKind {
   OFFER_IMAGE_GENERATE
   COMPLIANCE_EMAIL_SEND
   LEAD_WHATSAPP_SEND
+  /// One attempt at one tradie request email. Keyed per attempt, so a retry
+  /// someone pressed is a new effect and a replayed attempt is not resent.
+  TRADIE_REQUEST_SEND
+  /// The Xero invoice for one chargeable variation. Keyed on the variation:
+  /// one invoice per variation is the rule.
+  VARIATION_INVOICE_ISSUE
+  /// One attempt at emailing a variation to the client. Keyed per attempt,
+  /// like TRADIE_REQUEST_SEND, so a resend is something somebody pressed.
+  VARIATION_EMAIL_SEND
 }
 
 enum AgentMemoryProvenance {
@@ -535,6 +600,9 @@ model Project {
   buildingType     String   @default("Double Storey 4BR + Study")
   lotSize          Decimal? @db.Decimal(10, 2)
   council          String   @default("Sydney City Council")
+  // The PRIMARY owner: the first owner on the contract, and the one Xero
+  // invoices are addressed to. Every owner, this one included, is also a row
+  // in `customers` (ProjectCustomer at position 0 is always this customer).
   customerId       String
   location         String
   siteManagerId    String?
@@ -545,9 +613,18 @@ model Project {
   requirements     Json?
   // Full owner party set carried over from the offer at handoff (ADR 0003):
   // every owner (individual or company + directors), both addresses, and
-  // per-owner contact. The primary owner is also promoted to the Customer row;
-  // this JSON preserves the co-owners the single Customer can't hold.
+  // per-owner contact. Every owner is also a Customer, linked through
+  // ProjectCustomer; this JSON keeps what a Customer row cannot (company vs
+  // individual, directors, ABN).
   parties          Json?
+  /// The Xero ContactID this project's claims are billed to. One contact per
+  /// project, named as the contract names its owners, carrying the primary
+  /// owner's email, phone and address, with every co-owner as a contact person
+  /// on invoice emails (lib/domain/projects/billing-contact.ts). Set just after
+  /// the project is created, or at its first claim if Xero was unreachable
+  /// then. Not unique: a second build for the same owners reuses their
+  /// contact, and projects migrated from the per-customer contact share it.
+  xeroContactId    String?
 
   /// Defaults to DRAFT rather than ACTIVE. A project is created by the handoff
   /// from a won offer, which writes the row, the milestones and the
@@ -558,6 +635,7 @@ model Project {
   updatedAt DateTime      @updatedAt
 
   customer            Customer             @relation("CustomerProjects", fields: [customerId], references: [id])
+  customers           ProjectCustomer[]
   siteManager         User?                @relation("SiteManagerProjects", fields: [siteManagerId], references: [id])
   Lead                Lead                 @relation("LeadProject", fields: [leadId], references: [id], onDelete: Cascade)
   milestones          Milestone[]
@@ -566,10 +644,16 @@ model Project {
   tradieSchedules     TradieSchedule[]
   files               File[]               @relation("ProjectFiles")
   activityLogs        ActivityLog[]
+  tradieActivityLogs  TradieActivityLog[]
   materials           Material[]
   tradies             Tradie[]             @relation("ProjectTradies")
   certifierEngagement CertifierEngagement? @relation("ProjectCertifierEngagement")
   invoices            Invoice[]
+  tradieRequests      TradieRequest[]
+  tradieQuotes        TradieQuote[]
+  tradeSelections     TradeSelection[]
+  tradieInvoices      TradieInvoice[]
+  emailedInvoices     TradieInvoiceInbox[]
 
   @@index([name])
   @@index([customerId])
@@ -577,37 +661,77 @@ model Project {
   @@index([status])
 }
 
+/// Every owner of a build. One contract can name several owners, and each is
+/// a Customer in their own right; `position` is the order the contract lists
+/// them in, and position 0 is always `Project.customerId`.
+model ProjectCustomer {
+  projectId  String
+  customerId String
+  position   Int
+  createdAt  DateTime @default(now())
+
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@id([projectId, customerId])
+  @@unique([projectId, position])
+  @@index([customerId])
+}
+
 model Milestone {
-  id              String          @id @default(uuid())
-  projectId       String
-  name            String
-  order           Int
-  description     String?
-  projectStage    ProjectStage
-  targetDate      DateTime
-  startDate       DateTime?
-  actualDate      DateTime?
-  budget          Decimal         @default(10000) @db.Decimal(12, 2)
-  spend           Decimal?        @db.Decimal(12, 2)
-  status          MilestoneStatus @default(PENDING)
-  isPhotoRequired Boolean         @default(false)
-  parentId        String?
+  id                 String          @id @default(uuid())
+  projectId          String
+  name               String
+  order              Int
+  description        String?
+  projectStage       ProjectStage
+  targetDate         DateTime
+  startDate          DateTime?
+  actualDate         DateTime?
+  budget             Decimal         @default(10000) @db.Decimal(12, 2)
+  spend              Decimal?        @db.Decimal(12, 2)
+  status             MilestoneStatus @default(PENDING)
+  isPhotoRequired    Boolean         @default(false)
+  parentId           String?
+  /// Snapshot from the build sequence. Later template edits do not change this job.
+  estimatedDays      Int             @default(5)
+  requiredTradeTypes TradeType[]     @relation("MilestoneRequiredTrades")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   siteUpdates        SiteUpdate[]
   tradieSchedules    TradieSchedule[]
+  variations         Variation[]
   activityLogs       ActivityLog[]
-  project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  files              File[]           @relation("MilestoneFiles")
-  tradies            Tradie[]         @relation("TradieMilestones")
-  parentMilestone    Milestone?       @relation("MilestoneHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  childrenMilestones Milestone[]      @relation("MilestoneHierarchy")
+  tradieActivityLogs TradieActivityLog[]
+  project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  files              File[]              @relation("MilestoneFiles")
+  tradies            Tradie[]            @relation("TradieMilestones")
+  parentMilestone    Milestone?          @relation("MilestoneHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  childrenMilestones Milestone[]         @relation("MilestoneHierarchy")
 
   @@unique([projectId, order])
   @@index([projectId])
   @@index([status])
+}
+
+/// The admin-managed build sequence used only when a project is created.
+model MilestoneTemplate {
+  id                 String              @id @default(uuid())
+  name               String
+  order              Int                 @unique
+  projectStage       ProjectStage
+  parentId           String?
+  parent             MilestoneTemplate?  @relation("TemplateHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children           MilestoneTemplate[] @relation("TemplateHierarchy")
+  relatedCostLines   String[]            @default([])
+  estimatedDays      Int                 @default(5)
+  requiredTradeTypes TradeType[]         @relation("TemplateRequiredTrades")
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([parentId])
 }
 
 model Material {
@@ -632,7 +756,12 @@ model Material {
 model Tradie {
   id                  String          @id @default(uuid())
   name                String
+  /// The primary category: trades[0]. Kept because a tradie is shown, and Eve
+  /// names one, by a single trade.
   trade               String
+  /// Every category the tradie works in, the primary first. Whether a tradie
+  /// can be asked for a trade is "is it in here" (`tradieCoversTrade`).
+  trades              String[]        @default([])
   abn                 String          @unique
   phone               String          @unique
   email               String          @unique
@@ -646,6 +775,8 @@ model Tradie {
   lastQuotedPriceUnit TradiePriceUnit @default(HOURLY)
   rating              Decimal?        @db.Decimal(2, 1)
   note                String?         @db.Text
+  /// Removal archives the directory entry; historical bookings keep this identity.
+  archivedAt          DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -657,12 +788,38 @@ model Tradie {
   approvals  TradieApproval[]
   ratings    TradieRating[]
 
+  requestRecipients TradieRequestRecipient[]
+  quotes            TradieQuote[]
+  tradeSelections   TradeSelection[]
+  activityLogs      TradieActivityLog[]
+  invoices          TradieInvoice[]
+  emailedInvoices   TradieInvoiceInbox[]
+
   complianceOutreaches ComplianceOutreach[] @relation("TradieComplianceOutreaches")
 
   @@index([name])
   @@index([trade])
   @@index([email])
   @@index([phone])
+  @@index([archivedAt])
+}
+
+/// A trade in the tradie directory (Admin → Trade types). `Tradie.trade`
+/// holds the label rather than a foreign key; renaming a trade renames it on
+/// its tradies in the same transaction (lib/domain/tradies/trade-types.ts).
+model TradeType {
+  id         String    @id @default(uuid())
+  label      String    @unique
+  /// A key from TRADE_ICON_KEYS in types/trade-type.ts.
+  icon       String
+  /// Off the pickers. Tradies already under it keep it.
+  archivedAt DateTime?
+
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  /// Many-to-many: the join rows cascade, so deleteTradeType checks for holders itself.
+  milestoneTemplates MilestoneTemplate[] @relation("TemplateRequiredTrades")
+  requiredMilestones Milestone[]         @relation("MilestoneRequiredTrades")
 }
 
 model TradieIncident {
@@ -693,13 +850,15 @@ model TradieApproval {
   updationData       Json?
   rejectionReason    String?                  @db.Text
   pendingDeletionKey String?                  @unique
-  requestedBy        String
+  requestedBy        String?
+  /// Authenticated system channel when no staff user raised the request.
+  requestSource      String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   tradie Tradie @relation(fields: [tradieId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
 
   @@index([tradieId])
   @@index([requestedBy])
@@ -773,44 +932,222 @@ model SiteUpdate {
 model Variation {
   id            String          @id @default(uuid())
   projectId     String
+  /// The reason for the variation, as the client reads it on the document.
   description   String
+  /// The change to the activity's price, ex GST: new price less previous.
+  /// For a promotional variation this is the cost the builder absorbs.
   cost          Decimal         @db.Decimal(10, 2)
   requestedDate DateTime        @default(now())
   approvedDate  DateTime?
   delayDays     Int             @default(0)
   status        VariationStatus @default(PENDING)
 
+  /// "V-001" is number 1. Per project, in the order variations were raised.
+  /// Null only on a row older than this column and not backfilled.
+  number        Int?
+  kind          VariationKind @default(CHARGEABLE)
+  /// The activity it reprices. Null on a variation raised before one could be
+  /// chosen.
+  milestoneId   String?
+  /// The activity's price to the client before this variation, ex GST.
+  previousPrice Decimal?      @db.Decimal(12, 2)
+  /// The activity's price as this variation states it, ex GST.
+  newPrice      Decimal?      @db.Decimal(12, 2)
+  raisedById    String?
+  /// The browser's key for one press of Send, so a retry after a timeout
+  /// returns the variation it already raised instead of raising a second.
+  requestKey    String?       @unique
+
+  /// The variation document, archived in Blob.
+  documentUrl String?
+  /// When the client was last emailed it, and who it went to.
+  sentAt      DateTime?
+  sentTo      String[]  @default([])
+  /// The owners the office chose to email when it raised it. A retry sends to
+  /// these, not to every owner on the contract.
+  recipients  String[]  @default([])
+  /// The last step that failed while issuing it, in words an operator can
+  /// act on. Cleared once every step has landed.
+  issueError  String?
+
+  /// The Xero invoice billing a chargeable variation. Never set on a
+  /// promotional one.
+  xeroInvoiceId     String?        @unique
+  xeroInvoiceNumber String?
+  invoiceStatus     InvoiceStatus?
+  /// Inc GST, as Xero totalled it.
+  invoiceTotal      Decimal?       @db.Decimal(12, 2)
+  invoiceTax        Decimal?       @db.Decimal(12, 2)
+  invoiceAmountPaid Decimal?       @db.Decimal(12, 2)
+  xeroUpdatedAt     DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  raisedBy  User?      @relation("VariationRaisedBy", fields: [raisedById], references: [id], onDelete: SetNull)
 
+  @@unique([projectId, number])
   @@index([projectId])
+  @@index([milestoneId])
   @@index([status])
 }
 
 model TradieSchedule {
-  id             String               @id @default(uuid())
-  tradieId       String
-  projectId      String
-  milestoneId    String?
-  scheduledDate  DateTime
-  durationDays   Int                  @default(1)
-  requiresQuote  Boolean              @default(false)
-  quotedPrice    String?
-  status         TradieScheduleStatus @default(PENDING)
-  reminderSentAt DateTime?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  id                   String                @id @default(uuid())
+  tradieId             String
+  projectId            String
+  milestoneId          String?
+  scheduledDate        DateTime
+  durationDays         Int                   @default(1)
+  requiresQuote        Boolean               @default(false)
+  quotedPrice          String?
+  status               TradieScheduleStatus  @default(PENDING)
+  reminderSentAt       DateTime?
+  /// The status this booking's alert was dismissed at. The alert stays hidden
+  /// while the booking is still in that status and returns once it moves.
+  alertDismissedStatus TradieScheduleStatus?
+  alertDismissedAt     DateTime?
+  /// The trade this booking is for. A tradie can work in several, so it is
+  /// not the tradie's trade: a plumber-and-gasfitter booked for gas work is a
+  /// Gas booking. Null only on a row older than this column and not backfilled.
+  trade                String?
+  /// The request email this booking was asked for in, when it came from one.
+  requestRecipientId   String?
+  /// "RCTBK-…": quoted on every email about this one booking, so a reply is
+  /// matched to it rather than guessed from the tradie's open bookings.
+  refToken             String?               @unique
+  /// Where quotedPrice came from. The amount itself stays on the booking,
+  /// because milestone spend is counted per booking.
+  quoteId              String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
-  tradie    Tradie     @relation(fields: [tradieId], references: [id])
-  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  milestone Milestone? @relation(fields: [milestoneId], references: [id])
+  tradie           Tradie                  @relation(fields: [tradieId], references: [id])
+  project          Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone        Milestone?              @relation(fields: [milestoneId], references: [id])
+  requestRecipient TradieRequestRecipient? @relation(fields: [requestRecipientId], references: [id], onDelete: SetNull)
+  quote            TradieQuote?            @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  invoices         TradieInvoice[]
+  emailedInvoices  TradieInvoiceInbox[]
 
   @@index([tradieId])
   @@index([projectId])
   @@index([milestoneId])
   @@index([scheduledDate])
+  @@index([requestRecipientId])
+  @@index([quoteId])
+}
+
+/// One request: a trade and its activities, emailed to one or more tradies.
+model TradieRequest {
+  id          String            @id @default(uuid())
+  projectId   String
+  /// The trade label as the request named it.
+  trade       String
+  kind        TradieRequestKind @default(QUOTE)
+  subject     String
+  note        String?           @db.Text
+  createdById String?
+  createdAt   DateTime          @default(now())
+
+  project    Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy  User?                    @relation("TradieRequestCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  recipients TradieRequestRecipient[]
+
+  @@index([projectId])
+}
+
+/// One tradie's copy of a request, and its delivery.
+///
+/// The rendered email is stored so a retry resends exactly what was reviewed,
+/// not a re-render from data that may have moved since.
+model TradieRequestRecipient {
+  id             String                      @id @default(uuid())
+  requestId      String
+  tradieId       String
+  toAddress      String
+  ccAddresses    String[]                    @default([])
+  /// "RCTRQ-…": this tradie's copy's reference, in its subject and body, so a
+  /// reply is matched to the bookings this email asked about.
+  refToken       String?                     @unique
+  subject        String
+  html           String                      @db.Text
+  deliveryStatus TradieRequestDeliveryStatus @default(SENDING)
+  /// Attempts made so far, the one in flight included.
+  attempts       Int                         @default(0)
+  lastAttemptAt  DateTime?
+  /// When the next automatic attempt is due, while RETRYING.
+  nextAttemptAt  DateTime?
+  sentAt         DateTime?
+  /// Operator-facing: what went wrong and what to do. Never a provider error.
+  lastError      String?                     @db.Text
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+
+  request   TradieRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  tradie    Tradie           @relation(fields: [tradieId], references: [id])
+  schedules TradieSchedule[]
+
+  @@unique([requestId, tradieId])
+  @@index([tradieId])
+  @@index([deliveryStatus, nextAttemptAt])
+}
+
+/// Where a quote came from. Its amounts live on the bookings it priced
+/// (TradieSchedule.quotedPrice), one per activity.
+model TradieQuote {
+  id           String            @id @default(uuid())
+  projectId    String
+  tradieId     String
+  trade        String
+  source       TradieQuoteSource
+  /// Null when the quote did not say: an emailed reply rarely does.
+  gstTreatment TradieQuoteGst?
+  /// The date on the quote, or when the reply arrived.
+  quotedAt     DateTime
+  validUntil   DateTime?
+  notes        String?           @db.Text
+  enteredById  String?
+  createdAt    DateTime          @default(now())
+
+  project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tradie    Tradie           @relation(fields: [tradieId], references: [id])
+  enteredBy User?            @relation("TradieQuoteEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
+  schedules TradieSchedule[]
+
+  @@index([projectId, trade])
+  @@index([tradieId])
+}
+
+/// The tradie chosen for a whole trade on a project. At most one per project
+/// and trade is ACTIVE or CANCELLATION_PENDING at a time; cancelled ones stay
+/// as history.
+model TradeSelection {
+  id                     String               @id @default(uuid())
+  projectId              String
+  trade                  String
+  /// trade, trimmed and lower-cased: what "the same trade" means.
+  tradeKey               String
+  tradieId               String
+  status                 TradeSelectionStatus @default(ACTIVE)
+  selectedById           String?
+  selectedAt             DateTime             @default(now())
+  cancellationApprovalId String?              @unique
+  cancelledAt            DateTime?
+  updatedAt              DateTime             @updatedAt
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tradie     Tradie  @relation(fields: [tradieId], references: [id])
+  selectedBy User?   @relation("TradeSelectionSelectedBy", fields: [selectedById], references: [id], onDelete: SetNull)
+
+  // NOTE: one-live-selection-per-trade is enforced via a partial unique index
+  // (TradeSelection_one_live_per_trade, WHERE status is ACTIVE or
+  // CANCELLATION_PENDING) added in the migration, since Prisma cannot express
+  // a filtered unique in the schema.
+  @@index([projectId, tradeKey, status])
+  @@index([tradieId])
 }
 
 model ActivityLog {
@@ -832,24 +1169,57 @@ model ActivityLog {
   @@index([createdAt])
 }
 
+/// A tradie's own history: every booking, quote, request email, selection,
+/// cancellation and incident, across every project. Written by the domain
+/// commands through lib/domain/audit/tradie-activity-log.ts, from the
+/// templates in types/tradieActivityLog.ts. The project's ActivityLog is the
+/// job's story; this is the tradie's.
+model TradieActivityLog {
+  id          String   @id @default(uuid())
+  tradieId    String
+  /// Null for an entry about the tradie rather than a job, or once the
+  /// project is deleted: the history outlives it.
+  projectId   String?
+  milestoneId String?
+  /// Not a relation: a deleted booking keeps the history of what happened to it.
+  scheduleId  String?
+  /// Who did it. Null for the system — the email-reply webhook, a cron.
+  authorId    String?
+  type        String
+  message     String   @db.Text
+  createdAt   DateTime @default(now())
+
+  tradie    Tradie     @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  project   Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  milestone Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  author    User?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([tradieId, createdAt])
+  @@index([projectId])
+  @@index([scheduleId])
+}
+
 model Customer {
-  id            String  @id @default(uuid())
-  name          String
-  email         String  @unique
-  phone         String  @unique
-  // Primary owner's Current Location (residential/postal address). Populated at
-  // project handoff from the offer's owners[] (ADR 0003). Nullable — legacy
-  // customers have none.
-  address       String?
-  /// The Xero ContactID this customer is billed under. Resolved lazily the
-  /// first time a progress claim is raised (match on email, else create), so
-  /// legacy customers carry null until their first invoice.
-  xeroContactId String? @unique
+  id      String  @id @default(uuid())
+  name    String
+  // Every owner a project is created with carries an email and an address
+  // (lib/domain/projects/owners.ts), because they are what the Xero contact is
+  // built from. A phone is optional: some clients give none. Still unique when
+  // present (Postgres lets any number of rows hold NULL under a unique index),
+  // and always stored in `canonicalPhone` form.
+  email   String  @unique
+  phone   String? @unique
+  // The owner's Current Location (residential/postal address), from the
+  // contract or the offer's owners[] (ADR 0003). Required by the owner rule for
+  // every customer a project is created with; nullable only because legacy
+  // customers have none, and a NOT NULL here would need them backfilled first.
+  address String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  projects Project[] @relation("CustomerProjects")
+  projects      Project[]         @relation("CustomerProjects")
+  ownedProjects ProjectCustomer[]
 
   @@index([email])
   @@index([phone])
@@ -871,6 +1241,7 @@ model User {
   siteManagerProjects       Project[]                  @relation("SiteManagerProjects")
   siteUpdates               SiteUpdate[]
   activityLogs              ActivityLog[]
+  tradieActivityLogs        TradieActivityLog[]
   assignedLeads             Lead[]                     @relation("LeadAssignee")
   leadHistories             LeadHistory[]              @relation("LeadHistoryAuthor")
   leadTasks                 LeadTask[]                 @relation("LeadTaskAssignee")
@@ -879,6 +1250,12 @@ model User {
   whatsappUnmatchedResolved WhatsAppUnmatchedMessage[] @relation("WhatsAppUnmatchedResolver")
   reviews                   TradieRating[]
   approvalRequests          TradieApproval[]
+  tradieRequests            TradieRequest[]            @relation("TradieRequestCreatedBy")
+  tradieQuotes              TradieQuote[]              @relation("TradieQuoteEnteredBy")
+  tradieInvoices            TradieInvoice[]            @relation("TradieInvoiceEnteredBy")
+  inboxDecisions            TradieInvoiceInbox[]       @relation("TradieInvoiceInboxDecidedBy")
+  variationsRaised          Variation[]                @relation("VariationRaisedBy")
+  tradeSelections           TradeSelection[]           @relation("TradeSelectionSelectedBy")
   createdOffers             Offer[]                    @relation("OfferCreatedBy")
   xeroConnections           XeroConnection[]           @relation("XeroConnections")
   agentSessions             AgentSession[]
@@ -1486,20 +1863,47 @@ model EnvelopeSignature {
 
 // Each send of the negotiation Offer document, with tracked link + open telemetry.
 model OfferDocumentSend {
-  id               String    @id @default(uuid())
+  id               String               @id @default(uuid())
   offerId          String
-  offer            Offer     @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  offer            Offer                @relation(fields: [offerId], references: [id], onDelete: Cascade)
   offerFileVersion Int
   recipientEmail   String
-  trackedLinkToken String    @unique
-  sentAt           DateTime  @default(now())
+  trackedLinkToken String               @unique
+  sentAt           DateTime             @default(now())
   openedAt         DateTime?
   // Reply tracking: the subject carries [RCOFR-…] so inbound replies correlate
-  // back to this send (see lib/graph/offer-reply-tracker).
+  // back to this send (see lib/domain/offers/replies).
   repliedAt        DateTime?
   lastReplyAt      DateTime?
+  replies          OfferDocumentReply[]
 
   @@index([offerId])
+}
+
+// The client's reply to an Offer-document send, kept whole so the negotiation
+// can be read in-app rather than only in the builder's mailbox. repliedAt and
+// lastReplyAt on the send stay the cheap "did they answer" signal; this is what
+// they actually said (see lib/domain/offers/replies).
+model OfferDocumentReply {
+  id             String            @id @default(uuid())
+  sendId         String
+  send           OfferDocumentSend @relation(fields: [sendId], references: [id], onDelete: Cascade)
+  /// The Graph message id. Unique so a repeated notification for the same
+  /// message converges on one row instead of showing the reply twice.
+  graphMessageId String            @unique
+  fromEmail      String
+  subject        String
+  /// Plain text, as Graph renders it with outlook.body-content-type="text".
+  /// The whole body, quoted history included; the reader splits it for display.
+  body           String            @db.Text
+  /// [{ name, contentType, size, url, note }] — blob-backed copies of the
+  /// message's attachments. url is null for one that was not stored, and note
+  /// says why, so a missing file reads as missing rather than as never sent.
+  attachments    Json              @default("[]")
+  receivedAt     DateTime
+  createdAt      DateTime          @default(now())
+
+  @@index([sendId, receivedAt])
 }
 
 // One row per lifecycle transition, for accountability + legal trail.
@@ -2973,8 +3377,10 @@ model ComplianceAlert {
   @@index([engagementId, status])
 }
 
-/// Lifecycle of a progress claim, mirroring Xero's own invoice status codes so
-/// the webhook can map one to one without inventing intermediate states.
+/// Lifecycle of an invoice, mirroring Xero's own invoice status codes so the
+/// webhook can map one to one without inventing intermediate states. Shared by
+/// the progress claims we raise (Invoice) and the bills tradies raise on us
+/// (TradieInvoice): Xero gives both the same codes.
 enum InvoiceStatus {
   DRAFT
   SUBMITTED
@@ -3067,4 +3473,143 @@ model Invoice {
   @@unique([projectId, projectStage])
   @@index([projectId])
   @@index([status])
+}
+
+/// Where a tradie's invoice reached us from.
+enum TradieInvoiceSource {
+  /// Typed in by the office from an invoice that arrived by email or post.
+  MANUAL
+  /// A bill (ACCPAY) in Xero, mirrored by the invoice webhook.
+  XERO
+}
+
+/// A bill a tradie raised on us: what the work actually cost.
+///
+/// The cost side of a project's profit and loss. A booking's quote
+/// (TradieSchedule.quotedPrice) is what the work was agreed at; the invoices
+/// against it are what it is charged at, and a tradie may send several — a
+/// deposit, progress claims, a final — so one booking holds many.
+///
+/// `scheduleId` is null while an invoice is known to be this tradie's on this
+/// project but not which booking it bills: a Xero bill with no RCTBK reference
+/// and more than one booking it could be. The Financials tab lists those for
+/// the office to allocate, and they count towards no activity until it does.
+///
+/// Amounts are ex GST in `subTotal`, which is what is compared with the tender
+/// (Milestone.budget is ex GST). Not related to Invoice: that is the money the
+/// owner owes us, this is the money we owe the tradie.
+model TradieInvoice {
+  id         String              @id @default(uuid())
+  projectId  String
+  tradieId   String
+  scheduleId String?
+  source     TradieInvoiceSource
+  status     InvoiceStatus       @default(AUTHORISED)
+
+  /// The tradie's own invoice number, as printed on it.
+  invoiceNumber String?
+  reference     String?
+  currencyCode  String  @default("AUD")
+
+  subTotal   Decimal @db.Decimal(12, 2)
+  totalTax   Decimal @db.Decimal(12, 2)
+  total      Decimal @db.Decimal(12, 2)
+  amountPaid Decimal @default(0) @db.Decimal(12, 2)
+
+  issuedDate DateTime
+  dueDate    DateTime?
+  notes      String?   @db.Text
+
+  /// The Xero InvoiceID of the bill this mirrors. Unique, so a replayed or
+  /// repeated webhook updates the one row instead of adding a second invoice.
+  xeroInvoiceId String?   @unique
+  /// Xero's `updatedDateUTC` for the version this row reflects, so an older
+  /// delivery cannot overwrite a newer one.
+  xeroUpdatedAt DateTime?
+
+  /// Who typed it in, or allocated it to its booking. Null for the webhook.
+  enteredById String?
+
+  /// The tradie's own invoice document, uploaded when it was recorded.
+  documentUrl  String?
+  documentName String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tradie    Tradie              @relation(fields: [tradieId], references: [id])
+  schedule  TradieSchedule?     @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  enteredBy User?               @relation("TradieInvoiceEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
+  emailedAs TradieInvoiceInbox?
+
+  // NOTE: one live invoice per tradie and invoice number (case-insensitive) is
+  // enforced via a partial unique index (TradieInvoice_one_live_number_per_tradie,
+  // WHERE invoiceNumber IS NOT NULL and status is not VOIDED or DELETED) added
+  // in the migration, since Prisma cannot express a filtered unique in the schema.
+  @@index([projectId])
+  @@index([tradieId])
+  @@index([scheduleId])
+}
+
+/// Where an emailed tradie invoice is up to.
+enum TradieInvoiceInboxStatus {
+  /// Read and matched, waiting for the office. Counts nowhere yet.
+  PENDING
+  /// Recorded as a tradie invoice; `invoiceId` is that invoice.
+  CONFIRMED
+  /// Not an invoice to record — a duplicate, or not this project's.
+  DISMISSED
+}
+
+/// A tradie invoice that arrived by email, read off its attachment and
+/// matched to a project, waiting for the office to confirm it. Nothing here
+/// counts in what a job has been invoiced until it is confirmed, which records
+/// a TradieInvoice through the same command as typing one in.
+model TradieInvoiceInbox {
+  id         String                   @id @default(uuid())
+  projectId  String
+  tradieId   String
+  /// The booking it was matched to, when one could be.
+  scheduleId String?
+  status     TradieInvoiceInboxStatus @default(PENDING)
+
+  /// The email it came on, and which of its attachments this is. Unique
+  /// together, so a redelivered notification queues it once.
+  graphMessageId String
+  attachmentId   String
+  mailbox        GraphMailbox
+  fromAddress    String
+  subject        String
+  receivedAt     DateTime
+
+  /// The attachment, archived in Blob under the project's invoice folder.
+  documentUrl  String
+  documentName String
+
+  /// What was read off it. Suggestions only: the office checks them.
+  invoiceNumber String?
+  issuedDate    DateTime?
+  dueDate       DateTime?
+  subTotal      Decimal?  @db.Decimal(12, 2)
+  totalTax      Decimal?  @db.Decimal(12, 2)
+  total         Decimal?  @db.Decimal(12, 2)
+
+  /// The invoice it was recorded as, once confirmed.
+  invoiceId   String?   @unique
+  decidedById String?
+  decidedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tradie    Tradie          @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  schedule  TradieSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  invoice   TradieInvoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  decidedBy User?           @relation("TradieInvoiceInboxDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@unique([graphMessageId, attachmentId])
+  @@index([projectId, status])
+  @@index([tradieId])
 }

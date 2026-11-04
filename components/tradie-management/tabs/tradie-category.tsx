@@ -1,5 +1,4 @@
 import { TradiesByCategory } from "@/types/tradie";
-import { TRADIE_TYPE_ICONS, TRADIE_TYPES } from "@/constants/tradieTypes";
 import { Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TRADE_ICON_TILE_CLASS } from "@/constants/tradeChip";
@@ -8,10 +7,7 @@ import {
   setActiveTab,
   setQuery,
 } from "@/lib/store/slices/tradieManagementSlice";
-import {
-  convertCategoryToTradieType,
-  type TradieType,
-} from "@/utils/normalize-tradie-type";
+import { TradeIcon } from "../trade-icon";
 
 interface CategoryCardProps {
   name: string;
@@ -39,23 +35,17 @@ export function TradieCategory({
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-      {filteredTradies.map((category) => {
-        const Icon =
-          TRADIE_TYPE_ICONS[convertCategoryToTradieType(category.category)!] ||
-          Square;
-        const name =
-          TRADIE_TYPES[category.category as TradieType] ?? category.category;
-        return (
-          <CategoryCard
-            key={category.category}
-            name={name}
-            count={category.tradies.length}
-            totalJobs={category.totalCategoryJobsCompleted}
-            icon={<Icon className="size-5" aria-hidden="true" />}
-            onClick={() => handleActionClick(name)}
-          />
-        );
-      })}
+      {/* A category is the trade's label as the tradies hold it. */}
+      {filteredTradies.map((category) => (
+        <CategoryCard
+          key={category.category}
+          name={category.category}
+          count={category.tradies.length}
+          totalJobs={category.totalCategoryJobsCompleted}
+          icon={<TradeIcon trade={category.category} className="size-5" />}
+          onClick={() => handleActionClick(category.category)}
+        />
+      ))}
     </div>
   );
 }

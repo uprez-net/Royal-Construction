@@ -59,6 +59,39 @@ const CALLER_CHECKS = new Set([
   "generateOfferPrefill",
   "prepareProjectHandoff",
   "commitOfferStatusTransition",
+  // Removal impact is admin-only in the shared domain query.
+  "getTradieRemovalImpact",
+  // The tradie activity log: assertCanReadTradieDirectory before the read,
+  // and project names only for projects the caller may manage.
+  "listTradieActivity",
+  // The Tradies tab's request, quote and selection commands. Each calls
+  // authorizeProject (ADMIN, or the project's site manager) before it reads
+  // or writes anything; deliverTradieRequest does so for the "manual" trigger,
+  // the only one an adapter passes it.
+  "sendTradieRequests",
+  "deliverTradieRequest",
+  "recordManualQuote",
+  "selectTradeQuote",
+  "requestTradeCancellation",
+  "draftTradieRequestWorkDetails",
+  // The Financials tab (issue #405). Each calls requireAdminPrincipal and
+  // authorizeProject before it reads a figure or writes an invoice.
+  "getProjectFinancials",
+  "recordTradieInvoice",
+  "allocateTradieInvoice",
+  "voidTradieInvoice",
+  "setMilestonePrice",
+  // Request recheck: both call requireAdminPrincipal and authorizeProject
+  // before they read the booking or send anything.
+  "prepareTradieInvoiceRecheck",
+  "requestTradieInvoiceRecheck",
+  "readTradieInvoiceDocument",
+  "dismissEmailedTradieInvoice",
+  "getVariationOptions",
+  "draftVariation",
+  "raiseVariation",
+  "issueVariation",
+  "getProjectVariations",
 ]);
 
 // auth() alone passes every signed-in user, customers included. An export
@@ -129,8 +162,6 @@ const ALLOWLIST: Record<string, string> = {
   "lib/data/tradies.ts#getTradiesForLookup": TRADIE_SCHEDULES,
   "lib/notification/novu.ts#triggerNotification":
     "sends in-app notifications; only server code calls it, so it wants server-only (follow-up)",
-  "utils/generate-email-subject.ts#generateEmailSubject":
-    "drafts a subject line from text with the model; reads no data, spends tokens (follow-up)",
 };
 
 type Check = "caller" | "signed-in" | "none";

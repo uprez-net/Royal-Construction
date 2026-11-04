@@ -31,6 +31,9 @@ import { AddressSuggestion } from "@/types/data";
 import { fetchJson } from "@/utils/fetch";
 import { cn } from "@/lib/utils";
 import { EmailListInput } from "./forms/EmailLIstInput";
+import { TradeTypesField } from "./forms/TradieTypeInput";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { tradieTrades } from "@/lib/domain/tradies/request-rules";
 
 interface EditTradieModalProps {
   open: boolean;
@@ -39,12 +42,15 @@ interface EditTradieModalProps {
 }
 
 interface TradieUpdateInput {
+  name?: string;
   abn?: string;
   email?: string;
   phone?: string;
   location?: string;
   note?: string;
   additionalEmails?: string[];
+  /** Every category, the primary first. */
+  trades?: string[];
 }
 
 // Strips spaces, dashes, and parens so "04 1234 5678" / "(02) 1234-5678" normalize cleanly.
@@ -55,6 +61,7 @@ const normalizePhone = (value: string) => value.replace(/[\s()-]/g, "");
 const AU_PHONE_REGEX = /^(?:\+?61|0)[2-478]\d{8}$/;
 
 const updateTradieSchema = z.object({
+  name: z.string().trim().min(2, "Enter a name with at least 2 characters"),
   email: z.email("Please enter a valid email address"),
   additionalEmails: z
     .array(z.email("Please enter a valid email address"))
@@ -67,6 +74,10 @@ const updateTradieSchema = z.object({
       "Enter a valid Australian number, e.g. 04XX XXX XXX or 02 XXXX XXXX",
     ),
   location: z.string().min(2, "Location is required").optional(),
+  trades: z
+    .array(z.string().min(1))
+    .min(1, "Select at least one trade type")
+    .optional(),
   note: z.string().max(500, "Notes cannot exceed 500 characters").optional(),
 });
 
@@ -87,20 +98,36 @@ export default function EditTradieModal({
     AddressSuggestion[]
   >([]);
   const [formData, setFormData] = useState<TradieUpdateInput>({
+    name: tradie.name,
     abn: tradie.abn,
     email: tradie.email,
     phone: tradie.phone,
     location: tradie.location ?? "",
     note: tradie.note ?? "",
     additionalEmails: tradie.additionalEmails ?? [],
+    trades: tradieTrades(tradie),
   });
 
   const changes = useMemo(() => {
+    const original: Record<string, unknown> = {
+      ...tradie,
+      trades: tradieTrades(tradie),
+    };
     return Object.fromEntries(
       Object.entries(formData).filter(([key, value]) => {
+        // Lists compare by contents and order: the order of `trades` says
+        // which one is primary.
+        if (Array.isArray(value)) {
+          const before = original[key];
+          return (
+            !Array.isArray(before)
+            || before.length !== value.length
+            || before.some((item, index) => item !== value[index])
+          );
+        }
         const newValue =
           typeof value === "string" ? value?.trim() || null : value;
-        const oldValue = tradie[key as keyof TradieDetails] || null;
+        const oldValue = original[key] || null;
 
         return newValue !== oldValue;
       }),
@@ -250,13 +277,55 @@ export default function EditTradieModal({
           </DialogTitle>
 
           <DialogDescription>
-            Update contact information and internal notes for {tradie.name}.
-            Fields marked with an asterisk are required.
+            Update the name, trades, contact information and internal notes for{" "}
+            {tradie.name}. Fields marked with an asterisk are required.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 pt-2">
           <div className="grid gap-5 md:grid-cols-2">
+            <Field
+              className="md:col-span-2"
+              data-invalid={Boolean(errors.name)}
+            >
+              <FieldLabel htmlFor="tradie-edit-name">
+                Name <span aria-hidden="true">*</span>
+              </FieldLabel>
+              <Input
+                id="tradie-edit-name"
+                name="name"
+                required
+                disabled={isPending}
+                placeholder="Tradie or business name"
+                value={formData.name ?? ""}
+                aria-invalid={Boolean(errors.name)}
+                aria-describedby={
+                  errors.name ? "tradie-edit-name-error" : undefined
+                }
+                onChange={(event) =>
+                  handleInputChange("name", event.target.value)
+                }
+              />
+              {errors.name ? (
+                <FieldError id="tradie-edit-name-error">
+                  {errors.name}
+                </FieldError>
+              ) : null}
+            </Field>
+            <div className="md:col-span-2">
+              <TradeTypesField
+                id="tradie-edit-trades"
+                value={formData.trades ?? []}
+                disabled={isPending}
+                onChange={(trades) => handleInputChange("trades", trades)}
+                error={errors.trades}
+                requiredMark={
+                  <span className="text-destructive">
+                    *<span className="sr-only"> required</span>
+                  </span>
+                }
+              />
+            </div>
             {fields.map(({ key, label, icon: Icon, placeholder, mono }) => {
               if (key === "additionalEmails") {
                 return (
@@ -388,12 +457,12 @@ export default function EditTradieModal({
             </div>
           </div>
 
-          <div className="flex justify-between border-t border-border/70 pt-4">
+          <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
               {hasChanges ? "You have unsaved changes" : "No changes made"}
             </p>
 
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex">
               <Button variant="outline" disabled={isPending} onClick={onClose}>
                 Cancel
               </Button>

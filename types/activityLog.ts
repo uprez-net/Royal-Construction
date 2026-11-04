@@ -96,6 +96,26 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
     projectId: data.projectId,
   }),
 
+  siteManagerAssigned: (data) => ({
+    id: uuidv4(),
+    type: "siteManagerAssigned",
+    message: data.previousSiteManagerName
+      ? `Site manager changed from ${data.previousSiteManagerName} to ${data.siteManagerName}`
+      : `${data.siteManagerName} assigned as site manager`,
+    authorId: "system",
+    timestamp: new Date().toISOString(),
+    projectId: data.projectId,
+  }),
+
+  projectStartDateChanged: (data) => ({
+    id: uuidv4(),
+    type: "projectStartDateChanged",
+    message: `Start date moved from ${data.previousStartDate} to ${data.startDate}; ${data.milestonesRescheduled} milestone target dates rescheduled`,
+    authorId: "system",
+    timestamp: new Date().toISOString(),
+    projectId: data.projectId,
+  }),
+
   tradieScheduleCreated: (data) => ({
     id: uuidv4(),
     type: "tradieScheduleCreated",
@@ -146,6 +166,22 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
     milestoneId: data.milestoneId,
   }),
 
+  tradieScheduleRescheduled: (data) => ({
+    id: uuidv4(),
+    type: "tradieScheduleRescheduled",
+    message: `${data.tradieName}'s booking moved from ${data.previousDate} to ${data.scheduleDate} for ${data.durationDays} day${data.durationDays === 1 ? "" : "s"}${
+      data.notice === "emailed"
+        ? "; the tradie was emailed to confirm the new date"
+        : data.notice === "email-failed"
+          ? "; the email to the tradie failed and they have not been told"
+          : "; the tradie was not emailed"
+    }`,
+    authorId: "system",
+    timestamp: new Date().toISOString(),
+    projectId: data.projectId,
+    milestoneId: data.milestoneId,
+  }),
+
   tradieScheduleDeleted: (data) => ({
     id: uuidv4(),
     type: "tradieScheduleDeleted",
@@ -188,6 +224,16 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
     id: uuidv4(),
     type: "milestoneStatusChanged",
     message: `Milestone ${data.milestoneName} status changed to ${data.newStatus}`,
+    authorId: "system",
+    timestamp: new Date().toISOString(),
+    projectId: data.projectId,
+    milestoneId: data.milestoneId,
+  }),
+
+  milestonePriceChanged: (data) => ({
+    id: uuidv4(),
+    type: "milestonePriceChanged",
+    message: `${data.milestoneName} quoted price changed from ${data.previousPrice} to ${data.price}`,
     authorId: "system",
     timestamp: new Date().toISOString(),
     projectId: data.projectId,

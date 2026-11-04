@@ -3,13 +3,24 @@ import { isLeadMessage } from "@/lib/graph/lead-subject";
 import { getGraphConfig, type GraphMailbox } from "@/lib/graph/config";
 import prisma from "@/lib/prisma";
 import { extractTradieScheduleInfoFromMessage } from "@/lib/graph/tradie-schedule-info-extractor";
-import { updateTradieSchedule } from "@/lib/data/tradieSchedules";
+import { applyTradieScheduleUpdate } from "@/lib/data/tradie-schedule-updates";
+import { getAllAdminUsersIds } from "@/lib/data/user";
+import {
+  AWAITING_TRADIE_REPLY,
+  findTradieReplyReference,
+  isReplyFromTradie,
+  matchTradieReplyToSchedule,
+  referencedReplyTargets,
+  tradieReplyStatus,
+  type TradieReplyReference,
+} from "@/lib/domain/tradies/replies";
+import { extractTradieRefToken } from "@/lib/domain/tradies/reply-reference";
+import { triggerNotification } from "@/lib/notification/novu";
+import { createNotification } from "@/types/notification";
 import { saveLeadEmailTrail } from "@/lib/graph/save-lead-email-trail";
 import { evaluateEmail } from "@/utils/spam-detector";
-import {
-  extractOfferReplyToken,
-  recordOfferReply,
-} from "@/lib/graph/offer-reply-tracker";
+import { recordOfferReply } from "@/lib/domain/offers/replies";
+import { systemPrincipal } from "@/lib/domain/principal";
 import {
   extractCertifierRefToken,
   isPublicMailDomain,
@@ -21,18 +32,24 @@ import {
   normaliseReference,
   planningReferencesIn,
 } from "@/lib/graph/planning-portal";
-import { isMachineGenerated } from "@/lib/graph/offer-reply-classify";
+import {
+  extractOfferReplyToken,
+  isMachineGenerated,
+} from "@/lib/graph/offer-reply-classify";
 import { normalizeEmailAddress } from "@/utils/formatters";
 import {
   CertifierEmailDirection,
   CompliancePartyType,
   GraphMailbox as PrismaGraphMailbox,
+  TradieScheduleStatus,
 } from "@prisma/client";
 import { processInboundCertifierEmail } from "@/lib/workflow/certifier-email";
 import { processInboundPartyEmail } from "@/lib/workflow/party-email";
 import { isRetryableGraphError, withGraphRetry } from "@/lib/graph/retry";
 import { checkLeadPresentWithEmailPhone } from "@/lib/leads/existing-lead";
 import { processInboundLead } from "@/lib/workflow/lead-extraction";
+import { storeOfferReplyAttachments } from "@/lib/workflow/offer-reply-attachments";
+import { processTradieInvoiceEmail } from "@/lib/workflow/tradie-invoice-email";
 import { start } from "workflow/api";
 import { after } from "next/server";
 import { isOwnMailbox } from "@/lib/graph/mailbox";
@@ -85,6 +102,231 @@ async function isMessageAlreadyProcessed(messageId: string): Promise<boolean> {
       error,
     );
     return false;
+  }
+}
+
+/**
+ * A tradie's email that carries attachments may be an invoice. Reading them
+ * is the slow half, so it is a workflow of its own; it queues any invoice for
+ * the office to confirm and counts nothing itself. Never throws: a failure to
+ * enqueue is logged, and the rest of the batch still runs.
+ */
+async function startTradieInvoiceEmail(input: {
+  message: { id: string; subject?: string | null; receivedDateTime?: string };
+  mailbox: "business" | "admin";
+  from: string;
+  tradieId: string;
+  content: string;
+}) {
+  try {
+    const run = await start(processTradieInvoiceEmail, [
+      {
+        body: input.content,
+        from: input.from,
+        graphMessageId: input.message.id,
+        mailbox: input.mailbox,
+        receivedAt: input.message.receivedDateTime || new Date().toISOString(),
+        subject: input.message.subject ?? "",
+        tradieId: input.tradieId,
+      },
+    ]);
+    console.log(
+      `  Tradie ${input.tradieId}: invoice email workflow started for message ${input.message.id}: run ${run.runId}`,
+    );
+  } catch (error) {
+    console.error(
+      `  Tradie ${input.tradieId}: couldn't start the invoice email workflow`,
+      error,
+    );
+  }
+}
+
+/**
+ * Tell the admins a tradie's reply was not applied, instead of leaving it in a
+ * log nobody reads. Never throws: the rest of the batch still has to run.
+ */
+async function notifyTradieReplyNeedsReview(
+  tradie: { id: string; name: string },
+  subject: string,
+  reason: string,
+) {
+  console.log(`  Tradie reply needs review (${tradie.id}): ${reason}`);
+  try {
+    await triggerNotification(
+      await getAllAdminUsersIds(),
+      createNotification("tradieReplyNeedsReview", {
+        reason,
+        subject,
+        tradieId: tradie.id,
+        tradieName: tradie.name,
+      }),
+    );
+  } catch (error) {
+    console.error("Could not notify admins about a tradie reply:", error);
+  }
+}
+
+/**
+ * Read a tradie's reply and apply it to the booking, or bookings, it answers.
+ *
+ * With a `reference`, only the bookings it names are candidates, and a reply
+ * to a request email covering several activities can answer all of them at
+ * once (`referencedReplyTargets`). Without one, every booking the tradie has
+ * open is a candidate and the reply must pick out exactly one, as before.
+ * Whatever cannot be applied goes to the admins rather than the log.
+ */
+async function handleTradieReply(input: {
+  tradie: { id: string; name: string };
+  /** The subject as received; "" when there was none. */
+  subject: string;
+  content: string;
+  reference: TradieReplyReference | null;
+}): Promise<void> {
+  const { tradie, content, reference } = input;
+  const subject = input.subject || "(no subject)";
+  const label = reference
+    ? `${reference.token} (${reference.projectName})`
+    : `Tradie ${tradie.id}`;
+
+  // Without a reference, a tradie with nothing open is skipped before the
+  // model is asked. With one, the reply is about a job we can name, so it is
+  // read and, if its bookings are closed, put in front of the office below.
+  if (!reference) {
+    const openBookings = await prisma.tradieSchedule.count({
+      where: {
+        status: { in: [...AWAITING_TRADIE_REPLY] },
+        tradieId: tradie.id,
+      },
+    });
+    if (openBookings === 0) {
+      console.log(`  ${label}: no booking awaiting a reply. Skipping.`);
+      return;
+    }
+  }
+
+  const tradieInfo = await extractTradieScheduleInfoFromMessage(
+    input.subject,
+    content,
+  );
+  if (!tradieInfo) {
+    await notifyTradieReplyNeedsReview(
+      tradie,
+      subject,
+      `The reply${reference ? ` to ${label}` : ""} could not be read automatically. Check it and update the booking by hand.`,
+    );
+    return;
+  }
+  console.log(`  extractedTradieInfo: ${JSON.stringify(tradieInfo)}`);
+
+  const match = await matchTradieReplyToSchedule(
+    { hints: tradieInfo, scope: reference?.scope, tradieId: tradie.id },
+    prisma,
+  );
+  if (match.kind === "none") {
+    if (reference) {
+      // A late quote or a change of mind on a closed or cancelled booking:
+      // dropping it is the silent failure nobody here would notice.
+      await notifyTradieReplyNeedsReview(
+        tradie,
+        subject,
+        `The reply to ${label} arrived, but none of the bookings it is about are waiting on an answer any more. Read it and update the booking by hand if it changes anything.`,
+      );
+    } else {
+      console.log(`  ${label}: no booking awaiting a reply. Skipping.`);
+    }
+    return;
+  }
+
+  // The email asked about several activities and some are no longer going
+  // ahead: cancelled when another tradie was chosen, or declined. Nobody told
+  // the tradie, so a "yes" to the whole email can mean they turn up for work
+  // that is not happening. The open ones are still answered below.
+  if (reference && "requestRecipientId" in reference.scope) {
+    const withdrawn = await prisma.tradieSchedule.findMany({
+      select: { milestone: { select: { name: true } } },
+      where: {
+        requestRecipientId: reference.scope.requestRecipientId,
+        status: {
+          in: [TradieScheduleStatus.CANCELLED, TradieScheduleStatus.DECLINED],
+        },
+      },
+    });
+    if (withdrawn.length > 0) {
+      await notifyTradieReplyNeedsReview(
+        tradie,
+        subject,
+        `The reply to ${label} also covers ${withdrawn.length} ${withdrawn.length === 1 ? "activity that is" : "activities that are"} no longer going ahead (${withdrawn
+          .map((booking) => booking.milestone?.name ?? "general works")
+          .join(
+            ", ",
+          )}). The tradie may not know; let them know. Their answer on the open activities has been applied.`,
+      );
+    }
+  }
+
+  let targets: readonly { id: string; status: TradieScheduleStatus }[];
+  let where: string;
+  if (match.kind === "matched") {
+    targets = [match.schedule];
+    where = match.schedule.project.name;
+  } else {
+    const all = reference
+      ? referencedReplyTargets(match.candidates, {
+          confirmed: tradieInfo.scheduleConfirmation,
+          quoted: Boolean(tradieInfo.scheduleQuote),
+        })
+      : null;
+    if (!all) {
+      await notifyTradieReplyNeedsReview(
+        tradie,
+        subject,
+        reference
+          ? `The reply to ${label} covers ${match.candidates.length} open activities and could not be split between them automatically. Record any quote per activity with Manual quote on the Tradies tab, and update the bookings by hand.`
+          : `The reply did not say which of ${match.candidates.length} open bookings it is about (${match.candidates
+              .map((candidate) => candidate.project.name)
+              .join(", ")}). Update the right one by hand.`,
+      );
+      return;
+    }
+    targets = all;
+    where = `${all.length} activities on ${reference?.projectName}`;
+  }
+
+  const failed: string[] = [];
+  for (const target of targets) {
+    try {
+      await applyTradieScheduleUpdate(
+        systemPrincipal("graph:tradie-email-reply"),
+        target.id,
+        {
+          status: tradieReplyStatus(
+            target.status,
+            tradieInfo.scheduleConfirmation,
+          ),
+          // A price is never spread over several bookings: one amount written
+          // onto each would count it several times over.
+          quote:
+            targets.length === 1
+              ? (tradieInfo.scheduleQuote ?? undefined)
+              : undefined,
+          // Without the basis the amount is unreadable: "$950" is a day rate
+          // as often as it is a small job, and the schedule total and the
+          // tradie's last quoted price both hang off which one it is. FIXED
+          // when the tradie named a price and no basis.
+          quoteUnit: tradieInfo.scheduleQuoteBasis ?? undefined,
+        },
+      );
+    } catch (error) {
+      console.error("Failed to apply a tradie reply:", error);
+      failed.push(target.status);
+    }
+  }
+  if (failed.length > 0) {
+    await notifyTradieReplyNeedsReview(
+      tradie,
+      subject,
+      `The reply was matched to ${where} but ${failed.length === targets.length ? "the booking" : `${failed.length} of ${targets.length} bookings`} could not be updated from ${[...new Set(failed)].join(", ")}. Update ${failed.length === 1 ? "it" : "them"} by hand.`,
+    );
   }
 }
 
@@ -390,8 +632,8 @@ function mailboxForNotification(
     return "admin";
   }
   if (
-    clientState ===
-    (process.env.GRAPH_WEBHOOK_CLIENT_STATE || "royal-leadgen-webhook")
+    clientState
+    === (process.env.GRAPH_WEBHOOK_CLIENT_STATE || "royal-leadgen-webhook")
   ) {
     return "business";
   }
@@ -491,8 +733,8 @@ async function processNotifications(
             // here means "not visible yet", not "does not exist" — the one
             // place a 404 is worth repeating.
             shouldRetry: (error) =>
-              isRetryableGraphError(error) ||
-              (error as { status?: number })?.status === 404,
+              isRetryableGraphError(error)
+              || (error as { status?: number })?.status === 404,
           },
         );
       } catch {
@@ -523,7 +765,40 @@ async function processNotifications(
               ? extractOfferReplyToken(message.subject)
               : null;
           if (offerReplyToken) {
-            const outcome = await recordOfferReply(offerReplyToken, message);
+            const record = await recordOfferReply(
+              systemPrincipal("graph:offer-reply"),
+              {
+                body: content,
+                from: message.from,
+                graphMessageId: message.id,
+                hasAttachments: message.hasAttachments,
+                headers: message.headers,
+                receivedAt: message.receivedDateTime || null,
+                subject: message.subject ?? "",
+                token: offerReplyToken,
+              },
+              prisma,
+            );
+            const outcome = record.outcome;
+            if (record.outcome === "recorded") {
+              // The message is committed; its files are the slow half, and
+              // Graph has already been told 202. `start` only enqueues. Should
+              // it fail, the reply still reads "still being saved — if this
+              // stays, open the email in Outlook", which is the truth.
+              try {
+                const run = await start(storeOfferReplyAttachments, [
+                  { graphMessageId: message.id, replyId: record.replyId },
+                ]);
+                console.log(
+                  `  Offer ${offerReplyToken}: attachment workflow started: run ${run.runId}`,
+                );
+              } catch (error) {
+                console.error(
+                  `  Offer ${offerReplyToken}: couldn't start the attachment workflow`,
+                  error,
+                );
+              }
+            }
             // Log the negatives too. An "auto-generated" line here is a
             // bounce or an out-of-office arriving, and today this is the only
             // trace of it — it is what a bounce classifier gets tuned against
@@ -592,15 +867,15 @@ async function processNotifications(
                   body: content,
                   from: message.from,
                   to:
-                    message.to?.[0] ??
-                    config.senderUpn ??
-                    "info@royalconstructions.com.au",
+                    message.to?.[0]
+                    ?? config.senderUpn
+                    ?? "info@royalconstructions.com.au",
                   receivedDateTime: message.receivedDateTime,
                 },
               ]);
               console.log(
-                `  Compliance ${outreach.party} ${partyToken}: workflow started for message ${message.id} ` +
-                  `(matched on ${partyMatch.matchedOn}): run ${run.runId}`,
+                `  Compliance ${outreach.party} ${partyToken}: workflow started for message ${message.id} `
+                  + `(matched on ${partyMatch.matchedOn}): run ${run.runId}`,
               );
             }
             continue;
@@ -653,15 +928,15 @@ async function processNotifications(
                   body: content,
                   from: message.from,
                   to:
-                    message.to?.[0] ??
-                    config.senderUpn ??
-                    "info@royalconstructions.com.au",
+                    message.to?.[0]
+                    ?? config.senderUpn
+                    ?? "info@royalconstructions.com.au",
                   receivedDateTime: message.receivedDateTime,
                 },
               ]);
               console.log(
-                `  Certifier ${certifierToken}: workflow started for message ${message.id} ` +
-                  `(matched on ${certifierMatch.matchedOn}): run ${run.runId}`,
+                `  Certifier ${certifierToken}: workflow started for message ${message.id} `
+                  + `(matched on ${certifierMatch.matchedOn}): run ${run.runId}`,
               );
             }
             continue;
@@ -675,75 +950,85 @@ async function processNotifications(
             continue;
           }
 
-          // Check if the message is from a tradie and extract tradie schedule info
+          // A tradie answering a booking request. Which booking, and what the
+          // answer moves it to, is lib/domain/tradies/replies.ts; the status
+          // change itself runs as the system, because this webhook has no
+          // signed-in user — `updateTradieSchedule` is the browser's door and
+          // refused every reply here with "User not authenticated".
+          //
+          // A reply that quotes one of our references ([RCTRQ-…] on a
+          // request, [RCTBK-…] on one booking) is matched to the bookings it
+          // names. One that does not — or names nothing we have — falls back
+          // to the sender and the tradie's open bookings, as before.
+          const tradieRefToken = extractTradieRefToken(
+            message.subject,
+            content,
+          );
+          const tradieReference = tradieRefToken
+            ? await findTradieReplyReference(tradieRefToken, prisma)
+            : null;
+          if (tradieReference) {
+            const subject = message.subject ?? "(no subject)";
+            if (isMachineGenerated(message.headers)) {
+              // A bounce or an out-of-office quotes the subject, reference
+              // and all. Logged: it is the only trace of either today.
+              console.log(
+                `  Tradie reply ${tradieReference.token}: auto-generated`,
+                JSON.stringify({
+                  autoSubmitted: message.headers.autoSubmitted ?? null,
+                  from: message.from,
+                  subject: message.subject,
+                }),
+              );
+            } else if (!isReplyFromTradie(tradieReference, message.from)) {
+              await notifyTradieReplyNeedsReview(
+                tradieReference.tradie,
+                subject,
+                `The reply quotes ${tradieReference.token} (${tradieReference.projectName}) but came from ${message.from || "an unknown sender"}, which is not an address on ${tradieReference.tradie.name}'s record. Check it and update the booking by hand.`,
+              );
+            } else {
+              if (message.hasAttachments) {
+                await startTradieInvoiceEmail({
+                  content,
+                  from: message.from,
+                  mailbox,
+                  message,
+                  tradieId: tradieReference.tradie.id,
+                });
+              }
+              await handleTradieReply({
+                content,
+                reference: tradieReference,
+                subject: message.subject ?? "",
+                tradie: tradieReference.tradie,
+              });
+            }
+            continue;
+          }
+
           if (message.from && (await isTradieMessage(message.from))) {
             const tradie = await prisma.tradie.findUnique({
+              select: { id: true, name: true },
               where: { email: message.from },
             });
-            const tradieSchedules = await prisma.tradieSchedule.findMany({
-              where: {
-                tradieId: tradie!.id,
-                status: {
-                  not: {
-                    in: ["DECLINED", "AWAITING_ADMIN_APPROVAL", "CONFIRMED"],
-                  },
-                }, // Only consider non-declined schedules
-              },
-            });
-            console.log(
-              `  Found ${tradieSchedules.length} existing schedule(s) for tradieId: ${tradie!.id}`,
-            );
-            if (tradieSchedules.length === 0) {
-              console.log(
-                `  No existing schedules found for tradieId: ${tradie!.id}. Skipping lead extraction.`,
-              );
-              continue;
+            if (!tradie) continue;
+            if (
+              message.hasAttachments
+              && !isMachineGenerated(message.headers)
+            ) {
+              await startTradieInvoiceEmail({
+                content,
+                from: message.from,
+                mailbox,
+                message,
+                tradieId: tradie.id,
+              });
             }
-            console.log(
-              `  Message from ${message.from} is identified as a tradie message. Skipping lead extraction.`,
-            );
-            const tradieInfo = await extractTradieScheduleInfoFromMessage(
-              message.subject ?? "",
+            await handleTradieReply({
               content,
-            );
-            if (!tradieInfo) {
-              console.log(
-                "  No tradie schedule information could be extracted from the message.",
-              );
-              continue;
-            }
-            console.log(`  extractedTradieInfo: ${JSON.stringify(tradieInfo)}`);
-            const schedule = await prisma.tradieSchedule.findFirst({
-              where: {
-                tradieId: tradie!.id,
-                scheduledDate: new Date(tradieInfo.scheduleDate),
-                project: {
-                  location: {
-                    contains: tradieInfo.projectLocation ?? "",
-                    mode: "insensitive",
-                  },
-                },
-              },
-            });
-            if (!schedule) {
-              console.log(
-                `  Tradie schedule already exists for tradieId: ${tradie!.id}, scheduleDate: ${tradieInfo.scheduleDate}, projectLocation: ${tradieInfo.projectLocation}. Skipping duplicate processing.`,
-              );
-              continue;
-            }
-            const status = tradieInfo.scheduleConfirmation
-              ? schedule.status === "PENDING_FINAL_CONFIRMATION"
-                ? "CONFIRMED"
-                : "AWAITING_ADMIN_APPROVAL"
-              : "DECLINED";
-            await updateTradieSchedule(schedule.id, {
-              status,
-              quote: tradieInfo.scheduleQuote ?? undefined,
-              // Without the basis the amount is unreadable: "$950" is a day
-              // rate as often as it is a small job, and the schedule total
-              // and the tradie's last quoted price both hang off which one
-              // it is. FIXED when the tradie named a price and no basis.
-              quoteUnit: tradieInfo.scheduleQuoteBasis ?? undefined,
+              reference: null,
+              subject: message.subject ?? "",
+              tradie,
             });
             continue;
           }

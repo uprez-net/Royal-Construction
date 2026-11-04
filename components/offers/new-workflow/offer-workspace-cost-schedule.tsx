@@ -44,6 +44,7 @@ import { WorkbookImportControl } from "./offer-workspace-import";
 import { FIELD_LABEL_CLASS } from "./offer-workspace-fields";
 
 type CostSchedulePanelProps = {
+  readonly mobileLineId: string;
   // Which rows have their building-sequence editor open. Owned by the screen so
   // it survives a trip to another step: only the active step is mounted now, so
   // local state here was wiped every time the estimator went to Pricing.
@@ -76,8 +77,8 @@ function focusEditableCell(element: HTMLElement) {
   element.focus();
 
   if (
-    element instanceof HTMLInputElement ||
-    element instanceof HTMLTextAreaElement
+    element instanceof HTMLInputElement
+    || element instanceof HTMLTextAreaElement
   ) {
     element.select();
   }
@@ -104,6 +105,7 @@ function handleGridCellKeyDown(event: KeyboardEvent<HTMLElement>) {
 }
 
 export function CostSchedulePanel({
+  mobileLineId,
   expandedLineIds,
   onToggleLineExpanded,
   importResult,
@@ -114,6 +116,7 @@ export function CostSchedulePanel({
   onIncludeAll,
   onRemoveLine,
 }: CostSchedulePanelProps) {
+  const selectedMobileLine = mobileLineId;
   const includedCount = lines.filter((line) => line.includedInContract).length;
   const pricedCount = lines.filter((line) => line.costExGst > 0).length;
   const importedCount = lines.filter(
@@ -167,7 +170,7 @@ export function CostSchedulePanel({
           {importedCount > 0 ? (
             <OfferSummaryBadge label="imported" value={importedCount} />
           ) : null}
-          <span className="rounded-md border border-border bg-background px-2 py-1 @6xl/pane:hidden">
+          <span className="hidden rounded-md border border-border bg-background px-2 py-1 md:inline @6xl/pane:hidden">
             Scroll sideways to review all columns
           </span>
         </div>
@@ -193,7 +196,7 @@ export function CostSchedulePanel({
         <div className="max-w-full overflow-hidden rounded-lg border border-border bg-card">
           <Table
             aria-describedby="cost-schedule-summary cost-schedule-keyboard-help"
-            className="min-w-270 table-fixed border-separate border-spacing-0 text-[13px]"
+            className="cost-schedule-table md:min-w-270 table-fixed border-separate border-spacing-0 text-[13px]"
           >
             <colgroup>
               <col className="w-11" />
@@ -285,14 +288,20 @@ export function CostSchedulePanel({
 
                 return (
                   <Fragment key={line.id}>
-                    <TableRow className="group align-top hover:bg-royal-gold-light/25 focus-within:bg-royal-gold-light/35">
+                    <TableRow
+                      data-mobile-hidden={
+                        selectedMobileLine !== "all"
+                        && selectedMobileLine !== line.id
+                      }
+                      className="cost-data-row group align-top hover:bg-royal-gold-light/25 focus-within:bg-royal-gold-light/35"
+                    >
                       <TableCell className="sticky left-0 z-10 border-r border-border/70 bg-card px-1 py-0 align-middle group-hover:bg-royal-gold-light/25 group-focus-within:bg-royal-gold-light/35">
                         <div className="flex items-center gap-0.5">
                           <button
                             aria-controls={detailRowId}
                             aria-expanded={isExpanded}
                             aria-label={`${isExpanded ? "Collapse" : "Expand"} building sequence for ${rowLabel}`}
-                            className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-royal-gold-light/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                            className="flex size-11 items-center justify-center md:size-6 rounded-md text-muted-foreground transition-colors hover:bg-royal-gold-light/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                             onClick={() => onToggleLineExpanded(line.id)}
                             type="button"
                           >
@@ -317,6 +326,12 @@ export function CostSchedulePanel({
                         </div>
                       </TableCell>
                       <TableCell className="border-r border-border/70 p-0">
+                        <span
+                          aria-hidden="true"
+                          className="mb-1 block px-3 text-xs font-medium text-muted-foreground md:hidden"
+                        >
+                          Task / phase
+                        </span>
                         <Input
                           aria-labelledby={`${rowLabelId} cost-task-column`}
                           aria-keyshortcuts="Enter Shift+Enter"
@@ -335,12 +350,18 @@ export function CostSchedulePanel({
                         />
                       </TableCell>
                       <TableCell className="border-r border-border/70 p-0 align-middle">
+                        <span
+                          aria-hidden="true"
+                          className="mb-1 block px-3 text-xs font-medium text-muted-foreground md:hidden"
+                        >
+                          Building sequence
+                        </span>
                         <button
                           aria-controls={detailRowId}
                           aria-expanded={isExpanded}
                           aria-labelledby={`${rowLabelId} cost-sequence-column`}
                           className={cn(
-                            "flex h-9 w-full items-center gap-2 px-3 text-left text-[13px] transition-colors",
+                            "flex min-h-11 w-full items-center md:min-h-9 gap-2 px-3 text-left text-[13px] transition-colors",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50",
                             stepCount > 0
                               ? "text-foreground hover:bg-royal-gold-light/30"
@@ -372,6 +393,12 @@ export function CostSchedulePanel({
                         </button>
                       </TableCell>
                       <TableCell className="border-r border-border/70 p-0">
+                        <span
+                          aria-hidden="true"
+                          className="mb-1 block px-3 text-xs font-medium text-muted-foreground md:hidden"
+                        >
+                          Offer/Tender line item
+                        </span>
                         <Textarea
                           aria-labelledby={`${rowLabelId} cost-offer-line-column`}
                           aria-keyshortcuts="Enter Shift+Enter"
@@ -390,6 +417,12 @@ export function CostSchedulePanel({
                         />
                       </TableCell>
                       <TableCell className="border-r border-border/70 p-0">
+                        <span
+                          aria-hidden="true"
+                          className="mb-1 block px-3 text-xs font-medium text-muted-foreground md:hidden"
+                        >
+                          Value ex GST
+                        </span>
                         <Input
                           aria-labelledby={`${rowLabelId} cost-value-column`}
                           aria-keyshortcuts="Enter Shift+Enter"
@@ -420,6 +453,12 @@ export function CostSchedulePanel({
                         />
                       </TableCell>
                       <TableCell className="border-r border-border/70 p-0 align-middle">
+                        <span
+                          aria-hidden="true"
+                          className="mb-1 block px-3 text-xs font-medium text-muted-foreground md:hidden"
+                        >
+                          Included in contract
+                        </span>
                         <div className="flex justify-center">
                           <Checkbox
                             aria-labelledby={`${rowLabelId} cost-included-column`}
@@ -437,6 +476,12 @@ export function CostSchedulePanel({
                         </div>
                       </TableCell>
                       <TableCell className="p-0 align-middle">
+                        <span
+                          aria-hidden="true"
+                          className="mb-1 block px-3 text-xs font-medium text-muted-foreground md:hidden"
+                        >
+                          Remove task
+                        </span>
                         <div className="flex justify-center">
                           <Button
                             aria-label={`Remove row ${rowNumber}, ${rowLabel}`}
@@ -453,6 +498,10 @@ export function CostSchedulePanel({
                     </TableRow>
                     {isExpanded ? (
                       <TableRow
+                        data-mobile-hidden={
+                          selectedMobileLine !== "all"
+                          && selectedMobileLine !== line.id
+                        }
                         className="hover:bg-transparent"
                         id={detailRowId}
                       >
@@ -517,7 +566,7 @@ function SequenceStepEditor({
 
   return (
     <div className="grid gap-3 px-4 py-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className={FIELD_LABEL_CLASS}>
           Building sequence · {count} {count === 1 ? "step" : "steps"}
         </p>
@@ -555,7 +604,7 @@ function SequenceStepEditor({
         </p>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
         <Input
           aria-label={`Add a building sequence step for ${rowLabel} — pick from the list of sequences or type your own`}
           className="h-9 flex-1 text-[13px]"

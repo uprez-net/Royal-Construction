@@ -15,7 +15,10 @@ import {
   agentResultEnvelopeSchema,
   type AgentResultEnvelope,
 } from "@/agent/lib/result-contracts";
-import { PARTY_LABEL, PARTY_OUTREACH_ATTACHMENTS } from "@/constants/complianceDocuments";
+import {
+  PARTY_LABEL,
+  PARTY_OUTREACH_ATTACHMENTS,
+} from "@/constants/complianceDocuments";
 import { sendOnPartyThread } from "@/lib/compliance/party-mail";
 import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
 import {
@@ -34,12 +37,25 @@ import {
   sendComplianceFollowUp,
   sendComplianceOutreach,
 } from "@/lib/domain/compliance/outreach";
+import { defaultComplianceSubjectAddress } from "@/lib/domain/compliance/subject-address";
 import { isDomainError } from "@/lib/domain/errors";
 import {
   createMilestone as createMilestoneCommand,
   updateMilestone as updateMilestoneCommand,
 } from "@/lib/domain/projects/milestones";
+import { assignProjectSiteManager } from "@/lib/domain/projects/commands";
 import { getProjectDetail, listProjects } from "@/lib/domain/projects/queries";
+import {
+  getProjectFinancials,
+  type ProjectFinancials,
+} from "@/lib/domain/projects/financials";
+import { setMilestonePrice } from "@/lib/domain/projects/milestone-price";
+import type {
+  FinancialActivity,
+  FinancialFigures,
+  FinancialStage,
+} from "@/lib/domain/projects/financial-report";
+import { listSiteManagersForDropdown } from "@/lib/domain/identity/site-managers";
 import {
   getProjectRequirements,
   projectRequirementsSections,
@@ -200,6 +216,38 @@ export async function searchAuthorizedProjects(
   });
 }
 
+/**
+ * Staff a project can be handed to, for resolving a name the user gave into an
+ * id. The list and its role rule are the same ones the app's picker reads.
+ */
+export async function listAuthorizedSiteManagers(
+  ctx: SessionContext,
+  input: { limit: number; query: string },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const query = input.query.trim();
+  const { items, totalCount } = await listSiteManagersForDropdown(
+    userPrincipal(actor),
+    { limit: input.limit, page: 1, query },
+    agentDb,
+  );
+
+  return actionEnvelope({
+    kind: "entity-summary",
+    title: "Site managers",
+    summary: `${totalCount} assignable staff member${totalCount === 1 ? "" : "s"} matched.`,
+    data: {
+      query,
+      siteManagers: items.map((manager) => ({
+        id: manager.id,
+        name: manager.name,
+        email: manager.email,
+        role: manager.role,
+      })),
+    },
+  });
+}
+
 export async function getAuthorizedProject(
   ctx: SessionContext,
   input: { projectId: string },
@@ -274,7 +322,7 @@ export async function getAuthorizedProject(
         status: schedule.status,
         tradie: {
           name: schedule.tradie.name,
-          trade: schedule.tradie.trade,
+          trade: schedule.trade?.trim() || schedule.tradie.trade,
           email: schedule.tradie.email,
         },
       })),
@@ -339,6 +387,232 @@ export async function getAuthorizedProjectRequirements(
   });
 }
 
+const AUD = new Intl.NumberFormat("en-AU", {
+  currency: "AUD",
+  maximumFractionDigits: 2,
+  minimumFractionDigits: 2,
+  style: "currency",
+});
+const dollars = (cents: number) => AUD.format(cents / 100);
+
+/** The figures as an agent reads them: dollars, ex GST, already decided. */
+function financialFigures(figures: FinancialFigures) {
+  return {
+    quotedPrice: dollars(figures.tenderCents),
+    tradieQuoted: dollars(figures.quotedCents),
+    totalInvoiced: dollars(figures.invoicedCents),
+    outcome: figures.outcome,
+    profitToDate:
+      figures.profitCents === null ? null : dollars(figures.profitCents),
+    profitPercent: figures.profitPercent,
+    forecastProfit: dollars(figures.forecastProfitCents),
+    forecastPercent: figures.forecastPercent,
+    invoicedExceedsQuoted: figures.overInvoiced,
+    quoteMissing: figures.quoteMissing,
+  };
+}
+
+function financialActivities(
+  activities: readonly FinancialActivity[],
+  path: readonly string[] = [],
+): Record<string, unknown>[] {
+  return activities.flatMap((activity) => [
+    {
+      activity: [...path, activity.name].join(" › "),
+      milestoneId: activity.id,
+      // The figure set_activity_price edits and expects back: ex GST, before
+      // variations, including any sub-activities.
+      price: activity.priceCents / 100,
+      status: activity.status,
+      ...financialFigures(activity.figures),
+      variationsAdded:
+        activity.variationCents > 0 ? dollars(activity.variationCents) : null,
+    },
+    ...financialActivities(activity.children, [...path, activity.name]),
+  ]);
+}
+
+/** How a stage is priced: pegged to the contract, or its activities' sum. */
+function stagePricing(stage: FinancialStage) {
+  if (!stage.price) {
+    return {
+      priceSource: "activities",
+      allocatedToActivities: dollars(stage.allocatedCents),
+    };
+  }
+  const unallocated = stage.price.exGstCents - stage.allocatedCents;
+  return {
+    priceSource: "contract",
+    contractShare:
+      stage.price.percentage === null ? null : `${stage.price.percentage}%`,
+    contractClaim: `${dollars(stage.price.claimCents)}${stage.price.gstIncluded ? " inc GST" : ""}`,
+    allocatedToActivities: dollars(stage.allocatedCents),
+    unallocated: unallocated > 0 ? dollars(unallocated) : null,
+    activitiesOverBy: unallocated < 0 ? dollars(-unallocated) : null,
+  };
+}
+
+function signedMoney(cents: number, percent: number | null): string {
+  const word = cents >= 0 ? "profit" : "loss";
+  const share = percent === null ? "" : ` (${Math.abs(percent).toFixed(1)}%)`;
+  return `${word} ${dollars(Math.abs(cents))}${share}`;
+}
+
+/** One sentence the orchestrator can answer "how is job X tracking?" with. */
+function financialSummary(name: string, report: ProjectFinancials): string {
+  const { totals } = report;
+  const toDate =
+    totals.profitCents === null
+      ? "nothing invoiced yet"
+      : `${signedMoney(totals.profitCents, totals.profitPercent)} to date`;
+  const forecast = signedMoney(
+    totals.forecastProfitCents,
+    totals.forecastPercent,
+  );
+  return [
+    `${name}: quoted ${dollars(totals.tenderCents)},`,
+    `tradies quoted ${dollars(totals.quotedCents)},`,
+    `invoiced ${dollars(totals.invoicedCents)} —`,
+    `${toDate}; forecast at completion ${forecast}. All ex GST.`,
+  ].join(" ");
+}
+
+/**
+ * The project's profit and loss, activity by activity: the Financials tab's
+ * report, read through the same domain query, so the agent and the screen
+ * cannot tell the office two different margins. Admin only, as the tab is.
+ */
+export async function getAuthorizedProjectFinancials(
+  ctx: SessionContext,
+  input: { projectId: string },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const project = await assertProjectAccess(actor, input.projectId);
+
+  let report: ProjectFinancials;
+  try {
+    report = await getProjectFinancials(
+      userPrincipal(actor),
+      { projectId: input.projectId },
+      agentDb,
+    );
+  } catch (error) {
+    // Not an ADMIN is an answer to relay, not a tool crash.
+    if (!isDomainError(error)) throw error;
+    return failedAction("Project financials are not available", error.message);
+  }
+
+  const activities = report.stages.flatMap((stage) =>
+    financialActivities(stage.activities, [stage.stage]),
+  );
+  const needsAttention = activities.filter(
+    (activity) =>
+      activity.outcome === "LOSS"
+      || activity.invoicedExceedsQuoted === true
+      || activity.quoteMissing === true,
+  );
+  const unallocated = report.unallocatedInvoices.length;
+
+  return actionEnvelope({
+    entityRef: projectReference(project),
+    kind: "entity-summary",
+    title: "Project profit and loss",
+    summary: financialSummary(project.name, report),
+    data: {
+      projectId: report.projectId,
+      basis:
+        "Ex GST. quotedPrice is what the client is charged for the activity, chargeable variations included; tradieQuoted is the committed tradie prices; totalInvoiced is what tradies have billed. profitToDate counts only the activities invoiced so far; forecastProfit is quotedPrice less each booking's quote or invoices, whichever is more. A stage's quotedPrice is fixed to its share of the contract (priceSource 'contract') plus its variations; its activities divide that price, and unallocated / activitiesOverBy say how far their prices are from it. An activity's price is its own quoted price before variations — the figure set_activity_price changes.",
+      totals: {
+        ...financialFigures(report.totals),
+        notYetAllocated: dollars(report.totals.unallocatedCents),
+        chargeableVariations: dollars(report.totals.chargeableVariationCents),
+        promotionalVariations: dollars(report.totals.promotionalVariationCents),
+      },
+      stages: report.stages.map((stage) => ({
+        stage: stage.stage,
+        ...financialFigures(stage.figures),
+        ...stagePricing(stage),
+      })),
+      needsAttention,
+      activities,
+      invoicesToAllocate: unallocated,
+    },
+    warnings:
+      unallocated > 0
+        ? [
+            `${unallocated} invoice(s) from Xero are on this project but not matched to a booking; they count in the totals but in no activity.`,
+          ]
+        : [],
+  });
+}
+
+/**
+ * Reprice one activity through the same command the Financials tab's inline
+ * edit uses: admin only, its parents move with it, a parent cannot go below
+ * its sub-activities, a price that moved since it was read is refused, and a
+ * repeated save is reported as unchanged. The stage price stays pegged to the
+ * contract.
+ */
+export async function setAuthorizedActivityPrice(
+  ctx: ToolContext,
+  input: { milestoneId: string; price: number; expectedPrice: number },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const milestone = await assertMilestoneAccess(actor, input.milestoneId);
+  const project = await assertProjectAccess(actor, milestone.projectId);
+  return runProjectMutation({
+    action: "project.milestone.price.set",
+    actor,
+    projectId: milestone.projectId,
+    ctx,
+    ownerUserId: actor.id,
+    targetId: input.milestoneId,
+    inputSummary: input,
+    transactional: true,
+    execute: async (tx) => {
+      try {
+        const outcome = await setMilestonePrice(
+          userPrincipal(actor),
+          {
+            milestoneId: input.milestoneId,
+            previousPriceCents: Math.round(input.expectedPrice * 100),
+            priceCents: Math.round(input.price * 100),
+          },
+          tx ?? agentDb,
+        );
+        const price = dollars(Math.round(input.price * 100));
+        const parents = outcome.ancestorIds.length;
+        return actionEnvelope({
+          entityRef: projectReference(project),
+          data: {
+            ancestorIds: outcome.ancestorIds,
+            changed: outcome.changed,
+            milestoneId: outcome.milestoneId,
+            price,
+            projectId: outcome.projectId,
+          },
+          summary: outcome.changed
+            ? `The activity is now priced at ${price} ex GST${parents ? `, and ${parents === 1 ? "its parent" : `its ${parents} parents`} moved by the same amount` : ""}. The stage price is unchanged; get_project_financials shows what is now unallocated.`
+            : `The activity was already priced at ${price}; nothing changed.`,
+          title: outcome.changed
+            ? "Activity price updated"
+            : "Activity price unchanged",
+          warnings: outcome.changed
+            ? [
+                "The project's Milestones tab may show the previous budget for a few minutes until its cache refreshes.",
+              ]
+            : [],
+        });
+      } catch (error) {
+        // Not an ADMIN, a parent below its children, or a price that moved
+        // since it was read: each is a reason to relay, not a tool crash.
+        if (!isDomainError(error)) throw error;
+        return failedAction("Activity price was not changed", error.message);
+      }
+    },
+  });
+}
+
 export async function updateAuthorizedProjectRequirements(
   ctx: ToolContext,
   input: {
@@ -382,6 +656,62 @@ export async function updateAuthorizedProjectRequirements(
           "Project requirements were not updated",
           error.message,
         );
+      }
+    },
+  });
+}
+
+/**
+ * Hand a project to a different site manager through the same command the
+ * project header uses: ADMIN only, the new holder must be assignable, an
+ * unchanged pick writes nothing, and the change lands in the activity log.
+ */
+export async function assignAuthorizedSiteManager(
+  ctx: ToolContext,
+  input: { projectId: string; siteManagerId: string },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const project = await assertProjectAccess(actor, input.projectId);
+  return runProjectMutation({
+    action: "project.site_manager.assign",
+    actor,
+    projectId: input.projectId,
+    ctx,
+    ownerUserId: actor.id,
+    targetId: input.projectId,
+    inputSummary: input,
+    transactional: true,
+    execute: async (tx) => {
+      try {
+        const outcome = await assignProjectSiteManager(
+          userPrincipal(actor),
+          input,
+          tx ?? agentDb,
+        );
+        return actionEnvelope({
+          entityRef: projectReference(project),
+          data: {
+            changed: outcome.changed,
+            previousSiteManagerId: outcome.previousSiteManagerId,
+            siteManagerId: outcome.siteManagerId,
+          },
+          summary: outcome.changed
+            ? `${project.name} has a new site manager.`
+            : `${project.name} already had that site manager; nothing changed.`,
+          title: outcome.changed
+            ? "Site manager reassigned"
+            : "Site manager unchanged",
+          warnings: outcome.changed
+            ? [
+                "The project screens may show the previous site manager for a few minutes until their cache refreshes.",
+              ]
+            : [],
+        });
+      } catch (error) {
+        // Not an ADMIN, or an id that names nobody assignable: both are
+        // answers the operator can act on, not tool crashes.
+        if (!isDomainError(error)) throw error;
+        return failedAction("Site manager was not changed", error.message);
       }
     },
   });
@@ -454,11 +784,17 @@ export async function prepareAuthorizedComplianceOutreach(
         body,
         contactEmail: outreach?.contactEmail ?? null,
         contactName: outreach?.contactName ?? null,
-        daysOpen: alert
-          ? prepared.daysOpen
-          : null,
+        daysOpen: alert ? prepared.daysOpen : null,
         lastFollowUpAt: outreach?.lastFollowUpAt?.toISOString() ?? null,
         party,
+        // The only people an opening outreach for this party may go to: send
+        // with one of these tradie ids, never an address typed from elsewhere.
+        directoryContacts: prepared.candidates.map((candidate) => ({
+          additionalEmails: candidate.additionalEmails,
+          email: candidate.email,
+          name: candidate.name,
+          tradieId: candidate.id,
+        })),
         subject: `[${outreach?.refToken ?? "pending"}] ${prepared.subjectAddress}`,
         slaStatus: alert ? "OPEN" : "READY",
       },
@@ -482,19 +818,25 @@ export async function prepareAuthorizedComplianceOutreach(
   });
 }
 
-async function sendComplianceOutreachDirect(input: {
-  body: string;
-  contactEmail: string;
-  contactName?: string;
-  contactPhone?: string;
-  deliverables: {
-    checklistDocumentId?: string;
-    documentType: ComplianceDocumentType;
-  }[];
-  extraAttachmentIds: string[];
-  party: CompliancePartyType;
-  projectId: string;
-}, actor: ProjectActor, idempotencyKey: string) {
+async function sendComplianceOutreachDirect(
+  input: {
+    body: string;
+    contactEmail?: string;
+    contactName?: string;
+    contactPhone?: string;
+    developerKey?: string;
+    tradieId?: string;
+    deliverables: {
+      checklistDocumentId?: string;
+      documentType: ComplianceDocumentType;
+    }[];
+    extraAttachmentIds: string[];
+    party: CompliancePartyType;
+    projectId: string;
+  },
+  actor: ProjectActor,
+  idempotencyKey: string,
+) {
   return sendComplianceOutreach(
     userPrincipal(actor),
     {
@@ -511,9 +853,11 @@ export async function sendAuthorizedComplianceOutreach(
   ctx: ToolContext,
   input: {
     body: string;
-    contactEmail: string;
+    contactEmail?: string;
     contactName?: string;
     contactPhone?: string;
+    developerKey?: string;
+    tradieId?: string;
     deliverables: {
       checklistDocumentId?: string;
       documentType: ComplianceDocumentType;
@@ -536,12 +880,18 @@ export async function sendAuthorizedComplianceOutreach(
     inputSummary: {
       projectId: input.projectId,
       party: input.party,
-      contactEmail: input.contactEmail,
+      contactEmail: input.contactEmail ?? null,
+      tradieId: input.tradieId ?? null,
+      developerKey: input.developerKey ?? null,
       attachmentCount: input.extraAttachmentIds.length,
       deliverableCount: input.deliverables.length,
     },
     execute: async () => {
-      const result = await sendComplianceOutreachDirect(input, actor, ctx.callId);
+      const result = await sendComplianceOutreachDirect(
+        input,
+        actor,
+        ctx.callId,
+      );
       return actionEnvelope({
         entityRef: projectReference(project),
         data: result,
@@ -552,11 +902,15 @@ export async function sendAuthorizedComplianceOutreach(
   });
 }
 
-async function sendComplianceFollowUpDirect(input: {
-  alertId: string;
-  body: string;
-  projectId: string;
-}, actor: ProjectActor, idempotencyKey: string) {
+async function sendComplianceFollowUpDirect(
+  input: {
+    alertId: string;
+    body: string;
+    projectId: string;
+  },
+  actor: ProjectActor,
+  idempotencyKey: string,
+) {
   return sendComplianceFollowUp(
     userPrincipal(actor),
     {
@@ -585,7 +939,11 @@ export async function sendAuthorizedComplianceFollowUp(
     transactional: false,
     inputSummary: { projectId: input.projectId, alertId: input.alertId },
     execute: async () => {
-      const result = await sendComplianceFollowUpDirect(input, actor, ctx.callId);
+      const result = await sendComplianceFollowUpDirect(
+        input,
+        actor,
+        ctx.callId,
+      );
       return actionEnvelope({
         entityRef: projectReference(project),
         data: result,
@@ -626,11 +984,13 @@ export async function startAuthorizedCompliance(
     certifierName?: string;
     certifierPhone?: string;
     projectId: string;
-    subjectAddress: string;
+    subjectAddress?: string;
   },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   const project = await assertProjectAccess(actor, input.projectId);
+  const subjectAddress =
+    input.subjectAddress ?? defaultComplianceSubjectAddress(project);
   return runProjectMutation({
     action: "project.compliance.start",
     actor,
@@ -641,10 +1001,14 @@ export async function startAuthorizedCompliance(
     inputSummary: {
       projectId: input.projectId,
       certifierEmail: input.certifierEmail,
+      subjectAddress,
     },
     transactional: false,
     execute: async () => {
-      const result = await startComplianceDirect(input, actor);
+      const result = await startComplianceDirect(
+        { ...input, subjectAddress },
+        actor,
+      );
       return actionEnvelope({
         entityRef: projectReference(project),
         data: result,
@@ -738,11 +1102,7 @@ async function setComplianceDocumentRequiredDirect(
   actor: ProjectActor,
   db: ProjectDb = agentDb,
 ) {
-  return setComplianceDocumentNotRequired(
-    userPrincipal(actor),
-    input,
-    db,
-  );
+  return setComplianceDocumentNotRequired(userPrincipal(actor), input, db);
 }
 
 export async function setAuthorizedComplianceDocumentRequired(

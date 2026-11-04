@@ -8,15 +8,20 @@ import {
 
 import {
   complianceDocumentLabel,
+  CONSULTANT_DELIVERABLES,
+  DA_DOCUMENTS,
   DEVELOPER_APPROVAL_DOCUMENT,
   documentTypesForParty,
   isApprovalParty,
   isConsultantParty,
+  isNotRequired,
   PARTY_LABEL,
   PARTY_PREREQUISITES,
 } from "@/constants/complianceDocuments";
 import { applicableRequiredDocuments } from "./required-pack";
 import {
+  checklistItemDetail,
+  hasDevelopmentApplication,
   hasOpenAlert,
   isPartyEngaged,
   outreachForParty,
@@ -64,9 +69,8 @@ export function isCouncilSettled(
   }
   return engagement.documents.some(
     (document) =>
-      document.documentType ===
-        ComplianceDocumentType.PLANNING_CERTIFICATE_10_7 &&
-      document.files.length > 0,
+      document.documentType === ComplianceDocumentType.PLANNING_CERTIFICATE_10_7
+      && document.files.length > 0,
   );
 }
 
@@ -85,8 +89,8 @@ function outstandingFor(
 
   return documentTypesForParty(party).filter(
     (type) =>
-      inPlay.has(type) &&
-      !engagement.documents.some(
+      inPlay.has(type)
+      && !engagement.documents.some(
         (document) =>
           document.documentType === type && document.files.length > 0,
       ),
@@ -164,8 +168,8 @@ export function developerBlockedReason(
   // this way for the same reason, and these two gates must not disagree.
   const hasReport = engagement.documents.some(
     (document) =>
-      document.documentType === DEVELOPER_APPROVAL_DOCUMENT &&
-      document.files.length > 0,
+      document.documentType === DEVELOPER_APPROVAL_DOCUMENT
+      && document.files.length > 0,
   );
 
   if (!hasReport) {
@@ -240,4 +244,70 @@ export function packSendBlockedReason(
   }
 
   return null;
+}
+
+/**
+ * Why a consultant cannot be engaged on this file, or null.
+ *
+ * `partyBlockedReason` passes every consultant, on the understanding that "the
+ * row offering the control has already established" a checklist line asks for
+ * their work — true on the compliance tab, which only shows the button on such
+ * a row, and true of nothing else. Eve has no row, so a BASIX or structural
+ * outreach could go out on a project whose certifier never asked for one.
+ *
+ * Kept apart from `partyBlockedReason` because that one also gates the tab's
+ * buttons, which already appear only where this holds.
+ *
+ * A consultant may be engaged when a live checklist line asks for something
+ * they produce, by the type the extraction (or its keyword fallback) gave it,
+ * or when the send names one of this file's own live checklist lines — the
+ * tab's "engaged off this row" case, which also covers a line the extraction
+ * could not label.
+ *
+ * Or when the job is going through as a development application and the DA
+ * list asks for something they produce. That list offers the same engage
+ * button as the checklist, off the same `DA_DOCUMENTS` rows, and sends no line
+ * id because there is no checklist line behind it — so a rule that read only the
+ * checklist refused every send the DA list offered. A DA row marked not
+ * required is written off the same way a checklist line is.
+ */
+export function consultantNotAskedForReason(
+  engagement: Pick<
+    CertifierEngagementDetail,
+    "alerts" | "documents" | "externalApplications"
+  >,
+  party: CompliancePartyType,
+  namedChecklistIds: readonly string[] = [],
+): string | null {
+  if (!isConsultantParty(party)) return null;
+
+  const produces = new Set(CONSULTANT_DELIVERABLES[party] ?? []);
+  const named = new Set(namedChecklistIds);
+  const asked = engagement.documents.some((document) => {
+    if (document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM)
+      return false;
+    if (isNotRequired(document.status)) return false;
+    if (named.has(document.id)) return true;
+    const asksFor = checklistItemDetail(document.detail)?.mapsToType;
+    return asksFor !== undefined && produces.has(asksFor);
+  });
+  if (asked) return null;
+
+  const askedByDa =
+    hasDevelopmentApplication(engagement)
+    && DA_DOCUMENTS.some(
+      (entry) =>
+        entry.source === "consultant"
+        && produces.has(entry.type)
+        && !engagement.documents.some(
+          (document) =>
+            document.documentType === entry.type
+            && isNotRequired(document.status),
+        ),
+    );
+  if (askedByDa) return null;
+
+  return `Nothing on this project's certifier checklist or development application asks for the ${PARTY_LABEL[
+    party
+  ].toLowerCase()}'s work, so there is nothing to engage them for. Engage them from the line that needs it.`;
 }

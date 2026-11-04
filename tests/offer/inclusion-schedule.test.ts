@@ -26,8 +26,11 @@ import {
 } from "@/lib/offer/workspace-print-template";
 import {
   CURRENT_WORKSPACE_SCHEMA_VERSION,
+  deserializeWorkspace,
   INITIAL_TENDER_GATE,
   migrateWorkspaceState,
+  parseWorkspaceState,
+  serializeWorkspace,
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
 import { collectOfferSendBlockers } from "@/lib/offer/offer-readiness";
@@ -39,8 +42,6 @@ import { buildProposalHtml } from "@/lib/offer/offer-proposal-html";
 import {
   buildInclusionSections,
   buildTenderHtml,
-  INCLUSION_SECTION_ORDER,
-  OTHER_INCLUSIONS_SECTION,
 } from "@/lib/offer/offer-tender-html";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
@@ -315,80 +316,59 @@ test("the offer PDF keeps the Category / Specification table", () => {
   assert.match(html, /Concrete Slab/);
 });
 
-// The tender now follows the Word template: three columns (Ref / Description /
-// Status), the entry's trade label as the Description cell's bold lead-in, and a
-// hierarchical {section}.{row} reference. The Category COLUMN is gone — the
-// category is a per-row trade label, not a section, so it moved into the cell.
-// ─── Tender section grouping (D11) ───────────────────────────────────────────
-// `category` is a per-ROW trade label, not a section, so the tender maps each
-// label onto one of the template's canonical sections. These cases pin the
-// ordering rules; a mis-ordered or mis-filed section misstates which part of the
-// contract carries a row.
-
-test("sections follow the template's canonical order, not first appearance", () => {
-  // Deliberately supplied in reverse canonical order.
-  const sections = buildInclusionSections([
-    { spec: "Council fees", category: "Approvals" },
-    { spec: "Slab", category: "Concrete Slab" },
-    { spec: "Drawings", category: "Design & Plans" },
-  ]);
-
-  assert.deepEqual(
-    sections.map((section) => section.name),
-    [...INCLUSION_SECTION_ORDER],
-    "canonical order must not depend on the order entries were entered",
-  );
-  assert.deepEqual(
-    sections.map((section) => section.index),
-    [1, 2, 3],
-    "section numbers are 1-based and contiguous",
-  );
-  assert.deepEqual(
-    sections.flatMap((section) => section.rows.map((row) => row.ref)),
-    ["1.1", "2.1", "3.1"],
-    "refs are {section}.{row}, both 1-based",
-  );
-});
-
-test("an unmapped or missing category falls into Other Inclusions, last", () => {
-  const sections = buildInclusionSections([
-    { spec: "Estimator wrote this" },
-    { spec: "Bespoke item", category: "Something Nobody Mapped" },
-    { spec: "Slab", category: "Concrete Slab" },
-  ]);
-
-  assert.deepEqual(
-    sections.map((section) => section.name),
-    ["Building", OTHER_INCLUSIONS_SECTION],
-  );
-  const other = sections[sections.length - 1];
-  assert.equal(
-    other.name,
-    OTHER_INCLUSIONS_SECTION,
-    "Other Inclusions is last",
-  );
-  assert.deepEqual(
-    other.rows.map((row) => row.ref),
-    ["2.1", "2.2"],
-    "both the uncategorised and the unmapped row land in Other Inclusions",
-  );
-  // The unmapped row keeps its label as the description lead-in.
-  assert.equal(other.rows[1].label, "Something Nobody Mapped");
-  assert.equal(other.rows[0].label, "", "an absent category yields no label");
-});
-
-test("a section holding exactly one entry still renders as a section", () => {
-  const sections = buildInclusionSections([
-    { spec: "Council fees", category: "Approvals" },
-  ]);
-
+// The Tender keeps every Offer inclusion in the same order, with editable
+// Tender Text beneath each bold category. A blank Tender Text prints a heading.
+test("the tender keeps the Offer order and blank detail is header-only", () => {
+  const rows = [
+    { spec: "Offer wording", category: "First", tenderText: "Tender detail" },
+    { spec: "Offer wording two", category: "Second", tenderText: "" },
+  ];
+  const sections = buildInclusionSections(rows);
   assert.equal(sections.length, 1);
-  assert.equal(sections[0].name, "Council & Statutory Authority Requirements");
-  assert.equal(sections[0].index, 1, "a lone section is numbered 1, not 3");
+  assert.equal(sections[0].name, "Inclusion Details");
   assert.deepEqual(
     sections[0].rows.map((row) => row.ref),
-    ["1.1"],
+    ["1.1", "1.2"],
   );
+  assert.deepEqual(
+    sections[0].rows.map((row) => row.label),
+    ["First", "Second"],
+  );
+  const html = buildTenderHtml(buildProposalInput(snapshotWithSchedule(rows)));
+  assert.match(html, /First<\/b><span class="t-detail">Tender detail<\/span>/);
+  assert.match(html, /Second<\/b>/);
+  assert.doesNotMatch(html, /Offer wording/);
+  const restored = deserializeWorkspace(
+    parseWorkspaceState(serializeWorkspace(snapshotWithSchedule(rows))),
+  );
+  assert.deepEqual(restored.draft.inclusionSchedule, rows);
+});
+
+// The admin editor saves blank Tender Text as "", so an uncategorised row must
+// fall back to its Offer wording, not print an empty "Included" row.
+test("an uncategorised row with blank Tender Text prints its Offer wording", () => {
+  const html = buildTenderHtml(
+    buildProposalInput(
+      snapshotWithSchedule([{ spec: "Uncategorised wording", tenderText: "" }]),
+    ),
+  );
+  assert.match(html, /<td class="c-desc">Uncategorised wording<\/td>/);
+});
+
+// Category-only rows exist for the Tender; the Offer's Specification column
+// would print them as an empty cell.
+test("the offer PDF leaves out category-only rows", () => {
+  const html = buildProposalHtml(
+    buildProposalInput(
+      snapshotWithSchedule([
+        { spec: "Real spec", category: "Kept" },
+        { spec: "", category: "Tender Only", tenderText: "Detail" },
+      ]),
+    ),
+    EMPTY_OFFER_IMAGES,
+  );
+  assert.match(html, /Real spec/);
+  assert.doesNotMatch(html, /Tender Only/);
 });
 
 test("an empty schedule renders zero sections, not an empty table", () => {
@@ -398,29 +378,12 @@ test("an empty schedule renders zero sections, not an empty table", () => {
   assert.doesNotMatch(html, /<th class="c-ref">Ref<\/th>/, "no headless table");
   assert.doesNotMatch(
     html,
-    /class="t-section">\d+\.&nbsp;&nbsp;&nbsp;(Fixed Price|Building|Council|Other)/,
+    /class="t-section">\d+\.&nbsp;&nbsp;&nbsp;Inclusion Details/,
     "no inclusion section heading",
   );
   // Contract Terms continues the schedule's numbering, so with zero inclusion
   // sections it becomes section 1 rather than leaving a gap.
   assert.match(html, /class="t-section">1\.&nbsp;&nbsp;&nbsp;Contract Terms/);
-});
-
-test("label matching ignores case, dash style and repeated whitespace", () => {
-  for (const label of [
-    "Rendering — Full Facade",
-    "rendering - full facade",
-    "RENDERING  –  FULL   FACADE",
-  ]) {
-    const sections = buildInclusionSections([
-      { spec: "Render", category: label },
-    ]);
-    assert.equal(
-      sections[0].name,
-      "Building",
-      `"${label}" should resolve to Building`,
-    );
-  }
 });
 
 test("the tender prints a three-column schedule with hierarchical refs", () => {
@@ -440,19 +403,20 @@ test("the tender prints a three-column schedule with hierarchical refs", () => {
     "the Category column is gone",
   );
   // The trade label leads the description cell in bold, above its detail.
-  assert.match(html, /<b>Tiling<\/b><br \/>Tender spec/);
-  // "Tiling" maps to the Building section. It is the only entry here, so
-  // Building is the only section rendered and its single row is 1.1.
+  assert.match(
+    html,
+    /<b>Tiling<\/b><span class="t-detail">Tender spec<\/span>/,
+  );
+  // A single entry appears under Inclusion Details as row 1.1.
   assert.match(html, /<td class="c-ref">1\.1<\/td>/);
-  assert.match(html, /1\.&nbsp;&nbsp;&nbsp;Building/);
+  assert.match(html, /1\.&nbsp;&nbsp;&nbsp;Inclusion Details/);
 });
 
 // An entry pulled from the cost schedule or typed by an estimator has no
 // category. It must never print an empty cell on a fixed-price contract.
 // The OFFER still prints the Miscellaneous label in its Category column. The
-// TENDER has no such column: an uncategorised entry falls into the final "Other
-// Inclusions" section instead, so it is still visibly classified rather than
-// printing an empty cell on a fixed-price contract.
+// TENDER has no such column: the specification remains visible under
+// Inclusion Details when there is no category.
 test("an entry with no category is still classified on both documents", () => {
   const snapshot = snapshotWithSchedule([
     { spec: "Pulled from cost schedule." },
@@ -465,7 +429,7 @@ test("an entry with no category is still classified on both documents", () => {
   const tender = buildTenderHtml(buildProposalInput(snapshot));
 
   assert.match(offer, new RegExp(UNCATEGORISED_INCLUSION_LABEL));
-  assert.match(tender, new RegExp(OTHER_INCLUSIONS_SECTION));
+  assert.match(tender, /Inclusion Details/);
   assert.match(tender, /Pulled from cost schedule\./);
   // No empty bold label where the trade label would have been: the cell is the
   // spec alone, not a stray "<b></b>" followed by the detail.
@@ -529,7 +493,7 @@ test("tender numbering continues across page breaks", () => {
   const html = buildTenderHtml(buildProposalInput(snapshotWithSchedule(specs)));
 
   // Refs are hierarchical now. None of these "Cat N" labels is a known trade
-  // label, so all 60 land in the single "Other Inclusions" section and run
+  // label, so all 60 land in the single "Inclusion Details" section and run
   // 1.1..1.60 — unbroken, and never restarting at a page boundary.
   const refs = [...html.matchAll(/<td class="c-ref">([\d.]+)<\/td>/g)].map(
     (m) => m[1],
@@ -763,6 +727,31 @@ test("no findings, no blocker", () => {
 
 // ─── Exclusion detail reaches the tender ───
 
+test("standard tender exclusions have details in both blank columns", () => {
+  const rows = getVisibleExclusionRows(INITIAL_OFFER_DRAFT, INITIAL_EXCLUSIONS);
+  for (const row of rows.filter(
+    (row) => !row.label.startsWith("Granny flat"),
+  )) {
+    assert.ok(row.description.trim(), `${row.label} has no explanation`);
+    assert.ok(row.variationRule.trim(), `${row.label} has no variation rule`);
+  }
+  assert.match(
+    rows.find((row) => row.label === "Boundary or pool fencing")!.description,
+    /beyond included Colorbond perimeter/,
+  );
+  const tender = buildTenderHtml(
+    buildProposalInput(snapshotWithSchedule([{ spec: "S", category: "C" }])),
+  );
+  for (const row of rows.filter(
+    (row) => !row.label.startsWith("Granny flat"),
+  )) {
+    assert.ok(
+      tender.includes(row.description),
+      `${row.label} is blank in the tender`,
+    );
+  }
+});
+
 // The Scope step captures `description` and `variationRule` on every exclusion,
 // and getVisibleExclusions took only `.label` — so an estimator typed "Can be
 // priced later as a written variation" and no client ever saw it.
@@ -783,6 +772,26 @@ test("a scope exclusion carries its detail through to print", () => {
       label: "Pool, spa and water features",
       description: "Can be priced later as a separate package.",
       variationRule: "Priced as a written variation.",
+    },
+  ]);
+});
+
+test("a blank scope exclusion field keeps the standard wording", () => {
+  const draft = { ...INITIAL_OFFER_DRAFT, exclusionBullets: [] };
+  const item = {
+    ...INITIAL_EXCLUSIONS[0],
+    id: "scope-blank",
+    label: "Boundary or pool fencing",
+    description: "",
+    variationRule: " ",
+    includedInOfferDocument: true,
+    includedInTender: true,
+  };
+  assert.deepEqual(getVisibleExclusionRows(draft, [item]), [
+    {
+      label: "Boundary or pool fencing",
+      description: "Fencing beyond included Colorbond perimeter.",
+      variationRule: "By approved written variation.",
     },
   ]);
 });

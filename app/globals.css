@@ -6,6 +6,21 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@keyframes offer-step-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-4px);
+  }
+  40%,
+  80% {
+    transform: translateX(4px);
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -232,7 +247,6 @@
 
   html {
     @apply h-full font-sans;
-    zoom: 0.8;
   }
 
   @media (min-width: 1024px) {
@@ -285,6 +299,184 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+/* Phones use their actual viewport: controls remain readable and touchable
+   instead of scaling the desktop interface down. Keep these screen-only so
+   the customer-facing A4 documents retain their existing print geometry. */
+@media screen and (max-width: 767px) {
+  /* A Button rendered through a Radix trigger with `asChild` carries the
+     trigger's data-slot (popover-trigger, dropdown-menu-trigger, ...) instead
+     of "button", so it missed this rule and stayed 28px tall. */
+  [data-slot="button"],
+  button[data-slot$="-trigger"],
+  [data-slot="select-trigger"],
+  [data-slot="tabs-trigger"],
+  [data-slot="toggle"],
+  [data-slot="toggle-group-item"],
+  [data-slot="dropdown-menu-item"],
+  [data-slot="dropdown-menu-radio-item"] {
+    min-height: 44px;
+    min-width: 44px;
+    touch-action: manipulation;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  [data-slot="input"],
+  [data-slot="input-group"] {
+    min-height: 44px;
+  }
+
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"] {
+    max-width: calc(100vw - 1rem) !important;
+    max-height: calc(
+      100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+    ) !important;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  [data-slot="dialog-header"] {
+    padding-right: 2rem;
+  }
+
+  [data-slot="sheet-content"] {
+    max-width: 100vw;
+    overscroll-behavior: contain;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  [data-slot="pagination-content"] {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+
+  .payment-schedule-table,
+  .payment-schedule-table tbody {
+    display: block;
+  }
+
+  .payment-schedule-table thead {
+    display: none;
+  }
+
+  .payment-schedule-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding: 0.5rem 0;
+  }
+
+  .payment-schedule-table td {
+    min-width: 0;
+  }
+
+  .payment-schedule-table td:first-child,
+  .payment-schedule-table td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .cost-schedule-table,
+  .cost-schedule-table tbody,
+  .sequence-mapping-table,
+  .sequence-mapping-table tbody {
+    display: block;
+  }
+
+  .cost-schedule-table colgroup,
+  .cost-schedule-table thead,
+  .sequence-mapping-table colgroup,
+  .sequence-mapping-table thead {
+    display: none;
+  }
+
+  .cost-schedule-table tr,
+  .sequence-mapping-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.75rem 0;
+    gap: 0.75rem;
+  }
+
+  .cost-schedule-table td,
+  .sequence-mapping-table td {
+    position: static;
+    min-width: 0;
+    white-space: normal;
+    border-right: 0;
+  }
+
+  .cost-schedule-table input,
+  .cost-schedule-table textarea {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+
+  .cost-schedule-table [data-slot="checkbox"] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .cost-schedule-table tr[id] td:first-child {
+    display: none;
+  }
+
+  .project-stage-table,
+  .project-stage-table tbody,
+  .project-stage-table tfoot {
+    display: block;
+  }
+
+  .project-stage-table thead {
+    display: none;
+  }
+
+  .project-stage-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .project-stage-table td {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .project-stage-table .stage-heading {
+    grid-column: 1 / -1;
+  }
+
+  .project-stage-table .stage-claim {
+    text-align: left;
+  }
+
+  .project-stage-table tr[id],
+  .project-stage-table tr[id] > td {
+    display: block;
+  }
+
+  .filter-chip,
+  .btn-export {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -1142,6 +1334,23 @@
 
 .btn-export:hover {
   color: var(--leads-primary);
+}
+
+/* These rules are unlayered, so they outrank the Tailwind `flex-1` on the
+   search box and the phone rules earlier in this file. Without this the box
+   stayed a fixed 220px and 32px tall beside a wrapped Export button. From sm
+   up the toolbar sits beside the tabs and keeps its fixed width. */
+@media screen and (max-width: 639px) {
+  .search-box {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: none;
+    order: -1;
+  }
+
+  .search-box input {
+    min-height: 44px;
+  }
 }
 
 /* ── Table layout ─────────────────────────── */
@@ -2239,7 +2448,7 @@
   }
 
   .filter-chip {
-    min-height: 34px;
+    min-height: 44px;
   }
 
   .table-wrapper {
@@ -2303,7 +2512,7 @@
     align-items: center;
     gap: 6px;
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 700;
   }
 
@@ -2314,7 +2523,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .mobile-lead-meta {
@@ -2342,6 +2551,7 @@
 
   .mobile-link-action,
   .mobile-inline-action {
+    min-height: 44px;
     max-width: 100%;
     border: none;
     background: transparent;
@@ -2360,7 +2570,8 @@
   }
 
   .mobile-lead-actions {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     border-top: 1px solid var(--border-light);
     padding: 10px 12px 12px;
@@ -2368,7 +2579,7 @@
 
   .mobile-action-btn {
     display: inline-flex;
-    min-height: 36px;
+    min-height: 44px;
     flex: 1;
     align-items: center;
     justify-content: center;
@@ -3227,4 +3438,138 @@
   order: 2;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
+}
+
+/* Phone worklists and admin editors keep a single set of live controls. */
+@media screen and (max-width: 767px) {
+  .mobile-task-table,
+  .mobile-task-table tbody,
+  .admin-cost-table,
+  .admin-cost-table tbody {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .mobile-task-table thead,
+  .admin-cost-table thead,
+  .admin-cost-table colgroup {
+    display: none;
+  }
+
+  .mobile-task-table tr[data-task-row],
+  .admin-cost-table tr.admin-cost-data {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+    margin: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+
+  .mobile-task-table td,
+  .admin-cost-table td {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    padding: 0;
+    border-right: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .mobile-task-table td[data-label]::before,
+  .admin-cost-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+
+  .mobile-task-table td[data-label="Actions"]::before {
+    display: none;
+  }
+
+  .mobile-task-table td[data-label="Note"] span {
+    -webkit-line-clamp: unset;
+  }
+
+  .admin-cost-table tr.admin-cost-phase {
+    display: block;
+    padding: 0.75rem;
+  }
+
+  .admin-cost-table input,
+  .admin-cost-table textarea {
+    max-width: 100%;
+  }
+
+  .admin-cost-table button[aria-label="Remove task"] {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .task-open-row {
+    padding: 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .task-open-note {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  [data-slot="popover-content"] {
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  [data-slot="dialog-content"] > *,
+  [data-slot="dialog-content"] [data-slot="card-content"],
+  [data-slot="dialog-content"] [data-slot="card-header"] {
+    min-width: 0;
+  }
+
+  [data-slot="dialog-content"][data-mobile-scroll="body"] {
+    overflow: hidden;
+  }
+
+  [data-slot="dialog-content"] [data-slot="dialog-title"],
+  [data-slot="dialog-content"] [data-slot="dialog-description"] {
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+  }
+
+  [data-slot="dialog-content"] input,
+  [data-slot="dialog-content"] textarea,
+  [data-slot="dialog-content"] [data-slot="select-trigger"] {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .cost-schedule-table tr[data-mobile-hidden="true"],
+  .admin-cost-table tr[data-mobile-hidden="true"] {
+    display: none;
+  }
+
+  [data-slot="formula-suggestions"] {
+    left: 0 !important;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  [data-slot="calendar"] {
+    --cell-size: 36px;
+    max-width: 100%;
+  }
+
+  [data-slot="calendar"] button[data-day] {
+    min-width: 36px;
+    min-height: 36px;
+    height: 36px;
+    padding: 0;
+  }
 }

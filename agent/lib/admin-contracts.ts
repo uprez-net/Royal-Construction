@@ -12,6 +12,7 @@ import {
   offerContentDataSchema,
   offerScopeWriteSchema,
 } from "@/lib/validations/admin-offer-content";
+import { milestoneTemplateEditSchema } from "@/lib/validations/milestone-template";
 
 export const listApprovalsInputSchema = z.object({
   status: z.enum(TradieApprovalStatus).optional(),
@@ -41,6 +42,8 @@ export const resolveApprovalInputSchema = z
   );
 
 export const getAdminContentInputSchema = z.object({});
+export const getBuildSequenceInputSchema = z.strictObject({});
+export const updateBuildSequenceInputSchema = milestoneTemplateEditSchema;
 
 export const updateAdminContentInputSchema = z.discriminatedUnion("section", [
   z.object({

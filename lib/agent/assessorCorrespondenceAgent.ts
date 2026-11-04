@@ -1,7 +1,7 @@
 import { generateText, Output } from "ai";
 import { z } from "zod";
 
-import { gateway } from "@/lib/model";
+import { gateway, TEXT_MODEL_ID } from "@/lib/model";
 import { stripEmailThread, stripHtml } from "@/utils/formatters";
 
 /**
@@ -155,7 +155,7 @@ export async function readAssessorCorrespondence(params: {
     }
 
     const { output } = await generateText({
-      model: gateway("google/gemini-2.5-flash"),
+      model: gateway(TEXT_MODEL_ID),
       system: INSTRUCTION(params.assessor),
       prompt: `Subject: ${params.subject}\n\n${clean}`,
       output: Output.object({

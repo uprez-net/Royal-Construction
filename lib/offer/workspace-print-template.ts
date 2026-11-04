@@ -1,5 +1,6 @@
 import type {
   OfferDocumentDraft,
+  OfferInclusionEntry,
   OfferScopeAmountType,
   OfferWorkspaceCostLine,
   OfferWorkspaceJob,
@@ -58,10 +59,6 @@ export type OfferPrintTemplateData = {
   readonly preparedDateLabel: string;
   readonly savingAmount: number | null;
   readonly scopeRows: readonly OfferPrintScopeRow[];
-  // The allowances the signed Tender lists: every one ticked "Show on Tender",
-  // whatever its Offer box says. The Tender makes its price subject to exactly
-  // these, so they are derived here with the offer's rows, not in the renderer.
-  readonly tenderScopeRows: readonly OfferPrintScopeRow[];
   // The "This price includes" list on the Investment Summary page, derived from
   // the inclusions schedule's summary labels. Derived HERE rather than in each
   // renderer — the three renderers have drifted before.
@@ -144,14 +141,11 @@ export function buildOfferPrintTemplateData({
     summaryInclusions: draft.inclusionHighlights
       .map((line) => line.trim())
       .filter((line) => line.length > 0),
-    tenderScopeRows: allowances
-      .filter((item) => item.includedInTender)
-      .map(toScopeRow),
     validUntilLabel: formatDateDisplay(job.validUntil),
   };
 }
 
-// One allowance as the offer documents and the Tender print it.
+// One allowance as the Offer document prints it.
 function toScopeRow(item: OfferWorkspaceScopeItem): OfferPrintScopeRow {
   return {
     amountLabel: formatScopeAmount(item.amountType, item.amount, item.unit),
@@ -374,9 +368,37 @@ export function getVisibleExclusions(
   );
 }
 
+// Detail for the standard Offer bullets, grounded in the tender template's
+// exclusions and inclusions. Estimator-entered Scope detail still takes priority.
+const STANDARD_EXCLUSION_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  "Landscaping & turf beyond driveway":
+    "Gardens, paths and retaining walls beyond included turf.",
+  "Boundary or pool fencing": "Fencing beyond included Colorbond perimeter.",
+  "Swimming pool or spa": "Pool, spa and equipment excluded.",
+  "Blinds & window furnishings": "Curtains and blinds excluded.",
+  "Solar panels (variation on request)":
+    "Solar system and installation excluded.",
+  "Developer / estate infrastructure levies":
+    "Private estate charges beyond included statutory fees.",
+  "Rock excavation or abnormal fill beyond standard":
+    "Rock and extra fill beyond standard site works.",
+};
+
 // The Tender version of getVisibleExclusions, carrying the description and
 // variation rule a Scope item holds. The offer intentionally keeps the short
-// label-only list above; a free-text bullet has no Scope detail to carry.
+// label-only list above; custom free-text bullets have no detail to carry.
+// The detail printed beneath a Tender inclusion's bold category. A row saved
+// before Tender Text existed has no field and prints its Offer wording. The
+// admin editor saves a blank Tender Text as "": a categorised row then prints
+// its heading alone, and an uncategorised one falls back to its Offer wording
+// rather than an empty "Included" row.
+export function tenderInclusionDetail(entry: OfferInclusionEntry): string {
+  if (entry.tenderText === undefined) return entry.spec.trim();
+  const detail = entry.tenderText.trim();
+  if (detail.length > 0) return detail;
+  return (entry.category ?? "").trim().length > 0 ? "" : entry.spec.trim();
+}
+
 export function getVisibleExclusionRows(
   draft: OfferDocumentDraft,
   exclusions: readonly OfferWorkspaceScopeItem[],
@@ -385,18 +407,27 @@ export function getVisibleExclusionRows(
   for (const label of draft.exclusionBullets) {
     const key = label.trim();
     if (key.length > 0 && !rows.has(key)) {
-      rows.set(key, { label: key, description: "", variationRule: "" });
+      const description = STANDARD_EXCLUSION_DESCRIPTIONS[key];
+      rows.set(key, {
+        label: key,
+        description: description ?? "",
+        variationRule: description ? "By approved written variation." : "",
+      });
     }
   }
   for (const item of exclusions) {
     if (!item.includedInOfferDocument) continue;
     const key = item.label.trim();
     if (key.length === 0) continue;
-    // A Scope item's detail wins over a bare bullet of the same label.
+    // A Scope item's detail wins over a bare bullet of the same label, but a
+    // blank Scope field keeps the standard wording rather than printing a dash.
+    const standard = STANDARD_EXCLUSION_DESCRIPTIONS[key];
     rows.set(key, {
       label: key,
-      description: item.description.trim(),
-      variationRule: item.variationRule.trim(),
+      description: item.description.trim() || (standard ?? ""),
+      variationRule:
+        item.variationRule.trim()
+        || (standard ? "By approved written variation." : ""),
     });
   }
   return [...rows.values()];

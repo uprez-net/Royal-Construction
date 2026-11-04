@@ -1,19 +1,12 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 
 export default function LeadDetailLoading() {
   return (
-    <div
-      className="space-y-4 pb-4"
-      role="status"
-      aria-busy="true"
-      aria-live="polite"
-    >
-      <span className="sr-only">Loading lead details</span>
-
+    <PageSkeleton label="Loading lead details" className="space-y-4 pb-4">
       {/* Header Action Center skeleton — mirrors lead-header.tsx */}
-      <section className="rounded-xl border border-border/70 bg-card p-6 px-7 shadow-sm">
+      <section className="rounded-xl border border-border/70 bg-card p-4 shadow-sm sm:p-6 sm:px-7">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             <Skeleton className="h-4 w-32" />
             <div className="flex flex-wrap items-center gap-3">
               <Skeleton className="h-8 w-56" />
@@ -42,12 +35,12 @@ export default function LeadDetailLoading() {
 
       {/* Tabs layout skeleton */}
       <section className="space-y-4">
-        <div className="mb-5 flex flex-wrap gap-x-1 border-b-2 border-border/60">
-          {[28, 44, 24].map((width, i) => (
+        <div className="mb-5 grid grid-cols-2 gap-1 sm:flex sm:flex-wrap border-b-2 border-border/60">
+          {[28, 44, 24, 24].map((width, i) => (
             <Skeleton
               key={i}
               className="h-11 rounded-t-md rounded-b-none"
-              style={{ width: `${width * 4}px` }}
+              style={{ maxWidth: `${width * 4}px` }}
             />
           ))}
         </div>
@@ -66,7 +59,7 @@ export default function LeadDetailLoading() {
               >
                 <div className="flex items-center gap-3">
                   <Skeleton className="size-8 rounded-lg" />
-                  <div className="flex-1 space-y-1.5">
+                  <div className="min-w-0 flex-1 space-y-1.5">
                     <Skeleton className="h-4 w-44" />
                     <Skeleton className="h-3 w-64" />
                   </div>
@@ -89,6 +82,6 @@ export default function LeadDetailLoading() {
           </div>
         </div>
       </section>
-    </div>
+    </PageSkeleton>
   );
 }

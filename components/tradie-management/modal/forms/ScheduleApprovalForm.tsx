@@ -86,7 +86,7 @@ export function ScheduleApprovalForm({ approval, onSuccess }: Props) {
 
   return (
     <>
-      <DialogHeader className="pb-4">
+      <DialogHeader className="pb-4 pr-10">
         <DialogTitle className="flex items-center gap-2">
           <CalendarClock className="size-5 text-primary" aria-hidden="true" />
           Review schedule request
@@ -200,7 +200,7 @@ export function ScheduleApprovalForm({ approval, onSuccess }: Props) {
 
         {/* Actions */}
         {approval.status === "PENDING" && (
-          <div className="flex justify-end gap-2 border-t border-border/70 pt-5">
+          <div className="grid gap-2 border-t border-border/70 pt-5 sm:flex sm:justify-end">
             <Button
               variant="outline"
               disabled={mutation.isPending}

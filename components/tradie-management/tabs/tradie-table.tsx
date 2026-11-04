@@ -41,6 +41,8 @@ export function TradieTable({
 
   return (
     <DataTable
+      mobileLayout="cards"
+      mobileActionsPlacement="header"
       caption="Tradies with their trade, last quoted price, rating, completed jobs and incident counts."
       headers={[
         "Tradie",
@@ -54,7 +56,11 @@ export function TradieTable({
       align={COLUMN_ALIGN}
       rows={filteredTradies.map((tradie) => [
         tradie.name,
-        <TradieBadge trade={tradie.trade} key={`trade-${tradie.id}`} />,
+        <span key={`trade-${tradie.id}`} className="flex flex-wrap gap-1">
+          {tradie.trades.map((trade) => (
+            <TradieBadge key={trade} trade={trade} />
+          ))}
+        </span>,
         <span key={`rate-${tradie.id}`} className="whitespace-nowrap">
           <span className="font-mono tabular-nums">
             {formatPrice(tradie.lastQuotedPrice, tradie.lastQuotedPriceUnit)}

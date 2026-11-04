@@ -665,3 +665,102 @@ test("a specialist is released for interruption once its own approval is answere
 
   assert.equal(data.subagents[0]?.status, "interrupted");
 });
+
+test("a specialist's approval lands on the turn that is waiting for it, not the first one", () => {
+  // Every delegation is a fresh child session, so a forwarded request carries
+  // the child's `turn_0`. It used to render inside the conversation's opening
+  // turn, far above the message that actually asked for it.
+  const firstTurn = [
+    stamped({ data: { sequence: 0, turnId: "turn_0" }, type: "turn.started" }),
+    stamped({
+      data: {
+        finishReason: "stop",
+        message: "Here is the lead.",
+        sequence: 1,
+        stepIndex: 0,
+        turnId: "turn_0",
+      },
+      type: "message.completed",
+    }),
+    stamped({
+      data: { sequence: 2, turnId: "turn_0" },
+      type: "turn.completed",
+    }),
+  ];
+  const secondTurn = [
+    stamped({ data: { sequence: 0, turnId: "turn_1" }, type: "turn.started" }),
+    stamped({
+      data: {
+        finishReason: "tool-calls",
+        message: "Creating the task.",
+        sequence: 1,
+        stepIndex: 0,
+        turnId: "turn_1",
+      },
+      type: "message.completed",
+    }),
+    stamped({
+      data: {
+        requests: [
+          {
+            action: {
+              callId: "call_task",
+              input: { leadId: 106, type: "CALL" },
+              kind: "tool-call",
+              toolName: "create_lead_task",
+            },
+            kind: "tool-approval",
+            options: [{ id: "approve", label: "Approve" }],
+            prompt: "Approve tool call: create_lead_task",
+            requestId: "req_task",
+          },
+        ],
+        sequence: 2,
+        stepIndex: 0,
+        turnId: "turn_0",
+      },
+      type: "input.requested",
+    }),
+  ];
+
+  const data = reduceAll([...firstTurn, ...secondTurn]);
+  const holdsApproval = (message: AgentTranscriptData["messages"][number]) =>
+    message.parts.some(
+      (part) =>
+        part.type === "dynamic-tool" && part.approval?.id === "req_task",
+    );
+
+  const owner = data.messages.filter(holdsApproval);
+  assert.equal(owner.length, 1);
+  assert.equal(owner[0], data.messages.at(-1));
+  assert.equal(data.pendingApprovals[0]?.turnId, "turn_1");
+});
+
+test("an approval with no turn running keeps the turn it names", () => {
+  const data = reduceAll([
+    stamped({
+      data: {
+        requests: [
+          {
+            action: {
+              callId: "call_old",
+              input: {},
+              kind: "tool-call",
+              toolName: "complete_lead_task",
+            },
+            kind: "tool-approval",
+            options: [{ id: "approve", label: "Approve" }],
+            prompt: "Approve tool call: complete_lead_task",
+            requestId: "req_old",
+          },
+        ],
+        sequence: 0,
+        stepIndex: 0,
+        turnId: "turn_0",
+      },
+      type: "input.requested",
+    }),
+  ]);
+
+  assert.equal(data.pendingApprovals[0]?.turnId, "turn_0");
+});

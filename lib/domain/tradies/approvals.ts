@@ -1,4 +1,5 @@
 import {
+  TradeSelectionStatus,
   TradieApprovalActionType,
   TradieApprovalStatus,
   TradieScheduleStatus,
@@ -11,6 +12,10 @@ import {
   DomainValidationError,
 } from "../errors";
 import { requireAdminPrincipal, type DomainPrincipal } from "../principal";
+import { recordTradieActivity } from "../audit/tradie-activity-log";
+import { INACTIVE_SCHEDULE_STATUSES } from "./lifecycle";
+import { LIVE_SELECTION_STATUSES } from "./selection-rules";
+import { settleTradeCancellation } from "./trade-selection";
 
 export async function listTradieApprovals(
   principal: DomainPrincipal,
@@ -181,10 +186,75 @@ export async function resolveTradieApproval(
         }
 
         case TradieApprovalActionType.TRADIE_REMOVAL: {
-          const deleted = await tx.tradie.deleteMany({
-            where: { id: approval.tradieId },
+          const archived = await tx.tradie.updateMany({
+            where: { id: approval.tradieId, archivedAt: null },
+            data: { archivedAt: new Date(), isFavourite: false },
           });
-          affected = { deleted: deleted.count === 1 };
+          if (archived.count !== 1) {
+            throw new DomainTransitionError(
+              "This tradie has already been removed.",
+            );
+          }
+          const bookings = await tx.tradieSchedule.findMany({
+            where: {
+              tradieId: approval.tradieId,
+              status: { notIn: INACTIVE_SCHEDULE_STATUSES },
+            },
+            select: { projectId: true },
+          });
+          const cancelled = await tx.tradieSchedule.updateMany({
+            where: {
+              tradieId: approval.tradieId,
+              status: { notIn: INACTIVE_SCHEDULE_STATUSES },
+            },
+            data: { status: TradieScheduleStatus.CANCELLED },
+          });
+          // These requests can no longer be acted on after removal. Incident
+          // resolution stays available so existing incidents can be closed.
+          await tx.tradieApproval.updateMany({
+            where: {
+              tradieId: approval.tradieId,
+              status: TradieApprovalStatus.PENDING,
+              actionType: { not: TradieApprovalActionType.INCIDENT_RESOLUTION },
+            },
+            data: {
+              status: TradieApprovalStatus.REJECTED,
+              pendingDeletionKey: null,
+              rejectionReason: "Tradie removed from the active directory.",
+            },
+          });
+          // A removed tradie cannot hold a trade. Left alone, an active
+          // selection would block anyone else being chosen, and one waiting on
+          // the cancellation just rejected above would wait for ever.
+          const endedSelections = await tx.tradeSelection.updateMany({
+            data: {
+              cancelledAt: new Date(),
+              status: TradeSelectionStatus.CANCELLED,
+            },
+            where: {
+              status: { in: [...LIVE_SELECTION_STATUSES] },
+              tradieId: approval.tradieId,
+            },
+          });
+          await recordTradieActivity(
+            {
+              data: {
+                cancelledBookings: cancelled.count,
+                tradieId: approval.tradieId,
+              },
+              principal,
+              type: "removedFromDirectory",
+            },
+            tx,
+          );
+          affected = {
+            archived: true,
+            cancelledSchedules: cancelled.count,
+            endedSelections: endedSelections.count,
+            projectIds: [
+              ...new Set(bookings.map((booking) => booking.projectId)),
+            ],
+          };
           break;
         }
 
@@ -215,6 +285,14 @@ export async function resolveTradieApproval(
             data: { resolution, status: "RESOLVED" },
             where: { id: incident.id },
           });
+          await recordTradieActivity(
+            {
+              data: { resolution, tradieId: approval.tradieId },
+              principal,
+              type: "incidentResolved",
+            },
+            tx,
+          );
           affected = { incidentId: incident.id, status: "RESOLVED" };
           break;
         }
@@ -242,6 +320,13 @@ export async function resolveTradieApproval(
               "This schedule is no longer awaiting admin approval.",
             );
           }
+          await recordScheduleDecision(
+            principal,
+            approval.tradieId,
+            payload,
+            TradieScheduleStatus.PENDING_FINAL_CONFIRMATION,
+            tx,
+          );
           affected = {
             scheduleId,
             status: TradieScheduleStatus.PENDING_FINAL_CONFIRMATION,
@@ -266,6 +351,23 @@ export async function resolveTradieApproval(
           const deleted = await tx.tradieSchedule.deleteMany({
             where: { id: scheduleId, tradieId: approval.tradieId },
           });
+          if (deleted.count === 1 && projectId) {
+            await recordTradieActivity(
+              {
+                data: {
+                  milestoneId: stringValue(payload?.milestoneId),
+                  projectId,
+                  scheduleId,
+                  scheduledDate:
+                    stringValue(payload?.scheduledDate)?.slice(0, 10) ?? null,
+                  tradieId: approval.tradieId,
+                },
+                principal,
+                type: "bookingDeleted",
+              },
+              tx,
+            );
+          }
           // The booking row is gone by now, so everything the adapter needs to
           // describe it — the date a site manager reads in the notification,
           // the milestone the activity entry is filed against — has to come off
@@ -283,13 +385,44 @@ export async function resolveTradieApproval(
           };
           break;
         }
+
+        case TradieApprovalActionType.TRADE_CANCELLATION: {
+          affected = await settleTradeCancellation(
+            { id: approval.id, payload, tradieId: approval.tradieId },
+            true,
+            tx,
+          );
+          await recordCancellationDecision(
+            principal,
+            approval.tradieId,
+            affected,
+            true,
+            tx,
+          );
+          break;
+        }
       }
+    } else if (
+      approval.actionType === TradieApprovalActionType.TRADE_CANCELLATION
+    ) {
+      affected = await settleTradeCancellation(
+        { id: approval.id, payload, tradieId: approval.tradieId },
+        false,
+        tx,
+      );
+      await recordCancellationDecision(
+        principal,
+        approval.tradieId,
+        affected,
+        false,
+        tx,
+      );
     } else if (
       approval.actionType === TradieApprovalActionType.SCHEDULE_APPROVAL
     ) {
       const scheduleId = stringValue(payload?.scheduleId);
       if (scheduleId) {
-        await tx.tradieSchedule.updateMany({
+        const declined = await tx.tradieSchedule.updateMany({
           data: { status: TradieScheduleStatus.DECLINED },
           where: {
             id: scheduleId,
@@ -297,6 +430,15 @@ export async function resolveTradieApproval(
             tradieId: approval.tradieId,
           },
         });
+        if (declined.count === 1) {
+          await recordScheduleDecision(
+            principal,
+            approval.tradieId,
+            payload,
+            TradieScheduleStatus.DECLINED,
+            tx,
+          );
+        }
         affected = { scheduleId, status: TradieScheduleStatus.DECLINED };
       }
     }
@@ -313,6 +455,63 @@ export async function resolveTradieApproval(
   };
 
   return "$transaction" in db ? db.$transaction(run) : run(db);
+}
+
+/** An admin's decision on a booking's approval, on the tradie's history. */
+async function recordScheduleDecision(
+  principal: DomainPrincipal,
+  tradieId: string,
+  payload: Record<string, unknown> | null,
+  to: TradieScheduleStatus,
+  tx: DomainDb,
+): Promise<void> {
+  const scheduleId = stringValue(payload?.scheduleId);
+  const projectId = stringValue(payload?.projectId);
+  if (!scheduleId || !projectId) return;
+  await recordTradieActivity(
+    {
+      data: {
+        from: TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+        milestoneId: stringValue(payload?.milestoneId),
+        projectId,
+        scheduleId,
+        to,
+        tradieId,
+      },
+      principal,
+      type: "bookingStatusChanged",
+    },
+    tx,
+  );
+}
+
+/** An admin's decision on releasing a selected tradie. */
+async function recordCancellationDecision(
+  principal: DomainPrincipal,
+  tradieId: string,
+  affected: Record<string, unknown>,
+  approved: boolean,
+  tx: DomainDb,
+): Promise<void> {
+  const projectId = stringValue(affected.projectId);
+  if (!projectId) return;
+  await recordTradieActivity(
+    {
+      data: {
+        approved,
+        cancelledBookings:
+          typeof affected.cancelledSchedules === "number"
+            ? affected.cancelledSchedules
+            : 0,
+        projectId,
+        trade: stringValue(affected.trade) ?? "the trade",
+        tradieId,
+      },
+      principal,
+      type: "tradeCancellationResolved",
+    },
+    tx,
+  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

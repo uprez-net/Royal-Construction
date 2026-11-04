@@ -72,6 +72,7 @@ type ScheduleRow = {
   tradie_phone: string;
   requiresQuote: boolean;
   quotedPrice: string | null;
+  ref_token: string | null;
 };
 
 type CountRow = { count: bigint };
@@ -90,7 +91,7 @@ type StatusCountRow = {
 type ActiveTradieRow = { tradie_id: string };
 
 type TradeStatusGroupRow = {
-  tradie_id: string;
+  trade_type: string | null;
   status: TradieScheduleStatus;
   cnt: bigint;
 };
@@ -133,9 +134,8 @@ type UrgentRow = {
   last_quoted_price: string | null;
   last_quoted_price_unit: "HOURLY" | "FIXED";
   rating: string | null;
+  ref_token: string | null;
 };
-
-type TradeTypeRow = { id: string; trade_type: string };
 
 type TabCountRow = {
   tab_all: bigint;
@@ -180,10 +180,18 @@ function resolveCoordinationQuery(
 // Sort column whitelist — never interpolate user input directly
 // ---------------------------------------------------------------------------
 
+/**
+ * The trade a booking is for (`bookingTrade`): its own, else its tradie's.
+ * Filter, sort and the trade column all read this one expression. `Tradie`
+ * has no "tradeType" column, so the filter and sort that named one failed the
+ * whole query into an empty dashboard.
+ */
+const BOOKING_TRADE_SQL = `COALESCE(NULLIF(btrim(ts.trade), ''), t.trade)`;
+
 const SORT_COLUMN_MAP: Record<TradieCoordinationSortBy, string> = {
   scheduledDate: 'ts."scheduledDate"',
   tradieName: "t.name",
-  tradeType: 't."tradeType"',
+  tradeType: BOOKING_TRADE_SQL,
   projectName: "p.name",
   status: "ts.status::text",
 };
@@ -221,7 +229,9 @@ function buildWhere(
   }
 
   if (resolved.tradeType) {
-    parts.push(Prisma.sql`t."tradeType" = ${resolved.tradeType}`);
+    parts.push(
+      Prisma.sql`lower(${Prisma.raw(BOOKING_TRADE_SQL)}) = lower(${resolved.tradeType})`,
+    );
   }
 
   if (resolved.search) {
@@ -229,6 +239,7 @@ function buildWhere(
     parts.push(Prisma.sql`(
       t.name         ILIKE ${pattern}
       OR t.trade     ILIKE ${pattern}
+      OR ts.trade    ILIKE ${pattern}
       OR p.name      ILIKE ${pattern}
       OR m.name      ILIKE ${pattern}
     )`);
@@ -244,7 +255,7 @@ function buildWhere(
     switch (resolved.tab) {
       case "week":
         parts.push(
-          Prisma.sql`ts."scheduledDate" >= ${today} AND ts."scheduledDate" < ${nextWeek}`,
+          Prisma.sql`ts."scheduledDate" >= ${today} AND ts."scheduledDate" < ${nextWeek} AND ts.status <> 'CANCELLED'::"TradieScheduleStatus"`,
         );
         break;
       case "confirmed":
@@ -259,7 +270,7 @@ function buildWhere(
         break;
       case "overdue":
         parts.push(
-          Prisma.sql`ts."scheduledDate" < ${today} AND ts.status <> 'COMPLETED'::"TradieScheduleStatus"`,
+          Prisma.sql`ts."scheduledDate" < ${today} AND ts.status <> ALL(ARRAY['COMPLETED','CANCELLED']::"TradieScheduleStatus"[])`,
         );
         break;
       case "completed":
@@ -286,8 +297,8 @@ function mapScheduleStatus(status: TradieScheduleStatus): {
   label: string;
 } {
   if (
-    status === TradieScheduleStatus.CONFIRMED ||
-    status === TradieScheduleStatus.COMPLETED
+    status === TradieScheduleStatus.CONFIRMED
+    || status === TradieScheduleStatus.COMPLETED
   ) {
     return {
       type: "done",
@@ -296,22 +307,25 @@ function mapScheduleStatus(status: TradieScheduleStatus): {
     };
   }
   if (
-    status === TradieScheduleStatus.DECLINED ||
-    status === TradieScheduleStatus.NO_RESPONSE
+    status === TradieScheduleStatus.CANCELLED
+    || status === TradieScheduleStatus.DECLINED
+    || status === TradieScheduleStatus.NO_RESPONSE
   ) {
     return {
       type: "urgent",
       label:
-        status === TradieScheduleStatus.DECLINED
-          ? "declined"
-          : "had no response",
+        status === TradieScheduleStatus.CANCELLED
+          ? "cancelled"
+          : status === TradieScheduleStatus.DECLINED
+            ? "declined"
+            : "had no response",
     };
   }
   return {
     type: "warn",
     label:
-      status === TradieScheduleStatus.PENDING_RESPONSE ||
-      status === TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
+      status === TradieScheduleStatus.PENDING_RESPONSE
+      || status === TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
         ? "is pending final confirmation"
         : "is pending",
   };
@@ -403,7 +417,7 @@ export async function getTradieCoordinationDashboard(
           t."isFavourite"       AS isFavourite,
           t.note              AS note,
           t.abn               AS abn,
-          t.trade             AS trade_type,
+          ${Prisma.raw(BOOKING_TRADE_SQL)} AS trade_type,
           ts."projectId"      AS project_id,
           p.name              AS project_name,
           sm.name             AS site_manager_name,
@@ -422,7 +436,8 @@ export async function getTradieCoordinationDashboard(
           t.email              AS tradie_email,
           t.phone              AS tradie_phone,
           ts."requiresQuote"    AS requiresQuote,
-          ts."quotedPrice"     AS quotedPrice
+          ts."quotedPrice"     AS quotedPrice,
+          ts."refToken"        AS ref_token
         FROM "TradieSchedule" ts
         JOIN "Tradie"  t  ON t.id  = ts."tradieId"
         JOIN "Project" p  ON p.id  = ts."projectId"
@@ -446,15 +461,16 @@ export async function getTradieCoordinationDashboard(
 
       // 3. Distinct trade types for filter dropdown
       prisma.$queryRaw<TradeOptionRow[]>(Prisma.sql`
-        SELECT DISTINCT "trade" AS trade_type
-        FROM "Tradie"
-        WHERE "trade" IS NOT NULL
-        ORDER BY "trade" ASC
+        SELECT DISTINCT trade_type
+        FROM "Tradie",
+          unnest(array_append("trades", "trade")) AS trade_type
+        WHERE "archivedAt" IS NULL AND btrim(trade_type) <> ''
+        ORDER BY trade_type ASC
       `),
 
       // 4. Total registered tradies
       prisma.$queryRaw<CountRow[]>(Prisma.sql`
-        SELECT COUNT(*)::bigint AS count FROM "Tradie"
+        SELECT COUNT(*)::bigint AS count FROM "Tradie" WHERE "archivedAt" IS NULL
       `),
 
       // 5. Scheduled this week (current)
@@ -467,6 +483,7 @@ export async function getTradieCoordinationDashboard(
         WHERE ${insightsWhere}
           AND ts."scheduledDate" >= ${today}
           AND ts."scheduledDate" <  ${nextWeek}
+          AND ts.status <> 'CANCELLED'::"TradieScheduleStatus"
       `),
 
       // 6. Scheduled previous week
@@ -479,6 +496,7 @@ export async function getTradieCoordinationDashboard(
         WHERE ${insightsWhere}
           AND ts."scheduledDate" >= ${prevWeekStart}
           AND ts."scheduledDate" <  ${today}
+          AND ts.status <> 'CANCELLED'::"TradieScheduleStatus"
       `),
 
       // 7. Pending / no-response count
@@ -524,7 +542,7 @@ export async function getTradieCoordinationDashboard(
         WHERE ${insightsWhere}
           AND ts."scheduledDate" >= ${active14Start}
           AND ts."scheduledDate" <= ${active14End}
-          AND ts.status <> ALL(ARRAY['DECLINED','COMPLETED']::"TradieScheduleStatus"[])
+          AND ts.status <> ALL(ARRAY['DECLINED','COMPLETED','CANCELLED']::"TradieScheduleStatus"[])
       `),
 
       // 11. New tradies in current 30-day window
@@ -566,6 +584,7 @@ export async function getTradieCoordinationDashboard(
           COUNT(*)::bigint AS tab_all,
           COUNT(*) FILTER (
             WHERE ts."scheduledDate" >= ${today} AND ts."scheduledDate" < ${nextWeek}
+              AND ts.status <> 'CANCELLED'::"TradieScheduleStatus"
           )::bigint AS tab_week,
           COUNT(*) FILTER (
             WHERE ts.status = 'CONFIRMED'::"TradieScheduleStatus"
@@ -575,7 +594,7 @@ export async function getTradieCoordinationDashboard(
           )::bigint AS tab_pending,
           COUNT(*) FILTER (
             WHERE ts."scheduledDate" < ${today}
-              AND ts.status <> 'COMPLETED'::"TradieScheduleStatus"
+              AND ts.status <> ALL(ARRAY['COMPLETED','CANCELLED']::"TradieScheduleStatus"[])
           )::bigint AS tab_overdue,
           COUNT(*) FILTER (
             WHERE ts.status = 'COMPLETED'::"TradieScheduleStatus"
@@ -587,10 +606,11 @@ export async function getTradieCoordinationDashboard(
         WHERE ${insightsWhere}
       `),
 
-      // 15. Trade × status groups (for tradeBreakdown chart)
+      // 15. Trade × status groups (for tradeBreakdown chart), by the trade
+      //     each booking is for: a tradie in two trades has bookings in both.
       prisma.$queryRaw<TradeStatusGroupRow[]>(Prisma.sql`
         SELECT
-          ts."tradieId"  AS tradie_id,
+          ${Prisma.raw(BOOKING_TRADE_SQL)} AS trade_type,
           ts.status,
           COUNT(*)::bigint AS cnt
         FROM "TradieSchedule" ts
@@ -598,7 +618,7 @@ export async function getTradieCoordinationDashboard(
         JOIN "Project" p ON p.id = ts."projectId"
         LEFT JOIN "Milestone" m ON m.id = ts."milestoneId"
         WHERE ${insightsWhere}
-        GROUP BY ts."tradieId", ts.status
+        GROUP BY 1, ts.status
       `),
 
       // 16. Project allocations — top 6, with name joined in the same query
@@ -661,7 +681,7 @@ export async function getTradieCoordinationDashboard(
         SELECT
           ts.id,
           t.name              AS tradie_name,
-          t.trade             AS trade_type,
+          ${Prisma.raw(BOOKING_TRADE_SQL)} AS trade_type,
           t.abn               AS abn,
           p.name              AS project_name,
           sm.name             AS site_manager_name,
@@ -675,7 +695,8 @@ export async function getTradieCoordinationDashboard(
           t.phone             AS tradie_phone,
           t."lastQuotedPrice"::text AS last_quoted_price,
           t."lastQuotedPriceUnit"::text AS last_quoted_price_unit,
-          t.rating::text       AS rating
+          t.rating::text       AS rating,
+          ts."refToken"        AS ref_token
         FROM "TradieSchedule" ts
         JOIN "Tradie"  t  ON t.id  = ts."tradieId"
         JOIN "Project" p  ON p.id  = ts."projectId"
@@ -684,7 +705,8 @@ export async function getTradieCoordinationDashboard(
         WHERE ${insightsWhere}
           AND ts."scheduledDate" >= ${today}
           AND ts."scheduledDate" <  ${nextWeek}
-          AND ts.status <> ALL(ARRAY['CONFIRMED','COMPLETED']::"TradieScheduleStatus"[])
+          AND ts.status <> 'CANCELLED'::"TradieScheduleStatus"
+          AND ts.status <> ALL(ARRAY['CONFIRMED','COMPLETED','CANCELLED']::"TradieScheduleStatus"[])
         ORDER BY ts."scheduledDate" ASC
         LIMIT 8
       `),
@@ -749,33 +771,16 @@ export async function getTradieCoordinationDashboard(
     };
 
     // -----------------------------------------------------------------------
-    // Trade breakdown
-    // We need tradeType per tradieId — batch-fetch distinct tradieIds
+    // Trade breakdown, already grouped by each booking's trade
     // -----------------------------------------------------------------------
 
-    const distinctTradieIds = Array.from(
-      new Set(tradeStatusGroupRows.map((r) => r.tradie_id)),
-    );
-
-    const tradeTypeRows: TradeTypeRow[] =
-      distinctTradieIds.length > 0
-        ? await prisma.$queryRaw<TradeTypeRow[]>(Prisma.sql`
-          SELECT id, "trade" AS trade_type
-          FROM "Tradie"
-          WHERE id::text = ANY(${distinctTradieIds})
-        `)
-        : [];
-
-    const tradeTypeMap = new Map(
-      tradeTypeRows.map((r) => [r.id, r.trade_type]),
-    );
     const tradeBreakdownMap = new Map<
       string,
       { total: number; confirmed: number }
     >();
 
     for (const row of tradeStatusGroupRows) {
-      const tradeType = tradeTypeMap.get(row.tradie_id) ?? "Unknown";
+      const tradeType = row.trade_type?.trim() || "Unknown";
       const current = tradeBreakdownMap.get(tradeType) ?? {
         total: 0,
         confirmed: 0,
@@ -783,8 +788,8 @@ export async function getTradieCoordinationDashboard(
       const count = n(row.cnt);
       current.total += count;
       if (
-        row.status === TradieScheduleStatus.CONFIRMED ||
-        row.status === TradieScheduleStatus.COMPLETED
+        row.status === TradieScheduleStatus.CONFIRMED
+        || row.status === TradieScheduleStatus.COMPLETED
       ) {
         current.confirmed += count;
       }
@@ -873,6 +878,7 @@ export async function getTradieCoordinationDashboard(
           },
           requiresQuote: row.requiresQuote,
           quotedPrice: row.quotedPrice ?? undefined,
+          refToken: row.ref_token,
         }) satisfies TradieScheduleListItem,
     );
 
@@ -919,6 +925,7 @@ export async function getTradieCoordinationDashboard(
       rating: row.rating ?? undefined,
       lastQuotedPrice: row.last_quoted_price ?? undefined,
       reminderSentAt: row.reminder_sent_at?.toISOString(),
+      refToken: row.ref_token,
     }));
 
     // -----------------------------------------------------------------------

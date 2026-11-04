@@ -3,8 +3,8 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  formatDisplayField,
   formatDisplayText,
-  formatDisplayValue,
   humanize,
 } from "@/components/agent/agent-format";
 import {
@@ -243,7 +243,7 @@ export function AgentResult({
                 {humanize(key)}
               </dt>
               <dd className="truncate font-medium text-foreground">
-                {formatDisplayValue(value)}
+                {formatDisplayField(key, value)}
               </dd>
             </div>
           ))}

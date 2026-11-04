@@ -17,6 +17,16 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -51,6 +61,8 @@ import {
   HardHat,
   Check,
   Loader2,
+  Pencil,
+  Lock,
 } from "lucide-react";
 import { UploadButton } from "@/components/common/upload-button";
 import { useAppDispatch } from "@/lib/store/hooks";
@@ -60,6 +72,11 @@ import {
 } from "@/lib/store/slices/projectsSlice";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { useParams } from "next/navigation";
+import { format, parse } from "date-fns";
+import {
+  hasWorkStarted,
+  milestoneTargetDates,
+} from "@/lib/domain/projects/milestone-schedule";
 
 // ---------------------------------------------------------------------------
 // Types & config
@@ -359,6 +376,263 @@ function DateField({
   );
 }
 
+/**
+ * The on-site start date, edited and saved on its own.
+ *
+ * Every activity's target date hangs off this one — saving a new start re-dates
+ * the whole schedule (`milestoneTargetDate`) — so it changes deliberately: Edit,
+ * Save, then a confirmation that says what is about to move. It never rides
+ * along with whatever else the overview form holds unsaved, and a refusal (a
+ * start before the contract was signed) is reported against this field.
+ */
+function StartDateField({
+  projectId,
+  value,
+  milestones,
+  locked,
+  onSaved,
+}: {
+  projectId: string;
+  value: unknown;
+  milestones: ProjectDetail["milestones"];
+  /** Work has started on site: the date is the day it began, and fixed. */
+  locked: boolean;
+  onSaved: (project: ProjectDetail) => void;
+}) {
+  const milestoneCount = milestones.length;
+  const id = useId();
+  const current = toDateInputValue(value);
+  const [editing, setEditing] = useState(false);
+  const [pending, setPending] = useState(current);
+  const [confirming, setConfirming] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const startEditing = () => {
+    setPending(current);
+    setEditing(true);
+  };
+
+  const requestSave = () => {
+    if (saving) return;
+    if (!pending) {
+      toast.error("Pick a start date.");
+      return;
+    }
+    if (pending === current) {
+      setEditing(false);
+      return;
+    }
+    setConfirming(true);
+  };
+
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const response = await fetchJson<ProjectDetail>(
+        `/api/projects/${projectId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ startDate: pending }),
+        },
+        "Unable to update the start date",
+      );
+      onSaved(response.data);
+      setConfirming(false);
+      setEditing(false);
+      toast.success(
+        milestoneCount > 0
+          ? `Start date updated and ${milestoneCount} milestone target dates rescheduled`
+          : "Start date updated",
+      );
+    } catch (error) {
+      // The dialog closes so the date can be corrected; nothing was written.
+      setConfirming(false);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to update the start date",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const pendingDate = pending ? parse(pending, "yyyy-MM-dd", new Date()) : null;
+  const displayDate = (date: Date) => format(date, "d MMM yyyy");
+
+  const hintId = `${id}-hint`;
+  const hint = locked ? (
+    <p id={hintId} className="text-[11px] leading-snug text-muted-foreground">
+      Set to the day the first milestone started. It can&apos;t be changed once
+      work has started.
+    </p>
+  ) : (
+    <p id={hintId} className="text-[11px] leading-snug text-muted-foreground">
+      Changing it reschedules every milestone. It&apos;s set automatically, then
+      locked, when the first milestone starts.
+    </p>
+  );
+
+  if (!editing || locked) {
+    return (
+      <FieldShell label="Start date (on-site)">
+        <div
+          className={cn(
+            "flex h-9 items-center justify-between gap-2 rounded-lg border border-border pl-3 pr-1 text-sm",
+            locked ? "bg-muted" : "bg-card",
+          )}
+          aria-describedby={hintId}
+        >
+          <span
+            className={cn(
+              "font-mono tabular-nums",
+              locked ? "text-muted-foreground" : "text-foreground",
+            )}
+          >
+            {current
+              ? displayDate(parse(current, "yyyy-MM-dd", new Date()))
+              : "Not set"}
+          </span>
+          {locked ? (
+            <span className="mr-2 flex items-center">
+              <Lock
+                className="size-3.5 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span className="sr-only">Locked</span>
+            </span>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-primary"
+              aria-label="Edit start date"
+              aria-describedby={hintId}
+              onClick={startEditing}
+            >
+              <Pencil className="size-3.5" aria-hidden="true" />
+              Edit
+            </Button>
+          )}
+        </div>
+        {hint}
+      </FieldShell>
+    );
+  }
+
+  return (
+    <FieldShell label="Start date (on-site)" htmlFor={id}>
+      <div className="flex items-center gap-1">
+        <Input
+          id={id}
+          type="date"
+          value={pending}
+          aria-describedby={hintId}
+          autoFocus
+          disabled={saving}
+          onChange={(e) => setPending(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") requestSave();
+            if (e.key === "Escape" && !saving) setEditing(false);
+          }}
+          className={cn(FIELD_CONTROL_CLASS, "font-mono tabular-nums")}
+        />
+        <Button
+          size="icon"
+          className="size-9 shrink-0"
+          aria-label="Save start date"
+          disabled={saving}
+          onClick={requestSave}
+        >
+          <Check className="size-4" aria-hidden="true" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-9 shrink-0"
+          aria-label="Cancel editing start date"
+          disabled={saving}
+          onClick={() => setEditing(false)}
+        >
+          <X className="size-4" aria-hidden="true" />
+        </Button>
+      </div>
+      {hint}
+
+      <AlertDialog
+        open={confirming}
+        onOpenChange={(open) => {
+          if (!open && !saving) setConfirming(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingDate
+                ? `Move the start date to ${displayDate(pendingDate)}?`
+                : "Move the start date?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                {milestoneCount > 0 && pendingDate ? (
+                  <p>
+                    All {milestoneCount} milestone target dates will be
+                    rescheduled from the new start: the first on{" "}
+                    <span className="font-medium text-foreground">
+                      {displayDate(pendingDate)}
+                    </span>
+                    , then using each activity&apos;s estimated calendar days,
+                    the last on{" "}
+                    <span className="font-medium text-foreground">
+                      {displayDate(
+                        milestoneTargetDates(
+                          pendingDate,
+                          [...milestones].sort((a, b) => a.order - b.order),
+                        ).at(-1)!,
+                      )}
+                    </span>
+                    .
+                  </p>
+                ) : (
+                  <p>This project has no milestones to reschedule.</p>
+                )}
+                <p>
+                  This applies to every milestone, including ones already done
+                  or in progress, and replaces any target date set by hand. It
+                  cannot be undone from here.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={saving}
+              aria-busy={saving}
+              onClick={(event) => {
+                // Stay open until the save answers, so a failure is not
+                // mistaken for a dialog that simply closed.
+                event.preventDefault();
+                void save();
+              }}
+            >
+              {saving ? (
+                <Loader2
+                  className="size-4 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+              ) : null}
+              {saving ? "Rescheduling…" : "Move start date"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </FieldShell>
+  );
+}
+
 function NumberField({
   label,
   value,
@@ -587,6 +861,7 @@ function TagRow({
         {icon}
         <Input
           ref={inputRef}
+          aria-label={`Edit ${value}`}
           value={draft}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
             setDraft(e.target.value)
@@ -617,7 +892,7 @@ function TagRow({
           setDraft(value);
           setEditing(true);
         }}
-        className="min-w-0 flex-1 cursor-text truncate text-left"
+        className="min-h-11 min-w-0 flex-1 cursor-text whitespace-normal break-words text-left md:min-h-0 md:truncate"
         title={value}
       >
         {value}
@@ -626,7 +901,7 @@ function TagRow({
       <button
         type="button"
         onClick={onRemove}
-        className="shrink-0 rounded-full p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100 focus:opacity-100"
+        className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-opacity hover:bg-background hover:text-foreground md:size-auto md:p-0.5 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
         aria-label={`Remove ${value}`}
       >
         <X className="h-3 w-3" />
@@ -656,6 +931,7 @@ function TagListControl({
   icon,
   maxHeight = "30vh",
 }: TagListControlProps): React.JSX.Element {
+  const inputId = useId();
   const [draft, setDraft] = useState<string>("");
 
   const addFromText = (text: string): void => {
@@ -714,7 +990,7 @@ function TagListControl({
   };
 
   return (
-    <FieldShell label={label}>
+    <FieldShell label={label} htmlFor={inputId}>
       <div className="space-y-2">
         {values.length > 0 && (
           <ul
@@ -739,6 +1015,7 @@ function TagListControl({
             aria-hidden="true"
           />
           <Input
+            id={inputId}
             value={draft}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
               setDraft(e.target.value)
@@ -960,8 +1237,8 @@ function PaymentStagesTable({
     onChange([...stages, { label: "", percentage: null, amount: null }]);
 
   return (
-    <div className="space-y-2 rounded-xl border border-border bg-card p-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-2 rounded-xl border border-border bg-card p-3 md:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-foreground">Payment stages</p>
         <Badge
           variant="outline"
@@ -973,7 +1250,7 @@ function PaymentStagesTable({
 
       {stages.length > 0 ? (
         <div className="overflow-hidden rounded-lg border border-border">
-          <div className="grid grid-cols-[1fr_100px_120px_32px] gap-2 bg-muted px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="hidden grid-cols-[1fr_100px_120px_32px] gap-2 bg-muted px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground md:grid">
             <span>Label</span>
             <span>Percent</span>
             <span>Amount</span>
@@ -981,17 +1258,30 @@ function PaymentStagesTable({
           </div>
           <div className="divide-y divide-border">
             {stages.map((stage, index) => (
+              // On a phone each stage is a small card: its number and remove
+              // button on top, the label across, percent and amount side by
+              // side with their names shown, since the column header is gone.
               <div
                 key={index}
-                className="grid grid-cols-[1fr_100px_120px_32px] items-center gap-2 px-3 py-2"
+                className="grid grid-cols-2 items-end gap-x-2 gap-y-2 px-3 py-3 md:grid-cols-[1fr_100px_120px_32px] md:items-center md:gap-2 md:py-2"
               >
+                <span className="col-start-1 row-start-1 self-center text-xs font-semibold text-muted-foreground md:hidden">
+                  Stage {index + 1}
+                </span>
                 <Input
                   aria-label={`Stage ${index + 1} label`}
+                  placeholder="Stage label"
                   value={stage.label ?? ""}
                   onChange={(e) => updateRow(index, { label: e.target.value })}
-                  className="h-8 rounded-md bg-card text-sm"
+                  className="col-span-2 h-8 rounded-md bg-card text-sm md:col-span-1"
                 />
                 <div className="relative">
+                  <span
+                    aria-hidden="true"
+                    className="mb-1 block text-xs text-muted-foreground md:hidden"
+                  >
+                    Percent
+                  </span>
                   <Input
                     aria-label={`Stage ${index + 1} percent of contract`}
                     type="number"
@@ -1006,7 +1296,7 @@ function PaymentStagesTable({
                   />
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
+                    className="pointer-events-none absolute right-2 bottom-0 flex h-11 items-center text-xs text-muted-foreground md:h-8"
                   >
                     %
                   </span>
@@ -1014,7 +1304,13 @@ function PaymentStagesTable({
                 <div className="relative">
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
+                    className="mb-1 block text-xs text-muted-foreground md:hidden"
+                  >
+                    Amount
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute bottom-0 left-2 flex h-11 items-center text-xs text-muted-foreground md:h-8"
                   >
                     $
                   </span>
@@ -1032,7 +1328,7 @@ function PaymentStagesTable({
                 <button
                   type="button"
                   onClick={() => removeRow(index)}
-                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="col-start-2 row-start-1 flex h-11 w-11 items-center justify-center justify-self-end rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:col-start-auto md:row-start-auto md:h-8 md:w-8 md:justify-self-auto"
                   aria-label={`Remove stage ${index + 1}`}
                 >
                   <X aria-hidden="true" className="h-3.5 w-3.5" />
@@ -1213,14 +1509,14 @@ function ConflictRow({ conflict }: { conflict: ProjectConflictResult }) {
   return (
     <div className="space-y-2 rounded-lg border border-warning/30 bg-warning-light p-3 text-sm">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-xs text-foreground">
+        <span className="min-w-0 font-mono text-xs break-all text-foreground">
           {conflict.fieldPath}
         </span>
         <Badge className="rounded-full bg-card px-2 py-0.5 text-xs font-medium text-warning-ink">
           {toLabel(conflict.resolution)}
         </Badge>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid gap-2 sm:grid-cols-3">
         <ConflictValue label="Tender" value={conflict.tenderValue} />
         <ConflictValue label="Contract" value={conflict.contractValue} />
         <ConflictValue label="Resolved" value={conflict.resolvedValue} />
@@ -1245,13 +1541,10 @@ export function ProjectOverviewTab({
 }) {
   const params = useParams();
   const dispatch = useAppDispatch();
-  const { startDate, estimatedEndDate } = project;
+  const { estimatedEndDate } = project;
   const initialRequirements = (project.requirements ?? {}) as RequirementsData;
   const [openSection, setOpenSection] = useState<string>();
   const [draft, setDraft] = useState<RequirementsData>(initialRequirements);
-  const [stateStartDate, setStateStartDate] = useState<string | null>(
-    toDateInputValue(startDate),
-  );
   const [stateEstimatedEndDate, setStateEstimatedEndDate] = useState<
     string | null
   >(toDateInputValue(estimatedEndDate));
@@ -1376,7 +1669,7 @@ export function ProjectOverviewTab({
           body: JSON.stringify({
             requirements: payload,
             name: payload.projectName,
-            startDate: stateStartDate,
+            // The start date is saved on its own by `StartDateField`.
             estimatedEndDate: stateEstimatedEndDate,
           }),
         },
@@ -1389,7 +1682,6 @@ export function ProjectOverviewTab({
       // so hand it to the store the header actually reads.
       dispatch(setActiveProject(response.data));
       setDraft((response.data.requirements ?? payload) as RequirementsData);
-      setStateStartDate(toDateInputValue(response.data.startDate));
       setStateEstimatedEndDate(
         toDateInputValue(response.data.estimatedEndDate),
       );
@@ -1531,8 +1823,8 @@ export function ProjectOverviewTab({
     | { names?: string[]; emails?: string[]; phones?: string[] }
     | undefined;
   const hbcfInsuranceNumber =
-    (legalAdministration?.hbcfInsuranceNumber as string | null | undefined) ??
-    null;
+    (legalAdministration?.hbcfInsuranceNumber as string | null | undefined)
+    ?? null;
   const hbcfInsuranceDocument =
     (legalAdministration?.hbcfInsuranceDocument as
       | ProjectSourceDocumentReference
@@ -1577,9 +1869,12 @@ export function ProjectOverviewTab({
 
   return (
     <section className="space-y-4">
-      <Card className="border-border/70 bg-card shadow-sm">
-        <CardHeader className="sticky top-0 z-20 flex flex-row items-center justify-between gap-3 border-b border-border/70 bg-card pb-4 shadow-sm">
-          <div>
+      {/* Card clips its children by default, which made the header's
+          `sticky` a no-op: it stuck inside a box that never scrolls. Unclipped,
+          Save stays on screen down a form several screens long. */}
+      <Card className="overflow-visible border-border/70 bg-card pt-0 shadow-sm">
+        <CardHeader className="sticky top-0 z-20 flex flex-row flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-card px-4 pt-3 shadow-sm [.border-b]:pb-3 sm:gap-3 sm:px-6 sm:pt-4 sm:[.border-b]:pb-4">
+          <div className="min-w-0 flex-1">
             {/* The page <h1> is the project name in project-header.tsx and
                 nothing between here and it is an <h2>, so this panel title is
                 the first h2 on the tab. The accordion triggers below sit in
@@ -1590,11 +1885,11 @@ export function ProjectOverviewTab({
             >
               Project information
             </CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 hidden text-sm text-muted-foreground md:block">
               Extracted from the tender and contract documents.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {failCount + warnCount > 0 ? (
               /* Live region so the "as of last save" qualifier is announced when
                  the first edit makes these counts stale, not just seen. */
@@ -1626,12 +1921,19 @@ export function ProjectOverviewTab({
               disabled={!dirty || saving}
               aria-busy={saving}
             >
-              {saving ? "Saving…" : "Save changes"}
+              {saving ? (
+                "Saving…"
+              ) : (
+                <>
+                  <span className="sm:hidden">Save</span>
+                  <span className="hidden sm:inline">Save changes</span>
+                </>
+              )}
             </Button>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-5 pt-5">
+        <CardContent className="space-y-5 px-4 pt-4 sm:px-6 sm:pt-5">
           {/* Overview fields */}
           <div className="grid gap-4 md:grid-cols-3">
             <TextField
@@ -1648,13 +1950,14 @@ export function ProjectOverviewTab({
                 editDraft((c) => ({ ...c, projectType: v ?? "" }))
               }
             />
-            <DateField
-              label="Start date (on-site)"
-              value={stateStartDate}
-              onChange={(v) => {
-                setStateStartDate(v);
-                setDirty(true);
-              }}
+            <StartDateField
+              projectId={project.id}
+              value={project.startDate}
+              milestones={project.milestones}
+              locked={hasWorkStarted(project.milestones)}
+              // The header and the milestone tab read the store, not this
+              // tab, so the saved project goes back there.
+              onSaved={(saved) => dispatch(setActiveProject(saved))}
             />
             <DateField
               label="Estimated end date"
@@ -1745,12 +2048,12 @@ export function ProjectOverviewTab({
                   key={key}
                   id={key}
                   value={key}
-                  className="rounded-xl border border-border bg-card px-4"
+                  className="rounded-xl border border-border bg-card px-3 sm:px-4"
                 >
                   <AccordionTrigger className="py-3 hover:no-underline">
-                    <div className="flex flex-1 items-center justify-between gap-3 pr-3 text-left">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2 pr-1 text-left sm:gap-3 sm:pr-3">
+                      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                        <span className="hidden size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground sm:flex">
                           <Icon aria-hidden="true" className="h-4 w-4" />
                         </span>
                         <div>
@@ -1773,7 +2076,7 @@ export function ProjectOverviewTab({
                       ) : null}
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="max-h-[75vh] space-y-4 overflow-y-auto pb-4 pt-1 no-scrollbar">
+                  <AccordionContent className="space-y-4 pb-4 pt-1 md:max-h-[75vh] md:overflow-y-auto">
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                       {SECTION_FIELDS[key].map((config) => (
                         <div
@@ -1822,8 +2125,8 @@ export function ProjectOverviewTab({
                     {key === "commercialsAndClaims" ? (
                       <PaymentStagesTable
                         stages={
-                          (sectionData.paymentStages as ProjectPaymentStage[]) ??
-                          []
+                          (sectionData.paymentStages as ProjectPaymentStage[])
+                          ?? []
                         }
                         onChange={updatePaymentStages}
                       />
@@ -1831,48 +2134,50 @@ export function ProjectOverviewTab({
 
                     {key === "inclusionsAndExclusions" ? (
                       <div className="grid gap-4 rounded-xl border border-border bg-muted/40 p-4 md:grid-cols-2">
-                        <TagListControl
-                          label={
-                            <h5 className="flex items-center text-sm font-medium text-foreground">
-                              <Check
-                                aria-hidden="true"
-                                className="mr-1 h-3 w-3 shrink-0 text-success-ink"
-                              />
-                              Inclusions
-                            </h5>
-                          }
-                          icon={
+                        <div className="space-y-2">
+                          <h5 className="flex items-center text-sm font-medium text-foreground">
                             <Check
                               aria-hidden="true"
                               className="mr-1 h-3 w-3 shrink-0 text-success-ink"
                             />
-                          }
-                          values={(sectionData.inclusions as string[]) ?? []}
-                          onChange={(v) =>
-                            updateInclusionsExclusionsList("inclusions", v)
-                          }
-                        />
-                        <TagListControl
-                          label={
-                            <h5 className="flex items-center text-sm font-medium text-foreground">
-                              <AlertTriangle
+                            Inclusions
+                          </h5>
+                          <TagListControl
+                            label="Inclusions"
+                            icon={
+                              <Check
                                 aria-hidden="true"
-                                className="mr-1 h-3 w-3 shrink-0 text-warning-ink"
+                                className="mr-1 h-3 w-3 shrink-0 text-success-ink"
                               />
-                              Exclusions
-                            </h5>
-                          }
-                          icon={
+                            }
+                            values={(sectionData.inclusions as string[]) ?? []}
+                            onChange={(v) =>
+                              updateInclusionsExclusionsList("inclusions", v)
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <h5 className="flex items-center text-sm font-medium text-foreground">
                             <AlertTriangle
                               aria-hidden="true"
                               className="mr-1 h-3 w-3 shrink-0 text-warning-ink"
                             />
-                          }
-                          values={(sectionData.exclusions as string[]) ?? []}
-                          onChange={(v) =>
-                            updateInclusionsExclusionsList("exclusions", v)
-                          }
-                        />
+                            Exclusions
+                          </h5>
+                          <TagListControl
+                            label="Exclusions"
+                            icon={
+                              <AlertTriangle
+                                aria-hidden="true"
+                                className="mr-1 h-3 w-3 shrink-0 text-warning-ink"
+                              />
+                            }
+                            values={(sectionData.exclusions as string[]) ?? []}
+                            onChange={(v) =>
+                              updateInclusionsExclusionsList("exclusions", v)
+                            }
+                          />
+                        </div>
                       </div>
                     ) : null}
 

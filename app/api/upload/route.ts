@@ -142,9 +142,12 @@ export async function POST(request: Request): Promise<NextResponse> {
           }
 
           if (
-            payload.isOfferFile ||
-            payload.uploadType === "email-template" ||
-            payload.uploadType === "email-attachment"
+            payload.isOfferFile
+            // These screens confirm and save metadata synchronously. A delayed
+            // callback must not recreate a document the operator has deleted.
+            || payload.uploadType === "project-file"
+            || payload.uploadType === "email-template"
+            || payload.uploadType === "email-attachment"
           ) {
             console.log(
               `Skipping file record creation for uploadType: ${payload.uploadType}`,

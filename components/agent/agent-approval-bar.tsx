@@ -53,7 +53,7 @@ export function AgentApprovalBar({
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-4">
-      <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-royal-gold/50 bg-white/95 py-1.5 pr-1.5 pl-3 shadow-lg backdrop-blur">
+      <div className="pointer-events-auto flex min-w-0 max-w-full items-center gap-3 rounded-full border border-royal-gold/50 bg-white/95 py-1.5 pr-1.5 pl-3 shadow-lg backdrop-blur">
         <ShieldAlert
           aria-hidden="true"
           className="size-4 shrink-0 text-royal-gold-ink"

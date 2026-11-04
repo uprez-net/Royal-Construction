@@ -24,14 +24,14 @@ interface LeadCardListProps {
 // Shared by the list and its skeleton so the swap between them keeps the
 // dialog's layout still.
 const listClassName =
-  "grid max-h-[24vh] gap-3 overflow-y-auto overscroll-contain p-2 sm:grid-cols-2";
+  "grid min-w-0 grid-cols-1 max-h-[24vh] gap-3 overflow-y-auto overscroll-contain p-2 sm:grid-cols-2";
 
 const emptyHint = "Only leads that don't have a project yet appear here.";
 
 // Plain tiles, not Card: Card's overflow-hidden zeroes the automatic min-height
 // of CSS Grid items, which collapsed every row to a padding bar and hid names.
 const tileClassName =
-  "rounded-lg border border-border/70 bg-card p-4 text-sm text-card-foreground";
+  "min-w-0 break-words rounded-lg border border-border/70 bg-card p-4 text-sm text-card-foreground";
 
 function LeadStatusBadge({ lead }: { lead: Lead }) {
   if (lead.stage === "Quoted") {
@@ -98,7 +98,12 @@ function LeadCardSkeleton() {
 
 function LeadCardListSkeleton({ className }: { className?: string }) {
   return (
-    <div className={cn(listClassName, className)}>
+    <div
+      className={cn(listClassName, className)}
+      role="group"
+      aria-busy="true"
+      aria-label="Loading leads"
+    >
       {Array.from({ length: 10 }).map((_, i) => (
         <LeadCardSkeleton key={i} />
       ))}
@@ -205,8 +210,8 @@ export function LeadCardList({
             className={cn(
               tileClassName,
               "cursor-pointer transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
-              lead.id === selectedLeadId &&
-                "border-royal-gold-ink ring-2 ring-royal-gold-ink",
+              lead.id === selectedLeadId
+                && "border-royal-gold-ink ring-2 ring-royal-gold-ink",
               lead.stage === "Quoted" && "opacity-75",
             )}
             onClick={() => toggleLead(lead)}
@@ -268,15 +273,15 @@ export function LeadCardList({
         <div ref={sentinelRef} className="col-span-full h-1" aria-hidden />
 
         {/* "Load more" skeleton row — shown while fetching the next page */}
-        {loadingMore &&
-          Array.from({ length: 2 }).map((_, i) => (
+        {loadingMore
+          && Array.from({ length: 2 }).map((_, i) => (
             <LeadCardSkeleton key={`more-${i}`} />
           ))}
 
-        {!error &&
-          items.length > 0 &&
-          currentPage >= totalPages &&
-          totalPages > 0 && (
+        {!error
+          && items.length > 0
+          && currentPage >= totalPages
+          && totalPages > 0 && (
             <p className="text-center text-sm text-muted-foreground col-span-full mt-2">
               You&apos;ve reached the end of the list.
             </p>

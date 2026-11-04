@@ -57,10 +57,10 @@ export function SequenceMappingPanel() {
         <div className="rounded-lg border border-royal-gold/25 bg-royal-gold-light/25 px-3 py-2 text-sm text-muted-foreground">
           Sequence IDs are intentionally hidden. Trade and milestone columns are
           downstream handoff data for Project creation, not customer-facing
-          copy. Scroll sideways on small screens.
+          copy.
         </div>
         <div className="max-w-full overflow-x-auto rounded-lg border border-border bg-card">
-          <Table className="min-w-[720px] table-fixed border-separate border-spacing-0 text-[13px]">
+          <Table className="sequence-mapping-table md:min-w-[720px] table-fixed border-separate border-spacing-0 text-[13px]">
             <colgroup>
               <col className="w-40" />
               <col className="w-52" />
@@ -122,12 +122,24 @@ function MappingRow({ mapping }: { readonly mapping: OfferSequenceMapping }) {
         className="whitespace-normal break-words border-r border-border/70 bg-background/40 font-medium"
         headers="mapping-task-column"
       >
+        <span
+          aria-hidden="true"
+          className="mb-1 block text-xs text-muted-foreground md:hidden"
+        >
+          Task / phase
+        </span>
         {mapping.taskName}
       </TableCell>
       <TableCell
         className="whitespace-normal break-words border-r border-border/70 text-muted-foreground"
         headers="mapping-sequence-column"
       >
+        <span
+          aria-hidden="true"
+          className="mb-1 block text-xs text-muted-foreground md:hidden"
+        >
+          Building sequence
+        </span>
         <TextList
           emptyLabel="No scheduled sequence task"
           items={mapping.buildingSequenceTasks}
@@ -137,9 +149,21 @@ function MappingRow({ mapping }: { readonly mapping: OfferSequenceMapping }) {
         className="whitespace-normal break-words border-r border-border/70 leading-5"
         headers="mapping-wording-column"
       >
+        <span
+          aria-hidden="true"
+          className="mb-1 block text-xs text-muted-foreground md:hidden"
+        >
+          Offer/Tender wording
+        </span>
         {mapping.offerTenderWording}
       </TableCell>
       <TableCell className="whitespace-normal" headers="mapping-handoff-column">
+        <span
+          aria-hidden="true"
+          className="mb-1 block text-xs text-muted-foreground md:hidden"
+        >
+          Project handoff
+        </span>
         <HandoffSummary mapping={mapping} />
       </TableCell>
     </TableRow>
@@ -178,8 +202,8 @@ function HandoffSummary({
   readonly mapping: OfferSequenceMapping;
 }) {
   if (
-    mapping.tradesToBook.length === 0 &&
-    mapping.milestoneStages.length === 0
+    mapping.tradesToBook.length === 0
+    && mapping.milestoneStages.length === 0
   ) {
     return (
       <span className="text-muted-foreground/80">

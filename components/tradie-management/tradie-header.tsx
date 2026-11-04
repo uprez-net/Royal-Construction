@@ -54,7 +54,7 @@ export function TradieHeader() {
 
   return (
     <Card className="border border-border/70 bg-card shadow-sm">
-      <CardContent className="p-6">
+      <CardContent className="p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground">

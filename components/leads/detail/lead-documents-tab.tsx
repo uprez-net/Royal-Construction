@@ -208,7 +208,7 @@ export function LeadDocumentsTab({
   return (
     <section className="space-y-4">
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
-        <CardHeader className="border-b border-border/70 pb-4">
+        <CardHeader className="border-b border-border/70 px-4 pb-4 sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
               <CardTitle
@@ -252,7 +252,7 @@ export function LeadDocumentsTab({
           </div>
         </CardHeader>
 
-        <CardContent className="pt-5">
+        <CardContent className="px-4 pt-4 sm:px-6 sm:pt-5">
           <UploadDropzone
             label=""
             summary={
@@ -275,7 +275,7 @@ export function LeadDocumentsTab({
       </Card>
 
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
-        <CardHeader className="border-b border-border/70 pb-4">
+        <CardHeader className="border-b border-border/70 px-4 pb-4 sm:px-6">
           <CardTitle
             as="h2"
             className="text-base font-semibold text-foreground"
@@ -288,6 +288,8 @@ export function LeadDocumentsTab({
         </CardHeader>
         <CardContent className="p-4">
           <DataTable
+            mobileLayout="cards"
+            mobileTitleColumn={1}
             onRowClick={(index) => {
               // Lead files carry no stored MIME type (see fileTypeFromName
               // above), so the name is the only signal the helper has for

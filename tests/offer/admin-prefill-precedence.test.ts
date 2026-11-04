@@ -131,19 +131,25 @@ test("the inclusion schedule follows the same precedence", () => {
   );
 });
 
-test("a schedule row with a blank spec is dropped", () => {
+test("a named schedule row with a blank spec is retained for later content", () => {
   const draft = resolveDraft(
     contentWith({
       inclusionSchedule: [
         { spec: "Real spec", category: "Concrete" },
-        { spec: "   ", category: "Nothing" },
+        {
+          spec: "   ",
+          category: "Nothing",
+          tenderText: "Tender only",
+        },
+        { spec: "   " },
       ],
     }),
   );
   assert.deepEqual(
     draft.inclusionSchedule.map((row) => row.spec),
-    ["Real spec"],
+    ["Real spec", ""],
   );
+  assert.equal(draft.inclusionSchedule[1].tenderText, "Tender only");
 });
 
 test("admin allowances start off the Offer document and on the Tender", () => {

@@ -22,7 +22,6 @@ import { startOfMonth, subMonths } from "date-fns";
 import { calculateTrend, dateFormat } from "@/utils/formatters";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "../notification/novu";
-import { convertCategoryToTradieType } from "@/utils/normalize-tradie-type";
 import { getAllAdminUsersIds } from "./user";
 import {
   createTradie as createTradieDomain,
@@ -34,6 +33,30 @@ import {
 } from "@/lib/domain/tradies/directory";
 import { reportTradieIncident as reportTradieIncidentDomain } from "@/lib/domain/tradies/incidents";
 import { userPrincipal } from "@/lib/domain/principal";
+import {
+  getTradieRemovalImpact,
+  listTradieActivity,
+  type TradieActivityPage,
+} from "@/lib/domain/tradies/queries";
+import { bookingTrade, tradieTrades } from "@/lib/domain/tradies/request-rules";
+import { tradeLabelsMatching } from "@/lib/domain/tradies/trade-types";
+import { domainActionFailure } from "@/lib/http/domain-response";
+
+export async function fetchTradieRemovalImpact(tradieId: string) {
+  try {
+    const actor = await requireTradieActor();
+    const impact = await getTradieRemovalImpact(
+      userPrincipal(actor),
+      tradieId,
+      prisma,
+    );
+    return { ok: true as const, ...impact };
+  } catch (error) {
+    const failure = domainActionFailure(error);
+    if (failure) return failure;
+    throw error;
+  }
+}
 
 /**
  * The signed-in user behind a tradie Server Action.
@@ -88,6 +111,7 @@ export async function createTradie(
       id: res.id,
       name: res.name,
       trade: res.trade,
+      trades: tradieTrades(res),
       isFavourite: res.isFavourite,
       lastQuotedPrice: res.lastQuotedPrice
         ? res.lastQuotedPrice.toString()
@@ -103,6 +127,32 @@ export async function createTradie(
   } catch (error) {
     console.error("Error creating tradie:", error);
     throw new Error("Failed to create tradie");
+  }
+}
+
+/**
+ * One page of a tradie's activity log, newest first, for the details page.
+ *
+ * Not cached: the log is written by Eve, the email-reply webhook and the
+ * reminder cron as well as this app, and none of those can expire a tag.
+ */
+export async function fetchTradieActivityLog(
+  tradieId: string,
+  cursor?: string | null,
+) {
+  try {
+    const actor = await requireTradieActor();
+    const page: TradieActivityPage = await listTradieActivity(
+      userPrincipal(actor),
+      { cursor: cursor ?? null, tradieId },
+      prisma,
+    );
+    return { ok: true as const, ...page };
+  } catch (error) {
+    const failure = domainActionFailure(error);
+    if (failure) return failure;
+    console.error("Error loading the tradie activity log:", error);
+    throw new Error("Failed to load the activity log");
   }
 }
 
@@ -297,6 +347,8 @@ export async function deleteTradie(input: DeleteInput) {
     });
   } catch (error) {
     console.error("Error deleting tradie:", error);
+    const failure = domainActionFailure(error);
+    if (failure) return failure;
     throw new Error("Failed to delete tradie");
   }
 }
@@ -412,6 +464,25 @@ export async function reportTradieIncident(
 }
 
 /**
+ * The category tile a tradie sits under, and the key its filter matches.
+ *
+ * The label as stored: the trade list is Admin → Trade types, a tradie can
+ * only be given a listed label, and a rename carries its tradies with it.
+ */
+function tradeCategory(trade: string): string {
+  return trade.trim() || "Others";
+}
+
+/** Every tile a tradie sits under: each trade, or "Others" with none. */
+function tradeCategories(tradie: {
+  trade: string;
+  trades?: string[] | null;
+}): string[] {
+  const categories = tradieTrades(tradie).map(tradeCategory);
+  return categories.length > 0 ? categories : ["Others"];
+}
+
+/**
  * Retrieves all tradies grouped by trade category with aggregated metrics.
  *
  * Calculates:
@@ -428,11 +499,13 @@ export async function getTradieGroupedByCategory(): Promise<
 > {
   try {
     const tradies = await prisma.tradie.findMany({
+      where: { archivedAt: null },
       include: {
         schedules: {
           select: {
             id: true,
             status: true,
+            trade: true,
           },
         },
         incidents: {
@@ -447,12 +520,15 @@ export async function getTradieGroupedByCategory(): Promise<
     });
 
     const grouped = new Map<string, TradieRow[]>();
+    /** Completed jobs per tile, each counted under the trade it was for. */
+    const categoryJobs = new Map<string, number>();
 
     for (const tradie of tradies) {
       const row: TradieRow = {
         id: tradie.id,
         name: tradie.name,
         trade: tradie.trade,
+        trades: tradieTrades(tradie),
         isFavourite: tradie.isFavourite,
         lastQuotedPrice: tradie.lastQuotedPrice?.toString() ?? null,
         lastQuotedPriceUnit: tradie.lastQuotedPriceUnit,
@@ -469,16 +545,32 @@ export async function getTradieGroupedByCategory(): Promise<
         },
       };
 
-      const existing = grouped.get(
-        convertCategoryToTradieType(tradie.trade) ?? "Others",
-      );
+      // A tradie in two trades sits under both tiles, but each completed job
+      // was for one trade, and counts toward that tile alone — a gas job is
+      // not plumbing work done.
+      const completedByTrade = new Map<string, number>();
+      for (const schedule of tradie.schedules) {
+        if (schedule.status !== "COMPLETED") continue;
+        const key = tradeCategory(
+          bookingTrade({ ...schedule, tradie }),
+        ).toLowerCase();
+        completedByTrade.set(key, (completedByTrade.get(key) ?? 0) + 1);
+      }
 
-      if (existing) {
-        existing.push(row);
-      } else {
-        grouped.set(convertCategoryToTradieType(tradie.trade) ?? "Others", [
-          row,
-        ]);
+      // Under every category they work in, so a plumber who also does gas
+      // is offered for gas work too.
+      for (const category of tradeCategories(tradie)) {
+        const existing = grouped.get(category);
+        if (existing) {
+          existing.push(row);
+        } else {
+          grouped.set(category, [row]);
+        }
+        categoryJobs.set(
+          category,
+          (categoryJobs.get(category) ?? 0)
+            + (completedByTrade.get(category.toLowerCase()) ?? 0),
+        );
       }
     }
 
@@ -495,16 +587,13 @@ export async function getTradieGroupedByCategory(): Promise<
             ratings.length > 0
               ? Number(
                   (
-                    ratings.reduce((sum, rating) => sum + rating, 0) /
-                    ratings.length
+                    ratings.reduce((sum, rating) => sum + rating, 0)
+                    / ratings.length
                   ).toFixed(1),
                 )
               : 0,
 
-          totalCategoryJobsCompleted: tradies.reduce(
-            (sum, tradie) => sum + tradie.jobsCompleted,
-            0,
-          ),
+          totalCategoryJobsCompleted: categoryJobs.get(category) ?? 0,
 
           tradies,
         };
@@ -566,17 +655,24 @@ export async function fetchFilteredTradies(
   input: TradieTableQuery,
 ): Promise<TradieRow[]> {
   try {
+    // "gas" finds a tradie whose second trade is Gas Fitting.
+    const tradeLabels = input.search
+      ? await tradeLabelsMatching(input.search, prisma)
+      : [];
     const whereClause: Prisma.TradieWhereInput = {
+      archivedAt: null,
       ...(input.search
         ? {
             OR: [
               { name: { contains: input.search, mode: "insensitive" } },
               { trade: { contains: input.search, mode: "insensitive" } },
+              ...(tradeLabels.length > 0
+                ? [{ trades: { hasSome: tradeLabels } }]
+                : []),
               { abn: { contains: input.search, mode: "insensitive" } },
             ],
           }
         : undefined),
-      ...(input.category ? { trade: input.category } : undefined),
       ...(input.rating ? { rating: { gte: input.rating } } : undefined),
       ...(input.favourite !== undefined
         ? { isFavourite: input.favourite }
@@ -606,9 +702,19 @@ export async function fetchFilteredTradies(
       },
     });
 
-    return tradies.map((tradie) => {
+    // The category is matched here rather than in the query so it is the
+    // same key the tiles group by, blank and untrimmed trades included. This
+    // listing is not paginated, so nothing is lost by filtering after.
+    const inCategory = input.category
+      ? tradies.filter((tradie) =>
+          tradeCategories(tradie).includes(input.category!),
+        )
+      : tradies;
+
+    return inCategory.map((tradie) => {
       return {
         ...tradie,
+        trades: tradieTrades(tradie),
         lastQuotedPrice: tradie.lastQuotedPrice?.toString() ?? null,
         lastQuotedPriceUnit: tradie.lastQuotedPriceUnit,
         rating: tradie.rating?.toString() ?? null,
@@ -675,18 +781,19 @@ export async function fetchTradieKPIData(): Promise<TradieKPIData> {
                 (
                     SELECT COUNT(*)
                     FROM "Tradie"
+                    WHERE "archivedAt" IS NULL
                 ) AS registered_tradies,
 
                 (
                     SELECT COUNT(*)
                     FROM "Tradie"
-                    WHERE "createdAt" >= ${currentMonthStart}
+                    WHERE "archivedAt" IS NULL AND "createdAt" >= ${currentMonthStart}
                 ) AS registered_current_month,
 
                 (
                     SELECT COUNT(*)
                     FROM "Tradie"
-                    WHERE "createdAt" >= ${previousMonthStart}
+                    WHERE "archivedAt" IS NULL AND "createdAt" >= ${previousMonthStart}
                     AND "createdAt" < ${currentMonthStart}
                 ) AS registered_previous_month,
 
@@ -713,20 +820,20 @@ export async function fetchTradieKPIData(): Promise<TradieKPIData> {
                 (
                     SELECT COUNT(*)
                     FROM "Tradie"
-                    WHERE "isFavourite" = true
+                    WHERE "archivedAt" IS NULL AND "isFavourite" = true
                 ) AS favourite_tradies,
 
                 (
                     SELECT COUNT(*)
                     FROM "Tradie"
-                    WHERE "isFavourite" = true
+                    WHERE "archivedAt" IS NULL AND "isFavourite" = true
                     AND "createdAt" >= ${currentMonthStart}
                 ) AS favourites_current_month,
 
                 (
                     SELECT COUNT(*)
                     FROM "Tradie"
-                    WHERE "isFavourite" = true
+                    WHERE "archivedAt" IS NULL AND "isFavourite" = true
                     AND "createdAt" >= ${previousMonthStart}
                     AND "createdAt" < ${currentMonthStart}
                 ) AS favourites_previous_month
@@ -844,6 +951,7 @@ export async function toggleTradieFavourite(
 export async function exportTradies() {
   try {
     const tradies = await prisma.tradie.findMany({
+      where: { archivedAt: null },
       include: {
         schedules: {
           select: {
@@ -904,7 +1012,14 @@ export async function updateTradie(
   data: Partial<
     Pick<
       Tradie,
-      "email" | "abn" | "additionalEmails" | "phone" | "location" | "note"
+      | "name"
+      | "email"
+      | "abn"
+      | "additionalEmails"
+      | "phone"
+      | "location"
+      | "note"
+      | "trades"
     >
   >,
 ): Promise<TradieDetails> {

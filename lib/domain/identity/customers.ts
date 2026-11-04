@@ -1,11 +1,16 @@
 import { Prisma, type Customer } from "@prisma/client";
 
 import type { DomainDb } from "../db";
-import { DomainAuthorizationError, DomainNotFoundError } from "../errors";
+import {
+  DomainAuthorizationError,
+  DomainNotFoundError,
+  DomainValidationError,
+} from "../errors";
 import { isInternalPrincipal, type DomainPrincipal } from "../principal";
+import { ownerFieldPath, type ProjectOwner } from "../projects/owners";
 
-// The customer record a project belongs to: finding one, and resolving the
-// one a new project should use.
+// The customer records a project belongs to: finding one, and resolving the
+// ones a new project's owners are.
 //
 // Moved from `lib/data/customers.ts`, which was `"use server"` — so every one
 // of these was a POST endpoint reachable by any signed-in caller, including
@@ -118,91 +123,164 @@ export async function findCustomerByContact(
     if (byEmail) return byEmail;
   }
   if (phone) {
+    // `phone` is already in `canonicalPhone` form (the owner rule put it there),
+    // and so is every stored `Customer.phone`, so an exact match is the same
+    // number however either side was typed.
     const byPhone = await db.customer.findUnique({ where: { phone } });
     if (byPhone) return byPhone;
   }
   return null;
 }
 
-export type ResolveCustomerInput = {
-  readonly name: string;
-  readonly email: string;
-  readonly phone: string;
-  readonly address?: string | null;
+/** One resolved owner: the customer row, and what this call did to it. */
+export type ResolvedProjectCustomer = {
+  readonly customer: Customer;
+  readonly created: boolean;
+  readonly changed: boolean;
 };
 
 /**
- * The customer a project should be attached to: the existing record if the
- * contact details already identify one, otherwise a new one.
+ * The customers a project's owners are, in the owners' order: the customer
+ * already on file where the email or phone identifies one, otherwise a new one.
  *
- * Email and phone are resolved INDEPENDENTLY. The helper this replaced
- * returned the email match and never looked at the phone, so a conflict —
- * email and phone belonging to DIFFERENT customers — silently attached the
- * project to the email record with nobody noticing. Here the conflict is
- * explicit: email is the authoritative identity and wins deterministically,
- * the phone record's contact fields are never stolen, and changed values are
- * refreshed only when no OTHER customer already holds them, so the unique
- * constraint is never tripped and no record is hijacked.
+ * **A recurring client is linked, not refused.** Clients come back for a
+ * second build, so an owner whose email (or, failing that, phone) is already
+ * on file is that customer: the new project is linked to the existing id.
+ * Email is looked up first, because it is the authoritative identity
+ * (`findCustomerByContact` uses the same order).
  *
- * Every persisted value is the NORMALISED one — the same trimmed locals the
- * lookups use. Storing the raw input meant a record created from " a@b.com "
- * never matched the trimmed lookup again, so the next call created a duplicate
- * instead of reusing it.
+ * **What the contract updates on a linked customer.** The contract is the
+ * latest word on the client, so the name's spelling and the address are
+ * written from it, and so is an email or phone that changed — but only when
+ * no other customer holds that value. A phone that is on file for somebody
+ * else (a spouse's, a shared household line) is left alone rather than moved:
+ * the client keeps the number they had, and the other customer keeps theirs.
+ * An owner with no phone is matched on email alone, is created with a NULL
+ * phone, and never clears a phone a linked customer already has.
  *
- * Returns `{ customer, created }` so the caller can decide what to invalidate.
- * Deliberately says nothing about caches: when this runs inside a transaction
- * the write has not committed, and firing an invalidation here let another
- * request refill the "customers" cache from pre-commit data with nothing to
- * correct it afterwards.
+ * **Refused only where linking would put the wrong person on the project:**
+ *
+ *   - the matching customer has a different name. Households share a phone or
+ *     an email, and linking John's contract to Jane's record would name Jane
+ *     on John's project and its invoices — and renaming the record would
+ *     rewrite Jane's earlier projects. The office can tell which it is; this
+ *     cannot.
+ *   - the matching customer is already a different owner of this project. One
+ *     customer cannot be two owners (`ProjectCustomer` is keyed on both).
+ *
+ * A refusal message never carries the other record's details.
+ *
+ * Deliberately says nothing about caches: this runs inside the project
+ * transaction, and an invalidation fired before commit lets another request
+ * refill the "customers" cache from uncommitted data.
+ *
+ * @throws {DomainValidationError} One of the refusals above, naming the
+ * owner's row under `legalAdministrationOwners` (see `ownerFieldPath`).
  */
-export async function resolveCustomerForProject(
-  input: ResolveCustomerInput,
+export async function resolveCustomersForProject(
+  owners: readonly ProjectOwner[],
   db: DomainDb,
-): Promise<{ customer: Customer; created: boolean; changed: boolean }> {
-  const address = input.address?.trim() || null;
-  const name = input.name?.trim();
-  const email = input.email?.trim();
-  const phone = input.phone?.trim();
+): Promise<ResolvedProjectCustomer[]> {
+  const claimedBy = new Map<string, string>();
+  const resolved: ResolvedProjectCustomer[] = [];
 
-  const byEmail = email
-    ? await db.customer.findUnique({ where: { email } })
-    : null;
+  for (const [index, owner] of owners.entries()) {
+    const result = await resolveOwnerCustomer(owner, index, claimedBy, db);
+    claimedBy.set(result.customer.id, `Owner ${index + 1} (${owner.name})`);
+    resolved.push(result);
+  }
+
+  return resolved;
+}
+
+/**
+ * A name's words in any script — "李伟" and "José" are words too, not
+ * punctuation to strip. NFC first, so an accent typed as a combining mark and
+ * one typed precomposed compare equal.
+ */
+function nameWords(name: string): string[] {
+  return (
+    name
+      .normalize("NFC")
+      .toLowerCase()
+      .match(/[\p{L}\p{M}\p{N}]+/gu) ?? []
+  );
+}
+
+/**
+ * Whether a customer on file and an owner on the contract are plausibly one
+ * person: every word of the shorter name appears in the longer. "Jane" (a
+ * customer made from an enquiry) is "Jane Smith"; "Jane Smith" is
+ * "JANE A. SMITH"; "Jane Smith" is not "John Smith".
+ */
+function sameName(onFile: string, onContract: string): boolean {
+  const a = nameWords(onFile);
+  const b = nameWords(onContract);
+  if (a.length === 0 || b.length === 0) return false;
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  const words = new Set(longer);
+  return shorter.every((word) => words.has(word));
+}
+
+async function resolveOwnerCustomer(
+  owner: ProjectOwner,
+  index: number,
+  claimedBy: ReadonlyMap<string, string>,
+  db: DomainDb,
+): Promise<ResolvedProjectCustomer> {
+  const { address, email, name, phone } = owner;
+  const label = `Owner ${index + 1} (${name})`;
+
+  const byEmail = await db.customer.findFirst({
+    where: { email: { equals: email, mode: Prisma.QueryMode.insensitive } },
+  });
+  // No phone is no lookup: `findUnique({ phone: "" })` would match nobody,
+  // and a missing phone is NULL on the customer, never "".
   const byPhone = phone
     ? await db.customer.findUnique({ where: { phone } })
     : null;
+
   const existing = byEmail ?? byPhone;
-
-  if (existing) {
-    const patch: Prisma.CustomerUpdateInput = {};
-    if (name && name !== existing.name) patch.name = name;
-    if (address && address !== existing.address) patch.address = address;
-    if (
-      email
-      && email !== existing.email
-      && (byEmail === null || byEmail.id === existing.id)
-    ) {
-      patch.email = email;
-    }
-    if (
-      phone
-      && phone !== existing.phone
-      && (byPhone === null || byPhone.id === existing.id)
-    ) {
-      patch.phone = phone;
-    }
-
-    if (Object.keys(patch).length === 0) {
-      return { changed: false, created: false, customer: existing };
-    }
-    const updated = await db.customer.update({
-      where: { id: existing.id },
-      data: patch,
+  if (!existing) {
+    const customer = await db.customer.create({
+      data: { address, email, name, phone: phone || null },
     });
-    return { changed: true, created: false, customer: updated };
+    return { changed: true, created: true, customer };
   }
 
-  const customer = await db.customer.create({
-    data: { name, email, phone, address },
+  const matchedOn = byEmail ? "email" : "phone";
+
+  const earlierOwner = claimedBy.get(existing.id);
+  if (earlierOwner !== undefined) {
+    throw new DomainValidationError(
+      `${label} and ${earlierOwner} match the same customer on file. Check their emails and phone numbers against the contract.`,
+      ownerFieldPath(index, matchedOn),
+    );
+  }
+
+  if (!sameName(existing.name, name)) {
+    const detail = matchedOn === "email" ? "email" : "phone number";
+    throw new DomainValidationError(
+      `${label}: this ${detail} is already on file for a customer with a different name. If it is the same person, change the name to match the customer on file; if not, use ${name}'s own ${detail}.`,
+      ownerFieldPath(index, matchedOn),
+    );
+  }
+
+  const patch: Prisma.CustomerUpdateInput = {};
+  if (name !== existing.name) patch.name = name;
+  if (address !== existing.address) patch.address = address;
+  // An email or phone is moved onto this customer only when nobody else holds
+  // it: `byEmail`/`byPhone` is that holder, and both columns are unique.
+  if (email !== existing.email.toLowerCase() && !byEmail) patch.email = email;
+  // A contract with no phone never clears the one on file.
+  if (phone && phone !== existing.phone && !byPhone) patch.phone = phone;
+
+  if (Object.keys(patch).length === 0) {
+    return { changed: false, created: false, customer: existing };
+  }
+  const updated = await db.customer.update({
+    where: { id: existing.id },
+    data: patch,
   });
-  return { changed: true, created: true, customer };
+  return { changed: true, created: false, customer: updated };
 }

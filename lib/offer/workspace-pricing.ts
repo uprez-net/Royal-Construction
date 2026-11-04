@@ -386,6 +386,42 @@ export function calculateOfferWorkspacePricing({
   };
 }
 
+// Total Contract Value is the build-up's own contract value inc GST. The HBCF
+// premium priced on it is one of that build-up's additions, so the two depend
+// on each other: solve them together. Each pass re-prices the premium on the
+// last contract value; the premium is about 1.5% of the price, so the gap
+// shrinks some sixty-fold a pass and settles to the cent in three or four.
+// Returns settings whose TCV equals the contract value they produce, or
+// `settings` itself when they already do.
+const TCV_MAX_PASSES = 12;
+
+export function withDerivedTotalContractValue(
+  settings: OfferWorkspacePricingSettings,
+  directTotal: number,
+): OfferWorkspacePricingSettings {
+  const contractValueFor = (candidate: OfferWorkspacePricingSettings) =>
+    calculateOfferWorkspacePricing({
+      directTotal,
+      totalAreaSqm: 0,
+      settings: candidate,
+    }).contractValueIncGst;
+  let derived = withDerivedHbcfPremium(settings);
+  for (let pass = 0; pass < TCV_MAX_PASSES; pass += 1) {
+    const contractValue = contractValueFor(derived);
+    if (contractValue === derived.hbcfTotalContractValue) {
+      break;
+    }
+    derived = withDerivedHbcfPremium({
+      ...derived,
+      hbcfTotalContractValue: contractValue,
+    });
+  }
+  return derived.hbcfTotalContractValue === settings.hbcfTotalContractValue
+    && derived.homeWarrantyHbcfFixed === settings.homeWarrantyHbcfFixed
+    ? settings
+    : derived;
+}
+
 // The margin actually earned at the (possibly overridden) selling price, for
 // the margin badge. This is what makes the below_minimum / acceptable_below_
 // target warnings reachable: the cost build-up alone always reports the target

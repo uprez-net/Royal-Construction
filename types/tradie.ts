@@ -13,7 +13,10 @@ import { TradieScheduleStatus } from "@prisma/client";
 export interface TradieRow {
   id: string;
   name: string;
+  /** The primary category. */
   trade: string;
+  /** Every category, the primary first. */
+  trades: string[];
   isFavourite: boolean;
   lastQuotedPrice: string | null;
   lastQuotedPriceUnit: TradiePriceUnit;
@@ -48,7 +51,8 @@ export interface TradieDetails extends SafeTradie {
 
 export interface CreateTradieInput {
   name: string;
-  trade: string;
+  /** Every category, the primary first; the primary is also `trade`. */
+  trades: string[];
   // Matches the column. `createTradie` passes this object straight to
   // `prisma.tradie.create({ data: input })`, so a field the schema does not
   // have is an unknown-argument failure at runtime — and because `data`
@@ -161,6 +165,19 @@ export interface ScheduleDeletionJsonPayload {
   currentStatus: TradieScheduleStatus;
 }
 
+/**
+ * Recorded on a TRADE_CANCELLATION approval: the selection to release, and
+ * enough of the project for the queue to describe it.
+ */
+export interface TradeCancellationJsonPayload {
+  selectionId: string;
+  projectId: string;
+  projectName: string;
+  trade: string;
+  /** Open bookings the tradie held on the project when this was asked. */
+  openBookings: number;
+}
+
 export interface PriceUpdateJsonPayload {
   newHourlyRate: number;
   newPriceUnit?: TradiePriceUnit;
@@ -176,6 +193,7 @@ export interface IncidentReportJsonPayload {
 export type TradieApprovalPayload =
   | ScheduleApprovalJsonPayload
   | ScheduleDeletionJsonPayload
+  | TradeCancellationJsonPayload
   | PriceUpdateJsonPayload
   | IncidentReportJsonPayload
   | undefined;
@@ -188,55 +206,3 @@ export interface SafeTradieApproval extends Omit<
   requestBy: string;
   updationData: TradieApprovalPayload;
 }
-
-export const TRADIE_SCHEDULE_STATE_MACHINE: Record<
-  TradieScheduleStatus,
-  TradieScheduleStatus[]
-> = {
-  [TradieScheduleStatus.PENDING]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.NO_RESPONSE,
-    TradieScheduleStatus.PENDING_RESPONSE,
-  ],
-  [TradieScheduleStatus.AWAITING_ADMIN_APPROVAL]: [
-    TradieScheduleStatus.CONFIRMED,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.PENDING_RESPONSE]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.CONFIRMED]: [
-    TradieScheduleStatus.COMPLETED,
-    TradieScheduleStatus.DECLINED,
-    // Admin approval updates the row in its transaction and then runs the
-    // normal side-effect path with the same final status.
-    TradieScheduleStatus.CONFIRMED,
-  ],
-  [TradieScheduleStatus.PENDING_FINAL_CONFIRMATION]: [
-    TradieScheduleStatus.CONFIRMED,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.NO_RESPONSE]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.DECLINED]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.PENDING_RESPONSE,
-    TradieScheduleStatus.NO_RESPONSE,
-    // Admin rejection updates the row first, then runs the shared status
-    // side-effect path with DECLINED again.
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.COMPLETED]: [],
-  [TradieScheduleStatus.AWAITING_QUOTE]: [
-    TradieScheduleStatus.QUOTE_RECEIVED,
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.QUOTE_RECEIVED]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.DECLINED,
-  ],
-};

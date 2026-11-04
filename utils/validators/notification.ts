@@ -73,6 +73,49 @@ export const notificationSchemas = {
     scheduleDate: z.string(),
   }),
 
+  tradieReplyNeedsReview: z.object({
+    tradieId: z.string(),
+    tradieName: z.string(),
+    subject: z.string(),
+    reason: z.string(),
+  }),
+
+  tradieInvoiceNeedsAllocation: z.object({
+    projectId: z.string(),
+    projectName: z.string(),
+    tradieName: z.string(),
+    /** Formatted ex GST, e.g. "$4,500.00". */
+    amount: z.string(),
+    invoiceNumber: z.string().nullish(),
+  }),
+
+  tradieInvoiceDuplicateNumber: z.object({
+    projectId: z.string(),
+    tradieName: z.string(),
+    amount: z.string(),
+    invoiceNumber: z.string(),
+  }),
+
+  tradieInvoiceEmailed: z.object({
+    projectId: z.string(),
+    projectName: z.string(),
+    tradieName: z.string(),
+    count: z.number().int().min(1),
+  }),
+
+  tradieInvoiceEmailUnmatched: z.object({
+    tradieId: z.string(),
+    tradieName: z.string(),
+    subject: z.string(),
+  }),
+
+  tradieInvoiceUnmatched: z.object({
+    tradieId: z.string(),
+    tradieName: z.string(),
+    amount: z.string(),
+    invoiceNumber: z.string().nullish(),
+  }),
+
   tradieScheduleUpdated: z.object({
     projectId: z.string(),
     projectName: z.string(),
@@ -170,6 +213,26 @@ export const notificationSchemas = {
     trade: z.string(),
     reason: z.string(),
     requestedBy: z.string(),
+  }),
+
+  tradeCancellationRequest: z.object({
+    approvalId: z.string(),
+    projectId: z.string(),
+    projectName: z.string(),
+    trade: z.string(),
+    tradieId: z.string(),
+    tradieName: z.string(),
+    reason: z.string(),
+    requestedBy: z.string(),
+  }),
+
+  tradeCancellationResolved: z.object({
+    approvalId: z.string(),
+    projectId: z.string(),
+    projectName: z.string(),
+    trade: z.string(),
+    tradieName: z.string(),
+    approved: z.boolean(),
   }),
 
   tradieScheduleDeletionResolved: z.object({

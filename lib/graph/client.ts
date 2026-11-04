@@ -75,6 +75,25 @@ const MAX_TOTAL_ATTACHMENT_BYTES = Math.floor(
 // we align anyway: 10 x 320 KiB, comfortably under the 4 MB guidance.
 const UPLOAD_CHUNK_BYTES = 10 * 320 * 1024;
 
+/**
+ * A named MAPI property stamped on every message this app sends.
+ *
+ * Sent Items holds the app's mail and the mail somebody typed in Outlook side
+ * by side, and only the second needs copying onto a trail: the app records
+ * what it sends itself, and what it chooses not to record — a welcome email, a
+ * quotation — should not appear on a lead's trail because it passed through
+ * the mailbox. An `x-` internet header would be the obvious marker, but Graph
+ * does not reliably return internetMessageHeaders on a Sent Items copy. An
+ * extended property lives on the item itself, survives the move into Sent
+ * Items, and can be asked for by id. The GUID is ours and never changes.
+ */
+export const APP_ORIGIN_PROPERTY_ID =
+  "String {5305344f-58f5-444e-a921-45145a95a791} Name RoyalAppOrigin";
+
+const APP_ORIGIN_PROPERTY = [
+  { id: APP_ORIGIN_PROPERTY_ID, value: "app" },
+] as const;
+
 // Decoding is done once per send and carried around: at these sizes a stray
 // re-decode is a full extra copy of the file in memory.
 interface DecodedAttachment {
@@ -219,6 +238,23 @@ export interface GraphMessage {
   headers: EmailHeaders;
 }
 
+/** One message from Sent Items, as the sent-mail sync reads it. */
+export interface GraphSentMessage {
+  id: string;
+  subject: string;
+  /** To, Cc and Bcc together: whoever it went to is who it is about. */
+  recipients: string[];
+  sentDateTime: string;
+  hasAttachments: boolean;
+  /**
+   * Plain text of what this message added, without the history it quotes.
+   * Graph's uniqueBody, so a reply on a long thread is stored as the reply.
+   */
+  body: string;
+  /** Carries APP_ORIGIN_PROPERTY_ID: the app sent it and recorded it itself. */
+  sentByApp: boolean;
+}
+
 export interface GraphSubscription {
   id: string;
   expirationDateTime: string;
@@ -242,6 +278,8 @@ export interface GraphContext {
    */
   replyToMessage(input: ReplyInput): Promise<void>;
   listInbox(top?: number, includeBody?: boolean): Promise<GraphMessage[]>;
+  /** Sent Items from `since` onwards, oldest first, every page. */
+  listSentMessages(since: Date): Promise<GraphSentMessage[]>;
   getTokenPreview(): Promise<string>;
   getMessageByResource(
     resource: string,
@@ -302,6 +340,13 @@ interface GraphApiMessage {
     contentType?: string;
     content?: string;
   };
+
+  sentDateTime?: string;
+  uniqueBody?: {
+    contentType?: string;
+    content?: string;
+  };
+  singleValueExtendedProperties?: { id?: string; value?: string }[];
 }
 
 interface GraphApiAttachment {
@@ -565,6 +610,10 @@ export async function createGraphContext(
     ? "/me/mailFolders/inbox/messages"
     : `/users/${encodeURIComponent(normalizedSender || "")}/mailFolders/inbox/messages`;
 
+  const sentItemsPath = !useExplicitMailbox
+    ? "/me/mailFolders/sentitems/messages"
+    : `/users/${encodeURIComponent(normalizedSender || "")}/mailFolders/sentitems/messages`;
+
   // Draft creation for the large-attachment path. Needs Mail.ReadWrite, which is
   // a separate grant from the Mail.Send used by the inline path.
   const messagesPath = !useExplicitMailbox
@@ -596,6 +645,52 @@ export async function createGraphContext(
       );
 
       return list.value.map((item) => mapMessage(item, includeBody));
+    },
+    listSentMessages: async (since: Date) => {
+      const token = await getAccessToken();
+      const params = new URLSearchParams({
+        $filter: `sentDateTime ge ${since.toISOString()}`,
+        // $orderby has to lead with the property $filter is on, or Graph
+        // rejects the pair as too complex.
+        $orderby: "sentDateTime asc",
+        $top: "50",
+        $select:
+          "id,subject,toRecipients,ccRecipients,bccRecipients,sentDateTime,hasAttachments,uniqueBody",
+        $expand: `singleValueExtendedProperties($filter=id eq '${APP_ORIGIN_PROPERTY_ID}')`,
+      });
+
+      const messages: GraphSentMessage[] = [];
+      let url: string | undefined =
+        `https://graph.microsoft.com/v1.0${sentItemsPath}?${params.toString()}`;
+      while (url) {
+        const page: {
+          value?: GraphApiMessage[];
+          "@odata.nextLink"?: string;
+        } = await graphRequest("GET", url, token, undefined, {
+          // Text, as everywhere else the app stores a body: the trails render
+          // plain text, and the checksum strips markup anyway.
+          Prefer: 'outlook.body-content-type="text"',
+        });
+
+        for (const item of page.value ?? []) {
+          if (!item.id) continue;
+          const mapped = mapMessage(item, false);
+          messages.push({
+            id: item.id,
+            subject: item.subject ?? "",
+            recipients: [...mapped.to, ...mapped.cc, ...mapped.bcc],
+            sentDateTime: item.sentDateTime ?? "",
+            hasAttachments: item.hasAttachments ?? false,
+            body: item.uniqueBody?.content ?? "",
+            sentByApp: (item.singleValueExtendedProperties ?? []).some(
+              (property) => property.id === APP_ORIGIN_PROPERTY_ID,
+            ),
+          });
+        }
+        url = page["@odata.nextLink"];
+      }
+
+      return messages;
     },
     getMessageByResource: async (resource: string, includeBody = true) => {
       const token = await getAccessToken();
@@ -723,6 +818,7 @@ export async function createGraphContext(
           },
           ...(toRecipients && { toRecipients }),
           ...(ccRecipients && { ccRecipients }),
+          singleValueExtendedProperties: APP_ORIGIN_PROPERTY,
         });
 
         for (const decoded of decodedAttachments) {
@@ -786,6 +882,7 @@ export async function createGraphContext(
             toRecipients,
             ...(ccRecipients && { ccRecipients }),
             ...(bccRecipients && { bccRecipients }),
+            singleValueExtendedProperties: APP_ORIGIN_PROPERTY,
           },
         );
 
@@ -833,6 +930,7 @@ export async function createGraphContext(
             toRecipients,
             ...(ccRecipients && { ccRecipients }),
             ...(bccRecipients && { bccRecipients }),
+            singleValueExtendedProperties: APP_ORIGIN_PROPERTY,
             ...(attachments && attachments.length > 0
               ? {
                   attachments: attachments.map((attachment) => ({

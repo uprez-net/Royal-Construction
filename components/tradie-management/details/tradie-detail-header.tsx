@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { TradieBadge } from "../trade-badge";
+import { tradieTrades } from "@/lib/domain/tradies/request-rules";
 import { TradieRow } from "@/types/tradie";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { TRADE_AVATAR_CLASS } from "@/constants/tradeChip";
@@ -32,7 +33,8 @@ export function TradieCard() {
     return null;
   }
 
-  const { name, trade, incidents } = tradieDetails;
+  const { name, incidents } = tradieDetails;
+  const trades = tradieTrades(tradieDetails);
   const openIncidentsCount = incidents.filter(
     (incident) => incident.status === "OPEN",
   ).length;
@@ -44,6 +46,7 @@ export function TradieCard() {
     id: tradieDetails.id,
     name: tradieDetails.name,
     trade: tradieDetails.trade,
+    trades,
     isFavourite: tradieDetails.isFavourite,
     lastQuotedPrice: tradieDetails.lastQuotedPrice ?? null,
     lastQuotedPriceUnit: tradieDetails.lastQuotedPriceUnit,
@@ -106,7 +109,9 @@ export function TradieCard() {
             </div>
 
             <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <TradieBadge trade={trade} />
+              {trades.map((trade) => (
+                <TradieBadge key={trade} trade={trade} />
+              ))}
             </div>
           </div>
         </div>

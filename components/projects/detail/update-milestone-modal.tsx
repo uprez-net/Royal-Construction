@@ -40,8 +40,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { hasWorkStarted } from "@/lib/domain/projects/milestone-schedule";
 import { Calendar } from "@/components/ui/calendar";
-import { scheduleTotalCost } from "@/utils/calculations";
+import { allowedMilestoneTransitions } from "@/lib/domain/projects/milestone-status";
+import {
+  settledBookingStatus,
+  tradieScheduleSpend,
+} from "@/lib/domain/tradies/lifecycle";
 
 interface UpdateMilestoneModalProps {
   milestoneId: string;
@@ -68,13 +73,6 @@ const statusOptions: { label: string; value: MilestoneStatus }[] = [
   { label: "Done", value: "DONE" },
   { label: "Not required", value: "NOT_REQUIRED" },
 ];
-
-const STATE_MACHES: Record<MilestoneStatus, MilestoneStatus[]> = {
-  PENDING: ["ACTIVE", "NOT_REQUIRED"],
-  ACTIVE: ["DONE"],
-  DONE: [],
-  NOT_REQUIRED: ["PENDING"],
-};
 
 type MilestoneUpdateErrors = Partial<Record<keyof MilestoneUpdateData, string>>;
 
@@ -115,23 +113,19 @@ export default function UpdateMilestoneModal({
     if (!milestoneSchedules || milestoneSchedules.length === 0) {
       return 0;
     }
-    const totalSpend = milestoneSchedules.reduce((acc, schedule) => {
-      if (schedule.requiresQuote) {
-        return acc + parseFloat(schedule.quotedPrice ?? "0");
-      } else {
-        const lastQuotedPrice = parseFloat(
-          schedule.tradie.lastQuotedPrice ?? "0",
-        );
-        return (
-          acc +
-          scheduleTotalCost(
-            lastQuotedPrice,
-            schedule.durationDays,
-            schedule.tradie.lastQuotedPriceUnit,
-          )
-        );
-      }
-    }, 0);
+    // Spend is only entered when completing, and completing settles the
+    // bookings: an unapproved one is cancelled and costs nothing. So price each
+    // booking at the status completion is about to give it, not the one it has.
+    const totalSpend = milestoneSchedules.reduce(
+      (acc, schedule) =>
+        acc
+        + tradieScheduleSpend({
+          ...schedule,
+          status:
+            settledBookingStatus(schedule.status, "DONE") ?? schedule.status,
+        }),
+      0,
+    );
 
     return totalSpend;
   }, [project, milestoneId]);
@@ -147,8 +141,8 @@ export default function UpdateMilestoneModal({
       targetDate: toDateInputValue(milestone?.targetDate),
       startDate: toDateInputValue(milestone?.startDate),
       actualDate:
-        toDateInputValue(milestone?.actualDate) ??
-        (currentStatus === "DONE"
+        toDateInputValue(milestone?.actualDate)
+        ?? (currentStatus === "DONE"
           ? format(new Date(), "yyyy-MM-dd")
           : undefined),
       spend: spend > 0 ? spend : undefined,
@@ -333,9 +327,13 @@ export default function UpdateMilestoneModal({
                       key={option.value}
                       value={option.value}
                       disabled={
-                        !STATE_MACHES[
-                          status ?? milestone?.status ?? "PENDING"
-                        ].includes(option.value)
+                        option.value !== milestone?.status
+                        && !allowedMilestoneTransitions(
+                          milestone?.status ?? "PENDING",
+                          project?.milestones.filter(
+                            (child) => child.parentId === milestoneId,
+                          ) ?? [],
+                        ).includes(option.value)
                       }
                     >
                       {option.label}
@@ -350,8 +348,8 @@ export default function UpdateMilestoneModal({
 
             {/*
               Always editable, whatever the status. Activities seeded from the
-              template carry a placeholder date — project start plus four days
-              per position — so until someone sets the real one, "overdue" on
+              template carry a planned date based on estimated calendar days,
+              so until someone sets the real one, "overdue" on
               the milestones tab counts against a date nobody chose.
             */}
             <div className="space-y-1.5">
@@ -472,6 +470,33 @@ export default function UpdateMilestoneModal({
                 ) : null}
               </div>
             )}
+            {/* The same test the server makes before it moves the project's
+                start date: nothing on the project has started yet. */}
+            {formState.status === "ACTIVE"
+            && milestone?.status === "PENDING"
+            && project
+            && !hasWorkStarted(project.milestones) ? (
+              <div
+                role="note"
+                className="flex items-start gap-2 rounded-[10px] border border-warning/40 bg-warning-light px-3 py-2.5 text-xs leading-relaxed text-warning-ink"
+              >
+                <AlertCircle
+                  className="mt-0.5 size-3.5 shrink-0"
+                  aria-hidden="true"
+                />
+                <p>
+                  This is the first milestone to start. Saving makes{" "}
+                  <span className="font-semibold">
+                    {formState.startDate
+                      ? format(new Date(formState.startDate), "d MMM yyyy")
+                      : "its start date"}
+                  </span>{" "}
+                  the project start date and reschedules every milestone from
+                  it, using each activity&apos;s estimated calendar days. The
+                  project start date is locked after that.
+                </p>
+              </div>
+            ) : null}
             {formState.status === "DONE" && (
               <div className="space-y-4 rounded-[14px] border border-border/70 bg-muted/50 p-4">
                 <div className="space-y-1.5">

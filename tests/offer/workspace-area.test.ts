@@ -9,6 +9,9 @@ import {
   calculateOfferArea,
   getAreaBasisTotalSqm,
   INITIAL_AREA_CALCULATOR,
+  offerTotalBathrooms,
+  reconcileTileOverrides,
+  withoutTileOverrides,
   type OfferAreaBasis,
   type OfferAreaCalculator,
   type AreaRateConstants,
@@ -367,4 +370,115 @@ test("an unknown calculation version fails loudly rather than falling back", () 
     () => calculateFrame(pinBasis, pinInputs, pinRates, 99 as never),
     /calculation rules v99/,
   );
+});
+
+// ─── Entered tile areas ───
+
+const TILE_BASIS = {
+  groundFloorSqm: 110,
+  alfrescoSqm: 8,
+  balconySqm: 6,
+  grannyFlatSqm: 12,
+  porchSqm: 3,
+};
+
+test("an entered tile area replaces the calculated one, and waste follows it", () => {
+  assert.deepEqual(
+    calculateTiles(TILE_BASIS, 2, {
+      groundFloorTilesSqm: 120,
+      bathroomTilesSqm: 50,
+    }),
+    {
+      groundFloorTilesSqm: 120,
+      bathroomTilesSqm: 50,
+      tilesWasted: 17,
+      totalTilesRequired: 187,
+    },
+  );
+});
+
+test("an entered 0 is honoured, not treated as blank", () => {
+  assert.equal(
+    calculateTiles(TILE_BASIS, 2, { bathroomTilesSqm: 0 }).bathroomTilesSqm,
+    0,
+  );
+});
+
+test("the combined calculation prices tiles on the entered areas", () => {
+  const calc = calculateOfferArea(
+    basis,
+    { ...INITIAL_AREA_CALCULATOR, groundFloorTilesSqm: 100 },
+    defaultRates,
+    CURRENT_CALC_VERSION,
+    0,
+  );
+  assert.equal(calc.groundFloorTilesSqm, 100);
+  assert.equal(calc.totalTilesRequired, 110);
+});
+
+const TILE_JOB = {
+  groundFloorSqm: 110,
+  firstFloorSqm: 90,
+  garageSqm: 20,
+  alfrescoPorchSqm: 8,
+  porchSqm: 3,
+  grannyFlatSqm: 0,
+  balconySqm: 0,
+  voidSqm: 0,
+  kitchenSqm: 0,
+  bathrooms: 2,
+  hasGrannyHome: false,
+  grannyBathrooms: 1,
+};
+
+test("bathrooms count the granny flat's only while the build has one", () => {
+  assert.equal(offerTotalBathrooms(TILE_JOB), 2);
+  assert.equal(offerTotalBathrooms({ ...TILE_JOB, hasGrannyHome: true }), 3);
+});
+
+test("an entered tile area is dropped once the areas behind it change", () => {
+  const area: OfferAreaCalculator = {
+    ...INITIAL_AREA_CALCULATOR,
+    groundFloorTilesSqm: 150,
+    bathroomTilesSqm: 60,
+  };
+  const next = reconcileTileOverrides(area, TILE_JOB, {
+    ...TILE_JOB,
+    groundFloorSqm: 120,
+  });
+  assert.equal("groundFloorTilesSqm" in next, false);
+  // The bathroom figure was not worked from the ground floor, so it stays.
+  assert.equal(next.bathroomTilesSqm, 60);
+
+  const fewerBathrooms = reconcileTileOverrides(area, TILE_JOB, {
+    ...TILE_JOB,
+    bathrooms: 1,
+  });
+  assert.equal("bathroomTilesSqm" in fewerBathrooms, false);
+  assert.equal(fewerBathrooms.groundFloorTilesSqm, 150);
+});
+
+test("an unrelated job change leaves entered tile areas alone", () => {
+  const area: OfferAreaCalculator = {
+    ...INITIAL_AREA_CALCULATOR,
+    groundFloorTilesSqm: 150,
+  };
+  // First floor and garage do not feed the tile areas.
+  assert.equal(
+    reconcileTileOverrides(area, TILE_JOB, {
+      ...TILE_JOB,
+      firstFloorSqm: 95,
+      garageSqm: 40,
+    }),
+    area,
+  );
+});
+
+test("clearing a tile area removes its key, since the snapshot holds numbers only", () => {
+  const cleared = withoutTileOverrides(
+    { ...INITIAL_AREA_CALCULATOR, groundFloorTilesSqm: 150 },
+    ["groundFloorTilesSqm"],
+  );
+  assert.equal("groundFloorTilesSqm" in cleared, false);
+  assert.deepEqual(cleared, INITIAL_AREA_CALCULATOR);
 });

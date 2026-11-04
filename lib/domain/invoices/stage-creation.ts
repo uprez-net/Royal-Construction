@@ -17,7 +17,6 @@ export type StageInvoiceCustomer = {
   readonly email: string;
   readonly phone: string;
   readonly address: string | null;
-  readonly xeroContactId: string | null;
 };
 
 export type StageInvoiceProject = {
@@ -27,6 +26,12 @@ export type StageInvoiceProject = {
   readonly requirements: unknown;
   readonly customer: StageInvoiceCustomer;
 };
+
+/**
+ * Days the client has to pay an invoice we raise: a progress claim, and a
+ * variation billed on top of one.
+ */
+export const CLIENT_PAYMENT_TERMS_DAYS = 14;
 
 export type CreateStageInvoiceInput = {
   readonly projectId: string;
@@ -87,7 +92,7 @@ export async function createStageInvoice(
     return null;
   }
   const dueDate = new Date(input.issuedDate);
-  dueDate.setDate(dueDate.getDate() + 14);
+  dueDate.setDate(dueDate.getDate() + CLIENT_PAYMENT_TERMS_DAYS);
 
   // The provider call and the local mirror land inside the one intent, so a
   // claim that reached Xero is never recorded as un-issued.

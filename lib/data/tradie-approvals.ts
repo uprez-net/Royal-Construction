@@ -8,6 +8,7 @@ import pLimit from "p-limit";
 
 import { resolveTradieApproval } from "@/lib/domain/tradies/approvals";
 import { userPrincipal } from "@/lib/domain/principal";
+import { domainActionFailure } from "@/lib/http/domain-response";
 import prisma from "../prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { getUserByClerkIdCached } from "./user";
@@ -49,7 +50,7 @@ export async function fetchTradieApprovalById(
     if (!approval) throw new Error("Approval request not found");
     return {
       ...approval,
-      requestBy: approval.user.name,
+      requestBy: approval.user?.name ?? approval.requestSource ?? "System",
       tradie: {
         ...approval.tradie,
         lastQuotedPrice: approval.tradie.lastQuotedPrice?.toString(),
@@ -92,14 +93,26 @@ export async function handleAdminApproval(input: ApprovalInput) {
       revalidateTag("tradie-management", CACHE_PROFILES.MEDIUM);
       revalidateTag("approval-kpi", CACHE_PROFILES.MEDIUM);
       revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
+      if (resolved.actionType === "TRADIE_REMOVAL") {
+        revalidateTag("tradies", CACHE_PROFILES.MEDIUM);
+        revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
+        revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+        const projectIds = resolved.affected.projectIds;
+        if (Array.isArray(projectIds)) {
+          for (const projectId of projectIds) {
+            if (typeof projectId === "string")
+              revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
+          }
+        }
+      }
     });
 
     // The domain commits the state transition. Reuse the existing App
     // side-effect adapter for the site-manager notification/activity path;
     // Eve has its own audit boundary and does not have a Next request cache.
     if (
-      resolved.actionType === "SCHEDULE_APPROVAL" &&
-      typeof resolved.affected.scheduleId === "string"
+      resolved.actionType === "SCHEDULE_APPROVAL"
+      && typeof resolved.affected.scheduleId === "string"
     ) {
       after(async () => {
         const approved = resolved.resolution === "approved";
@@ -111,9 +124,7 @@ export async function handleAdminApproval(input: ApprovalInput) {
             // name the committed status separately from the side effects being
             // asked for — otherwise the guard throws here and the site manager
             // is never told the booking was approved.
-            appliedStatus: approved
-              ? "PENDING_FINAL_CONFIRMATION"
-              : "DECLINED",
+            appliedStatus: approved ? "PENDING_FINAL_CONFIRMATION" : "DECLINED",
             approvalId: resolved.approvalId,
             statusAlreadyApplied: true,
           },
@@ -121,8 +132,8 @@ export async function handleAdminApproval(input: ApprovalInput) {
       });
     }
     if (
-      resolved.actionType === "SCHEDULE_DELETION" &&
-      typeof resolved.affected.scheduleId === "string"
+      resolved.actionType === "SCHEDULE_DELETION"
+      && typeof resolved.affected.scheduleId === "string"
     ) {
       after(async () => {
         revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
@@ -181,6 +192,36 @@ export async function handleAdminApproval(input: ApprovalInput) {
       });
     }
 
+    if (
+      resolved.actionType === "TRADE_CANCELLATION"
+      && typeof resolved.affected.projectId === "string"
+    ) {
+      const projectId = resolved.affected.projectId;
+      after(async () => {
+        revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
+        revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+        revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
+        // The person who asked hears the answer; the admins already know it.
+        const request = await prisma.tradieApproval.findUnique({
+          select: { requestedBy: true },
+          where: { id: resolved.approvalId },
+        });
+        if (request?.requestedBy) {
+          await triggerNotification(
+            [request.requestedBy],
+            createNotification("tradeCancellationResolved", {
+              approvalId: resolved.approvalId,
+              approved: resolved.resolution === "approved",
+              projectId,
+              projectName: String(resolved.affected.projectName ?? ""),
+              trade: String(resolved.affected.trade ?? resolved.tradieTrade),
+              tradieName: resolved.tradieName,
+            }),
+          );
+        }
+      });
+    }
+
     return {
       approvalId: resolved.approvalId,
       actionType: resolved.actionType,
@@ -191,6 +232,8 @@ export async function handleAdminApproval(input: ApprovalInput) {
     };
   } catch (error) {
     console.error("Error handling admin approval:", error);
+    const failure = domainActionFailure(error);
+    if (failure) return failure;
     throw new Error("Failed to handle admin approval");
   }
 }
@@ -200,7 +243,14 @@ export async function handleBulkAdminApproval(inputs: ApprovalInput[]) {
     await authorisedForApproval();
     const limit = pLimit(5);
     return await Promise.all(
-      inputs.map((input) => limit(() => handleAdminApproval(input))),
+      inputs.map((input) =>
+        limit(async () => {
+          const result = await handleAdminApproval(input);
+          if ("ok" in result && result.ok === false)
+            throw new Error(result.error);
+          return result as Exclude<typeof result, { ok: false }>;
+        }),
+      ),
     );
   } catch (error) {
     console.error("Error handling bulk admin approvals:", error);
@@ -242,7 +292,7 @@ export async function fetchTradieApprovals(
 
     const safeApprovals: SafeTradieApproval[] = approvals.map((approval) => ({
       ...approval,
-      requestBy: approval.user.name,
+      requestBy: approval.user?.name ?? approval.requestSource ?? "System",
       tradie: {
         ...approval.tradie,
         lastQuotedPrice: approval.tradie.lastQuotedPrice?.toString(),

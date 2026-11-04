@@ -22,8 +22,12 @@ const SERVER_HELPERS = [
   "lib/agent/projectCreationAgent.ts",
   "lib/data/file.ts",
   "lib/data/projectsWrite.ts",
-  "lib/utils/generatePDF.ts",
 ];
+
+// The same promise, kept without "server-only": Eve's offer sends render the
+// same documents, and "server-only" throws outside a React bundler. Headless
+// Chromium cannot load in a browser bundle regardless.
+const NODE_HELPERS = ["lib/pdf/generate-pdf.ts"];
 
 /** The directive prologue: string-literal statements before any code. */
 function directives(source: string): string[] {
@@ -60,5 +64,16 @@ for (const file of SERVER_HELPERS) {
 
   test(`${file} refuses to load in a client bundle`, () => {
     assert.match(source, /^import ["']server-only["'];?$/m);
+  });
+}
+
+for (const file of NODE_HELPERS) {
+  const source = readFileSync(join(ROOT, file), "utf8");
+
+  test(`${file} is not a Server Action module`, () => {
+    assert.ok(
+      !directives(source).includes("use server"),
+      `${file} declares "use server", so each export is a public endpoint`,
+    );
   });
 }

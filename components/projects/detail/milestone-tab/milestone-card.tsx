@@ -10,6 +10,7 @@ import {
   ChevronDown,
   CircleAlert,
   DollarSign,
+  FilePlus2,
   Users,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
+  activeOverdueDays,
   daysLate,
   duenessOf,
   isSettled,
@@ -37,6 +39,9 @@ import { currency, formatStatus } from "@/utils/formatters";
 import { MilestoneStatus } from "@prisma/client";
 
 import { MilestoneActionGroup } from "./milestone-action-button";
+import { missingMilestoneTrades } from "@/lib/domain/projects/tradie-dependencies";
+import { milestoneEndDate } from "@/lib/domain/projects/milestone-schedule";
+import { bookingTrade } from "@/lib/domain/tradies/request-rules";
 
 /** How many progress photos sit inline before the rest go behind a button. */
 const INLINE_PHOTO_LIMIT = 3;
@@ -91,7 +96,7 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
       return <span>Completed</span>;
     }
 
-    const late = daysLate(new Date(milestone.targetDate), actual);
+    const late = daysLate(milestone, actual);
 
     return (
       <MetaItem icon={<CheckCircle2 className="size-3.5 text-success-ink" />}>
@@ -102,7 +107,8 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
     );
   }
 
-  const dueness = duenessOf(new Date(milestone.targetDate), new Date());
+  const endDate = milestoneEndDate(milestone);
+  const dueness = duenessOf(milestone, new Date());
 
   if (dueness.kind === "overdue") {
     return (
@@ -111,9 +117,7 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
           Overdue {Math.abs(dueness.days)}d
         </span>{" "}
         · was due{" "}
-        <span className="font-mono tabular-nums">
-          {shortDate(new Date(milestone.targetDate))}
-        </span>
+        <span className="font-mono tabular-nums">{shortDate(endDate)}</span>
       </MetaItem>
     );
   }
@@ -133,10 +137,7 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
           dueness.kind === "soon" && "font-semibold text-warning-ink",
         )}
       >
-        Due{" "}
-        <span className="font-mono tabular-nums">
-          {shortDate(new Date(milestone.targetDate))}
-        </span>
+        Due <span className="font-mono tabular-nums">{shortDate(endDate)}</span>
         {dueness.kind === "soon" ? ` · in ${dueness.days}d` : null}
       </span>
     </MetaItem>
@@ -164,6 +165,7 @@ export function MilestoneCard({
   onStartMilestone,
   onSendReminder,
   onOpenViewPicture,
+  onCreateVariation,
 }: {
   isAdmin: boolean;
   isActiveStage: boolean;
@@ -180,10 +182,17 @@ export function MilestoneCard({
   onMarkasNotRequired: (id: string) => void;
   onSendReminder: (tradieReminder: TradieScheduleListItem) => void;
   onOpenViewPicture: (imageUrls: string[], selectedIndex: number) => void;
+  /** Raise a variation on this activity. Admin only, so absent otherwise. */
+  onCreateVariation?: (id: string) => void;
 }) {
   const children = milestone.childrenMilestones;
   const hasChildren = children.length > 0;
   const isNotRequired = milestone.status === MilestoneStatus.NOT_REQUIRED;
+  const missingTrades = missingMilestoneTrades(
+    milestone,
+    project.tradieSchedules,
+  );
+  const runningOverdueDays = activeOverdueDays(milestone, new Date());
 
   // Finished parents open on request; anything still in flight opens by default,
   // because its children are where the work actually is.
@@ -226,6 +235,16 @@ export function MilestoneCard({
             <StatusPill tone={STATUS_TONE[milestone.status]}>
               {formatStatus(milestone.status)}
             </StatusPill>
+
+            {runningOverdueDays !== null ? (
+              <StatusPill tone="danger">
+                Overdue
+                <span className="sr-only">
+                  {" "}
+                  — {runningOverdueDays} calendar days past the estimated end
+                </span>
+              </StatusPill>
+            ) : null}
 
             {hasChildren ? (
               <span className="text-xs text-muted-foreground">
@@ -302,12 +321,23 @@ export function MilestoneCard({
                 {milestone.tradieSchedules
                   .map(
                     (schedule) =>
-                      `${schedule.tradie.name} — ${schedule.tradie.trade}`,
+                      `${schedule.tradie.name} — ${bookingTrade(schedule)}`,
                   )
                   .join(", ")}
               </MetaItem>
             </div>
           ) : null}
+
+          {missingTrades.map((missingTrade) => (
+            <p
+              key={missingTrade}
+              role="status"
+              className="mt-2 flex items-center gap-1.5 text-xs font-medium text-warning-ink"
+            >
+              <CircleAlert className="size-3.5" aria-hidden="true" />
+              No confirmed {missingTrade} booking for this activity
+            </p>
+          ))}
 
           {depth === 0 && nextTradies.length > 0 ? (
             <div className="mt-2 space-y-1.5">
@@ -327,7 +357,7 @@ export function MilestoneCard({
                   />
                   <span className="text-foreground">
                     <span className="font-medium">
-                      Booked: {schedule.tradie.name} ({schedule.tradie.trade})
+                      Booked: {schedule.tradie.name} ({bookingTrade(schedule)})
                     </span>{" "}
                     <span className="text-muted-foreground">
                       ·{" "}
@@ -355,13 +385,13 @@ export function MilestoneCard({
                         ).toISOString(),
                         abn: schedule.tradie.abn,
                         status: schedule.status,
-                        tradeType: schedule.tradie.trade,
+                        tradeType: bookingTrade(schedule),
                         tradieName: schedule.tradie.name,
                         lastQuotedPriceUnit:
                           schedule.tradie.lastQuotedPriceUnit,
                         projectId: schedule.projectId,
                         projectName: project.name,
-                        taskLabel: `${milestone.name} - ${schedule.tradie.trade}`,
+                        taskLabel: `${milestone.name} - ${bookingTrade(schedule)}`,
                         durationDays: schedule.durationDays,
                         updatedAt: new Date(schedule.updatedAt).toISOString(),
                         contact: {
@@ -381,6 +411,7 @@ export function MilestoneCard({
                         note: schedule.tradie.note,
                         requiresQuote: schedule.requiresQuote,
                         quotedPrice: schedule.quotedPrice ?? undefined,
+                        refToken: schedule.refToken,
                       } satisfies TradieScheduleListItem)
                     }
                   >
@@ -419,6 +450,17 @@ export function MilestoneCard({
             onStartMilestone={onStartMilestone}
             onMarkasNotRequired={onMarkasNotRequired}
           />
+          {onCreateVariation ? (
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label={`Create a variation for ${milestone.name}`}
+              title="Create variation"
+              onClick={() => onCreateVariation(milestone.id)}
+            >
+              <FilePlus2 className="size-4" aria-hidden="true" />
+            </Button>
+          ) : null}
         </div>
 
         {hasChildren ? (
@@ -439,6 +481,7 @@ export function MilestoneCard({
                   onSendReminder={onSendReminder}
                   onOpenViewPicture={onOpenViewPicture}
                   onMarkasNotRequired={onMarkasNotRequired}
+                  onCreateVariation={onCreateVariation}
                 />
               ))}
             </ul>

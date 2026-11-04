@@ -35,6 +35,14 @@ const TAB_LABELS: Record<LeadDetailTabKey, string> = {
   notes: "Notes",
 };
 
+/** A quarter of a phone's width holds one short word under the icon. */
+const TAB_SHORT_LABELS: Record<LeadDetailTabKey, string> = {
+  overview: "Overview",
+  scheduledWork: "Tasks",
+  documents: "Docs",
+  notes: "Notes",
+};
+
 /**
  * Same badge contract as the project tabs: the count and the sentence that
  * explains it are one value, so a bare number can never reach a screen reader
@@ -98,12 +106,14 @@ export function LeadTabNavigation({
   );
 
   return (
+    // Four sections fit side by side on a phone, so they stay visible tabs
+    // there too: a picker hid where the operator was and cost a second tap.
     <div
       role="tablist"
       aria-label="Lead sections"
       aria-orientation="horizontal"
       onKeyDown={handleKeyDown}
-      className="mb-5 flex flex-wrap gap-x-1 border-b-2 border-border/60"
+      className="mb-5 grid grid-cols-4 border-b-2 border-border/60 md:flex md:flex-wrap md:gap-x-1"
     >
       {LEAD_DETAIL_TABS.map((key) => {
         const Icon = TAB_ICONS[key];
@@ -124,23 +134,28 @@ export function LeadTabNavigation({
             tabIndex={isActive ? 0 : -1}
             onClick={() => onTabChange(key)}
             className={cn(
-              "relative -mb-0.5 inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+              "relative -mb-0.5 inline-flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border-b-2 border-transparent px-1 py-2 text-center text-xs font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-11 md:flex-row md:gap-1.5 md:px-4 md:text-left md:text-sm md:whitespace-nowrap",
               isActive && "border-primary font-semibold text-primary",
             )}
           >
             <Icon className="size-4" aria-hidden="true" />
-            <span>{TAB_LABELS[key]}</span>
-            {badge ? (
-              <>
-                <span
-                  aria-hidden="true"
-                  className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium leading-none text-muted-foreground"
-                >
-                  {badge.count}
-                </span>
-                <span className="sr-only">{badge.description}</span>
-              </>
-            ) : null}
+            <span className="flex max-w-full items-center">
+              <span className="truncate md:hidden">
+                {TAB_SHORT_LABELS[key]}
+              </span>
+              <span className="hidden md:inline">{TAB_LABELS[key]}</span>
+              {badge ? (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium leading-none text-muted-foreground"
+                  >
+                    {badge.count}
+                  </span>
+                  <span className="sr-only">{badge.description}</span>
+                </>
+              ) : null}
+            </span>
           </button>
         );
       })}

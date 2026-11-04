@@ -2,7 +2,13 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { addWeeks, format, isWithinInterval } from "date-fns";
-import { CalendarCheck2, ChevronDown, Lock, Plus } from "lucide-react";
+import {
+  CalendarCheck2,
+  CalendarPlus,
+  ChevronDown,
+  Lock,
+  Plus,
+} from "lucide-react";
 
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
@@ -34,6 +40,9 @@ import {
   contractClaimTotal,
   resolveStageClaims,
 } from "@/lib/projects/stage-claim";
+import { sydneyDateOnly } from "@/lib/dates/sydney";
+import { isTradieAlertLive } from "@/lib/domain/tradies/alert-rules";
+import { milestoneEndDate } from "@/lib/domain/projects/milestone-schedule";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { cn } from "@/lib/utils";
@@ -47,6 +56,8 @@ import {
 } from "@/types/project";
 import { currency } from "@/utils/formatters";
 import { MilestoneStatus, ProjectStage } from "@prisma/client";
+
+import { CreateVariationModal } from "@/components/projects/create-variation-modal";
 
 import { MilestoneCard } from "./milestone-tab/milestone-card";
 
@@ -111,7 +122,7 @@ function NextUp({ ledgerStage }: { ledgerStage: LedgerStage }) {
     );
   }
 
-  const dueness = duenessOf(new Date(next.activity.targetDate), new Date());
+  const dueness = duenessOf(next.activity, new Date());
   const detail =
     dueness.kind === "overdue"
       ? `Overdue ${Math.abs(dueness.days)}d`
@@ -119,7 +130,7 @@ function NextUp({ ledgerStage }: { ledgerStage: LedgerStage }) {
         ? "Due today"
         : dueness.kind === "soon"
           ? `Due in ${dueness.days}d`
-          : `Due ${shortDate(new Date(next.activity.targetDate))}`;
+          : `Due ${shortDate(milestoneEndDate(next.activity))}`;
 
   return (
     <>
@@ -218,6 +229,8 @@ export function ProjectMilestonesTab({
   const [stagesShowingDone, setStagesShowingDone] = useState<ProjectStage[]>(
     [],
   );
+  // The activity a variation is being raised on, while the wizard is open.
+  const [variationFor, setVariationFor] = useState<string | null>(null);
 
   const toggleStage = (stage: ProjectStage) =>
     setOpenStages((open) =>
@@ -236,14 +249,20 @@ export function ProjectMilestonesTab({
   const tradieAlerts = useMemo(() => {
     const now = new Date();
     const nextWeek = addWeeks(now, 1);
+    const today = sydneyDateOnly(now);
 
     return project.tradieSchedules.filter((schedule) => {
+      if (schedule.status === "CANCELLED") return false;
+      // Settled with its milestone, past its last day, or dismissed.
+      if (!isTradieAlertLive(schedule, project.tradieSchedules, today)) {
+        return false;
+      }
       const hasAlertStatus = schedule.status === "CONFIRMED";
 
       const targetDate = schedule.milestone?.targetDate;
       const isMilestoneDueSoon =
-        targetDate &&
-        isWithinInterval(new Date(targetDate), {
+        targetDate
+        && isWithinInterval(new Date(targetDate), {
           start: now,
           end: nextWeek,
         });
@@ -289,6 +308,15 @@ export function ProjectMilestonesTab({
       openModal({
         type: "addMilestone",
         payload: { projectId: project.id, projectStage: stage },
+      }),
+    );
+  };
+
+  const handleScheduleTradies = (stage: ProjectStage) => {
+    dispatch(
+      openModal({
+        type: "scheduleTradie",
+        payload: { project, projectStage: stage },
       }),
     );
   };
@@ -386,24 +414,24 @@ export function ProjectMilestonesTab({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="project-stage-table">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Stage</TableHead>
                     {isAdmin ? (
                       <TableHead className="text-right">Claim</TableHead>
                     ) : null}
-                    <TableHead className="hidden sm:table-cell">
+                    <TableHead className="hidden md:table-cell">
                       Progress
                     </TableHead>
-                    <TableHead className="hidden sm:table-cell">
+                    <TableHead className="hidden md:table-cell">
                       Status
                     </TableHead>
-                    <TableHead className="hidden sm:table-cell">
+                    <TableHead className="hidden md:table-cell">
                       Next up
                     </TableHead>
                     <TableHead className="w-12">
-                      <span className="sr-only">Activities</span>
+                      <span className="sr-only">Actions</span>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -430,7 +458,7 @@ export function ProjectMilestonesTab({
                           )}
                           onClick={() => toggleStage(ledgerStage.stage)}
                         >
-                          <TableCell>
+                          <TableCell className="stage-heading">
                             <span className="font-medium text-foreground">
                               {ledgerStage.label}
                             </span>
@@ -442,23 +470,26 @@ export function ProjectMilestonesTab({
 
                             {/* Below `sm` the Status and Next up columns are
                                 gone, so both fold in under the stage name. */}
-                            <span className="ml-1.5 inline-flex align-middle sm:hidden">
+                            <span className="ml-1.5 inline-flex align-middle md:hidden">
                               <StageStatusPill state={ledgerStage.state} />
                             </span>
-                            <span className="mt-1 block text-xs sm:hidden">
+                            <span className="mt-1 block text-xs md:hidden">
                               <NextUp ledgerStage={ledgerStage} />
                             </span>
                           </TableCell>
 
                           {isAdmin ? (
-                            <TableCell className="text-right font-mono tabular-nums">
+                            <TableCell className="stage-claim text-right font-mono tabular-nums">
+                              <span className="mb-1 block font-sans text-xs text-muted-foreground md:hidden">
+                                Stage claim
+                              </span>
                               {ledgerStage.claim === null
                                 ? "—"
                                 : currency.format(ledgerStage.claim)}
                             </TableCell>
                           ) : null}
 
-                          <TableCell className="hidden sm:table-cell">
+                          <TableCell className="hidden md:table-cell">
                             <span className="flex items-center gap-2">
                               <span className="font-mono text-xs tabular-nums text-muted-foreground">
                                 {rollup.done} / {rollup.total}
@@ -488,34 +519,58 @@ export function ProjectMilestonesTab({
                             </span>
                           </TableCell>
 
-                          <TableCell className="hidden sm:table-cell">
+                          <TableCell className="hidden md:table-cell">
                             <StageStatusPill state={ledgerStage.state} />
                           </TableCell>
 
-                          <TableCell className="hidden max-w-[22rem] text-xs sm:table-cell">
+                          <TableCell className="hidden max-w-[22rem] text-xs md:table-cell">
                             <NextUp ledgerStage={ledgerStage} />
                           </TableCell>
 
-                          <TableCell className="text-center">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              aria-expanded={isOpen}
-                              aria-controls={isOpen ? bodyId : undefined}
-                              aria-label={`${isOpen ? "Hide" : "Show"} ${ledgerStage.label} activities`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                toggleStage(ledgerStage.stage);
-                              }}
-                            >
-                              <ChevronDown
-                                className={cn(
-                                  "size-4 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
-                                  isOpen && "rotate-180",
-                                )}
-                                aria-hidden="true"
-                              />
-                            </Button>
+                          <TableCell className="stage-actions">
+                            <span className="flex items-center justify-end gap-1">
+                              {/* A finished stage has no open activity left to
+                                  book a tradie onto, so it gets no button. */}
+                              {ledgerStage.state !== "complete" ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-primary"
+                                  aria-label={`Schedule tradies for ${ledgerStage.label}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleScheduleTradies(ledgerStage.stage);
+                                  }}
+                                >
+                                  <CalendarPlus
+                                    className="size-4"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="hidden whitespace-nowrap md:inline">
+                                    Schedule tradies
+                                  </span>
+                                </Button>
+                              ) : null}
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                aria-expanded={isOpen}
+                                aria-controls={isOpen ? bodyId : undefined}
+                                aria-label={`${isOpen ? "Hide" : "Show"} ${ledgerStage.label} activities`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleStage(ledgerStage.stage);
+                                }}
+                              >
+                                <ChevronDown
+                                  className={cn(
+                                    "size-4 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
+                                    isOpen && "rotate-180",
+                                  )}
+                                  aria-hidden="true"
+                                />
+                              </Button>
+                            </span>
                           </TableCell>
                         </TableRow>
 
@@ -527,8 +582,8 @@ export function ProjectMilestonesTab({
                             >
                               <div id={bodyId}>
                                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/70 px-4 py-2 text-xs text-muted-foreground">
-                                  {ledgerStage.isWorkable ||
-                                  ledgerStage.state === "complete" ? (
+                                  {ledgerStage.isWorkable
+                                  || ledgerStage.state === "complete" ? (
                                     <span>
                                       {ledgerStage.state === "complete"
                                         ? `All ${rollup.total} activities done`
@@ -605,6 +660,9 @@ export function ProjectMilestonesTab({
                                         }
                                         onMarkasNotRequired={
                                           handleMarkAsNotRequired
+                                        }
+                                        onCreateVariation={
+                                          isAdmin ? setVariationFor : undefined
                                         }
                                       />
                                     ))}
@@ -685,6 +743,11 @@ export function ProjectMilestonesTab({
                                             onMarkasNotRequired={
                                               handleMarkAsNotRequired
                                             }
+                                            onCreateVariation={
+                                              isAdmin
+                                                ? setVariationFor
+                                                : undefined
+                                            }
                                           />
                                         ))}
                                       </ul>
@@ -720,6 +783,16 @@ export function ProjectMilestonesTab({
           )}
         </CardContent>
       </Card>
+      {isAdmin ? (
+        <CreateVariationModal
+          projectId={project.id}
+          open={variationFor !== null}
+          onOpenChange={(open) => {
+            if (!open) setVariationFor(null);
+          }}
+          initialMilestoneId={variationFor}
+        />
+      ) : null}
     </section>
   );
 }

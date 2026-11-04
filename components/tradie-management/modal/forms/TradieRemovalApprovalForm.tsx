@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  AlertTriangle,
   Building2,
   DollarSign,
   Loader2,
@@ -26,6 +25,10 @@ import { RatingStars } from "@/components/common/rating-stars";
 import { rateCurrency, dataTimeFormat, formatStatus } from "@/utils/formatters";
 import { cn } from "@/lib/utils";
 import { formatQuotedPrice } from "@/utils/calculations";
+import {
+  TradieRemovalImpact,
+  useTradieRemovalImpact,
+} from "../tradie-removal-impact";
 
 interface Props {
   approval: SafeTradieApproval;
@@ -34,10 +37,14 @@ interface Props {
 
 export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
   const mutation = useApprovalMutation(onSuccess);
-  // A permanent deletion should not be one careless click; the operator has to
+  // Removal also cancels unfinished bookings; the operator has to
   // acknowledge the named tradie first.
   const confirmId = useId();
   const [confirmed, setConfirmed] = useState(false);
+  const impact = useTradieRemovalImpact(
+    approval.tradieId,
+    approval.status === "PENDING",
+  );
 
   const submit = (resolution: "approved" | "rejected") => {
     mutation.mutate({
@@ -50,7 +57,7 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
 
   return (
     <>
-      <DialogHeader className="pb-4">
+      <DialogHeader className="pb-4 pr-10">
         <DialogTitle className="flex items-center gap-2 text-destructive">
           <Trash2 className="size-5" aria-hidden="true" />
           Remove {approval.tradie.name}
@@ -91,7 +98,7 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
           </h3>
 
           <div className="rounded-lg border border-border/70 p-4">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h4 className="text-base font-semibold">
                   {approval.tradie.name}
@@ -174,32 +181,9 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
         </div>
 
         {/* Danger Zone */}
-        <div className="rounded-lg bg-destructive-light p-5">
-          <div className="flex gap-3">
-            <AlertTriangle
-              className="size-5 shrink-0 text-destructive-ink"
-              aria-hidden="true"
-            />
-
-            <div>
-              <p className="font-semibold text-destructive-ink">
-                Permanent action
-              </p>
-
-              <p className="mt-2 text-sm text-foreground/80">
-                Approving this request permanently removes{" "}
-                {approval.tradie.name} from the system.
-              </p>
-
-              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-foreground/80">
-                <li>The tradie record is deleted</li>
-                <li>Associated approvals may become inaccessible</li>
-                <li>Historical references may be affected</li>
-                <li>This action cannot be undone</li>
-              </ul>
-            </div>
-          </div>
-        </div>
+        {approval.status === "PENDING" && (
+          <TradieRemovalImpact impact={impact} />
+        )}
 
         <div className="flex items-start gap-3">
           <Checkbox
@@ -210,14 +194,14 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
           />
 
           <Label htmlFor={confirmId} className="text-sm leading-relaxed">
-            I understand this permanently removes {approval.tradie.name} and
-            cannot be undone.
+            I understand this removes {approval.tradie.name} from active use and
+            cancels all unfinished bookings while preserving their history.
           </Label>
         </div>
 
         {/* Actions */}
         {approval.status === "PENDING" && (
-          <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
+          <div className="grid gap-2 border-t border-border/70 pt-4 sm:flex sm:justify-end">
             <Button
               variant="outline"
               disabled={mutation.isPending}
@@ -228,7 +212,12 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
 
             <Button
               variant="destructive"
-              disabled={mutation.isPending || !confirmed}
+              disabled={
+                mutation.isPending
+                || !confirmed
+                || !impact.isSuccess
+                || impact.isFetching
+              }
               onClick={() => submit("approved")}
             >
               {mutation.isPending ? (
@@ -263,10 +252,15 @@ function InfoItem({
   mono?: boolean;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-xs text-muted-foreground">{label}</p>
 
-      <p className={cn("font-medium", mono && "font-mono tabular-nums")}>
+      <p
+        className={cn(
+          "break-words font-medium",
+          mono && "font-mono tabular-nums",
+        )}
+      >
         {value}
       </p>
     </div>
@@ -290,10 +284,15 @@ function DetailRow({
         {icon}
       </div>
 
-      <div>
+      <div className="min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
 
-        <p className={cn("font-medium", mono && "font-mono tabular-nums")}>
+        <p
+          className={cn(
+            "break-words font-medium",
+            mono && "font-mono tabular-nums",
+          )}
+        >
           {value}
         </p>
       </div>

@@ -5,10 +5,8 @@ import {
   ProjectStatus,
   type Milestone,
 } from "@prisma/client";
-import { addDays } from "date-fns";
 import { v4 as randomUUID } from "uuid";
 
-import { milestoneTemplates } from "@/constants/milestoneTemplate";
 import type { OfferWorkspaceCostLine } from "@/lib/offer/workspace-model";
 
 import { authorizeMilestone, authorizeProject } from "../access/projects";
@@ -23,6 +21,17 @@ import {
   type DueStageClaim,
 } from "../invoices/stage-claim";
 import type { DomainPrincipal } from "../principal";
+
+import { createActivityLogEntry } from "@/types/activityLog";
+
+import { logActionOrThrow } from "../audit/action-log";
+import { attributionUserId } from "../principal";
+
+import {
+  milestoneTargetDates,
+  STARTED_MILESTONE_STATUSES,
+} from "./milestone-schedule";
+import { settleMilestoneBookings } from "../tradies/settlement";
 
 // Milestones: creation, ordering, the status state machine, the parent
 // roll-up, and what settling one means for the project it belongs to.
@@ -55,19 +64,11 @@ import type { DomainPrincipal } from "../principal";
 // whichever adapter called, because they are post-commit work and a Xero
 // outage must not roll back a milestone the operator already marked done.
 
-const MILESTONE_STATE_MACHINE: Record<MilestoneStatus, MilestoneStatus[]> = {
-  PENDING: [MilestoneStatus.ACTIVE, MilestoneStatus.NOT_REQUIRED],
-  ACTIVE: [MilestoneStatus.DONE],
-  DONE: [MilestoneStatus.DONE],
-  NOT_REQUIRED: [MilestoneStatus.PENDING],
-};
-
-/** The transitions this milestone may take from where it is now. */
-export function allowedMilestoneTransitions(
-  from: MilestoneStatus,
-): readonly MilestoneStatus[] {
-  return MILESTONE_STATE_MACHINE[from] ?? [];
-}
+import {
+  allowedMilestoneTransitions,
+  shouldCompleteParent,
+} from "./milestone-status";
+export { allowedMilestoneTransitions } from "./milestone-status";
 
 export type CreateMilestoneInput = {
   readonly projectId: string;
@@ -245,6 +246,13 @@ export type UpdatedMilestone = Omit<Milestone, "budget" | "spend"> & {
 };
 
 export type UpdateMilestoneOutcome = {
+  readonly parentUpdates: readonly {
+    id: string;
+    status: MilestoneStatus;
+    spend?: string;
+    actualDate?: Date;
+    startDate?: Date;
+  }[];
   readonly milestone: UpdatedMilestone;
   /** True when this call moved the status, not just the dates or the spend. */
   readonly statusChanged: boolean;
@@ -261,6 +269,20 @@ export type UpdateMilestoneOutcome = {
    * or a claim already exists.
    */
   readonly stageClaim: DueStageClaim | null;
+  /**
+   * The project's new start date, when this update started the first activity
+   * and moved the start (and so every target date) to the day work began.
+   * Null otherwise.
+   */
+  readonly projectStartDate: Date | null;
+  /**
+   * Bookings this update settled: completed or cancelled because the milestone
+   * they were for (or the parent it rolled up) was settled. Empty otherwise.
+   */
+  readonly settledBookings: {
+    readonly completed: readonly string[];
+    readonly cancelled: readonly string[];
+  };
 };
 
 /**
@@ -348,6 +370,7 @@ export async function updateMilestone(
       parentId: true,
       projectId: true,
       status: true,
+      childrenMilestones: { select: { status: true } },
     },
   });
 
@@ -357,7 +380,10 @@ export async function updateMilestone(
   const statusChanged = input.status !== current.status;
   if (
     statusChanged
-    && !MILESTONE_STATE_MACHINE[current.status].includes(input.status)
+    && !allowedMilestoneTransitions(
+      current.status,
+      current.childrenMilestones ?? [],
+    ).includes(input.status)
   ) {
     throw new DomainTransitionError(
       `A milestone cannot go from ${current.status} to ${input.status}.`,
@@ -371,6 +397,18 @@ export async function updateMilestone(
   const targetDate = toDate(input.targetDate, "targetDate");
   const startDate = toDate(input.startDate, "startDate");
   const actualDate = toDate(input.actualDate, "actualDate");
+
+  // The first activity to start sets the project's start date to the day work
+  // began, and the schedule is re-dated from it — the last time it can be: the
+  // start date is locked from here on (`updateProject`). Counted before this
+  // milestone is written, so it is not counting itself.
+  const startsWork =
+    statusChanged
+    && input.status === MilestoneStatus.ACTIVE
+    && startDate !== undefined
+    && (await db.milestone.count({
+      where: { projectId, status: { in: STARTED_MILESTONE_STATUSES } },
+    })) === 0;
 
   const updated = await db.milestone.update({
     where: { id: input.milestoneId },
@@ -389,55 +427,85 @@ export async function updateMilestone(
     || input.status === MilestoneStatus.NOT_REQUIRED;
 
   let rolledUpParentId: string | null = null;
+  let rolledUpParentStatus: MilestoneStatus | null = null;
+  const parentUpdates: {
+    id: string;
+    status: MilestoneStatus;
+    spend?: string;
+    actualDate?: Date;
+    startDate?: Date;
+  }[] = [];
 
-  if (updated.parentId) {
+  let parentId = updated.parentId;
+  while (parentId) {
     if (settled) {
       const [outstanding, siblings, waived, childrenSpend] = await Promise.all([
         db.milestone.count({
           where: {
-            parentId: updated.parentId,
+            parentId,
             status: {
               notIn: [MilestoneStatus.DONE, MilestoneStatus.NOT_REQUIRED],
             },
           },
         }),
-        db.milestone.count({ where: { parentId: updated.parentId } }),
+        db.milestone.count({ where: { parentId } }),
         db.milestone.count({
           where: {
-            parentId: updated.parentId,
+            parentId,
             status: MilestoneStatus.NOT_REQUIRED,
           },
         }),
         db.milestone.aggregate({
-          where: { parentId: updated.parentId },
+          where: { parentId },
           _sum: { spend: true },
         }),
       ]);
 
-      if (outstanding === 0) {
+      // Waiving every child leaves the parent's outcome to the operator.
+      if (shouldCompleteParent(outstanding, siblings, waived)) {
+        rolledUpParentStatus = MilestoneStatus.DONE;
         await db.milestone.update({
-          where: { id: updated.parentId },
+          where: { id: parentId },
           data: {
-            status:
-              waived === siblings
-                ? MilestoneStatus.NOT_REQUIRED
-                : MilestoneStatus.DONE,
+            status: rolledUpParentStatus,
             spend: childrenSpend._sum.spend ?? undefined,
             actualDate,
           },
         });
-        rolledUpParentId = updated.parentId;
+        rolledUpParentId ??= parentId;
+        parentUpdates.push({
+          id: parentId,
+          status: MilestoneStatus.DONE,
+          spend: childrenSpend._sum.spend?.toString(),
+          actualDate,
+        });
+      } else {
+        break;
       }
     } else if (input.status === MilestoneStatus.ACTIVE) {
       // Starting a child starts its parent, if it has not started already.
-      await db.milestone.updateMany({
+      const { count } = await db.milestone.updateMany({
         where: {
-          id: updated.parentId,
+          id: parentId,
           status: { not: MilestoneStatus.ACTIVE },
         },
         data: { status: MilestoneStatus.ACTIVE, startDate },
       });
+      if (count > 0) {
+        parentUpdates.push({
+          id: parentId,
+          status: MilestoneStatus.ACTIVE,
+          startDate,
+        });
+      }
+    } else {
+      break;
     }
+    const parent = await db.milestone.findUnique({
+      where: { id: parentId },
+      select: { parentId: true },
+    });
+    parentId = parent?.parentId ?? null;
   }
 
   const [rootSpend, pendingCount] = await Promise.all([
@@ -446,7 +514,10 @@ export async function updateMilestone(
       _sum: { spend: true },
     }),
     db.milestone.count({
-      where: { projectId, status: MilestoneStatus.PENDING },
+      where: {
+        projectId,
+        status: { in: [MilestoneStatus.PENDING, MilestoneStatus.ACTIVE] },
+      },
     }),
   ]);
 
@@ -464,11 +535,28 @@ export async function updateMilestone(
         ? ProjectStatus.ACTIVE
         : null;
 
+  let projectStartDate: Date | null = null;
+  if (startsWork && startDate) {
+    const { startDate: plannedStart } = await db.project.findUniqueOrThrow({
+      select: { startDate: true },
+      where: { id: projectId },
+    });
+    if (plannedStart.getTime() !== startDate.getTime()) {
+      await rescheduleProjectFromStart(
+        principal,
+        { previousStartDate: plannedStart, projectId, startDate },
+        db,
+      );
+      projectStartDate = startDate;
+    }
+  }
+
   const project = await db.project.update({
     where: { id: projectId },
     data: {
       spent: rootSpend._sum.spend ?? undefined,
       ...(projectStatus ? { status: projectStatus } : {}),
+      ...(projectStartDate ? { startDate: projectStartDate } : {}),
     },
     select: { siteManagerId: true, spent: true },
   });
@@ -477,7 +565,34 @@ export async function updateMilestone(
     ? await resolveDueStageClaim({ milestoneId: updated.id, projectId }, db)
     : null;
 
+  // A settled milestone takes its open bookings with it — and so does a parent
+  // this update rolled up — or they stay "confirmed" and alerting for ever.
+  const settledBookings: { completed: string[]; cancelled: string[] } = {
+    cancelled: [],
+    completed: [],
+  };
+  const settledMilestones: [string, MilestoneStatus][] = settled
+    ? [[updated.id, input.status]]
+    : [];
+  for (const parent of parentUpdates) {
+    if (parent.status === MilestoneStatus.DONE)
+      settledMilestones.push([parent.id, parent.status]);
+  }
+  for (const [milestoneId, status] of settledMilestones) {
+    const result = await settleMilestoneBookings(
+      {
+        milestoneId,
+        principal,
+        settlement: status === MilestoneStatus.DONE ? "DONE" : "NOT_REQUIRED",
+      },
+      db,
+    );
+    settledBookings.completed.push(...result.completed);
+    settledBookings.cancelled.push(...result.cancelled);
+  }
+
   return {
+    parentUpdates,
     milestone: {
       ...updated,
       budget: updated.budget.toString(),
@@ -485,8 +600,10 @@ export async function updateMilestone(
       spend: updated.spend?.toString(),
     },
     projectSpent: project.spent.toString(),
+    projectStartDate,
     projectStatus,
     rolledUpParentId,
+    settledBookings,
     siteManagerId: project.siteManagerId,
     stageClaim,
     statusChanged,
@@ -557,11 +674,78 @@ export async function attachMilestonePhotos(
 }
 
 /**
+ * Re-date every activity on a project from a new start date.
+ *
+ * Every activity moves, whatever its status, so the whole schedule stays one
+ * sequence; a hand-set target date is overwritten. Not a command on its own:
+ * `updateProject` authorizes, decides the start date really moved, and runs
+ * this inside the transaction that writes it, so the project never shows a new
+ * start against the old schedule.
+ */
+export async function rescheduleMilestonesFromStart(
+  input: { readonly projectId: string; readonly startDate: Date },
+  db: DomainDb,
+): Promise<{ rescheduled: number }> {
+  const milestones = await db.milestone.findMany({
+    orderBy: { order: "asc" },
+    select: { id: true, estimatedDays: true },
+    where: { projectId: input.projectId },
+  });
+
+  const targets = milestoneTargetDates(input.startDate, milestones);
+  for (const [position, milestone] of milestones.entries()) {
+    await db.milestone.update({
+      data: { targetDate: targets[position] },
+      where: { id: milestone.id },
+    });
+  }
+
+  return { rescheduled: milestones.length };
+}
+
+/**
+ * Move a project's schedule onto a new start date, and put the move on record.
+ *
+ * Re-dates every activity (`rescheduleMilestonesFromStart`) and writes the
+ * history entry. The caller writes `Project.startDate` itself, in the same
+ * transaction: `updateProject` when an operator moves it before work starts,
+ * `updateMilestone` when the first activity starting sets it.
+ */
+export async function rescheduleProjectFromStart(
+  principal: DomainPrincipal,
+  input: {
+    readonly projectId: string;
+    readonly previousStartDate: Date;
+    readonly startDate: Date;
+  },
+  db: DomainDb,
+): Promise<number> {
+  const { rescheduled } = await rescheduleMilestonesFromStart(
+    { projectId: input.projectId, startDate: input.startDate },
+    db,
+  );
+  await logActionOrThrow(
+    {
+      ...createActivityLogEntry("projectStartDateChanged", {
+        milestonesRescheduled: rescheduled,
+        previousStartDate: input.previousStartDate.toISOString().slice(0, 10),
+        projectId: input.projectId,
+        startDate: input.startDate.toISOString().slice(0, 10),
+      }),
+      authorId: attributionUserId(principal),
+    },
+    db,
+  );
+  return rescheduled;
+}
+
+/**
  * Seed a new project's milestones from the configured template.
  *
  * Budgets come from the offer's cost lines: a line referenced by several
  * template activities is split evenly between them, and a parent's budget is
- * the sum of its children's. Target dates are spaced from the project start.
+ * the sum of its children's. Target dates follow `milestoneTargetDates` using
+ * the durations snapshotted from the database template.
  *
  * Runs inside the creating transaction, so the project never exists without
  * its milestones.
@@ -574,6 +758,14 @@ export async function createMilestonesFromTemplate(
   },
   db: DomainDb,
 ): Promise<{ created: number }> {
+  const milestoneTemplates = await db.milestoneTemplate.findMany({
+    orderBy: { order: "asc" },
+    include: { requiredTradeTypes: { select: { id: true } } },
+  });
+  if (!milestoneTemplates.length)
+    throw new DomainValidationError(
+      "The build sequence is empty. Add activities under Admin before creating a project.",
+    );
   const referenceCounts = milestoneTemplates.reduce((map, template) => {
     template.relatedCostLines?.forEach((costLineName) => {
       map.set(costLineName, (map.get(costLineName) ?? 0) + 1);
@@ -593,20 +785,25 @@ export async function createMilestonesFromTemplate(
       }, 0);
   };
 
-  const records = milestoneTemplates.map((template) => ({
+  const inOrder = [...milestoneTemplates].sort((a, b) => a.order - b.order);
+  const targets = milestoneTargetDates(input.startDate, inOrder);
+  const records = inOrder.map((template, position) => ({
     ...template,
     id: randomUUID(),
-    targetDate: addDays(input.startDate, template.order * 4),
+    templateId: template.id,
+    targetDate: targets[position],
     totalBudget: budgetFor(template.relatedCostLines),
   }));
 
-  const idByOrder = new Map(records.map((record) => [record.order, record.id]));
+  const idByTemplate = new Map(
+    records.map((record) => [record.templateId, record.id]),
+  );
 
   // Roll each child's budget up into its parent.
-  for (const record of records) {
+  for (const record of [...records].reverse()) {
     if (record.parentId === null || record.parentId === undefined) continue;
     const parent = records.find(
-      (candidate) => candidate.id === idByOrder.get(record.parentId!),
+      (candidate) => candidate.id === idByTemplate.get(record.parentId!),
     );
     if (parent) parent.totalBudget += record.totalBudget;
   }
@@ -618,14 +815,23 @@ export async function createMilestonesFromTemplate(
       name: record.name,
       order: record.order,
       targetDate: record.targetDate,
+      estimatedDays: record.estimatedDays,
       parentId:
         record.parentId === null || record.parentId === undefined
           ? null
-          : (idByOrder.get(record.parentId) ?? null),
+          : (idByTemplate.get(record.parentId) ?? null),
       projectStage: record.projectStage,
       budget: new Prisma.Decimal(record.totalBudget),
     })),
   });
+  // createMany cannot write a relation; the trades follow, in the same transaction.
+  for (const record of records) {
+    if (!record.requiredTradeTypes.length) continue;
+    await db.milestone.update({
+      where: { id: record.id },
+      data: { requiredTradeTypes: { connect: record.requiredTradeTypes } },
+    });
+  }
 
   return { created: created.count };
 }

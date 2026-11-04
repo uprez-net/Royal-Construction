@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   CalendarDays,
@@ -17,12 +18,14 @@ import {
   projectStatusConfig,
 } from "@/components/projects/project-status";
 import { HbcfCapacityBadge } from "@/components/projects/detail/hbcf-capacity-badge";
+import { SiteManagerSelector } from "@/components/projects/detail/site-manager-selector";
 import { StatusPill } from "@/components/common/status-pill";
 import type { ProjectDetail } from "@/types/project";
 import { formatDisplayDate, normalizeDateString } from "@/utils/date";
 import { UploadButton } from "@/components/common/upload-button";
 import { appendFileToProject } from "@/lib/store/slices/projectsSlice";
 import { useAppDispatch } from "@/lib/store/hooks";
+import { projectsListHref } from "@/components/projects/projects-list-url";
 
 type ProjectRequirementsHeader = {
   legalAdministration?: {
@@ -45,10 +48,19 @@ const NOT_SET = "Not set";
  */
 const LEGAL_SECTION_ID = "legalAdministration";
 
-export function ProjectHeader({ project }: { project: ProjectDetail }) {
+export function ProjectHeader({
+  project,
+  canAssignSiteManager,
+}: {
+  project: ProjectDetail;
+  /** Only an ADMIN may reassign; everyone else sees the name. */
+  canAssignSiteManager: boolean;
+}) {
   const dispatch = useAppDispatch();
-  const requirements = (project.requirements ??
-    {}) as ProjectRequirementsHeader;
+  // Back to the chip and page of the list this project was opened from.
+  const backToListHref = projectsListHref(useSearchParams().get("list"));
+  const requirements = (project.requirements
+    ?? {}) as ProjectRequirementsHeader;
   const legal = requirements.legalAdministration ?? {};
 
   const rawSignedDate = legal.signedDate;
@@ -67,11 +79,11 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
 
   const statusTone = projectStatusConfig(project.status);
   const showPcaWarning =
-    pcaMissing &&
-    (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
+    pcaMissing
+    && (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
   const showHbcfWarning =
-    hbcfInsuranceMissing &&
-    (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
+    hbcfInsuranceMissing
+    && (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
 
   const legalSectionAnchor = `#${LEGAL_SECTION_ID}`;
   const ownerContacts = (
@@ -89,18 +101,18 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
       : [];
 
   return (
-    <section className="rounded-xl border border-border/70 bg-card p-6 px-7 shadow-sm">
+    <section className="rounded-xl border border-border/70 bg-card p-4 shadow-sm sm:p-6 sm:px-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2 [&_a]:break-words">
           <Link
-            href="/projects"
+            href={backToListHref}
             className="inline-flex items-center gap-1 rounded-md text-sm font-medium text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <ArrowLeft className="size-3.5" aria-hidden="true" />
             Back to all projects
           </Link>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-heading text-2xl font-semibold leading-tight tracking-tight text-foreground">
+            <h1 className="font-heading break-words text-xl font-semibold leading-tight tracking-tight text-foreground sm:text-2xl">
               {project.name}
             </h1>
             <span
@@ -116,12 +128,14 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
                 state this project is in. Absent unless the pool is breached. */}
             <HbcfCapacityBadge projectId={project.id} />
           </div>
-          <div className="flex flex-wrap items-center gap-3 pt-1 text-sm text-muted-foreground">
+          <div className="flex flex-col items-start gap-1.5 pt-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
             <span className="inline-flex items-center gap-1">
               <MapPin className="size-3.5" aria-hidden="true" />
               {legal.siteAddress || project.location}
             </span>
-            <span aria-hidden="true">|</span>
+            <span aria-hidden="true" className="hidden sm:inline">
+              |
+            </span>
             <span className="inline-flex items-center gap-1">
               <CalendarDays className="size-3.5" aria-hidden="true" />
               Signed (contract executed){" "}
@@ -144,7 +158,9 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
                 </Link>
               )}
             </span>
-            <span aria-hidden="true">|</span>
+            <span aria-hidden="true" className="hidden sm:inline">
+              |
+            </span>
             <span className="inline-flex items-center gap-1">
               <ShieldCheck className="size-3.5" aria-hidden="true" />
               PCA{" "}
@@ -172,7 +188,9 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
                 <span className="font-mono tabular-nums">{pcaInspector}</span>
               )}
             </span>
-            <span aria-hidden="true">|</span>
+            <span aria-hidden="true" className="hidden sm:inline">
+              |
+            </span>
             <span
               className="inline-flex items-center gap-1"
               key={hbcfInsuranceNumber}
@@ -206,11 +224,17 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
               )}
             </span>
           </div>
+          {/* Its own line: who runs the build is a different kind of fact
+              from the contract dates and certificates above it. */}
+          <SiteManagerSelector
+            project={project}
+            canAssign={canAssignSiteManager}
+          />
           {owners.length > 0 ? (
             <div className="flex flex-col gap-1 pt-1">
               {owners.map((owner, index) => (
                 <p
-                  className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground"
+                  className="flex flex-col items-start gap-1 pt-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-2"
                   key={`owner-${index}`}
                 >
                   <span className="inline-flex items-center gap-1">
@@ -219,7 +243,9 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
                   </span>
                   {owner.phone && (
                     <>
-                      <span aria-hidden="true">|</span>
+                      <span aria-hidden="true" className="hidden sm:inline">
+                        |
+                      </span>
                       <span className="inline-flex items-center gap-1">
                         <Phone className="size-3.5" aria-hidden="true" />
                         <a
@@ -233,7 +259,9 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
                   )}
                   {owner.email && (
                     <>
-                      <span aria-hidden="true">|</span>
+                      <span aria-hidden="true" className="hidden sm:inline">
+                        |
+                      </span>
                       <a
                         href={`mailto:${owner.email}`}
                         className="rounded-md text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -246,22 +274,30 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
               ))}
             </div>
           ) : (
-            <p className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground">
+            <p className="flex flex-col items-start gap-1 pt-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
               <span className="inline-flex items-center gap-1">
                 <UserRound className="size-3.5" aria-hidden="true" />
                 {project.customer.name}
               </span>
-              <span aria-hidden="true">|</span>
-              <span className="inline-flex items-center gap-1">
-                <Phone className="size-3.5" aria-hidden="true" />
-                <a
-                  href={`tel:${project.customer.phone.replace(/\s+/g, "")}`}
-                  className="rounded-md font-mono tabular-nums text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                >
-                  {project.customer.phone}
-                </a>
+              {project.customer.phone ? (
+                <>
+                  <span aria-hidden="true" className="hidden sm:inline">
+                    |
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Phone className="size-3.5" aria-hidden="true" />
+                    <a
+                      href={`tel:${project.customer.phone.replace(/\s+/g, "")}`}
+                      className="rounded-md font-mono tabular-nums text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    >
+                      {project.customer.phone}
+                    </a>
+                  </span>
+                </>
+              ) : null}
+              <span aria-hidden="true" className="hidden sm:inline">
+                |
               </span>
-              <span aria-hidden="true">|</span>
               <a
                 href={`mailto:${project.customer.email}`}
                 className="rounded-md text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"

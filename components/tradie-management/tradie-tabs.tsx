@@ -9,7 +9,6 @@ import {
   List,
   LucideIcon,
   Search,
-  Square,
   Star,
   Users,
 } from "lucide-react";
@@ -23,7 +22,8 @@ import {
   SelectContent,
   SelectItem,
 } from "../ui/select";
-import { TRADIE_TYPE_ICONS, TRADIE_TYPES } from "@/constants/tradieTypes";
+import { useTradeTypes } from "@/hooks/use-trade-types";
+import { TradeIconGlyph } from "./trade-icon";
 import { cn } from "@/lib/utils";
 import type { TradieTableQuery, TradieViewTab } from "@/types/tradie";
 
@@ -42,11 +42,11 @@ export const CLEARED_TRADIE_QUERY: TradieTableQuery = {
 
 export function hasActiveTradieFilters(query: TradieTableQuery): boolean {
   return (
-    Boolean(query.search?.trim()) ||
-    query.category !== undefined ||
-    query.rating !== undefined ||
-    query.favourite !== undefined ||
-    query.tab === "flagged"
+    Boolean(query.search?.trim())
+    || query.category !== undefined
+    || query.rating !== undefined
+    || query.favourite !== undefined
+    || query.tab === "flagged"
   );
 }
 
@@ -57,6 +57,7 @@ const VIEW_TABS: { label: string; value: TradieViewTab; icon: LucideIcon }[] = [
 
 export function TradieTabs() {
   const dispatch = useAppDispatch();
+  const { tradeTypes } = useTradeTypes();
   const { query, activeTab, tradies } = useAppSelector(
     (state) => state.tradieManagement,
   );
@@ -176,7 +177,7 @@ export function TradieTabs() {
           })}
         </div>
 
-        <div className="relative min-w-52 max-w-70 flex-1">
+        <div className="relative min-w-0 basis-full sm:min-w-52 sm:max-w-70 sm:flex-1 sm:basis-auto">
           <label htmlFor="tradie-search" className="sr-only">
             Search tradies by name
           </label>
@@ -215,21 +216,21 @@ export function TradieTabs() {
             <SelectItem value="all" className="text-sm">
               All trades
             </SelectItem>
-            {Object.entries(TRADIE_TYPES).map(([key, label]) => {
-              const Icon =
-                TRADIE_TYPE_ICONS[key as keyof typeof TRADIE_TYPES] ?? Square;
-              return (
-                <SelectItem key={key} value={label} className="text-sm">
-                  <div className="flex items-center gap-2">
-                    <Icon
-                      className="size-3 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <span>{label}</span>
-                  </div>
-                </SelectItem>
-              );
-            })}
+            {tradeTypes.map((tradeType) => (
+              <SelectItem
+                key={tradeType.id}
+                value={tradeType.label}
+                className="text-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <TradeIconGlyph
+                    icon={tradeType.icon}
+                    className="size-3 text-muted-foreground"
+                  />
+                  <span>{tradeType.label}</span>
+                </div>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -275,8 +276,8 @@ export function TradieTabs() {
           aria-pressed={query.favourite === true}
           onClick={toggleFavouriteOnly}
           className={cn(
-            query.favourite &&
-              "border-warning bg-warning-light text-warning-ink hover:bg-warning-light",
+            query.favourite
+              && "border-warning bg-warning-light text-warning-ink hover:bg-warning-light",
           )}
         >
           <Star

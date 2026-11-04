@@ -99,7 +99,7 @@ interface MediaSupport {
 // rather than ignoring it, so an unfiltered .dwg would fail the whole call.
 const SUPPORTED_MEDIA: Record<string, MediaSupport> = {
   "application/pdf": { ocr: "document", agent: true },
-  // Word has no fallback — Gemini cannot open a .docx, so if OCR returns
+  // Word has no fallback — the model cannot open a .docx, so if OCR returns
   // nothing there is nothing left to try.
   [DOCX_MEDIA_TYPE]: { ocr: "document", agent: false },
   "image/png": { ocr: "image", agent: true },
@@ -134,8 +134,8 @@ const EXTENSION_MEDIA_TYPES: Record<string, string> = {
 // will read usefully, and it would spend the whole request budget on its own.
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
-// Gemini rejects an inline request over 20 MB outright. Stop well short of it:
-// the body and the prompt ride in the same request.
+// Inline file parts are capped per request by the model provider. Stay well
+// short of any cap: the body and the prompt ride in the same request.
 const MAX_TOTAL_ATTACHMENT_BYTES = 15 * 1024 * 1024;
 
 // Past a handful of files an enquiry is a document dump; the first few carry

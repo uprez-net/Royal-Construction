@@ -6,6 +6,7 @@ import {
   type UserPrincipal,
   userPrincipal,
 } from "../principal";
+import { canonicalPhone } from "../projects/owners";
 
 // Application-user lookup and the conversion into a principal.
 //
@@ -150,7 +151,14 @@ export async function createUser(
     let customerId: string | null = null;
     if (role === Role.CUSTOMER) {
       const customer = await tx.customer.create({
-        data: { email: input.email, name: input.name, phone: input.phone },
+        data: {
+          email: input.email,
+          name: input.name,
+          // Same form the project owners are stored in, so this customer is
+          // found when a contract later names them. No phone is NULL, not "":
+          // the column is unique, and only NULL can repeat.
+          phone: canonicalPhone(input.phone) || null,
+        },
       });
       await tx.user.update({
         data: { customerId: customer.id },
@@ -200,7 +208,11 @@ export async function updateUserByClerkId(
     let customerId: string | null = null;
     if (updates.role === Role.CUSTOMER && !user.customerId) {
       const customer = await tx.customer.create({
-        data: { email: user.email, name: user.name, phone: user.phone },
+        data: {
+          email: user.email,
+          name: user.name,
+          phone: canonicalPhone(user.phone) || null,
+        },
       });
       await tx.user.update({
         data: { customerId: customer.id },
@@ -227,6 +239,23 @@ export async function deleteUserByClerkId(
 ): Promise<{ success: true; message: string }> {
   await db.user.delete({ where: { clerkId } });
   return { message: "User deleted successfully", success: true };
+}
+
+/**
+ * Stored phone numbers keyed by Clerk id, for the team screen, which lists
+ * Clerk users and reads each one's phone from here first.
+ */
+export async function findPhonesByClerkIds(
+  clerkIds: readonly string[],
+  db: DomainDb,
+): Promise<Record<string, string>> {
+  const ids = [...new Set(clerkIds.filter(Boolean))];
+  if (ids.length === 0) return {};
+  const users = await db.user.findMany({
+    select: { clerkId: true, phone: true },
+    where: { clerkId: { in: ids } },
+  });
+  return Object.fromEntries(users.map((user) => [user.clerkId, user.phone]));
 }
 
 /** Every application user's Clerk id, for a broadcast notification. */

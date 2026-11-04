@@ -1,10 +1,23 @@
 import { NextRequest } from "next/server";
 import { verifyWebhook } from "@clerk/nextjs/webhooks";
+import type { UserJSON } from "@clerk/backend";
 import { createUser, deleteUser, updateUser } from "@/lib/data/user";
 import { Role } from "@prisma/client";
 import { updateUserMetadata } from "@/lib/auth";
 import { errorResponse, successResponse } from "@/utils/validators";
 import { randomPhoneNumberGenerator } from "@/utils/generator";
+
+/**
+ * The phone the team screen saved into `publicMetadata.phone`, or undefined.
+ *
+ * Team phones are kept in metadata, not as Clerk phone numbers, so this is the
+ * only place a Clerk event carries one.
+ */
+function metadataPhone(user: UserJSON): string | undefined {
+  const phone = (user.public_metadata as { phone?: unknown } | undefined)
+    ?.phone;
+  return typeof phone === "string" && phone.trim() ? phone.trim() : undefined;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,14 +35,16 @@ export async function POST(request: NextRequest) {
         const { email_addresses, first_name, last_name, id } = evt.data;
 
         const email = email_addresses[0]?.email_address;
-        const phone = randomPhoneNumberGenerator();
+        // `User.phone` is required and unique, and most accounts reach Clerk
+        // with no number, so a placeholder stands in until someone sets one.
+        const phone = metadataPhone(evt.data) ?? randomPhoneNumberGenerator();
         const fullName = [first_name, last_name].filter(Boolean).join(" ");
         const newUser = await createUser(fullName, email, id, phone);
         await updateUserMetadata(id, {
           publicMetadata: {
             role: newUser.role,
-            ...((newUser.customerId && { customerId: newUser.customerId }) ||
-              {}),
+            ...((newUser.customerId && { customerId: newUser.customerId })
+              || {}),
           },
           privateMetadata: {
             applicationUserId: newUser.userId,
@@ -50,10 +65,18 @@ export async function POST(request: NextRequest) {
         const updatedEmail = updatedEmailAddresses[0]?.email_address;
         const role = (public_metadata?.role as Role) || Role.GUEST;
 
+        // The phone used to be replaced with a fresh random number on every
+        // Clerk update — a role change, a name edit, a new phone set from the
+        // team screen — so whatever the office saved was wiped seconds later.
+        // Only a number Clerk actually holds is copied; otherwise the stored
+        // one is left alone. Same for an empty name.
+        const updatedName = [updatedFirstName, updatedLastName]
+          .filter(Boolean)
+          .join(" ");
         await updateUser(updatedId, {
-          name: `${updatedFirstName} ${updatedLastName}`,
+          name: updatedName || undefined,
           email: updatedEmail,
-          phone: randomPhoneNumberGenerator(),
+          phone: metadataPhone(evt.data),
           role,
         });
 

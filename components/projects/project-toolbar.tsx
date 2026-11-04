@@ -3,11 +3,8 @@
 import React from "react";
 import { ArrowDownUp, Grid3x3, List, Search } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import {
-  setProjectSearchQuery,
-  setProjectSort,
-  setProjectView,
-} from "@/lib/store/slices/uiSlice";
+import { setProjectView } from "@/lib/store/slices/uiSlice";
+import type { ProjectListSortBy } from "@/lib/domain/projects/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,39 +17,27 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-
-type SortOption = "name" | "progress" | "budget" | "startDate" | "spent";
-type SortDirection = "asc" | "desc";
-
-// Each option carries its own direction: the labels promise a direction
-// ("high to low", "newest first"), so dispatching `sortBy` alone left the
-// previous `sortOrder` in place and sorted the opposite way.
-const SORT_OPTIONS: {
-  label: string;
-  value: SortOption;
-  sortOrder: SortDirection;
-}[] = [
-  { label: "Name A–Z", value: "name", sortOrder: "asc" },
-  { label: "Progress, high to low", value: "progress", sortOrder: "desc" },
-  { label: "Budget, high to low", value: "budget", sortOrder: "desc" },
-  { label: "Start date, newest first", value: "startDate", sortOrder: "desc" },
-  { label: "Spent, high to low", value: "spent", sortOrder: "desc" },
-];
+import { PROJECT_SORT_OPTIONS } from "./projects-list-url";
 
 interface ProjectToolbarProps {
-  onSearchChange: () => void;
+  searchTerm: string;
+  onSearchTermChange: (term: string) => void;
+  sort: ProjectListSortBy;
+  onSortChange: (sort: ProjectListSortBy) => void;
 }
 
-export function ProjectToolbar({ onSearchChange }: ProjectToolbarProps) {
+export function ProjectToolbar({
+  searchTerm,
+  onSearchTermChange,
+  sort,
+  onSortChange,
+}: ProjectToolbarProps) {
   const dispatch = useAppDispatch();
-  const searchQuery = useAppSelector(
-    (state) => state.ui.projectFilters.searchQuery,
-  );
-  const sortBy = useAppSelector((state) => state.ui.projectFilters.sortBy);
   const view = useAppSelector((state) => state.ui.projectFilters.view);
 
   const activeSortLabel =
-    SORT_OPTIONS.find((option) => option.value === sortBy)?.label ?? "Name A–Z";
+    PROJECT_SORT_OPTIONS.find((option) => option.value === sort)?.label
+    ?? "Name A–Z";
 
   // 44px targets at the 0.9 zoom this app applies above 1024px; `size-11`
   // would render at ~40px, so the toggle keeps generous padding instead of an
@@ -80,11 +65,8 @@ export function ProjectToolbar({ onSearchChange }: ProjectToolbarProps) {
             id="project-search"
             type="search"
             placeholder="Project or client name"
-            value={searchQuery}
-            onChange={(event) => {
-              dispatch(setProjectSearchQuery(event.target.value));
-              onSearchChange();
-            }}
+            value={searchTerm}
+            onChange={(event) => onSearchTermChange(event.target.value)}
             className="h-11 pl-9 pr-3"
           />
         </div>
@@ -104,21 +86,15 @@ export function ProjectToolbar({ onSearchChange }: ProjectToolbarProps) {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>Sort by</DropdownMenuLabel>
             <DropdownMenuRadioGroup
-              value={sortBy}
+              value={sort}
               onValueChange={(value) => {
-                const option = SORT_OPTIONS.find(
+                const option = PROJECT_SORT_OPTIONS.find(
                   (candidate) => candidate.value === value,
                 );
-                if (!option) return;
-                dispatch(
-                  setProjectSort({
-                    sortBy: option.value,
-                    sortOrder: option.sortOrder,
-                  }),
-                );
+                if (option) onSortChange(option.value);
               }}
             >
-              {SORT_OPTIONS.map((option) => (
+              {PROJECT_SORT_OPTIONS.map((option) => (
                 <DropdownMenuRadioItem key={option.value} value={option.value}>
                   {option.label}
                 </DropdownMenuRadioItem>

@@ -21,7 +21,6 @@ import {
   TradieViewTab,
   UpdatePriceInput,
 } from "@/types/tradie";
-import { convertCategoryToTradieType } from "@/utils/normalize-tradie-type";
 import { TradieIncident, Tradie } from "@prisma/client";
 import {
   createAsyncThunk,
@@ -106,7 +105,14 @@ export const updateTradieThunk = createAsyncThunk<
     data: Partial<
       Pick<
         Tradie,
-        "email" | "abn" | "additionalEmails" | "phone" | "location" | "note"
+        | "name"
+        | "email"
+        | "abn"
+        | "additionalEmails"
+        | "phone"
+        | "location"
+        | "note"
+        | "trades"
       >
     >;
   }
@@ -157,7 +163,8 @@ export const deleteTradieThunk = createAsyncThunk<void, DeleteInput>(
   async (input, thunkAPI) => {
     try {
       // Call the server action to delete the tradie
-      await deleteTradie(input);
+      const result = await deleteTradie(input);
+      if (result?.ok === false) return thunkAPI.rejectWithValue(result.error);
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error instanceof Error ? error.message : "Failed to delete tradie",
@@ -266,7 +273,8 @@ const tradieManagementSlice = createSlice({
         // real. The trend is a server-computed figure; adding one tradie
         // cannot be turned into a delta on the client. It refreshes on the
         // next load of fetchTradieKPIDataCached.
-        const tradeCategory = convertCategoryToTradieType(action.payload.trade);
+        // Categories are trade labels (getTradieGroupedByCategory).
+        const tradeCategory = action.payload.trade;
         if (tradeCategory) {
           state.tradiesByCategory = state.tradiesByCategory.map((cat) => {
             if (cat.category === tradeCategory) {
@@ -319,8 +327,8 @@ const tradieManagementSlice = createSlice({
           state.tradies[tradie].incidentCount.open += 1;
         }
         if (
-          state.selectedTradieId === incident.tradieId &&
-          state.selectedTradieDetails
+          state.selectedTradieId === incident.tradieId
+          && state.selectedTradieDetails
         ) {
           state.selectedTradieDetails.incidents.push(incident);
         }
@@ -364,8 +372,8 @@ const tradieManagementSlice = createSlice({
           };
         }
         if (
-          state.selectedTradieId === updatedTradie.id &&
-          state.selectedTradieDetails !== null
+          state.selectedTradieId === updatedTradie.id
+          && state.selectedTradieDetails !== null
         ) {
           state.selectedTradieDetails = {
             ...state.selectedTradieDetails!,

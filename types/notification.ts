@@ -112,6 +112,42 @@ export const notificationTemplates: NotificationTemplateFactory = {
     url: `/projects/${data.projectId}?activeTab=milestones`,
   }),
 
+  tradieReplyNeedsReview: (data) => ({
+    title: `Tradie reply needs review: ${data.tradieName}`,
+    message: `"${data.subject}" — ${data.reason}`,
+    url: `/tradie-management/${data.tradieId}`,
+  }),
+
+  tradieInvoiceNeedsAllocation: (data) => ({
+    title: `Tradie invoice to allocate: ${data.projectName}`,
+    message: `${data.tradieName}'s invoice${data.invoiceNumber ? ` ${data.invoiceNumber}` : ""} for ${data.amount} ex GST came in from Xero but could not be matched to one booking. Allocate it on the Financials tab.`,
+    url: `/projects/${data.projectId}?activeTab=financials`,
+  }),
+
+  tradieInvoiceDuplicateNumber: (data) => ({
+    title: `Duplicate Xero bill: ${data.tradieName} ${data.invoiceNumber}`,
+    message: `Xero has a second bill numbered ${data.invoiceNumber} from ${data.tradieName} (${data.amount} ex GST). It was not added to the project. Check Xero for a duplicate before it is paid twice.`,
+    url: `/projects/${data.projectId}?activeTab=financials`,
+  }),
+
+  tradieInvoiceEmailed: (data) => ({
+    title: `Invoice by email to confirm: ${data.projectName}`,
+    message: `${data.tradieName} emailed ${data.count === 1 ? "an invoice" : `${data.count} invoices`}. Check what was read and record ${data.count === 1 ? "it" : "them"} on the Financials tab; nothing counts until confirmed.`,
+    url: `/projects/${data.projectId}?activeTab=financials`,
+  }),
+
+  tradieInvoiceEmailUnmatched: (data) => ({
+    title: `Invoice by email not matched: ${data.tradieName}`,
+    message: `${data.tradieName} emailed an invoice ("${data.subject}") that could not be matched to one project. Record it by hand on the right project's Financials tab.`,
+    url: `/tradie-management/${data.tradieId}`,
+  }),
+
+  tradieInvoiceUnmatched: (data) => ({
+    title: `Xero bill not matched: ${data.tradieName}`,
+    message: `A bill${data.invoiceNumber ? ` ${data.invoiceNumber}` : ""} for ${data.amount} ex GST from ${data.tradieName} could not be matched to a project. Add the booking's RCTBK reference to the bill in Xero, or record it on the project's Financials tab.`,
+    url: `/tradie-management/${data.tradieId}`,
+  }),
+
   tradieScheduleUpdated: (data) => ({
     title: `Tradie Schedule Updated: ${data.projectName}`,
     message: `${data.tradieName}'s schedule is now ${data.status}`,
@@ -170,6 +206,20 @@ export const notificationTemplates: NotificationTemplateFactory = {
     title: `Schedule Deletion Request: ${data.tradieName} (${data.trade}) for ${data.projectName}`,
     message: `${data.requestedBy} has requested the removal of ${data.tradieName}'s booking on ${data.scheduledDate} for ${data.projectName}: ${data.reason}`,
     url: `/admin-approvals?q=${encodeURIComponent(data.tradieName)}&approvalType=${TradieApprovalActionType.SCHEDULE_DELETION}&status=${TradieApprovalStatus.PENDING}&approvalId=${data.approvalId}`,
+  }),
+
+  tradeCancellationRequest: (data) => ({
+    title: `Trade Cancellation Request: ${data.tradieName} (${data.trade}) for ${data.projectName}`,
+    message: `${data.requestedBy} has asked to release ${data.tradieName} from ${data.trade} on ${data.projectName}: ${data.reason}`,
+    url: `/admin-approvals?q=${encodeURIComponent(data.tradieName)}&approvalType=${TradieApprovalActionType.TRADE_CANCELLATION}&status=${TradieApprovalStatus.PENDING}&approvalId=${data.approvalId}`,
+  }),
+
+  tradeCancellationResolved: (data) => ({
+    title: `Trade Cancellation ${data.approved ? "Approved" : "Rejected"}: ${data.tradieName} (${data.trade})`,
+    message: data.approved
+      ? `${data.tradieName} has been released from ${data.trade} on ${data.projectName}, and their bookings there are cancelled`
+      : `The request to release ${data.tradieName} from ${data.trade} on ${data.projectName} was rejected — they remain selected`,
+    url: `/projects/${data.projectId}?activeTab=tradies&trade=${encodeURIComponent(data.trade)}`,
   }),
 
   tradieScheduleDeletionResolved: (data) => ({
@@ -335,8 +385,8 @@ export const notificationTemplates: NotificationTemplateFactory = {
         data.rejectedCount > 0 ? `${data.rejectedCount} sent back` : null,
       ]
         .filter(Boolean)
-        .join(", ") ||
-      "The council has come back on the development application",
+        .join(", ")
+      || "The council has come back on the development application",
     url: `/projects/${data.projectId}?activeTab=compliance`,
   }),
 };

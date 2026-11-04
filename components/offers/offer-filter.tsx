@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { fetchOffers } from "@/lib/store/slices/offerSlice";
 import type { OfferStatusBucket } from "@/types/offer";
+import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
 
 interface OfferFilterProps {
   /**
@@ -84,7 +85,20 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
   return (
     <CardHeader className="border-b border-border/70 px-5 py-4">
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 pb-4">
+        <MobileFilterSelect
+          label="Offer status"
+          value={tabId}
+          options={TABS.map((tab) => ({
+            value: tab,
+            label:
+              tab === "all"
+                ? "All offers"
+                : tab.charAt(0).toUpperCase() + tab.slice(1),
+            count: initialTabCounts[tab],
+          }))}
+          onChange={(value) => handleTabChange(value as OfferStatusBucket)}
+        />
+        <div className="hidden flex-wrap items-center gap-1.5 border-b border-border/70 pb-4 md:flex">
           {TABS.map((tab) => {
             const active = tabId === tab;
 
@@ -95,7 +109,7 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
                 aria-pressed={active}
                 onClick={() => handleTabChange(tab)}
                 className={cn(
-                  "group relative inline-flex h-9 items-center rounded-md px-3 text-[12.5px] font-semibold transition-all duration-200",
+                  "group relative inline-flex min-h-11 items-center rounded-md px-3 text-sm font-semibold transition-colors duration-200 sm:min-h-9 sm:text-[12.5px]",
                   active
                     ? "bg-royal-gold-light text-royal-gold-ink shadow-sm"
                     : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
@@ -127,7 +141,7 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative max-w-70 flex-1">
+          <div className="relative min-w-0 flex-1 sm:max-w-70">
             <label htmlFor="search" className="sr-only">
               Search
             </label>

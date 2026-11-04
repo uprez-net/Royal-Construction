@@ -11,6 +11,7 @@ import {
 import { getWritable, sleep } from "workflow";
 import { findLeadById } from "@/lib/data/leads";
 import { ObjectToMarkdown } from "@/utils/converter";
+import { mergeExtractedOwners } from "@/lib/projects/extracted-owners";
 import pLimit from "p-limit";
 import type { OCRPageObject } from "@mistralai/mistralai/models/components";
 
@@ -113,6 +114,15 @@ function mergeExtraction(
       ProjectExtractionData[keyof ProjectExtractionData],
     ]
   >) {
+    // Not "last answer wins": a later chunk's owners are usually the parties
+    // on its signature page — the builder among them. See extracted-owners.ts.
+    if (key === "legalAdministrationOwners") {
+      merged.legalAdministrationOwners = mergeExtractedOwners(
+        merged.legalAdministrationOwners,
+        (value as ProjectExtractionData["legalAdministrationOwners"]) ?? [],
+      );
+      continue;
+    }
     if (Array.isArray(value)) {
       if (value.length > 0) merged[key] = value as never;
       continue;

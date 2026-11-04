@@ -184,16 +184,16 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
               >
                 <CollapsibleTrigger
                   className={cn(
-                    "group flex w-full items-center justify-between px-4 py-3",
+                    "group flex w-full flex-col items-stretch justify-between gap-2 px-3 py-3 sm:flex-row sm:items-center sm:px-4",
                     "transition-colors hover:bg-muted/40",
                     "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
                     isStageComplete && "hover:bg-emerald-500/10",
-                    hasActiveMilestone &&
-                      !isStageComplete &&
-                      "hover:bg-primary/10",
+                    hasActiveMilestone
+                      && !isStageComplete
+                      && "hover:bg-primary/10",
                   )}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-sm font-semibold text-foreground">
                       {stage}
                     </h3>

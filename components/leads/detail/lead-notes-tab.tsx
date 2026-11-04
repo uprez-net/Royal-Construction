@@ -79,8 +79,8 @@ export function LeadNotesTab({
     (userId) => !baselineMentionedUserIds.includes(userId),
   );
   const noteHasChanges =
-    notesDoc.plainText !== baselineDoc.plainText ||
-    JSON.stringify(notesDoc) !== JSON.stringify(baselineDoc);
+    notesDoc.plainText !== baselineDoc.plainText
+    || JSON.stringify(notesDoc) !== JSON.stringify(baselineDoc);
   const canSaveNote = noteHasChanges || hasNewMentions;
 
   const activities = useMemo(
@@ -136,7 +136,7 @@ export function LeadNotesTab({
   return (
     <section className="space-y-4">
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
-        <CardHeader className="border-b border-border/70 pb-4">
+        <CardHeader className="border-b border-border/70 px-4 pb-4 sm:px-6">
           <CardTitle
             as="h2"
             id={notesLabelId}
@@ -149,7 +149,7 @@ export function LeadNotesTab({
             note into the activity log below.
           </p>
         </CardHeader>
-        <CardContent className="pt-5">
+        <CardContent className="px-4 pt-4 sm:px-6 sm:pt-5">
           <LeadRichTextEditor
             value={notesDoc}
             availableUsers={availableUsers}
@@ -163,7 +163,7 @@ export function LeadNotesTab({
       </Card>
 
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
-        <CardHeader className="border-b border-border/70 pb-4">
+        <CardHeader className="border-b border-border/70 px-4 pb-4 sm:px-6">
           <CardTitle
             as="h2"
             className="text-base font-semibold text-foreground"
@@ -175,7 +175,7 @@ export function LeadNotesTab({
             newest first
           </p>
         </CardHeader>
-        <CardContent className="pt-5">
+        <CardContent className="px-4 pt-4 sm:px-6 sm:pt-5">
           {activities.length === 0 ? (
             <div className="mx-auto flex max-w-md flex-col items-center gap-3 py-8 text-center">
               <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">

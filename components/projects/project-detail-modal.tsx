@@ -14,6 +14,7 @@ import { CustomerTab } from "./project-customer-tab";
 import { MilestoneTab } from "./project-milestone-tab";
 import { OverviewTab } from "./project-overview-tab";
 import { FinancialTab } from "./project-financial-tab";
+import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
 
 interface ProjectDetailModalProps {
   isAdmin: boolean;
@@ -47,6 +48,10 @@ export function ProjectDetailModal({
   // Stable per-instance prefix so tab ids never collide with another dialog's.
   const idPrefix = useId();
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const visibleTabs = TABS.filter((tab) => !tab.requiresAdmin || isAdmin);
+  const effectiveTab = visibleTabs.some((tab) => tab.id === activeTab)
+    ? activeTab
+    : "overview";
 
   const tabId = (id: TabType) => `${idPrefix}-tab-${id}`;
   const panelId = (id: TabType) => `${idPrefix}-panel-${id}`;
@@ -55,7 +60,7 @@ export function ProjectDetailModal({
   // tabs pattern. Roving tabIndex keeps the tablist a single tab stop.
   const handleTabKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
-      const lastIndex = TABS.length - 1;
+      const lastIndex = visibleTabs.length - 1;
       let nextIndex: number | null = null;
 
       if (event.key === "ArrowRight")
@@ -68,11 +73,11 @@ export function ProjectDetailModal({
       if (nextIndex === null) return;
 
       event.preventDefault();
-      const next = TABS[nextIndex];
+      const next = visibleTabs[nextIndex];
       setActiveTab(next.id);
       tabRefs.current[next.id]?.focus();
     },
-    [],
+    [visibleTabs],
   );
 
   if (!project) return null;
@@ -89,8 +94,11 @@ export function ProjectDetailModal({
           from DialogTitle/DialogDescription. Nothing here re-implements it.
           The grid rows make the body the single scroll region — the dialog
           shell itself does not scroll, so there is no nested-scroll trap. */}
-      <DialogContent className="grid max-h-[85vh] w-full max-w-[calc(100%-1.5rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-[90vw] lg:max-h-[80vh] lg:max-w-[60vw]">
-        <DialogHeader className="border-b border-border bg-card px-6 pt-5 pr-14 text-left">
+      <DialogContent
+        data-mobile-scroll="body"
+        className="grid max-h-[85vh] w-full max-w-[calc(100%-1.5rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-[90vw] lg:max-h-[80vh] lg:max-w-[60vw]"
+      >
+        <DialogHeader className="border-b border-border bg-card px-4 pt-4 pb-3 pr-14 text-left sm:px-6 sm:pt-5">
           <DialogTitle className="font-heading text-xl font-semibold text-foreground">
             {project.name}
           </DialogTitle>
@@ -98,17 +106,22 @@ export function ProjectDetailModal({
             {project.location} • {project.customer.name}
           </DialogDescription>
 
+          <MobileFilterSelect
+            label="Project section"
+            value={effectiveTab}
+            options={visibleTabs.map((tab) => ({
+              value: tab.id,
+              label: tab.label,
+            }))}
+            onChange={(value) => setActiveTab(value as TabType)}
+          />
           <div
             role="tablist"
             aria-label="Project sections"
-            className="no-scrollbar -mx-6 mt-4 flex gap-0 overflow-x-auto border-t border-border/40 px-6 pt-3"
+            className="-mx-6 mt-4 hidden flex-wrap gap-0 border-t border-border/40 px-6 pt-3 md:flex"
           >
-            {TABS.map((tab, index) => {
-              const isActive = activeTab === tab.id;
-
-              if (tab.requiresAdmin && !isAdmin) {
-                return null;
-              }
+            {visibleTabs.map((tab, index) => {
+              const isActive = effectiveTab === tab.id;
 
               return (
                 <button
@@ -139,12 +152,12 @@ export function ProjectDetailModal({
 
         <div
           role="tabpanel"
-          id={panelId(activeTab)}
-          aria-labelledby={tabId(activeTab)}
+          id={panelId(effectiveTab)}
+          aria-labelledby={tabId(effectiveTab)}
           tabIndex={0}
-          className="no-scrollbar overflow-y-auto px-6 py-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+          className="min-h-0 min-w-0 overflow-y-auto overscroll-contain px-4 py-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:px-6 sm:py-5"
         >
-          {activeTab === "overview" && (
+          {effectiveTab === "overview" && (
             <OverviewTab
               isAdmin={isAdmin}
               project={project}
@@ -153,15 +166,17 @@ export function ProjectDetailModal({
             />
           )}
 
-          {activeTab === "customer" && (
+          {effectiveTab === "customer" && (
             <CustomerTab project={project} isAdmin={isAdmin} />
           )}
 
-          {activeTab === "milestones" && <MilestoneTab project={project} />}
+          {effectiveTab === "milestones" && <MilestoneTab project={project} />}
 
-          {activeTab === "financials" && <FinancialTab project={project} />}
+          {effectiveTab === "financials" && (
+            <FinancialTab project={project} onClose={onClose} />
+          )}
 
-          {activeTab === "team" && <TeamTab project={project} />}
+          {effectiveTab === "team" && <TeamTab project={project} />}
         </div>
       </DialogContent>
     </Dialog>

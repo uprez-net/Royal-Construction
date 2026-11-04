@@ -14,7 +14,8 @@
 // number on screen stopped being the number on the offer. The cells beside it
 // are on that same price; see buildOfferSummaryFigures.
 
-import { Check, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, TriangleAlert } from "lucide-react";
+import { useId, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   formatCurrency,
@@ -70,6 +71,8 @@ export function OfferSummaryStrip({
     totalAreaSqm,
   });
   const priced = effectiveMargin.marginStatus !== "not_priced";
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const breakdownId = useId();
 
   // Blank while the offer is still loading: every figure below is a seeded
   // default until then, and a price stated with confidence beside a loading
@@ -101,9 +104,44 @@ export function OfferSummaryStrip({
     // landmark so the totals are reachable by region navigation.
     <aside
       aria-label="Offer totals"
-      className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-2 border-t border-border/70 bg-white px-5 py-2.5"
+      className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/70 bg-white px-3 py-1 md:gap-x-6 md:px-5 md:py-2.5"
     >
-      <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
+      {/* On a phone the toggle shares the price's row, and the breakdown
+          opens as a row of its own below it. A full-width <details> spent a
+          whole 44px row on its summary line before the price row. */}
+      <button
+        type="button"
+        aria-controls={breakdownId}
+        aria-expanded={breakdownOpen}
+        onClick={() => setBreakdownOpen((open) => !open)}
+        className="-ml-1 inline-flex min-h-11 items-center gap-1 rounded-md px-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring md:hidden"
+      >
+        Breakdown
+        <ChevronDown
+          aria-hidden="true"
+          className={cn(
+            "size-4 transition-transform",
+            breakdownOpen && "rotate-180",
+          )}
+        />
+      </button>
+      <dl
+        id={breakdownId}
+        className={cn(
+          "order-last max-h-[25dvh] w-full grid-cols-2 gap-3 overflow-y-auto pb-1 md:hidden",
+          breakdownOpen ? "grid" : "hidden",
+        )}
+      >
+        {cells.map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <dt className="text-xs text-muted-foreground">{label}</dt>
+            <dd className="break-words font-mono text-sm tabular-nums">
+              {value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <dl className="hidden flex-wrap items-center gap-x-6 gap-y-2 md:flex">
         {cells.map(([label, value]) => (
           <div key={label} className="flex items-baseline gap-2">
             <dt className="text-xs text-muted-foreground">{label}</dt>
@@ -114,7 +152,7 @@ export function OfferSummaryStrip({
         ))}
       </dl>
 
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
         {awaitingOffer ? (
           // Every figure in this group comes from the same seeded state as the
           // cells above: the override badge compares two placeholder numbers,

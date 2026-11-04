@@ -2,44 +2,66 @@ import {
   Prisma,
   TradieApprovalActionType,
   TradieApprovalStatus,
+  TradieQuoteSource,
   TradieScheduleStatus,
 } from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import {
   DomainAuthorizationError,
+  DomainError,
   DomainNotFoundError,
+  DomainStaleVersionError,
   DomainTransitionError,
   DomainValidationError,
 } from "../errors";
 import { attributionUserId, type DomainPrincipal } from "../principal";
-import { authorizeProject } from "../access/projects";
+import {
+  noteTradieActivity,
+  recordTradieActivity,
+  viaOf,
+} from "../audit/tradie-activity-log";
+import { authorizeProject, canManageProject } from "../access/projects";
+import { assertCanReadTradieDirectory } from "../access/tradies";
+import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
+import {
+  notReschedulableReason,
+  rescheduleOutcome,
+  type RescheduleNotice,
+} from "./reschedule-rules";
+import { generateTradieRefToken } from "./reply-reference";
+import { tradieTradeLabel } from "./request-rules";
+import { canTransitionSchedule } from "./schedule-transitions";
 import {
   normalizeQuoteBasis,
   parseQuotedAmount,
   scheduleTotalCost,
 } from "../../../utils/calculations";
-import { currency } from "../../../utils/formatters";
+import { currency, rateCurrency } from "../../../utils/formatters";
+
+/** `YYYY-MM-DD`: schedule dates are calendar days stored at UTC midnight. */
+function isoDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
 
 // Booking a tradie onto a project.
 //
-// Two implementations, and this time it was the APP that was missing the
-// rules:
+// What the command refuses, for both callers (the app and Eve):
 //
-//   - No overlap check. lib/data/tradieSchedules.ts#createTradieSchedule wrote
-//     the row unconditionally, so the same tradie could be booked onto two
-//     projects for the same week. Eve refused it. A tradie who cannot show up
-//     to one of two sites is a day of work lost on whichever site loses, and
-//     nothing in the app would have warned anyone.
-//   - No check that the milestone belongs to the project. Both ids arrive from
+//   - The same booking twice. One tradie, one project, one milestone (or none)
+//     can hold one active booking. A second identical row would send the
+//     tradie a second request for work they already have and put the same job
+//     on the project twice. To change the dates, reschedule the booking that
+//     exists.
+//   - A milestone that does not belong to the project. Both ids arrive from
 //     the client, so a booking could be attached to a milestone on somebody
-//     else's project. Eve checked; the app did not.
+//     else's project.
 //
-// Both are kept, and both now apply to both callers. This is a deliberate
-// behaviour change on the app side: a booking that overlaps an existing active
-// one is now refused where it used to be written. If the office genuinely
-// needs to double-book a tradie with a crew across two sites, that wants an
-// explicit override, not a missing check.
+// What it no longer refuses: a tradie booked on overlapping days. The office
+// books one tradie onto two sites, or two milestones, on the same day, and a
+// hard refusal stopped them doing it. The picker shows the days already
+// booked instead (`listTradieBookings`), so the double booking is a decision
+// made with the clash in view rather than one the command makes for them.
 
 export type CreateScheduleInput = {
   readonly tradieId: string;
@@ -48,61 +70,154 @@ export type CreateScheduleInput = {
   readonly scheduledDate: Date;
   readonly durationDays: number;
   readonly requiresQuote: boolean;
+  /** The request email this booking is part of, when it is. */
+  readonly requestRecipientId?: string | null;
+  /**
+   * The trade it is for, when the tradie works in several. Defaults to their
+   * primary trade.
+   */
+  readonly trade?: string | null;
 };
 
 /**
  * Statuses that no longer hold the tradie's time.
  *
  * A declined booking was never accepted and a completed one is in the past, so
- * neither blocks a new one.
+ * neither counts as booked: neither shows on the picker, and neither stops the
+ * same tradie being booked onto the same milestone again.
  */
-const NON_BLOCKING_STATUSES = [
-  TradieScheduleStatus.DECLINED,
-  TradieScheduleStatus.COMPLETED,
-];
+const NON_BLOCKING_STATUSES = INACTIVE_SCHEDULE_STATUSES;
+
+/** "12 Oct 2026" — schedule dates are stored at UTC midnight. */
+function bookingDay(date: Date): string {
+  return new Intl.DateTimeFormat("en-AU", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+    year: "numeric",
+  }).format(date);
+}
 
 /**
- * Refuse a booking that overlaps one this tradie already holds.
+ * Refuse a booking this tradie already holds on the same project and milestone.
  *
- * Half-open by day: a booking that ends on the morning a new one starts does
- * not block it. The candidate set is narrowed in the query by start date and
- * the end date is computed per row, because `durationDays` varies and the
- * database has no end column to compare.
+ * "No milestone" is a milestone for this purpose: a second general booking for
+ * the same tradie on the same project is the same booking again. Dates play no
+ * part — moving one is a reschedule, not a second booking.
  */
-export async function assertNoScheduleConflict(
+export async function assertNotAlreadyBooked(
   input: {
     tradieId: string;
-    scheduledDate: Date;
-    durationDays: number;
-    /** An existing booking being moved, which must not conflict with itself. */
+    projectId: string;
+    milestoneId: string | null;
+    /** An existing booking being changed, which must not match itself. */
     ignoreScheduleId?: string;
   },
   db: DomainDb,
 ): Promise<void> {
-  const end = new Date(input.scheduledDate);
-  end.setUTCDate(end.getUTCDate() + input.durationDays);
-
-  const candidates = await db.tradieSchedule.findMany({
-    select: { durationDays: true, id: true, scheduledDate: true },
+  const existing = await db.tradieSchedule.findFirst({
+    select: { durationDays: true, scheduledDate: true },
     where: {
       id: input.ignoreScheduleId ? { not: input.ignoreScheduleId } : undefined,
-      scheduledDate: { lt: end },
+      milestoneId: input.milestoneId,
+      projectId: input.projectId,
+      status: { notIn: NON_BLOCKING_STATUSES },
+      tradieId: input.tradieId,
+    },
+  });
+  if (!existing) return;
+
+  // The dates, so the operator can find the booking to reschedule.
+  const lastDay = new Date(existing.scheduledDate);
+  lastDay.setUTCDate(lastDay.getUTCDate() + existing.durationDays - 1);
+  const booked =
+    existing.durationDays > 1
+      ? `from ${bookingDay(existing.scheduledDate)} to ${bookingDay(lastDay)}`
+      : `on ${bookingDay(existing.scheduledDate)}`;
+  const work = input.milestoneId ? "this milestone" : "this project";
+  throw new DomainTransitionError(
+    `That tradie is already booked for ${work} ${booked}. Reschedule that booking instead of adding another.`,
+  );
+}
+
+export type TradieBooking = {
+  readonly scheduleId: string;
+  readonly projectId: string;
+  /**
+   * Null when the caller may not manage that project: they still learn the
+   * tradie is busy, which is what stops a double booking, without learning
+   * whose build it is.
+   */
+  readonly projectName: string | null;
+  /** Null for no milestone, and when the project is not the caller's. */
+  readonly milestoneId: string | null;
+  readonly milestoneName: string | null;
+  readonly status: TradieScheduleStatus;
+  /** First working day, `YYYY-MM-DD`. */
+  readonly firstDay: string;
+  /** Last working day, inclusive, `YYYY-MM-DD`. */
+  readonly lastDay: string;
+};
+
+/** How far back a booking can start and still be running today. */
+const BOOKING_LOOKBACK_DAYS = 366;
+
+/**
+ * The bookings that hold this tradie's time from `from` onwards.
+ *
+ * For the picker to mark, not to refuse: a booked day can still be booked
+ * again. A booking holds `durationDays` days from its first, half-open, and
+ * the same `NON_BLOCKING_STATUSES` as `assertNotAlreadyBooked` decide which
+ * bookings count.
+ */
+export async function listTradieBookings(
+  principal: DomainPrincipal,
+  input: { readonly tradieId: string; readonly from: Date },
+  db: DomainDb,
+): Promise<TradieBooking[]> {
+  assertCanReadTradieDirectory(principal);
+
+  const earliest = new Date(input.from);
+  earliest.setUTCDate(earliest.getUTCDate() - BOOKING_LOOKBACK_DAYS);
+
+  const rows = await db.tradieSchedule.findMany({
+    orderBy: { scheduledDate: "asc" },
+    select: {
+      durationDays: true,
+      id: true,
+      milestone: { select: { name: true } },
+      milestoneId: true,
+      project: { select: { id: true, name: true, siteManagerId: true } },
+      scheduledDate: true,
+      status: true,
+    },
+    where: {
+      scheduledDate: { gte: earliest },
       status: { notIn: NON_BLOCKING_STATUSES },
       tradieId: input.tradieId,
     },
   });
 
-  const conflict = candidates.find((candidate) => {
-    const candidateEnd = new Date(candidate.scheduledDate);
-    candidateEnd.setUTCDate(candidateEnd.getUTCDate() + candidate.durationDays);
-    return candidateEnd > input.scheduledDate;
+  return rows.flatMap((row) => {
+    const end = new Date(row.scheduledDate);
+    end.setUTCDate(end.getUTCDate() + row.durationDays);
+    if (end <= input.from) return [];
+    const lastDay = new Date(end);
+    lastDay.setUTCDate(lastDay.getUTCDate() - 1);
+    const visible = canManageProject(principal, row.project);
+    return [
+      {
+        firstDay: row.scheduledDate.toISOString().slice(0, 10),
+        lastDay: lastDay.toISOString().slice(0, 10),
+        milestoneId: visible ? row.milestoneId : null,
+        milestoneName: visible ? (row.milestone?.name ?? null) : null,
+        projectId: row.project.id,
+        projectName: visible ? row.project.name : null,
+        scheduleId: row.id,
+        status: row.status,
+      },
+    ];
   });
-
-  if (conflict) {
-    throw new DomainTransitionError(
-      "That tradie already has an overlapping active booking in the requested window.",
-    );
-  }
 }
 
 /**
@@ -159,11 +274,18 @@ export async function createTradieSchedule(
       transactionDb,
     );
 
-    const tradie = await transactionDb.tradie.findUnique({
-      select: { id: true },
-      where: { id: input.tradieId },
-    });
-    if (!tradie) throw new DomainNotFoundError("Tradie not found");
+    const tradie = await requireActiveTradie(input.tradieId, transactionDb);
+    // Checked only when a trade is named. Booked under their primary trade,
+    // a tradie the directory has no trade for can still be booked, as before.
+    const asked = input.trade?.trim();
+    const listed = asked ? tradieTradeLabel(tradie, asked) : null;
+    if (asked && !listed) {
+      throw new DomainValidationError(
+        `${tradie.name} is not listed under ${asked}.`,
+        "trade",
+      );
+    }
+    const trade = listed ?? tradie.trade;
 
     if (input.milestoneId) {
       await assertMilestoneOnProject(
@@ -173,25 +295,30 @@ export async function createTradieSchedule(
       );
     }
 
-    await assertNoScheduleConflict(
+    await assertNotAlreadyBooked(
       {
-        durationDays: input.durationDays,
-        scheduledDate: input.scheduledDate,
+        milestoneId: input.milestoneId ?? null,
+        projectId: project.id,
         tradieId: tradie.id,
       },
       transactionDb,
     );
 
-    return transactionDb.tradieSchedule.create({
+    const created = await transactionDb.tradieSchedule.create({
       data: {
         durationDays: input.durationDays,
         milestoneId: input.milestoneId ?? null,
         projectId: project.id,
+        // Minted here, the one place a booking is created, so every email
+        // about it can quote the same reference.
+        refToken: generateTradieRefToken("booking"),
+        requestRecipientId: input.requestRecipientId ?? null,
         requiresQuote: input.requiresQuote,
         scheduledDate: input.scheduledDate,
         status: input.requiresQuote
           ? TradieScheduleStatus.AWAITING_QUOTE
           : TradieScheduleStatus.PENDING,
+        trade,
         tradieId: tradie.id,
       },
       select: {
@@ -205,6 +332,25 @@ export async function createTradieSchedule(
         tradieId: true,
       },
     });
+    await recordTradieActivity(
+      {
+        data: {
+          asksForQuote: input.requiresQuote,
+          durationDays: created.durationDays,
+          milestoneId: created.milestoneId,
+          projectId: created.projectId,
+          scheduleId: created.id,
+          scheduledDate: isoDay(created.scheduledDate),
+          trade,
+          tradieId: created.tradieId,
+          via: viaOf(principal),
+        },
+        principal,
+        type: "bookingCreated",
+      },
+      transactionDb,
+    );
+    return created;
   };
 
   return "$transaction" in db
@@ -216,9 +362,10 @@ export async function createTradieSchedule(
 
 /**
  * Create a batch atomically. The App bulk endpoint used to bypass the single
- * booking command entirely, so it skipped milestone ownership and overlap
- * checks. Running the same command once per row inside one transaction keeps
- * those checks identical and makes a partial bulk booking impossible.
+ * booking command entirely, so it skipped its checks. Running the same command
+ * once per row inside one transaction keeps those checks identical — a batch
+ * that names the same booking twice is refused at its second row — and makes a
+ * partial bulk booking impossible.
  */
 export async function createTradieSchedules(
   principal: DomainPrincipal,
@@ -232,8 +379,19 @@ export async function createTradieSchedules(
   }
   const run = async (transactionDb: DomainDb) => {
     const created: CreatedSchedule[] = [];
-    for (const input of inputs) {
-      created.push(await createTradieSchedule(principal, input, transactionDb));
+    for (const [index, input] of inputs.entries()) {
+      try {
+        created.push(
+          await createTradieSchedule(principal, input, transactionDb),
+        );
+      } catch (error) {
+        // Name the row: "That tradie is already booked…" means nothing on a
+        // form with five tradies on it.
+        if (inputs.length > 1 && error instanceof DomainError) {
+          error.message = `Booking ${index + 1}: ${error.message}`;
+        }
+        throw error;
+      }
     }
     return created;
   };
@@ -243,53 +401,6 @@ export async function createTradieSchedules(
       })
     : run(db);
 }
-
-const ALLOWED_TRANSITIONS: Record<
-  TradieScheduleStatus,
-  readonly TradieScheduleStatus[]
-> = {
-  [TradieScheduleStatus.PENDING]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.NO_RESPONSE,
-    TradieScheduleStatus.PENDING_RESPONSE,
-  ],
-  [TradieScheduleStatus.AWAITING_QUOTE]: [
-    TradieScheduleStatus.PENDING_RESPONSE,
-    TradieScheduleStatus.NO_RESPONSE,
-  ],
-  [TradieScheduleStatus.PENDING_RESPONSE]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.QUOTE_RECEIVED]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.AWAITING_ADMIN_APPROVAL]: [
-    TradieScheduleStatus.CONFIRMED,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.CONFIRMED]: [
-    TradieScheduleStatus.COMPLETED,
-    TradieScheduleStatus.DECLINED,
-    TradieScheduleStatus.CONFIRMED,
-  ],
-  [TradieScheduleStatus.PENDING_FINAL_CONFIRMATION]: [
-    TradieScheduleStatus.CONFIRMED,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.NO_RESPONSE]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.DECLINED]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.PENDING_RESPONSE,
-    TradieScheduleStatus.NO_RESPONSE,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.COMPLETED]: [],
-};
 
 type ScheduleQuoteInput = {
   readonly quote?: string | null;
@@ -313,6 +424,18 @@ type ScheduleMutationResult = {
 /** Move one booking through the persisted state machine and quote rule. */
 export async function transitionTradieSchedule(
   principal: DomainPrincipal,
+  input: Parameters<typeof applyScheduleTransition>[1],
+  db: DomainDb,
+): Promise<ScheduleMutationResult> {
+  // The booking, quote and approval must commit together. A failed approval
+  // used to leave the booking awaiting an approval that did not exist.
+  return "$transaction" in db
+    ? db.$transaction((tx) => applyScheduleTransition(principal, input, tx))
+    : applyScheduleTransition(principal, input, db);
+}
+
+async function applyScheduleTransition(
+  principal: DomainPrincipal,
   input: {
     scheduleId: string;
     toStatus: TradieScheduleStatus;
@@ -335,6 +458,11 @@ export async function transitionTradieSchedule(
 ): Promise<ScheduleMutationResult> {
   const existing = await findSchedule(input.scheduleId, db);
   await authorizeProject(principal, existing.projectId, db);
+  if (existing.tradie.archivedAt) {
+    throw new DomainTransitionError(
+      "This tradie has been removed from the active directory.",
+    );
+  }
 
   if (
     input.statusAlreadyApplied
@@ -346,7 +474,7 @@ export async function transitionTradieSchedule(
   }
   if (
     !input.statusAlreadyApplied
-    && !ALLOWED_TRANSITIONS[existing.status].includes(input.toStatus)
+    && !canTransitionSchedule(existing.status, input.toStatus)
   ) {
     throw new DomainTransitionError(
       `Invalid schedule transition from ${existing.status} to ${input.toStatus}.`,
@@ -358,6 +486,24 @@ export async function transitionTradieSchedule(
   const normalized = input.statusAlreadyApplied
     ? null
     : readQuote(input.quote, input.quoteUnit);
+  // Where the amount came from, for the board's quote column: the reply
+  // webhook records quotes as the system, a person records the rest.
+  const quote = normalized
+    ? await db.tradieQuote.create({
+        data: {
+          enteredById: attributionUserId(principal),
+          projectId: existing.projectId,
+          quotedAt: new Date(),
+          source:
+            principal.kind === "system"
+              ? TradieQuoteSource.EMAIL
+              : TradieQuoteSource.MANUAL,
+          trade: existing.trade?.trim() || existing.tradie.trade,
+          tradieId: existing.tradieId,
+        },
+        select: { id: true },
+      })
+    : null;
   if (!input.statusAlreadyApplied) {
     const updatedCount = await db.tradieSchedule.updateMany({
       data: {
@@ -373,6 +519,7 @@ export async function transitionTradieSchedule(
                 existing.durationDays,
                 normalized.unit,
               ).toFixed(2),
+              quoteId: quote?.id,
               requiresQuote: true,
             }
           : {}),
@@ -384,6 +531,31 @@ export async function transitionTradieSchedule(
         "The schedule changed before this transition was applied.",
       );
     }
+    await recordTradieActivity(
+      {
+        data: {
+          from: existing.status,
+          milestoneId: existing.milestoneId,
+          projectId: existing.projectId,
+          quote: normalized
+            ? rateCurrency.format(
+                scheduleTotalCost(
+                  normalized.amount,
+                  existing.durationDays,
+                  normalized.unit,
+                ),
+              )
+            : null,
+          scheduleId: existing.id,
+          to: input.toStatus,
+          tradieId: existing.tradieId,
+          via: viaOf(principal),
+        },
+        principal,
+        type: "bookingStatusChanged",
+      },
+      db,
+    );
 
     if (
       input.toStatus === TradieScheduleStatus.DECLINED
@@ -420,7 +592,7 @@ export async function transitionTradieSchedule(
     && input.toStatus === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL
   ) {
     const requesterId = attributionUserId(principal);
-    if (!requesterId) {
+    if (!requesterId && principal.kind !== "system") {
       throw new DomainAuthorizationError(
         "Schedule approval requires a signed-in user.",
       );
@@ -446,6 +618,7 @@ export async function transitionTradieSchedule(
         actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
         reason: `${existing.tradie.name} has confirmed their availability for the scheduled task on ${existing.scheduledDate.toISOString().slice(0, 10)}. Please review and approve the booking.`,
         requestedBy: requesterId,
+        requestSource: principal.kind === "system" ? principal.reason : null,
         tradieId: existing.tradieId,
         updationData: {
           cost,
@@ -484,7 +657,35 @@ export async function transitionTradieSchedule(
   };
 }
 
-/** Reschedule one booking with an optimistic old-date/duration check. */
+export type RescheduleScheduleResult = ScheduleMutationResult & {
+  readonly milestoneId: string | null;
+  readonly previousScheduledDate: Date;
+  readonly previousDurationDays: number;
+  /**
+   * The email the tradie is now owed, or `null` when only the milestone moved
+   * and the dates the tradie answered for still stand. The command does not
+   * send it: the App sends it after this commits and says if it failed, and
+   * Eve, which has no mailbox, tells the operator it is still owed.
+   */
+  readonly notice: RescheduleNotice | null;
+  /** A pending approval for the old date was withdrawn. */
+  readonly withdrewApproval: boolean;
+};
+
+/**
+ * Move one booking's dates (or milestone), and put it back to the tradie.
+ *
+ * The status the booking lands in is `rescheduleOutcome`'s: an approved
+ * booking only needs the tradie to confirm the new date, anything else needs
+ * their availability again. The week-out reminder and any dismissed alert are
+ * reset with it, because both were about the old date.
+ *
+ * Optimistic on the dates, duration and status the caller saw. The status
+ * check is what keeps the dialog honest: it chose its email from the status it
+ * was opened on, and a tradie's reply landing in between would otherwise send
+ * an "approved, just confirm" email about a booking that is now waiting on an
+ * admin.
+ */
 export async function rescheduleTradieSchedule(
   principal: DomainPrincipal,
   input: {
@@ -492,68 +693,176 @@ export async function rescheduleTradieSchedule(
     scheduledDate: Date;
     durationDays?: number;
     milestoneId?: string | null;
+    /** The status the caller decided from; refused as stale if it moved. */
+    expectedStatus?: TradieScheduleStatus;
   },
   db: DomainDb,
-): Promise<ScheduleMutationResult> {
-  const existing = await findSchedule(input.scheduleId, db);
-  await authorizeProject(principal, existing.projectId, db);
-  const durationDays = input.durationDays ?? existing.durationDays;
-  if (!Number.isInteger(durationDays) || durationDays < 1) {
-    throw new DomainValidationError(
-      "A schedule must last at least one day.",
-      "durationDays",
-    );
-  }
-  if (Number.isNaN(input.scheduledDate.getTime())) {
-    throw new DomainValidationError(
-      "The scheduled date is invalid.",
-      "scheduledDate",
-    );
-  }
-  if (input.milestoneId) {
-    await assertMilestoneOnProject(existing.projectId, input.milestoneId, db);
-  }
-  await assertNoScheduleConflict(
-    {
+): Promise<RescheduleScheduleResult> {
+  const write = async (
+    transactionDb: DomainDb,
+  ): Promise<RescheduleScheduleResult> => {
+    const existing = await findSchedule(input.scheduleId, transactionDb);
+    await authorizeProject(principal, existing.projectId, transactionDb);
+    const durationDays = input.durationDays ?? existing.durationDays;
+    if (existing.tradie.archivedAt) {
+      throw new DomainTransitionError(
+        "This tradie has been removed from the active directory.",
+      );
+    }
+    const outcome = rescheduleOutcome(existing.status);
+    if (!outcome) {
+      throw new DomainTransitionError(notReschedulableReason(existing.status));
+    }
+    if (input.expectedStatus && input.expectedStatus !== existing.status) {
+      throw new DomainStaleVersionError(
+        "This booking changed while you were rescheduling it — the tradie may have replied. Close this and try again.",
+      );
+    }
+    if (!Number.isInteger(durationDays) || durationDays < 1) {
+      throw new DomainValidationError(
+        "A schedule must last at least one day.",
+        "durationDays",
+      );
+    }
+    if (Number.isNaN(input.scheduledDate.getTime())) {
+      throw new DomainValidationError(
+        "The scheduled date is invalid.",
+        "scheduledDate",
+      );
+    }
+
+    const datesChanged =
+      input.scheduledDate.getTime() !== existing.scheduledDate.getTime()
+      || durationDays !== existing.durationDays;
+    const milestoneChanged =
+      input.milestoneId !== undefined
+      && input.milestoneId !== existing.milestoneId;
+    if (!datesChanged && !milestoneChanged) {
+      throw new DomainValidationError(
+        "Pick a different date or duration to reschedule this booking.",
+        "scheduledDate",
+      );
+    }
+
+    if (input.milestoneId) {
+      await assertMilestoneOnProject(
+        existing.projectId,
+        input.milestoneId,
+        transactionDb,
+      );
+    }
+    // Moving a booking onto another milestone must not turn it into a copy of
+    // one the tradie already holds there. A date change cannot.
+    if (milestoneChanged) {
+      await assertNotAlreadyBooked(
+        {
+          ignoreScheduleId: existing.id,
+          milestoneId: input.milestoneId ?? null,
+          projectId: existing.projectId,
+          tradieId: existing.tradieId,
+        },
+        transactionDb,
+      );
+    }
+
+    // Only a change of dates reopens the booking. Moving it to another
+    // milestone on the same days leaves the tradie's answer standing.
+    const status = datesChanged ? outcome.status : existing.status;
+    const updatedCount = await transactionDb.tradieSchedule.updateMany({
+      data: {
+        durationDays,
+        ...(input.milestoneId !== undefined
+          ? { milestoneId: input.milestoneId }
+          : {}),
+        scheduledDate: input.scheduledDate,
+        ...(datesChanged
+          ? {
+              alertDismissedAt: null,
+              alertDismissedStatus: null,
+              reminderSentAt: null,
+              status,
+            }
+          : {}),
+      },
+      where: {
+        durationDays: existing.durationDays,
+        id: existing.id,
+        scheduledDate: existing.scheduledDate,
+        status: existing.status,
+      },
+    });
+    if (updatedCount.count !== 1) {
+      throw new DomainTransitionError(
+        "The schedule changed before it could be rescheduled.",
+      );
+    }
+    if (datesChanged) {
+      await recordTradieActivity(
+        {
+          data: {
+            durationDays,
+            milestoneId:
+              input.milestoneId !== undefined
+                ? input.milestoneId
+                : existing.milestoneId,
+            previousDate: isoDay(existing.scheduledDate),
+            previousDurationDays: existing.durationDays,
+            projectId: existing.projectId,
+            scheduleId: existing.id,
+            scheduledDate: isoDay(input.scheduledDate),
+            tradieId: existing.tradieId,
+            via: viaOf(principal),
+          },
+          principal,
+          type: "bookingRescheduled",
+        },
+        transactionDb,
+      );
+    }
+
+    let withdrewApproval = false;
+    if (datesChanged && outcome.withdrawsApproval) {
+      const withdrawn = await transactionDb.tradieApproval.updateMany({
+        where: {
+          actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
+          status: TradieApprovalStatus.PENDING,
+          tradieId: existing.tradieId,
+          updationData: { path: ["scheduleId"], equals: existing.id },
+        },
+        data: {
+          rejectionReason: `The booking moved to ${bookingDay(input.scheduledDate)}; the tradie has been asked to confirm the new date.`,
+          status: TradieApprovalStatus.REJECTED,
+        },
+      });
+      withdrewApproval = withdrawn.count > 0;
+    }
+
+    return {
       durationDays,
-      ignoreScheduleId: existing.id,
+      milestoneId:
+        input.milestoneId !== undefined
+          ? input.milestoneId
+          : existing.milestoneId,
+      notice: datesChanged ? outcome.notice : null,
+      previousDurationDays: existing.durationDays,
+      previousScheduledDate: existing.scheduledDate,
+      previousStatus: existing.status,
+      projectId: existing.projectId,
+      projectName: existing.project.name,
+      quotedPrice: existing.quotedPrice,
+      scheduleId: existing.id,
       scheduledDate: input.scheduledDate,
+      status,
       tradieId: existing.tradieId,
-    },
-    db,
-  );
-
-  const updatedCount = await db.tradieSchedule.updateMany({
-    data: {
-      durationDays,
-      ...(input.milestoneId !== undefined
-        ? { milestoneId: input.milestoneId }
-        : {}),
-      scheduledDate: input.scheduledDate,
-    },
-    where: {
-      durationDays: existing.durationDays,
-      id: existing.id,
-      scheduledDate: existing.scheduledDate,
-    },
-  });
-  if (updatedCount.count !== 1) {
-    throw new DomainTransitionError(
-      "The schedule changed before it could be rescheduled.",
-    );
-  }
-
-  return {
-    durationDays,
-    projectId: existing.projectId,
-    projectName: existing.project.name,
-    quotedPrice: existing.quotedPrice,
-    scheduleId: existing.id,
-    scheduledDate: input.scheduledDate,
-    status: existing.status,
-    tradieId: existing.tradieId,
-    tradieName: existing.tradie.name,
+      tradieName: existing.tradie.name,
+      withdrewApproval,
+    };
   };
+
+  // The booking and the withdrawn approval commit together, or a booking
+  // waiting on the tradie again would leave an approval for the old date in
+  // the queue for somebody to approve.
+  return "$transaction" in db ? db.$transaction(write) : write(db);
 }
 
 /** Queue deletion; the booking remains until an admin resolves the request. */
@@ -573,6 +882,11 @@ export async function requestTradieScheduleDeletion(
 }> {
   const schedule = await findSchedule(input.scheduleId, db);
   await authorizeProject(principal, schedule.projectId, db);
+  if (schedule.status === TradieScheduleStatus.CANCELLED) {
+    throw new DomainTransitionError(
+      "A cancelled booking is retained as history and cannot be deleted.",
+    );
+  }
   const requesterId = attributionUserId(principal);
   if (!requesterId) {
     throw new DomainAuthorizationError(
@@ -626,6 +940,20 @@ export async function requestTradieScheduleDeletion(
     },
     select: { id: true },
   });
+  await noteTradieActivity(
+    {
+      data: {
+        milestoneId: schedule.milestoneId,
+        projectId: schedule.projectId,
+        reason: input.reason.trim(),
+        scheduleId: schedule.id,
+        tradieId: schedule.tradieId,
+      },
+      principal,
+      type: "bookingDeletionRequested",
+    },
+    db,
+  );
   return {
     approvalId: approval.id,
     projectId: schedule.projectId,
@@ -649,9 +977,11 @@ async function findSchedule(scheduleId: string, db: DomainDb) {
       quotedPrice: true,
       scheduledDate: true,
       status: true,
+      trade: true,
       tradie: {
         select: {
           id: true,
+          archivedAt: true,
           lastQuotedPrice: true,
           lastQuotedPriceUnit: true,
           name: true,

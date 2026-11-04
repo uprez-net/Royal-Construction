@@ -55,8 +55,8 @@ async function runTradieDomain<T>(run: () => Promise<T>): Promise<T> {
   } catch (error) {
     if (!isDomainError(error)) throw error;
     if (
-      error.code === "domain_unauthorized" ||
-      error.code === "domain_not_found"
+      error.code === "domain_unauthorized"
+      || error.code === "domain_not_found"
     ) {
       throw new AgentAuthorizationError();
     }
@@ -483,7 +483,7 @@ export async function listAuthorizedTradieSchedules(
         id: schedule.id,
         tradieId: schedule.tradie.id,
         tradieName: schedule.tradie.name,
-        trade: schedule.tradie.trade,
+        trade: schedule.trade?.trim() || schedule.tradie.trade,
         projectId: schedule.project.id,
         projectName: schedule.project.name,
         milestoneId: schedule.milestone?.id ?? null,
@@ -500,8 +500,7 @@ export async function listAuthorizedTradieSchedules(
   );
 }
 
-// lib/domain/tradies/schedules.ts owns the overlap rule; the app had none at
-// all until this phase.
+// lib/domain/tradies/schedules.ts owns the booking rules, shared with the app.
 export async function createAuthorizedTradieSchedule(
   ctx: ToolContext,
   input: {
@@ -516,8 +515,9 @@ export async function createAuthorizedTradieSchedule(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   const db = transaction ?? agentDb;
-  // Project scope, the milestone-belongs-to-project check and the overlap
-  // refusal are all lib/domain/tradies/schedules.ts now, shared with the app.
+  // Project scope, the milestone-belongs-to-project check and the duplicate
+  // booking refusal are all lib/domain/tradies/schedules.ts now, shared with
+  // the app. Overlapping days on different work are allowed.
   let created;
   try {
     created = await createTradieScheduleDomain(
@@ -535,8 +535,8 @@ export async function createAuthorizedTradieSchedule(
   } catch (error) {
     if (!isDomainError(error)) throw error;
     if (
-      error.code === "domain_unauthorized" ||
-      error.code === "domain_not_found"
+      error.code === "domain_unauthorized"
+      || error.code === "domain_not_found"
     ) {
       throw new AgentAuthorizationError();
     }
@@ -634,14 +634,26 @@ export async function rescheduleAuthorizedTradie(
       transaction ?? agentDb,
     ),
   );
+  // Eve has no mailbox, so the email the tradie is now owed is not sent from
+  // here. Say so in the summary: a booking quietly moved under a tradie who
+  // was never told is the failure nobody notices until the day.
+  const owed =
+    changed.notice === "reconfirm-attendance"
+      ? ` The booking is still approved, but ${changed.tradieName} has not been told about the new date — send them a reminder from the project's Tradies tab so they can confirm it.`
+      : changed.notice === "confirm-availability"
+        ? ` ${changed.tradieName} has not been told about the new date — send them a reminder from the project's Tradies tab asking them to confirm their availability.${changed.withdrewApproval ? " The approval waiting for the old date was withdrawn; their confirmation for the new date will raise a fresh one." : ""}`
+        : "";
   return envelope(
     "confirmation",
     "Tradie booking rescheduled",
-    `${changed.tradieName}'s booking for ${changed.projectName} now starts ${changed.scheduledDate.toISOString().slice(0, 10)}.`,
+    `${changed.tradieName}'s booking for ${changed.projectName} now starts ${changed.scheduledDate.toISOString().slice(0, 10)}.${owed}`,
     {
       scheduleId: changed.scheduleId,
       scheduledDate: changed.scheduledDate.toISOString(),
       durationDays: changed.durationDays,
+      status: changed.status,
+      previousStatus: changed.previousStatus,
+      tradieNotified: false,
     },
     {
       entityRef: {
@@ -710,9 +722,9 @@ export async function authorizeTradieWrite(
     return;
   }
   if (
-    action === "tradie.update" ||
-    action === "tradie.price-change.request" ||
-    action === "tradie.removal.request"
+    action === "tradie.update"
+    || action === "tradie.price-change.request"
+    || action === "tradie.removal.request"
   ) {
     requireAdmin(actor);
     await getVisibleTradie(actor, inputString(input, "tradieId"), transaction);
@@ -726,8 +738,8 @@ export async function authorizeTradieWrite(
       ? input.fileIds.filter((id): id is string => typeof id === "string")
       : [];
     if (
-      fileIds.length !==
-      (Array.isArray(input.fileIds) ? input.fileIds.length : 0)
+      fileIds.length
+      !== (Array.isArray(input.fileIds) ? input.fileIds.length : 0)
     )
       throw new AgentAuthorizationError();
     // File ownership and attachment state are checked atomically by the
@@ -755,9 +767,9 @@ export async function authorizeTradieWrite(
     return;
   }
   if (
-    action === "tradie.schedule.transition" ||
-    action === "tradie.schedule.reschedule" ||
-    action === "tradie.schedule.deletion.request"
+    action === "tradie.schedule.transition"
+    || action === "tradie.schedule.reschedule"
+    || action === "tradie.schedule.deletion.request"
   ) {
     if (!isAdmin(actor) && actor.role !== Role.SITE_MANAGER)
       throw new AgentAuthorizationError();

@@ -40,12 +40,15 @@ interface ProjectPaymentsTabProps {
   project: ProjectDetail;
 }
 
-const CARD_SURFACE = "rounded-xl border border-border/70 bg-card p-5 shadow-sm";
+// Four full-size cards stacked to about 580px on a phone before the first
+// invoice. There they sit two by two, smaller and without the icon tile.
+const CARD_SURFACE =
+  "rounded-xl border border-border/70 bg-card p-3 shadow-sm sm:p-5";
 const CARD_VALUE =
-  "mt-2 font-heading text-3xl font-semibold leading-tight tracking-tight tabular-nums text-foreground";
+  "mt-1 font-heading text-xl font-semibold leading-tight tracking-tight tabular-nums text-foreground sm:mt-2 sm:text-3xl";
 const CARD_LABEL = "mt-1 text-xs text-muted-foreground";
 const ICON_CONTAINER =
-  "flex size-11 items-center justify-center rounded-2xl text-white";
+  "hidden size-11 shrink-0 items-center justify-center rounded-2xl text-white sm:flex";
 
 /**
  * Money that may legitimately be unknown.
@@ -111,7 +114,9 @@ const StatCard = ({
   <div className={CARD_SURFACE}>
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        <p className="text-xs font-medium text-muted-foreground sm:text-sm">
+          {label}
+        </p>
         <p className={CARD_VALUE}>
           {value ?? <span aria-hidden="true">&mdash;</span>}
         </p>
@@ -176,7 +181,7 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
 
   return (
     <section className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-4">
         <StatCard
           label="Contract total"
           value={money(contractTotal)}
@@ -222,6 +227,7 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
         </CardHeader>
         <CardContent className="pt-5">
           <DataTable
+            mobileLayout="cards"
             caption={`Progress claims raised for ${project.name}`}
             headers={[
               "Invoice",
@@ -256,8 +262,8 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
                   <NoValueCell label="Invoice number not yet assigned" />
                 )}
               </span>,
-              PROJECT_STAGE_LABELS[invoice.projectStage as ProjectStage] ??
-                invoice.projectStage,
+              PROJECT_STAGE_LABELS[invoice.projectStage as ProjectStage]
+                ?? invoice.projectStage,
               dateFormat.format(new Date(invoice.issuedDate)),
               dateFormat.format(new Date(invoice.dueDate)),
               <MoneyCell

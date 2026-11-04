@@ -126,12 +126,13 @@ export function TaskForm({
           type="single"
           variant="outline"
           size="sm"
+          spacing={2}
           value={type}
           // A toggle group can deselect; a task must always have a type, so an
           // empty value is ignored rather than written.
           onValueChange={(value) => value && setType(value as LeadTaskType)}
           aria-label="Task type"
-          className="flex-wrap"
+          className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap"
         >
           {LEAD_TASK_TYPES.map((t) => (
             <ToggleGroupItem key={t.value} value={t.value}>
@@ -145,6 +146,7 @@ export function TaskForm({
           type="single"
           variant="outline"
           size="sm"
+          spacing={2}
           value={dueValue}
           onValueChange={(value) => {
             if (!value) return;
@@ -155,7 +157,7 @@ export function TaskForm({
             }
           }}
           aria-label="Due date"
-          className="flex-wrap"
+          className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap"
         >
           {LEAD_TASK_DUE_PRESETS.map((p) => (
             <ToggleGroupItem key={p.days} value={String(p.days)}>
@@ -173,7 +175,7 @@ export function TaskForm({
             <Input
               type="date"
               aria-label="Due date"
-              className="w-auto"
+              className="w-full min-w-0 sm:w-auto"
               required
               // Sydney's today, not the browser's: a laptop set to another
               // timezone would otherwise reject a date that is valid here.
@@ -185,7 +187,7 @@ export function TaskForm({
           <Input
             type="time"
             aria-label="Due time (optional)"
-            className="w-auto"
+            className="w-full min-w-0 sm:w-auto"
             value={dueTime}
             onChange={(e) => setDueTime(e.target.value)}
           />
@@ -214,7 +216,7 @@ export function TaskForm({
         </p>
       )}
 
-      <div className="mt-4 flex justify-end gap-2">
+      <div className="mt-4 flex flex-wrap justify-end gap-2 [&>button]:flex-1 sm:[&>button]:flex-none">
         {onCancel && (
           <Button
             type="button"

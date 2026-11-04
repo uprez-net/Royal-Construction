@@ -1,13 +1,22 @@
 import { Prisma } from "@prisma/client";
 
+import { createActivityLogEntry } from "@/types/activityLog";
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import { normalizeDateString } from "@/utils/date";
 
-import { authorizeProjectEdit } from "../access/projects";
+import { authorizeProject, authorizeProjectEdit } from "../access/projects";
+import { logActionOrThrow } from "../audit/action-log";
 import type { DomainDb } from "../db";
-import { DomainValidationError } from "../errors";
-import type { DomainPrincipal } from "../principal";
+import { DomainStaleVersionError, DomainValidationError } from "../errors";
+import { requireAssignableSiteManager } from "../identity/site-managers";
+import {
+  attributionUserId,
+  requireAdminPrincipal,
+  type DomainPrincipal,
+} from "../principal";
 
+import { STARTED_MILESTONE_STATUSES } from "./milestone-schedule";
+import { rescheduleProjectFromStart } from "./milestones";
 import {
   collectProjectDateBlockers,
   partitionBlockers,
@@ -40,6 +49,8 @@ export type UpdateProjectResult = {
   readonly projectId: string;
   /** Blockers that did not stop the save but the header should still show. */
   readonly warnings: readonly string[];
+  /** Activities re-dated because the start date moved; 0 when it did not. */
+  readonly rescheduledMilestones: number;
 };
 
 type PersistedLegalAdministration = {
@@ -109,35 +120,173 @@ export async function updateProject(
     }
   }
 
-  await db.project.update({
-    where: { id: input.projectId },
-    data: {
-      ...(input.name ? { name: input.name } : {}),
-      ...(input.location ? { location: input.location } : {}),
-      ...(input.council !== undefined ? { council: input.council } : {}),
-      ...(input.description !== undefined
-        ? { description: input.description }
-        : {}),
-      ...(input.startDate ? { startDate: new Date(input.startDate) } : {}),
-      ...(input.estimatedEndDate
-        ? { estimatedEndDate: new Date(input.estimatedEndDate) }
-        : {}),
-      ...(input.totalBudget !== undefined
-        ? { totalBudget: new Prisma.Decimal(input.totalBudget) }
-        : {}),
-      ...(input.requirements !== undefined
-        ? {
-            requirements:
-              input.requirements as unknown as Prisma.InputJsonValue,
-          }
-        : {}),
-    },
-  });
+  // Compared by instant, so re-sending the stored date — a form saving its
+  // other fields — never rewrites a schedule nobody asked to move.
+  const nextStartDate = input.startDate ? new Date(input.startDate) : null;
+  const startDateMoved =
+    nextStartDate !== null
+    && nextStartDate.getTime() !== existing.startDate.getTime();
+
+  // Once an activity has started, the start date is the day work began — set
+  // by `updateMilestone` — and moving it would re-date a schedule already under
+  // way. Refused for every caller, not just hidden on the Overview tab.
+  if (startDateMoved) {
+    const started = await db.milestone.count({
+      where: {
+        projectId: input.projectId,
+        status: { in: STARTED_MILESTONE_STATUSES },
+      },
+    });
+    if (started > 0) {
+      throw new DomainValidationError(
+        "The start date can't be changed once work has started. It was set to the day the first milestone started.",
+        "startDate",
+      );
+    }
+  }
+
+  const writeProjectFields = (tx: DomainDb) =>
+    tx.project.update({
+      where: { id: input.projectId },
+      data: {
+        ...(input.name ? { name: input.name } : {}),
+        ...(input.location ? { location: input.location } : {}),
+        ...(input.council !== undefined ? { council: input.council } : {}),
+        ...(input.description !== undefined
+          ? { description: input.description }
+          : {}),
+        ...(input.startDate ? { startDate: new Date(input.startDate) } : {}),
+        ...(input.estimatedEndDate
+          ? { estimatedEndDate: new Date(input.estimatedEndDate) }
+          : {}),
+        ...(input.totalBudget !== undefined
+          ? { totalBudget: new Prisma.Decimal(input.totalBudget) }
+          : {}),
+        ...(input.requirements !== undefined
+          ? {
+              requirements:
+                input.requirements as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
+      },
+    });
+
+  const write = async (tx: DomainDb): Promise<number> => {
+    await writeProjectFields(tx);
+    if (!startDateMoved || !nextStartDate) return 0;
+
+    // Every activity's target date hangs off the start, so moving it moves
+    // the schedule — in this transaction, or the project would show a new
+    // start against the old dates.
+    return rescheduleProjectFromStart(
+      principal,
+      {
+        previousStartDate: existing.startDate,
+        projectId: input.projectId,
+        startDate: nextStartDate,
+      },
+      tx,
+    );
+  };
+
+  // A caller already inside a transaction hands in its own client, which has
+  // no `$transaction`. Rewriting every activity is one update per row, so the
+  // default five-second interactive window is too tight on a full template.
+  const rescheduledMilestones =
+    startDateMoved && "$transaction" in db
+      ? await db.$transaction(write, { timeout: 30_000 })
+      : await write(db);
 
   return {
     projectId: input.projectId,
+    rescheduledMilestones,
     warnings: warns.map((warn) => warn.label),
   };
+}
+
+export type AssignProjectSiteManagerResult = {
+  readonly projectId: string;
+  readonly siteManagerId: string;
+  readonly previousSiteManagerId: string | null;
+  /** False when the project already had this site manager; nothing was written. */
+  readonly changed: boolean;
+};
+
+/**
+ * Hand a project to a different site manager.
+ *
+ * ADMIN only, not `canEditProject`: a site manager who may edit a project's
+ * fields may not give the project to someone else — or take one that is not
+ * theirs. The new holder is checked with the same `requireAssignableSiteManager`
+ * project creation uses, so a GUEST or a customer account cannot be handed a
+ * build through this door either.
+ *
+ * The read, the change and its history entry are one transaction, and the
+ * change is conditional on the manager it was decided against. A double-click
+ * or a retry after a timeout — one person, two requests — then finds the
+ * project already moved and is refused, rather than writing the change and
+ * its history row twice.
+ */
+export async function assignProjectSiteManager(
+  principal: DomainPrincipal,
+  input: { readonly projectId: string; readonly siteManagerId: string },
+  db: DomainDb,
+): Promise<AssignProjectSiteManagerResult> {
+  requireAdminPrincipal(principal);
+
+  const run = async (tx: DomainDb): Promise<AssignProjectSiteManagerResult> => {
+    const project = await authorizeProject(principal, input.projectId, tx);
+    const siteManager = await requireAssignableSiteManager(
+      input.siteManagerId,
+      tx,
+    );
+
+    const result = {
+      previousSiteManagerId: project.siteManagerId,
+      projectId: project.id,
+      siteManagerId: siteManager.id,
+    };
+    if (project.siteManagerId === siteManager.id) {
+      return { ...result, changed: false };
+    }
+
+    const previous = project.siteManagerId
+      ? await tx.user.findUnique({
+          select: { name: true },
+          where: { id: project.siteManagerId },
+        })
+      : null;
+
+    const updated = await tx.project.updateMany({
+      data: { siteManagerId: siteManager.id },
+      where: { id: project.id, siteManagerId: project.siteManagerId },
+    });
+    if (updated.count !== 1) {
+      throw new DomainStaleVersionError(
+        "The site manager changed while this was being saved. Refresh and try again.",
+      );
+    }
+    // Throwing, not the forgiving logAction: inside a transaction a failed
+    // insert aborts the commit anyway, and the history row is part of what
+    // this change promises.
+    await logActionOrThrow(
+      {
+        ...createActivityLogEntry("siteManagerAssigned", {
+          previousSiteManagerName: previous?.name ?? null,
+          projectId: project.id,
+          siteManagerName: siteManager.name,
+        }),
+        authorId: attributionUserId(principal),
+      },
+      tx,
+    );
+
+    return { ...result, changed: true };
+  };
+
+  // A caller already inside a transaction (an Eve tool's audited operation)
+  // hands in its own client, which has no `$transaction` of its own.
+  return "$transaction" in db ? db.$transaction(run) : run(db);
 }
 
 /**

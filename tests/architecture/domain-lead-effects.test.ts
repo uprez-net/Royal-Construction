@@ -12,7 +12,6 @@ import {
 import {
   allowedLeadRecipients,
   authorizeLeadEmail,
-  sendLeadEmailMessage,
   sendLeadEmailOnce,
 } from "@/lib/domain/leads/email";
 import {
@@ -110,11 +109,16 @@ test("resubmitting the same booking does not make a second meeting", async () =>
     recordingDb(pendingIntent()).transactionalDb,
     async () => {
       calendarCalls += 1;
-      return { joinUrl: "https://teams.example/1", leadId: 7 };
+      return {
+        confirmationSent: true,
+        joinUrl: "https://teams.example/1",
+        leadId: 7,
+      };
     },
   );
   assert.deepEqual(first, {
     alreadyBooked: false,
+    confirmationSent: true,
     joinUrl: "https://teams.example/1",
     leadId: 7,
   });
@@ -134,13 +138,37 @@ test("resubmitting the same booking does not make a second meeting", async () =>
     }).transactionalDb,
     async () => {
       calendarCalls += 1;
-      return { joinUrl: "https://teams.example/2", leadId: 9 };
+      return {
+        confirmationSent: true,
+        joinUrl: "https://teams.example/2",
+        leadId: 9,
+      };
     },
   );
   assert.equal(second.alreadyBooked, true);
   // The client is handed the meeting they already have, not a second one.
   assert.equal(second.joinUrl, "https://teams.example/1");
   assert.equal(calendarCalls, 1);
+  // That stored result predates confirmationSent. Every booking then was an
+  // online one, confirmed by its Teams invitation, so absent means sent.
+  assert.equal(second.confirmationSent, true);
+});
+
+test("an in-person booking whose confirmation email failed says so", async () => {
+  const booked = await bookConsultation(
+    customerPrincipal(),
+    {
+      email: "client@example.com",
+      name: "Client",
+      startsAt: new Date("2026-10-02T04:00:00.000Z"),
+    },
+    recordingDb(pendingIntent()).transactionalDb,
+    async () => ({ confirmationSent: false, joinUrl: null, leadId: 7 }),
+  );
+  // Reported, not swallowed: the page tells the client, and the meeting task
+  // tells the office, that nobody has the venue yet.
+  assert.equal(booked.confirmationSent, false);
+  assert.equal(booked.alreadyBooked, false);
 });
 
 test("the booking route commits the meeting and the lead together", () => {
@@ -298,50 +326,6 @@ test("pressing Send twice on the same message sends it once", async () => {
   assert.equal(sends, 1);
 });
 
-test("a signed lead email uses the supplied staff name and persists in history", async () => {
-  let delivered: { body: string; subject: string; to: string } | undefined;
-  const recorder = recordingDb({
-    ...pendingIntent(),
-    "lead.findUnique": LEAD,
-    "leadEmails.create": { id: "email_1" },
-    "outboxEvent.findUnique": (args: unknown) => ({
-      attempts: 0,
-      id: "effect_1",
-      key: (args as { where: { key: string } }).where.key,
-      kind: "LEAD_EMAIL_SEND",
-      payload: {},
-      status: OutboxEventStatus.PENDING,
-    }),
-  });
-
-  const result = await sendLeadEmailMessage(
-    adminPrincipal(),
-    {
-      body: "Thanks for your **time**.\n\nI'll send the plans shortly.",
-      leadId: 7,
-      senderName: "Sam Staff",
-      subject: "Next steps",
-      to: "CLIENT@example.com",
-    },
-    recorder.db,
-    async (message) => {
-      delivered = message;
-    },
-  );
-
-  assert.equal(result.alreadySent, false);
-  assert.equal(result.emailId, "email_1");
-  assert.deepEqual(delivered, {
-    body: "<html><body><p>Hi Ann Lee,</p><p>Thanks for your <strong>time</strong>.</p><p>I&#039;ll send the plans shortly.</p><p>Thanks &amp; Regards,<br>Sam Staff<br>Royal Constructions.</p></body></html>",
-    subject: "Next steps",
-    to: "client@example.com",
-  });
-  assert.equal(
-    recorder.writes().some((call) => call.operation === "leadEmails.create"),
-    true,
-  );
-});
-
 test("a genuinely new message still goes out", async () => {
   const keys: string[] = [];
   const script = {
@@ -382,10 +366,15 @@ test("a genuinely new message still goes out", async () => {
   assert.notEqual(keys[0], keys[2]);
 });
 
-test("the composer action reaches the shared rules", () => {
+test("the composer action and Eve reach the shared rules", () => {
+  // The composer's pipeline is lib/leads/lead-email-send.ts, which the app's
+  // action and Eve's send_lead_email both call.
+  const pipeline = read("lib/leads/lead-email-send.ts");
+  assert.match(pipeline, /authorizeLeadEmail\(/);
+  assert.match(pipeline, /sendLeadEmailOnce\(/);
   const adapter = read("lib/data/leads.ts");
-  assert.match(adapter, /authorizeLeadEmail\(/);
-  assert.match(adapter, /sendLeadEmailOnce\(/);
+  assert.match(adapter, /sendComposedLeadEmail\(/);
+  assert.match(read("agent/lib/lead-operations.ts"), /sendComposedLeadEmail\(/);
   // Its own "is the caller signed in" check, which said nothing about the
   // lead or the recipient, is gone.
   assert.doesNotMatch(

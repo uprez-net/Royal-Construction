@@ -38,6 +38,8 @@ import {
 } from "@/lib/leads/task-service";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
+import { DataTableSkeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -96,7 +98,7 @@ function CompletedItem({
       )}
       {task.notes && (
         <span
-          className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+          className="min-w-0 basis-full whitespace-normal break-words text-sm md:basis-auto md:flex-1 md:truncate md:text-xs text-muted-foreground"
           title={task.notes}
         >
           {task.notes}
@@ -284,6 +286,7 @@ function FollowupItem({
           )
         : null}
       <TableRow
+        data-task-row
         className={
           isOverdue
             ? "bg-(--destructive-light)/40"
@@ -292,7 +295,7 @@ function FollowupItem({
               : undefined
         }
       >
-        <TableCell className="max-w-56">
+        <TableCell data-label="Lead" className="max-w-56">
           {/* Link, not a bare anchor. A worklist is somewhere you open a lead,
               deal with it and come back, and a plain href tears the app down
               and rebuilds it every time — losing the filter chip you had
@@ -300,7 +303,7 @@ function FollowupItem({
               navigation would have gone straight there. */}
           <Link
             href={`/leads/${task.leadId}?activeTab=scheduledWork`}
-            className="block truncate font-medium text-foreground hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="block break-words font-medium text-foreground hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             {task.lead.name}
           </Link>
@@ -315,10 +318,11 @@ function FollowupItem({
             {task.lead.stage}
           </Badge>
         </TableCell>
-        <TableCell>
+        <TableCell data-label="Type">
           <Badge variant="outline">{typeLabel}</Badge>
         </TableCell>
         <TableCell
+          data-label="Due"
           className={
             isOverdue
               ? "font-medium tabular-nums text-destructive-ink"
@@ -328,34 +332,37 @@ function FollowupItem({
           {dueLabel}
         </TableCell>
         <TableCell
+          data-label="Assigned"
           className="max-w-36 truncate text-muted-foreground"
           title={task.lead.assignedName || "Unassigned"}
         >
           {task.lead.assignedName || "Unassigned"}
         </TableCell>
         <TableCell
+          data-label="Note"
           className="max-w-64 min-w-40 whitespace-normal text-muted-foreground"
           title={task.notes || undefined}
         >
           <span className="line-clamp-2">{task.notes || "—"}</span>
         </TableCell>
-        <TableCell className="text-right">
-          <div className="flex justify-end gap-1">
+        <TableCell data-label="Actions" className="text-right">
+          <div className="grid grid-cols-2 gap-2 md:flex md:justify-end md:gap-1">
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="sm"
               className="cursor-pointer"
               title={`Call ${task.lead.name}`}
               aria-label={`Call ${task.lead.name}`}
               onClick={handleCall}
             >
               <Phone aria-hidden="true" />
+              <span className="md:sr-only">Call</span>
             </Button>
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="sm"
               className="cursor-pointer"
               title={
                 lead
@@ -367,6 +374,7 @@ function FollowupItem({
               onClick={() => setShowEmailModal(true)}
             >
               <Mail aria-hidden="true" />
+              <span className="md:sr-only">Email</span>
             </Button>
             <Button
               type="button"
@@ -431,7 +439,7 @@ function FollowupItem({
 
 function TaskTable({ children }: { children: React.ReactNode }) {
   return (
-    <Table>
+    <Table className="mobile-task-table">
       <TableHeader>
         <TableRow>
           <TableHead>Lead</TableHead>
@@ -698,10 +706,20 @@ function FollowupsView({
 
   return (
     <div className="followups-view">
+      <MobileFilterSelect
+        label="Task filter"
+        value={taskFilter}
+        options={filterChips.map(({ key, count, label }) => ({
+          value: key,
+          count,
+          label,
+        }))}
+        onChange={(value) => setTaskFilter(value as TaskFilter)}
+      />
       {/* One list, full width. Summary chips are real filters — each count
           matches what the list shows when that chip is pressed. */}
       <div
-        className="mb-2 flex flex-wrap gap-1.5"
+        className="mb-2 hidden flex-wrap gap-1.5 md:flex"
         role="toolbar"
         aria-label="Filter tasks"
       >
@@ -728,8 +746,13 @@ function FollowupsView({
       <div className="fu-card">
         <div className="fu-list">
           {busy ? (
-            <div className="fu-empty">
-              <p className="fu-empty-title">Loading...</p>
+            <div role="status" aria-busy="true">
+              <span className="sr-only">Loading tasks…</span>
+              <DataTableSkeleton
+                rowCount={3}
+                columnCount={6}
+                mobileColumns={1}
+              />
             </div>
           ) : listIsEmpty ? (
             <div className="fu-empty">

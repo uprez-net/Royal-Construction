@@ -9,21 +9,37 @@ import {
   reopenLeadTask,
 } from "@/lib/domain/leads/tasks";
 import {
+  archiveLead,
+  createLead,
+  updateLead,
+  type LeadWithRelations,
+} from "@/lib/domain/leads/commands";
+import {
   getLeadDetail,
   listLeadTasks,
   searchLeads,
 } from "@/lib/domain/leads/queries";
 import { authorizeLead as authorizeLeadRecord } from "@/lib/domain/access/leads";
 import { isDomainError } from "@/lib/domain/errors";
+import { findUserById } from "@/lib/domain/identity/users";
 import { userPrincipal } from "@/lib/domain/principal";
+import { isLeadValidationError } from "@/lib/leads/lead-validation-error";
+import { sendComposedLeadEmail } from "@/lib/leads/lead-email-send";
+import { sendEmail } from "@/lib/azureClient";
+import { generateEmailSubject } from "@/utils/generate-email-subject";
 import { stageMap } from "@/types/lead";
+import { createLeadSchema, updateLeadSchema } from "@/utils/validators/lead";
 import {
   AgentAuthorizationError,
   requireCurrentAgentActor,
 } from "@/agent/lib/actor";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
-import { sendLeadEmailMessage } from "@/lib/domain/leads/email";
-import { sendEmail } from "@/lib/azureClient";
+import type {
+  createLeadInputSchema,
+  sendLeadEmailInputSchema,
+  updateLeadInputSchema,
+} from "@/agent/lib/lead-contracts";
+import type { z } from "zod";
 
 const MAX_UNTRUSTED_TEXT = 500;
 
@@ -117,37 +133,6 @@ export async function searchAuthorizedLeads(
       })),
       query,
     },
-  });
-}
-
-export async function sendAuthorizedLeadEmail(
-  ctx: SessionContext,
-  input: { body: string; leadId: number; subject: string; to: string },
-) {
-  const actor = await requireCurrentAgentActor(ctx);
-  const sent = await sendLeadEmailMessage(
-    userPrincipal(actor),
-    { ...input, senderName: actor.name },
-    agentDb,
-    sendEmail,
-  );
-  return agentResultEnvelopeSchema.parse({
-    version: 1,
-    kind: "confirmation",
-    entityRef: {
-      type: "lead",
-      id: String(input.leadId),
-      display: {
-        label: `Lead ${input.leadId}`,
-        href: `/leads/${input.leadId}`,
-      },
-    },
-    title: sent.alreadySent ? "Email already sent" : "Email sent",
-    summary: sent.alreadySent
-      ? `This exact email to ${sent.to} was already sent today; it was not sent again.`
-      : `Email sent to ${sent.to} with subject “${sent.subject}”.`,
-    links: [{ label: "Open lead", href: `/leads/${input.leadId}` }],
-    data: { alreadySent: sent.alreadySent, emailId: sent.emailId, to: sent.to },
   });
 }
 
@@ -376,6 +361,284 @@ function taskConfirmation(
         status: task.status,
         type: task.type,
       },
+    },
+  });
+}
+
+/**
+ * A refusal the operator can act on, as an error envelope rather than a
+ * thrown tool failure: the reason ("add a reason before moving a lead to
+ * Lost") is the whole answer.
+ */
+function leadRefusal(title: string, error: unknown) {
+  if (isLeadValidationError(error) || isDomainError(error)) {
+    return agentResultEnvelopeSchema.parse({
+      version: 1,
+      kind: "error",
+      title,
+      summary: error.message,
+    });
+  }
+  throw error;
+}
+
+function leadWriteConfirmation(
+  title: string,
+  summary: string,
+  lead: Pick<LeadWithRelations, "id" | "name" | "stage" | "isArchived">,
+  data: Record<string, unknown> = {},
+  warnings: string[] = [],
+) {
+  const entityRef = leadReference(lead);
+  return agentResultEnvelopeSchema.parse({
+    version: 1,
+    kind: "confirmation",
+    entityRef,
+    title,
+    summary,
+    links: [{ label: "Open lead", href: entityRef.display.href }],
+    data: {
+      archived: lead.isArchived,
+      leadId: lead.id,
+      stage: stageMap[lead.stage],
+      ...data,
+    },
+    warnings,
+  });
+}
+
+/**
+ * Create a lead, assigned to the caller.
+ *
+ * lib/domain/leads/commands.ts owns the rule: the email check, the dedupe
+ * behind advisory locks, the closed-stage reason. A duplicate is not created;
+ * the existing lead is named so the operator can work on that one instead.
+ *
+ * The app's create also sends the client a welcome email and a Novu
+ * notification after the commit. Neither is a business rule and both are
+ * Next-side adapter work, so a lead created here gets neither, and the result
+ * says so rather than leaving the operator to assume the client heard from us.
+ */
+export async function createAuthorizedLead(
+  ctx: SessionContext,
+  input: z.infer<typeof createLeadInputSchema>,
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const domainInput = createLeadSchema.parse({
+    assignedId: actor.id,
+    budget: input.budget,
+    email: input.email,
+    estimatedValue: input.estimatedValue,
+    expectedCloseDate: input.expectedCloseDate,
+    location: input.location,
+    name: input.name,
+    phone: input.phone,
+    secondaryEmail: input.secondaryEmail,
+    secondaryName: input.secondaryName,
+    secondaryPhone: input.secondaryPhone,
+    source: input.source,
+    sourceDetail: input.sourceDetail,
+    type: input.projectTypes,
+    urgent: input.urgent,
+  });
+
+  let outcome;
+  try {
+    outcome = await createLead(userPrincipal(actor), domainInput, agentDb);
+  } catch (error) {
+    return leadRefusal("Lead was not created", error);
+  }
+
+  if (outcome.kind === "duplicate") {
+    const existing = outcome.existing;
+    return agentResultEnvelopeSchema.parse({
+      version: 1,
+      kind: "error",
+      entityRef: leadReference(existing),
+      title: "Lead already exists",
+      summary: `Lead ${existing.id} (${existing.name}) already has this email or phone number. Nothing was created; work on the existing lead instead.`,
+      links: [{ label: "Open lead", href: `/leads/${existing.id}` }],
+      data: { existingLeadId: existing.id },
+    });
+  }
+
+  return leadWriteConfirmation(
+    "Lead created",
+    `${outcome.lead.name} was created as lead ${outcome.lead.id} and assigned to you.`,
+    outcome.lead,
+    { assignedToYou: true, welcomeEmailSent: false },
+    [
+      "No welcome email was sent to the client. Send one with send_lead_email if they should hear from us now.",
+    ],
+  );
+}
+
+function updateDomainInput(
+  changes: z.infer<typeof updateLeadInputSchema>["changes"],
+) {
+  const { assignedUserId, estimatedValue, projectTypes, ...direct } = changes;
+  return updateLeadSchema.parse({
+    ...direct,
+    ...(assignedUserId !== undefined ? { assignedId: assignedUserId } : {}),
+    ...(projectTypes !== undefined ? { type: projectTypes } : {}),
+    // A value typed here is owned by the operator, exactly as the lead page
+    // records it, so the next offer save does not overwrite it.
+    ...(estimatedValue !== undefined
+      ? {
+          estimatedValue,
+          estimatedValueSource: estimatedValue === null ? null : "MANUAL",
+        }
+      : {}),
+  });
+}
+
+/**
+ * Edit a lead's details, stage, meeting or follow-up.
+ *
+ * lib/domain/leads/commands.ts owns every rule: access, the stage resolution
+ * against a scheduled task, the close-date stamps, the lost-reason gate and
+ * the stage-change history entry. The app's PATCH route calls the same
+ * command; the "assigned to you" / "lead updated" notifications it sends
+ * afterwards are app adapter work and are not sent from here.
+ */
+export async function updateAuthorizedLead(
+  ctx: SessionContext,
+  input: z.infer<typeof updateLeadInputSchema>,
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  await assertAgentCanAccessLead(actor, input.leadId);
+  if (input.changes.assignedUserId) {
+    const assignee = await findUserById(input.changes.assignedUserId, agentDb);
+    if (!assignee) {
+      return agentResultEnvelopeSchema.parse({
+        version: 1,
+        kind: "error",
+        title: "Lead was not updated",
+        summary:
+          "That team member was not found, so the lead was not reassigned.",
+      });
+    }
+  }
+
+  let outcome;
+  try {
+    outcome = await updateLead(
+      userPrincipal(actor),
+      input.leadId,
+      updateDomainInput(input.changes),
+      agentDb,
+    );
+  } catch (error) {
+    return leadRefusal("Lead was not updated", error);
+  }
+
+  const changed = Object.keys(input.changes);
+  const requestedStage = input.changes.stage;
+  const resolvedStage = stageMap[outcome.lead.stage];
+  const warnings =
+    requestedStage !== undefined && requestedStage !== resolvedStage
+      ? [
+          `The lead is ${resolvedStage}, not ${requestedStage}: the stage rules kept it there because of the meeting or follow-up scheduled in this change.`,
+        ]
+      : [];
+  return leadWriteConfirmation(
+    "Lead updated",
+    outcome.stageChanged
+      ? `${outcome.lead.name} moved to ${resolvedStage}.`
+      : `${outcome.lead.name} was updated (${changed.join(", ")}).`,
+    outcome.lead,
+    {
+      assignmentChanged: outcome.assignmentChanged,
+      changedFields: changed,
+      stageChanged: outcome.stageChanged,
+    },
+    warnings,
+  );
+}
+
+/** Archive a lead. Internal staff only, per lib/domain/leads/commands.ts. */
+export async function archiveAuthorizedLead(
+  ctx: SessionContext,
+  input: { leadId: number },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  await assertAgentCanAccessLead(actor, input.leadId);
+  let result;
+  try {
+    result = await archiveLead(userPrincipal(actor), input.leadId, agentDb);
+  } catch (error) {
+    return leadRefusal("Lead was not archived", error);
+  }
+  return agentResultEnvelopeSchema.parse({
+    version: 1,
+    kind: "confirmation",
+    entityRef: {
+      type: "lead",
+      id: String(result.id),
+      display: { label: `Lead ${result.id}`, href: `/leads/${result.id}` },
+    },
+    title: result.alreadyArchived ? "Lead already archived" : "Lead archived",
+    summary: result.alreadyArchived
+      ? `Lead ${result.id} was already archived; nothing changed.`
+      : `Lead ${result.id} is archived and no longer appears in lead lists.`,
+    data: { alreadyArchived: result.alreadyArchived, leadId: result.id },
+  });
+}
+
+/**
+ * Email the client from the business mailbox, once.
+ *
+ * lib/leads/lead-email-send.ts is the lead composer's own pipeline: the
+ * recipient must be one of the lead's recorded addresses, the same message is
+ * not sent twice in a day, and the thread is recorded on the lead. The
+ * caller's name signs it, as the composer signs with the signed-in user's.
+ */
+export async function sendAuthorizedLeadEmail(
+  ctx: SessionContext,
+  input: z.infer<typeof sendLeadEmailInputSchema>,
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  await assertAgentCanAccessLead(actor, input.leadId);
+
+  const lead = await getLeadDetail(
+    userPrincipal(actor),
+    input.leadId,
+    0,
+    agentDb,
+  );
+  let outcome;
+  try {
+    outcome = await sendComposedLeadEmail(
+      userPrincipal(actor),
+      {
+        body: input.body,
+        leadId: input.leadId,
+        location: lead.location ?? "",
+        senderName: actor.name?.trim() || "Royal Constructions",
+        to: input.to,
+      },
+      agentDb,
+      { generateSubject: generateEmailSubject, sendMail: sendEmail },
+    );
+  } catch (error) {
+    return leadRefusal("Email was not sent", error);
+  }
+
+  const entityRef = leadReference(lead);
+  return agentResultEnvelopeSchema.parse({
+    version: 1,
+    kind: "confirmation",
+    entityRef,
+    title: outcome.alreadySent ? "Email already sent" : "Email sent",
+    summary: outcome.alreadySent
+      ? `This exact message already went to ${outcome.email.emailTo} today, so it was not sent again.`
+      : `Sent "${outcome.email.subject}" to ${outcome.email.emailTo}.`,
+    links: [{ label: "Open lead", href: entityRef.display.href }],
+    data: {
+      alreadySent: outcome.alreadySent,
+      emailId: outcome.email.id,
+      subject: outcome.email.subject,
+      to: outcome.email.emailTo,
     },
   });
 }

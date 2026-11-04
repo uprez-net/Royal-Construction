@@ -264,8 +264,8 @@ export function MentionInputElement(props: PlateElementProps) {
       if (!normalizedSearch) return true;
 
       return (
-        filterWords(user.name, normalizedSearch) ||
-        filterWords(user.email ?? "", normalizedSearch)
+        filterWords(user.name, normalizedSearch)
+        || filterWords(user.email ?? "", normalizedSearch)
       );
     })
     .slice(0, 8);
@@ -308,8 +308,8 @@ export function MentionInputElement(props: PlateElementProps) {
   };
 
   const menu =
-    menuPosition &&
-    createPortal(
+    menuPosition
+    && createPortal(
       <span
         className="fixed z-[10000] flex max-h-64 flex-col overflow-y-auto rounded-[6px] border border-[#d6d3d1] bg-white py-1 text-left shadow-xl"
         style={{
@@ -405,7 +405,7 @@ export function ToolbarButton({
   return (
     <button
       type="button"
-      className={`inline-flex size-8 items-center justify-center rounded-[5px] border text-[#44403c] transition-colors hover:border-[#d6d3d1] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 ${
+      className={`inline-flex size-11 items-center justify-center rounded-[5px] border text-[#44403c] transition-colors hover:border-[#d6d3d1] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 md:size-8 ${
         isActive
           ? "border-[#99f6e4] bg-[#ccfbf1] text-[#0f766e]"
           : "border-transparent bg-transparent"
@@ -717,7 +717,7 @@ export function LeadRichTextEditor({
         <div className="flex items-center justify-end border-t border-[#e7e5e4] bg-[#f8fafc] px-3 py-2">
           <button
             type="button"
-            className="inline-flex h-8 items-center gap-1 rounded bg-[#0D9488] px-3 text-xs font-medium text-white hover:bg-[#0f766e] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-1 rounded bg-[#0D9488] px-3 text-sm font-medium text-white hover:bg-[#0f766e] disabled:cursor-not-allowed disabled:opacity-50 md:min-h-8 md:w-auto md:text-xs"
             onClick={onSaveNote}
             disabled={!canSaveNote || isSavingNote}
           >

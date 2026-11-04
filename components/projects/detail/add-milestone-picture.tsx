@@ -30,6 +30,7 @@ import {
 } from "@/lib/store/slices/projectsSlice";
 import { upload } from "@vercel/blob/client";
 import { buildBlobPath } from "@/utils/formatters";
+import { completeProjectUpload as confirmProjectUpload } from "@/lib/files/complete-project-upload";
 import { AlertCircle, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UploadDropzone } from "@/components/common/upload-dropzone";
@@ -68,12 +69,14 @@ export default function AddMilestonePictureModal({
   } = useUploadQueue({ maxFiles });
   const [submitError, setSubmitError] = useState<string | null>(null);
   const uploadControllersRef = useRef<Record<string, AbortController>>({});
+  const transferredUrlsRef = useRef<Record<string, string>>({});
 
   const resetForm = () => {
     Object.values(uploadControllersRef.current).forEach((controller) =>
       controller.abort(),
     );
     uploadControllersRef.current = {};
+    transferredUrlsRef.current = {};
     resetQueue();
     dispatch(clearProjectUploads(projectId));
   };
@@ -182,38 +185,55 @@ export default function AddMilestonePictureModal({
     markUploading(queuedFile.id);
 
     try {
-      const blob = await upload(
-        buildBlobPath({
-          fileId: queuedFile.id,
-          fileName: queuedFile.file.name,
+      const uploadedUrl =
+        transferredUrlsRef.current[queuedFile.id] ?? queuedFile.url;
+      const blob = uploadedUrl
+        ? { url: uploadedUrl }
+        : await upload(
+            buildBlobPath({
+              fileId: queuedFile.id,
+              fileName: queuedFile.file.name,
+              projectId,
+              milestoneId,
+            }),
+            queuedFile.file,
+            {
+              access: "public",
+              handleUploadUrl: "/api/upload",
+              clientPayload: JSON.stringify({
+                projectId,
+                milestoneId: milestoneId ?? null,
+                fileId: queuedFile.id,
+                fileName: queuedFile.file.name,
+                fileSize: queuedFile.file.size,
+                isOfferFile: false,
+                uploadType: "project-file",
+              } satisfies ClientPayload),
+              abortSignal: controller.signal,
+              onUploadProgress: ({ percentage }) => {
+                dispatch(
+                  updateProjectUploadProgress({
+                    projectId,
+                    fileId: queuedFile.id,
+                    progress: percentage,
+                  }),
+                );
+
+                updateProgress(queuedFile.id, percentage);
+              },
+            },
+          );
+
+      transferredUrlsRef.current[queuedFile.id] = blob.url;
+      await confirmProjectUpload(
+        {
           projectId,
           milestoneId,
-        }),
-        queuedFile.file,
-        {
-          access: "public",
-          handleUploadUrl: "/api/upload",
-          clientPayload: JSON.stringify({
-            projectId,
-            milestoneId: milestoneId ?? null,
-            fileId: queuedFile.id,
-            fileName: queuedFile.file.name,
-            fileSize: queuedFile.file.size,
-            isOfferFile: false,
-          } satisfies ClientPayload),
-          abortSignal: controller.signal,
-          onUploadProgress: ({ percentage }) => {
-            dispatch(
-              updateProjectUploadProgress({
-                projectId,
-                fileId: queuedFile.id,
-                progress: percentage,
-              }),
-            );
-
-            updateProgress(queuedFile.id, percentage);
-          },
+          fileId: queuedFile.id,
+          fileName: queuedFile.file.name,
+          fileUrl: blob.url,
         },
+        controller.signal,
       );
 
       dispatch(

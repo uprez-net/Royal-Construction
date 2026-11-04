@@ -60,39 +60,22 @@ export function OfferCommandBar({
   const owners = formatOwnerNamesLine(job.owners ?? []) || job.clientNames;
 
   return (
-    <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/70 bg-white px-4 py-2.5">
-      <div className="flex min-w-0 flex-1 items-center gap-2.5">
-        <Badge className="shrink-0 bg-royal-gold-ink font-mono text-white">
-          {formatOfferReference(job.reference, job.revision)}
-        </Badge>
-        {/* The page's only h1. Screen readers get the offer's identity here;
-            sighted users get it from the badge and address. */}
-        <h1
-          id="new-offer-workspace-title"
-          className="min-w-0 truncate text-sm font-medium"
-        >
-          <span className="sr-only">Offer workspace for </span>
-          {job.siteAddress || "New offer"}
-        </h1>
-        <span className="hidden shrink-0 truncate text-sm text-muted-foreground lg:inline">
-          {owners}
-        </span>
-        <Badge variant="secondary" className="shrink-0">
-          {OFFER_STATUS_LABEL[status]}
-        </Badge>
-        <ExpiryChip expiry={offerExpiry} />
-      </div>
+    // On a phone this is two short rows — the address beside the actions, then
+    // the badges and save state — instead of three. The contract value is left
+    // to the summary strip there, which already shows it at the bottom of the
+    // same frame. From md up every item sits on one line via `md:contents`.
+    <header className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border/70 bg-white px-3 py-2 md:flex-nowrap md:gap-x-2.5 md:px-4 md:py-2.5">
+      {/* The page's only h1. Screen readers get the offer's identity here;
+          sighted users get it from the badge and address. */}
+      <h1
+        id="new-offer-workspace-title"
+        className="min-w-0 flex-1 basis-0 truncate text-sm font-medium md:order-2 md:flex-initial md:basis-auto"
+      >
+        <span className="sr-only">Offer workspace for </span>
+        {awaitingOffer ? "Loading offer…" : job.siteAddress || "New offer"}
+      </h1>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <div className="text-right">
-          <p className="font-mono text-sm font-semibold leading-none tabular-nums">
-            <span className="sr-only">Contract value including GST: </span>
-            {formatCurrency(customerPrice.selectedContractValueIncGst)}
-          </p>
-          <div className="mt-1 flex justify-end">
-            <SaveIndicator state={saveState} onRetry={onRetrySave} />
-          </div>
-        </div>
+      <div className="flex shrink-0 items-center gap-2 md:order-6">
         <Button
           aria-label="Download offer"
           className="h-8"
@@ -112,6 +95,41 @@ export function OfferCommandBar({
             activeRevisionNumber={activeRevisionNumber}
           />
         ) : null}
+      </div>
+
+      <div className="flex w-full min-w-0 flex-wrap items-center gap-2 md:contents">
+        <Badge className="shrink-0 bg-royal-gold-ink font-mono text-white md:order-1">
+          {awaitingOffer
+            ? "Loading…"
+            : formatOfferReference(job.reference, job.revision)}
+        </Badge>
+        <span className="hidden shrink-0 truncate text-sm text-muted-foreground md:order-3 lg:inline">
+          {owners}
+        </span>
+        <Badge variant="secondary" className="shrink-0 md:order-4">
+          {awaitingOffer ? "Loading" : OFFER_STATUS_LABEL[status]}
+        </Badge>
+        <ExpiryChip
+          className="md:order-4"
+          expiry={awaitingOffer ? null : offerExpiry}
+        />
+        {/* A failed save must stay in sight on a phone too; this copy is the
+            phone's, the one beside the price below is the desktop's. */}
+        <span className="md:hidden">
+          <SaveIndicator state={saveState} onRetry={onRetrySave} />
+        </span>
+      </div>
+
+      <div className="hidden shrink-0 text-right md:order-5 md:ml-auto md:block">
+        <p className="font-mono text-sm font-semibold leading-none tabular-nums">
+          <span className="sr-only">Contract value including GST: </span>
+          {awaitingOffer
+            ? "—"
+            : formatCurrency(customerPrice.selectedContractValueIncGst)}
+        </p>
+        <div className="mt-1 flex justify-end">
+          <SaveIndicator state={saveState} onRetry={onRetrySave} />
+        </div>
       </div>
     </header>
   );

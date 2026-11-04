@@ -6,7 +6,7 @@ import {
   NoOutputGeneratedError,
 } from "ai";
 import { z } from "zod";
-import { gateway } from "@/lib/model";
+import { gateway, TEXT_MODEL_ID } from "@/lib/model";
 
 // Consistency check across the three lists on an offer.
 //
@@ -105,9 +105,7 @@ export async function checkOfferConsistency(
 
   try {
     const { output } = await generateText({
-      model: gateway("google/gemini-2.5-flash"),
-      // Judgement, not prose: keep it as close to deterministic as the model allows.
-      temperature: 0,
+      model: gateway(TEXT_MODEL_ID),
       system: SYSTEM_PROMPT,
       output: Output.object({ schema: consistencySchema }),
       prompt: `Audit this offer.\n\n<estimated>\n${estimated || "(nothing estimated)"}\n</estimated>\n\n<schedule>\n${scheduled}\n</schedule>\n\n<excluded>\n${excluded || "(nothing excluded)"}\n</excluded>\n\n<offer>\n${offered || "(nothing offered)"}\n</offer>`,
@@ -130,9 +128,9 @@ export async function checkOfferConsistency(
     return { ok: true, findings };
   } catch (error) {
     if (
-      NoObjectGeneratedError.isInstance(error) ||
-      TypeValidationError.isInstance(error) ||
-      NoOutputGeneratedError.isInstance(error)
+      NoObjectGeneratedError.isInstance(error)
+      || TypeValidationError.isInstance(error)
+      || NoOutputGeneratedError.isInstance(error)
     ) {
       return { ok: false, message: (error as Error).message };
     }
@@ -178,10 +176,7 @@ export async function draftInclusionHighlights(
 
   try {
     const { output } = await generateText({
-      model: gateway("google/gemini-2.5-flash"),
-      // These are short human-facing lines; 0 tends to produce near-identical
-      // phrasing across every one.
-      temperature: 0.2,
+      model: gateway(TEXT_MODEL_ID),
       system: DRAFT_SYSTEM_PROMPT,
       output: Output.object({ schema: highlightsSchema }),
       prompt: `Write the selling list for this schedule. Shorten and group only — never add a detail the schedule does not state.\n\n<schedule>\n${specs.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n</schedule>`,
@@ -197,9 +192,9 @@ export async function draftInclusionHighlights(
     return { ok: true, highlights };
   } catch (error) {
     if (
-      NoObjectGeneratedError.isInstance(error) ||
-      TypeValidationError.isInstance(error) ||
-      NoOutputGeneratedError.isInstance(error)
+      NoObjectGeneratedError.isInstance(error)
+      || TypeValidationError.isInstance(error)
+      || NoOutputGeneratedError.isInstance(error)
     ) {
       return { ok: false, message: (error as Error).message };
     }

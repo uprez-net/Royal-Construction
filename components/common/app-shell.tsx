@@ -127,7 +127,17 @@ export function AppShell({
   );
 
   return (
-    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0))] overflow-hidden bg-[#F7F6F2] text-foreground">
+    // The fallback needs its unit: `calc(100dvh - 0)` is invalid, so outside
+    // the sandbox (where the variable is unset) the height used to drop to
+    // auto. The shell then grew with its content, the window scrolled instead
+    // of <main>, and the agent workspace collapsed to its composer.
+    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0px))] overflow-hidden bg-[#F7F6F2] text-foreground">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-background focus:p-3 focus:text-foreground focus:outline-2 focus:outline-ring"
+      >
+        Skip to content
+      </a>
       {/* Clean Light Background matching Email Theme */}
       <div className="flex h-full">
         {/* ── Desktop Sidebar ── */}
@@ -177,7 +187,7 @@ export function AppShell({
             <SheetContent
               side="left"
               showCloseButton={false}
-              className="w-80 border-r border-border bg-white p-0 text-foreground"
+              className="w-80 max-w-[calc(100vw-2rem)] border-r border-border bg-white p-0 text-foreground"
             >
               <div className="flex h-full flex-col">
                 <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-4">
@@ -211,7 +221,7 @@ export function AppShell({
 
                 <nav
                   aria-label="Main"
-                  className="flex flex-1 flex-col gap-1 px-3 py-4"
+                  className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-4"
                 >
                   {visibleNavigationItems.map((item) => (
                     <SheetClose key={item.slug} asChild>
@@ -294,8 +304,8 @@ export function AppShell({
 
           {/* ── Top Header ── */}
           <header className="shrink-0 z-30 border-b border-border bg-white text-foreground shadow-sm backdrop-blur">
-            <div className="flex w-full items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-              <div className="flex min-w-0 items-center gap-4">
+            <div className="flex w-full items-center justify-between gap-2 px-3 py-2 sm:gap-4 sm:px-6 sm:py-3 lg:px-8">
+              <div className="flex min-w-0 items-center gap-2 sm:gap-4">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -305,9 +315,12 @@ export function AppShell({
                 >
                   <Menu className="size-4" aria-hidden="true" />
                 </Button>
-                <div>
-                  <p className="font-heading text-xl font-semibold tracking-tight text-royal-gold-ink">
+                <div className="min-w-0">
+                  <p className="font-heading truncate text-base font-semibold tracking-tight text-royal-gold-ink sm:text-xl">
                     Royal Constructions
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground md:hidden">
+                    {title}
                   </p>
                   <div className="hidden items-center gap-2 text-xs text-muted-foreground md:flex">
                     {trail.map((segment, index) => (
@@ -377,12 +390,16 @@ export function AppShell({
           </header>
 
           <main
+            id="main-content"
+            tabIndex={-1}
             className={cn(
-              "min-h-0 w-full flex-1 gap-6",
+              "min-h-0 min-w-0 w-full flex-1 gap-4 outline-none sm:gap-6",
               pathName.startsWith("/agent")
-                ? "grid h-0 grid-rows-[minmax(0,1fr)] overflow-hidden"
-                : "flex flex-col overflow-y-auto",
-              "px-4 py-5 sm:px-6 lg:px-8 lg:py-6",
+                ? // The workspace is its own full-height card; on a phone the
+                  // gutter around it only takes room from the transcript, and
+                  // the composer pads for the home indicator itself.
+                  "grid h-0 grid-rows-[minmax(0,1fr)] overflow-hidden p-0 sm:px-6 sm:py-4 lg:px-8 lg:py-6"
+                : "flex flex-col overflow-y-auto px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-6",
               "scrollbar-none",
               "[-ms-overflow-style:none]",
               "[&::-webkit-scrollbar]:hidden",

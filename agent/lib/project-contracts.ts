@@ -14,6 +14,17 @@ export const searchProjectsInputSchema = z.object({
 
 export const getProjectInputSchema = z.object({ projectId: projectIdSchema });
 
+export const listSiteManagersInputSchema = z.object({
+  query: z.string().trim().max(120).default(""),
+  limit: z.number().int().min(1).max(25).default(10),
+});
+
+export const assignSiteManagerInputSchema = z.object({
+  projectId: projectIdSchema,
+  /** An id from list_site_managers, never one inferred from a name. */
+  siteManagerId: z.string().uuid(),
+});
+
 const requirementSectionKeys = [
   "projectName",
   "projectType",
@@ -32,6 +43,10 @@ const requirementSectionKeys = [
 ] as const;
 
 export const getProjectRequirementsInputSchema = z.object({
+  projectId: projectIdSchema,
+});
+
+export const getProjectFinancialsInputSchema = z.object({
   projectId: projectIdSchema,
 });
 
@@ -60,7 +75,8 @@ export const getComplianceInputSchema = z.object({
 
 export const startComplianceInputSchema = z.object({
   projectId: projectIdSchema,
-  subjectAddress: z.string().trim().min(1).max(500),
+  /** Defaults to the project's name and location; see defaultComplianceSubjectAddress. */
+  subjectAddress: z.string().trim().min(1).max(500).optional(),
   certifierName: z.string().trim().max(200).optional(),
   certifierEmail: z.email().trim().toLowerCase(),
   certifierPhone: z.string().trim().max(80).optional(),
@@ -103,8 +119,16 @@ export const prepareComplianceOutreachInputSchema = z
 export const sendComplianceOutreachInputSchema = z.object({
   projectId: projectIdSchema,
   party: z.enum(compliancePartyValues),
+  /**
+   * The directory tradie being engaged, from prepare_compliance_outreach's
+   * directoryContacts. Required for every party picked from the directory.
+   */
+  tradieId: z.string().uuid().optional(),
+  /** The estate, for the developer party only. */
+  developerKey: z.string().trim().min(1).max(100).optional(),
   contactName: z.string().trim().max(200).optional(),
-  contactEmail: z.email().trim().toLowerCase(),
+  /** One of the chosen tradie's own addresses; defaults to their primary one. */
+  contactEmail: z.email().trim().toLowerCase().optional(),
   contactPhone: z.string().trim().max(80).optional(),
   body: z.string().trim().min(1).max(100_000),
   deliverables: z
@@ -143,6 +167,26 @@ export const createMilestoneInputSchema = z.object({
   }),
   parentId: milestoneIdSchema.optional(),
   projectStage: z.enum(projectStages),
+});
+
+/**
+ * Reprice one activity. Both figures are dollars ex GST, before variations —
+ * the `price` get_project_financials returns for the activity — and the
+ * expected one is the figure just read, so a price that moved in between is
+ * refused instead of overwritten.
+ */
+export const setActivityPriceInputSchema = z.object({
+  milestoneId: milestoneIdSchema,
+  price: z.number().finite().nonnegative().refine(hasAtMostTwoDecimalPlaces, {
+    message: "Price must have at most two decimal places.",
+  }),
+  expectedPrice: z
+    .number()
+    .finite()
+    .nonnegative()
+    .refine(hasAtMostTwoDecimalPlaces, {
+      message: "Expected price must have at most two decimal places.",
+    }),
 });
 
 export const updateMilestoneInputSchema = z.object({

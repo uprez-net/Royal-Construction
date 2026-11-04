@@ -10,6 +10,7 @@ import {
   Users,
 } from "lucide-react";
 import { ModalShell } from "@/components/common/modal-shell";
+import { ModalLoadingState } from "@/components/common/modal-loading-state";
 import { Lead, EmailTemplate } from "@/lib/leads/types";
 import { EMAIL_TEMPLATES } from "@/lib/leads/variables";
 import { sendEmailToLead, fetchAllLeads } from "@/lib/leads/leads-service";
@@ -66,9 +67,9 @@ export function EmailCampaignModal({
     null,
   );
   const aiReady = !!(
-    hook.templateName &&
-    hook.generatedHtml &&
-    hook.emailSubject
+    hook.templateName
+    && hook.generatedHtml
+    && hook.emailSubject
   );
   if (aiReady && prevGeneratedHtml !== hook.generatedHtml) {
     setPrevGeneratedHtml(hook.generatedHtml);
@@ -238,12 +239,7 @@ export function EmailCampaignModal({
         subtitle="Select a template to send to the leads"
         maxWidthClass="max-w-[720px]"
       >
-        <div className="flex h-64 flex-col items-center justify-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
-          <p className="text-sm font-medium text-slate-600">
-            Loading campaign leads...
-          </p>
-        </div>
+        <ModalLoadingState label="Loading campaign leads" />
       </ModalShell>
     );
   }
@@ -359,7 +355,7 @@ export function EmailCampaignModal({
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               <Button
                 type="button"
                 variant="outline"
@@ -452,18 +448,18 @@ export function EmailCampaignModal({
             separately with its own recipient&apos;s details, so this preview is
             read-only.
           </p>
-          {selectedTemplate &&
-          selectedTemplate.id !== -1 &&
-          !hook.generatedHtml ? (
+          {selectedTemplate
+          && selectedTemplate.id !== -1
+          && !hook.generatedHtml ? (
             <ReactEmailIframe
               ref={emailIframeRef}
               category={selectedTemplate.category}
               lead={allLeads[0] ?? null}
               editable={false}
             />
-          ) : selectedTemplate &&
-            selectedTemplate.id === -1 &&
-            hook.generatedHtml ? (
+          ) : selectedTemplate
+            && selectedTemplate.id === -1
+            && hook.generatedHtml ? (
             <div className="mt-2">
               <div
                 className="overflow-hidden rounded-lg"
@@ -500,10 +496,10 @@ export function EmailCampaignModal({
           <Button
             onClick={handleSend}
             disabled={
-              !subjectTemplate.trim() ||
-              emailTargets.length === 0 ||
-              invalidTargets.length > 0 ||
-              sending
+              !subjectTemplate.trim()
+              || emailTargets.length === 0
+              || invalidTargets.length > 0
+              || sending
             }
           >
             {sending ? (

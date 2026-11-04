@@ -4,6 +4,7 @@ import type { DomainDb } from "./db";
 import {
   DomainAuthorizationError,
   DomainNotFoundError,
+  DomainSideEffectError,
   DomainValidationError,
 } from "./errors";
 import { authorizeFileAttachment } from "./access/projects";
@@ -11,9 +12,12 @@ import { authorizeLead } from "./access/leads";
 import {
   isInternalPrincipal,
   isUserPrincipal,
+  requireUserPrincipal,
   type DomainPrincipal,
 } from "./principal";
 import type { BlobDeletePort } from "./ports/blob";
+import type { BlobUploadHeadPort } from "./ports/blob";
+import { buildBlobPath } from "@/utils/formatters";
 
 export type SaveFileInput = {
   readonly userId: string;
@@ -136,19 +140,113 @@ export async function saveFile(
     await authorizeLead(principal, leadId, db);
   }
 
-  return db.file.create({
-    data: {
-      filename: input.fileName,
-      fileType: input.fileType,
-      filesize: input.fileSize,
-      id: input.fileId,
-      incidentId: null,
-      leadId: input.leadId ? Number(input.leadId) : null,
-      milestoneId: input.milestoneId ?? null,
-      projectId,
-      storagePath: input.storagePath,
-      uploadedBy: input.userId,
-      url: input.fileUrl,
-    },
+  const data = {
+    filename: input.fileName,
+    fileType: input.fileType,
+    filesize: input.fileSize,
+    id: input.fileId,
+    incidentId: null,
+    leadId: input.leadId ? Number(input.leadId) : null,
+    milestoneId: input.milestoneId ?? null,
+    projectId,
+    storagePath: input.storagePath,
+    uploadedBy: input.userId,
+    url: input.fileUrl,
+  };
+
+  // The browser confirmation and Blob callback can arrive in either order.
+  // Replaying the same upload must never replace an existing file's scope.
+  const sameUpload = (file: PrismaFile): PrismaFile => {
+    if (
+      file.uploadedBy !== input.userId
+      || file.projectId !== projectId
+      || file.leadId !== data.leadId
+      || file.milestoneId !== data.milestoneId
+      || file.url !== input.fileUrl
+    ) {
+      throw new DomainAuthorizationError(
+        "That file ID belongs to a different upload.",
+      );
+    }
+    return file;
+  };
+  if (input.fileId) {
+    const existing = await db.file.findUnique({ where: { id: input.fileId } });
+    if (existing) return sameUpload(existing);
+  }
+  try {
+    return await db.file.create({ data });
+  } catch (error) {
+    if (
+      input.fileId
+      && typeof error === "object"
+      && error !== null
+      && "code" in error
+      && error.code === "P2002"
+    ) {
+      const existing = await db.file.findUnique({
+        where: { id: input.fileId },
+      });
+      if (existing) return sameUpload(existing);
+    }
+    throw error;
+  }
+}
+
+/** Confirm storage and persist metadata before a screen uses the file ID. */
+export async function completeProjectFileUpload(
+  principal: DomainPrincipal,
+  input: {
+    readonly projectId: string;
+    readonly milestoneId?: string | null;
+    readonly fileId: string;
+    readonly fileName: string;
+    readonly fileUrl: string;
+  },
+  db: DomainDb,
+  inspectBlob: BlobUploadHeadPort,
+): Promise<PrismaFile> {
+  const user = requireUserPrincipal(principal);
+  await authorizeFileAttachment(user, input, db);
+  let blob: Awaited<ReturnType<BlobUploadHeadPort>>;
+  try {
+    blob = await inspectBlob(input.fileUrl);
+  } catch {
+    throw new DomainSideEffectError(
+      "Unable to confirm the uploaded file. Please try again.",
+      "blob",
+      true,
+    );
+  }
+  const expectedPath = buildBlobPath({
+    ...input,
+    milestoneId: input.milestoneId ?? undefined,
   });
+  // Blob inserts its random suffix before the last extension. Match the full
+  // canonical path, never just a project prefix supplied by the browser.
+  const dot = expectedPath.lastIndexOf(".");
+  const extensionStart =
+    dot > expectedPath.lastIndexOf("/") ? dot : expectedPath.length;
+  const escape = (value: string) =>
+    value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(
+    `^${escape(expectedPath.slice(0, extensionStart))}(?:-[a-zA-Z0-9]+)?${escape(expectedPath.slice(extensionStart))}$`,
+  );
+  if (blob.url !== input.fileUrl || !pattern.test(blob.pathname)) {
+    throw new DomainNotFoundError(
+      "That uploaded file does not belong to this project.",
+    );
+  }
+  return saveFile(
+    principal,
+    {
+      ...input,
+      userId: user.userId,
+      milestoneId: input.milestoneId ?? undefined,
+      fileType: blob.contentType,
+      fileSize: blob.size,
+      storagePath: blob.pathname,
+    },
+    db,
+  );
 }

@@ -16,6 +16,11 @@ const tradieScheduleInclude = {
   milestone: true,
 } as const;
 import { CACHE_PROFILES } from "@/types/cache";
+import { tradieInTradeWhere } from "@/lib/domain/tradies/request-rules";
+import {
+  canonicalTradeLabel,
+  tradeLabelsMatching,
+} from "@/lib/domain/tradies/trade-types";
 import { getTradieCoordinationDashboard } from "./tradie-dashboard";
 import { ProjectRequirementsPayload } from "@/types/project-flow";
 
@@ -32,6 +37,7 @@ function toSafeTradie(
 export async function getTradies(): Promise<SafeTradie[]> {
   try {
     const tradies = await prisma.tradie.findMany({
+      where: { archivedAt: null },
       orderBy: { name: "asc" },
     });
 
@@ -216,28 +222,35 @@ export async function getCachedTradieCoordinationDashboard(
 
 export async function getTradiesForLookup(limit = 20, search = "", trade = "") {
   try {
-    const search_ = search
+    const tradeLabels = search ? await tradeLabelsMatching(search, prisma) : [];
+    const search_: Prisma.TradieWhereInput | undefined = search
       ? {
           OR: [
             { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
             { abn: { contains: search, mode: Prisma.QueryMode.insensitive } },
             { trade: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            ...(tradeLabels.length > 0
+              ? [{ trades: { hasSome: tradeLabels } }]
+              : []),
           ],
         }
       : undefined;
 
     // ANDed with the search rather than replacing it, so a compliance picker
-    // can narrow to surveyors and still let the user type a name. Exact,
-    // because `trade` stores the label the combobox wrote.
-    const where = trade
+    // can narrow to surveyors and still let the user type a name. Any of the
+    // tradie's categories counts: a firm that surveys among other things is
+    // still a surveyor.
+    const where: Prisma.TradieWhereInput | undefined = trade
       ? {
-          ...(search_ ?? {}),
-          trade: { equals: trade, mode: Prisma.QueryMode.insensitive },
+          AND: [
+            search_ ?? {},
+            tradieInTradeWhere(await canonicalTradeLabel(trade, prisma)),
+          ],
         }
       : search_;
 
     const tradies = await prisma.tradie.findMany({
-      where,
+      where: { ...where, archivedAt: null },
       take: limit,
       orderBy: { name: "asc" },
       select: {

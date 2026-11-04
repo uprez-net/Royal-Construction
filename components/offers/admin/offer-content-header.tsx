@@ -65,7 +65,7 @@ export function OfferContentHeader({
       <ol
         role="tablist"
         aria-orientation="horizontal"
-        className="flex min-w-190"
+        className="grid grid-cols-2 gap-x-2 gap-y-4 sm:grid-cols-3 md:flex md:min-w-190 md:gap-0"
       >
         {ADMIN_OFFER_TABS.map((tab, index) => {
           const isCurrent = tab.id === activeTab;

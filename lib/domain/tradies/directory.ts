@@ -6,13 +6,16 @@ import {
 } from "@prisma/client";
 
 import type { DomainDb } from "../db";
-import { DomainNotFoundError, DomainValidationError } from "../errors";
+import { DomainValidationError } from "../errors";
 import {
   attributionUserId,
   requireAdminPrincipal,
   type DomainPrincipal,
 } from "../principal";
 import { assertCanReadTradieDirectory } from "../access/tradies";
+import { resolveTradeLabel } from "./trade-types";
+import { requireActiveTradie as requireTradie } from "./lifecycle";
+import { sameTrade, tradieTrades } from "./request-rules";
 
 // The tradie directory: who may read it, who may change it, and what has to go
 // through an approval instead of being written directly.
@@ -36,7 +39,13 @@ import { assertCanReadTradieDirectory } from "../access/tradies";
 
 export type TradieInput = {
   readonly name: string;
-  readonly trade: string;
+  /**
+   * The primary category. Optional when `trades` is given — its first entry is
+   * the primary — and kept for callers that name one trade, like Eve.
+   */
+  readonly trade?: string;
+  /** Every category, primary first. */
+  readonly trades?: readonly string[];
   readonly abn: string;
   readonly phone: string;
   readonly email: string;
@@ -47,6 +56,37 @@ export type TradieInput = {
   readonly lastQuotedPriceUnit: TradiePriceUnit;
 };
 
+/**
+ * Each category as the trade list spells it, in order, once each. Refuses an
+ * empty list: a tradie under no trade is offered for nothing.
+ *
+ * `current` is the tradie's existing list, so a category since archived can be
+ * kept, exactly as `resolveTradeLabel` lets a single trade be kept.
+ */
+async function resolveTradeLabels(
+  requested: readonly string[],
+  db: DomainDb,
+  current: readonly string[] = [],
+): Promise<string[]> {
+  const labels: string[] = [];
+  for (const raw of requested) {
+    if (!raw.trim()) continue;
+    const kept = current.find((own) => sameTrade(own, raw));
+    const label = await resolveTradeLabel(
+      raw,
+      db,
+      kept ? { current: kept } : {},
+    );
+    if (!labels.some((existing) => sameTrade(existing, label))) {
+      labels.push(label);
+    }
+  }
+  if (labels.length === 0) {
+    throw new DomainValidationError("Choose at least one trade.", "trades");
+  }
+  return labels;
+}
+
 /** Add a tradie to the directory. ADMIN only. */
 export async function createTradie(
   principal: DomainPrincipal,
@@ -54,6 +94,10 @@ export async function createTradie(
   db: DomainDb,
 ): Promise<Tradie> {
   requireAdminPrincipal(principal);
+  const trades = await resolveTradeLabels(
+    input.trades ?? (input.trade ? [input.trade] : []),
+    db,
+  );
 
   return db.tradie.create({
     data: {
@@ -66,7 +110,8 @@ export async function createTradie(
       name: input.name,
       note: input.note ?? null,
       phone: input.phone,
-      trade: input.trade,
+      trade: trades[0],
+      trades,
     },
   });
 }
@@ -86,7 +131,30 @@ export async function updateTradie(
   db: DomainDb,
 ): Promise<Tradie> {
   requireAdminPrincipal(principal);
-  await requireTradie(tradieId, db);
+  const current = await requireTradie(tradieId, db);
+  const name = input.name?.trim();
+  if (name !== undefined && name.length < 2) {
+    throw new DomainValidationError(
+      "Enter a name with at least 2 characters.",
+      "name",
+    );
+  }
+  // A whole list replaces the categories. A single trade — Eve's shape —
+  // becomes the primary and keeps the rest.
+  const existing = tradieTrades(current);
+  const trades =
+    input.trades !== undefined
+      ? await resolveTradeLabels(input.trades, db, existing)
+      : input.trade !== undefined
+        ? await resolveTradeLabels(
+            [
+              input.trade,
+              ...existing.filter((own) => !sameTrade(own, input.trade!)),
+            ],
+            db,
+            existing,
+          )
+        : undefined;
 
   const data = Object.fromEntries(
     Object.entries({
@@ -100,10 +168,11 @@ export async function updateTradie(
       // dedicated toggle stays staff-level for the directory's star control.
       isFavourite: input.isFavourite,
       location: input.location,
-      name: input.name,
+      name,
       note: input.note,
       phone: input.phone,
-      trade: input.trade,
+      trade: trades?.[0],
+      trades,
     }).filter(([, value]) => value !== undefined),
   );
 
@@ -302,10 +371,4 @@ function requireActorId(principal: DomainPrincipal): string {
     throw new DomainValidationError("This action needs a signed-in user.");
   }
   return userId;
-}
-
-async function requireTradie(tradieId: string, db: DomainDb): Promise<Tradie> {
-  const tradie = await db.tradie.findUnique({ where: { id: tradieId } });
-  if (!tradie) throw new DomainNotFoundError("Tradie not found");
-  return tradie;
 }

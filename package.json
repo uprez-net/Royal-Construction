@@ -5,7 +5,7 @@
     "node": ">=24"
   },
   "private": true,
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@9.15.9",
   "scripts": {
     "dev": "next dev",
     "dev:webpack": "next dev --webpack",
@@ -48,7 +48,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@mistralai/mistralai": "^2.2.5",
     "@novu/api": "^3.19.0",
-    "@novu/js": "^3.19.0",
+    "@novu/js": "^3.19.2",
     "@platejs/ai": "^53.0.9",
     "@platejs/basic-nodes": "^53.0.0",
     "@platejs/combobox": "^53.0.0",
@@ -69,6 +69,7 @@
     "@streamdown/math": "^1.0.2",
     "@streamdown/mermaid": "^1.0.2",
     "@tanstack/react-query": "^5.101.0",
+    "@tanstack/react-table": "^9.3.1",
     "@upstash/redis": "^1.38.4",
     "@vercel/blob": "^2.3.3",
     "@vercel/connect": "^2.3.2",
@@ -81,7 +82,7 @@
     "date-fns-tz": "^3.2.0",
     "docusign-esign": "^9.0.0",
     "docx-preview": "^0.4.0",
-    "dompurify": "^3.4.14",
+    "dompurify": "^3.4.16",
     "dotenv": "^17.4.2",
     "embla-carousel-react": "^8.6.0",
     "eve": "^0.64.1",
@@ -92,7 +93,7 @@
     "limiter": "^3.0.0",
     "lucide-react": "^1.14.0",
     "mathjs": "^15.2.0",
-    "next": "16.3.3",
+    "next": "16.3.8",
     "next-themes": "^0.4.6",
     "p-limit": "^7.3.0",
     "pg": "^8.20.0",
@@ -132,7 +133,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.3",
+    "eslint-config-next": "16.3.8",
     "just-bash": "^3.4.2",
     "prettier": "3.8.3",
     "prisma": "^7.10.0",
@@ -140,7 +141,8 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.22.0",
     "typescript": "^5",
-    "vitest": "^5.0.1"
+    "vite": "^8.3.3",
+    "vitest": "^5.0.5"
   },
   "pnpm": {
     "overrides": {
@@ -153,13 +155,40 @@
       "ai@6>@ai-sdk/provider-utils": "^4.0.33",
       "baseline-browser-mapping": "^2.11.25",
       "@platejs/core": "^53.3.11",
-      "devalue": "^5.9.2",
+      "devalue": "^5.9.3",
       "pdfjs-dist": "5.4.394",
       "exceljs>uuid": "^11.1.1",
       "@workflow/core>nanoid": "^5.1.16",
-      "@workflow/world-local>undici": "^7.29.0",
-      "@workflow/world-vercel>undici": "^7.29.0",
-      "@prisma/config>deepmerge-ts": "^8.0.2"
+      "@workflow/world-local>undici": "^7.29.1",
+      "@workflow/world-vercel>undici": "^7.29.1",
+      "undici@^6": "^6.28.1",
+      "undici@^7": "^7.29.1",
+      "undici@^8": "^8.10.2",
+      "@prisma/config>deepmerge-ts": "^8.0.2",
+      "fast-uri@^3": "^3.1.7",
+      "ip-address@^10": "^10.5.1",
+      "brace-expansion@^1": "^1.1.21",
+      "brace-expansion@^2": "^2.1.7",
+      "brace-expansion@^5": "^5.0.12",
+      "axios@^1": "^1.20.0",
+      "hono@^4": "^4.13.7",
+      "piscina@^4": "^4.9.4",
+      "proxy-addr@^2": "^2.0.8",
+      "smol-toml@^1": "^1.9.0",
+      "source-map-js@^1": "^1.2.2",
+      "http-cache-semantics@^4": "^4.3.0",
+      "seroval": "^1.6.8",
+      "seroval-plugins": "^1.6.8",
+      "katex@^0.16": "^0.18.2",
+      "sharp@^0.35": "^0.35.5",
+      "@modelcontextprotocol/sdk@^1": "^1.32.1",
+      "follow-redirects@^1": "^1.16.1"
+    },
+    "auditConfig": {
+      "ignoreCves": [
+        "CVE-2026-93687",
+        "CVE-2026-97058"
+      ]
     }
   }
 }

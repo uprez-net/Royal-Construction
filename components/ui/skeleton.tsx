@@ -7,7 +7,7 @@ function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="skeleton"
       aria-hidden="true"
       className={cn(
-        "animate-pulse rounded-md bg-muted motion-reduce:animate-none",
+        "min-w-0 max-w-full animate-pulse rounded-md bg-muted motion-reduce:animate-none",
         className,
       )}
       {...props}
@@ -23,6 +23,7 @@ function PageSkeleton({
 }: React.ComponentProps<"div"> & { label: string }) {
   return (
     <div
+      data-slot="page-skeleton"
       role="status"
       aria-busy="true"
       aria-live="polite"
@@ -35,15 +36,19 @@ function PageSkeleton({
   );
 }
 
-function MetricCardSkeleton() {
+function MetricCardSkeleton({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border/70 bg-card px-4 py-3 shadow-sm">
-      <Skeleton className="size-9 rounded-lg" />
+    <div
+      className={cn(
+        "grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-lg border border-border/70 bg-card px-3 py-3 shadow-sm sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-3 sm:px-4",
+        !compact && "sm:py-7",
+      )}
+    >
+      <Skeleton className="size-7 rounded-lg sm:size-9" />
       <div className="min-w-0 space-y-2">
         <Skeleton className="h-5 w-16" />
         <Skeleton className="h-3 w-28 max-w-full" />
       </div>
-      <Skeleton className="h-5 w-12 rounded-md" />
     </div>
   );
 }
@@ -56,4 +61,91 @@ function skeletonTableRows(columnCount: number, rowCount = 5): ReactNode[][] {
   );
 }
 
-export { Skeleton, PageSkeleton, MetricCardSkeleton, skeletonTableRows };
+/** Matches labelled list cards on phones and the comparison table on desktop. */
+function DataTableSkeleton({
+  columnCount,
+  rowCount = 5,
+  mobileLayout = "cards",
+  mobileColumns = 2,
+}: {
+  columnCount: number;
+  rowCount?: number;
+  mobileLayout?: "cards" | "scroll";
+  mobileColumns?: 1 | 2;
+}) {
+  return (
+    <>
+      {mobileLayout === "cards" ? (
+        <div className="space-y-3 md:hidden">
+          {Array.from({ length: rowCount }, (_, row) => (
+            <div
+              key={row}
+              className="rounded-lg border border-border/70 bg-background p-4"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <Skeleton className="h-5 w-44" />
+                <Skeleton className="size-6 shrink-0 rounded-full" />
+              </div>
+              <div
+                className={cn(
+                  "mt-3 grid gap-x-4 gap-y-3",
+                  mobileColumns === 2 && "grid-cols-2",
+                )}
+              >
+                {Array.from({ length: columnCount - 1 }, (_, col) => (
+                  <div key={col} className="min-w-0 space-y-2">
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="h-4 w-28" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          "min-w-0 overflow-x-auto rounded-lg border border-border/70 bg-background",
+          mobileLayout === "cards" && "hidden md:block",
+        )}
+      >
+        <div
+          className="min-w-160"
+          style={{ minWidth: Math.max(480, columnCount * 88) }}
+        >
+          <div
+            className="grid gap-4 border-b bg-muted/70 px-4 py-3"
+            style={{
+              gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+            }}
+          >
+            {Array.from({ length: columnCount }, (_, col) => (
+              <Skeleton key={col} className="h-3 w-20" />
+            ))}
+          </div>
+          {Array.from({ length: rowCount }, (_, row) => (
+            <div
+              key={row}
+              className="grid gap-4 border-b px-4 py-4 last:border-0"
+              style={{
+                gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+              }}
+            >
+              {Array.from({ length: columnCount }, (_, col) => (
+                <Skeleton key={col} className="h-4 w-28" />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+export {
+  Skeleton,
+  PageSkeleton,
+  MetricCardSkeleton,
+  DataTableSkeleton,
+  skeletonTableRows,
+};

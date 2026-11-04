@@ -12,7 +12,7 @@ import type {
 import { logActionOrThrow } from "../audit/action-log";
 import type { DomainDb } from "../db";
 import { DomainTransitionError, DomainValidationError } from "../errors";
-import { resolveCustomerForProject } from "../identity/customers";
+import { resolveCustomersForProject } from "../identity/customers";
 import { requireAssignableSiteManager } from "../identity/site-managers";
 import {
   unavailableProjectInference,
@@ -23,6 +23,11 @@ import { attributionUserId, type DomainPrincipal } from "../principal";
 import { withNormalizedSignedDate } from "./commands";
 import { buildProjectRequirementsPayload, resolveProjectBudget } from "./flow";
 import { createMilestonesFromTemplate } from "./milestones";
+import {
+  requireProjectOwners,
+  withOwnerContacts,
+  type ProjectOwnerInput,
+} from "./owners";
 import {
   collectProjectDateBlockers,
   partitionBlockers,
@@ -64,13 +69,20 @@ export type CreateProjectFromLeadInput = {
   readonly address: string;
   readonly council: string;
   readonly siteManagerId: string;
-  // Primary owner identity, promoted to the Customer at handoff so Project
-  // screens and notifications show the legal owner, not the original lead
-  // contact (ADR 0003). Each falls back to the lead value when absent.
-  readonly customerName?: string | null;
-  readonly customerEmail?: string | null;
-  readonly customerPhone?: string | null;
-  readonly customerAddress?: string | null;
+  /**
+   * Every owner the contract names, in its order; each becomes a customer
+   * linked to the project, and the first is the primary (`Project.customerId`,
+   * the one invoiced). Omitted, it is read from a flat extraction's
+   * `legalAdministrationOwners`. There is no fallback to the lead: the person
+   * who enquired is not necessarily an owner, so a project with no owners is
+   * refused rather than attached to them.
+   *
+   * This replaced `customerName`/`customerEmail`/`customerPhone`, which named
+   * one customer and fell back to the lead's contact field by field: the
+   * wizard never sent them, so every wizard project was attached to whoever
+   * made the enquiry rather than to the owners who signed.
+   */
+  readonly owners?: readonly ProjectOwnerInput[] | null;
   /** Full owner party set, preserved on `Project.parties` (ADR 0003). */
   readonly parties?: Prisma.InputJsonValue | null;
   readonly extraction?:
@@ -87,6 +99,15 @@ export type CreateProjectFromLeadInput = {
   readonly confirmDateBlockers?: boolean;
 };
 
+export type CreatedProjectCustomer = {
+  readonly id: string;
+  readonly name: string;
+  readonly email: string;
+  /** `null` when the owner gave no phone. */
+  readonly phone: string | null;
+  readonly created: boolean;
+};
+
 export type CreateProjectFromLeadResult = {
   readonly projectId: string;
   readonly projectName: string;
@@ -94,13 +115,10 @@ export type CreateProjectFromLeadResult = {
   readonly location: string;
   readonly status: ProjectStatus;
   readonly siteManagerId: string;
-  readonly customer: {
-    readonly id: string;
-    readonly name: string;
-    readonly email: string;
-    readonly phone: string;
-    readonly created: boolean;
-  };
+  /** The primary owner: `customers[0]`. */
+  readonly customer: CreatedProjectCustomer;
+  /** Every owner, in the contract's order. */
+  readonly customers: readonly CreatedProjectCustomer[];
   /** Advisory blockers the project was created with, for the header. */
   readonly warnings: readonly string[];
   readonly milestonesCreated: number;
@@ -135,11 +153,9 @@ function normalizeExtraction(
       summary: extraction.summary,
       legalAdministration: {
         siteAddress: extraction.legalAdministrationSiteAddress,
-        ownerContacts: {
-          names: extraction.legalAdministrationOwnerNames,
-          emails: extraction.legalAdministrationOwnerEmails,
-          phones: extraction.legalAdministrationOwnerPhones,
-        },
+        // Written from the resolved owners by `withOwnerContacts`, so the
+        // three lists stay aligned owner by owner.
+        ownerContacts: { names: [], emails: [], phones: [] },
         commencementTrigger: extraction.legalAdministrationCommencementTrigger,
         signedDate: extraction.legalAdministrationSignedDate,
         pcaInspector: extraction.legalAdministrationPcaInspector,
@@ -219,7 +235,6 @@ function normalizeExtraction(
 function inferredRequirements(input: {
   projectName: string;
   address: string;
-  lead: { name: string; email: string | null; phone: string | null };
   specs: { projectType: string; summary: string; budget: number };
 }): ProjectRequirementsPayload {
   return buildProjectRequirementsPayload(
@@ -229,11 +244,8 @@ function inferredRequirements(input: {
       summary: input.specs.summary,
       legalAdministration: {
         siteAddress: input.address,
-        ownerContacts: {
-          names: [input.lead.name],
-          emails: input.lead.email ? [input.lead.email] : [],
-          phones: input.lead.phone ? [input.lead.phone] : [],
-        },
+        // Written from the resolved owners by `withOwnerContacts`.
+        ownerContacts: { names: [], emails: [], phones: [] },
         commencementTrigger: "",
         signedDate: "",
         pcaInspector: "",
@@ -297,8 +309,8 @@ function inferredRequirements(input: {
 }
 
 /**
- * Convert a lead into a project, its customer, its milestones and its history,
- * in one transaction.
+ * Convert a lead into a project, its owners' customers, its milestones and
+ * its history, in one transaction.
  *
  * Authorizes nobody by itself beyond needing a caller: whether the principal
  * may open `leadId` is the lead rule (`lib/domain/access/leads.ts`), which the
@@ -308,6 +320,8 @@ function inferredRequirements(input: {
  * @throws {ProjectDateBlockerError} A hard date blocker. Carries the blocker
  * list, so the wizard can bind each one to the field that caused it.
  * @throws {DomainTransitionError} The lead already has a project.
+ * @throws {DomainValidationError} An owner list the owner rule refuses
+ * (`lib/domain/projects/owners.ts`), named by `legalAdministrationOwners`.
  */
 export async function createProjectFromLead(
   principal: DomainPrincipal,
@@ -354,6 +368,16 @@ export async function createProjectFromLead(
     );
   }
 
+  // The owners are checked before anything is written, so a contract with an
+  // owner the office has not finished filling in is refused with the owner
+  // named, rather than failing on a customer insert halfway through.
+  const owners = requireProjectOwners(
+    input.owners
+      ?? (input.extraction && isFlatExtraction(input.extraction)
+        ? input.extraction.legalAdministrationOwners
+        : []),
+  );
+
   // Validated before anything is written. The previous implementation only
   // checked the site manager on the deprecated manual path, so a stale id from
   // the wizard reached `project.create` and failed as a foreign-key violation
@@ -388,19 +412,21 @@ export async function createProjectFromLead(
       : resolveProjectBudget(input.extraction)
     : (specs?.projectBudget ?? 0);
 
-  const requirements = withNormalizedSignedDate(
-    input.extraction
-      ? normalizeExtraction(input.extraction, input.sourceDocuments)
-      : inferredRequirements({
-          address: input.address,
-          lead,
-          projectName: input.projectName,
-          specs: {
-            budget: specs?.projectBudget ?? 0,
-            projectType: specs?.projectType ?? "",
-            summary: specs?.projectDescription ?? "",
-          },
-        }),
+  const requirements = withOwnerContacts(
+    withNormalizedSignedDate(
+      input.extraction
+        ? normalizeExtraction(input.extraction, input.sourceDocuments)
+        : inferredRequirements({
+            address: input.address,
+            projectName: input.projectName,
+            specs: {
+              budget: specs?.projectBudget ?? 0,
+              projectType: specs?.projectType ?? "",
+              summary: specs?.projectDescription ?? "",
+            },
+          }),
+    ),
+    owners,
   );
 
   const legal = (
@@ -434,15 +460,9 @@ export async function createProjectFromLead(
   // asserting that it has.
   const flagNeedsAttention = warns.length > 0 && !input.confirmDateBlockers;
 
-  const { customer, created } = await resolveCustomerForProject(
-    {
-      address: input.customerAddress ?? null,
-      email: input.customerEmail?.trim() || lead.email,
-      name: input.customerName?.trim() || lead.name,
-      phone: input.customerPhone?.trim() || lead.phone,
-    },
-    db,
-  );
+  const customers = await resolveCustomersForProject(owners, db);
+  // `requireProjectOwners` refuses an empty list, so there is always a first.
+  const customer = customers[0].customer;
 
   const project = await db.project.create({
     data: {
@@ -461,6 +481,12 @@ export async function createProjectFromLead(
       ...(input.parties ? { parties: input.parties } : {}),
       ...(flagNeedsAttention ? { status: ProjectStatus.NEEDS_ATTENTION } : {}),
       customerId: customer.id,
+      customers: {
+        create: customers.map((owner, position) => ({
+          customerId: owner.customer.id,
+          position,
+        })),
+      },
     },
     select: { id: true, location: true, name: true, status: true },
   });
@@ -474,8 +500,11 @@ export async function createProjectFromLead(
     {
       ...createActivityLogEntry("projectCreated", {
         customerEmail: customer.email,
-        customerName: customer.name,
-        customerPhone: customer.phone,
+        // Every owner, so the history reads "created for Jane & John Smith"
+        // rather than naming only the primary.
+        customerName: customers.map((owner) => owner.customer.name).join(" & "),
+        // The log's schema wants a string; the leads' entries say the same.
+        customerPhone: customer.phone ?? "Not specified",
         location: project.location,
         projectId: project.id,
         projectName: project.name,
@@ -496,14 +525,19 @@ export async function createProjectFromLead(
     data: { projectId: project.id },
   });
 
-  return {
-    customer: {
+  const createdCustomers = customers.map(
+    ({ created, customer: owner }): CreatedProjectCustomer => ({
       created,
-      email: customer.email,
-      id: customer.id,
-      name: customer.name,
-      phone: customer.phone,
-    },
+      email: owner.email,
+      id: owner.id,
+      name: owner.name,
+      phone: owner.phone,
+    }),
+  );
+
+  return {
+    customer: createdCustomers[0],
+    customers: createdCustomers,
     filesMoved,
     location: project.location,
     milestonesCreated,

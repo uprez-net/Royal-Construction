@@ -8,7 +8,8 @@ import { fetchTradieApprovalById } from "@/lib/data/tradie-approvals";
 import { SafeTradieApproval } from "@/types/tradie";
 import { TradieApprovalActionType } from "@prisma/client";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import { ModalLoadingState } from "@/components/common/modal-loading-state";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PriceChangeApprovalForm } from "./forms/PriceChangeApprovalForm";
@@ -16,6 +17,7 @@ import { TradieRemovalApprovalForm } from "./forms/TradieRemovalApprovalForm";
 import { IncidentResolutionApprovalForm } from "./forms/IncidentResolutionApprovalForm";
 import { ScheduleApprovalForm } from "./forms/ScheduleApprovalForm";
 import { ScheduleDeletionApprovalForm } from "./forms/ScheduleDeletionApprovalForm";
+import { TradeCancellationApprovalForm } from "./forms/TradeCancellationApprovalForm";
 
 interface AdminApprovalActionModalProps {
   open: boolean;
@@ -73,6 +75,11 @@ export function AdminApprovalActionModal({
           <ScheduleDeletionApprovalForm approval={data} onSuccess={onClose} />
         );
 
+      case TradieApprovalActionType.TRADE_CANCELLATION:
+        return (
+          <TradeCancellationApprovalForm approval={data} onSuccess={onClose} />
+        );
+
       default:
         return (
           <div className="space-y-2">
@@ -88,17 +95,14 @@ export function AdminApprovalActionModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[70vh] w-full max-w-2xl overflow-y-auto no-scrollbar">
+      <DialogContent className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto no-scrollbar sm:max-h-[70vh]">
         {isLoading ? (
-          <div
-            className="flex h-40 items-center justify-center"
-            aria-busy="true"
-          >
+          <div>
             <DialogTitle className="sr-only">Loading request</DialogTitle>
             <DialogDescription className="sr-only">
               Please wait while the approval request loads.
             </DialogDescription>
-            <Loader2 className="size-6 animate-spin" aria-hidden="true" />
+            <ModalLoadingState label="Loading approval request" />
           </div>
         ) : isError ? (
           <div className="space-y-3 p-4">

@@ -43,6 +43,8 @@ import {
   unsentRequiredDocuments,
 } from "@/lib/domain/compliance/required-pack";
 import { packSendBlockedReason } from "@/lib/domain/compliance/prerequisites";
+import { certifierCopyAddresses } from "@/lib/domain/compliance/certifier-copies";
+import { earlyReviewSelection } from "@/lib/domain/compliance/early-review";
 import {
   recordPreliminaryPlansArrival,
   recordWasteManagementPlanArrival,
@@ -116,18 +118,18 @@ export async function getCertifierEngagement(
   const hasDevelopmentApplication =
     engagement.alerts.some(
       (alert) =>
-        alert.type === ComplianceAlertType.DA_APPROVAL_REQUIRED &&
-        alert.status === "OPEN",
-    ) ||
-    engagement.externalApplications.some(
+        alert.type === ComplianceAlertType.DA_APPROVAL_REQUIRED
+        && alert.status === "OPEN",
+    )
+    || engagement.externalApplications.some(
       (application) =>
-        application.kind ===
-        ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+        application.kind
+        === ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
     );
 
   if (
-    !hasDevelopmentApplication ||
-    !(await ensureDevelopmentApplicationDocuments(engagement.id))
+    !hasDevelopmentApplication
+    || !(await ensureDevelopmentApplicationDocuments(engagement.id))
   ) {
     return engagement;
   }
@@ -375,8 +377,8 @@ export async function sendCertifierOutreach(engagementId: string) {
       (required) =>
         !engagement.documents.some(
           (document) =>
-            document.documentType === required.type &&
-            document.files.length > 0,
+            document.documentType === required.type
+            && document.files.length > 0,
         ),
     )
     .map((required) => required.label);
@@ -413,12 +415,13 @@ export async function sendCertifierOutreach(engagementId: string) {
     pending,
   );
   const attachments = await Promise.all(files.map(toEmailAttachment));
+  const cc = await certifierCopyAddresses(certifierEmail, config.cc, prisma);
 
   await client.sendMail({
     to: certifierEmail,
     subject,
     body,
-    cc: config.cc,
+    cc,
     attachments,
   });
 
@@ -571,6 +574,7 @@ export async function sendCertifierReply(
     : [];
 
   const attachments = await Promise.all(files.map(toEmailAttachment));
+  const cc = await certifierCopyAddresses(certifierEmail, config.cc, prisma);
 
   // Subject threading: what opens the thread before the certifier has answered,
   // and what is left if the message we were replying onto is gone.
@@ -579,7 +583,7 @@ export async function sendCertifierReply(
       to: certifierEmail,
       subject,
       body: input.body,
-      cc: config.cc,
+      cc,
       ...(attachments.length > 0 ? { attachments } : {}),
     });
 
@@ -592,7 +596,7 @@ export async function sendCertifierReply(
         messageId: engagement.lastInboundMessageId,
         body: input.body,
         to: certifierEmail,
-        cc: config.cc,
+        cc,
         ...(attachments.length > 0 ? { attachments } : {}),
       });
     } catch (error) {
@@ -802,8 +806,8 @@ export async function attachComplianceDocumentFile(params: {
   // alert has to close either way, or the panel keeps chasing a redraw that is
   // sitting on the row underneath it.
   if (
-    document.documentType ===
-    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS
+    document.documentType
+    === ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS
   ) {
     after(async () => {
       await recordPreliminaryPlansArrival({
@@ -893,8 +897,8 @@ export async function attachComplianceDocumentFile(params: {
   // upload as well as on the inbound path: an admin dragging in the copy the
   // surveyor emailed them is the same document with the same problem.
   if (
-    document.documentType ===
-    ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL
+    document.documentType
+    === ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL
   ) {
     after(async () => {
       await verifyTitleSearchOwners({
@@ -1195,66 +1199,78 @@ export async function setComplianceDocumentNotRequired(params: {
 }
 
 /**
- * Sends one checklist document to the certifier as soon as it is available.
+ * Sends a chosen set of checklist documents to the certifier in one email,
+ * without waiting for the rest of the checklist.
  *
- * This is intentionally independent of the engagement's IN_REVIEW status. The
- * rest of the checklist can still be collected while this item is assessed;
- * the outbound email itself is the durable marker that enables its decision
- * controls. Sending a replacement works the same way because its new URL will
- * not appear in the mail trail until this call succeeds.
+ * Independent of the engagement's IN_REVIEW status: the rest of the checklist
+ * can still be collected while these items are assessed, and the outbound email
+ * itself is the durable marker that enables their decision controls. A
+ * replacement goes the same way, because its new URL is not on the mail trail
+ * until this call succeeds.
+ *
+ * One email for the set rather than one per row: a certifier sent eight
+ * documents as eight messages has eight threads of attachments to reconcile,
+ * and the office had no way to send a partly complete pack as a pack. Which rows
+ * may go is `earlyReviewSelection`'s decision, the same rule the tab reads to
+ * offer a checkbox. Rows whose current copy the certifier already holds are left
+ * off rather than attached again.
  */
-export async function sendComplianceDocumentForReview(
+export async function sendComplianceDocumentsForReview(
   engagementId: string,
-  documentId: string,
+  documentIds: readonly string[],
 ) {
   const engagement = await requireEngagement(engagementId);
-  const blocked = checklistBlockedReason(engagement);
-  if (blocked) throw new Error(blocked);
+  const { toSend, alreadySent } = earlyReviewSelection(engagement, documentIds);
+  if (toSend.length === 0) {
+    return {
+      subject: "",
+      attachmentCount: 0,
+      sentCount: 0,
+      alreadySentCount: alreadySent.length,
+      alreadySent: true as const,
+    };
+  }
 
-  const document = engagement.documents.find(
-    (candidate) => candidate.id === documentId,
+  const labels = toSend.map((document) =>
+    escapeEmailHtml(
+      complianceDocumentLabel(document.documentType, document.label),
+    ),
   );
-  if (!document) {
-    throw new Error("Compliance document not found on this project.");
-  }
-  if (document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM) {
-    throw new Error(
-      "Only a checklist item can be sent for early verification.",
-    );
-  }
-  if (isNotRequired(document.status) || document.files.length === 0) {
-    throw new Error(
-      "Upload the checklist document before sending it for verification.",
-    );
-  }
-  if (document.status === ComplianceDocumentStatus.APPROVED) {
-    throw new Error("This checklist document has already been approved.");
-  }
-  if (document.rejectionReason) {
-    throw new Error(
-      "Upload the revised document before sending it back to the certifier.",
-    );
-  }
-  if (hasSentCurrentDocument(engagement, document)) {
-    return { subject: "", attachmentCount: 0, alreadySent: true as const };
-  }
+  const address = escapeEmailHtml(engagement.subjectAddress);
+  const introduction =
+    labels.length === 1
+      ? `<p>The <strong>${labels[0]}</strong> for <strong>${address}</strong> is ready and attached.</p>`
+      : [
+          `<p>The following ${labels.length} checklist documents for <strong>${address}</strong> are ready and attached:</p>`,
+          `<ul>${labels.map((label) => `<li>${label}</li>`).join("")}</ul>`,
+        ].join("\n");
 
-  const label = complianceDocumentLabel(document.documentType, document.label);
-  return sendCertifierReply(engagementId, {
+  const sent = await sendCertifierReply(engagementId, {
     body: [
       engagement.certifierName
         ? `<p>Hi ${escapeEmailHtml(engagement.certifierName)},</p>`
         : "<p>Hi,</p>",
-      `<p>The <strong>${escapeEmailHtml(label)}</strong> for <strong>${escapeEmailHtml(engagement.subjectAddress)}</strong> is ready and attached.</p>`,
-      "<p>Could you please verify this item while we continue collecting the rest of the checklist documents, and let us know if it needs revising?</p>",
+      introduction,
+      labels.length === 1
+        ? "<p>Could you please verify this item while we continue collecting the rest of the checklist documents, and let us know if it needs revising?</p>"
+        : "<p>Could you please verify these items while we continue collecting the rest of the checklist documents, and let us know if any of them need revising?</p>",
       "<p>Kind regards,<br/>Royal Constructions</p>",
     ].join("\n"),
-    attachments: document.files.map((file) => ({
-      fileId: file.id,
-      name: file.filename,
-      url: file.url,
-    })),
+    attachments: toSend.flatMap((document) =>
+      document.files.map((file) => ({
+        fileId: file.id,
+        name: file.filename,
+        url: file.url,
+      })),
+    ),
   });
+
+  return {
+    ...sent,
+    alreadySent: false as const,
+    sentCount: toSend.length,
+    alreadySentCount: alreadySent.length,
+  };
 }
 
 /**

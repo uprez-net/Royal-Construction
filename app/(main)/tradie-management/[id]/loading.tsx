@@ -10,9 +10,9 @@ export default function TradieDetailsSkeleton() {
       <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
-            <Skeleton className="h-14 w-14 rounded-full" />
+            <Skeleton className="size-14 shrink-0 rounded-full" />
 
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Skeleton className="h-7 w-56" />
               <Skeleton className="h-6 w-28 rounded-full" />
             </div>

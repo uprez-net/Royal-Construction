@@ -55,14 +55,19 @@ export const NEVER_APPROVE_ON_STAGING = [
   // approval, so there is nothing to approve.
   "send_compliance_outreach",
   "send_compliance_follow_up",
-  // Emails a real lead from the company mailbox (issue #341).
+  // Emails a real lead from the company mailbox.
   "send_lead_email",
+  "email_offer_proposal",
   // Puts a WhatsApp message on a real customer's phone (issue #333).
   // `prepare_lead_whatsapp_message` is absent for the same reason as
   // `prepare_compliance_outreach`: it previews and declares no approval.
   "send_lead_whatsapp_message",
   // Creates or mutates a DocuSign envelope.
   "recall_offer_envelope",
+  "send_offer_for_signature",
+  // Irreversible: the offer becomes Project, and the executed documents may be
+  // fetched from DocuSign on the way.
+  "create_project_from_offer",
   // Creates a real Clerk/application invitation.
   "invite_team_member",
   "revoke_team_invitation",

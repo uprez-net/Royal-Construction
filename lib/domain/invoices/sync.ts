@@ -149,7 +149,13 @@ export async function archiveInvoicePdf(
   }
 }
 
-function invoiceStatusRank(status: InvoiceStatus): number {
+/**
+ * Forward-only rank of a Xero invoice status. A webhook can deliver an older
+ * version after a newer one, so a status is only ever replaced by one ranked
+ * at least as high. Shared by progress claims and the tradie bills mirrored
+ * from Xero (`tradies/invoices.ts`).
+ */
+export function invoiceStatusRank(status: InvoiceStatus): number {
   switch (status) {
     case InvoiceStatus.DRAFT:
       return 1;

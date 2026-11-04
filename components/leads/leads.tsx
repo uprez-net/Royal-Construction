@@ -26,6 +26,7 @@ import { AddLeadModal } from "@/components/leads/modal-ui/add-lead-modal";
 import { EmailCampaignModal } from "@/components/leads/modal-ui/email-campaign-modal";
 import { UnmatchedWhatsAppButton } from "@/components/leads/whatsapp/unmatched-whatsapp-review";
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
+import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
 import { LeadPagination } from "./lead-pagination";
 import {
   readLeadsListParams,
@@ -340,28 +341,32 @@ function LeadsWorkspace() {
 
       {/* Header card */}
       <Card className="overflow-hidden border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
-        <CardContent className="relative p-6">
+        <CardContent className="relative p-4 sm:p-6">
           <div className="absolute -right-12 -top-10 h-40 w-40 rounded-full bg-teal-500/10" />
           <div className="absolute -bottom-14 right-20 h-32 w-32 rounded-full bg-teal-700/10" />
           <div className="relative flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-extrabold text-slate-900">
+              <h1 className="text-lg font-extrabold text-slate-900">
                 Lead Pipeline
-              </h2>
-              <p className="text-sm text-slate-600">
+              </h1>
+              <p className="hidden text-sm text-slate-600 sm:block">
                 Google Ads auto-capture • Follow-up automation • Email templates
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
               <UnmatchedWhatsAppButton />
               <Button
                 variant="outline"
                 onClick={() => setShowEmailCampaign(true)}
               >
-                <Mail className="mr-2 size-4" /> Email Campaign
+                <Mail className="mr-2 size-4" />
+                <span className="sm:hidden">Email</span>
+                <span className="hidden sm:inline">Email Campaign</span>
               </Button>
               <Button onClick={() => setShowAddLead(true)}>
-                <Plus className="mr-2 size-4" /> Add Lead Manually
+                <Plus className="mr-2 size-4" />
+                <span className="sm:hidden">Add Lead</span>
+                <span className="hidden sm:inline">Add Lead Manually</span>
               </Button>
             </div>
           </div>
@@ -373,7 +378,14 @@ function LeadsWorkspace() {
       {/* Metric cards */}
       {stats && !loading && (
         <>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-3">
+          {/* Six cards stacked three rows deep pushed the list itself below
+              the fold on a phone; there they scroll sideways instead. */}
+          <div
+            className={cn(
+              MOBILE_METRIC_STRIP_CLASS,
+              "sm:grid-cols-2 md:grid-cols-3",
+            )}
+          >
             <LeadMetricCard
               label="Total Leads"
               value={String(stats.total)}
@@ -451,7 +463,7 @@ function LeadsWorkspace() {
                 key={key}
                 onClick={() => handleTabChange(key)}
                 className={cn(
-                  "group relative inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-[12.5px] font-semibold transition-all duration-200",
+                  "group relative inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-sm font-semibold transition-colors duration-200 sm:min-h-9 sm:text-[12.5px]",
                   activeTab === key
                     ? "bg-teal-50 text-teal-700 shadow-sm"
                     : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
@@ -471,7 +483,7 @@ function LeadsWorkspace() {
                   value={activeFilterTiming}
                   onValueChange={handleFilterTimingChange}
                 >
-                  <SelectTrigger className="h-9 flex-none rounded-full border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
+                  <SelectTrigger className="h-9 flex-1 rounded-full sm:flex-none border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
                     <SelectValue placeholder="Select timeframe" />
                   </SelectTrigger>
                   <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">
@@ -486,6 +498,7 @@ function LeadsWorkspace() {
                 <div className="search-box min-w-0 flex-1">
                   <Search size={16} />
                   <input
+                    aria-label="Search leads"
                     type="text"
                     placeholder="Search leads..."
                     value={searchTerm}

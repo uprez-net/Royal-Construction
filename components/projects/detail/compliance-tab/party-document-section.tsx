@@ -24,6 +24,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   complianceDocumentLabel,
+  coveringDocumentType,
   isOptionalForOutreach,
   PARTY_LABEL,
   type CompliancePartySection,
@@ -72,6 +73,15 @@ type PartyDocumentSectionProps = {
   types: readonly ComplianceDocumentType[];
   /** The rows for `types`, in the same order; undefined where none exists yet. */
   documents: (ComplianceDocumentWithFiles | undefined)[];
+  /**
+   * Types in `types` that a later document on this file stands in for.
+   *
+   * Rendered rather than dropped, so the reader sees why the architect's block
+   * asks for nothing more instead of wondering where the preliminary plans
+   * went, and left out of the counts and the lateness by the caller and here.
+   * Read off `isCoveredOnFile`.
+   */
+  coveredTypes?: ReadonlySet<ComplianceDocumentType>;
   /** Why the section cannot be opened yet, or null when it can. */
   blockedReason: string | null;
   isActive: boolean;
@@ -163,6 +173,7 @@ export function PartyDocumentSection({
   outreach,
   types,
   documents,
+  coveredTypes,
   blockedReason,
   isActive,
   open,
@@ -195,9 +206,9 @@ export function PartyDocumentSection({
    * would unlock the section and hide the button that retries it.
    */
   const isEngaged =
-    outreach !== undefined &&
-    (outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED ||
-      outreach.status !== ComplianceOutreachStatus.NOT_SENT);
+    outreach !== undefined
+    && (outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED
+      || outreach.status !== ComplianceOutreachStatus.NOT_SENT);
 
   // The council has nobody to engage. Its section opens as soon as the surveyor
   // is settled, because ordering a certificate needs the deposited plan and
@@ -222,14 +233,18 @@ export function PartyDocumentSection({
   // be empty on a DA path and the architect's second document is not something
   // the outreach waits for — a section badge computed from the party would go
   // red over a row that is not on screen.
+  const isCovered = (type: ComplianceDocumentType) =>
+    coveredTypes?.has(type) ?? false;
   const sectionOverdue = types.some(
-    (type, index) => isRowOverdue?.(documents[index], type) ?? false,
+    (type, index) =>
+      !isCovered(type) && (isRowOverdue?.(documents[index], type) ?? false),
   );
 
   const rows = (
     <ul>
       {types.map((type, index) => {
         const document = documents[index];
+        const covering = isCovered(type) ? coveringDocumentType(type) : null;
         return (
           <ComplianceDocumentRow
             key={type}
@@ -238,16 +253,20 @@ export function PartyDocumentSection({
             helperText={
               document?.files.length
                 ? undefined
-                : isOptionalForOutreach(type)
-                  ? // The pack goes without this one. Said on the row, because
-                    // otherwise the section reads as blocked by it and somebody
-                    // waits for an architect who is not holding anything up.
-                    "Not collected yet — the certifier can be sent the pack without it"
-                  : "Not collected yet"
+                : covering
+                  ? // Still uploadable, because a preliminary set that does
+                    // turn up belongs on the file — but nothing waits on it.
+                    `Not needed — the ${complianceDocumentLabel(covering).toLowerCase()} on this file covers it`
+                  : isOptionalForOutreach(type)
+                    ? // The pack goes without this one. Said on the row, because
+                      // otherwise the section reads as blocked by it and somebody
+                      // waits for an architect who is not holding anything up.
+                      "Not collected yet — the certifier can be sent the pack without it"
+                    : "Not collected yet"
             }
             mode={rowMode(document)}
             isBusy={isRowBusy(document, type)}
-            overdue={isRowOverdue?.(document, type) ?? false}
+            overdue={!covering && (isRowOverdue?.(document, type) ?? false)}
             onUpload={(file) =>
               onUpload(file, { documentId: document?.id, documentType: type })
             }
@@ -266,9 +285,9 @@ export function PartyDocumentSection({
         // a reader coming back to the tab actually wants from this line.
         outreach?.mode === ComplianceOutreachMode.SELF_SUPPLIED
           ? "Supplied by the client."
-          : (outreach?.contactName ??
-            outreach?.contactEmail ??
-            section.description)
+          : (outreach?.contactName
+            ?? outreach?.contactEmail
+            ?? section.description)
       }
       icon={PARTY_ICON[party]}
       progress={progress}
@@ -278,8 +297,8 @@ export function PartyDocumentSection({
       overdue={sectionOverdue}
       locked={locked}
       lockMessage={
-        blockedReason ??
-        (isCouncil
+        blockedReason
+        ?? (isCouncil
           ? undefined
           : outreach
             ? // A row with no mail behind it. Said plainly, because the button

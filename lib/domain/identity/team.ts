@@ -8,6 +8,7 @@ import {
 import type { DomainDb, TransactionalDomainDb } from "../db";
 import {
   DomainNotFoundError,
+  DomainSideEffectError,
   DomainTransitionError,
   DomainValidationError,
 } from "../errors";
@@ -21,6 +22,7 @@ import {
   runOutboxEffect,
   runOutboxEffectWithOutcome,
 } from "../outbox";
+import { findUserByClerkId } from "./users";
 
 // Changing a team member's role.
 //
@@ -314,4 +316,169 @@ export async function changeTeamMemberRole(
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
+}
+
+export type TeamMemberProfileInput = {
+  /** Clerk's id — the team screen lists Clerk users, not application rows. */
+  readonly clerkUserId: string;
+  readonly name: string;
+  readonly phone: string;
+};
+
+export type TeamMemberProfile = {
+  readonly userId: string;
+  readonly clerkUserId: string;
+  readonly name: string;
+  readonly firstName: string;
+  readonly lastName: string;
+  readonly phone: string;
+};
+
+/**
+ * Writes the name to Clerk and the phone to Clerk's `publicMetadata.phone`.
+ * Throws with Clerk's own message.
+ *
+ * Metadata, not a Clerk phone number: those carry verification, uniqueness
+ * and instance-setting rules that have nothing to do with a contact number
+ * the office reads on screen. The database is the record; the metadata copy
+ * is what the `user.updated` webhook carries back across.
+ */
+export type TeamProfilePort = (input: {
+  clerkUserId: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+}) => Promise<void>;
+
+/**
+ * The one stored form of a team phone, E.164, in the database and in Clerk's
+ * metadata alike so the two never disagree on spacing. The screen shows it in
+ * AU format (`utils/phone.ts#formatAuPhone`).
+ *
+ * An Australian local mobile or landline ("0412 345 678") is read as +61,
+ * because that is what everyone here will type. Anything else must already
+ * carry its country code: guessing one is how a number ends up pointing at
+ * somebody else.
+ */
+export function teamPhoneE164(raw: string): string | null {
+  const trimmed = raw.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  if (trimmed.startsWith("+")) {
+    return /^[1-9]\d{7,14}$/.test(digits) ? `+${digits}` : null;
+  }
+  if (/^0\d{9}$/.test(digits)) return `+61${digits.slice(1)}`;
+  return null;
+}
+
+/**
+ * Change a team member's name and phone, in Clerk and in the local record.
+ *
+ * The email is deliberately not editable: it is the sign-in identity, and
+ * changing it is Clerk's verification flow, not a form field.
+ *
+ * Order matters. The local uniqueness check runs first so the commonest
+ * refusal — the number already belongs to someone — touches nothing. Clerk is
+ * written next, and only then the local row, so a Clerk refusal leaves both
+ * sides as they were and the operator reads Clerk's reason. If the local
+ * write then fails, Clerk is put back to what the database — the record —
+ * still holds, and the local error surfaces. Leaving Clerk ahead would not
+ * converge on its own: a number lost to the unique constraint would fail the
+ * webhook's copy the same way.
+ */
+export async function updateTeamMemberProfile(
+  principal: DomainPrincipal,
+  input: TeamMemberProfileInput,
+  db: DomainDb,
+  updateIdentity: TeamProfilePort,
+): Promise<TeamMemberProfile> {
+  requireAdminPrincipal(principal);
+
+  const name = input.name.replace(/\s+/g, " ").trim();
+  if (!name) {
+    throw new DomainValidationError("A name is required.", "name");
+  }
+  if (name.length > 100) {
+    throw new DomainValidationError(
+      "That name is too long — keep it under 100 characters.",
+      "name",
+    );
+  }
+  const phone = teamPhoneE164(input.phone);
+  if (!phone) {
+    throw new DomainValidationError(
+      "Enter a phone number like 0412 345 678, or with its country code like +61 412 345 678.",
+      "phone",
+    );
+  }
+
+  const user = await findUserByClerkId(input.clerkUserId, db);
+  if (!user) throw new DomainNotFoundError("Team member not found.");
+
+  const taken = await db.user.findFirst({
+    select: { id: true },
+    where: { id: { not: user.id }, phone },
+  });
+  if (taken) {
+    throw new DomainValidationError(
+      "That phone number already belongs to another team member.",
+      "phone",
+    );
+  }
+
+  const [firstName, ...rest] = name.split(" ");
+  const lastName = rest.join(" ");
+
+  try {
+    await updateIdentity({
+      clerkUserId: user.clerkId,
+      firstName,
+      lastName,
+      phone,
+    });
+  } catch (error) {
+    throw new DomainSideEffectError(
+      error instanceof Error && error.message
+        ? `Clerk refused the change: ${error.message}`
+        : "Clerk refused the change; nothing was saved.",
+      "clerk",
+      false,
+      { cause: error },
+    );
+  }
+
+  try {
+    await db.user.update({ data: { name, phone }, where: { id: user.id } });
+  } catch (error) {
+    const [previousFirstName = "", ...previousRest] = user.name.split(" ");
+    await updateIdentity({
+      clerkUserId: user.clerkId,
+      firstName: previousFirstName,
+      lastName: previousRest.join(" "),
+      phone: user.phone,
+    }).catch((compensationError) => {
+      // Nothing more can be done from here; the operator still gets the
+      // local error below, and the next save from the team screen rewrites
+      // both sides.
+      console.error(
+        "[team] Could not restore Clerk after the local profile write failed",
+        compensationError,
+      );
+    });
+    if (error instanceof Error && "code" in error && error.code === "P2002") {
+      throw new DomainValidationError(
+        "That phone number already belongs to another team member.",
+        "phone",
+      );
+    }
+    throw error;
+  }
+
+  return {
+    clerkUserId: user.clerkId,
+    firstName,
+    lastName,
+    name,
+    phone,
+    userId: user.id,
+  };
 }

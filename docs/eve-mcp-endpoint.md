@@ -150,14 +150,21 @@ the supported areas are:
   revision, transition status, recall an envelope.
 - **Projects** — search, read a project with its milestones, schedules, site
   updates, files and customer, create and update milestones, read and update
-  project requirements.
+  project requirements, list assignable site managers and reassign a
+  project's site manager (administrators only), read a project's profit and
+  loss and reprice one activity in it (administrators only).
 - **Compliance** — start an engagement, read it, set a document required,
   resolve a document, prepare and send outreach and follow-ups.
 - **Tradies** — search and read the directory, create and update a tradie,
   rate one, list schedules, create, reschedule and transition a schedule,
   request a price change, a removal or a schedule deletion, report an incident.
 - **Admin**, for administrators only — team list and roles, invitations, the
-  approval queue, admin offer content, the Xero connection.
+  approval queue, admin offer content, the Xero connection, and the build
+  sequence template used by new projects. Read its activities, stages, parent
+  links, estimated calendar days, tradie category dependencies and related
+  cost-schedule tasks. Add, update, move or remove activities with owner
+  approval. Edits preserve unrelated activities, reject stale revisions and
+  leave existing projects' milestones unchanged.
 
 Writes that are persistent, irreversible or visible to a client go through the
 approval flow, which reaches you as an `input_required` turn. They are audited
@@ -177,7 +184,7 @@ side of the line a capability is on before building against it.
 | `get_leads` | Covered by `search_leads` and `get_lead` |
 | `get_tradies`, `get_all_tradies` | Covered by `search_tradies` and `get_tradie` |
 | `get_tradie_coordination_dashboard` | Covered by `list_schedules` |
-| `create_tradie_schedule` | Covered by `create_schedule`, which has the overlap and milestone-ownership checks the old one lacked |
+| `create_tradie_schedule` | Covered by `create_schedule`, which has the duplicate-booking and milestone-ownership checks the old one lacked |
 | `update_tradie_schedule` | Covered by `transition_schedule` |
 | `create_variation`, `update_variation_status` | **Retired.** Variation rules are not implemented, and the agent says so rather than guessing |
 | `create_lead`, `update_lead`, `delete_lead` | **Not available.** Lead writes have no domain command yet |
@@ -185,7 +192,8 @@ side of the line a capability is on before building against it.
 | `add_material` | **Not available** |
 | `upload_file`, `add_milestone_photos` | **Not available.** The agent reads and links existing files; it takes no uploads over MCP |
 | `address_council_lookup` | **Not available** |
-| `get_customer`, `get_site_managers` | **Not available** as standalone lookups. Customer data comes back with the project |
+| `get_site_managers` | Covered by `list_site_managers`; `assign_site_manager` reassigns a project through the same command as the project header |
+| `get_customer` | **Not available** as a standalone lookup. Customer data comes back with the project |
 | `create_project` | Never existed. The old prompt documented it, but no such tool was ever registered |
 
 Anything on the "not available" list is a business decision, not an oversight.

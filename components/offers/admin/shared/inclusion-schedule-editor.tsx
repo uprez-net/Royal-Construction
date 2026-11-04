@@ -5,24 +5,17 @@ import { toast } from "sonner";
 import { PlusIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import type { InclusionScheduleRow } from "@/types/admin-offer-content";
 import { INCLUSION_CATEGORY_SUGGESTIONS } from "./inclusion-schedule";
 import { INCLUSION_SCHEDULE_UNDO_TOAST_ID } from "./undo-toast-ids";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface InclusionScheduleEditorProps {
   value: InclusionScheduleRow[];
   onChange: (rows: InclusionScheduleRow[]) => void;
   onRestore: (row: InclusionScheduleRow, index: number) => void;
-}
-
-// An emptied category drops the key rather than storing "", so a cleared row
-// reads the same as one that never had a category.
-function withCategory(
-  row: InclusionScheduleRow,
-  category: string,
-): InclusionScheduleRow {
-  return category === "" ? { spec: row.spec } : { spec: row.spec, category };
 }
 
 export function InclusionScheduleEditor({
@@ -31,19 +24,31 @@ export function InclusionScheduleEditor({
   onRestore,
 }: InclusionScheduleEditorProps) {
   const id = useId();
+  const isMobile = useMediaQuery("(max-width: 767px)", null);
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const categoryListId = `${id}-categories`;
   const draftSpecId = `${id}-draft-spec`;
   const draftCategoryId = `${id}-draft-category`;
+  const draftTenderTextId = `${id}-draft-tender-text`;
   const [draftSpec, setDraftSpec] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
+  const [draftTenderText, setDraftTenderText] = useState("");
 
   const commitDraft = () => {
     const spec = draftSpec.trim();
-    if (!spec) return;
     const category = draftCategory.trim();
-    onChange([...value, category ? { spec, category } : { spec }]);
+    if (!spec && !category) return;
+    onChange([
+      ...value,
+      {
+        spec,
+        ...(category ? { category } : {}),
+        tenderText: draftTenderText.trim(),
+      },
+    ]);
     setDraftSpec("");
     setDraftCategory("");
+    setDraftTenderText("");
   };
 
   const updateAt = (index: number, row: InclusionScheduleRow) => {
@@ -90,45 +95,110 @@ export function InclusionScheduleEditor({
           {value.map((row, index) => {
             const specId = `${id}-spec-${index}`;
             const categoryId = `${id}-category-${index}`;
+            const tenderTextId = `${id}-tender-text-${index}`;
             return (
-              <li
-                key={index}
-                className="flex flex-wrap items-center gap-2 py-2"
-              >
-                <Label htmlFor={specId} className="sr-only">
-                  Inclusion {index + 1} specification
-                </Label>
-                <Input
-                  id={specId}
-                  value={row.spec}
-                  onChange={(e) =>
-                    updateAt(index, { ...row, spec: e.target.value })
-                  }
-                  placeholder="Inclusion text"
-                  className="min-w-60 flex-1"
-                  aiRewrite
-                />
-                <Label htmlFor={categoryId} className="sr-only">
-                  Inclusion {index + 1} category
-                </Label>
-                <Input
-                  id={categoryId}
-                  list={categoryListId}
-                  value={row.category ?? ""}
-                  onChange={(e) =>
-                    updateAt(index, withCategory(row, e.target.value))
-                  }
-                  placeholder="Category"
-                  className="w-56"
-                />
-                <button
-                  type="button"
-                  aria-label={`Remove inclusion ${index + 1}`}
-                  onClick={() => removeAt(index)}
-                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive-ink"
+              <li key={index} className="py-2">
+                <details
+                  open={isMobile === false || expandedRows.has(index)}
+                  onToggle={(event) => {
+                    if (isMobile !== true) return;
+                    const open = event.currentTarget.open;
+                    setExpandedRows((previous) => {
+                      if (previous.has(index) === open) return previous;
+                      const next = new Set(previous);
+                      if (open) next.add(index);
+                      else next.delete(index);
+                      return next;
+                    });
+                  }}
+                  onFocusCapture={(event) => {
+                    // Keep the editor visible if a focused field crosses into mobile.
+                    if (
+                      !(
+                        event.target instanceof HTMLInputElement
+                        || event.target instanceof HTMLTextAreaElement
+                      )
+                    )
+                      return;
+                    setExpandedRows((previous) =>
+                      previous.has(index)
+                        ? previous
+                        : new Set([...previous, index]),
+                    );
+                  }}
                 >
-                  <XIcon className="size-4" aria-hidden="true" />
-                </button>
+                  <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3 text-sm font-medium md:hidden">
+                    <span className="min-w-0 break-words">
+                      {index + 1}.{" "}
+                      {row.spec || row.category || "Untitled inclusion"}
+                    </span>
+                    <span className="shrink-0 text-primary">Edit</span>
+                  </summary>
+                  <div className="flex min-w-0 flex-col gap-2 py-3 md:flex-row md:flex-wrap md:items-center md:py-0">
+                    <Label
+                      htmlFor={specId}
+                      className="text-xs text-muted-foreground md:sr-only"
+                    >
+                      Inclusion {index + 1} specification
+                    </Label>
+                    <Input
+                      id={specId}
+                      value={row.spec}
+                      onChange={(e) =>
+                        updateAt(index, { ...row, spec: e.target.value })
+                      }
+                      placeholder="Offer inclusion text"
+                      className="min-w-0 flex-1 md:min-w-60"
+                      aiRewrite
+                    />
+                    <Label
+                      htmlFor={categoryId}
+                      className="text-xs text-muted-foreground md:sr-only"
+                    >
+                      Inclusion {index + 1} category
+                    </Label>
+                    <Input
+                      id={categoryId}
+                      list={categoryListId}
+                      value={row.category ?? ""}
+                      onChange={(e) =>
+                        updateAt(index, {
+                          ...row,
+                          category: e.target.value || undefined,
+                        })
+                      }
+                      placeholder="Category"
+                      className="w-full md:w-56"
+                    />
+                    <Label
+                      htmlFor={tenderTextId}
+                      className="text-xs text-muted-foreground md:sr-only"
+                    >
+                      Inclusion {index + 1} tender text
+                    </Label>
+                    <Textarea
+                      id={tenderTextId}
+                      value={row.tenderText ?? ""}
+                      onChange={(e) =>
+                        updateAt(index, {
+                          ...row,
+                          tenderText: e.target.value,
+                        })
+                      }
+                      placeholder="Tender Text"
+                      className="w-full md:w-[28rem] md:max-w-full"
+                    />
+                    <button
+                      type="button"
+                      aria-label={`Remove inclusion ${index + 1}`}
+                      onClick={() => removeAt(index)}
+                      className="flex min-h-11 w-full shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive-ink md:size-7"
+                    >
+                      <XIcon className="size-4" aria-hidden="true" />
+                      <span className="ml-2 md:sr-only">Remove inclusion</span>
+                    </button>
+                  </div>
+                </details>
               </li>
             );
           })}
@@ -136,7 +206,7 @@ export function InclusionScheduleEditor({
       )}
 
       <div className="flex flex-wrap items-end gap-2">
-        <div className="min-w-60 flex-1 space-y-1">
+        <div className="w-full min-w-0 space-y-1 md:min-w-60 md:flex-1">
           <Label
             htmlFor={draftSpecId}
             className="text-xs text-muted-foreground"
@@ -148,11 +218,11 @@ export function InclusionScheduleEditor({
             value={draftSpec}
             onChange={(e) => setDraftSpec(e.target.value)}
             onKeyDown={commitOnEnter}
-            placeholder="Inclusion text"
+            placeholder="Offer inclusion text"
             aiRewrite
           />
         </div>
-        <div className="w-56 space-y-1">
+        <div className="w-full space-y-1 md:w-56">
           <Label
             htmlFor={draftCategoryId}
             className="text-xs text-muted-foreground"
@@ -166,6 +236,20 @@ export function InclusionScheduleEditor({
             onChange={(e) => setDraftCategory(e.target.value)}
             onKeyDown={commitOnEnter}
             placeholder="e.g. Concrete Slab"
+          />
+        </div>
+        <div className="w-full space-y-1 md:w-[28rem] md:max-w-full">
+          <Label
+            htmlFor={draftTenderTextId}
+            className="text-xs text-muted-foreground"
+          >
+            Tender Text
+          </Label>
+          <Textarea
+            id={draftTenderTextId}
+            value={draftTenderText}
+            onChange={(e) => setDraftTenderText(e.target.value)}
+            placeholder="Tender Text"
           />
         </div>
         <Button type="button" variant="outline" size="sm" onClick={commitDraft}>

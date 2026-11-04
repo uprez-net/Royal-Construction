@@ -1,15 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
-import { addWeeks, isWithinInterval, startOfDay } from "date-fns";
 import {
   AlertTriangle,
   Bell,
   CheckCircle2,
+  Clock10,
   Download,
   Loader2,
   Send,
-  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,6 +22,8 @@ import {
 } from "@/constants/complianceAlerts";
 import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { COMPLIANCE_ALERT_PARTY } from "@/lib/domain/compliance/alert-parties";
+import { missingMilestoneTrades } from "@/lib/domain/projects/tradie-dependencies";
+import { bookingTrade } from "@/lib/domain/tradies/request-rules";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import {
@@ -34,8 +34,13 @@ import {
 import { cn } from "@/lib/utils";
 import type { ComplianceAlertRecord } from "@/types/compliance";
 import { outreachForParty } from "@/types/compliance";
-import type { ProjectDetail, TradieScheduleListItem } from "@/types/project";
-import { dataTimeFormat, dateFormat } from "@/utils/formatters";
+import type { ProjectDetail } from "@/types/project";
+import { dataTimeFormat } from "@/utils/formatters";
+import {
+  TradieAttentionActionButton,
+  useTradieAttention,
+  type TradieAttentionEntry,
+} from "./tradie-attention";
 
 /**
  * Everything raised on this project, in one place above the tabs.
@@ -49,7 +54,8 @@ import { dataTimeFormat, dateFormat } from "@/utils/formatters";
  * eleven working days late looked, from the project page, exactly like a job
  * with nothing wrong.
  *
- * The compliance half leads. A trade reminder is a courtesy about next week; an
+ * The compliance half leads. A trade follow-up is a booking to chase or
+ * re-book, and the Tradies tab carries the same list with its own count; an
  * open compliance condition is a document nobody has and a clock that is
  * already past. Within it, open before resolved, which is the order the read
  * returns them in.
@@ -187,7 +193,7 @@ function ComplianceAlertRow({
       </div>
 
       {isOpen ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
           {/* The chase comes first and carries the weight: on a freshly raised
               alert it is what someone is here to do, and Resolve is what they
               come back for once the replacement lands. */}
@@ -233,132 +239,77 @@ function ComplianceAlertRow({
   );
 }
 
-/** One upcoming trade booking, with the reminder that goes to them. */
+/**
+ * One trade booking that needs somebody, with the control that deals with it.
+ *
+ * The same entry, wording and button as the Tradies tab's attention card. This
+ * row used to list confirmed bookings and bookings whose milestone was due,
+ * each with a reminder bell — so a tradie who had already confirmed was
+ * offered a reminder here while the tab disabled that bell, and a tradie who
+ * had declined showed in the tab and not here at all.
+ */
 function TradieAlertRow({
-  schedule,
+  entry,
   project,
 }: {
-  schedule: ProjectDetail["tradieSchedules"][number];
+  entry: TradieAttentionEntry;
   project: ProjectDetail;
 }) {
-  const dispatch = useAppDispatch();
+  const { schedule, title, detail } = entry;
+  const isDanger = entry.attention.tone === "danger";
 
   return (
-    <li className="flex items-center gap-3 rounded-[10px] border border-border/70 bg-card p-3.5">
-      <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-warning-light text-warning-ink">
-        <Wrench className="size-5" aria-hidden="true" />
+    <li className="flex flex-wrap items-center gap-3 rounded-[10px] border border-border/70 bg-card p-3.5">
+      <div
+        className={cn(
+          "flex size-10 shrink-0 items-center justify-center rounded-2xl",
+          isDanger
+            ? "bg-destructive-light text-destructive"
+            : "bg-warning-light text-warning-ink",
+        )}
+      >
+        {isDanger ? (
+          <AlertTriangle className="size-5" aria-hidden="true" />
+        ) : (
+          <Clock10 className="size-5" aria-hidden="true" />
+        )}
       </div>
 
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-foreground">
-          {schedule.tradie.trade} • {schedule.tradie.name}
-        </p>
+      <div className="min-w-0 flex-1 break-words">
+        <p className="text-sm font-medium text-foreground">{title}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          ABN{" "}
-          <span className="font-mono tabular-nums">{schedule.tradie.abn}</span>
-        </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Needed for {schedule.milestone?.name ?? "general works"} on{" "}
-          <span className="font-mono tabular-nums">
-            {dateFormat.format(new Date(schedule.scheduledDate))}
-          </span>
+          {bookingTrade(schedule)} ·{" "}
+          {schedule.milestone?.name ?? "General works"} · {detail}
         </p>
       </div>
 
       <div className="ml-auto">
-        <Button
-          variant="outline"
-          size="icon"
-          className="size-9"
-          aria-label={`Send reminder to ${schedule.tradie.name}`}
-          onClick={() =>
-            dispatch(
-              openModal({
-                type: "tradieReminder",
-                payload: {
-                  schedule: {
-                    id: schedule.id,
-                    tradieId: schedule.tradieId,
-                    milestoneId: schedule.milestoneId ?? undefined,
-                    scheduledDate: new Date(
-                      schedule.scheduledDate,
-                    ).toISOString(),
-                    status: schedule.status,
-                    abn: schedule.tradie.abn,
-                    tradieName: schedule.tradie.name,
-                    lastQuotedPriceUnit: schedule.tradie.lastQuotedPriceUnit,
-                    tradeType: schedule.tradie.trade,
-                    projectId: schedule.projectId,
-                    projectName: project.name,
-                    taskLabel: `${project.milestones.find((m) => m.id === schedule.milestoneId)?.name ?? "General"} - ${schedule.tradie.trade}`,
-                    durationDays: schedule.durationDays,
-                    updatedAt: new Date(schedule.updatedAt).toISOString(),
-                    contact: {
-                      email: schedule.tradie.email,
-                      phone: schedule.tradie.phone,
-                      additionalEmails: schedule.tradie.additionalEmails,
-                    },
-                    siteManager: {
-                      name: project.siteManager?.name ?? "Site Manager",
-                      email: project.siteManager?.email ?? "Site Manager Email",
-                      phone: project.siteManager?.phone ?? "Site Manager Phone",
-                    },
-                    isFavourite: schedule.tradie.isFavourite,
-                    note: schedule.tradie.note,
-                    requiresQuote: schedule.requiresQuote,
-                    quotedPrice: schedule.quotedPrice ?? undefined,
-                  } satisfies TradieScheduleListItem,
-                },
-              }),
-            )
-          }
-        >
-          <Bell className="size-3.5" aria-hidden="true" />
-        </Button>
+        <TradieAttentionActionButton entry={entry} project={project} />
       </div>
     </li>
   );
 }
 
+/** How many trade alerts the card lists before pointing at the Tradies tab. */
+const TRADIE_ALERT_LIMIT = 4;
+
 export function ProjectAlerts({ project }: { project: ProjectDetail }) {
   const complianceMutations = useAppSelector(selectComplianceMutations);
   const engagement = project.certifierEngagement;
 
-  const tradieAlerts = useMemo(() => {
-    const now = new Date();
-    const nextWeek = addWeeks(now, 1);
-    // Midnight, not the current instant. A trade booked for this morning is
-    // still today's work at two in the afternoon, and dropping it off the list
-    // the moment the clock passes it is the opposite of useful.
-    const today = startOfDay(now);
-
-    return project.tradieSchedules.filter((schedule) => {
-      // Confirmed and still ahead. The row prints `scheduledDate`, so an
-      // unbounded status test put a booking from three months ago under a
-      // heading that says "Upcoming" with a date in the past beside it — and
-      // every one of those pushed a genuinely upcoming trade further down a
-      // list that shows four.
-      const isConfirmedAndAhead =
-        (schedule.status === "CONFIRMED"
-          || schedule.status === "PENDING_FINAL_CONFIRMATION")
-        && new Date(schedule.scheduledDate) >= today;
-
-      // Kept as it was, and deliberately not bounded the same way: this arm is
-      // about a milestone falling due within the week, which is actionable
-      // whatever state the booking behind it is in.
-      const targetDate = schedule.milestone?.targetDate;
-      const isMilestoneDueSoon =
-        targetDate
-        && isWithinInterval(new Date(targetDate), {
-          start: now,
-          end: nextWeek,
-        });
-
-      return isConfirmedAndAhead || isMilestoneDueSoon;
-    });
-  }, [project.tradieSchedules]);
+  // The Tradies tab's list, from the same rule, so the two never disagree
+  // about which bookings need somebody or what to press.
+  const tradieAlerts = useTradieAttention(project.tradieSchedules);
 
   const complianceAlerts = engagement?.alerts ?? [];
+  // One alert per missing trade: an activity needing two trades can be
+  // missing either, and each has its own booking to chase.
+  const dependencyAlerts = project.milestones.flatMap((milestone) =>
+    missingMilestoneTrades(milestone, project.tradieSchedules).map((trade) => ({
+      milestone,
+      trade,
+    })),
+  );
 
   /**
    * The two counts on the header, and why they are two.
@@ -380,7 +331,7 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
   const readyCount = openAlerts.filter(
     (alert) => COMPLIANCE_ALERT_COPY[alert.type].tone === "positive",
   ).length;
-  const openCount = openAlerts.length - readyCount;
+  const openCount = openAlerts.length - readyCount + dependencyAlerts.length;
 
   /**
    * Whether one alert has anybody to chase.
@@ -408,7 +359,11 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
   // Empty chrome was eating a full card slot between the budget cards and the
   // tabs on every quiet project. Alerts only earn the surface when there is
   // something to act on; the "none" case is silence, not a placeholder panel.
-  if (tradieAlerts.length === 0 && complianceAlerts.length === 0) {
+  if (
+    tradieAlerts.length === 0
+    && complianceAlerts.length === 0
+    && dependencyAlerts.length === 0
+  ) {
     return null;
   }
 
@@ -417,13 +372,14 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
       <CardHeader className="border-b border-border/70 pb-4">
         <CardTitle
           as="h2"
-          className="flex items-center gap-2 text-base font-semibold text-foreground"
+          className="flex flex-wrap items-center gap-2 text-base font-semibold text-foreground"
         >
           <Bell className="size-4 text-warning-ink" aria-hidden="true" />
           Alerts
-          {/* Open compliance conditions only. A trade reminder is not something
-              anybody is behind on, and counting the two together would put a
-              number on this card that goes up when a job is going well. */}
+          {/* Compliance conditions and missing trades. Trade follow-ups are
+              counted on the Tradies tab's own card, which lists the same
+              bookings; counting them here too would put the same booking in
+              two numbers on one page. */}
           {openCount > 0 ? (
             <StatusPill tone="warning">{openCount} open</StatusPill>
           ) : null}
@@ -435,6 +391,36 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pt-5">
+        {dependencyAlerts.length > 0 ? (
+          <ul
+            className="flex flex-col gap-2"
+            aria-label="Missing required trades"
+          >
+            {dependencyAlerts.map(({ milestone, trade }) => (
+              <li
+                key={`dependency-${milestone.id}-${trade}`}
+                className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-light px-4 py-3"
+              >
+                <AlertTriangle
+                  className="mt-0.5 size-4 shrink-0 text-warning-ink"
+                  aria-hidden="true"
+                />
+                <div>
+                  <p className="text-sm font-medium text-warning-ink">
+                    No confirmed {trade} booking for this activity
+                  </p>
+                  <p className="mt-1 text-sm text-foreground">
+                    {milestone.name} has started without a confirmed {trade}{" "}
+                    booking. Book a tradie in this category against this
+                    activity, approve the booking and obtain their final
+                    confirmation. A booking against another activity does not
+                    meet this dependency.
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {complianceAlerts.length > 0 ? (
           <ul className="space-y-2">
             {complianceAlerts.map((alert) => (
@@ -459,18 +445,24 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
                 card and a label over a single list is noise. */}
             {complianceAlerts.length > 0 ? (
               <p className="pt-1 text-xs font-medium text-muted-foreground">
-                Upcoming trades
+                Trades needing follow-up
               </p>
             ) : null}
             <ul className="space-y-3">
-              {tradieAlerts.slice(0, 4).map((schedule) => (
+              {tradieAlerts.slice(0, TRADIE_ALERT_LIMIT).map((entry) => (
                 <TradieAlertRow
-                  key={schedule.id}
-                  schedule={schedule}
+                  key={entry.key}
+                  entry={entry}
                   project={project}
                 />
               ))}
             </ul>
+            {tradieAlerts.length > TRADIE_ALERT_LIMIT ? (
+              <p className="text-xs text-muted-foreground">
+                {tradieAlerts.length - TRADIE_ALERT_LIMIT} more in the Tradies
+                tab.
+              </p>
+            ) : null}
           </>
         ) : null}
       </CardContent>

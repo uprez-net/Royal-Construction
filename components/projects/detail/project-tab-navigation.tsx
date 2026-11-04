@@ -19,6 +19,8 @@ import {
   LayoutGrid,
   CalendarCheck,
   CreditCard,
+  FileDiff,
+  Scale,
   Wrench,
   FileText,
   History,
@@ -26,14 +28,14 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { ProjectDetail } from "@/types/project";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ProjectDetailTabKey } from "@/utils/validators/projects";
 
 /**
  * The tabs that are actually navigable. `projectTabsValidator` still accepts
- * `materials`, `updates`, `workers` and `variations` because those tab bodies
- * exist, but they were deliberately hidden (commit 230c35e) as unfinished
- * surfaces. This list is the single source of truth for what a user can reach,
+ * `materials`, `updates` and `workers` because those tab bodies exist, but
+ * they were deliberately hidden (commit 230c35e) as unfinished surfaces.
+ * Variations came back once raising one invoiced and emailed the client. This list is the single source of truth for what a user can reach,
  * and `project-detail-tabs.tsx` narrows the URL parameter against it so a
  * hidden key can no longer render a panel with no way back.
  */
@@ -41,6 +43,8 @@ export const VISIBLE_PROJECT_DETAIL_TABS = [
   "overview",
   "milestones",
   "payments",
+  "financials",
+  "variations",
   "tradies",
   "docs",
   "history",
@@ -66,6 +70,8 @@ const TabIcons: Record<VisibleProjectDetailTabKey, React.ElementType> = {
   overview: LayoutGrid,
   milestones: CalendarCheck,
   payments: CreditCard,
+  financials: Scale,
+  variations: FileDiff,
   tradies: Wrench,
   history: History,
   docs: FileText,
@@ -236,13 +242,13 @@ const calcComplianceOverviewData = (
     case CertifierEngagementStatus.IN_REVIEW: {
       const unresolved = checklist.filter(
         (document) =>
-          document.status !== ComplianceDocumentStatus.APPROVED &&
-          !isNotRequired(document.status),
+          document.status !== ComplianceDocumentStatus.APPROVED
+          && !isNotRequired(document.status),
       );
       const rejected = unresolved.filter(
         (document) =>
-          document.status === ComplianceDocumentStatus.REJECTED ||
-          document.rejectionReason,
+          document.status === ComplianceDocumentStatus.REJECTED
+          || document.rejectionReason,
       ).length;
       return {
         outstanding: unresolved.length,
@@ -277,6 +283,12 @@ const generateProjectDetailTabs = (
   ).length;
   const tradieAlerts = blockedTradies + awaitingTradies;
   const compliance = calcComplianceOverviewData(project.certifierEngagement);
+  const unsentVariations = project.variations.filter(
+    (variation) =>
+      variation.status === "APPROVED"
+      && variation.newPrice !== null
+      && (variation.issueError !== null || variation.sentAt === null),
+  ).length;
   // One reference date for the whole calculation — see `invoice-display`.
   const { pending: pendingInvoices, overdue: overdueInvoices } =
     countPendingInvoices(project.invoices, new Date());
@@ -333,6 +345,26 @@ const generateProjectDetailTabs = (
           }
         : {}),
     },
+    // Profit and loss per activity: the tender against what each tradie is
+    // paid, which is the margin, so admin only like Payments.
+    { key: "financials", label: "Financials", isAdminOnly: true },
+    // Prices to the client and the Xero invoices behind them: admin only.
+    {
+      key: "variations",
+      label: "Variations",
+      isAdminOnly: true,
+      ...(unsentVariations > 0
+        ? {
+            badge: {
+              count: unsentVariations.toString(),
+              // Raised but not in front of the client: an invoice or an email
+              // that did not go, which nobody else is watching for.
+              tone: "danger",
+              description: `${unsentVariations} variations not fully sent to the client`,
+            } satisfies TabBadge,
+          }
+        : {}),
+    },
     {
       key: "tradies",
       label: "Tradies",
@@ -373,6 +405,20 @@ export function ProjectTabNavigation({
     [project],
   );
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Keep the active tab in view on the phone strip, without scrolling the page.
+  useEffect(() => {
+    const list = listRef.current;
+    const tab = tabRefs.current[activeTab];
+    if (!list || !tab || list.scrollWidth <= list.clientWidth) return;
+    const left = tab.offsetLeft - list.offsetLeft;
+    if (
+      left < list.scrollLeft
+      || left + tab.offsetWidth > list.scrollLeft + list.clientWidth
+    )
+      list.scrollTo({ left: Math.max(0, left - 12), behavior: "smooth" });
+  }, [activeTab]);
 
   const focusTab = useCallback(
     (tab: ProjectDetailTab) => {
@@ -418,59 +464,64 @@ export function ProjectTabNavigation({
   );
 
   return (
-    // Wrapping rather than horizontally scrolling: a scroll container with a
-    // hidden scrollbar gave no affordance that further tabs existed.
-    <div
-      role="tablist"
-      aria-label="Project sections"
-      aria-orientation="horizontal"
-      onKeyDown={handleKeyDown}
-      className="mb-5 flex flex-wrap gap-x-1 border-b-2 border-border/60"
-    >
-      {projectDetailTabs.map((tab) => {
-        const Icon = TabIcons[tab.key];
-        const isActive = activeTab === tab.key;
-        if (tab.isAdminOnly && !isAdmin) {
-          return null;
-        }
+    <>
+      {/* Desktop tabs wrap so every section is visible without a hidden
+          scrollbar. A phone has room for two or three, so there the same
+          tablist scrolls sideways with the active tab kept in view; it
+          replaces a <select> that hid every other section behind a tap. */}
+      <div
+        ref={listRef}
+        role="tablist"
+        aria-label="Project sections"
+        aria-orientation="horizontal"
+        onKeyDown={handleKeyDown}
+        className="-mx-3 mb-5 flex snap-x gap-x-1 overflow-x-auto overscroll-x-contain border-b-2 border-border/60 px-3 no-scrollbar md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
+      >
+        {projectDetailTabs.map((tab) => {
+          const Icon = TabIcons[tab.key];
+          const isActive = activeTab === tab.key;
+          if (tab.isAdminOnly && !isAdmin) {
+            return null;
+          }
 
-        return (
-          <button
-            key={tab.key}
-            ref={(node) => {
-              tabRefs.current[tab.key] = node;
-            }}
-            type="button"
-            role="tab"
-            id={projectTabTriggerId(tab.key)}
-            aria-selected={isActive}
-            aria-controls={projectTabPanelId(tab.key)}
-            tabIndex={isActive ? 0 : -1}
-            onClick={() => onTabChange(tab.key)}
-            className={cn(
-              "relative -mb-0.5 inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-              isActive && "border-primary font-semibold text-primary",
-            )}
-          >
-            <Icon className="size-4" aria-hidden="true" />
-            <span>{tab.label}</span>
-            {tab.badge ? (
-              <>
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium leading-none",
-                    BADGE_TONE_CLASS[tab.badge.tone],
-                  )}
-                >
-                  {tab.badge.count}
-                </span>
-                <span className="sr-only">{tab.badge.description}</span>
-              </>
-            ) : null}
-          </button>
-        );
-      })}
-    </div>
+          return (
+            <button
+              key={tab.key}
+              ref={(node) => {
+                tabRefs.current[tab.key] = node;
+              }}
+              type="button"
+              role="tab"
+              id={projectTabTriggerId(tab.key)}
+              aria-selected={isActive}
+              aria-controls={projectTabPanelId(tab.key)}
+              tabIndex={isActive ? 0 : -1}
+              onClick={() => onTabChange(tab.key)}
+              className={cn(
+                "relative -mb-0.5 inline-flex min-h-11 shrink-0 snap-start items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm md:px-4 font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                isActive && "border-primary font-semibold text-primary",
+              )}
+            >
+              <Icon className="size-4" aria-hidden="true" />
+              <span>{tab.label}</span>
+              {tab.badge ? (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium leading-none",
+                      BADGE_TONE_CLASS[tab.badge.tone],
+                    )}
+                  >
+                    {tab.badge.count}
+                  </span>
+                  <span className="sr-only">{tab.badge.description}</span>
+                </>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }

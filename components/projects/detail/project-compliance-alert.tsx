@@ -58,7 +58,10 @@ export function ProjectComplianceAlert({
       aria-label="Compliance details still needed"
       className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-warning/40 bg-warning-light px-4 py-3 text-sm text-warning-ink shadow-sm"
     >
-      <div className="flex min-w-0 flex-1 items-start gap-3">
+      {/* A 16rem basis makes the link wrap under the message on a phone. At
+          basis 0 both shared one line and the message was squeezed into a
+          column a word or two wide beside the link. */}
+      <div className="flex min-w-0 flex-1 basis-64 items-start gap-3">
         <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <div className="min-w-0">
           <p className="font-medium text-foreground">
@@ -72,7 +75,7 @@ export function ProjectComplianceAlert({
       </div>
       <Link
         href={legalHref}
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-md text-sm font-medium text-foreground underline-offset-4 transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className="ml-7 inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md text-sm font-medium text-foreground sm:ml-0 sm:min-h-0 underline-offset-4 transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         Add in Legal and administration
         <ArrowRight className="size-3.5" aria-hidden="true" />

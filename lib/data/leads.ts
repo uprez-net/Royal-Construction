@@ -1,13 +1,8 @@
 import "server-only";
 import { signBookConsultationToken } from "@/lib/leads/book-consultation-token";
 
-import { createHash } from "node:crypto";
-
 import prisma from "@/lib/prisma";
-import {
-  mapLead,
-  LeadAnalyticsData,
-} from "@/types/lead";
+import { mapLead, LeadAnalyticsData } from "@/types/lead";
 import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
@@ -42,89 +37,22 @@ import {
 } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { sendEmail } from "../azureClient";
-import { generateEmailChecksum } from "@/utils/generator";
 import { generateEmailSubject } from "@/utils/generate-email-subject";
-import { normalizeEmailAddress } from "@/utils/formatters";
+import {
+  escapeEmailHtml,
+  sendComposedLeadEmail,
+} from "@/lib/leads/lead-email-send";
 import { auth } from "@clerk/nextjs/server";
 import { revalidateTag } from "next/cache";
 import { getUserByClerkIdCached } from "./user";
-import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
-import { getAllEmailThreads } from "@/utils/email-parser";
-import {
-  EMAIL_FOOTER_HTML,
-  EMAIL_HEADER_HTML,
-} from "@/constants/email-artifacts";
 import {
   archiveLead as archiveLeadDomain,
   createLead as createLeadDomain,
   updateLead as updateLeadDomain,
 } from "@/lib/domain/leads/commands";
 import { currentLeadPrincipal } from "@/lib/data/current-principal";
-import {
-  authorizeLeadEmail,
-  sendLeadEmailOnce,
-} from "@/lib/domain/leads/email";
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
-
-function normalizeEmailBody(value: string) {
-  return value.replace(/\r\n/g, "\n").trim();
-}
-
-function hasHtmlMarkup(value: string) {
-  return /<[a-z][\s\S]*>/i.test(value);
-}
-
-function markdownToHtml(value: string) {
-  const paragraphs = normalizeEmailBody(value)
-    .split(/\n\s*\n/)
-    .filter(Boolean);
-
-  if (paragraphs.length === 0) {
-    return "";
-  }
-
-  return paragraphs
-    .map((paragraph) => {
-      const formattedParagraph = paragraph
-        .split("\n")
-        .map((line) =>
-          escapeEmailHtml(line).replace(
-            /\*\*(.+?)\*\*/g,
-            "<strong>$1</strong>",
-          ),
-        )
-        .join("<br>");
-
-      return `<p>${formattedParagraph}</p>`;
-    })
-    .join("");
-}
-
-function buildLeadEmailHtml(body: string, name: string) {
-  const normalizedBody = normalizeEmailBody(body);
-  const bodyHtml = hasHtmlMarkup(normalizedBody)
-    ? sanitizeLeadNotesHtml(normalizedBody)
-    : markdownToHtml(normalizedBody);
-
-  return `${bodyHtml}<p style="margin:16px 0 0;">Thanks &amp; Regards, <br>${escapeEmailHtml(name)} <br>Royal Constructions.</p>`;
-}
-
-/**
- * Escapes HTML-sensitive characters to prevent HTML injection when embedding
- * user-provided values inside email templates.
- *
- * @param value - Raw string to escape.
- * @returns The escaped HTML-safe string.
- */
-function escapeEmailHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
 
 /**
  * Builds a deterministic set of advisory lock keys used to prevent duplicate
@@ -168,8 +96,8 @@ async function sendLeadMentionEmails(input: {
   const config = getGraphConfig();
   const graphClient = await createGraphContext(config);
   const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "https://royal-construction-chi.vercel.app";
+    process.env.NEXT_PUBLIC_APP_URL
+    || "https://royal-construction-chi.vercel.app";
   const crmUrl = `${baseUrl}/leads`;
   const leadName = escapeEmailHtml(input.leadName);
   const selectedText = escapeEmailHtml(input.selectedText);
@@ -326,9 +254,9 @@ export async function getLeads(
   // Current date in Sydney
   const sydneyNow = toZonedTime(new Date(), timeZone);
   const isMeetingScheduledFilterActive =
-    pendingMeetings !== undefined ||
-    upcomingMeetings !== undefined ||
-    (status?.includes("MEETING_SCHEDULED") && status?.length === 1);
+    pendingMeetings !== undefined
+    || upcomingMeetings !== undefined
+    || (status?.includes("MEETING_SCHEDULED") && status?.length === 1);
 
   if (hasTimingFilter) {
     let startSydney: Date;
@@ -770,10 +698,10 @@ export async function createLead(
   await triggerNotification([], notificationPayload);
 
   if (
-    !options?.skipWelcomeEmail &&
-    created.email &&
-    created.name &&
-    input.stage !== "In Follow-up"
+    !options?.skipWelcomeEmail
+    && created.email
+    && created.name
+    && input.stage !== "In Follow-up"
   ) {
     await sendLeadWelcomeEmail(created);
   }
@@ -947,7 +875,9 @@ export async function updateLead(
         customerEmail: res.email ?? "Not specified",
         customerPhone: res.phone ?? "Not specified",
         status: res.stage,
-        change: outcome.stageChanged ? undefined : "updated with more information",
+        change: outcome.stageChanged
+          ? undefined
+          : "updated with more information",
       }),
     );
   }
@@ -1316,147 +1246,24 @@ export async function sendLeadEmail(
   replyingToEmail?: LeadEmails,
 ): Promise<LeadEmails> {
   try {
-    // Who may send, and to whom. The recipient used to come straight from the
-    // browser and was never checked against the lead, so an authorised caller
-    // could send an arbitrary body to an arbitrary address from Royal's
-    // mailbox.
-    const authorized = await authorizeLeadEmail(
+    // Composing, sending once and recording the thread is
+    // lib/leads/lead-email-send.ts, which Eve's send_lead_email calls too.
+    // The signature the client reads is presentation, so it stays here, and
+    // the fallback matters: a cron or a webhook has no person behind it.
+    const { email } = await sendComposedLeadEmail(
       await currentLeadPrincipal(),
-      { leadId, to },
-      prisma,
-    );
-    to = authorized.to;
-
-    // The signature the client reads. Presentation, so it stays here — and the
-    // fallback matters: a cron or a webhook has no person behind it.
-    const senderName = await resolveSenderName();
-
-    const signedBody = `
-    <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { margin: 0; padding: 0; outline: none; }
-    .rc-hover-toolbar {
-      position: absolute;
-      background: rgba(12,24,41,0.95);
-      color: white;
-      padding: 6px 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      z-index: 9999;
-      display: none;
-      pointer-events: auto;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-      max-width: 90%;
-      align-items: center;
-      gap: 8px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
-    .rc-hover-toolbar span { font-weight: 600; white-space: nowrap; }
-    .rc-hover-toolbar input {
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.3);
-      color: white;
-      font-size: 12px;
-      width: 300px;
-      max-width: 55vw;
-      padding: 3px 8px;
-      border-radius: 4px;
-      outline: none;
-      font-family: monospace;
-    }
-    .rc-hover-toolbar input:focus {
-      border-color: #c6923a;
-      background: rgba(255,255,255,0.15);
-    }
-  </style>
-</head>
-<body>
-  <div style="background-color:#f7f6f2;margin:0;padding:0">
-    ${EMAIL_HEADER_HTML}
-    <p>Hi ${escapeEmailHtml(authorized.leadName)},</p>
-    ${buildLeadEmailHtml(body, senderName)}
-    ${EMAIL_FOOTER_HTML}
-  </div>
-</body>
-</html>
-    `;
-
-    // Generate a subject line using AI for the body
-    const aiSubject = replyingToEmail
-      ? `Re: ${replyingToEmail.subject}`
-      : await generateEmailSubject(escapeEmailHtml(signedBody));
-
-    // The send and the thread record are one durable effect, keyed on the lead,
-    // the recipient and the body. A double-click, or a retry after a slow Graph
-    // call, used to send the client the same message twice.
-    const { alreadySent, result } = await sendLeadEmailOnce(
-      authorized,
       {
-        bodyFingerprint: createHash("sha256")
-          .update(`${aiSubject}\u0000${location}\u0000${signedBody}`)
-          .digest("hex"),
+        body,
+        leadId,
+        location,
+        replyingTo: replyingToEmail ?? null,
+        senderName: await resolveSenderName(),
+        to,
       },
       prisma,
-      async () => {
-        await sendEmail({
-          to,
-          subject: replyingToEmail ? aiSubject : `${aiSubject} - ${location}`,
-          body: signedBody,
-        });
-        const strippedEmailBody = getAllEmailThreads(signedBody, {
-          from: normalizeEmailAddress(
-            process.env.BUSINESS_EMAIL ?? "info@royalconstructions.com.au",
-          ),
-          to: normalizeEmailAddress(to),
-          subject: `${aiSubject} - ${location}`,
-          sentAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
-        });
-        let lastId: string | null = null;
-        for (const thread of strippedEmailBody) {
-          const checksum = await generateEmailChecksum(
-            thread.subject,
-            thread.body,
-            normalizeEmailAddress(thread.from),
-            normalizeEmailAddress(thread.to),
-          );
-          const emailRecord = await prisma.leadEmails.create({
-            data: {
-              leadId,
-              subject: `${aiSubject} - ${location}`,
-              body: thread.body,
-              emailTo: normalizeEmailAddress(thread.to),
-              emailFrom: normalizeEmailAddress(thread.from),
-              checksum,
-              sentAt: new Date(),
-            },
-          });
-          console.log(
-            `[Lead ${leadId}] Email sent and recorded with ID: ${emailRecord.id}`,
-          );
-          lastId = emailRecord.id;
-        }
-        if (!lastId) throw new Error("Failed to record email");
-        // Only the id goes in the intent; a replay reads the row back rather
-        // than reconstructing a stored copy of the message.
-        return { emailId: lastId };
-      },
+      { generateSubject: generateEmailSubject, sendMail: sendEmail },
     );
-
-    const recordedEmail = await prisma.leadEmails.findUnique({
-      where: { id: result.emailId },
-    });
-    if (!recordedEmail) {
-      throw new Error("Failed to record email");
-    }
-    if (alreadySent) {
-      console.log(
-        `[Lead ${leadId}] This message already went out today; nothing was sent again.`,
-      );
-    }
-
-    return recordedEmail;
+    return email;
   } catch (error) {
     console.error(`[Lead ${leadId}] Failed to send email:`, error);
     throw new Error("Failed to send email");

@@ -7,7 +7,7 @@ import {
 } from "ai";
 import { z } from "zod";
 
-import { gateway } from "@/lib/model";
+import { gateway, TEXT_MODEL_ID } from "@/lib/model";
 import { ocrPagesToText, processPDFWithMistral } from "@/lib/ocr";
 
 /**
@@ -182,9 +182,8 @@ export async function readLandDeedDeveloper(file: {
 
   try {
     const { output } = await generateText({
-      model: gateway("google/gemini-2.5-flash"),
+      model: gateway(TEXT_MODEL_ID),
       system: INSTRUCTION,
-      temperature: 0,
       output: Output.object({ schema: landDeedDeveloperSchema }),
       prompt: [
         file.filename ? `File name: ${file.filename}` : "",

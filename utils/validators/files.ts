@@ -145,7 +145,9 @@ export const clientPayloadSchema = z.object({
   leadId: z.coerce.string().trim().optional(),
   tradieId: z.coerce.string().trim().optional(),
   isOfferFile: z.boolean().optional().default(false),
-  uploadType: z.enum(["email-template", "email-attachment"]).optional(),
+  uploadType: z
+    .enum(["email-template", "email-attachment", "project-file"])
+    .optional(),
 });
 
 export type ClientPayload = z.infer<typeof clientPayloadSchema>;

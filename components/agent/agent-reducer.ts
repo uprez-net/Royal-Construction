@@ -148,7 +148,8 @@ export function agentTranscriptReducer(): EveAgentReducer<AgentTranscriptData> {
       ...emptyTranscriptData,
       messages: messageReducer.initial().messages,
     }),
-    reduce: (data, event) => {
+    reduce: (data, rawEvent) => {
+      const event = withRequestHomedToRunningTurn(data, rawEvent);
       const next = reduceTranscript(data, event);
       // A background-task wake-up is runtime input, not something the operator
       // typed. It settles the specialist it names (above) and never becomes a
@@ -163,6 +164,30 @@ export function agentTranscriptReducer(): EveAgentReducer<AgentTranscriptData> {
       return { ...next, messages };
     },
   };
+}
+
+/**
+ * Put a forwarded approval on the turn that is actually waiting for it.
+ *
+ * Eve projects `input.requested` onto the assistant message of the event's
+ * `turnId`. A request raised inside a specialist is forwarded with the
+ * *specialist's* turn id, and every delegation is a fresh child session, so
+ * that id is always `turn_0` — the parent's first turn. Every approval after
+ * the first message therefore rendered up in the opening turn, nowhere near the
+ * message that asked for it.
+ *
+ * The parent turn that delegated is still running while it waits (a blocking
+ * delegate parks it until the specialist settles), so that is where the request
+ * belongs. Derived only from earlier events, so a replay homes it identically.
+ */
+function withRequestHomedToRunningTurn(
+  data: AgentTranscriptData,
+  event: EveAgentReducerEvent,
+): EveAgentReducerEvent {
+  if (event.type !== "input.requested") return event;
+  const running = data.turns.findLast((turn) => turn.status === "running");
+  if (!running || running.turnId === event.data.turnId) return event;
+  return { ...event, data: { ...event.data, turnId: running.turnId } };
 }
 
 /**

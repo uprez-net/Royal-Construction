@@ -38,6 +38,13 @@ export type ConsultationSlot = {
 export type BookedConsultation = {
   readonly joinUrl: string | null;
   readonly leadId: number | null;
+  /**
+   * Whether the client was sent their confirmation. For an online meeting the
+   * Teams invitation is the confirmation, so this is true once the event
+   * exists. For an in-person meeting it is a separate email, and false means
+   * the meeting is booked but the client has not been told where to go.
+   */
+  readonly confirmationSent: boolean;
 };
 
 /**
@@ -99,12 +106,19 @@ export async function bookConsultation(
     },
     async () => {
       const booked = await book();
-      return { joinUrl: booked.joinUrl, leadId: booked.leadId };
+      return {
+        confirmationSent: booked.confirmationSent,
+        joinUrl: booked.joinUrl,
+        leadId: booked.leadId,
+      };
     },
   );
 
   return {
     alreadyBooked: replayed,
+    // A booking recorded before this field existed was always an online one,
+    // confirmed by its invitation, so a missing value on replay means sent.
+    confirmationSent: result.confirmationSent !== false,
     joinUrl: result.joinUrl,
     leadId: result.leadId,
   };

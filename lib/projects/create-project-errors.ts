@@ -21,6 +21,11 @@ import {
   isDomainError,
 } from "@/lib/domain/errors";
 import {
+  parseOwnerFieldPath,
+  projectOwnerProblems,
+  type ProjectOwnerField,
+} from "@/lib/domain/projects/owners";
+import {
   ProjectDateBlockerError,
   type ProjectDateBlocker,
 } from "@/lib/domain/projects/readiness";
@@ -48,9 +53,21 @@ export type ProjectFormFieldKey =
   | keyof ProjectExtractionData
   | NonExtractionFieldKey;
 
+/** Which owner row, and which of its inputs, an owner error is about. */
+export type OwnerErrorTarget = {
+  readonly index: number;
+  readonly field: ProjectOwnerField | null;
+};
+
 export type CreateProjectFieldError = {
   readonly field: ProjectFormFieldKey;
   readonly message: string;
+  /**
+   * Set on a `legalAdministrationOwners` error that is about one owner, so
+   * the wizard can mark that row and focus that input. Absent when the
+   * problem is the list as a whole ("Add at least one owner").
+   */
+  readonly owner?: OwnerErrorTarget;
 };
 
 export type CreateProjectFailureCode =
@@ -119,6 +136,25 @@ export function fieldElementId(field: string): string {
   return `create-project-field-${field}`;
 }
 
+/** Stable DOM id for one owner row, or one input on it. */
+export function ownerElementId(
+  index: number,
+  field: ProjectOwnerField | null = null,
+): string {
+  const row = `${fieldElementId("legalAdministrationOwners")}-${index}`;
+  return field ? `${row}-${field}` : row;
+}
+
+/** The owner row and input a dotted field path names, if it names one. */
+function ownerTargetOf(
+  fieldPath: string | null | undefined,
+): OwnerErrorTarget | undefined {
+  const parsed = parseOwnerFieldPath(fieldPath);
+  return parsed && parsed.index !== null
+    ? { field: parsed.field, index: parsed.index }
+    : undefined;
+}
+
 const FIELD_LABELS: Partial<Record<ProjectFormFieldKey, string>> = {
   lead: "Lead",
   documents: "Tender and contract PDFs",
@@ -130,6 +166,7 @@ const FIELD_LABELS: Partial<Record<ProjectFormFieldKey, string>> = {
   legalAdministrationSignedDate: "Signed date",
   legalAdministrationPcaInspector: "PCA inspector",
   legalAdministrationSiteAddress: "Site address",
+  legalAdministrationOwners: "Owners",
   commercialsAndClaimsTotalContractSum: "Total contract sum",
   commercialsAndClaimsDepositValue: "Deposit value",
 };
@@ -156,6 +193,10 @@ export function fieldPathToFormField(
   fieldPath: string | null | undefined,
 ): ProjectFormFieldKey | null {
   if (!fieldPath) return null;
+
+  // `legalAdministrationOwners.1.email` is the owner editor; the row and
+  // input travel separately, as `CreateProjectFieldError.owner`.
+  if (parseOwnerFieldPath(fieldPath)) return "legalAdministrationOwners";
 
   const segments = fieldPath
     .split(".")
@@ -288,6 +329,20 @@ export function validateCreateProjectForm({
     });
   }
 
+  // The rule the server applies, so every owner problem is listed here rather
+  // than coming back from the server one at a time.
+  for (const problem of projectOwnerProblems(
+    extraction.legalAdministrationOwners,
+  )) {
+    errors.push({
+      field: "legalAdministrationOwners",
+      message: problem.message,
+      ...(problem.index !== null
+        ? { owner: { field: problem.field, index: problem.index } }
+        : {}),
+    });
+  }
+
   if (!normalizeString(extraction.projectName) && !hasLocation) {
     errors.push({
       field: "projectName",
@@ -376,11 +431,13 @@ export function createProjectFailure(
 function domainFailure(error: unknown): CreateProjectFailure | null {
   if (!isDomainError(error)) return null;
 
-  const named =
-    error instanceof DomainValidationError && error.field
-      ? fieldPathToFormField(error.field)
-      : null;
-  const fieldErrors = named ? [{ field: named, message: error.message }] : [];
+  const fieldPath =
+    error instanceof DomainValidationError ? error.field : undefined;
+  const named = fieldPathToFormField(fieldPath);
+  const owner = ownerTargetOf(fieldPath);
+  const fieldErrors: CreateProjectFieldError[] = named
+    ? [{ field: named, message: error.message, ...(owner ? { owner } : {}) }]
+    : [];
 
   if (error instanceof DomainTransitionError) {
     // The only transition this command has: the lead already has a project.
@@ -407,6 +464,17 @@ function domainFailure(error: unknown): CreateProjectFailure | null {
       {
         fieldErrors: [{ field: "siteManager", message: error.message }],
       },
+    );
+  }
+
+  if (named === "legalAdministrationOwners") {
+    return createProjectFailure(
+      "VALIDATION",
+      owner
+        ? `Owner ${owner.index + 1} needs correcting`
+        : "The owners need correcting",
+      `${error.message} Nothing was created.`,
+      { fieldErrors },
     );
   }
 
@@ -610,7 +678,30 @@ export function failureFromThrownError(error: unknown): CreateProjectFailure {
     );
   }
 
-  // Prisma surfaces unique/foreign-key violations as `P2002` / `P2003`.
+  // Prisma surfaces unique/foreign-key violations as `P2002` / `P2003`. A
+  // unique email or phone on a customer is an owner colliding with an existing
+  // customer, not a project-name clash: say so, on the owner editor.
+  if (
+    /\bP2002\b|Unique constraint/i.test(message)
+    && /customer/i.test(message)
+    && /email|phone/i.test(message)
+  ) {
+    return createProjectFailure(
+      "CONFLICT",
+      "An owner's email or phone belongs to another customer",
+      "One owner's email or phone number is already on file for a different customer. Check each owner's details against the contract — nothing was created.",
+      {
+        fieldErrors: [
+          {
+            field: "legalAdministrationOwners",
+            message:
+              "An owner's email or phone number is already used by another customer.",
+          },
+        ],
+      },
+    );
+  }
+
   if (/\bP2002\b/.test(message)) {
     return createProjectFailure(
       "CONFLICT",

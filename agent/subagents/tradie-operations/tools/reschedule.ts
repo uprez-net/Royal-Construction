@@ -10,7 +10,7 @@ import {
 
 export default defineTool({
   description:
-    "Move an authorized tradie booking to a new date, duration, or milestone after checking conflicts and owner approval.",
+    "Move an authorized tradie booking to a new date, duration, or milestone after checking conflicts and owner approval. A date change puts the booking back to the tradie: an approved booking waits on their confirmation of the new date, anything else on their availability again (a pending admin approval for the old date is withdrawn). Declined, completed and removed bookings cannot be moved. This tool does not email the tradie.",
   inputSchema: rescheduleTradieInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),

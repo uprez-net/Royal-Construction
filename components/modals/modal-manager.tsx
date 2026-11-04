@@ -18,6 +18,7 @@ import type {
 } from "@/types/project";
 import { CreateProjectModal } from "../projects/create-project-modal";
 import { ReminderModal } from "../tradies/reminder-send-modal";
+import { RescheduleScheduleModal } from "../tradies/reschedule-schedule-modal";
 import { TradieScheduleDetailsModal } from "../tradies/details-view-modal";
 import { DeleteScheduleModal } from "../tradies/delete-schedule-modal";
 import {
@@ -32,6 +33,7 @@ import {
   ProjectStage,
   TradieApprovalActionType,
   TradieScheduleStatus,
+  type TradieRequestKind,
   type ComplianceDocumentType,
   type ComplianceExternalApplicationKind,
   type CompliancePartyType,
@@ -57,7 +59,7 @@ import { AdminApprovalActionModal } from "../tradie-management/modal/admin-appro
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApprovalDetailModal } from "../tradie-approvals/modal/approval-detail-modal";
-import ScheduleTradieModal from "../projects/detail/modal/schedule-tradie-modal";
+import TradieRequestWizard from "../projects/detail/modal/tradie-request-wizard";
 import InsuranceClaimDatesModal from "../projects/detail/modal/insurance-claim-dates-modal";
 import { TradieApprovalRejectionModal } from "../tradie-approvals/modal/rejection-input-modal";
 import { WorkflowStreamProvider } from "@/context/WorkFlowStatusContext";
@@ -105,9 +107,9 @@ export function ModalManager() {
     projectPayload?.milestones.map((milestone) => ({
       id: milestone.id,
       name: milestone.name,
-    })) ??
-    (modal.payload?.milestones as { id: string; name: string }[]) ??
-    [];
+    }))
+    ?? (modal.payload?.milestones as { id: string; name: string }[])
+    ?? [];
 
   if (!modal.type) {
     return null;
@@ -207,36 +209,20 @@ export function ModalManager() {
         </WorkflowStreamProvider>
       );
     case "scheduleTradie":
-      const project = projectPayload
-        ? {
-            id: projectPayload.id,
-            name: projectPayload.name,
-          }
-        : undefined;
-      const milestones = projectPayload
-        ? projectPayload.milestones
-            .filter(
-              (m) =>
-                m.status !== MilestoneStatus.DONE &&
-                m.status !== MilestoneStatus.NOT_REQUIRED,
-            )
-            .map((m) => ({
-              id: m.id,
-              name: m.name,
-              projectStage: m.projectStage,
-            }))
-        : undefined;
-
-      if (!project || !milestones) {
+      if (!projectPayload) {
         return null;
       }
 
       return (
-        <ScheduleTradieModal
+        <TradieRequestWizard
           open
           onClose={handleClose}
-          projectId={project.id}
-          milestones={milestones}
+          project={projectPayload}
+          initialProjectStage={
+            modal.payload?.projectStage as ProjectStage | undefined
+          }
+          initialTrade={modal.payload?.trade as string | undefined}
+          initialKind={modal.payload?.kind as TradieRequestKind | undefined}
         />
       );
     case "logCall": {
@@ -286,25 +272,35 @@ export function ModalManager() {
           onOpenChange={(open) => !open && handleClose()}
         />
       );
-    case "tradieReminder":
+    case "tradieReminder": {
       const { schedule } = modal.payload as {
         schedule: TradieScheduleListItem;
       };
-      const tradie = schedule.contact;
-      const siteManager = schedule.siteManager;
 
       return (
         <ReminderModal
-          schedule={schedule as TradieScheduleListItem}
-          tradie={tradie as { email: string; phone: string }}
-          siteManager={
-            siteManager as { email: string; phone: string; name: string }
-          }
+          schedule={schedule}
           open
           onOpenChange={(open) => !open && handleClose()}
           onSend={handleClose}
         />
       );
+    }
+    case "rescheduleTradie": {
+      const schedule = modal.payload?.schedule as
+        | TradieScheduleListItem
+        | undefined;
+      if (!schedule) return null;
+
+      return (
+        <RescheduleScheduleModal
+          schedule={schedule}
+          open
+          onOpenChange={(open) => !open && handleClose()}
+          onDone={handleClose}
+        />
+      );
+    }
     case "tradieScheduleDetails":
       const scheduleDetails = modal.payload
         ?.schedule as TradieUrgentReminderItem;
@@ -548,11 +544,13 @@ export function ModalManager() {
     case "deleteTradie":
       const deleteTradie = modal.payload as { tradie: TradieRow };
       return (
-        <DeleteTradieModal
-          open
-          onClose={handleClose}
-          tradie={deleteTradie.tradie}
-        />
+        <QueryClientProvider client={queryClient}>
+          <DeleteTradieModal
+            open
+            onClose={handleClose}
+            tradie={deleteTradie.tradie}
+          />
+        </QueryClientProvider>
       );
     case "reportTradie":
       const reportTradie = modal.payload as { tradie: TradieRow };
@@ -832,8 +830,8 @@ export function ModalManager() {
       // itself says cannot be undone from the screen, and defaulting it to the
       // approval branch is the worst of the two ways to be wrong.
       if (
-        decision !== ComplianceApprovalDecision.APPROVED &&
-        decision !== ComplianceApprovalDecision.REJECTED
+        decision !== ComplianceApprovalDecision.APPROVED
+        && decision !== ComplianceApprovalDecision.REJECTED
       ) {
         return null;
       }

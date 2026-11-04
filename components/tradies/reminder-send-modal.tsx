@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useUser } from "@clerk/nextjs";
-import { Loader2, Mail, MessageSquare, Send } from "lucide-react";
+import { useMemo, useRef, useState, useTransition } from "react";
+import { Info, Loader2, Send } from "lucide-react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -13,126 +13,66 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  EmailPreviewFrame,
+  type EmailPreviewFrameHandle,
+} from "@/components/common/email-preview-frame";
 import { cn } from "@/lib/utils";
 import { TradieScheduleListItem } from "@/types/project";
-import { dateFormat } from "@/utils/formatters";
 import { toast } from "sonner";
 import { sendTradieScheduleReminder } from "@/lib/data/tradieSchedules";
+import { generateTradieReminderEmail } from "@/utils/generate-email";
 
 interface ReminderModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSend: () => void;
   schedule: TradieScheduleListItem;
-  tradie: {
-    email: string;
-    phone: string;
-  };
-  siteManager: {
-    email: string;
-    phone: string;
-    name: string;
-  };
 }
 
-const buildEmailAndSmsBodies = (
-  schedule: TradieScheduleListItem,
-  tradie: { email: string; phone: string; name?: string },
-  siteManager: { email: string; phone: string; name: string },
-  senderName: string,
-) => {
-  const formattedDate = dateFormat.format(new Date(schedule.scheduledDate));
-
-  const tradieName = tradie.name || "there";
-
-  const emailSubject = `Work Reminder • ${schedule.tradeType} at ${schedule.projectName} • ${formattedDate}`;
-
-  const emailBody = `
-Hi ${tradieName},
-
-Just a reminder that your ${schedule.tradeType.toLowerCase()} work is scheduled for:
-
-Project: ${schedule.projectName}
-Date: ${formattedDate}
-
-Site Manager Contact
-----------------------------
-Name: ${siteManager.name}
-Email: ${siteManager.email}
-Phone: ${siteManager.phone}
-
-If you need to reschedule, require site access details, materials, or additional support, please get in touch as soon as possible.
-
-Please reply to confirm attendance.
-
-Kind regards,
-${senderName}
-Royal Constructions
-NSW, Australia
-`.trim();
-
-  const smsBody = [
-    `Reminder: ${schedule.tradeType} work at ${schedule.projectName}`,
-    `Date: ${formattedDate}.`,
-    `Site Manager: ${siteManager.name} (${siteManager.phone}).`,
-    `Reply to confirm or reschedule.`,
-  ].join(" ");
-
-  return {
-    emailSubject,
-    emailBody,
-    smsBody,
-  };
-};
-
+/**
+ * Email a booked tradie a reminder, on the same branded template as the
+ * outreach they were first sent, previewed and editable in place.
+ *
+ * The body used to be a plain-text textarea. The mailbox sends every message
+ * as HTML, so its line breaks collapsed and the tradie got one run-on
+ * paragraph. The SMS tab beside it reported "SMS reminder sent successfully"
+ * without sending anything — nothing is wired to send a text — so it is gone
+ * until something is.
+ */
 export function ReminderModal({
   open,
   onOpenChange,
   onSend,
   schedule,
-  tradie,
-  siteManager,
 }: ReminderModalProps) {
-  const { user } = useUser();
-  const senderName =
-    user?.fullName?.trim() ||
-    [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
-    "Royal Constructions";
-
-  const {
-    emailBody: emailBodyInt,
-    smsBody: smsBodyInt,
-    emailSubject: emailSubjectInt,
-  } = buildEmailAndSmsBodies(schedule, tradie, siteManager, senderName);
+  const initial = useMemo(
+    () => generateTradieReminderEmail(schedule),
+    [schedule],
+  );
+  const previewRef = useRef<EmailPreviewFrameHandle | null>(null);
   const [isSending, startTransition] = useTransition();
-  const [tab, setTab] = useState<"email" | "sms">("email");
-  const [emailBody, setEmailBody] = useState(emailBodyInt);
-  const [smsBody, setSmsBody] = useState(smsBodyInt);
-  const [emailSubject, setEmailSubject] = useState(emailSubjectInt);
+  const [emailSubject, setEmailSubject] = useState(initial.subject);
+
+  const recipient = schedule.contact.email.trim();
 
   const handleSend = async () => {
     try {
-      if (tab === "email") {
-        // The action sends to the schedule's own tradie; the address above is
-        // only shown. A refusal comes back as data, since Next hides a thrown
-        // message in production.
-        const result = await sendTradieScheduleReminder({
-          scheduleId: schedule.id,
-          subject: emailSubject,
-          body: emailBody,
-        });
-        if (!result.success) {
-          toast.error(result.message);
-          return;
-        }
-        toast.success("Email reminder sent successfully.");
-        onSend();
-      } else if (tab === "sms") {
-        // Implement SMS sending logic here
-        toast.success("SMS reminder sent successfully.");
-        onSend();
+      // The action sends to the schedule's own tradie; the address above is
+      // only shown. A refusal comes back as data, since Next hides a thrown
+      // message in production.
+      const body = previewRef.current?.readHtml() ?? initial.html;
+      const result = await sendTradieScheduleReminder({
+        scheduleId: schedule.id,
+        subject: emailSubject,
+        body,
+      });
+      if (!result.success) {
+        toast.error(result.message);
+        return;
       }
+      toast.success(result.message);
+      onSend();
     } catch (error) {
       console.error("Error sending reminder:", error);
       toast.error("Failed to send reminder. Please try again.");
@@ -143,140 +83,77 @@ export function ReminderModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "max-w-[calc(100%-2rem)] gap-0 sm:max-w-170 overflow-hidden rounded-[14px] border border-border/70 bg-card p-0 shadow-2xl",
-          "sm:rounded-[14px]",
-          "max-h-[60vh] overflow-y-auto",
+          "max-w-[calc(100%-2rem)] gap-0 overflow-hidden rounded-[14px] border border-border/70 bg-card p-0 shadow-2xl sm:max-w-3xl",
+          "flex max-h-[90dvh] flex-col",
         )}
       >
-        {/* Header */}
-        <DialogHeader className="flex-row items-center justify-between border-b border-border/70 px-6 py-5">
-          <div>
-            <DialogTitle className="text-[18px] font-bold tracking-[-0.02em] text-foreground">
-              Send Reminder
-            </DialogTitle>
-          </div>
+        <DialogHeader className="shrink-0 border-b border-border/70 px-6 py-5 text-left">
+          <DialogTitle className="text-[18px] font-bold tracking-[-0.02em] text-foreground">
+            Send reminder — {schedule.tradieName}
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            {schedule.projectName} · {schedule.tradeType}
+          </DialogDescription>
         </DialogHeader>
 
-        {/* Body */}
-        <div className="px-6 py-5">
-          {/* Tabs */}
-          <div className="mb-4 flex gap-1.5">
-            <button
-              onClick={() => setTab("email")}
-              className={cn(
-                "inline-flex items-center rounded-[7px] border px-3 py-1.75 text-[12.5px] font-semibold transition-all",
-                tab === "email"
-                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                  : "border-border/70 bg-card text-foreground hover:border-primary hover:bg-muted/40 hover:text-primary",
-              )}
-            >
-              <Mail className="mr-1.5 h-3.5 w-3.5" />
-              Email
-            </button>
-
-            <button
-              onClick={() => setTab("sms")}
-              className={cn(
-                "inline-flex items-center rounded-[7px] border px-3 py-1.75 text-[12.5px] font-semibold transition-all",
-                tab === "sms"
-                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                  : "border-border/70 bg-card text-foreground hover:border-primary hover:bg-muted/40 hover:text-primary",
-              )}
-            >
-              <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
-              SMS
-            </button>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground">
+                To
+              </Label>
+              <div className="text-[13px] font-semibold text-foreground [overflow-wrap:anywhere]">
+                {recipient || "No email on file"}
+              </div>
+            </div>
+            <div>
+              <Label className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground">
+                Site manager
+              </Label>
+              <div className="text-[13px] text-muted-foreground">
+                {schedule.siteManager.name || "Unassigned"}
+              </div>
+            </div>
           </div>
 
-          {/* EMAIL */}
-          {tab === "email" && (
-            <div>
-              <div className="mb-3">
-                <Label className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground">
-                  To
-                </Label>
+          <div>
+            <Label
+              htmlFor="reminder-subject"
+              className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground"
+            >
+              Subject
+            </Label>
+            <Input
+              id="reminder-subject"
+              value={emailSubject}
+              onChange={(e) => setEmailSubject(e.target.value)}
+              className="text-[13px] font-semibold text-foreground"
+            />
+          </div>
 
-                <div className="text-[13px] font-semibold text-foreground">
-                  {tradie?.email || "N/A"}
-                </div>
-              </div>
-
-              <div className="mb-3">
-                <Label className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground">
-                  Subject
-                </Label>
-
-                <Input
-                  value={emailSubject}
-                  onChange={(e) => setEmailSubject(e.target.value)}
-                  className="text-[13px] font-semibold text-foreground"
-                />
-              </div>
-
-              <div className="mb-3">
-                <Label className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground">
-                  CC
-                </Label>
-
-                <div className="text-[13px] text-muted-foreground">
-                  {siteManager.name} (Site Manager)
-                </div>
-              </div>
-
-              <div>
-                <Label className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground">
-                  Body
-                </Label>
-
-                <Textarea
-                  onChange={(e) => setEmailBody(e.target.value)}
-                  className={cn(
-                    "min-h-45 resize-none rounded-[8px] border border-border/70 bg-muted/30 p-3.5",
-                    "font-sans text-[12.5px] leading-[1.6] text-foreground",
-                  )}
-                  value={emailBody}
-                />
-              </div>
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label className="text-[11.5px] font-semibold text-muted-foreground">
+                Email
+              </Label>
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/80">
+                <Info className="size-3" aria-hidden="true" />
+                Click the email to edit it before sending.
+              </span>
             </div>
-          )}
-
-          {/* SMS */}
-          {tab === "sms" && (
-            <div>
-              <div className="mb-3">
-                <Label className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground">
-                  To
-                </Label>
-
-                <div className="text-[13px] font-semibold text-foreground">
-                  {tradie.phone || "N/A"}
-                </div>
-              </div>
-
-              <div>
-                <Label className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground">
-                  Message
-                </Label>
-
-                <Textarea
-                  onChange={(e) => setSmsBody(e.target.value)}
-                  className={cn(
-                    "min-h-45 resize-none rounded-[8px] border border-border/70 bg-muted/30 p-3.5",
-                    "font-sans text-[12.5px] leading-[1.6] text-foreground",
-                  )}
-                  value={smsBody}
-                />
-
-                <div className="mt-1 text-[11px] text-muted-foreground">
-                  {smsBody.length}/160 characters
-                </div>
-              </div>
-            </div>
-          )}
+            <EmailPreviewFrame
+              ref={previewRef}
+              // Fit to width: the dialog scrolls, and fitting a long
+              // email to a fixed height shrank it to a narrow strip.
+              maxHeight={Infinity}
+              minScale={0.4}
+              html={initial.html}
+              title={`Reminder email to ${schedule.tradieName}`}
+            />
+          </div>
         </div>
 
-        {/* Footer */}
-        <DialogFooter className="flex-row justify-end gap-2 border-t border-border/70 px-6 py-4">
+        <DialogFooter className="shrink-0 flex-row justify-end gap-2 border-t border-border/70 px-6 py-4">
           <Button
             variant="outline"
             disabled={isSending}
@@ -287,7 +164,7 @@ export function ReminderModal({
           </Button>
 
           <Button
-            disabled={isSending}
+            disabled={isSending || !recipient || !emailSubject.trim()}
             onClick={() => startTransition(() => handleSend())}
             className="h-auto rounded-[7px] bg-primary px-3.5 py-1.75 text-[12.5px] font-semibold text-primary-foreground shadow-none transition-all hover:bg-primary/90"
           >
@@ -299,7 +176,7 @@ export function ReminderModal({
             ) : (
               <>
                 <Send className="mr-1.5 h-3.5 w-3.5" />
-                Send Reminder
+                Send reminder
               </>
             )}
           </Button>

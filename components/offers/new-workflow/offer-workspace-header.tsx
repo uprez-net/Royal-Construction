@@ -15,8 +15,10 @@ import type { OfferSaveState } from "./offer-workspace-screen";
 // destructive as the fixed price approaches and passes its validity date, so an
 // expired offer can never be emailed unnoticed.
 export function ExpiryChip({
+  className,
   expiry,
 }: {
+  readonly className?: string;
   readonly expiry: OfferExpiry | null;
 }) {
   if (!expiry || expiry.state === "none") {
@@ -33,6 +35,7 @@ export function ExpiryChip({
       className={cn(
         "rounded-full border px-2 py-0.5 text-xs font-medium",
         toneClass,
+        className,
       )}
     >
       {expiry.label}

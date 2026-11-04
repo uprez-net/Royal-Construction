@@ -26,11 +26,12 @@ import {
   isPortalDownloadAlert,
 } from "./portal-certificates";
 import { businessDaysSince } from "@/lib/dates/business-days";
-import { applicableRequiredDocuments } from "./required-pack";
 import {
-  STAGE_ACTORS,
-  type ComplianceStageActor,
-} from "./stage-actors";
+  applicableRequiredDocuments,
+  hasArchitectPlansOnFile,
+  isCoveredOnFile,
+} from "./required-pack";
+import { STAGE_ACTORS, type ComplianceStageActor } from "./stage-actors";
 import {
   checklistBlockedReason,
   externalApplication,
@@ -316,9 +317,9 @@ export function stageForAlert(
   }
 
   if (
-    belongsTo === "CHECKLIST" &&
-    checklistBlockedReason(engagement) &&
-    hasDa
+    belongsTo === "CHECKLIST"
+    && checklistBlockedReason(engagement)
+    && hasDa
   ) {
     return "DEVELOPMENT_APPLICATION";
   }
@@ -354,8 +355,8 @@ function isSettled(
 ): boolean {
   return engagement.documents.some(
     (document) =>
-      document.documentType === documentType &&
-      (document.files.length > 0 || isNotRequired(document.status)),
+      document.documentType === documentType
+      && (document.files.length > 0 || isNotRequired(document.status)),
   );
 }
 
@@ -529,16 +530,13 @@ function architectStage(
   now: Date,
 ): BuiltStage {
   const outreach = outreachForParty(engagement, CompliancePartyType.ARCHITECT);
-  const plansIn = isSettled(
-    engagement,
-    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
-  );
+  const plansIn = hasArchitectPlansOnFile(engagement);
   const revision = outstandingRevision(outreach);
   const heldAt = meetingHeldAt(outreach);
 
   const done =
-    outreach?.mode === ComplianceOutreachMode.SELF_SUPPLIED ||
-    (plansIn && !revision);
+    outreach?.mode === ComplianceOutreachMode.SELF_SUPPLIED
+    || (plansIn && !revision);
 
   const [startedAt, sla] = revision
     ? [revision.requestedAt, ARCHITECT_REVISION_BUSINESS_DAYS]
@@ -559,11 +557,17 @@ function architectStage(
       startedAt,
       // The plans landing is what ends the wait, whichever of the three clocks
       // was running: a revision is finished with by a revised set arriving on
-      // the same row.
+      // the same row. Where the full design stands in for a preliminary set
+      // that never came, its arrival is the one that ended it.
       done
         ? {
             at: latestArrival(engagement, [
-              ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+              isCoveredOnFile(
+                engagement,
+                ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+              )
+                ? ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN
+                : ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
             ]),
           }
         : null,
@@ -597,9 +601,9 @@ function councilStage(
   // far as this header is concerned -- the certificate is still wanted, but it
   // is ordered from the DA block and chased on the DA's own stage.
   const done =
-    certificateIn ||
-    Boolean(application?.receivedAt) ||
-    !requiresPlanningCertificate(engagement);
+    certificateIn
+    || Boolean(application?.receivedAt)
+    || !requiresPlanningCertificate(engagement);
 
   return {
     id: "COUNCIL",
@@ -614,8 +618,8 @@ function councilStage(
       done
         ? {
             at:
-              application?.receivedAt ??
-              latestArrival(engagement, [
+              application?.receivedAt
+              ?? latestArrival(engagement, [
                 ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
               ]),
           }
@@ -724,8 +728,8 @@ function developmentApplicationStage(
 function checklistIssuedAt(engagement: CertifierEngagementDetail): Date | null {
   return engagement.documents.reduce<Date | null>(
     (earliest, document) =>
-      document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM ||
-      (earliest !== null && document.createdAt >= earliest)
+      document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM
+      || (earliest !== null && document.createdAt >= earliest)
         ? earliest
         : document.createdAt,
     null,
@@ -743,8 +747,10 @@ function checklistStage(
   );
 
   const done =
-    items.length > 0 &&
-    items.every((item) => item.files.length > 0 || isNotRequired(item.status));
+    items.length > 0
+    && items.every(
+      (item) => item.files.length > 0 || isNotRequired(item.status),
+    );
 
   return {
     id: "CHECKLIST",
@@ -809,17 +815,17 @@ function planningPortalStage(
   // hands the certificate over at a site meeting has self-evidently determined
   // it.
   const determinedAt =
-    application?.approvalNotifiedAt ??
-    application?.receivedAt ??
-    (hasCertificate(engagement)
+    application?.approvalNotifiedAt
+    ?? application?.receivedAt
+    ?? (hasCertificate(engagement)
       ? latestArrival(engagement, [certificateDocumentTypeFor(engagement)])
       : null);
 
   return {
     id: "PLANNING_PORTAL",
     label:
-      kind ===
-      ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE
+      kind
+      === ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE
         ? "CDC application"
         : "Construction certificate",
     done: determinedAt !== null,
@@ -913,8 +919,8 @@ function branchOrigin(
 
   const raisedAt = engagement.alerts.reduce<Date | null>(
     (earliest, alert) =>
-      alert.type !== ComplianceAlertType.DA_APPROVAL_REQUIRED ||
-      (earliest !== null && alert.createdAt >= earliest)
+      alert.type !== ComplianceAlertType.DA_APPROVAL_REQUIRED
+      || (earliest !== null && alert.createdAt >= earliest)
         ? earliest
         : alert.createdAt,
     null,
@@ -1007,8 +1013,8 @@ export function complianceStageFlow(
       ...extras,
       actors: STAGE_ACTORS[stage.id](engagement),
       state:
-        extras.state ??
-        (done ? "done" : index === currentIndex ? "current" : "upcoming"),
+        extras.state
+        ?? (done ? "done" : index === currentIndex ? "current" : "upcoming"),
       // A done stage with an open alert still reads as late, which is not a
       // contradiction: a stale title search is raised against a surveyor who
       // has sent everything they were asked for.

@@ -236,8 +236,8 @@ function validateSection(
           return "Deal value must be a non-negative number.";
       }
       if (
-        form.probabilityOverride !== "" &&
-        !Number.isFinite(Number(form.probabilityOverride))
+        form.probabilityOverride !== ""
+        && !Number.isFinite(Number(form.probabilityOverride))
       )
         return "Likelihood must be a number between 0 and 100.";
       return null;
@@ -595,7 +595,7 @@ export function LeadOverviewTab({
           <div className="grid gap-4 md:grid-cols-2">
             <div className="md:col-span-2">
               <Field label="Deal value" htmlFor={fieldId("estimated-value")}>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Input
                     id={fieldId("estimated-value")}
                     type="number"
@@ -739,8 +739,8 @@ export function LeadOverviewTab({
               className={cn(
                 "mt-1 bg-card",
                 FIELD_CONTROL_CLASS,
-                lostReasonMissing &&
-                  "border-destructive ring-1 ring-(--destructive)/20",
+                lostReasonMissing
+                  && "border-destructive ring-1 ring-(--destructive)/20",
               )}
               placeholder={closureReasonCopy(form.stage).placeholder}
               value={form.lostReason}
@@ -774,7 +774,7 @@ export function LeadOverviewTab({
   return (
     <section className="space-y-4">
       <Card className="border-border/70 bg-card shadow-sm">
-        <CardHeader className="border-b border-border/70 pb-4">
+        <CardHeader className="border-b border-border/70 px-4 pb-4 sm:px-6">
           <CardTitle
             as="h2"
             className="text-base font-semibold text-foreground"
@@ -787,7 +787,7 @@ export function LeadOverviewTab({
           </p>
         </CardHeader>
 
-        <CardContent className="pt-5">
+        <CardContent className="px-4 pt-4 sm:px-6 sm:pt-5">
           <Accordion
             type="multiple"
             value={openSections}
@@ -799,19 +799,42 @@ export function LeadOverviewTab({
               const Icon = meta.icon;
               const dirty = isSectionDirty(key);
               const saving = savingSection === key;
+              const saveButton = (className?: string) => (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleSectionSave(key)}
+                  disabled={saving}
+                  aria-busy={saving}
+                  aria-label={`Save ${meta.label}`}
+                  className={className}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2
+                        className="mr-1.5 size-3.5 animate-spin"
+                        aria-hidden="true"
+                      />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save"
+                  )}
+                </Button>
+              );
 
               return (
                 <AccordionItem
                   key={key}
                   value={key}
-                  className="rounded-xl border border-border bg-card px-4"
+                  className="rounded-xl border border-border bg-card px-3 sm:px-4"
                 >
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="min-w-0 flex-1">
                       <AccordionTrigger className="py-3 hover:no-underline">
-                        <div className="flex flex-1 items-center justify-between gap-3 pr-3 text-left">
-                          <div className="flex items-center gap-3">
-                            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2 pr-1 sm:gap-3 sm:pr-3 text-left">
+                          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                            <span className="hidden size-8 shrink-0 items-center sm:flex justify-center rounded-lg bg-muted text-muted-foreground">
                               <Icon aria-hidden="true" className="h-4 w-4" />
                             </span>
                             <div>
@@ -836,32 +859,14 @@ export function LeadOverviewTab({
                         button within a button is invalid and unreachable by
                         keyboard. Living here also means a dirty section can be
                         saved without expanding it. */}
-                    {dirty ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => handleSectionSave(key)}
-                        disabled={saving}
-                        aria-busy={saving}
-                        aria-label={`Save ${meta.label}`}
-                      >
-                        {saving ? (
-                          <>
-                            <Loader2
-                              className="mr-1.5 size-3.5 animate-spin"
-                              aria-hidden="true"
-                            />
-                            Saving…
-                          </>
-                        ) : (
-                          "Save"
-                        )}
-                      </Button>
-                    ) : null}
+                    {dirty ? saveButton() : null}
                   </div>
 
                   <AccordionContent className="space-y-4 pt-1 pb-4">
                     {renderSectionBody(key)}
+                    {/* On a phone the header's Save has scrolled away by the
+                        time the last field in a long section is filled in. */}
+                    {dirty ? saveButton("w-full md:hidden") : null}
                   </AccordionContent>
                 </AccordionItem>
               );

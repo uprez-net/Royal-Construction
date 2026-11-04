@@ -96,3 +96,40 @@ export async function withGraphRetry<T>(
 
   throw lastError;
 }
+
+// Codes Node gives a connection that never reached the server: nothing was
+// sent. A reset or a timeout is different — the request may already have gone.
+const NEVER_CONNECTED_CODES = new Set([
+  "ECONNREFUSED",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ENETUNREACH",
+]);
+
+/**
+ * What a failed Graph `sendMail` means for whether the email went.
+ *
+ * Stricter than `isRetryableGraphError`, which is for reads: repeating a read
+ * costs nothing, repeating a send can email a tradie twice. So only failures
+ * that are definitely not a send are `transient` — throttled (429), service
+ * unavailable (503), or no connection at all. A 500, 502, 504, 408 or a reset
+ * socket can mean Graph accepted the message and the answer was lost, so it
+ * is `ambiguous` and left to a person. Any other 4xx is Graph saying no.
+ */
+export function classifyGraphSendFailure(
+  error: unknown,
+): "transient" | "rejected" | "ambiguous" {
+  const status = statusOf(error);
+  if (status === 429 || status === 503) return "transient";
+  if (status !== undefined) {
+    return status >= 400 && status < 500 && status !== 408
+      ? "rejected"
+      : "ambiguous";
+  }
+  const code =
+    (error as { code?: unknown; cause?: { code?: unknown } })?.code
+    ?? (error as { cause?: { code?: unknown } })?.cause?.code;
+  return typeof code === "string" && NEVER_CONNECTED_CODES.has(code)
+    ? "transient"
+    : "ambiguous";
+}

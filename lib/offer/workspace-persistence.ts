@@ -192,8 +192,8 @@ function hydratePricingSettings(
     return rateRaw >= 0 && rateRaw <= 1 ? rateRaw : d.hbcfRate;
   })();
   const homeWarrantyHbcfFixed =
-    pick(num(pricing.homeWarrantyHbcfFixed), num(l.hbcfInsuranceFixed)) ??
-    d.homeWarrantyHbcfFixed;
+    pick(num(pricing.homeWarrantyHbcfFixed), num(l.hbcfInsuranceFixed))
+    ?? d.homeWarrantyHbcfFixed;
 
   // Whole-number percent (5 = 5%). Absent on offers saved before the loading
   // charge shipped → 0, so their premium stays exactly what was quoted. Out of
@@ -329,14 +329,14 @@ const scopeItemSchema = z.object({
   unit: z.string(),
   variationRule: z.string(),
   includedInOfferDocument: z.boolean(),
-  // Absent on offers saved before the Offer and Tender boxes were split. Those
-  // Tenders list every allowance, as they did before.
+  // Legacy field absent on older snapshots; retained for round-trip compatibility.
   includedInTender: z.boolean().default(true),
 });
 
 const inclusionEntrySchema = z.object({
   spec: z.string(),
   category: z.string().optional(),
+  tenderText: z.string().optional(),
   draftedByAi: z.boolean().optional(),
 });
 
@@ -468,10 +468,10 @@ function coerceImages(value: unknown): Record<string, unknown> {
         out[key] = { url: entry, source: "upload" };
       }
     } else if (
-      entry &&
-      typeof entry === "object" &&
-      "url" in entry &&
-      isAllowedOfferImageUrl((entry as { url: unknown }).url)
+      entry
+      && typeof entry === "object"
+      && "url" in entry
+      && isAllowedOfferImageUrl((entry as { url: unknown }).url)
     ) {
       out[key] = entry;
     }
@@ -787,6 +787,9 @@ export function serializeWorkspace(
       inclusionSchedule: snapshot.draft.inclusionSchedule.map((entry) => ({
         spec: entry.spec,
         ...(entry.category === undefined ? {} : { category: entry.category }),
+        ...(entry.tenderText === undefined
+          ? {}
+          : { tenderText: entry.tenderText }),
         ...(entry.draftedByAi === undefined
           ? {}
           : { draftedByAi: entry.draftedByAi }),

@@ -16,6 +16,7 @@ import type { DomainDb } from "../db";
 import { DomainNotFoundError } from "../errors";
 import { serializeInvoice, serializeListInvoice } from "../invoices/serialize";
 import type { DomainPrincipal } from "../principal";
+import { bookingBilling } from "../tradies/billing-rules";
 
 // Every read of a project, its list, its KPIs and its lookup — one place, one
 // scope (issue #301, phase 4).
@@ -145,6 +146,10 @@ const projectDetailInclude = {
   milestones: {
     orderBy: { order: "asc" as const },
     include: {
+      requiredTradeTypes: {
+        select: { id: true, label: true },
+        orderBy: { label: "asc" as const },
+      },
       siteUpdates: {
         include: {
           author: true,
@@ -173,6 +178,51 @@ const projectDetailInclude = {
     include: {
       tradie: true,
       milestone: true,
+      // The delivery, not the stored email: the html is only for resending.
+      requestRecipient: {
+        select: {
+          id: true,
+          deliveryStatus: true,
+          attempts: true,
+          lastAttemptAt: true,
+          nextAttemptAt: true,
+          sentAt: true,
+          lastError: true,
+          toAddress: true,
+          createdAt: true,
+          request: {
+            select: { id: true, createdAt: true, subject: true, kind: true },
+          },
+        },
+      },
+      // Status and amount only: enough for the booking's billing state on the
+      // Tradies tab, without putting the invoices themselves on the page.
+      invoices: { select: { status: true, subTotal: true } },
+      quote: {
+        select: {
+          id: true,
+          source: true,
+          gstTreatment: true,
+          quotedAt: true,
+          validUntil: true,
+          notes: true,
+          enteredBy: { select: { name: true } },
+        },
+      },
+    },
+  },
+  tradeSelections: {
+    orderBy: { selectedAt: "desc" as const },
+    select: {
+      id: true,
+      trade: true,
+      tradeKey: true,
+      tradieId: true,
+      status: true,
+      selectedAt: true,
+      cancelledAt: true,
+      tradie: { select: { name: true } },
+      selectedBy: { select: { name: true } },
     },
   },
   files: true,
@@ -490,25 +540,36 @@ export async function getProjectDetail(
         },
       })),
     })),
+    // Every Decimal as a string: the detail crosses into client components,
+    // which cannot receive a Decimal.
     variations: project.variations.map((variation) => ({
       ...variation,
       cost: variation.cost.toString(),
+      invoiceAmountPaid: variation.invoiceAmountPaid?.toString() ?? null,
+      invoiceTax: variation.invoiceTax?.toString() ?? null,
+      invoiceTotal: variation.invoiceTotal?.toString() ?? null,
+      newPrice: variation.newPrice?.toString() ?? null,
+      previousPrice: variation.previousPrice?.toString() ?? null,
     })),
-    tradieSchedules: project.tradieSchedules.map((schedule) => ({
-      ...schedule,
-      tradie: {
-        ...schedule.tradie,
-        lastQuotedPrice: schedule.tradie.lastQuotedPrice?.toString(),
-        rating: schedule.tradie.rating?.toString(),
-      },
-      milestone: schedule.milestone
-        ? {
-            ...schedule.milestone,
-            budget: schedule.milestone.budget.toString(),
-            spend: schedule.milestone.spend?.toString(),
-          }
-        : undefined,
-    })),
+    tradieSchedules: project.tradieSchedules.map(
+      ({ invoices, ...schedule }) => ({
+        ...schedule,
+        // The same rule the Financials tab and the record command use.
+        billing: bookingBilling({ ...schedule, invoices }),
+        tradie: {
+          ...schedule.tradie,
+          lastQuotedPrice: schedule.tradie.lastQuotedPrice?.toString(),
+          rating: schedule.tradie.rating?.toString(),
+        },
+        milestone: schedule.milestone
+          ? {
+              ...schedule.milestone,
+              budget: schedule.milestone.budget.toString(),
+              spend: schedule.milestone.spend?.toString(),
+            }
+          : undefined,
+      }),
+    ),
   };
 }
 

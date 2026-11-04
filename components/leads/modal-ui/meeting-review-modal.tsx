@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { ModalShell } from "@/components/common/modal-shell";
+import { ModalLoadingState } from "@/components/common/modal-loading-state";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -170,9 +171,7 @@ export function MeetingReviewModal({
       maxWidthClass="max-w-[560px]"
     >
       {loading || !lead ? (
-        <div className="py-8 text-center text-sm text-muted-foreground">
-          Loading meeting...
-        </div>
+        <ModalLoadingState label="Loading meeting" />
       ) : (
         <div className="space-y-6">
           <div className="space-y-2">

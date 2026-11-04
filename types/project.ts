@@ -1,4 +1,11 @@
-import type { TradiePriceUnit } from "@prisma/client";
+import type {
+  TradeSelectionStatus,
+  TradiePriceUnit,
+  TradieQuoteGst,
+  TradieQuoteSource,
+  TradieRequestDeliveryStatus,
+  TradieRequestKind,
+} from "@prisma/client";
 import {
   Milestone,
   Project,
@@ -19,6 +26,7 @@ import {
 } from "@prisma/client";
 import { ProjectRequirementsPayload } from "./project-flow";
 import type { CertifierEngagementDetail } from "./compliance";
+import type { BookingBillingState } from "@/lib/domain/tradies/billing-rules";
 
 export interface SafeProject extends Omit<
   Project,
@@ -125,8 +133,21 @@ export interface SafeTradie extends Omit<Tradie, "lastQuotedPrice" | "rating"> {
   rating?: string;
 }
 
-export interface SafeVariation extends Omit<Variation, "cost"> {
+export interface SafeVariation extends Omit<
+  Variation,
+  | "cost"
+  | "invoiceAmountPaid"
+  | "invoiceTax"
+  | "invoiceTotal"
+  | "newPrice"
+  | "previousPrice"
+> {
   cost: string;
+  invoiceAmountPaid: string | null;
+  invoiceTax: string | null;
+  invoiceTotal: string | null;
+  newPrice: string | null;
+  previousPrice: string | null;
 }
 
 export interface SiteUpdateWithAuthor extends SiteUpdate {
@@ -141,18 +162,89 @@ export interface TradieScheduleWithTradie extends TradieSchedule {
   tradie: SafeTradie;
 }
 
+/**
+ * Where the request email a booking came from stands. Shared by every booking
+ * the same email asked for, so it is keyed by `id`, not by the booking.
+ */
+export type TradieRequestDeliverySummary = {
+  id: string;
+  deliveryStatus: TradieRequestDeliveryStatus;
+  attempts: number;
+  lastAttemptAt: Date | null;
+  nextAttemptAt: Date | null;
+  sentAt: Date | null;
+  lastError: string | null;
+  toAddress: string;
+  createdAt: Date;
+  request: {
+    id: string;
+    createdAt: Date;
+    subject: string;
+    kind: TradieRequestKind;
+  };
+};
+
+/** Where a booking's quoted amount came from. */
+export type TradieQuoteSummary = {
+  id: string;
+  source: TradieQuoteSource;
+  gstTreatment: TradieQuoteGst | null;
+  quotedAt: Date;
+  validUntil: Date | null;
+  notes: string | null;
+  enteredBy: { name: string } | null;
+};
+
 export interface TradieScheduleWithTradieAndMilestone extends TradieScheduleWithTradie {
   milestone?: SafeMilestone;
+  /**
+   * Where the booking is up to with its invoices. Null when it is neither
+   * committed nor billed; absent on a row the store built itself.
+   */
+  billing?: BookingBillingState | null;
+  requestRecipient?: TradieRequestDeliverySummary | null;
+  quote?: TradieQuoteSummary | null;
 }
+
+/** The tradie chosen for a trade on a project. */
+export type TradeSelectionSummary = {
+  id: string;
+  trade: string;
+  tradeKey: string;
+  tradieId: string;
+  status: TradeSelectionStatus;
+  selectedAt: Date;
+  cancelledAt: Date | null;
+  tradie: { name: string };
+  selectedBy: { name: string } | null;
+};
 
 export interface TradieScheduleWithTradieMilestoneAndProject extends TradieScheduleWithTradieAndMilestone {
   project: SafeProject;
 }
 
 export interface SafeMilestone extends Omit<Milestone, "spend" | "budget"> {
+  requiredTradeTypes?: { id: string; label: string }[];
   budget: string;
   spend?: string;
 }
+
+/** Authoritative consequences returned by the milestone command; the store never re-decides them. */
+export type MilestoneUpdateResult = SafeMilestone & {
+  effects: {
+    parents: {
+      id: string;
+      status: Milestone["status"];
+      spend?: string;
+      actualDate?: Date;
+      startDate?: Date;
+    }[];
+    projectStatus: ProjectStatus | null;
+    projectSpent: string;
+    projectStartDate: Date | null;
+    settledBookings: { completed: string[]; cancelled: string[] };
+  };
+};
 
 export interface MilestoneWithFilesTradiesUpdates extends SafeMilestone {
   files: ProjectFile[];
@@ -208,6 +300,8 @@ export interface ProjectDetail extends SafeProject {
   certifierEngagement: CertifierEngagementDetail | null;
   /** Progress claims raised against this project, newest first. */
   invoices: SafeInvoice[];
+  /** Who is selected for each trade, newest first, cancelled ones included. */
+  tradeSelections: TradeSelectionSummary[];
 }
 
 /**
@@ -313,6 +407,8 @@ export type TradieScheduleListItem = {
   rating?: string;
   requiresQuote: boolean;
   quotedPrice?: string;
+  /** The booking's reply reference, quoted on every email about it. */
+  refToken?: string | null;
   contact: {
     email: string;
     phone: string;
@@ -380,6 +476,8 @@ export type TradieUrgentReminderItem = {
   daysLeft: number;
   status: TradieScheduleStatus;
   reminderSentAt?: string;
+  /** The booking's reply reference, for a reminder sent from here. */
+  refToken?: string | null;
   contact: {
     email: string;
     phone: string;
@@ -467,13 +565,6 @@ export type CreateProjectRequest = {
   estimatedEndDate?: string | null;
   notes?: string;
   quoteFile?: File | null;
-};
-
-export type CreateVariationRequest = {
-  projectId: string;
-  description: string;
-  cost: number;
-  requestedDate?: string;
 };
 
 export type AddProjectUpdateRequest = {

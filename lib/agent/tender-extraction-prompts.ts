@@ -1,3 +1,4 @@
+import { BUILDER_IDENTITY } from "@/lib/domain/identity/builder";
 import type { ProjectExtractionSectionKey } from "@/types/project-extraction";
 
 type TenderExtractionPromptInput = {
@@ -13,11 +14,53 @@ extraction contract:
 - Fill each schema field individually from the most specific source section available.
 - Leave a field blank ("" / null / []) when the value is not explicitly present.
 - Never fabricate, infer, or complete missing data from context.
-- Never emit raw JSON, nested objects, or object-like strings for a field value.
+- Never emit raw JSON, nested objects, or object-like strings for a field value. The one exception is legalAdministrationOwners, which is a list of owner objects as the schema defines.
 - Prefer Tender for scope, inclusions, exclusions, pricing, and acceptance language.
 - Prefer Contract for signed-date, MBA reference, payment timing, and any post-sign legal metadata.
 - If the documents conflict, keep the most document-specific value and leave a short conflict note in the source reasoning, not in the field value.
 `;
+
+/**
+ * Who is and is not an owner. Its own block because it is the field the model
+ * gets wrong in the expensive direction: the builder's name, phone and email
+ * are printed on every page, often right beside the owners, and an owner
+ * becomes a customer and a Xero contact. `withoutBuilderDetails` checks the
+ * answer afterwards; this is what keeps it from being needed.
+ */
+const OWNERS_GUIDE = `<owners>
+  <who_is_an_owner>
+    An owner is a party the signed Contract labels "Owner" (or "Owner 1", "Owner 2", "Owner(s)", "the Owner") — the client the house is being built for, who signs on the Owner line. Usually a person; sometimes a company or trust, in which case the owner is the company and its name is the name.
+  </who_is_an_owner>
+
+  <the_builder_is_never_an_owner>
+    This business is the Builder on every contract. Never return any of these as an owner, or as any owner's detail:
+    - name: ${BUILDER_IDENTITY.tradingName} / ${BUILDER_IDENTITY.legalName}, in any spelling or capitalisation
+    - licence ${BUILDER_IDENTITY.licenceNumber}, ABN ${BUILDER_IDENTITY.abn}
+    - office address: ${BUILDER_IDENTITY.officeAddress}
+    - phone: ${BUILDER_IDENTITY.phones.join(", ")}
+    - any email ending @${BUILDER_IDENTITY.emailDomain}
+    - the builder's director, nominated supervisor, sales or office staff, or whoever signs on the Builder line
+  </the_builder_is_never_an_owner>
+
+  <also_not_owners>
+    Witnesses; the certifier / PCA; architect, designer, engineer or surveyor; the lender, bank or broker; a real-estate or selling agent; solicitors or conveyancers; the insurer (HBCF); the council; any tradie or supplier; the person who made the enquiry unless the contract also names them as Owner.
+  </also_not_owners>
+
+  <reading_the_who_section>
+    - The Owner block and the Builder block sit side by side or one after the other. Take values only from inside the Owner block; stop at the heading "Builder", a licence number, or an ABN.
+    - A phone, email or address printed in a page header, footer or letterhead is the builder's, not an owner's.
+    - Attach a detail to an owner only when it is printed in that owner's block or on that owner's line. If you are unsure whose it is, leave it blank — the office fills it in.
+    - Owners on separate lines (Owner 1, Owner 2) are separate owners. One line naming two people ("John Smith and Jane Smith") is two owners too, each with their own name; a detail printed once on that line goes to the first of them only. A company or trust is one owner.
+  </reading_the_who_section>
+
+  <when_this_excerpt_has_no_owner_block>
+    You may be reading one excerpt of a longer document. If this excerpt does not contain the Contract's Owner block, return [] for legalAdministrationOwners. Do not build owners from a signature page, a footer, the tender cover, or the lead information alone.
+  </when_this_excerpt_has_no_owner_block>
+
+  <self_check>
+    Before answering, read each owner back: if its name, email, phone or address matches anything in <the_builder_is_never_an_owner>, remove that owner (or that detail).
+  </self_check>
+</owners>`;
 
 /**
  * Per-field extraction guidance sourced from the "Tender & Contract Mapping To
@@ -87,26 +130,14 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
         logic: "Extract the string between 'SITE ADDRESS:' and 'FINANCE'.",
         importance: "Prevents mobilization to the wrong lot.",
       },
-      legalAdministrationOwnerNames: {
-        label: "Owner Names",
-        source: 'Contract: "WHO" > Owner(s)',
+      legalAdministrationOwners: {
+        label: "Owners",
+        source:
+          'Contract: "WHO" section, the block headed Owner / Owner(s) / Owner 1, Owner 2 — never the Builder block beside it',
         logic:
-          "Extract each named owner (Owner 1, Owner 2, ...) as separate array entries.",
-        importance: "Confirms who is legally party to the contract.",
-      },
-      legalAdministrationOwnerEmails: {
-        label: "Owner Emails",
-        source: 'Contract: "WHO" > Owner(s)',
-        logic: "Extract each owner's email address as a separate array entry.",
-        importance: "Instant access for site-meeting requests and notices.",
-      },
-      legalAdministrationOwnerPhones: {
-        label: "Owner Phones",
-        source: 'Contract: "WHO" > Owner(s)',
-        logic:
-          "Extract each owner's mobile/phone number as a separate array entry.",
+          "One object per party the contract labels Owner (Owner 1, Owner 2, ...) in document order: { name, email, phone, address }. address is the owner's own residential/postal address (the 'of ...' line), never the site address. Put each detail on the owner it is printed against. If a detail is printed once for several owners, give it to the first of them only and leave the others blank. Never shift a detail onto a different owner to fill a gap. The builder, its staff and every other party are not owners — see <owners> below.",
         importance:
-          "Instant access for site-meeting requests and urgent contact.",
+          "Each owner becomes a customer on the project and a Xero contact: the name on every notice and invoice, and where they are sent.",
       },
       legalAdministrationCommencementTrigger: {
         label: "Commencement Trigger",
@@ -419,14 +450,14 @@ ${EXTRACTION_CONTRACT}
 
 <general_rules>
   <rule>Return only structured output that matches the schema.</rule>
-  <rule>Treat every field as independent. Do not bundle values into paragraphs, tables, arrays of objects, or nested JSON.</rule>
+  <rule>Treat every field as independent. Do not bundle values into paragraphs, tables, arrays of objects, or nested JSON — except legalAdministrationOwners, where each owner is one object holding that owner's own name, email, phone and address.</rule>
   <rule>Use empty string, null, or [] for any value that cannot be verified directly from the documents.</rule>
 
   <rule>Contract Document information takes precedence over Tender Document information for any field that appears in both documents.</rule>
   <rule>Use Tender sections for scope, inclusions, exclusions, allowances, payment schedule, and acceptance language.</rule>
   <rule>Use Contract sections for signature date, contract administration metadata, and any MBA-specific reference information.</rule>
-  <rule>Use Lead Information for any missing site, client, or contact details.</rule>
-  <rule>Lead Information may include a secondary client (secondaryName/secondaryEmail/secondaryPhone) when the lead has a co-owner; record the secondary client in the relevant owner arrays alongside the primary client only when the tender/contract does not state otherwise.</rule>
+  <rule>Use Lead Information for any missing site details.</rule>
+  <rule>Owners come from the tender/contract, never from the Lead Information alone: the person who made the enquiry is not necessarily an owner. Lead Information (including secondaryName/secondaryEmail/secondaryPhone) may fill a missing email or phone on an owner only when the lead's name is that owner's name.</rule>
   <rule>If a field appears in both documents, prefer the signed Contract for post-signature administrative facts and the Tender for scope/legal package content.</rule>
   <rule>If a field is not found, leave it blank rather than fabricating something plausible.</rule>
 </general_rules>
@@ -439,6 +470,8 @@ ${EXTRACTION_CONTRACT}
   <rule name="payment_stage_sum">A complete payment/claim stage schedule should sum to 100%; if the extracted stages look incomplete, re-check the source markdown for missed rows before finalizing commercialsAndClaimsPaymentStages.</rule>
   <rule name="h_class_vapour_barrier">An H1/H2 slab class normally requires a vapour barrier; if subStructureAndGroundConcreteSlabClass indicates an H-class slab but no vapour barrier text is found, double-check the source before leaving subStructureAndGroundVapourBarrier blank.</rule>
 </precedence_and_conflict_resolution>
+
+${OWNERS_GUIDE}
 
 <section_guide>
 ${renderSectionGuideXml()}
