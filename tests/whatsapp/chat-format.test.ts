@@ -45,3 +45,18 @@ test("initials and sender colours are stable", () => {
   assert.equal(initials("+61 412 345 678"), "#");
   assert.equal(senderColour("+61412345678"), senderColour("+61412345678"));
 });
+
+test("the media workflow's retry count matches the domain's attempt limit", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { REPO_ROOT } = await import("../support/repo-root");
+  const { MAX_MEDIA_ATTEMPTS } = await import("@/lib/domain/whatsapp/media");
+  const source = readFileSync(
+    join(REPO_ROOT, "lib/workflow/whatsapp-media.ts"),
+    "utf8",
+  );
+  // A literal in the workflow (the sandbox cannot load the domain module), so
+  // pin it here: retries + the first attempt = the domain's limit.
+  const retries = Number(source.match(/storeOne\.maxRetries = (\d+);/)?.[1]);
+  assert.equal(retries + 1, MAX_MEDIA_ATTEMPTS);
+});

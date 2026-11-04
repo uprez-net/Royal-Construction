@@ -3,10 +3,7 @@ import { FatalError, RetryableError, getStepMetadata } from "workflow";
 import { vercelBlobPut } from "@/lib/blob-port";
 import { isDomainError, DomainSideEffectError } from "@/lib/domain/errors";
 import { systemPrincipal } from "@/lib/domain/principal";
-import {
-  MAX_MEDIA_ATTEMPTS,
-  storeWhatsAppMedia,
-} from "@/lib/domain/whatsapp/media";
+import { storeWhatsAppMedia } from "@/lib/domain/whatsapp/media";
 import prisma from "@/lib/prisma";
 import { createCloudApiMediaPort } from "@/lib/whatsapp/cloud-api";
 import { readWhatsAppConfig } from "@/lib/whatsapp/config";
@@ -50,7 +47,10 @@ async function storeOne(mediaId: string): Promise<string> {
     );
   }
 }
-storeOne.maxRetries = MAX_MEDIA_ATTEMPTS - 1;
+// Five attempts in all, matching MAX_MEDIA_ATTEMPTS in the domain. A literal on
+// purpose: reading the constant here would pull the domain module — and
+// @prisma/client — into the workflow sandbox, which refuses Node packages.
+storeOne.maxRetries = 4;
 
 // The workflow body stays to steps and literals: it runs in the workflow
 // sandbox, which replays it, and has no business loading Prisma.
