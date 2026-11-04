@@ -12,18 +12,18 @@ import {
   Video,
 } from "lucide-react";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { WhatsAppMediaRecord } from "@/lib/domain/whatsapp/media";
 import type { Jsonified } from "@/lib/leads/whatsapp-types";
 import { fileKindLabel, formatFileSize } from "@/lib/whatsapp/chat-format";
 
-// One WhatsApp attachment, as it sits inside a bubble.
+import { WhatsAppAudioPlayer } from "./media/whatsapp-audio-player";
+import { WhatsAppPhoto, WhatsAppSticker } from "./media/whatsapp-image";
+import { WhatsAppVideoPlayer } from "./media/whatsapp-video-player";
+
+// One WhatsApp attachment, as it sits inside a bubble: photos and stickers
+// through next/image, video and voice notes in the app's own players
+// (./media), documents as a file card.
 //
 // The file is served from Blob storage once the media workflow has copied it.
 // Until then it says it is still saving; if the copy failed it says why and
@@ -118,101 +118,24 @@ export function WhatsAppMedia({
   media: Media;
   onRetry?: (mediaId: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
   if (!media.url) return <Placeholder media={media} onRetry={onRetry} />;
   const url = media.url;
 
   switch (media.type) {
     case "IMAGE":
-      return (
-        <>
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="block overflow-hidden rounded-md focus-visible:outline-2 focus-visible:outline-[#00a884]"
-            aria-label={
-              media.caption ? `Open photo: ${media.caption}` : "Open photo"
-            }
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element -- Blob URL, sized by the bubble */}
-            <img
-              src={url}
-              alt={media.caption ?? "Photo sent on WhatsApp"}
-              loading="lazy"
-              className="max-h-[330px] w-full min-w-[200px] max-w-[330px] object-cover"
-            />
-          </button>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogContent className="max-w-[min(92vw,1100px)] border-0 bg-black/95 p-2 sm:p-4">
-              <DialogTitle className="sr-only">Photo</DialogTitle>
-              <DialogDescription className="sr-only">
-                {media.caption ?? "Photo sent on WhatsApp"}
-              </DialogDescription>
-              {/* eslint-disable-next-line @next/next/no-img-element -- full-size Blob original */}
-              <img
-                src={url}
-                alt={media.caption ?? "Photo sent on WhatsApp"}
-                className="mx-auto max-h-[80vh] w-auto rounded-md object-contain"
-              />
-              <div className="flex items-center justify-between gap-3 px-1 pt-2 text-sm text-white/80">
-                <span className="truncate">{media.caption}</span>
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  download
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-white hover:bg-white/20"
-                >
-                  <Download className="size-4" aria-hidden="true" />
-                  Download
-                </a>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </>
-      );
+      return <WhatsAppPhoto src={url} caption={media.caption} />;
     case "STICKER":
-      return (
-        // eslint-disable-next-line @next/next/no-img-element -- stickers are small webp files
-        <img
-          src={url}
-          alt="Sticker"
-          loading="lazy"
-          className="size-32 object-contain"
-        />
-      );
+      return <WhatsAppSticker src={url} />;
     case "VIDEO":
-      return (
-        <video
-          src={url}
-          controls
-          preload="metadata"
-          className="max-h-[330px] w-full min-w-[220px] max-w-[330px] rounded-md bg-black"
-        >
-          <a href={url}>Download the video</a>
-        </video>
-      );
+      return <WhatsAppVideoPlayer src={url} caption={media.caption} />;
     case "AUDIO":
       return (
-        <div className="flex min-w-[240px] items-center gap-2 px-1 py-1">
-          <span
-            className={cn(
-              "inline-flex size-9 shrink-0 items-center justify-center rounded-full text-white",
-              media.voice ? "bg-[#00a884]" : "bg-[#ff8a3d]",
-            )}
-            aria-hidden="true"
-          >
-            <Mic className="size-4.5" />
-          </span>
-          <audio
-            src={url}
-            controls
-            preload="metadata"
-            className="h-9 w-full min-w-0"
-          >
-            <a href={url}>Download the audio</a>
-          </audio>
-        </div>
+        <WhatsAppAudioPlayer
+          src={url}
+          seed={media.id}
+          voice={media.voice}
+          byteSize={media.byteSize}
+        />
       );
     case "DOCUMENT": {
       const kind = fileKindLabel(media.fileName, media.mimeType);
@@ -222,7 +145,7 @@ export function WhatsAppMedia({
           href={url}
           target="_blank"
           rel="noreferrer"
-          className="flex min-w-[240px] items-center gap-3 rounded-md bg-black/[0.04] px-3 py-2.5 transition hover:bg-black/[0.07]"
+          className="flex min-w-60 items-center gap-3 rounded-md bg-black/4 px-3 py-2.5 transition hover:bg-black/7"
         >
           <span
             className={cn(

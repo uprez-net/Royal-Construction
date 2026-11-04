@@ -6,7 +6,10 @@ import {
   chatTime,
   fileKindLabel,
   formatFileSize,
+  formatMediaDuration,
   initials,
+  peaksFromSamples,
+  placeholderPeaks,
   senderColour,
 } from "@/lib/whatsapp/chat-format";
 
@@ -59,4 +62,38 @@ test("the media workflow's retry count matches the domain's attempt limit", asyn
   // pin it here: retries + the first attempt = the domain's limit.
   const retries = Number(source.match(/storeOne\.maxRetries = (\d+);/)?.[1]);
   assert.equal(retries + 1, MAX_MEDIA_ATTEMPTS);
+});
+
+test("media clocks read like a phone's", () => {
+  assert.equal(formatMediaDuration(7.9), "0:07");
+  assert.equal(formatMediaDuration(102), "1:42");
+  assert.equal(formatMediaDuration(3725), "1:02:05");
+  assert.equal(formatMediaDuration(Number.POSITIVE_INFINITY), "0:00");
+  assert.equal(formatMediaDuration(null), "0:00");
+});
+
+test("the waveform follows the recording's loudness, quietest still visible", () => {
+  // Two quiet slices, then two loud ones.
+  const samples = [0.1, -0.1, 0.1, -0.1, 0.8, -0.8, 0.8, -0.8];
+  const peaks = peaksFromSamples(samples, 4);
+  assert.equal(peaks.length, 4);
+  assert.equal(peaks[3], 1);
+  assert.ok(peaks[0] < peaks[2]);
+  assert.ok(peaks.every((peak) => peak >= 0.08 && peak <= 1));
+  assert.deepEqual(peaksFromSamples([0, 0, 0, 0], 2), [0.08, 0.08]);
+  assert.deepEqual(peaksFromSamples([], 3), [0.08, 0.08, 0.08]);
+});
+
+test("the stand-in waveform is stable per file and differs between files", () => {
+  assert.deepEqual(
+    placeholderPeaks("media-1", 36),
+    placeholderPeaks("media-1", 36),
+  );
+  assert.notDeepEqual(
+    placeholderPeaks("media-1", 36),
+    placeholderPeaks("media-2", 36),
+  );
+  assert.ok(
+    placeholderPeaks("x", 36).every((peak) => peak >= 0.08 && peak <= 1),
+  );
 });

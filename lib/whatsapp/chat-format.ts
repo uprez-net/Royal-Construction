@@ -108,3 +108,66 @@ export function initials(name: string | null | undefined): string {
     words[0][0] + (words.length > 1 ? words.at(-1)![0] : "")
   ).toUpperCase();
 }
+
+/** "0:07", "1:42", "1:02:05" — a media clock. Unknown or broken reads "0:00". */
+export function formatMediaDuration(
+  seconds: number | null | undefined,
+): string {
+  if (!seconds || !Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const whole = Math.floor(seconds);
+  const h = Math.floor(whole / 3600);
+  const m = Math.floor((whole % 3600) / 60);
+  const s = String(whole % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
+
+/** The quietest bar still drawn, so silence reads as a line, not a gap. */
+const MIN_PEAK = 0.08;
+
+/**
+ * A waveform for the voice-note player: `bars` heights between MIN_PEAK and
+ * 1, from decoded samples. RMS per slice, normalised to the loudest slice, so
+ * a quiet recording still fills the bubble.
+ */
+export function peaksFromSamples(
+  samples: ArrayLike<number>,
+  bars: number,
+): number[] {
+  if (bars <= 0) return [];
+  if (samples.length === 0) return Array.from({ length: bars }, () => MIN_PEAK);
+  const size = Math.max(1, Math.floor(samples.length / bars));
+  const rms: number[] = [];
+  for (let bar = 0; bar < bars; bar += 1) {
+    const start = bar * size;
+    const end = Math.min(samples.length, start + size);
+    let sum = 0;
+    for (let index = start; index < end; index += 1) {
+      sum += samples[index] * samples[index];
+    }
+    rms.push(end > start ? Math.sqrt(sum / (end - start)) : 0);
+  }
+  const loudest = Math.max(...rms);
+  if (loudest <= 0) return rms.map(() => MIN_PEAK);
+  return rms.map((value) =>
+    Number(Math.max(MIN_PEAK, value / loudest).toFixed(3)),
+  );
+}
+
+/**
+ * A stand-in waveform when the file can't be decoded in this browser (Safari
+ * and some Ogg voice notes): stable for a file, so it doesn't jump on every
+ * render, and clearly speech-shaped rather than a flat line.
+ */
+export function placeholderPeaks(seed: string, bars: number): number[] {
+  let state = 2166136261;
+  for (const char of seed)
+    state = Math.imul(state ^ char.charCodeAt(0), 16777619);
+  return Array.from({ length: bars }, (_, index) => {
+    state = Math.imul(state ^ (state >>> 15), 2246822507) >>> 0;
+    const noise = (state % 1000) / 1000;
+    const envelope = Math.sin((Math.PI * (index + 0.5)) / bars);
+    return Number(
+      Math.max(MIN_PEAK, 0.25 + 0.75 * noise * envelope).toFixed(3),
+    );
+  });
+}
