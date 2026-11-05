@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "vitest";
 
 import {
+  ccWithSender,
   DEFAULT_BUSINESS_EMAIL,
   isOwnMailbox,
+  isSenderCopy,
   resolveLeadEmail,
 } from "@/lib/graph/mailbox";
 
@@ -121,6 +123,84 @@ describe("resolveLeadEmail", () => {
     assert.equal(
       resolveLeadEmail("  Client@Example.COM  ", ""),
       "client@example.com",
+    );
+  });
+});
+
+describe("ccWithSender", () => {
+  it("adds the sending mailbox to an empty CC", () => {
+    assert.deepEqual(
+      ccWithSender("info@royalconstructions.com.au", {
+        to: "client@example.com",
+      }),
+      ["info@royalconstructions.com.au"],
+    );
+  });
+
+  it("keeps the caller's CC and appends the sender", () => {
+    assert.deepEqual(
+      ccWithSender("info@royalconstructions.com.au", {
+        to: ["client@example.com"],
+        cc: "dhrub@royalconstructions.com.au",
+      }),
+      ["dhrub@royalconstructions.com.au", "info@royalconstructions.com.au"],
+    );
+  });
+
+  it("does not add the sender twice when it is already on the message", () => {
+    for (const message of [
+      { to: "Info@RoyalConstructions.com.au" },
+      { to: "client@example.com", cc: ["info@royalconstructions.com.au"] },
+      { to: "client@example.com", bcc: "info@royalconstructions.com.au" },
+    ]) {
+      const cc = ccWithSender("info@royalconstructions.com.au", message);
+      const copies = (cc ?? []).filter(
+        (address) => address.toLowerCase() === "info@royalconstructions.com.au",
+      );
+      assert.ok(copies.length <= 1, JSON.stringify(message));
+    }
+    assert.equal(
+      ccWithSender("info@royalconstructions.com.au", {
+        to: "info@royalconstructions.com.au",
+      }),
+      undefined,
+    );
+  });
+
+  it("leaves CC alone when the sender is unknown", () => {
+    assert.equal(
+      ccWithSender(undefined, { to: "client@example.com" }),
+      undefined,
+    );
+    assert.deepEqual(
+      ccWithSender("  ", { to: "client@example.com", cc: "a@example.com" }),
+      ["a@example.com"],
+    );
+  });
+});
+
+describe("isSenderCopy", () => {
+  it("recognises our own send CC'd back to the same mailbox", () => {
+    assert.equal(
+      isSenderCopy({
+        from: DEFAULT_BUSINESS_EMAIL,
+        cc: [DEFAULT_BUSINESS_EMAIL.toUpperCase()],
+      }),
+      true,
+    );
+  });
+
+  it("does not swallow a website form relayed by our mailbox to itself", () => {
+    assert.equal(isSenderCopy({ from: DEFAULT_BUSINESS_EMAIL, cc: [] }), false);
+  });
+
+  it("does not swallow a client who CCs our address", () => {
+    assert.equal(
+      isSenderCopy({
+        from: "client@example.com",
+        cc: ["client@example.com", DEFAULT_BUSINESS_EMAIL],
+      }),
+      false,
     );
   });
 });
