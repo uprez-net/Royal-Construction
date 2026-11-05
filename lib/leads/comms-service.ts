@@ -4,6 +4,7 @@ import { fetchJson } from "@/utils/fetch";
 import type {
   BrowserCredentialDto,
   CallDto,
+  CommsAvailabilityDto,
   CommsStatusDto,
   LeadCallsDto,
   PlaceCallResultDto,
@@ -160,6 +161,17 @@ export function fetchCommsStatus(
     "/api/comms/status",
     { ...GET, signal },
     "Could not load the phone settings.",
+  );
+}
+
+/** Whether calling and texting are available; readable by any staff. */
+export function fetchCommsAvailability(
+  signal?: AbortSignal,
+): Promise<CommsAvailabilityDto> {
+  return unwrap(
+    "/api/comms/status",
+    { ...GET, signal },
+    "Could not load whether calling is available.",
   );
 }
 

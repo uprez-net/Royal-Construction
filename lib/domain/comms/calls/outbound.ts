@@ -192,6 +192,12 @@ export async function requestLeadCall(
       flowStep: CallFlowStep.DIALING_CUSTOMER,
       providerErrorCode: null,
       providerErrorTitle: null,
+      // A retry after a definite refusal may switch browser <-> mobile; the
+      // flow rings whichever this attempt asked for.
+      staffTarget:
+        input.target === "mobile"
+          ? CallStaffTarget.MOBILE
+          : CallStaffTarget.BROWSER,
       startedAt: now,
       status: CallStatus.QUEUED,
     };
@@ -202,10 +208,6 @@ export async function requestLeadCall(
         idempotencyKey: outboxKey,
         leadId: lead.id,
         provider: providerColumn(voice.provider),
-        staffTarget:
-          input.target === "mobile"
-            ? CallStaffTarget.MOBILE
-            : CallStaffTarget.BROWSER,
         staffUserId: principal.userId,
       },
       select: { id: true },

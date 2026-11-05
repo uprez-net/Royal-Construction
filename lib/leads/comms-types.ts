@@ -150,12 +150,17 @@ export type WhatsAppCallPermissionDto = {
   reason: string | null;
 };
 
-export type CommsStatusDto = {
+/** What every member of staff may read: whether to show the buttons. */
+export type CommsAvailabilityDto = {
+  smsAvailable: boolean;
+  callsAvailable: boolean;
+};
+
+/** The full configuration, for an admin only. */
+export type CommsStatusDto = CommsAvailabilityDto & {
   activeProvider: "twilio" | "telnyx" | null;
   smsEnabled: boolean;
   callsEnabled: boolean;
-  smsAvailable: boolean;
-  callsAvailable: boolean;
   browserCalling: boolean;
   recordingMode: "off" | "consented";
   staffForwardNumber: string | null;

@@ -81,7 +81,8 @@ export function createTelnyxDialer(events: DialerEvents): Dialer {
 
   return {
     answer: async () => {
-      await current?.answer({ remoteElement: remoteAudio() } as never);
+      // Plays through client.remoteElement, set when the client connected.
+      await current?.answer();
     },
     destroy: () => {
       void current?.hangup();

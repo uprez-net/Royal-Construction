@@ -536,6 +536,7 @@ export function parseWhatsAppWebhook(
                 : null,
             fromWaId: message.data.from,
             permanent: permission.is_permanent === true,
+            providerMessageId: message.data.id,
           });
           return;
         }

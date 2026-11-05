@@ -51,6 +51,14 @@ function describeTelnyxError(json: unknown): {
   };
 }
 
+function carrierStatusIs(error: unknown, ...statuses: number[]): boolean {
+  return (
+    error instanceof CommsError
+    && error.httpStatus !== null
+    && statuses.includes(error.httpStatus)
+  );
+}
+
 /** One credential per identity, looked up once per process. */
 const sipUsernames = new Map<string, string>();
 
@@ -268,8 +276,9 @@ export function createTelnyxAdapter(
     try {
       await action(callControlId, "hangup", "ending the call");
     } catch (error) {
-      // 422: the call already ended, which is what was asked for.
-      if (error instanceof CommsError && error.kind === "rejected") return;
+      // 404/422: the call already ended, which is what was asked for. Any
+      // other refusal (401, 403, ...) is a real failure and is reported.
+      if (carrierStatusIs(error, 404, 422)) return;
       throw error;
     }
   }
@@ -360,11 +369,7 @@ export function createTelnyxAdapter(
                 "deleting a recording",
               );
             } catch (error) {
-              if (
-                error instanceof CommsError
-                && error.providerCode === "TELNYX_HTTP_404"
-              )
-                return;
+              if (carrierStatusIs(error, 404)) return;
               throw error;
             }
           },
@@ -489,10 +494,7 @@ export function createTelnyxAdapter(
               } catch (error) {
                 // The call was placed (it has an id), so a 404 means Telnyx
                 // has forgotten it: it ended, how is unknown. VERIFY.
-                if (
-                  error instanceof CommsError
-                  && error.providerCode?.endsWith("404")
-                ) {
+                if (carrierStatusIs(error, 404)) {
                   return {
                     alive: false,
                     durationSeconds: null,

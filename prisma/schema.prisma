@@ -2714,6 +2714,15 @@ model WhatsAppCallPermission {
   @@index([leadId])
 }
 
+/// Each call-permission reply (Meta's message id) applied once: Meta retries
+/// deliveries, and a retry must not write a second transition or history row.
+model WhatsAppCallPermissionReplyEvent {
+  providerMessageId String   @id
+  receivedAt        DateTime @default(now())
+
+  @@index([receivedAt])
+}
+
 model AdminOfferContent {
   id           String   @id @default(uuid())
   buildScope   String[]

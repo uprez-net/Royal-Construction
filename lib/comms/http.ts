@@ -91,6 +91,7 @@ export async function carrierRequest(
       : `The phone provider failed while handling ${request.what} (HTTP ${response.status}); it may or may not have acted.`,
     definite ? "rejected" : "uncertain",
     providerCode,
+    response.status,
   );
 }
 

@@ -93,7 +93,11 @@ export async function recordInboundSms(
       });
       if (existing) return { outcome: "duplicate" as const };
 
-      const candidates = business ? await leadsWithNumber(tx, input.from) : [];
+      // Every lead with this number, whatever number it was sent to: STOP
+      // applies to them all. Filing it onto a lead needs a known business
+      // number as well.
+      const matches = await leadsWithNumber(tx, input.from);
+      const candidates = business ? matches : [];
       const base = {
         body,
         businessNumber: input.to,
@@ -122,12 +126,13 @@ export async function recordInboundSms(
           },
           select: { id: true },
         });
-        // An unmatched STOP still stops every lead with that number: the
-        // person asked, and not knowing which lead they are is no excuse.
-        if (isOptOutMessage(input.body) && candidates.length > 0) {
+        // An unmatched STOP still stops every lead with that number — even
+        // when it arrived on a number we don't recognise: the person asked,
+        // and not knowing which lead they are is no excuse.
+        if (isOptOutMessage(input.body) && matches.length > 0) {
           await tx.lead.updateMany({
             data: { smsOptedOutAt: input.receivedAt },
-            where: { id: { in: candidates }, smsOptedOutAt: null },
+            where: { id: { in: matches }, smsOptedOutAt: null },
           });
         }
         return { messageId: message.id, outcome: "unmatched" as const, reason };

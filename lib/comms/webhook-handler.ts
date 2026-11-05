@@ -187,10 +187,14 @@ export async function handleCommsWebhook(
         }
         default: {
           if (event.type === "call.incoming" && !config.callsEnabled) {
-            instructions = NOT_IN_SERVICE;
+            // A markup provider can speak the notice in its answer. A command
+            // provider would have to answer the call first (and start billing
+            // it) to say anything, so it just hangs up the ringing call.
+            const markup = adapter.capabilities.callControl === "markup";
+            instructions = markup ? NOT_IN_SERVICE : [{ op: "hangup" }];
             Object.assign(respondContext, {
               providerCallId: event.providerCallId,
-              trigger: "call.incoming",
+              trigger: markup ? "call.incoming" : "continuation",
             });
             outcomes.push("call.incoming:not_in_service");
             break;

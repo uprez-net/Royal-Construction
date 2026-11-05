@@ -31,10 +31,10 @@ spec or a real request before coding. **Pricing was not researched**; see
    **VERIFY** current AU requirements and SMS capability for the number type you pick.
    Alphanumeric sender IDs need ACMA registration (see README compliance section).
 4. **Messaging profile.** Create one, set its inbound webhook URL to
-   `https://<origin>/api/comms/telnyx/sms-inbound` and attach the number. Use the profile
+   `https://<origin>/api/comms/telnyx/sms` and attach the number. Use the profile
    ID as `TELNYX_MESSAGING_PROFILE_ID`.
 5. **Call Control Application** (voice). Create one, set the webhook URL to
-   `https://<origin>/api/comms/telnyx/status`, then attach the number and an **outbound
+   `https://<origin>/api/comms/telnyx/voice`, then attach the number and an **outbound
    voice profile** (required to dial out; restrict allowed destinations to Australia).
    Its ID is `TELNYX_CONNECTION_ID`. **VERIFY** the exact name of the required ID field in
    `POST /v2/calls`.
@@ -57,12 +57,10 @@ TELNYX_MESSAGING_PROFILE_ID=
 
 ### Route table
 
-| Route                                | Purpose                                                    | Response       |
-| ------------------------------------ | ---------------------------------------------------------- | -------------- |
-| `POST /api/comms/telnyx/sms-inbound` | `message.received`                                         | `200` / `204`  |
-| `POST /api/comms/telnyx/sms-status`  | `message.sent`, `message.finalized` (if separate URL used) | `200` / `204`  |
-| `POST /api/comms/telnyx/status`      | All Call Control events for calls placed by the CRM        | `200`, no body |
-| `POST /api/comms/telnyx/connect`     | Internal: run the answered-call steps (bridge to browser)  | `200`, no body |
+| Route                          | Purpose                                                                       | Response       |
+| ------------------------------ | ----------------------------------------------------------------------------- | -------------- |
+| `POST /api/comms/telnyx/sms`   | `message.received`, `message.sent`, `message.finalized`                       | `200` / `204`  |
+| `POST /api/comms/telnyx/voice` | Every Call Control event: inbound and outbound calls, transfers, recordings  | `200`, no body |
 
 Telnyx posts JSON and ignores the response body for Call Control. Command-driven flows act
 through REST, not through the webhook response (this differs from Twilio and Plivo).
@@ -145,7 +143,7 @@ async function sendSms({ from, to, body }) {
     to,
     text: body,
     messaging_profile_id: env("TELNYX_MESSAGING_PROFILE_ID"),
-    webhook_url: commsCallback("telnyx", "sms-status"), // optional per-message status URL
+    webhook_url: commsCallbackUrl(origin, "telnyx", "sms"), // per-message status URL
   })
   return { providerMessageId: r.data.id }
 }
@@ -196,7 +194,7 @@ async function placeCall(i) {
 }
 ```
 
-Flow: the `status` route receives `call.answered` for the customer leg → it asks the
+Flow: the `voice` route receives `call.answered` for the customer leg → it asks the
 domain what to do (`answeredOutboundCall`, same as the Twilio `customer-connect` route)
 → `callControl.execute(callId, [{ op: "dialBrowser", identity, … }])` which issues a
 `transfer` (or `bridge` to a leg created by dialling the agent) to the agent's SIP URI.
@@ -278,17 +276,35 @@ tabs need separate credentials; use `tag = identity:<tabId>`. Credentials may ta
 5 seconds to become usable: retry login with short backoff. Check registration with
 `GET /v2/sip_registration_status?credential_type=telephony_credential&username=<sip_username>`.
 
-The SDK is **not bundled** in this app. Until a `telnyx-dialer.ts` implementing `Dialer`
-(file 06 §8) exists, the adapter must report `browserSdkBundled: false` and the dialer
-shows "unavailable".
+The SDK **is bundled**: `components/comms/dialer/telnyx-dialer.ts` implements `Dialer`
+(file 06 §8) over `@telnyx/webrtc`, loaded only when the active provider is Telnyx, and
+the adapter reports `browserSdkBundled: true`. A transfer rings one browser (the most
+recently active staff member, `browserRingGroup: false`); Royal's call id reaches the
+browser in the `X-Royal-Call-Id` custom header (**VERIFY** against a live account).
 
-## 7. AI voice agent and recordings
+## 7. Inbound calls, recordings and the AI voice agent
 
-Both are **out of scope for the first Telnyx release**. Telnyx offers a "Streaming start"
-command (WebSocket audio) and recording commands, but the audio frame format, codec and
-event names were not verified. When adding them, capture real frames first and write the
-`StreamCodec` against fixtures, as file 03 §6 does for Plivo. Until then
-`capabilities.inboundCallFlow = false` and `recordings = false`.
+**Inbound call flow: implemented** (`capabilities.inboundCallFlow = true`). An incoming
+call is answered with the `answer` command; its `call.answered` event asks the domain for
+the next steps, which run as commands: the recording question (`gather_using_speak`), a
+`transfer` to the staff browser or the office mobile, then voicemail (`record_start`). A
+step that finishes later carries the remaining steps in `client_state`, and the matching
+`.ended`/`.saved` event continues them. With calling switched off, a ringing call is hung
+up without being answered.
+
+**Recordings: implemented** (`capabilities.recordings = true` when Telnyx is configured).
+Consented calls start `record_start` (dual channel, mp3) once connected; voicemails use the
+same command. The "recording saved" event files the recording; the copy job asks
+`GET /recordings/{id}` for a fresh download link (the link in the callback is never
+fetched), stores the audio privately, then `DELETE`s it at Telnyx.
+
+**AI voice agent: not implemented.** Telnyx offers a "Streaming start" command (WebSocket
+audio), but the frame format, codec and event names were not verified. When adding it,
+capture real frames first and write the `StreamCodec` against fixtures, as file 03 §6 does
+for Plivo.
+
+Field names on all of the above are still **VERIFY** items; see the
+[runbook](../comms-runbook.md#not-yet-verified-against-a-live-account).
 
 ## 8. Telnyx-specific gotchas
 

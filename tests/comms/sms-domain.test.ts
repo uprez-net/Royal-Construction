@@ -324,6 +324,49 @@ test("STOP is honoured in the same transaction that records it", async () => {
   );
 });
 
+test("STOP sent to a number we don't recognise still stops every lead with it", async () => {
+  const recorder = recordingDb({
+    "lead.findMany": [{ id: 7 }, { id: 9 }],
+    "lead.updateMany": { count: 2 },
+    "smsMessage.create": { id: "in-3" },
+    "smsMessage.findUnique": null,
+  });
+  const outcome = await recordInboundSms(
+    systemPrincipal("test"),
+    {
+      body: "STOP",
+      from: "+61412345678",
+      mediaCount: 0,
+      provider: "twilio",
+      providerMessageId: "SM10",
+      receivedAt: new Date(),
+      to: "+61299990000",
+    },
+    recorder.transactionalDb,
+    { channel: channel() },
+  );
+  assert.deepEqual(outcome, {
+    messageId: "in-3",
+    outcome: "unmatched",
+    reason: "UNKNOWN_BUSINESS_NUMBER",
+  });
+  const optOut = recorder
+    .writes()
+    .find((call) => call.operation === "lead.updateMany");
+  assert.deepEqual(
+    (optOut?.args as { where: { id: { in: number[] } } }).where.id.in,
+    [7, 9],
+  );
+  const filed = recorder
+    .writes()
+    .find((call) => call.operation === "smsMessage.create");
+  assert.deepEqual(
+    (filed?.args as { data: { candidateLeadIds: number[] } }).data
+      .candidateLeadIds,
+    [],
+  );
+});
+
 test("a text from a number no lead has waits for a person", async () => {
   const recorder = recordingDb({
     "lead.findMany": [],

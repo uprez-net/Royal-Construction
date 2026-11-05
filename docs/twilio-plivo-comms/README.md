@@ -20,9 +20,12 @@ layer. [File 06](./06-provider-agnostic-architecture.md) maps that layer onto th
 repository: what is Twilio-specific today, the interfaces, the factory, webhook
 normalisation, per-tenant selection and the browser dialer.
 
-> **Status of this folder.** These are design and setup documents. At the time of writing
-> only Twilio is implemented in code; the Plivo and Telnyx material is a plan, with items
-> marked `VERIFY` still to be confirmed against a live account.
+> **Status of this folder.** These are design and setup documents. In this repository the
+> **Twilio and Telnyx adapters are shipped** (`lib/comms/`): SMS, outbound calls, the inbound
+> call flow, recordings and browser credentials, for either carrier. **Plivo is not
+> implemented**; its material is a plan. Telnyx items marked `VERIFY` are coded from the docs
+> and still to be confirmed against a live account. How to operate it:
+> [comms runbook](../comms-runbook.md).
 
 ## Read order
 
@@ -60,8 +63,8 @@ normalisation, per-tenant selection and the browser dialer.
 
 | Question                                    | Answer                                                                                                                                                                                                                                           |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Is Telnyx supported?                        | Designed, not built. File 07 documents SMS, outbound voice, webhooks and browser credentials. Its call model is REST commands, not markup. Inbound flow, recording and AI streaming for Telnyx are not verified. Pricing was **not** researched. |
-| Can Plivo do everything we use Twilio for?  | Yes for SMS, PSTN voice, browser calling, recording, IVR, AI audio streaming, WhatsApp messaging and WhatsApp calling. No Plivo equivalent was found for Twilio ConversationRelay (managed STT/TTS relay).                                       |
+| Is Telnyx supported?                        | Yes: shipped for SMS, outbound calls, the inbound call flow, recordings and browser calling (file 07). Its call model is REST commands, not markup. `VERIFY` field names still need a live-account check; there is no AI streaming. Pricing was **not** researched. |
+| Can Plivo do everything we use Twilio for?  | As a provider, yes (no Plivo adapter exists in this repository yet) for SMS, PSTN voice, browser calling, recording, IVR, AI audio streaming, WhatsApp messaging and WhatsApp calling. No Plivo equivalent was found for Twilio ConversationRelay (managed STT/TTS relay).                                       |
 | Is Plivo cheaper in AU?                     | Yes. About **4–5%** cheaper at pilot volume and **14–16%** at regular/busy volume on list prices. See [file 04](./04-au-cost-comparison.md#5-monthly-scenarios).                                                                                 |
 | Where is the biggest saving?                | Free recording, free audio streaming, cheaper WhatsApp provider fee (USD 0.001 vs 0.005 per message) and cheaper SMS. PSTN minute prices are close.                                                                                              |
 | Where is Plivo more expensive?              | Small WhatsApp volumes: Plivo adds **USD 10/month per WhatsApp Business Account** from 1 November 2026. Twilio has no monthly WhatsApp fee.                                                                                                      |
@@ -150,5 +153,5 @@ These are product requirements, not provider features. Build them into the neutr
 - Telnyx: [Receiving webhooks](https://developers.telnyx.com/docs/messaging/messages/receiving-webhooks),
   [Telephony credentials](https://developers.telnyx.com/docs/voice/webrtc/auth/telephony-credentials),
   [docs index](https://developers.telnyx.com/llms.txt), read 3 November 2026.
-- Within this repository, see [docs/phone](../phone/README.md) for the CitizenTechies-specific
-  Twilio plans. This folder is project-agnostic and does not depend on them.
+- Within this repository, see the [comms runbook](../comms-runbook.md) for setting up and
+  checking SMS, calls and WhatsApp calling on Twilio or Telnyx.

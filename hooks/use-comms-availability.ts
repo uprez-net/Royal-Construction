@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { fetchCommsStatus } from "@/lib/leads/comms-service";
+import { fetchCommsAvailability } from "@/lib/leads/comms-service";
 
 /**
  * Whether this deployment can call or text through the app. Read once per
@@ -14,7 +14,7 @@ export type CommsAvailability = { calls: boolean; sms: boolean };
 let pending: Promise<CommsAvailability> | null = null;
 
 function load(): Promise<CommsAvailability> {
-  pending ??= fetchCommsStatus()
+  pending ??= fetchCommsAvailability()
     .then((status) => ({
       calls: status.callsAvailable,
       sms: status.smsAvailable,

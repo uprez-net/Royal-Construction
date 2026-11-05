@@ -237,6 +237,42 @@ test("Telnyx: an inbound call is answered by command, and the webhook answers an
   );
 });
 
+test("Telnyx with calling switched off hangs up a ringing call without answering it", async () => {
+  const commands: string[] = [];
+  const fetchImpl = (async (url: string) => {
+    commands.push(String(url));
+    return new Response("{}", { status: 200 });
+  }) as typeof fetch;
+  const { deps: d } = deps({ "commsWebhookEvent.findUnique": null }, fetchImpl);
+  const response = await handleCommsWebhook(
+    telnyxRequest("voice", {
+      data: {
+        event_type: "call.initiated",
+        id: "evt-off",
+        payload: {
+          call_control_id: "v3:in",
+          direction: "incoming",
+          from: "+61412345678",
+          to: "+61290001234",
+        },
+      },
+    }),
+    { event: "voice", provider: "telnyx" },
+    {
+      ...d,
+      runtime: commsRuntimeFromEnv(
+        { ...ENV, COMMS_CALLS_ENABLED: "false" },
+        fetchImpl,
+      ),
+    },
+  );
+  assert.equal(response.status, 200);
+  // Answering would bill the call just to say "not in service".
+  assert.deepEqual(commands, [
+    "https://api.telnyx.com/v2/calls/v3%3Ain/actions/hangup",
+  ]);
+});
+
 test("a Telnyx event already processed is acknowledged without touching the domain", async () => {
   const { deps: d, recorder } = deps({
     "commsWebhookEvent.findUnique": { processedAt: new Date() },
@@ -379,4 +415,94 @@ test("switching provider changes no business behaviour: the same call writes the
   const twilio = await place("twilio");
   assert.ok(twilio.length > 0);
   assert.deepEqual(await place("telnyx"), twilio);
+});
+
+test("retrying a refused call on the same key rings whichever target this attempt chose", async () => {
+  // The browser attempt was refused outright (nothing rang); the same click
+  // intent retried as "office mobile" must ring the mobile, not the browser.
+  const failed = {
+    answeredAt: null,
+    answeredBy: null,
+    businessNumber: "+61280001234",
+    candidateLeadIds: [],
+    connectedAt: null,
+    customerNumber: "+61412345678",
+    direction: "OUTBOUND",
+    durationSeconds: null,
+    endedAt: NOW,
+    flowStep: "ENDED",
+    hangupCause: null,
+    id: "call-1",
+    lead: { id: 7, name: "Sam" },
+    leadId: 7,
+    needsReconciliation: false,
+    provider: "TWILIO",
+    providerErrorTitle: "Refused",
+    recordingConsent: "NOT_ASKED",
+    recordings: [],
+    staffTarget: "BROWSER",
+    staffUser: null,
+    startedAt: NOW,
+    status: "FAILED",
+  };
+  const recorder = recordingDb({
+    "call.findUnique": failed,
+    "call.upsert": { id: "call-1" },
+    "lead.findUnique": {
+      assignedId: null,
+      id: 7,
+      isArchived: false,
+      phone: "0412345678",
+    },
+    "outboxEvent.findUnique": {
+      attempts: 1,
+      id: "ob",
+      key: "k",
+      kind: "LEAD_CALL_PLACE",
+      payload: {},
+      status: "PENDING",
+    },
+    "outboxEvent.updateMany": { count: 1 },
+    "outboxEvent.upsert": {
+      id: "ob",
+      key: "k",
+      result: null,
+      status: "PENDING",
+    },
+  });
+  await requestLeadCall(
+    adminPrincipal(),
+    { idempotencyKey: "k", leadId: 7, now: NOW, target: "mobile" },
+    recorder.transactionalDb,
+    {
+      channel: {
+        browserCalling: true,
+        browserRingGroup: true,
+        callsAvailable: true,
+        defaultNumber: {
+          e164: "+61280001234",
+          label: "Office",
+          provider: "twilio",
+        },
+        numbers: [],
+        provider: "twilio",
+        recordingMode: "off",
+        smsAvailable: true,
+        staffForwardNumber: "+61400000000",
+      },
+      voice: {
+        endCall: async () => {},
+        lookupCall: async () => ({ found: false }),
+        placeCall: async () => ({ providerCallId: "CA1" }),
+        provider: "twilio",
+      },
+    },
+  );
+  const upsert = recorder
+    .writes()
+    .find((call) => call.operation === "call.upsert");
+  assert.equal(
+    (upsert?.args as { update: { staffTarget: string } }).update.staffTarget,
+    "MOBILE",
+  );
 });

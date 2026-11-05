@@ -150,8 +150,9 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
           || dialer.current.provider !== credential.provider
         ) {
           dialer.current?.destroy();
+          dialer.current = null;
           setStatus("connecting");
-          dialer.current = await createDialer(credential.provider, {
+          const created = await createDialer(credential.provider, {
             onConnected: () =>
               setActive((call) =>
                 call?.kind === "pstn"
@@ -207,9 +208,20 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
               setMessage(null);
             },
           });
-          await dialer.current.register(usable);
+          // Unmounted while the SDK loaded: never leave an orphan registered.
+          if (cancelled) {
+            created.destroy();
+            return;
+          }
+          dialer.current = created;
+          await created.register(usable);
+          if (cancelled) {
+            created.destroy();
+            return;
+          }
         } else {
           await dialer.current.refresh(usable);
+          if (cancelled) return;
         }
         // Refresh a minute before expiry; this also keeps this browser on the
         // ring list (staff seen in the last fifteen minutes).
@@ -234,6 +246,8 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(timer);
       dialer.current?.destroy();
       dialer.current = null;
+      session.current?.close();
+      session.current = null;
     };
   }, []);
 

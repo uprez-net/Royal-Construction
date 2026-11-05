@@ -76,6 +76,8 @@ export class CommsError extends Error {
     readonly kind: CommsErrorKind,
     /** e.g. TWILIO_21211, TELNYX_40300, TELNYX_HTTP_503. */
     readonly providerCode: string | null = null,
+    /** The carrier's HTTP status, when it answered with an error. */
+    readonly httpStatus: number | null = null,
   ) {
     super(message);
     this.name = "CommsError";

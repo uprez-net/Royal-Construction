@@ -1,18 +1,28 @@
 # 6. Provider-agnostic communications architecture (Twilio, Plivo, Telnyx)
 
-> **Status: design and migration guide. No application code has been changed by this
-> document.** It describes how to move CitizenTechies from its Twilio-only code to the
-> neutral architecture in [file 01](./01-architecture-and-contracts.md), with Twilio, Plivo and
-> Telnyx adapters. Where this file says "today" it describes the repository as inspected on
-> **3 November 2026**. Where it says "target" it describes work not yet done.
+> **Status: implemented in this repository for Twilio and Telnyx; Plivo is not built.**
+> The neutral layer lives in `lib/comms/` — `factory.ts` (provider selection),
+> `config.ts`, `callbacks.ts`, `webhook-handler.ts`, and the adapters in
+> `providers/twilio/` and `providers/telnyx/`. Every carrier callback arrives at one route,
+> `app/api/comms/[provider]/[event]/route.ts`; business rules live in `lib/domain/comms/`;
+> the browser dialer is `components/comms/phone-provider.tsx` over
+> `components/comms/dialer/{twilio,telnyx}-dialer.ts`. Operating it is in the
+> [runbook](../comms-runbook.md).
+>
+> This file was first written as a migration guide for a different codebase
+> (CitizenTechies). §1 below still describes **that** codebase as inspected on
+> 3 November 2026 — its paths (`lib/integrations/twilio/*`, `PhoneDock.tsx`, …) do not
+> exist here. §2 onwards is the design this repository follows; where it says "target",
+> compare against the files above.
 
 Read file 01 first. File 01 is the generic, project-agnostic contract. This file maps it
 onto this repository, adds Telnyx, and defines the pieces file 01 leaves open: the factory,
 capabilities, normalised events, per-tenant selection and the browser dialer.
 
-## 1. What exists today (repository inspection)
+## 1. The original Twilio-only codebase (CitizenTechies, not this repository)
 
-Only **Twilio** is implemented in code. Plivo exists as documentation only; Telnyx is new.
+Kept as a worked example of finding provider coupling. In that codebase only **Twilio**
+was implemented; none of the paths in this section exist in this repository.
 
 | Area                 | Where it lives today                                                                                                                                  | Provider coupling                                                                                  |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |

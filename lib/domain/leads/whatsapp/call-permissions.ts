@@ -356,6 +356,8 @@ export async function requestWhatsAppCallPermission(
 }
 
 export type WhatsAppCallPermissionReply = {
+  /** Meta's message id: a redelivery carries the same one. */
+  readonly providerMessageId: string;
   readonly businessPhoneNumberId: string;
   readonly fromWaId: string;
   readonly accepted: boolean;
@@ -369,7 +371,7 @@ export async function recordWhatsAppCallPermissionReply(
   principal: DomainPrincipal,
   reply: WhatsAppCallPermissionReply,
   db: TransactionalDomainDb,
-): Promise<"applied" | "unparseable"> {
+): Promise<"applied" | "duplicate" | "unparseable"> {
   if (principal.kind !== "system") {
     throw new DomainAuthorizationError(
       "Only the verified WhatsApp webhook may record a permission reply.",
@@ -378,6 +380,13 @@ export async function recordWhatsAppCallPermissionReply(
   const customer = waIdToE164(reply.fromWaId);
   if (!customer) return "unparseable";
   return db.$transaction(async (tx) => {
+    // Claim the reply first: a redelivery finds it claimed and changes
+    // nothing. The claim commits or rolls back with the transition.
+    const claimed = await tx.whatsAppCallPermissionReplyEvent.createMany({
+      data: [{ providerMessageId: reply.providerMessageId }],
+      skipDuplicates: true,
+    });
+    if (claimed.count === 0) return "duplicate" as const;
     const leads = await tx.lead.findMany({
       select: { id: true },
       take: 2,

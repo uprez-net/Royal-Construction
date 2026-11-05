@@ -483,6 +483,36 @@ test("Telnyx: a failing command still answers 200 (a retried event cannot redo i
   }
 });
 
+test("Telnyx: hanging up a call that already ended is fine, but a refused key is not", async () => {
+  const gone = createTelnyxAdapter(
+    config,
+    fakeFetch([{ body: { errors: [{ code: "90018" }] }, status: 422 }]).impl,
+  );
+  await gone.voice!.endCall("v3:gone");
+  const forbidden = createTelnyxAdapter(
+    config,
+    fakeFetch([{ body: { errors: [{ code: "10010" }] }, status: 403 }]).impl,
+  );
+  await assert.rejects(forbidden.voice!.endCall("v3:live"), (error) => {
+    assert.ok(error instanceof CommsError);
+    assert.equal(error.httpStatus, 403);
+    return true;
+  });
+});
+
+test("Telnyx: a 404 with Telnyx's own error code still reads as a forgotten call", async () => {
+  const adapter = createTelnyxAdapter(
+    config,
+    fakeFetch([{ body: { errors: [{ code: "90015" }] }, status: 404 }]).impl,
+  );
+  assert.deepEqual(await adapter.voice!.lookupCall("v3:old"), {
+    alive: false,
+    durationSeconds: null,
+    found: true,
+    state: null,
+  });
+});
+
 test("Telnyx: call events parse by leg — the customer's leg is a status, a staff leg is the dial", () => {
   const incoming = parseTelnyxWebhook(
     webhook(

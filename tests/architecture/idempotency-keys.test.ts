@@ -160,15 +160,18 @@ const SEND_PATHS: ReadonlyArray<{
   {
     // A text to a lead: one key per composed message, no derived fallback.
     caller: "lib/leads/comms-service.ts",
+    // Bounded to sendSms: the header must appear before its closing brace,
+    // so a later function's header cannot satisfy it.
     evidence:
-      /`\/api\/leads\/\$\{leadId\}\/sms`,\s*\{\s*body[\s\S]*?\.\.\.idempotencyHeader\(idempotencyKey\)/,
+      /export function sendSms\((?:(?!\n\})[\s\S])*?`\/api\/leads\/\$\{leadId\}\/sms`,\s*\{\s*body(?:(?!\n\})[\s\S])*?\.\.\.idempotencyHeader\(idempotencyKey\)/,
     route: "app/api/(data)/leads/[leadId]/sms/route.ts",
   },
   {
     // Ringing a lead: a double click must not ring the customer twice.
     caller: "lib/leads/comms-service.ts",
     evidence:
-      /`\/api\/leads\/\$\{leadId\}\/calls`,\s*\{\s*body[\s\S]*?\.\.\.idempotencyHeader\(idempotencyKey\)/,
+      // Bounded to placeLeadCall, for the same reason.
+      /export function placeLeadCall\((?:(?!\n\})[\s\S])*?`\/api\/leads\/\$\{leadId\}\/calls`,\s*\{\s*body(?:(?!\n\})[\s\S])*?\.\.\.idempotencyHeader\(idempotencyKey\)/,
     route: "app/api/(data)/leads/[leadId]/calls/route.ts",
   },
   {

@@ -83,11 +83,15 @@ These apply once the layer in [file 06](./06-provider-agnostic-architecture.md) 
 ## 3. Migration plan: Twilio to Plivo or Telnyx
 
 The steps below are written for Plivo. For **Telnyx** substitute its setup
-([file 07 section 1](./07-telnyx-setup-and-pseudocode.md#1-account-and-console-setup)), set
-`COMMUNICATIONS_PROVIDER=telnyx`, and note that Telnyx has no inbound call flow, recording
-or AI stream support yet (file 06 section 9): keep inbound voice on Twilio until those
-exist. Existing numbers, active calls, recordings and approvals do **not** migrate
+([file 07 section 1](./07-telnyx-setup-and-pseudocode.md#1-account-and-console-setup)) and
+set `COMMUNICATIONS_PROVIDER=telnyx`. Telnyx handles inbound ringing, voicemail and
+recording in this repository (see the [runbook](../comms-runbook.md)); it has no AI
+stream support. Existing numbers, active calls, recordings and approvals do **not** migrate
 automatically.
+
+**Plivo is not implemented yet.** `COMMS_PROVIDER` (alias `COMMUNICATIONS_PROVIDER`)
+accepts only `twilio` or `telnyx`; the Plivo-specific steps below cannot be completed until
+a Plivo adapter ships.
 
 Only start this after the neutral layer exists and Twilio runs through the Twilio adapter.
 
@@ -123,8 +127,10 @@ A WhatsApp sender belongs to a WABA through one provider (BSP) at a time. Moving
 
 ### Step 4: Cut-over
 
-1. Set `COMMS_PROVIDER=plivo` for **new outbound** work. Inbound continues to be handled by
-   whichever provider owns each number.
+1. Set `COMMS_PROVIDER` to the new provider (`twilio` or `telnyx` today) for **new
+   outbound** work. Inbound continues to be handled by whichever provider owns each number.
+   For a Plivo migration this step is blocked: `plivo` is not an accepted value until the
+   Plivo adapter is supported.
 2. Port the number (or switch WhatsApp/voice configuration) during low traffic, and watch
    signature failures, unknown-number webhooks and outbox `uncertain` jobs.
 3. Keep the Twilio adapter, routes and credentials for **30 days**, for late callbacks
