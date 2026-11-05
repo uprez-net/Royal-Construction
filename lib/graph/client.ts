@@ -5,6 +5,7 @@ import {
   type DeviceCodeInfo,
 } from "@azure/identity";
 import { type GraphConfig } from "./config";
+import { ccWithSender } from "./mailbox";
 import { type EmailHeaders } from "@/utils/spam-detector";
 
 export interface EmailAttachment {
@@ -711,7 +712,9 @@ export async function createGraphContext(
             : undefined;
 
         const toRecipients = formatRecipients(to);
-        const ccRecipients = formatRecipients(cc);
+        const ccRecipients = formatRecipients(
+          ccWithSender(normalizedSender, { to, cc }),
+        );
 
         await graphRequest("PATCH", draftUrl, token, {
           body: {
@@ -753,7 +756,9 @@ export async function createGraphContext(
           : undefined;
 
       const toRecipients = formatRecipients(to);
-      const ccRecipients = formatRecipients(cc);
+      const ccRecipients = formatRecipients(
+        ccWithSender(normalizedSender, { to, cc, bcc }),
+      );
       const bccRecipients = formatRecipients(bcc);
 
       const decodedAttachments =

@@ -51,7 +51,7 @@ import { processInboundLead } from "@/lib/workflow/lead-extraction";
 import { storeOfferReplyAttachments } from "@/lib/workflow/offer-reply-attachments";
 import { start } from "workflow/api";
 import { after } from "next/server";
-import { isOwnMailbox } from "@/lib/graph/mailbox";
+import { isOwnMailbox, isSenderCopy } from "@/lib/graph/mailbox";
 import { graphResourceBelongsToMailbox } from "@/lib/graph/resource";
 
 // export const runtime = 'nodejs';
@@ -711,6 +711,17 @@ async function processNotifications(
           // inbound party response and must not reach lead extraction.
           if (mailbox === "admin" && isOwnMailbox(message.from)) {
             console.log(`  Ignored self-generated admin message ${message.id}`);
+            continue;
+          }
+
+          // Every send CCs the mailbox it went from, as the office's
+          // confirmation copy (lib/graph/mailbox.ts, ccWithSender). On the
+          // business inbox that copy would otherwise read as a client reply:
+          // an offer email carries its [RCOFR-…] token and would be recorded
+          // as the client answering. Narrower than the admin rule above,
+          // because a website form is relayed by our own mailbox to itself.
+          if (isSenderCopy(message)) {
+            console.log(`  Ignored our own sent-mail copy ${message.id}`);
             continue;
           }
 
