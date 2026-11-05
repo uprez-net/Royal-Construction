@@ -31,7 +31,14 @@ The connection allowlist exposes only Plaud's read tools:
 - `get_current_user`
 - `list_files` (optional name and date filters, plus pagination)
 - `get_file` (details for one recording, including notes and transcript segments)
+- `get_note` (the AI-generated summary, action items and key topics, without the
+  audio URL `get_file` carries)
 - `get_transcript` (the full transcript with timestamps and speaker labels)
+
+When reporting a recording, Eve gives its Plaud recording ID, name, recording
+time, and which requested content was available, using only what the tools
+returned. `get_file`'s `presigned_url` is a temporary audio URL valid for 24
+hours; Royal never stores it, and Eve never shows it.
 
 Keep listings small. Plaud ignores `page` and `page_size` whenever a name
 (`query`) or date (`date_from`, `date_to`) filter is set, so a filtered listing

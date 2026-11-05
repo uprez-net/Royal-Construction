@@ -38,11 +38,42 @@ const metaMedia = z
   })
   .passthrough();
 
+// Meta's timestamps are Unix seconds as a digit string. Anything that would
+// not make a real date close to now — empty, fractional, past
+// Number.MAX_SAFE_INTEGER, before WhatsApp Business existed, or ahead of the
+// clock beyond skew — is refused here, before any domain write. An Invalid
+// Date reaching Prisma would fail the write, answer 500, and Meta would retry
+// the same bytes forever.
+const EARLIEST_EVENT_MS = Date.UTC(2015, 0, 1);
+const CLOCK_SKEW_MS = 24 * 60 * 60 * 1000;
+/** A temporary call permission lasts days; a year is generous. */
+const MAX_EXPIRY_AHEAD_MS = 366 * 24 * 60 * 60 * 1000;
+
+export function webhookTimestamp(
+  value: unknown,
+  aheadMs: number = CLOCK_SKEW_MS,
+): Date | null {
+  const seconds =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && /^\d{1,15}$/.test(value)
+        ? Number(value)
+        : Number.NaN;
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) return null;
+  const ms = seconds * 1000;
+  if (ms < EARLIEST_EVENT_MS || ms > Date.now() + aheadMs) return null;
+  return new Date(ms);
+}
+
+const metaTimestamp = z
+  .string()
+  .refine((value) => webhookTimestamp(value) !== null, "invalid timestamp");
+
 const messageSchema = z
   .object({
     from: z.string().min(1),
     id: z.string().min(1),
-    timestamp: z.string().regex(/^\d+$/),
+    timestamp: metaTimestamp,
     type: z.string().min(1),
     /** Present when it was posted in a group. */
     group_id: z.string().min(1).optional(),
@@ -75,7 +106,7 @@ const statusSchema = z
   .object({
     id: z.string().min(1),
     status: z.string().min(1),
-    timestamp: z.string().regex(/^\d+$/),
+    timestamp: metaTimestamp,
     /** "call" for a call's ringing/accepted/rejected status. */
     type: z.string().optional(),
     biz_opaque_callback_data: z.string().optional(),
@@ -186,6 +217,8 @@ const payloadSchema = z
 export type ParsedWhatsAppWebhook = {
   /** WhatsApp Business Account ids named by the delivery (`entry[].id`). */
   readonly businessAccountIds: readonly string[];
+  /** Entries that named no account: they cannot be checked against ours. */
+  readonly entriesWithoutAccountId: number;
   readonly messages: readonly InboundWhatsAppMessage[];
   readonly statuses: readonly WhatsAppStatusUpdate[];
   readonly groupEvents: readonly WhatsAppGroupEvent[];
@@ -202,8 +235,12 @@ const STATUS_MAP: Record<string, WhatsAppStatusUpdate["status"]> = {
   sent: "SENT",
 };
 
+/** Only for a timestamp the schema already accepted (metaTimestamp). */
 function secondsToDate(seconds: string): Date {
-  return new Date(Number(seconds) * 1000);
+  const date = webhookTimestamp(seconds);
+  if (!date)
+    throw new Error("A timestamp passed the schema but not the check.");
+  return date;
 }
 
 /** The text a customer sent, from whichever field Meta put it in. */
@@ -246,11 +283,9 @@ function inboundMedia(
   };
 }
 
+/** Optional on group and call events: missing or invalid means "now". */
 function eventTime(timestamp: string | number | undefined): Date {
-  const seconds = Number(timestamp);
-  return Number.isFinite(seconds) && seconds > 0
-    ? new Date(seconds * 1000)
-    : new Date();
+  return webhookTimestamp(timestamp) ?? new Date();
 }
 
 function participantIds(list: z.infer<typeof participantList>): string[] {
@@ -453,8 +488,10 @@ export function parseWhatsAppWebhook(
   const callPermissionReplies: WhatsAppCallPermissionReply[] = [];
   const ignored: string[] = [];
 
+  let entriesWithoutAccountId = 0;
   parsed.data.entry.forEach((entry, entryIndex) => {
     if (entry.id) businessAccountIds.push(entry.id);
+    else entriesWithoutAccountId += 1;
     (entry.changes ?? []).forEach((change, changeIndex) => {
       const where = `entry ${entryIndex} change ${changeIndex}`;
       if (change.field && GROUP_FIELDS.has(change.field)) {
@@ -513,7 +550,7 @@ export function parseWhatsAppWebhook(
         const message = messageSchema.safeParse(raw);
         if (!message.success) {
           ignored.push(
-            `${where} message ${index}: missing id, sender or timestamp`,
+            `${where} message ${index}: missing id or sender, or an invalid timestamp`,
           );
           return;
         }
@@ -525,15 +562,15 @@ export function parseWhatsAppWebhook(
         ) {
           // The customer's tap on Allow or Decline. Never an ordinary reply:
           // only this tap grants permission (file 01 section 14).
-          const expires = Number(permission.expiration_timestamp);
+          const expires = webhookTimestamp(
+            permission.expiration_timestamp,
+            MAX_EXPIRY_AHEAD_MS,
+          );
           callPermissionReplies.push({
             accepted: permission.response === "accept",
             at: secondsToDate(message.data.timestamp),
             businessPhoneNumberId: phoneNumberId,
-            expiresAt:
-              Number.isFinite(expires) && expires > 0
-                ? new Date(expires * 1000)
-                : null,
+            expiresAt: expires,
             fromWaId: message.data.from,
             permanent: permission.is_permanent === true,
             providerMessageId: message.data.id,
@@ -560,7 +597,7 @@ export function parseWhatsAppWebhook(
         const status = statusSchema.safeParse(raw);
         if (!status.success) {
           ignored.push(
-            `${where} status ${index}: missing id, status or timestamp`,
+            `${where} status ${index}: missing id or status, or an invalid timestamp`,
           );
           return;
         }
@@ -595,6 +632,7 @@ export function parseWhatsAppWebhook(
   return {
     businessAccountIds,
     callEvents,
+    entriesWithoutAccountId,
     callPermissionReplies,
     groupEvents,
     ignored,

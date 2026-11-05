@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 
-import { parseWhatsAppWebhook } from "@/lib/whatsapp/webhook-payload";
+import {
+  parseWhatsAppWebhook,
+  webhookTimestamp,
+} from "@/lib/whatsapp/webhook-payload";
 
 // Shapes follow Meta's published payload examples (Cloud API webhooks →
 // payload examples): one entry per WABA, one change per field, `value` carrying
@@ -409,4 +412,28 @@ test("group lifecycle, participant and status webhooks become group events", () 
   assert.equal(status?.groupEvents[0]?.kind, "suspended");
   // Group fields carry no messages; nothing is mistaken for one.
   assert.deepEqual(status?.messages, []);
+});
+
+test("timestamps must be a real date near now; optional ones fall back to now", () => {
+  const now = Math.floor(Date.now() / 1000);
+  assert.deepEqual(webhookTimestamp(String(now)), new Date(now * 1000));
+  for (const bad of [
+    "",
+    "0",
+    "-5",
+    "12.5",
+    "1e10",
+    "99999999999999999999",
+    String(Date.UTC(2014, 0, 1) / 1000),
+    String(now + 2 * 24 * 60 * 60),
+    Number.MAX_SAFE_INTEGER,
+    Number.NaN,
+    undefined,
+  ]) {
+    assert.equal(webhookTimestamp(bad), null, String(bad));
+  }
+  // A permission expiry may be days ahead.
+  assert.ok(
+    webhookTimestamp(now + 7 * 24 * 60 * 60, 366 * 24 * 60 * 60 * 1000),
+  );
 });

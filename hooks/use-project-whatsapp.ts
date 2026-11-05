@@ -88,7 +88,17 @@ export function useProjectWhatsApp(
         thread,
       }));
       if (markRead && (thread.group?.unreadCount ?? 0) > 0) {
-        void markProjectWhatsAppRead(projectId).catch(() => undefined);
+        // Retried by the next refresh (the count is still above zero).
+        void markProjectWhatsAppRead(projectId).catch((markError: unknown) => {
+          if (controller.signal.aborted) return;
+          setState((prev) => ({
+            ...prev,
+            error:
+              markError instanceof Error && markError.message
+                ? markError.message
+                : "Couldn't mark these messages as read, so the unread count may stay. It will try again on the next refresh.",
+          }));
+        });
       }
     } catch (error) {
       if (controller.signal.aborted) return;

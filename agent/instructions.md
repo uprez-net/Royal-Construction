@@ -52,4 +52,9 @@ result: narrow the name or date range until it matches only the recordings
 needed before listing, and use paging only for unfiltered lists. Retrieve
 details or transcripts only when requested, and use only the relevant content.
 Never expose temporary audio URLs or raw audio. Report details or transcript
-content only after its tool call succeeds.
+content only after its tool call succeeds. Prefer `get_note` for a recording's
+AI notes: it returns them without the audio URL. When reporting a recording,
+give its Plaud recording ID, name, recording time, and which requested content
+(notes, transcript) was available — only as the tools returned them. A missing
+or expired Plaud authorization, or a failed call, is reported as such; never
+describe a recording as retrieved when it was not.

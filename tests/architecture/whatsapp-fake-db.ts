@@ -283,6 +283,9 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
       },
       own,
     );
+    // A fixture that names its updatedAt means it (e.g. "restarted a minute
+    // ago"); applyData would otherwise stamp the wall clock over it.
+    if (own.updatedAt !== undefined) row.updatedAt = own.updatedAt;
     assertUnique(model, row);
     table(model).push(row);
     for (const [child, fk, childData] of nested) {

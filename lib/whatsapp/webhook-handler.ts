@@ -157,13 +157,18 @@ export async function handleWhatsAppWebhookDelivery(
 
   if (
     config.businessAccountId
-    && parsed.businessAccountIds.some((id) => id !== config.businessAccountId)
+    && (parsed.businessAccountIds.length === 0
+      || parsed.entriesWithoutAccountId > 0
+      || parsed.businessAccountIds.some(
+        (id) => id !== config.businessAccountId,
+      ))
   ) {
-    // Signed with our app secret but for another WhatsApp Business Account:
-    // a misconfigured subscription. Refused (not dropped with a 200) so Meta
+    // Signed with our app secret but for another WhatsApp Business Account,
+    // or not saying which: every entry must name ours. A misconfigured
+    // subscription. Refused (not dropped with a 200) so Meta
     // keeps retrying while somebody fixes it — see docs/whatsapp-runbook.md.
     log.warn(
-      "[whatsapp-webhook] Delivery for a WhatsApp Business Account other than WHATSAPP_BUSINESS_ACCOUNT_ID; rejecting.",
+      "[whatsapp-webhook] Delivery not (or not only) for WHATSAPP_BUSINESS_ACCOUNT_ID; rejecting.",
     );
     return text(403, "Unexpected business account");
   }

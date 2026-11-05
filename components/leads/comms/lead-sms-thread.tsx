@@ -128,7 +128,15 @@ export function LeadSmsThread({
             (message) => message.direction === "INBOUND" && !message.readAt,
           )
         ) {
-          void markSmsRead(lead.id).catch(() => {});
+          // Retried by the next load while anything is still unread.
+          void markSmsRead(lead.id).catch((markError: unknown) => {
+            if (signal?.aborted) return;
+            setError(
+              markError instanceof Error && markError.message
+                ? markError.message
+                : "Couldn't mark these messages as read, so the unread count may stay. It will try again on the next refresh.",
+            );
+          });
         }
       } catch (loadError) {
         if (signal?.aborted) return;

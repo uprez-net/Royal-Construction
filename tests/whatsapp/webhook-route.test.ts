@@ -190,6 +190,64 @@ test("a delivery for another WhatsApp Business Account is refused, not filed", a
   assert.deepEqual(recorder.calls, []);
 });
 
+test("with an account configured, entries that don't name it are refused", async () => {
+  const withoutId = JSON.stringify({
+    entry: [
+      { changes: JSON.parse(delivery({ messages: [] })).entry[0].changes },
+    ],
+    object: "whatsapp_business_account",
+  });
+  const mixed = JSON.stringify({
+    entry: [
+      JSON.parse(TEXT_DELIVERY).entry[0],
+      { changes: JSON.parse(TEXT_DELIVERY).entry[0].changes },
+    ],
+    object: "whatsapp_business_account",
+  });
+  for (const body of [withoutId, mixed]) {
+    const recorder = recordingDb();
+    const response = await handleWhatsAppWebhookDelivery(post(body), {
+      allow: allowAll,
+      config,
+      db: recorder.transactionalDb,
+      log: quiet,
+    });
+    assert.equal(response.status, 403);
+    assert.deepEqual(recorder.calls, []);
+  }
+});
+
+test("a message or status with an impossible timestamp is skipped before any write", async () => {
+  for (const timestamp of [
+    "0",
+    "99999999999999999999",
+    "1",
+    String(Math.floor(Date.now() / 1000) + 10 * 24 * 60 * 60),
+  ]) {
+    const recorder = recordingDb();
+    const body = delivery({
+      messages: [
+        {
+          from: "61412345678",
+          id: "wamid.BAD",
+          text: { body: "Hi" },
+          timestamp,
+          type: "text",
+        },
+      ],
+      statuses: [{ id: "wamid.OUT", status: "delivered", timestamp }],
+    });
+    const response = await handleWhatsAppWebhookDelivery(post(body), {
+      allow: allowAll,
+      config,
+      db: recorder.transactionalDb,
+      log: quiet,
+    });
+    assert.equal(response.status, 200, timestamp);
+    assert.deepEqual(recorder.writes(), [], timestamp);
+  }
+});
+
 test("a verified text from a known lead is filed on that lead before 200", async () => {
   const recorder = recordingDb({
     "lead.findMany": [{ id: 42 }],

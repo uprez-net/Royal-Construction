@@ -970,9 +970,15 @@ export async function applyWhatsAppGroupEvent(
             ? { inviteLink: event.inviteLink, inviteLinkAt: event.at }
             : {}),
           ...(event.subject ? { subject: event.subject } : {}),
-          // Without a link the resolver fetches one and activates it.
-          ...(event.inviteLink && awaitingConfirmation
-            ? { status: ProjectWhatsAppGroupStatus.ACTIVE }
+          // Without a link it goes (back) to CREATING, so the resolver and
+          // the sweep fetch one and activate it — a FAILED row is never
+          // looked at again.
+          ...(awaitingConfirmation
+            ? {
+                status: event.inviteLink
+                  ? ProjectWhatsAppGroupStatus.ACTIVE
+                  : ProjectWhatsAppGroupStatus.CREATING,
+              }
             : {}),
         },
         where: { id: row.id },

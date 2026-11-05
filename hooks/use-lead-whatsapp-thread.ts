@@ -87,8 +87,18 @@ export function useLeadWhatsAppThread(leadId: number) {
         thread,
       }));
       if (thread.unreadCount > 0) {
-        // Best effort: an unread badge that lingers is cosmetic.
-        void markWhatsAppRead(leadId).catch(() => undefined);
+        // Retried by the next refresh (the count is still above zero); said
+        // here so a badge that never clears has a reason on screen.
+        void markWhatsAppRead(leadId).catch((markError: unknown) => {
+          if (controller.signal.aborted) return;
+          setState((prev) => ({
+            ...prev,
+            error:
+              markError instanceof Error && markError.message
+                ? markError.message
+                : "Couldn't mark these messages as read, so the unread count may stay. It will try again on the next refresh.",
+          }));
+        });
       }
     } catch (error) {
       if (controller.signal.aborted) return;

@@ -181,3 +181,26 @@ test("merging pages keeps one row per message, oldest first, fresher copy wins",
     ],
   );
 });
+
+test("a failed mark-as-read is shown, never swallowed", () => {
+  for (const [file, call] of [
+    ["hooks/use-lead-whatsapp-thread.ts", "markWhatsAppRead"],
+    ["hooks/use-project-whatsapp.ts", "markProjectWhatsAppRead"],
+    ["components/leads/comms/lead-sms-thread.tsx", "markSmsRead"],
+  ] as const) {
+    const source = read(file);
+    const at = source.indexOf(`void ${call}(`);
+    assert.ok(at >= 0, `${file} no longer marks read with ${call}`);
+    const handler = source.slice(at, at + 600);
+    assert.doesNotMatch(
+      handler,
+      /\.catch\(\(\) => (undefined|\{\})\)/,
+      `${file} swallows a failed ${call}`,
+    );
+    assert.match(
+      handler,
+      /\.catch\(\(markError: unknown\) => \{[\s\S]*?set(State|Error)\(/,
+      `${file} must put a failed ${call} in its error state`,
+    );
+  }
+});

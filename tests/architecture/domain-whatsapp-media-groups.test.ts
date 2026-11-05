@@ -531,6 +531,56 @@ describe("project groups", () => {
     assert.equal(row.inviteLink, "https://chat.whatsapp.com/LINK");
   });
 
+  test("a late confirmation without a link goes back to CREATING, and the resolver activates it", async () => {
+    const fake = seedProject();
+    const { group } = await requestProjectWhatsAppGroup(
+      admin,
+      { projectId: "p1" },
+      fake.db,
+      { channel: channel() },
+    );
+    const { port } = groupsPort();
+    await submitProjectWhatsAppGroupCreate(
+      workflow,
+      { groupRowId: group.id, now: new Date("2026-11-04T00:00:00Z") },
+      fake.db,
+      { groups: port },
+    );
+    await resolveCreatingProjectWhatsAppGroup(
+      workflow,
+      { groupRowId: group.id, now: new Date("2026-11-04T00:31:00Z") },
+      fake.db,
+      { groups: port },
+    );
+    assert.equal(fake.rows("projectWhatsAppGroup")[0].status, "FAILED");
+
+    await applyWhatsAppGroupEvent(
+      webhook,
+      {
+        at: new Date("2026-11-04T00:40:00Z"),
+        groupId: "GROUP-1",
+        inviteLink: null,
+        kind: "created",
+        requestId: "REQ-1",
+        subject: null,
+      },
+      fake.db,
+    );
+    // Not left FAILED with its reason wiped: the sweep picks CREATING up.
+    assert.equal(fake.rows("projectWhatsAppGroup")[0].status, "CREATING");
+
+    const resolved = await resolveCreatingProjectWhatsAppGroup(
+      workflow,
+      { groupRowId: group.id, now: new Date("2026-11-04T00:41:00Z") },
+      fake.db,
+      { groups: port },
+    );
+    assert.equal(resolved.outcome, "active");
+    const [row] = fake.rows("projectWhatsAppGroup");
+    assert.equal(row.providerGroupId, "GROUP-1");
+    assert.equal(row.inviteLink, "https://chat.whatsapp.com/LINK");
+  });
+
   test("asking again after a failed group starts the new one with no members", async () => {
     const fake = seedProject();
     const old = fake.seed("projectWhatsAppGroup", {
