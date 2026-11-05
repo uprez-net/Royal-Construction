@@ -16,7 +16,10 @@ import { carrierNumberToE164 } from "@/lib/domain/comms/shared";
 // Switching provider is COMMUNICATIONS_PROVIDER plus that provider's
 // credentials and numbers (file 06 §5). No migration, no code change.
 
-export const COMMS_PROVIDERS: readonly CommsProviderName[] = ["twilio", "telnyx"];
+export const COMMS_PROVIDERS: readonly CommsProviderName[] = [
+  "twilio",
+  "telnyx",
+];
 
 export type TwilioConfig = {
   readonly accountSid: string | null;
@@ -91,11 +94,15 @@ export function parseCommsPhoneNumbers(raw: string | null): {
     .map((entry) => entry.trim())
     .filter(Boolean)
     .forEach((entry, index) => {
-      const [number, provider, ...labelParts] = entry.split("=").map((part) => part.trim());
+      const [number, provider, ...labelParts] = entry
+        .split("=")
+        .map((part) => part.trim());
       const e164 = carrierNumberToE164(number);
       const label = labelParts.join("=").trim();
       if (!e164) {
-        problems.push(`COMMS_PHONE_NUMBERS entry ${index + 1} has no valid E.164 number.`);
+        problems.push(
+          `COMMS_PHONE_NUMBERS entry ${index + 1} has no valid E.164 number.`,
+        );
         return;
       }
       if (!COMMS_PROVIDERS.includes(provider as CommsProviderName)) {
@@ -108,7 +115,11 @@ export function parseCommsPhoneNumbers(raw: string | null): {
         problems.push(`COMMS_PHONE_NUMBERS lists ${e164} more than once.`);
         return;
       }
-      numbers.push({ e164, label: label || e164, provider: provider as CommsProviderName });
+      numbers.push({
+        e164,
+        label: label || e164,
+        provider: provider as CommsProviderName,
+      });
     });
   return { numbers, problems };
 }
@@ -123,7 +134,9 @@ export function readActiveProvider(env: Env): {
   provider: CommsProviderName | null;
   problem: string | null;
 } {
-  const raw = (value(env, "COMMUNICATIONS_PROVIDER") ?? value(env, "COMMS_PROVIDER"))?.toLowerCase();
+  const raw = (
+    value(env, "COMMUNICATIONS_PROVIDER") ?? value(env, "COMMS_PROVIDER")
+  )?.toLowerCase();
   if (!raw) return { problem: null, provider: "twilio" };
   if (COMMS_PROVIDERS.includes(raw as CommsProviderName)) {
     return { problem: null, provider: raw as CommsProviderName };
@@ -135,12 +148,15 @@ export function readActiveProvider(env: Env): {
 }
 
 function origin(env: Env, problems: string[]): string | null {
-  const raw = value(env, "COMMS_WEBHOOK_ORIGIN") ?? value(env, "NEXT_PUBLIC_APP_URL");
+  const raw =
+    value(env, "COMMS_WEBHOOK_ORIGIN") ?? value(env, "NEXT_PUBLIC_APP_URL");
   if (!raw) return null;
   try {
     const url = new URL(raw);
     if (url.protocol !== "https:" && url.hostname !== "localhost") {
-      problems.push("COMMS_WEBHOOK_ORIGIN must be https: carriers will not call plain http.");
+      problems.push(
+        "COMMS_WEBHOOK_ORIGIN must be https: carriers will not call plain http.",
+      );
     }
     return url.origin;
   } catch {
@@ -156,26 +172,34 @@ export function readCommsConfig(env: Env = process.env): CommsConfig {
   const parsed = parseCommsPhoneNumbers(value(env, "COMMS_PHONE_NUMBERS"));
   problems.push(...parsed.problems);
   const forwardRaw = value(env, "COMMS_STAFF_FORWARD_NUMBER");
-  const staffForwardNumber = forwardRaw ? carrierNumberToE164(forwardRaw) : null;
+  const staffForwardNumber = forwardRaw
+    ? carrierNumberToE164(forwardRaw)
+    : null;
   if (forwardRaw && !staffForwardNumber) {
     problems.push("COMMS_STAFF_FORWARD_NUMBER is not a valid phone number.");
   }
   const mode = value(env, "COMMS_RECORDING_MODE") ?? "off";
   if (mode !== "off" && mode !== "consented") {
-    problems.push('COMMS_RECORDING_MODE must be "off" or "consented"; recording is off.');
+    problems.push(
+      'COMMS_RECORDING_MODE must be "off" or "consented"; recording is off.',
+    );
   }
   const smsEnabled = flag(env, "COMMS_SMS_ENABLED");
   const callsEnabled = flag(env, "COMMS_CALLS_ENABLED");
   const webhookOrigin = origin(env, problems);
   if ((smsEnabled || callsEnabled) && !webhookOrigin) {
-    problems.push("COMMS_WEBHOOK_ORIGIN is not set, so carriers have nowhere to report back.");
+    problems.push(
+      "COMMS_WEBHOOK_ORIGIN is not set, so carriers have nowhere to report back.",
+    );
   }
   if (
     (smsEnabled || callsEnabled)
     && active.provider
     && !parsed.numbers.some((number) => number.provider === active.provider)
   ) {
-    problems.push(`COMMS_PHONE_NUMBERS has no number on ${active.provider}, the active provider.`);
+    problems.push(
+      `COMMS_PHONE_NUMBERS has no number on ${active.provider}, the active provider.`,
+    );
   }
   return {
     callsEnabled,
@@ -194,7 +218,9 @@ export function readCommsConfig(env: Env = process.env): CommsConfig {
     },
     twilio: {
       accountSid: value(env, "TWILIO_ACCOUNT_SID"),
-      apiBase: (value(env, "TWILIO_API_BASE") ?? "https://api.twilio.com").replace(/\/+$/, ""),
+      apiBase: (
+        value(env, "TWILIO_API_BASE") ?? "https://api.twilio.com"
+      ).replace(/\/+$/, ""),
       apiKeySecret: value(env, "TWILIO_API_KEY_SECRET"),
       apiKeySid: value(env, "TWILIO_API_KEY_SID"),
       authToken: value(env, "TWILIO_AUTH_TOKEN"),
@@ -206,18 +232,30 @@ export function readCommsConfig(env: Env = process.env): CommsConfig {
 }
 
 /** Can this provider talk to its REST API at all? */
-export function providerConfigured(config: CommsConfig, provider: CommsProviderName): boolean {
+export function providerConfigured(
+  config: CommsConfig,
+  provider: CommsProviderName,
+): boolean {
   if (provider === "twilio") {
     const t = config.twilio;
-    return Boolean(t.accountSid && (t.authToken || (t.apiKeySid && t.apiKeySecret)));
+    return Boolean(
+      t.accountSid && (t.authToken || (t.apiKeySid && t.apiKeySecret)),
+    );
   }
   return Boolean(config.telnyx.apiKey);
 }
 
 /** Can this provider ring a browser (issue a credential)? */
-export function browserCallingConfigured(config: CommsConfig, provider: CommsProviderName): boolean {
+export function browserCallingConfigured(
+  config: CommsConfig,
+  provider: CommsProviderName,
+): boolean {
   if (provider === "twilio") {
-    return Boolean(config.twilio.accountSid && config.twilio.apiKeySid && config.twilio.apiKeySecret);
+    return Boolean(
+      config.twilio.accountSid
+      && config.twilio.apiKeySid
+      && config.twilio.apiKeySecret,
+    );
   }
   return Boolean(config.telnyx.apiKey && config.telnyx.webrtcConnectionId);
 }
@@ -226,14 +264,19 @@ export function browserCallingConfigured(config: CommsConfig, provider: CommsPro
 export function commsChannel(config: CommsConfig): CommsChannel | null {
   const provider = config.provider;
   if (!provider || (!config.smsEnabled && !config.callsEnabled)) return null;
-  const configured = providerConfigured(config, provider) && Boolean(config.webhookOrigin);
+  const configured =
+    providerConfigured(config, provider) && Boolean(config.webhookOrigin);
   const callsConfigured =
-    provider === "twilio" ? configured : configured && Boolean(config.telnyx.connectionId);
+    provider === "twilio"
+      ? configured
+      : configured && Boolean(config.telnyx.connectionId);
   return {
-    browserCalling: config.callsEnabled && browserCallingConfigured(config, provider),
+    browserCalling:
+      config.callsEnabled && browserCallingConfigured(config, provider),
     browserRingGroup: provider === "twilio",
     callsAvailable: config.callsEnabled && callsConfigured,
-    defaultNumber: config.numbers.find((number) => number.provider === provider) ?? null,
+    defaultNumber:
+      config.numbers.find((number) => number.provider === provider) ?? null,
     numbers: config.numbers,
     provider,
     recordingMode: config.recordingMode,

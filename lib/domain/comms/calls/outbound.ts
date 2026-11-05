@@ -31,7 +31,12 @@ import {
 import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
 import { normaliseLeadPhone } from "../../leads/whatsapp/phone";
 import { SMS_REFUSALS } from "../sms/policy";
-import { maskNumber, providerColumn, providerName, recordCommsHistory } from "../shared";
+import {
+  maskNumber,
+  providerColumn,
+  providerName,
+  recordCommsHistory,
+} from "../shared";
 import { OUTBOUND_RING_SECONDS } from "./flow";
 import { CALL_SELECT, toCallRecord, type CallRecord } from "./records";
 import { CALL_TIME_LIMIT_SECONDS, isTerminalCallStatus } from "./state";
@@ -78,7 +83,10 @@ export function callOutboxKey(leadId: number, idempotencyKey: string) {
   return `lead-call:${leadId}:${idempotencyKey}`;
 }
 
-async function readCall(db: TransactionalDomainDb, where: { id: string } | { idempotencyKey: string }) {
+async function readCall(
+  db: TransactionalDomainDb,
+  where: { id: string } | { idempotencyKey: string },
+) {
   const row = await db.call.findUnique({ select: CALL_SELECT, where });
   if (!row) throw new DomainNotFoundError("Call not found");
   return toCallRecord(row);
@@ -162,9 +170,14 @@ export async function requestLeadCall(
     const intent = await enqueueOutboxEvent(tx, {
       key: outboxKey,
       kind: OutboxEventKind.LEAD_CALL_PLACE,
-      payload: { leadId: lead.id, provider: voice.provider, target: input.target },
+      payload: {
+        leadId: lead.id,
+        provider: voice.provider,
+        target: input.target,
+      },
     });
-    if (intent.status === OutboxEventStatus.SUCCEEDED) return { replay: true as const };
+    if (intent.status === OutboxEventStatus.SUCCEEDED)
+      return { replay: true as const };
     if (intent.status !== OutboxEventStatus.PENDING) {
       throw new DomainTransitionError(
         intent.status === OutboxEventStatus.RUNNING
@@ -190,7 +203,9 @@ export async function requestLeadCall(
         leadId: lead.id,
         provider: providerColumn(voice.provider),
         staffTarget:
-          input.target === "mobile" ? CallStaffTarget.MOBILE : CallStaffTarget.BROWSER,
+          input.target === "mobile"
+            ? CallStaffTarget.MOBILE
+            : CallStaffTarget.BROWSER,
         staffUserId: principal.userId,
       },
       select: { id: true },
@@ -201,12 +216,17 @@ export async function requestLeadCall(
     return { callId: call.id, replay: false as const };
   });
   if (prepared.replay) {
-    return { alreadyPlaced: true, call: await readCall(db, { idempotencyKey: outboxKey }) };
+    return {
+      alreadyPlaced: true,
+      call: await readCall(db, { idempotencyKey: outboxKey }),
+    };
   }
 
   const claimed = await claimOutboxEvent(db, outboxKey);
   if (!claimed) {
-    throw new DomainTransitionError("This call is already being placed. Wait for it to ring.");
+    throw new DomainTransitionError(
+      "This call is already being placed. Wait for it to ring.",
+    );
   }
 
   let providerCallId: string;
@@ -233,8 +253,12 @@ export async function requestLeadCall(
           ? {
               endedAt: failedAt,
               flowStep: CallFlowStep.ENDED,
-              providerErrorCode: isCommsError(error) ? error.providerCode : null,
-              providerErrorTitle: isCommsError(error) ? error.message : "The provider refused the call.",
+              providerErrorCode: isCommsError(error)
+                ? error.providerCode
+                : null,
+              providerErrorTitle: isCommsError(error)
+                ? error.message
+                : "The provider refused the call.",
               status: CallStatus.FAILED,
             }
           : {
@@ -256,10 +280,16 @@ export async function requestLeadCall(
   }
 
   await db.$transaction(async (tx) => {
-    await completeOutboxEvent(tx, claimed.id, { callId: prepared.callId, providerCallId });
+    await completeOutboxEvent(tx, claimed.id, {
+      callId: prepared.callId,
+      providerCallId,
+    });
     // Callbacks can beat this write: they carry ?callId= and may already have
     // moved the status on. Only set INITIATED if nothing has.
-    await tx.call.update({ data: { providerCallId }, where: { id: prepared.callId } });
+    await tx.call.update({
+      data: { providerCallId },
+      where: { id: prepared.callId },
+    });
     await tx.call.updateMany({
       data: { status: CallStatus.INITIATED },
       where: { id: prepared.callId, status: CallStatus.QUEUED },
@@ -275,7 +305,10 @@ export async function requestLeadCall(
       type: "CALL",
     });
   });
-  return { alreadyPlaced: false, call: await readCall(db, { id: prepared.callId }) };
+  return {
+    alreadyPlaced: false,
+    call: await readCall(db, { id: prepared.callId }),
+  };
 }
 
 /**
@@ -287,10 +320,14 @@ export async function endCall(
   principal: DomainPrincipal,
   input: { readonly callId: string },
   db: TransactionalDomainDb,
-  ports: { readonly voiceFor: (provider: "twilio" | "telnyx") => VoicePort | null },
+  ports: {
+    readonly voiceFor: (provider: "twilio" | "telnyx") => VoicePort | null;
+  },
 ): Promise<CallRecord> {
   if (!isInternalPrincipal(principal) || principal.kind !== "user") {
-    throw new DomainAuthorizationError("Ending a call requires a signed-in member of staff.");
+    throw new DomainAuthorizationError(
+      "Ending a call requires a signed-in member of staff.",
+    );
   }
   const call = await db.call.findUnique({
     select: {

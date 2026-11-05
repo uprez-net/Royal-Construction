@@ -106,12 +106,18 @@ export type WhatsAppCallsPort = {
     readonly bizOpaqueCallbackData: string;
   }) => Promise<{ readonly providerCallId: string }>;
   /** Answer a customer's call: pre-accept starts media, accept connects it. */
-  readonly preAccept: (call: WhatsAppCallTarget & { readonly sdpAnswer: string }) => Promise<void>;
-  readonly accept: (call: WhatsAppCallTarget & { readonly sdpAnswer: string }) => Promise<void>;
+  readonly preAccept: (
+    call: WhatsAppCallTarget & { readonly sdpAnswer: string },
+  ) => Promise<void>;
+  readonly accept: (
+    call: WhatsAppCallTarget & { readonly sdpAnswer: string },
+  ) => Promise<void>;
   readonly reject: (call: WhatsAppCallTarget) => Promise<void>;
   readonly terminate: (call: WhatsAppCallTarget) => Promise<void>;
   /** The interactive "Allow calls" message. Only delivered inside the 24-hour window. */
-  readonly sendPermissionRequest: (message: WhatsAppTextMessage) => Promise<WhatsAppSendReceipt>;
+  readonly sendPermissionRequest: (
+    message: WhatsAppTextMessage,
+  ) => Promise<WhatsAppSendReceipt>;
 };
 
 // ── Groups (Meta's Groups API) ────────────────────────────────────────

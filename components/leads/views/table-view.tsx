@@ -35,6 +35,8 @@ import { fetchOpenTasks, type LeadTaskRow } from "@/lib/leads/task-service";
 import { fetchWhatsAppSummaries } from "@/lib/leads/whatsapp-service";
 import type { WhatsAppSummaryDto } from "@/lib/leads/whatsapp-types";
 import { LeadWhatsAppModal } from "@/components/leads/whatsapp/lead-whatsapp-modal";
+import { LeadCommsModal } from "@/components/leads/comms/lead-comms-modal";
+import { useCommsAvailability } from "@/hooks/use-comms-availability";
 import { WhatsAppGlyph } from "@/components/whatsapp/whatsapp-logo";
 import {
   WhatsAppBadge,
@@ -92,6 +94,8 @@ export default function TableView({
   const [assignedLead, setAssignedLead] = React.useState<Lead | null>(null);
   const [commLead, setCommLead] = React.useState<string | null>(null);
   const [whatsappLead, setWhatsappLead] = React.useState<Lead | null>(null);
+  const [phoneLead, setPhoneLead] = React.useState<Lead | null>(null);
+  const comms = useCommsAvailability();
   const [whatsappSummaries, setWhatsappSummaries] = React.useState<
     Map<number, WhatsAppSummaryDto>
   >(() => new Map());
@@ -203,6 +207,12 @@ export default function TableView({
   };
 
   const handleCall = (lead: Lead) => {
+    // Through the phone provider when one is set up, so the call is placed,
+    // logged and (with consent) recorded; otherwise the device's own dialler.
+    if (comms.calls) {
+      setPhoneLead(lead);
+      return;
+    }
     const dial = dialablePhone(lead.phone);
     if (dial) window.location.assign(`tel:${dial}`);
   };
@@ -709,6 +719,13 @@ export default function TableView({
         />
       )}
 
+      {phoneLead && (
+        <LeadCommsModal
+          key={phoneLead.id}
+          lead={phoneLead}
+          onClose={() => setPhoneLead(null)}
+        />
+      )}
       {whatsappLead && (
         <LeadWhatsAppModal
           key={whatsappLead.id}

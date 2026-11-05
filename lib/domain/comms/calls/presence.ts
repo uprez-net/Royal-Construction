@@ -44,7 +44,9 @@ export async function browserRingIdentities(
     select: { id: true },
     take: 10,
     where: {
-      commsBrowserSeenAt: { gte: new Date(now.getTime() - BROWSER_PRESENCE_WINDOW_MS) },
+      commsBrowserSeenAt: {
+        gte: new Date(now.getTime() - BROWSER_PRESENCE_WINDOW_MS),
+      },
       role: { in: [...INTERNAL_ROLES] },
     },
   });

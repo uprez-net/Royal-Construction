@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import type { CallState, CommsEvent, DialOutcome } from "@/lib/domain/ports/comms";
+import type {
+  CallState,
+  CommsEvent,
+  DialOutcome,
+} from "@/lib/domain/ports/comms";
 import { carrierNumberToE164 } from "@/lib/domain/comms/shared";
 
 import type { ParsedWebhook, WebhookRequest } from "../../types";
@@ -48,7 +52,10 @@ function at(raw: string | null | undefined, fallback: Date): Date {
   return parsed && !Number.isNaN(parsed.getTime()) ? parsed : fallback;
 }
 
-function secondsBetween(start: string | null, end: string | null): number | null {
+function secondsBetween(
+  start: string | null,
+  end: string | null,
+): number | null {
   if (!start || !end) return null;
   const ms = new Date(end).getTime() - new Date(start).getTime();
   return Number.isFinite(ms) && ms >= 0 ? Math.round(ms / 1000) : null;
@@ -78,7 +85,9 @@ function dialOutcomeFromCause(cause: string | null): DialOutcome {
 }
 
 /** Telnyx's per-recipient message status → Royal's SMS status. */
-export function telnyxSmsStatus(raw: string | null): "QUEUED" | "SENT" | "DELIVERED" | "FAILED" | null {
+export function telnyxSmsStatus(
+  raw: string | null,
+): "QUEUED" | "SENT" | "DELIVERED" | "FAILED" | null {
   switch (raw) {
     case "queued":
     case "sending":
@@ -97,7 +106,9 @@ export function telnyxSmsStatus(raw: string | null): "QUEUED" | "SENT" | "DELIVE
   }
 }
 
-export function parseTelnyxWebhook(request: WebhookRequest): ParsedWebhook | null {
+export function parseTelnyxWebhook(
+  request: WebhookRequest,
+): ParsedWebhook | null {
   let json: unknown;
   try {
     json = JSON.parse(request.rawBody);
@@ -108,7 +119,10 @@ export function parseTelnyxWebhook(request: WebhookRequest): ParsedWebhook | nul
   if (!parsed.success) return null;
   const { event_type: type, id: eventId, payload } = parsed.data.data;
   const occurredAt = at(parsed.data.data.occurred_at, request.now);
-  const ack = (events: CommsEvent[], extra: Partial<ParsedWebhook> = {}): ParsedWebhook => ({
+  const ack = (
+    events: CommsEvent[],
+    extra: Partial<ParsedWebhook> = {},
+  ): ParsedWebhook => ({
     dedupeKey: eventId,
     events,
     respondWith: "ack",
@@ -139,14 +153,20 @@ export function parseTelnyxWebhook(request: WebhookRequest): ParsedWebhook | nul
     if (type === "message.sent" || type === "message.finalized") {
       const recipient = (firstTo ?? {}) as Payload;
       const status =
-        telnyxSmsStatus(typeof recipient.status === "string" ? recipient.status : null)
-        ?? (type === "message.sent" ? "SENT" : null);
+        telnyxSmsStatus(
+          typeof recipient.status === "string" ? recipient.status : null,
+        ) ?? (type === "message.sent" ? "SENT" : null);
       if (!status) return ignore("unknown message status");
-      const errors = Array.isArray(payload.errors) ? (payload.errors as Payload[]) : [];
+      const errors = Array.isArray(payload.errors)
+        ? (payload.errors as Payload[])
+        : [];
       const code = errors[0]?.code;
       return ack([
         {
-          errorCode: typeof code === "string" || typeof code === "number" ? String(code) : null,
+          errorCode:
+            typeof code === "string" || typeof code === "number"
+              ? String(code)
+              : null,
           occurredAt,
           providerMessageId: messageId,
           status,
@@ -160,12 +180,18 @@ export function parseTelnyxWebhook(request: WebhookRequest): ParsedWebhook | nul
   // ── Call Control ──────────────────────────────────────────────────────
   const callControlId = str(payload, "call_control_id");
   if (!callControlId) return null;
-  const state: TelnyxClientState | null = decodeClientState(payload.client_state);
+  const state: TelnyxClientState | null = decodeClientState(
+    payload.client_state,
+  );
   const callId = state?.c ?? null;
   const staffLeg = state?.r === "b";
   const continuation = (pendingState: TelnyxClientState | null) =>
     pendingState?.n?.length
-      ? { callId: pendingState.c ?? null, instructions: pendingState.n, providerCallId: callControlId }
+      ? {
+          callId: pendingState.c ?? null,
+          instructions: pendingState.n,
+          providerCallId: callControlId,
+        }
       : null;
 
   switch (type) {
@@ -176,7 +202,10 @@ export function parseTelnyxWebhook(request: WebhookRequest): ParsedWebhook | nul
           {
             from: carrierNumberToE164(str(payload, "from")) ?? "withheld",
             providerCallId: callControlId,
-            to: carrierNumberToE164(str(payload, "to")) ?? str(payload, "to") ?? "",
+            to:
+              carrierNumberToE164(str(payload, "to"))
+              ?? str(payload, "to")
+              ?? "",
             type: "call.incoming",
           },
         ]);
@@ -195,16 +224,32 @@ export function parseTelnyxWebhook(request: WebhookRequest): ParsedWebhook | nul
     }
     case "call.answered": {
       if (staffLeg) {
-        return ack([{ callId, providerCallId: state?.a ?? null, type: "call.connected" }], {
-          recordAfterConnect:
-            state?.rec === 1 && state.a ? { callId, providerCallId: state.a } : null,
-        });
+        return ack(
+          [
+            {
+              callId,
+              providerCallId: state?.a ?? null,
+              type: "call.connected",
+            },
+          ],
+          {
+            recordAfterConnect:
+              state?.rec === 1 && state.a
+                ? { callId, providerCallId: state.a }
+                : null,
+          },
+        );
       }
-      return ack([{ callId, providerCallId: callControlId, type: "call.answered" }]);
+      return ack([
+        { callId, providerCallId: callControlId, type: "call.answered" },
+      ]);
     }
     case "call.hangup": {
       const cause = str(payload, "hangup_cause");
-      const duration = secondsBetween(str(payload, "start_time"), str(payload, "end_time"));
+      const duration = secondsBetween(
+        str(payload, "start_time"),
+        str(payload, "end_time"),
+      );
       if (staffLeg) {
         if (!state?.a) return ignore("staff leg without its customer leg");
         return ack([

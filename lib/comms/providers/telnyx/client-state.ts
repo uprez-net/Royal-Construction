@@ -37,7 +37,10 @@ const instruction: z.ZodType<CallInstruction> = z.union([
     timeoutSeconds: z.number().int().min(1).max(120),
     to: z.string().max(40),
   }),
-  z.object({ maxSeconds: z.number().int().min(1).max(600), op: z.literal("recordVoicemail") }),
+  z.object({
+    maxSeconds: z.number().int().min(1).max(600),
+    op: z.literal("recordVoicemail"),
+  }),
   z.object({ op: z.literal("hangup") }),
 ]);
 
@@ -58,7 +61,9 @@ export function encodeClientState(state: TelnyxClientState): string {
 export function decodeClientState(raw: unknown): TelnyxClientState | null {
   if (typeof raw !== "string" || !raw || raw.length > 8_000) return null;
   try {
-    const parsed = schema.safeParse(JSON.parse(Buffer.from(raw, "base64").toString("utf8")));
+    const parsed = schema.safeParse(
+      JSON.parse(Buffer.from(raw, "base64").toString("utf8")),
+    );
     return parsed.success ? parsed.data : null;
   } catch {
     return null;

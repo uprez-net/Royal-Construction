@@ -44,7 +44,9 @@ async function storeOne(recordingId: string): Promise<string> {
 // @prisma/client — into the workflow sandbox (tests/comms/recording-workflow).
 storeOne.maxRetries = 4;
 
-export const storeCallRecordings = async (recordingIds: string[]): Promise<string[]> => {
+export const storeCallRecordings = async (
+  recordingIds: string[],
+): Promise<string[]> => {
   "use workflow";
   const outcomes: string[] = [];
   for (const recordingId of recordingIds) {

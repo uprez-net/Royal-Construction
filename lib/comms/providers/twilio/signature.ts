@@ -38,7 +38,12 @@ export function verifyTwilioSignature(input: {
   if (actual.length !== 20) return false;
   return input.authTokens.some((token) => {
     if (!token) return false;
-    const expected = Buffer.from(twilioSignature(token, input.url, input.params), "base64");
-    return expected.length === actual.length && timingSafeEqual(expected, actual);
+    const expected = Buffer.from(
+      twilioSignature(token, input.url, input.params),
+      "base64",
+    );
+    return (
+      expected.length === actual.length && timingSafeEqual(expected, actual)
+    );
   });
 }

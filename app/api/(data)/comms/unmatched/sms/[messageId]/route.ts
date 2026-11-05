@@ -14,23 +14,36 @@ import {
 
 /** File an unmatched text onto a lead, or dismiss it. */
 const bodySchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("attach"), leadId: z.number().int().positive() }),
+  z.object({
+    action: z.literal("attach"),
+    leadId: z.number().int().positive(),
+  }),
   z.object({ action: z.literal("dismiss") }),
 ]);
 
-export async function POST(request: NextRequest, ctx: { params: Promise<{ messageId: string }> }) {
+export async function POST(
+  request: NextRequest,
+  ctx: { params: Promise<{ messageId: string }> },
+) {
   const { messageId } = await ctx.params;
   const parsed = await parseBodyWithResponse(request, bodySchema);
   if (!parsed.success) return parsed.response;
   try {
     const principal = await signedInUserPrincipal();
     if (!principal) return unauthorizedResponse();
-    const message = await resolveUnmatchedSms(principal, { ...parsed.data, messageId }, prisma);
+    const message = await resolveUnmatchedSms(
+      principal,
+      { ...parsed.data, messageId },
+      prisma,
+    );
     return successResponse({ message });
   } catch (error) {
     const refusal = domainErrorResponse(error);
     if (refusal) return refusal;
     console.error("[sms] Filing an unmatched text failed", error);
-    return errorResponse("Could not file the text.", { code: "SMS_FILE_FAILED", status: 500 });
+    return errorResponse("Could not file the text.", {
+      code: "SMS_FILE_FAILED",
+      status: 500,
+    });
   }
 }

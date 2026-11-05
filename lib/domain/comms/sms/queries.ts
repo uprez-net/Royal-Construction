@@ -8,10 +8,7 @@ import {
   DomainTransitionError,
 } from "../../errors";
 import type { CommsChannel } from "../../ports/comms";
-import {
-  isInternalPrincipal,
-  type DomainPrincipal,
-} from "../../principal";
+import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
 import { recordCommsHistory } from "../shared";
 import { evaluateSmsEligibility, type SmsEligibility } from "./policy";
 import {
@@ -25,7 +22,10 @@ import {
 export type LeadSmsThread = {
   readonly leadId: number;
   readonly messages: readonly SmsMessageRecord[];
-  readonly eligibility: Pick<SmsEligibility, "allowed" | "reason" | "optedOut"> & {
+  readonly eligibility: Pick<
+    SmsEligibility,
+    "allowed" | "reason" | "optedOut"
+  > & {
     readonly to: string | null;
     readonly from: string | null;
     readonly fromLabel: string | null;
@@ -56,7 +56,10 @@ export async function getLeadSmsThread(
       ...(input.before ? { occurredAt: { lt: input.before } } : {}),
     },
   });
-  const eligibility = evaluateSmsEligibility({ channel: context.channel, lead });
+  const eligibility = evaluateSmsEligibility({
+    channel: context.channel,
+    lead,
+  });
   return {
     eligibility: {
       allowed: eligibility.allowed,
@@ -141,7 +144,11 @@ export async function listUnmatchedSms(
 export async function resolveUnmatchedSms(
   principal: DomainPrincipal,
   input:
-    | { readonly messageId: string; readonly action: "attach"; readonly leadId: number }
+    | {
+        readonly messageId: string;
+        readonly action: "attach";
+        readonly leadId: number;
+      }
     | { readonly messageId: string; readonly action: "dismiss" },
   db: TransactionalDomainDb,
 ): Promise<SmsMessageRecord> {

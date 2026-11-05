@@ -50,7 +50,10 @@ export const PROMPTS = {
 export type CallFlowContext = {
   readonly channel: Pick<
     CommsChannel,
-    "recordingMode" | "staffForwardNumber" | "browserCalling" | "browserRingGroup"
+    | "recordingMode"
+    | "staffForwardNumber"
+    | "browserCalling"
+    | "browserRingGroup"
   >;
   /** Identities of staff browsers that registered recently, newest first. */
   readonly browserIdentities: readonly string[];
@@ -114,7 +117,11 @@ function ringMobile(call: CallForFlow, ctx: CallFlowContext, record: boolean) {
   } satisfies FlowDecision;
 }
 
-function ringBrowsers(call: CallForFlow, ctx: CallFlowContext, record: boolean) {
+function ringBrowsers(
+  call: CallForFlow,
+  ctx: CallFlowContext,
+  record: boolean,
+) {
   if (!ctx.channel.browserCalling || ctx.browserIdentities.length === 0) {
     return null;
   }
@@ -140,9 +147,16 @@ function consented(call: CallForFlow): boolean {
 }
 
 /** Inbound: the staff ring sequence, from the first ring. */
-function ringInboundStaff(call: CallForFlow, ctx: CallFlowContext): FlowDecision {
+function ringInboundStaff(
+  call: CallForFlow,
+  ctx: CallFlowContext,
+): FlowDecision {
   const record = consented(call);
-  return ringBrowsers(call, ctx, record) ?? ringMobile(call, ctx, record) ?? voicemail();
+  return (
+    ringBrowsers(call, ctx, record)
+    ?? ringMobile(call, ctx, record)
+    ?? voicemail()
+  );
 }
 
 /** Outbound: put the customer through to whoever placed the call. */
@@ -155,7 +169,8 @@ function connectOutbound(
   const say: CallInstruction = { op: "say", text: greeting };
   if (call.staffTarget === CallStaffTarget.MOBILE) {
     const mobile = ringMobile(call, ctx, record);
-    if (mobile) return { ...mobile, instructions: [say, ...mobile.instructions] };
+    if (mobile)
+      return { ...mobile, instructions: [say, ...mobile.instructions] };
   } else if (call.staffIdentity && ctx.channel.browserCalling) {
     return {
       instructions: [
@@ -215,7 +230,9 @@ export function decideAfterConsent(
   digits: string,
 ): FlowDecision {
   const recordingConsent =
-    digits.trim() === "1" ? RecordingConsent.GRANTED : RecordingConsent.DECLINED;
+    digits.trim() === "1"
+      ? RecordingConsent.GRANTED
+      : RecordingConsent.DECLINED;
   const decided = { ...call, recordingConsent };
   const next =
     call.direction === CommsDirection.INBOUND

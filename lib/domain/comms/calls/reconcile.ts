@@ -5,7 +5,12 @@ import { DomainAuthorizationError } from "../../errors";
 import type { CommsProviderName, VoicePort } from "../../ports/comms";
 import type { DomainPrincipal } from "../../principal";
 import { providerName } from "../shared";
-import { callStatusAdvances, callStatusOf, CALL_TIME_LIMIT_SECONDS, RINGING_STALE_MS } from "./state";
+import {
+  callStatusAdvances,
+  callStatusOf,
+  CALL_TIME_LIMIT_SECONDS,
+  RINGING_STALE_MS,
+} from "./state";
 
 // Calls whose final callback never arrived (file 06 §6.3).
 //
@@ -32,7 +37,9 @@ export type ReconcileSummary = {
 export async function reconcileStaleCalls(
   principal: DomainPrincipal,
   db: DomainDb,
-  ports: { readonly voiceFor: (provider: CommsProviderName) => VoicePort | null },
+  ports: {
+    readonly voiceFor: (provider: CommsProviderName) => VoicePort | null;
+  },
   now: Date = new Date(),
 ): Promise<ReconcileSummary> {
   if (principal.kind !== "system") {
@@ -49,8 +56,16 @@ export async function reconcileStaleCalls(
     take: 200,
     where: {
       OR: [
-        { startedAt: { lt: new Date(now.getTime() - RINGING_STALE_MS) }, status: { in: LIVE.slice(0, 3) } },
-        { startedAt: { lt: new Date(now.getTime() - CALL_TIME_LIMIT_SECONDS * 1000) }, status: CallStatus.IN_PROGRESS },
+        {
+          startedAt: { lt: new Date(now.getTime() - RINGING_STALE_MS) },
+          status: { in: LIVE.slice(0, 3) },
+        },
+        {
+          startedAt: {
+            lt: new Date(now.getTime() - CALL_TIME_LIMIT_SECONDS * 1000),
+          },
+          status: CallStatus.IN_PROGRESS,
+        },
       ],
     },
   });
@@ -68,7 +83,8 @@ export async function reconcileStaleCalls(
           endedAt: now,
           flowStep: CallFlowStep.ENDED,
           needsReconciliation: true,
-          providerErrorTitle: "The call never got a provider id. Check the provider's call log.",
+          providerErrorTitle:
+            "The call never got a provider id. Check the provider's call log.",
           status: CallStatus.FAILED,
         },
         where: { id: call.id },
@@ -93,7 +109,8 @@ export async function reconcileStaleCalls(
           endedAt: now,
           flowStep: CallFlowStep.ENDED,
           needsReconciliation: true,
-          providerErrorTitle: "The provider has no record of this call. Check its call log.",
+          providerErrorTitle:
+            "The provider has no record of this call. Check its call log.",
           status: CallStatus.FAILED,
         },
         where: { id: call.id },
@@ -102,7 +119,9 @@ export async function reconcileStaleCalls(
       continue;
     }
     if (lookup.alive) continue;
-    const next = lookup.state ? callStatusOf(lookup.state) : CallStatus.COMPLETED;
+    const next = lookup.state
+      ? callStatusOf(lookup.state)
+      : CallStatus.COMPLETED;
     if (!callStatusAdvances(call.status, next)) continue;
     await db.call.updateMany({
       data: {
@@ -117,4 +136,27 @@ export async function reconcileStaleCalls(
     settled += 1;
   }
   return { checked: stale.length, notFound, settled, unavailable };
+}
+
+/** Processed carrier events are only kept long enough to catch a retry. */
+export const WEBHOOK_EVENT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Drop processed event-dedupe rows past their retention. Returns how many. */
+export async function pruneCommsWebhookEvents(
+  principal: DomainPrincipal,
+  db: DomainDb,
+  now: Date = new Date(),
+): Promise<number> {
+  if (principal.kind !== "system") {
+    throw new DomainAuthorizationError(
+      "Pruning carrier events is a scheduled job.",
+    );
+  }
+  const result = await db.commsWebhookEvent.deleteMany({
+    where: {
+      processedAt: { not: null },
+      receivedAt: { lt: new Date(now.getTime() - WEBHOOK_EVENT_RETENTION_MS) },
+    },
+  });
+  return result.count;
 }

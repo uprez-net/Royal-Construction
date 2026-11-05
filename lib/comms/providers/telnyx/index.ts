@@ -1,7 +1,11 @@
 import { CommsError, type CallInstruction } from "@/lib/domain/ports/comms";
 
 import { commsCallbackUrl } from "../../callbacks";
-import { browserCallingConfigured, providerConfigured, type CommsConfig } from "../../config";
+import {
+  browserCallingConfigured,
+  providerConfigured,
+  type CommsConfig,
+} from "../../config";
 import { carrierRequest, readCapped, type Fetch } from "../../http";
 import type { CommsAdapter, RespondContext } from "../../types";
 import { encodeClientState } from "./client-state";
@@ -24,10 +28,20 @@ import { verifyTelnyxSignature } from "./signature";
 const API = "https://api.telnyx.com/v2";
 const VOICE = { language: "en-AU", voice: "female" } as const;
 
-function describeTelnyxError(json: unknown): { code: string | null; message: string | null } {
-  const first = ((json ?? {}) as { errors?: { code?: unknown; title?: unknown; detail?: unknown }[] }).errors?.[0];
+function describeTelnyxError(json: unknown): {
+  code: string | null;
+  message: string | null;
+} {
+  const first = (
+    (json ?? {}) as {
+      errors?: { code?: unknown; title?: unknown; detail?: unknown }[];
+    }
+  ).errors?.[0];
   return {
-    code: typeof first?.code === "string" || typeof first?.code === "number" ? String(first.code) : null,
+    code:
+      typeof first?.code === "string" || typeof first?.code === "number"
+        ? String(first.code)
+        : null,
     message:
       typeof first?.detail === "string"
         ? first.detail.slice(0, 200)
@@ -40,12 +54,17 @@ function describeTelnyxError(json: unknown): { code: string | null; message: str
 /** One credential per identity, looked up once per process. */
 const sipUsernames = new Map<string, string>();
 
-export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetch): CommsAdapter {
+export function createTelnyxAdapter(
+  config: CommsConfig,
+  fetchImpl: Fetch = fetch,
+): CommsAdapter {
   const t = config.telnyx;
-  const configured = providerConfigured(config, "telnyx") && Boolean(config.webhookOrigin);
+  const configured =
+    providerConfigured(config, "telnyx") && Boolean(config.webhookOrigin);
   const callsConfigured = configured && Boolean(t.connectionId);
   const origin = config.webhookOrigin ?? "";
-  const browserCalling = config.callsEnabled && browserCallingConfigured(config, "telnyx");
+  const browserCalling =
+    config.callsEnabled && browserCallingConfigured(config, "telnyx");
 
   async function rest(
     method: "GET" | "POST" | "DELETE",
@@ -54,7 +73,11 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
     body?: Record<string, unknown>,
   ) {
     if (!configured) {
-      throw new CommsError("Telnyx isn't configured in this runtime.", "config", "TELNYX_CONFIG");
+      throw new CommsError(
+        "Telnyx isn't configured in this runtime.",
+        "config",
+        "TELNYX_CONFIG",
+      );
     }
     return carrierRequest(
       fetchImpl,
@@ -74,34 +97,60 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
     );
   }
 
-  const data = (json: unknown) => ((json ?? {}) as { data?: Record<string, unknown> }).data ?? {};
-  const action = (id: string, name: string, what: string, body: Record<string, unknown> = {}) =>
-    rest("POST", `/calls/${encodeURIComponent(id)}/actions/${name}`, what, body);
-  const voiceUrl = (callId: string | null) => commsCallbackUrl(origin, "telnyx", "voice", { callId });
+  const data = (json: unknown) =>
+    ((json ?? {}) as { data?: Record<string, unknown> }).data ?? {};
+  const action = (
+    id: string,
+    name: string,
+    what: string,
+    body: Record<string, unknown> = {},
+  ) =>
+    rest(
+      "POST",
+      `/calls/${encodeURIComponent(id)}/actions/${name}`,
+      what,
+      body,
+    );
+  const voiceUrl = (callId: string | null) =>
+    commsCallbackUrl(origin, "telnyx", "voice", { callId });
 
   /** The telephony credential for a browser identity, created on first use. */
-  async function credentialFor(identity: string): Promise<{ id: string; sipUsername: string }> {
+  async function credentialFor(
+    identity: string,
+  ): Promise<{ id: string; sipUsername: string }> {
     const found = await rest(
       "GET",
       `/telephony_credentials?filter[tag]=${encodeURIComponent(identity)}&page[size]=1`,
       "looking up a browser credential",
     );
-    const existing = ((found.json ?? {}) as { data?: Record<string, unknown>[] }).data?.[0];
+    const existing = (
+      (found.json ?? {}) as { data?: Record<string, unknown>[] }
+    ).data?.[0];
     const record =
       existing
       ?? data(
         (
-          await rest("POST", "/telephony_credentials", "creating a browser credential", {
-            connection_id: t.webrtcConnectionId,
-            name: identity,
-            tag: identity,
-          })
+          await rest(
+            "POST",
+            "/telephony_credentials",
+            "creating a browser credential",
+            {
+              connection_id: t.webrtcConnectionId,
+              name: identity,
+              tag: identity,
+            },
+          )
         ).json,
       );
     const id = typeof record.id === "string" ? record.id : null;
-    const sipUsername = typeof record.sip_username === "string" ? record.sip_username : null;
+    const sipUsername =
+      typeof record.sip_username === "string" ? record.sip_username : null;
     if (!id || !sipUsername) {
-      throw new CommsError("Telnyx returned a browser credential without an id.", "uncertain", "TELNYX_NO_CREDENTIAL");
+      throw new CommsError(
+        "Telnyx returned a browser credential without an id.",
+        "uncertain",
+        "TELNYX_NO_CREDENTIAL",
+      );
     }
     sipUsernames.set(identity, sipUsername);
     return { id, sipUsername };
@@ -126,7 +175,11 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
       const step = instructions[index];
       const rest = instructions.slice(index + 1);
       const stateA = (n?: readonly CallInstruction[]) =>
-        encodeClientState({ c: callId ?? undefined, r: "a", ...(n?.length ? { n: [...n] } : {}) });
+        encodeClientState({
+          c: callId ?? undefined,
+          r: "a",
+          ...(n?.length ? { n: [...n] } : {}),
+        });
       switch (step.op) {
         case "say":
           await action(callControlId, "speak", "speaking to the caller", {
@@ -136,15 +189,20 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
           });
           return;
         case "gatherDigits":
-          await action(callControlId, "gather_using_speak", "asking the caller to press a key", {
-            ...VOICE,
-            client_state: stateA(),
-            maximum_digits: step.numDigits,
-            minimum_digits: 1,
-            payload: step.prompt,
-            timeout_millis: step.timeoutSeconds * 1000,
-            valid_digits: "0123456789*#",
-          });
+          await action(
+            callControlId,
+            "gather_using_speak",
+            "asking the caller to press a key",
+            {
+              ...VOICE,
+              client_state: stateA(),
+              maximum_digits: step.numDigits,
+              minimum_digits: 1,
+              payload: step.prompt,
+              timeout_millis: step.timeoutSeconds * 1000,
+              valid_digits: "0123456789*#",
+            },
+          );
           return;
         case "dialBrowser":
         case "dialNumber": {
@@ -157,23 +215,36 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
                 ? await sipUriFor(step.identities[0])
                 : null;
           if (!to) {
-            throw new CommsError("There is no staff browser to ring.", "unsupported", "TELNYX_NO_TARGET");
+            throw new CommsError(
+              "There is no staff browser to ring.",
+              "unsupported",
+              "TELNYX_NO_TARGET",
+            );
           }
-          await action(callControlId, "transfer", "putting the caller through", {
-            client_state: encodeClientState({
-              a: callControlId,
-              c: callId ?? undefined,
-              r: "b",
-              ...(step.record ? { rec: 1 as const } : {}),
-            }),
-            ...(step.op === "dialBrowser" && callId
-              ? { custom_headers: [{ name: "X-Royal-Call-Id", value: callId }] }
-              : {}),
-            from: step.callerId,
-            timeout_secs: step.timeoutSeconds,
-            to,
-            webhook_url: voiceUrl(callId),
-          });
+          await action(
+            callControlId,
+            "transfer",
+            "putting the caller through",
+            {
+              client_state: encodeClientState({
+                a: callControlId,
+                c: callId ?? undefined,
+                r: "b",
+                ...(step.record ? { rec: 1 as const } : {}),
+              }),
+              ...(step.op === "dialBrowser" && callId
+                ? {
+                    custom_headers: [
+                      { name: "X-Royal-Call-Id", value: callId },
+                    ],
+                  }
+                : {}),
+              from: step.callerId,
+              timeout_secs: step.timeoutSeconds,
+              to,
+              webhook_url: voiceUrl(callId),
+            },
+          );
           return;
         }
         case "recordVoicemail":
@@ -207,7 +278,10 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
     instructions: readonly CallInstruction[] | null,
     context: RespondContext,
   ): Promise<Response> {
-    const ok = new Response(null, { headers: { "Cache-Control": "no-store" }, status: 200 });
+    const ok = new Response(null, {
+      headers: { "Cache-Control": "no-store" },
+      status: 200,
+    });
     if (!context.providerCallId) return ok;
     try {
       if (context.trigger === "call.incoming") {
@@ -215,13 +289,17 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
         // the domain for the first step (file 07 §5).
         if (instructions && instructions.length > 0) {
           await action(context.providerCallId, "answer", "answering the call", {
-            client_state: encodeClientState({ c: context.callId ?? undefined, r: "a" }),
+            client_state: encodeClientState({
+              c: context.callId ?? undefined,
+              r: "a",
+            }),
             webhook_url: voiceUrl(context.callId),
           });
         }
         return ok;
       }
-      if (instructions?.length) await execute(context.providerCallId, context.callId, instructions);
+      if (instructions?.length)
+        await execute(context.providerCallId, context.callId, instructions);
     } catch (error) {
       // Answer 200 regardless: a retried event finds the flow already moved
       // on, so a retry cannot issue the command either. The stale-call sweep
@@ -255,9 +333,19 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
           // The token endpoint answers the JWT as plain text. VERIFY.
           const jwt = token.text.trim().replace(/^"|"$/g, "");
           if (!jwt) {
-            throw new CommsError("Telnyx returned an empty browser login.", "uncertain", "TELNYX_NO_TOKEN");
+            throw new CommsError(
+              "Telnyx returned an empty browser login.",
+              "uncertain",
+              "TELNYX_NO_TOKEN",
+            );
           }
-          return { identity, options: { mode: "login_token" }, provider: "telnyx", token: jwt, ttlSeconds };
+          return {
+            identity,
+            options: { mode: "login_token" },
+            provider: "telnyx",
+            token: jwt,
+            ttlSeconds,
+          };
         }
       : null,
     name: "telnyx",
@@ -266,26 +354,52 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
       ? {
           deleteRecording: async (recordingId) => {
             try {
-              await rest("DELETE", `/recordings/${encodeURIComponent(recordingId)}`, "deleting a recording");
+              await rest(
+                "DELETE",
+                `/recordings/${encodeURIComponent(recordingId)}`,
+                "deleting a recording",
+              );
             } catch (error) {
-              if (error instanceof CommsError && error.providerCode === "TELNYX_HTTP_404") return;
+              if (
+                error instanceof CommsError
+                && error.providerCode === "TELNYX_HTTP_404"
+              )
+                return;
               throw error;
             }
           },
           fetchRecording: async (recordingId, options) => {
             // Ask for a fresh download link by id; the one in the callback
             // expires within minutes and is never fetched (SSRF).
-            const found = data((await rest("GET", `/recordings/${encodeURIComponent(recordingId)}`, "finding a recording")).json);
+            const found = data(
+              (
+                await rest(
+                  "GET",
+                  `/recordings/${encodeURIComponent(recordingId)}`,
+                  "finding a recording",
+                )
+              ).json,
+            );
             const urls = (found.download_urls ?? {}) as Record<string, unknown>;
             const url = typeof urls.mp3 === "string" ? urls.mp3 : null;
             if (!url || !url.startsWith("https://")) {
-              throw new CommsError("Telnyx gave no download link for the recording.", "rejected", "TELNYX_NO_DOWNLOAD");
+              throw new CommsError(
+                "Telnyx gave no download link for the recording.",
+                "rejected",
+                "TELNYX_NO_DOWNLOAD",
+              );
             }
             let response: Response;
             try {
-              response = await fetchImpl(url, { signal: AbortSignal.timeout(60_000) });
+              response = await fetchImpl(url, {
+                signal: AbortSignal.timeout(60_000),
+              });
             } catch {
-              throw new CommsError("The recording didn't download in time.", "uncertain", "TELNYX_TIMEOUT");
+              throw new CommsError(
+                "The recording didn't download in time.",
+                "uncertain",
+                "TELNYX_TIMEOUT",
+              );
             }
             if (!response.ok) {
               throw new CommsError(
@@ -294,7 +408,10 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
                 `TELNYX_HTTP_${response.status}`,
               );
             }
-            return { bytes: await readCapped(response, options.maxBytes, "TELNYX"), mimeType: "audio/mpeg" };
+            return {
+              bytes: await readCapped(response, options.maxBytes, "TELNYX"),
+              mimeType: "audio/mpeg",
+            };
           },
           provider: "telnyx",
         }
@@ -312,13 +429,19 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
                     text: body,
                     to,
                     webhook_url: commsCallbackUrl(origin, "telnyx", "sms"),
-                    ...(t.messagingProfileId ? { messaging_profile_id: t.messagingProfileId } : {}),
+                    ...(t.messagingProfileId
+                      ? { messaging_profile_id: t.messagingProfileId }
+                      : {}),
                   })
                 ).json,
               );
               const id = typeof result.id === "string" ? result.id : null;
               if (!id) {
-                throw new CommsError("Telnyx accepted the text but returned no id.", "uncertain", "TELNYX_NO_ID");
+                throw new CommsError(
+                  "Telnyx accepted the text but returned no id.",
+                  "uncertain",
+                  "TELNYX_NO_ID",
+                );
               }
               return { providerMessageId: id };
             },
@@ -344,12 +467,21 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
             endCall: hangup,
             lookupCall: async (callControlId) => {
               try {
-                const call = data((await rest("GET", `/calls/${encodeURIComponent(callControlId)}`, "looking up the call")).json);
+                const call = data(
+                  (
+                    await rest(
+                      "GET",
+                      `/calls/${encodeURIComponent(callControlId)}`,
+                      "looking up the call",
+                    )
+                  ).json,
+                );
                 const alive = call.is_alive === true;
                 const duration = Number(call.call_duration);
                 return {
                   alive,
-                  durationSeconds: !alive && Number.isFinite(duration) ? duration : null,
+                  durationSeconds:
+                    !alive && Number.isFinite(duration) ? duration : null,
                   found: true,
                   // Telnyx only says whether the call is alive (file 07 §5).
                   state: null,
@@ -357,8 +489,16 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
               } catch (error) {
                 // The call was placed (it has an id), so a 404 means Telnyx
                 // has forgotten it: it ended, how is unknown. VERIFY.
-                if (error instanceof CommsError && error.providerCode?.endsWith("404")) {
-                  return { alive: false, durationSeconds: null, found: true, state: null };
+                if (
+                  error instanceof CommsError
+                  && error.providerCode?.endsWith("404")
+                ) {
+                  return {
+                    alive: false,
+                    durationSeconds: null,
+                    found: true,
+                    state: null,
+                  };
                 }
                 throw error;
               }
@@ -367,7 +507,10 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
               const result = data(
                 (
                   await rest("POST", "/calls", "the call", {
-                    client_state: encodeClientState({ c: request.callId, r: "a" }),
+                    client_state: encodeClientState({
+                      c: request.callId,
+                      r: "a",
+                    }),
                     connection_id: t.connectionId,
                     from: request.from,
                     time_limit_secs: request.timeLimitSeconds,
@@ -378,9 +521,16 @@ export function createTelnyxAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
                   })
                 ).json,
               );
-              const id = typeof result.call_control_id === "string" ? result.call_control_id : null;
+              const id =
+                typeof result.call_control_id === "string"
+                  ? result.call_control_id
+                  : null;
               if (!id) {
-                throw new CommsError("Telnyx accepted the call but returned no id.", "uncertain", "TELNYX_NO_ID");
+                throw new CommsError(
+                  "Telnyx accepted the call but returned no id.",
+                  "uncertain",
+                  "TELNYX_NO_ID",
+                );
               }
               return { providerCallId: id };
             },

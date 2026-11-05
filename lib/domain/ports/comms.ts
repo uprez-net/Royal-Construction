@@ -63,7 +63,11 @@ export type CommsChannel = {
  * - `unsupported`: this provider cannot do it. Never a silent no-op.
  * - `config`: credentials or settings are missing. Nothing left the server.
  */
-export type CommsErrorKind = "rejected" | "uncertain" | "unsupported" | "config";
+export type CommsErrorKind =
+  | "rejected"
+  | "uncertain"
+  | "unsupported"
+  | "config";
 
 export class CommsError extends Error {
   constructor(

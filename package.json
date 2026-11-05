@@ -70,6 +70,8 @@
     "@streamdown/mermaid": "^1.0.2",
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-table": "^9.3.1",
+    "@telnyx/webrtc": "^2.28.2",
+    "@twilio/voice-sdk": "^2.18.5",
     "@upstash/redis": "^1.38.4",
     "@vercel/blob": "^2.3.3",
     "@vercel/connect": "^2.3.2",

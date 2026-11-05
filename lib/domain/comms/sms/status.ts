@@ -4,7 +4,8 @@ import type { DomainDb, TransactionalDomainDb } from "../../db";
 import { DomainAuthorizationError } from "../../errors";
 import type { CommsProviderName } from "../../ports/comms";
 import type { DomainPrincipal } from "../../principal";
-import { isUniqueViolation, providerColumn } from "../shared";
+import { providerColumn } from "../shared";
+import { isUniqueViolation } from "../../leads/whatsapp/records";
 
 // SMS delivery callbacks. Statuses arrive out of order and more than once, so
 // a message only moves forward: QUEUED < SENT < DELIVERED, FAILED terminal
@@ -20,7 +21,10 @@ const RANK: Record<SmsStatus, number> = {
 };
 
 /** True when `next` may replace `current`. A terminal status never moves. */
-export function smsStatusAdvances(current: SmsStatus, next: SmsStatus): boolean {
+export function smsStatusAdvances(
+  current: SmsStatus,
+  next: SmsStatus,
+): boolean {
   if (RANK[current] === 9) return false;
   return RANK[next] > RANK[current];
 }
@@ -129,7 +133,8 @@ export async function applyPendingSmsStatuses(
     data.statusAt = event.occurredAt;
     // A carrier report settles an unconfirmed send: it did go.
     data.needsReconciliation = false;
-    if (event.status === SmsStatus.DELIVERED) data.deliveredAt = event.occurredAt;
+    if (event.status === SmsStatus.DELIVERED)
+      data.deliveredAt = event.occurredAt;
     if (event.status === SmsStatus.FAILED) {
       data.failedAt = event.occurredAt;
       data.providerErrorCode = event.errorCode;

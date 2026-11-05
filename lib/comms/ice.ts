@@ -19,7 +19,10 @@ export async function browserIceServers(
   env: Record<string, string | undefined> = process.env,
   now = Date.now(),
 ): Promise<readonly IceServer[]> {
-  const urls = env.WHATSAPP_CALL_TURN_URLS?.split(",").map((url) => url.trim()).filter(Boolean) ?? [];
+  const urls =
+    env.WHATSAPP_CALL_TURN_URLS?.split(",")
+      .map((url) => url.trim())
+      .filter(Boolean) ?? [];
   if (urls.length > 0) {
     return [
       STUN,
@@ -31,14 +34,18 @@ export async function browserIceServers(
     ];
   }
   if (cached && cached.until > now) return cached.servers;
-  const adapter = runtime.channel ? runtime.adapterFor(runtime.channel.provider) : null;
+  const adapter = runtime.channel
+    ? runtime.adapterFor(runtime.channel.provider)
+    : null;
   if (!adapter?.iceServers) return [STUN];
   try {
     const servers = [STUN, ...(await adapter.iceServers())];
     cached = { servers, until: now + CACHE_MS };
     return servers;
   } catch {
-    console.warn("[whatsapp-calls] TURN credentials unavailable; browsers fall back to STUN.");
+    console.warn(
+      "[whatsapp-calls] TURN credentials unavailable; browsers fall back to STUN.",
+    );
     return [STUN];
   }
 }

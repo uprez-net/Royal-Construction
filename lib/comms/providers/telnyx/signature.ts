@@ -27,7 +27,11 @@ export function telnyxPublicKey(base64: string): KeyObject | null {
   const raw = Buffer.from(base64, "base64");
   if (raw.length === 32) {
     try {
-      key = createPublicKey({ format: "der", key: Buffer.concat([SPKI_PREFIX, raw]), type: "spki" });
+      key = createPublicKey({
+        format: "der",
+        key: Buffer.concat([SPKI_PREFIX, raw]),
+        type: "spki",
+      });
     } catch {
       key = null;
     }
@@ -44,7 +48,13 @@ export function verifyTelnyxSignature(input: {
 }): boolean {
   const signature = input.headers.get(TELNYX_SIGNATURE_HEADER)?.trim();
   const timestamp = input.headers.get(TELNYX_TIMESTAMP_HEADER)?.trim();
-  if (!signature || !timestamp || !input.publicKey || !/^\d{1,12}$/.test(timestamp)) return false;
+  if (
+    !signature
+    || !timestamp
+    || !input.publicKey
+    || !/^\d{1,12}$/.test(timestamp)
+  )
+    return false;
   const age = Math.abs(input.now.getTime() / 1000 - Number(timestamp));
   if (age > TELNYX_TOLERANCE_SECONDS) return false;
   const key = telnyxPublicKey(input.publicKey);
@@ -52,7 +62,12 @@ export function verifyTelnyxSignature(input: {
   const bytes = Buffer.from(signature, "base64");
   if (bytes.length !== 64) return false;
   try {
-    return verify(null, Buffer.from(`${timestamp}|${input.rawBody}`, "utf8"), key, bytes);
+    return verify(
+      null,
+      Buffer.from(`${timestamp}|${input.rawBody}`, "utf8"),
+      key,
+      bytes,
+    );
   } catch {
     return false;
   }

@@ -89,7 +89,10 @@ const STOP_WORDS = new Set([
 const START_WORDS = new Set(["START", "UNSTOP", "YES", "OPTIN", "OPT IN"]);
 
 function keyword(body: string): string {
-  return body.trim().replace(/[.!]+$/, "").toUpperCase();
+  return body
+    .trim()
+    .replace(/[.!]+$/, "")
+    .toUpperCase();
 }
 
 /** A whole message that is an opt-out keyword. "Stop by at 5" is not. */

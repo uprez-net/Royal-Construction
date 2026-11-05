@@ -17,11 +17,11 @@ import {
   type InboundProjectWhatsAppOutcome,
 } from "@/lib/domain/projects/whatsapp/inbound";
 import { systemPrincipal } from "@/lib/domain/principal";
-import { recordWhatsAppCallPermissionReply } from "@/lib/domain/whatsapp/call-permissions";
+import { recordWhatsAppCallPermissionReply } from "@/lib/domain/leads/whatsapp/call-permissions";
 import {
   recordWhatsAppCallEvent,
   type WhatsAppCallEventOutcome,
-} from "@/lib/domain/whatsapp/calls";
+} from "@/lib/domain/leads/whatsapp/calls";
 import {
   createFixedWindowRateLimiter,
   requestAddress,

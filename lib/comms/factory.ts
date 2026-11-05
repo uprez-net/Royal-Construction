@@ -6,7 +6,12 @@ import type {
   VoicePort,
 } from "@/lib/domain/ports/comms";
 
-import { commsChannel, COMMS_PROVIDERS, readCommsConfig, type CommsConfig } from "./config";
+import {
+  commsChannel,
+  COMMS_PROVIDERS,
+  readCommsConfig,
+  type CommsConfig,
+} from "./config";
 import type { Fetch } from "./http";
 import { createTelnyxAdapter } from "./providers/telnyx";
 import { createTwilioAdapter } from "./providers/twilio";
@@ -24,7 +29,10 @@ import type { CommsAdapter } from "./types";
 // Telnyx credentials, and missing ones surface as `config` errors only when
 // that adapter is used. This table is the only `switch` on a provider.
 
-const BUILDERS: Record<CommsProviderName, (config: CommsConfig, fetchImpl: Fetch) => CommsAdapter> = {
+const BUILDERS: Record<
+  CommsProviderName,
+  (config: CommsConfig, fetchImpl: Fetch) => CommsAdapter
+> = {
   telnyx: createTelnyxAdapter,
   twilio: createTwilioAdapter,
 };

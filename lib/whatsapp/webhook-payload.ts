@@ -3,8 +3,8 @@ import { z } from "zod";
 import type { InboundWhatsAppMessage } from "@/lib/domain/leads/whatsapp/inbound";
 import type { WhatsAppStatusUpdate } from "@/lib/domain/leads/whatsapp/status";
 import type { WhatsAppGroupEvent } from "@/lib/domain/projects/whatsapp/groups";
-import type { WhatsAppCallPermissionReply } from "@/lib/domain/whatsapp/call-permissions";
-import type { WhatsAppCallEvent } from "@/lib/domain/whatsapp/calls";
+import type { WhatsAppCallPermissionReply } from "@/lib/domain/leads/whatsapp/call-permissions";
+import type { WhatsAppCallEvent } from "@/lib/domain/leads/whatsapp/calls";
 import {
   whatsappMediaTypeOf,
   type InboundWhatsAppMedia,
@@ -403,7 +403,9 @@ function callEvent(
         at,
         bizOpaqueCallbackData: opaque,
         durationSeconds:
-          Number.isFinite(duration) && duration >= 0 ? Math.round(duration) : null,
+          Number.isFinite(duration) && duration >= 0
+            ? Math.round(duration)
+            : null,
         kind: "terminate",
         providerCallId: value.id,
         status: status.includes("FAILED") ? "FAILED" : "COMPLETED",

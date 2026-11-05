@@ -54,9 +54,7 @@ export function carrierNumberToE164(
 /** "+61412345678" → "+61412***678", for logs. Never log a whole number. */
 export function maskNumber(e164: string | null | undefined): string {
   if (!e164) return "unknown";
-  return e164.length > 7
-    ? `${e164.slice(0, 6)}***${e164.slice(-3)}`
-    : "***";
+  return e164.length > 7 ? `${e164.slice(0, 6)}***${e164.slice(-3)}` : "***";
 }
 
 /** The configured Royal number with this E.164, on this provider, if any. */
@@ -96,15 +94,6 @@ export async function recordCommsHistory(
       ...(authorId ? { authorId } : {}),
     },
   });
-}
-
-/** Prisma's unique-constraint violation, without importing its runtime. */
-export function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object"
-    && error !== null
-    && (error as { code?: unknown }).code === "P2002"
-  );
 }
 
 /** Leads with this E.164 number, enough of them to know if it is ambiguous. */

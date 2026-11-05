@@ -19,12 +19,12 @@ import {
 import type { DomainPrincipal } from "../../principal";
 import {
   findBusinessNumber,
-  isUniqueViolation,
   leadsWithNumber,
   maskNumber,
   providerColumn,
   recordCommsHistory,
 } from "../shared";
+import { isUniqueViolation } from "../../leads/whatsapp/records";
 import {
   decideAfterConsent,
   decideAfterDial,
@@ -169,7 +169,11 @@ function formatDuration(seconds: number | null): string {
   return minutes > 0 ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
 }
 
-function describeEnd(call: CallForEvent, status: CallStatus, seconds: number | null) {
+function describeEnd(
+  call: CallForEvent,
+  status: CallStatus,
+  seconds: number | null,
+) {
   const inbound = call.direction === CommsDirection.INBOUND;
   if (status === CallStatus.COMPLETED && call.connectedAt) {
     return {
@@ -179,7 +183,10 @@ function describeEnd(call: CallForEvent, status: CallStatus, seconds: number | n
   }
   if (inbound) {
     return {
-      action: call.answeredBy === CallAnsweredBy.VOICEMAIL ? "Voicemail" : "Missed call",
+      action:
+        call.answeredBy === CallAnsweredBy.VOICEMAIL
+          ? "Voicemail"
+          : "Missed call",
       detail:
         call.answeredBy === CallAnsweredBy.VOICEMAIL
           ? `${maskNumber(call.customerNumber)} left a voicemail.`
@@ -238,7 +245,12 @@ export async function applyCallEvent(
       providerCallId: event.providerCallId,
     });
     if (!call) {
-      return { callId: null, instructions: null, outcome: "unknown_call" as const, recordingId: null };
+      return {
+        callId: null,
+        instructions: null,
+        outcome: "unknown_call" as const,
+        recordingId: null,
+      };
     }
 
     switch (event.type) {
@@ -272,9 +284,16 @@ export async function applyCallEvent(
           ...(callStatusAdvances(call.status, CallStatus.IN_PROGRESS)
             ? { status: CallStatus.IN_PROGRESS }
             : {}),
-          ...(event.providerCallId ? { providerCallId: event.providerCallId } : {}),
+          ...(event.providerCallId
+            ? { providerCallId: event.providerCallId }
+            : {}),
         });
-        return { callId: call.id, instructions: decision.instructions, outcome: "applied" as const, recordingId: null };
+        return {
+          callId: call.id,
+          instructions: decision.instructions,
+          outcome: "applied" as const,
+          recordingId: null,
+        };
       }
 
       case "call.status": {
@@ -291,17 +310,25 @@ export async function applyCallEvent(
               data: { durationSeconds: event.durationSeconds },
               where: { id: call.id },
             });
-            return { callId: call.id, instructions: null, outcome: "applied" as const, recordingId: null };
+            return {
+              callId: call.id,
+              instructions: null,
+              outcome: "applied" as const,
+              recordingId: null,
+            };
           }
           return ignored(call.id);
         }
         await tx.call.update({
           data: {
             status: next,
-            ...(next === CallStatus.IN_PROGRESS ? { answeredAt: call.answeredAt ?? event.occurredAt } : {}),
+            ...(next === CallStatus.IN_PROGRESS
+              ? { answeredAt: call.answeredAt ?? event.occurredAt }
+              : {}),
             ...(terminal
               ? {
-                  durationSeconds: event.durationSeconds ?? call.durationSeconds,
+                  durationSeconds:
+                    event.durationSeconds ?? call.durationSeconds,
                   endedAt: event.occurredAt,
                   flowStep: CallFlowStep.ENDED,
                   hangupCause: event.hangupCause,
@@ -311,7 +338,11 @@ export async function applyCallEvent(
           where: { id: call.id },
         });
         if (terminal && call.leadId !== null) {
-          const ended = describeEnd(call, next, event.durationSeconds ?? call.durationSeconds);
+          const ended = describeEnd(
+            call,
+            next,
+            event.durationSeconds ?? call.durationSeconds,
+          );
           await recordCommsHistory(tx, {
             action: ended.action,
             at: event.occurredAt,
@@ -321,15 +352,26 @@ export async function applyCallEvent(
             type: "CALL",
           });
         }
-        return { callId: call.id, instructions: null, outcome: "applied" as const, recordingId: null };
+        return {
+          callId: call.id,
+          instructions: null,
+          outcome: "applied" as const,
+          recordingId: null,
+        };
       }
 
       case "call.gathered": {
-        if (call.flowStep !== CallFlowStep.RECORDING_CONSENT) return ignored(call.id);
+        if (call.flowStep !== CallFlowStep.RECORDING_CONSENT)
+          return ignored(call.id);
         const ctx = await flowContext(tx, context.channel, now);
         const decision = decideAfterConsent(forFlow(call), ctx, event.digits);
         await applyDecision(tx, call, decision);
-        return { callId: call.id, instructions: decision.instructions, outcome: "applied" as const, recordingId: null };
+        return {
+          callId: call.id,
+          instructions: decision.instructions,
+          outcome: "applied" as const,
+          recordingId: null,
+        };
       }
 
       case "call.connected": {
@@ -350,7 +392,12 @@ export async function applyCallEvent(
           },
           where: { id: call.id },
         });
-        return { callId: call.id, instructions: null, outcome: "applied" as const, recordingId: null };
+        return {
+          callId: call.id,
+          instructions: null,
+          outcome: "applied" as const,
+          recordingId: null,
+        };
       }
 
       case "call.dialed": {
@@ -369,7 +416,12 @@ export async function applyCallEvent(
             : {}),
           ...(answered && !call.connectedAt ? { connectedAt: now } : {}),
         });
-        return { callId: call.id, instructions: decision.instructions, outcome: "applied" as const, recordingId: null };
+        return {
+          callId: call.id,
+          instructions: decision.instructions,
+          outcome: "applied" as const,
+          recordingId: null,
+        };
       }
 
       case "call.recording": {
@@ -403,7 +455,12 @@ export async function applyCallEvent(
             where: { id: call.id },
           });
         }
-        return { callId: call.id, instructions: null, outcome: "applied" as const, recordingId: recording.id };
+        return {
+          callId: call.id,
+          instructions: null,
+          outcome: "applied" as const,
+          recordingId: recording.id,
+        };
       }
     }
   });
@@ -423,7 +480,10 @@ async function recordIncomingCall(
       const existing = await tx.call.findUnique({
         select: CALL_FOR_EVENT,
         where: {
-          provider_providerCallId: { provider, providerCallId: event.providerCallId },
+          provider_providerCallId: {
+            provider,
+            providerCallId: event.providerCallId,
+          },
         },
       });
       if (existing) {
@@ -438,7 +498,11 @@ async function recordIncomingCall(
           recordingId: null,
         };
       }
-      const business = findBusinessNumber(context.channel, event.to, context.provider);
+      const business = findBusinessNumber(
+        context.channel,
+        event.to,
+        context.provider,
+      );
       const candidates = await leadsWithNumber(tx, event.from);
       const leadId = candidates.length === 1 ? candidates[0] : null;
       const draft: CallForFlow = {

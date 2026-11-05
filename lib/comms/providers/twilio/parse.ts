@@ -1,4 +1,8 @@
-import type { CallState, CommsEvent, DialOutcome } from "@/lib/domain/ports/comms";
+import type {
+  CallState,
+  CommsEvent,
+  DialOutcome,
+} from "@/lib/domain/ports/comms";
 import { carrierNumberToE164 } from "@/lib/domain/comms/shared";
 
 import type { ParsedWebhook, WebhookRequest } from "../../types";
@@ -37,7 +41,9 @@ const CALL_STATES: ReadonlySet<string> = new Set<CallState>([
 
 const SID = /^[A-Za-z0-9]{2,64}$/;
 
-function smsStatus(raw: string): "QUEUED" | "SENT" | "DELIVERED" | "FAILED" | null {
+function smsStatus(
+  raw: string,
+): "QUEUED" | "SENT" | "DELIVERED" | "FAILED" | null {
   switch (raw) {
     case "accepted":
     case "scheduled":
@@ -84,12 +90,17 @@ function caller(raw: string | null): string {
   return carrierNumberToE164(raw) ?? "withheld";
 }
 
-export function parseTwilioWebhook(request: WebhookRequest): ParsedWebhook | null {
+export function parseTwilioWebhook(
+  request: WebhookRequest,
+): ParsedWebhook | null {
   const form = new URLSearchParams(request.rawBody);
   const get = (name: string) => form.get(name)?.trim() || null;
   const callId = request.query.get("callId");
   const callSid = get("CallSid");
-  const ack = (events: CommsEvent[], dedupeKey: string | null = null): ParsedWebhook => ({
+  const ack = (
+    events: CommsEvent[],
+    dedupeKey: string | null = null,
+  ): ParsedWebhook => ({
     dedupeKey,
     events,
     respondWith: "ack",
@@ -122,7 +133,8 @@ export function parseTwilioWebhook(request: WebhookRequest): ParsedWebhook | nul
       const sid = get("MessageSid") ?? get("SmsSid");
       const status = smsStatus(get("MessageStatus") ?? get("SmsStatus") ?? "");
       if (!sid || !SID.test(sid)) return null;
-      if (!status) return { ...ack([]), ignoredReason: "unknown message status" };
+      if (!status)
+        return { ...ack([]), ignoredReason: "unknown message status" };
       return ack(
         [
           {
@@ -149,12 +161,19 @@ export function parseTwilioWebhook(request: WebhookRequest): ParsedWebhook | nul
     }
     case "voice-connect": {
       if (!callSid) return null;
-      return markup([{ callId, providerCallId: callSid, type: "call.answered" }]);
+      return markup([
+        { callId, providerCallId: callSid, type: "call.answered" },
+      ]);
     }
     case "voice-gather": {
       if (!callSid) return null;
       return markup([
-        { callId, digits: get("Digits") ?? "", providerCallId: callSid, type: "call.gathered" },
+        {
+          callId,
+          digits: get("Digits") ?? "",
+          providerCallId: callSid,
+          type: "call.gathered",
+        },
       ]);
     }
     case "voice-dial": {
@@ -173,13 +192,18 @@ export function parseTwilioWebhook(request: WebhookRequest): ParsedWebhook | nul
       if (!callSid) return null;
       return {
         ...markup([]),
-        pending: { callId, instructions: [{ op: "hangup" }], providerCallId: callSid },
+        pending: {
+          callId,
+          instructions: [{ op: "hangup" }],
+          providerCallId: callSid,
+        },
       };
     }
     case "voice-status": {
       const state = get("CallStatus");
       if (!callSid || !state) return null;
-      if (!CALL_STATES.has(state)) return { ...ack([]), ignoredReason: "unknown call status" };
+      if (!CALL_STATES.has(state))
+        return { ...ack([]), ignoredReason: "unknown call status" };
       return ack(
         [
           {
@@ -200,7 +224,13 @@ export function parseTwilioWebhook(request: WebhookRequest): ParsedWebhook | nul
       // (the customer) is ParentCallSid, and Royal's id is in the URL.
       if (get("CallStatus") !== "in-progress") return ack([]);
       return ack(
-        [{ callId, providerCallId: get("ParentCallSid"), type: "call.connected" }],
+        [
+          {
+            callId,
+            providerCallId: get("ParentCallSid"),
+            type: "call.connected",
+          },
+        ],
         callSid ? `leg:${callSid}:answered` : null,
       );
     }

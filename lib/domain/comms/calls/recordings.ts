@@ -42,7 +42,9 @@ export async function storeCallRecording(
   input: { readonly recordingId: string },
   db: DomainDb,
   ports: {
-    readonly recordingsFor: (provider: CommsProviderName) => RecordingPort | null;
+    readonly recordingsFor: (
+      provider: CommsProviderName,
+    ) => RecordingPort | null;
     readonly put: BlobPutPort;
   },
 ): Promise<StoreRecordingOutcome> {
@@ -77,7 +79,12 @@ export async function storeCallRecording(
 
   if (recording.status === CallRecordingStatus.STORED) {
     if (recording.providerDeletedAt) return "already_stored";
-    await deleteProviderCopy(db, recording.id, recording.providerRecordingId, port);
+    await deleteProviderCopy(
+      db,
+      recording.id,
+      recording.providerRecordingId,
+      port,
+    );
     return "provider_deleted";
   }
   if (recording.status === CallRecordingStatus.FAILED) return "gave_up";
@@ -96,7 +103,10 @@ export async function storeCallRecording(
   } catch (error) {
     const retryable =
       attempts < MAX_RECORDING_ATTEMPTS
-      && !(isCommsError(error) && (error.kind === "rejected" || error.kind === "config"));
+      && !(
+        isCommsError(error)
+        && (error.kind === "rejected" || error.kind === "config")
+      );
     const reason = isCommsError(error)
       ? error.message
       : "The recording could not be downloaded.";
@@ -106,7 +116,9 @@ export async function storeCallRecording(
         : { failureReason: reason, status: CallRecordingStatus.FAILED },
       where: { id: recording.id },
     });
-    throw new DomainSideEffectError(reason, "recordings", retryable, { cause: error });
+    throw new DomainSideEffectError(reason, "recordings", retryable, {
+      cause: error,
+    });
   }
 
   // Reuse the path on a retry so a replayed step overwrites, never orphans.
@@ -131,7 +143,12 @@ export async function storeCallRecording(
     },
     where: { id: recording.id },
   });
-  await deleteProviderCopy(db, recording.id, recording.providerRecordingId, port);
+  await deleteProviderCopy(
+    db,
+    recording.id,
+    recording.providerRecordingId,
+    port,
+  );
   return "stored";
 }
 
@@ -175,7 +192,9 @@ export async function retryCallRecording(
   db: DomainDb,
 ): Promise<void> {
   if (!isInternalPrincipal(principal) || principal.kind !== "user") {
-    throw new DomainAuthorizationError("Retrying a recording requires a member of staff.");
+    throw new DomainAuthorizationError(
+      "Retrying a recording requires a member of staff.",
+    );
   }
   const recording = await db.callRecording.findUnique({
     select: { id: true, status: true },
@@ -186,7 +205,11 @@ export async function retryCallRecording(
     throw new DomainTransitionError("Only a failed recording can be retried.");
   }
   await db.callRecording.update({
-    data: { attempts: 0, failureReason: null, status: CallRecordingStatus.PENDING },
+    data: {
+      attempts: 0,
+      failureReason: null,
+      status: CallRecordingStatus.PENDING,
+    },
     where: { id: recording.id },
   });
 }

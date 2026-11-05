@@ -1,7 +1,10 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { parsePositiveId, signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
+import {
+  parsePositiveId,
+  signedInUserPrincipal,
+} from "@/lib/data/lead-whatsapp-request";
 import { reconcileLeadSms } from "@/lib/domain/comms/sms/send";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
@@ -38,6 +41,9 @@ export async function POST(
     const refusal = domainErrorResponse(error);
     if (refusal) return refusal;
     console.error("[sms] Reconcile failed", error);
-    return errorResponse("Could not settle the text.", { code: "SMS_RECONCILE_FAILED", status: 500 });
+    return errorResponse("Could not settle the text.", {
+      code: "SMS_RECONCILE_FAILED",
+      status: 500,
+    });
   }
 }

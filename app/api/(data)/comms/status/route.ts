@@ -1,7 +1,13 @@
+import { connection } from "next/server";
+
 import { commsRuntimeFromEnv } from "@/lib/comms/factory";
 import { signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
 import { isInternalPrincipal } from "@/lib/domain/principal";
-import { forbiddenResponse, successResponse, unauthorizedResponse } from "@/utils/validators/response";
+import {
+  forbiddenResponse,
+  successResponse,
+  unauthorizedResponse,
+} from "@/utils/validators/response";
 
 /**
  * The SMS and phone configuration, without secrets, for the admin page:
@@ -9,6 +15,8 @@ import { forbiddenResponse, successResponse, unauthorizedResponse } from "@/util
  * misconfiguration the reader found.
  */
 export async function GET() {
+  // Per request, never prerendered: the answer depends on who is asking.
+  await connection();
   const principal = await signedInUserPrincipal();
   if (!principal) return unauthorizedResponse();
   if (!isInternalPrincipal(principal)) return forbiddenResponse();
@@ -19,7 +27,9 @@ export async function GET() {
     browserCalling: channel?.browserCalling ?? false,
     callsAvailable: channel?.callsAvailable ?? false,
     callsEnabled: config.callsEnabled,
-    capabilities: channel ? runtime.adapterFor(channel.provider).capabilities : null,
+    capabilities: channel
+      ? runtime.adapterFor(channel.provider).capabilities
+      : null,
     numbers: config.numbers,
     problems: config.problems,
     recordingMode: config.recordingMode,

@@ -115,5 +115,8 @@ export type CommsAdapter = {
    */
   readonly iceServers?: () => Promise<readonly IceServer[]>;
   /** See `ParsedWebhook.recordAfterConnect`. Absent for markup providers. */
-  readonly startCallRecording?: (providerCallId: string, callId: string | null) => Promise<void>;
+  readonly startCallRecording?: (
+    providerCallId: string,
+    callId: string | null,
+  ) => Promise<void>;
 };

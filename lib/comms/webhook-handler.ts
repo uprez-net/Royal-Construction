@@ -6,7 +6,10 @@ import type { TransactionalDomainDb } from "@/lib/domain/db";
 import { isDomainError } from "@/lib/domain/errors";
 import type { CallInstruction, CommsEvent } from "@/lib/domain/ports/comms";
 import { systemPrincipal } from "@/lib/domain/principal";
-import { createFixedWindowRateLimiter, requestAddress } from "@/lib/http/rate-limit";
+import {
+  createFixedWindowRateLimiter,
+  requestAddress,
+} from "@/lib/http/rate-limit";
 
 import { signedUrlFor } from "./callbacks";
 import { providerFromPath, type CommsRuntime } from "./factory";
@@ -36,7 +39,10 @@ export const COMMS_WEBHOOK_MAX_BODY_BYTES = 64 * 1024;
 const limiter = createFixedWindowRateLimiter({ limit: 600, windowMs: 60_000 });
 
 const NOT_IN_SERVICE: readonly CallInstruction[] = [
-  { op: "say", text: "Sorry, this number can't take calls right now. Please send us a text or an email instead." },
+  {
+    op: "say",
+    text: "Sorry, this number can't take calls right now. Please send us a text or an email instead.",
+  },
   { op: "hangup" },
 ];
 
@@ -47,17 +53,25 @@ export type CommsWebhookDeps = {
   readonly log?: Pick<Console, "info" | "warn" | "error">;
   readonly now?: () => Date;
   /** Start copying newly recorded recordings into storage, after commit. */
-  readonly onRecordingRecorded?: (recordingIds: readonly string[]) => Promise<void>;
+  readonly onRecordingRecorded?: (
+    recordingIds: readonly string[],
+  ) => Promise<void>;
 };
 
 function text(status: number, body: string) {
   return new Response(body, {
-    headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" },
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "text/plain; charset=utf-8",
+    },
     status,
   });
 }
 
-function eventCallIds(event: CommsEvent): { callId: string | null; providerCallId: string | null } {
+function eventCallIds(event: CommsEvent): {
+  callId: string | null;
+  providerCallId: string | null;
+} {
   if (event.type === "sms.received" || event.type === "sms.status") {
     return { callId: null, providerCallId: null };
   }
@@ -76,7 +90,8 @@ export async function handleCommsWebhook(
   const now = deps.now?.() ?? new Date();
   const provider = providerFromPath(params.provider);
   const { config, channel } = deps.runtime;
-  if (!provider || (!config.smsEnabled && !config.callsEnabled)) return text(404, "Not found");
+  if (!provider || (!config.smsEnabled && !config.callsEnabled))
+    return text(404, "Not found");
   const adapter = deps.runtime.adapterFor(provider);
   if (!adapter.webhookEvents.has(params.event)) return text(404, "Not found");
 
@@ -90,7 +105,8 @@ export async function handleCommsWebhook(
     return text(401, "Unauthorized");
   }
   const declared = Number(request.headers.get("content-length") ?? "0");
-  if (declared > COMMS_WEBHOOK_MAX_BODY_BYTES) return text(413, "Payload too large");
+  if (declared > COMMS_WEBHOOK_MAX_BODY_BYTES)
+    return text(413, "Payload too large");
   const rawBody = await request.text();
   if (Buffer.byteLength(rawBody, "utf8") > COMMS_WEBHOOK_MAX_BODY_BYTES) {
     return text(413, "Payload too large");
@@ -105,7 +121,9 @@ export async function handleCommsWebhook(
     signedUrl: signedUrlFor(config.webhookOrigin, request.url),
   };
   if (!adapter.verifyWebhook(webhook)) {
-    log.warn(`[comms-webhook] ${provider}/${params.event}: signature rejected.`);
+    log.warn(
+      `[comms-webhook] ${provider}/${params.event}: signature rejected.`,
+    );
     return text(403, "Forbidden");
   }
   const parsed = adapter.parseWebhook(webhook);
@@ -119,11 +137,18 @@ export async function handleCommsWebhook(
       select: { processedAt: true },
       where: { provider_dedupeKey: dedupe },
     });
-    if (seen?.processedAt) return adapter.respond(null, { callId: null, providerCallId: null, trigger: null });
+    if (seen?.processedAt)
+      return adapter.respond(null, {
+        callId: null,
+        providerCallId: null,
+        trigger: null,
+      });
   }
 
   let instructions: readonly CallInstruction[] | null = null;
-  const respondContext: { -readonly [K in keyof RespondContext]: RespondContext[K] } = {
+  const respondContext: {
+    -readonly [K in keyof RespondContext]: RespondContext[K];
+  } = {
     callId: parsed.pending?.callId ?? null,
     providerCallId: parsed.pending?.providerCallId ?? null,
     trigger: parsed.pending ? "continuation" : null,
@@ -163,22 +188,31 @@ export async function handleCommsWebhook(
         default: {
           if (event.type === "call.incoming" && !config.callsEnabled) {
             instructions = NOT_IN_SERVICE;
-            Object.assign(respondContext, { providerCallId: event.providerCallId, trigger: "call.incoming" });
+            Object.assign(respondContext, {
+              providerCallId: event.providerCallId,
+              trigger: "call.incoming",
+            });
             outcomes.push("call.incoming:not_in_service");
             break;
           }
-          const result = await applyCallEvent(COMMS_WEBHOOK_PRINCIPAL, event, deps.db, {
-            channel,
-            now,
-            provider,
-          });
+          const result = await applyCallEvent(
+            COMMS_WEBHOOK_PRINCIPAL,
+            event,
+            deps.db,
+            {
+              channel,
+              now,
+              provider,
+            },
+          );
           outcomes.push(`${event.type}:${result.outcome}`);
           const ids = eventCallIds(event);
           if (result.instructions) {
             instructions = result.instructions;
             Object.assign(respondContext, {
               callId: result.callId ?? ids.callId,
-              providerCallId: ids.providerCallId ?? respondContext.providerCallId,
+              providerCallId:
+                ids.providerCallId ?? respondContext.providerCallId,
               trigger: event.type,
             });
           } else if (!respondContext.providerCallId) {
@@ -211,14 +245,22 @@ export async function handleCommsWebhook(
     try {
       await deps.onRecordingRecorded(recordingIds);
     } catch (error) {
-      log.warn("[comms-webhook] Could not start copying a recording; the daily sweep will.", error);
+      log.warn(
+        "[comms-webhook] Could not start copying a recording; the daily sweep will.",
+        error,
+      );
     }
   }
   if (parsed.recordAfterConnect && adapter.startCallRecording) {
     try {
-      await adapter.startCallRecording(parsed.recordAfterConnect.providerCallId, parsed.recordAfterConnect.callId);
+      await adapter.startCallRecording(
+        parsed.recordAfterConnect.providerCallId,
+        parsed.recordAfterConnect.callId,
+      );
     } catch {
-      log.warn(`[comms-webhook] ${provider}: the call connected but recording could not start.`);
+      log.warn(
+        `[comms-webhook] ${provider}: the call connected but recording could not start.`,
+      );
     }
   }
 
@@ -227,5 +269,8 @@ export async function handleCommsWebhook(
       parsed.ignoredReason ? ` (ignored: ${parsed.ignoredReason})` : ""
     }`,
   );
-  return adapter.respond(instructions ?? parsed.pending?.instructions ?? null, respondContext);
+  return adapter.respond(
+    instructions ?? parsed.pending?.instructions ?? null,
+    respondContext,
+  );
 }

@@ -83,7 +83,8 @@ export async function carrierRequest(
 
   const described = describe(json);
   const providerCode = `${request.provider}_${described.code ?? `HTTP_${response.status}`}`;
-  const definite = response.status >= 400 && response.status < 500 && response.status !== 429;
+  const definite =
+    response.status >= 400 && response.status < 500 && response.status !== 429;
   throw new CommsError(
     definite
       ? `The phone provider refused ${request.what}${described.message ? `: ${described.message}` : "."}`
@@ -101,11 +102,19 @@ export async function readCapped(
 ): Promise<Uint8Array> {
   const declared = Number(response.headers.get("content-length") ?? "0");
   if (declared > maxBytes) {
-    throw new CommsError("The recording is larger than the app keeps.", "rejected", `${provider}_TOO_LARGE`);
+    throw new CommsError(
+      "The recording is larger than the app keeps.",
+      "rejected",
+      `${provider}_TOO_LARGE`,
+    );
   }
   const buffer = new Uint8Array(await response.arrayBuffer());
   if (buffer.byteLength > maxBytes) {
-    throw new CommsError("The recording is larger than the app keeps.", "rejected", `${provider}_TOO_LARGE`);
+    throw new CommsError(
+      "The recording is larger than the app keeps.",
+      "rejected",
+      `${provider}_TOO_LARGE`,
+    );
   }
   return buffer;
 }

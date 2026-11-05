@@ -2,7 +2,10 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { commsRuntimeFromEnv } from "@/lib/comms/factory";
-import { parsePositiveId, signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
+import {
+  parsePositiveId,
+  signedInUserPrincipal,
+} from "@/lib/data/lead-whatsapp-request";
 import { getLeadSmsThread } from "@/lib/domain/comms/sms/queries";
 import { sendLeadSms } from "@/lib/domain/comms/sms/send";
 import { domainErrorResponse } from "@/lib/http/domain-response";
@@ -28,28 +31,43 @@ import {
 
 const sendBodySchema = z.object({ body: z.string().max(5_000) });
 
-export async function GET(request: NextRequest, ctx: { params: Promise<{ leadId: string }> }) {
+export async function GET(
+  request: NextRequest,
+  ctx: { params: Promise<{ leadId: string }> },
+) {
   const leadId = parsePositiveId((await ctx.params).leadId);
   if (leadId === null) return badRequestResponse("Invalid lead id.");
   const beforeRaw = request.nextUrl.searchParams.get("before");
   const before = beforeRaw ? new Date(beforeRaw) : null;
-  if (before && Number.isNaN(before.getTime())) return badRequestResponse("Invalid `before`.");
+  if (before && Number.isNaN(before.getTime()))
+    return badRequestResponse("Invalid `before`.");
   try {
     const principal = await signedInUserPrincipal();
     if (!principal) return unauthorizedResponse();
-    const thread = await getLeadSmsThread(principal, { before, leadId }, prisma, {
-      channel: commsRuntimeFromEnv().channel,
-    });
+    const thread = await getLeadSmsThread(
+      principal,
+      { before, leadId },
+      prisma,
+      {
+        channel: commsRuntimeFromEnv().channel,
+      },
+    );
     return successResponse(thread);
   } catch (error) {
     const refusal = domainErrorResponse(error);
     if (refusal) return refusal;
     console.error("[sms] Failed to load a lead thread", error);
-    return errorResponse("Could not load the SMS conversation.", { code: "SMS_THREAD_FAILED", status: 500 });
+    return errorResponse("Could not load the SMS conversation.", {
+      code: "SMS_THREAD_FAILED",
+      status: 500,
+    });
   }
 }
 
-export async function POST(request: NextRequest, ctx: { params: Promise<{ leadId: string }> }) {
+export async function POST(
+  request: NextRequest,
+  ctx: { params: Promise<{ leadId: string }> },
+) {
   const leadId = parsePositiveId((await ctx.params).leadId);
   if (leadId === null) return badRequestResponse("Invalid lead id.");
   const idempotencyKey = request.headers.get("idempotency-key")?.trim();

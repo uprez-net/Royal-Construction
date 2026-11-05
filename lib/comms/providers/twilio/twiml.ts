@@ -25,7 +25,11 @@ export function renderTwiml(
   context: { readonly origin: string; readonly callId: string | null },
 ): string {
   const url = (event: string) =>
-    xmlEscape(commsCallbackUrl(context.origin, "twilio", event, { callId: context.callId }));
+    xmlEscape(
+      commsCallbackUrl(context.origin, "twilio", event, {
+        callId: context.callId,
+      }),
+    );
   const parts: string[] = [];
   for (const step of instructions ?? []) {
     switch (step.op) {

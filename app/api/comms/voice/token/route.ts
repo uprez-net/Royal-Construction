@@ -1,9 +1,15 @@
+import { connection } from "next/server";
+
 import { commsRuntimeFromEnv } from "@/lib/comms/factory";
 import { signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
 import { recordBrowserPresence } from "@/lib/domain/comms/calls/presence";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
-import { errorResponse, successResponse, unauthorizedResponse } from "@/utils/validators/response";
+import {
+  errorResponse,
+  successResponse,
+  unauthorizedResponse,
+} from "@/utils/validators/response";
 
 /**
  * A short-lived browser calling credential for the signed-in member of staff
@@ -19,12 +25,17 @@ import { errorResponse, successResponse, unauthorizedResponse } from "@/utils/va
 const CREDENTIAL_TTL_SECONDS = 600;
 
 export async function GET() {
+  // Per request, never prerendered: the answer depends on who is asking.
+  await connection();
   try {
     const principal = await signedInUserPrincipal();
     if (!principal) return unauthorizedResponse();
     const runtime = commsRuntimeFromEnv();
     const adapter = runtime.channel?.callsAvailable ? runtime.active : null;
-    if (!adapter?.issueBrowserCredential || !adapter.capabilities.browserSdkBundled) {
+    if (
+      !adapter?.issueBrowserCredential
+      || !adapter.capabilities.browserSdkBundled
+    ) {
       return successResponse({
         available: false as const,
         provider: runtime.channel?.provider ?? null,
@@ -34,15 +45,21 @@ export async function GET() {
       });
     }
     const identity = await recordBrowserPresence(principal, prisma);
-    const credential = await adapter.issueBrowserCredential(identity, CREDENTIAL_TTL_SECONDS);
+    const credential = await adapter.issueBrowserCredential(
+      identity,
+      CREDENTIAL_TTL_SECONDS,
+    );
     return successResponse({ available: true as const, ...credential });
   } catch (error) {
     const refusal = domainErrorResponse(error);
     if (refusal) return refusal;
     console.error("[calls] Could not issue a browser credential");
-    return errorResponse("The browser phone couldn't connect. It will try again shortly.", {
-      code: "VOICE_TOKEN_FAILED",
-      status: 502,
-    });
+    return errorResponse(
+      "The browser phone couldn't connect. It will try again shortly.",
+      {
+        code: "VOICE_TOKEN_FAILED",
+        status: 502,
+      },
+    );
   }
 }

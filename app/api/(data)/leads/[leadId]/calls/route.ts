@@ -2,7 +2,10 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { commsRuntimeFromEnv } from "@/lib/comms/factory";
-import { parsePositiveId, signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
+import {
+  parsePositiveId,
+  signedInUserPrincipal,
+} from "@/lib/data/lead-whatsapp-request";
 import { requestLeadCall } from "@/lib/domain/comms/calls/outbound";
 import { getLeadCalls } from "@/lib/domain/comms/calls/queries";
 import { domainErrorResponse } from "@/lib/http/domain-response";
@@ -26,24 +29,35 @@ import {
 
 const placeBodySchema = z.object({ target: z.enum(["browser", "mobile"]) });
 
-export async function GET(_request: NextRequest, ctx: { params: Promise<{ leadId: string }> }) {
+export async function GET(
+  _request: NextRequest,
+  ctx: { params: Promise<{ leadId: string }> },
+) {
   const leadId = parsePositiveId((await ctx.params).leadId);
   if (leadId === null) return badRequestResponse("Invalid lead id.");
   try {
     const principal = await signedInUserPrincipal();
     if (!principal) return unauthorizedResponse();
     return successResponse(
-      await getLeadCalls(principal, { leadId }, prisma, { channel: commsRuntimeFromEnv().channel }),
+      await getLeadCalls(principal, { leadId }, prisma, {
+        channel: commsRuntimeFromEnv().channel,
+      }),
     );
   } catch (error) {
     const refusal = domainErrorResponse(error);
     if (refusal) return refusal;
     console.error("[calls] Failed to load a lead's calls", error);
-    return errorResponse("Could not load the calls.", { code: "CALLS_LOAD_FAILED", status: 500 });
+    return errorResponse("Could not load the calls.", {
+      code: "CALLS_LOAD_FAILED",
+      status: 500,
+    });
   }
 }
 
-export async function POST(request: NextRequest, ctx: { params: Promise<{ leadId: string }> }) {
+export async function POST(
+  request: NextRequest,
+  ctx: { params: Promise<{ leadId: string }> },
+) {
   const leadId = parsePositiveId((await ctx.params).leadId);
   if (leadId === null) return badRequestResponse("Invalid lead id.");
   const idempotencyKey = request.headers.get("idempotency-key")?.trim();

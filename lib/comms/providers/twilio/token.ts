@@ -37,6 +37,8 @@ export function twilioVoiceAccessToken(input: {
     sub: input.accountSid,
   };
   const signingInput = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(payload))}`;
-  const signature = createHmac("sha256", input.apiKeySecret).update(signingInput).digest();
+  const signature = createHmac("sha256", input.apiKeySecret)
+    .update(signingInput)
+    .digest();
   return `${signingInput}.${base64url(signature)}`;
 }

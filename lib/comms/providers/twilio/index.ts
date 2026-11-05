@@ -1,7 +1,11 @@
 import { CommsError } from "@/lib/domain/ports/comms";
 
 import { commsCallbackUrl } from "../../callbacks";
-import { browserCallingConfigured, providerConfigured, type CommsConfig } from "../../config";
+import {
+  browserCallingConfigured,
+  providerConfigured,
+  type CommsConfig,
+} from "../../config";
 import { carrierRequest, readCapped, type Fetch } from "../../http";
 import type { CommsAdapter } from "../../types";
 import { parseTwilioWebhook, TWILIO_WEBHOOK_EVENTS } from "./parse";
@@ -13,17 +17,28 @@ import { renderTwiml } from "./twiml";
 // no SDK — form-encoded bodies, Basic auth with an API key when there is one.
 // Call control is markup: the webhook's response is the TwiML.
 
-function describeTwilioError(json: unknown): { code: string | null; message: string | null } {
+function describeTwilioError(json: unknown): {
+  code: string | null;
+  message: string | null;
+} {
   const body = (json ?? {}) as { code?: unknown; message?: unknown };
   return {
-    code: typeof body.code === "number" || typeof body.code === "string" ? String(body.code) : null,
-    message: typeof body.message === "string" ? body.message.slice(0, 200) : null,
+    code:
+      typeof body.code === "number" || typeof body.code === "string"
+        ? String(body.code)
+        : null,
+    message:
+      typeof body.message === "string" ? body.message.slice(0, 200) : null,
   };
 }
 
-export function createTwilioAdapter(config: CommsConfig, fetchImpl: Fetch = fetch): CommsAdapter {
+export function createTwilioAdapter(
+  config: CommsConfig,
+  fetchImpl: Fetch = fetch,
+): CommsAdapter {
   const t = config.twilio;
-  const configured = providerConfigured(config, "twilio") && Boolean(config.webhookOrigin);
+  const configured =
+    providerConfigured(config, "twilio") && Boolean(config.webhookOrigin);
   const origin = config.webhookOrigin ?? "";
   const user = t.apiKeySid && t.apiKeySecret ? t.apiKeySid : t.accountSid;
   const pass = t.apiKeySid && t.apiKeySecret ? t.apiKeySecret : t.authToken;
@@ -37,7 +52,11 @@ export function createTwilioAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
     form?: URLSearchParams,
   ): Promise<Record<string, unknown>> {
     if (!configured) {
-      throw new CommsError("Twilio isn't configured in this runtime.", "config", "TWILIO_CONFIG");
+      throw new CommsError(
+        "Twilio isn't configured in this runtime.",
+        "config",
+        "TWILIO_CONFIG",
+      );
     }
     const response = await carrierRequest(
       fetchImpl,
@@ -45,7 +64,9 @@ export function createTwilioAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
         body: form?.toString(),
         headers: {
           Authorization: auth,
-          ...(form ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
+          ...(form
+            ? { "Content-Type": "application/x-www-form-urlencoded" }
+            : {}),
         },
         method,
         provider: "TWILIO",
@@ -60,7 +81,8 @@ export function createTwilioAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
   const callback = (event: string, callId: string | null) =>
     commsCallbackUrl(origin, "twilio", event, { callId });
 
-  const browserCalling = config.callsEnabled && browserCallingConfigured(config, "twilio");
+  const browserCalling =
+    config.callsEnabled && browserCallingConfigured(config, "twilio");
 
   return {
     capabilities: {
@@ -91,14 +113,31 @@ export function createTwilioAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
     iceServers: configured
       ? async () => {
           // Network Traversal Service: TURN credentials that last an hour.
-          const token = await rest("POST", "/Tokens.json", "fetching TURN servers", new URLSearchParams({ Ttl: "3600" }));
-          const servers = Array.isArray(token.ice_servers) ? (token.ice_servers as Record<string, unknown>[]) : [];
+          const token = await rest(
+            "POST",
+            "/Tokens.json",
+            "fetching TURN servers",
+            new URLSearchParams({ Ttl: "3600" }),
+          );
+          const servers = Array.isArray(token.ice_servers)
+            ? (token.ice_servers as Record<string, unknown>[])
+            : [];
           return servers
-            .filter((server) => typeof server.urls === "string" || typeof server.url === "string")
+            .filter(
+              (server) =>
+                typeof server.urls === "string"
+                || typeof server.url === "string",
+            )
             .map((server) => ({
-              credential: typeof server.credential === "string" ? server.credential : undefined,
+              credential:
+                typeof server.credential === "string"
+                  ? server.credential
+                  : undefined,
               urls: String(server.urls ?? server.url),
-              username: typeof server.username === "string" ? server.username : undefined,
+              username:
+                typeof server.username === "string"
+                  ? server.username
+                  : undefined,
             }));
         }
       : undefined,
@@ -108,16 +147,28 @@ export function createTwilioAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
       ? {
           deleteRecording: async (recordingSid) => {
             try {
-              await rest("DELETE", `/Recordings/${encodeURIComponent(recordingSid)}.json`, "deleting a recording");
+              await rest(
+                "DELETE",
+                `/Recordings/${encodeURIComponent(recordingSid)}.json`,
+                "deleting a recording",
+              );
             } catch (error) {
               // Already gone is the end state the caller wants.
-              if (error instanceof CommsError && error.providerCode === "TWILIO_20404") return;
+              if (
+                error instanceof CommsError
+                && error.providerCode === "TWILIO_20404"
+              )
+                return;
               throw error;
             }
           },
           fetchRecording: async (recordingSid, options) => {
             if (!configured) {
-              throw new CommsError("Twilio isn't configured in this runtime.", "config", "TWILIO_CONFIG");
+              throw new CommsError(
+                "Twilio isn't configured in this runtime.",
+                "config",
+                "TWILIO_CONFIG",
+              );
             }
             // Built from the SID, never from the callback's RecordingUrl.
             const url = `${account}/Recordings/${encodeURIComponent(recordingSid)}.mp3`;
@@ -128,25 +179,40 @@ export function createTwilioAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
                 signal: AbortSignal.timeout(60_000),
               });
             } catch {
-              throw new CommsError("Twilio didn't return the recording in time.", "uncertain", "TWILIO_TIMEOUT");
+              throw new CommsError(
+                "Twilio didn't return the recording in time.",
+                "uncertain",
+                "TWILIO_TIMEOUT",
+              );
             }
             if (!response.ok) {
               throw new CommsError(
                 `Twilio refused the recording download (HTTP ${response.status}).`,
-                response.status >= 400 && response.status < 500 ? "rejected" : "uncertain",
+                response.status >= 400 && response.status < 500
+                  ? "rejected"
+                  : "uncertain",
                 `TWILIO_HTTP_${response.status}`,
               );
             }
-            return { bytes: await readCapped(response, options.maxBytes, "TWILIO"), mimeType: "audio/mpeg" };
+            return {
+              bytes: await readCapped(response, options.maxBytes, "TWILIO"),
+              mimeType: "audio/mpeg",
+            };
           },
           provider: "twilio",
         }
       : null,
     respond: async (instructions, context) =>
-      new Response(renderTwiml(instructions, { callId: context.callId, origin }), {
-        headers: { "Cache-Control": "no-store", "Content-Type": "text/xml; charset=utf-8" },
-        status: 200,
-      }),
+      new Response(
+        renderTwiml(instructions, { callId: context.callId, origin }),
+        {
+          headers: {
+            "Cache-Control": "no-store",
+            "Content-Type": "text/xml; charset=utf-8",
+          },
+          status: 200,
+        },
+      ),
     sms:
       configured && config.smsEnabled
         ? {
@@ -156,11 +222,20 @@ export function createTwilioAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
                 "POST",
                 "/Messages.json",
                 "the text",
-                new URLSearchParams({ Body: body, From: from, StatusCallback: callback("sms-status", null), To: to }),
+                new URLSearchParams({
+                  Body: body,
+                  From: from,
+                  StatusCallback: callback("sms-status", null),
+                  To: to,
+                }),
               );
               const sid = typeof result.sid === "string" ? result.sid : null;
               if (!sid) {
-                throw new CommsError("Twilio accepted the text but returned no id.", "uncertain", "TWILIO_NO_SID");
+                throw new CommsError(
+                  "Twilio accepted the text but returned no id.",
+                  "uncertain",
+                  "TWILIO_NO_SID",
+                );
               }
               return { providerMessageId: sid };
             },
@@ -177,30 +252,60 @@ export function createTwilioAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
       configured && config.callsEnabled
         ? {
             endCall: async (callSid) => {
-              const lookup = await rest("GET", `/Calls/${encodeURIComponent(callSid)}.json`, "looking up the call");
+              const lookup = await rest(
+                "GET",
+                `/Calls/${encodeURIComponent(callSid)}.json`,
+                "looking up the call",
+              );
               const status = String(lookup.status ?? "");
-              if (["completed", "busy", "no-answer", "failed", "canceled"].includes(status)) return;
+              if (
+                [
+                  "completed",
+                  "busy",
+                  "no-answer",
+                  "failed",
+                  "canceled",
+                ].includes(status)
+              )
+                return;
               await rest(
                 "POST",
                 `/Calls/${encodeURIComponent(callSid)}.json`,
                 "ending the call",
-                new URLSearchParams({ Status: status === "in-progress" ? "completed" : "canceled" }),
+                new URLSearchParams({
+                  Status: status === "in-progress" ? "completed" : "canceled",
+                }),
               );
             },
             lookupCall: async (callSid) => {
               try {
-                const call = await rest("GET", `/Calls/${encodeURIComponent(callSid)}.json`, "looking up the call");
+                const call = await rest(
+                  "GET",
+                  `/Calls/${encodeURIComponent(callSid)}.json`,
+                  "looking up the call",
+                );
                 const status = String(call.status ?? "");
-                const alive = ["queued", "initiated", "ringing", "in-progress"].includes(status);
+                const alive = [
+                  "queued",
+                  "initiated",
+                  "ringing",
+                  "in-progress",
+                ].includes(status);
                 const duration = Number(call.duration);
                 return {
                   alive,
-                  durationSeconds: Number.isFinite(duration) && call.duration !== null ? duration : null,
+                  durationSeconds:
+                    Number.isFinite(duration) && call.duration !== null
+                      ? duration
+                      : null,
                   found: true,
                   state: alive ? null : (status as "completed"),
                 };
               } catch (error) {
-                if (error instanceof CommsError && error.providerCode === "TWILIO_20404") {
+                if (
+                  error instanceof CommsError
+                  && error.providerCode === "TWILIO_20404"
+                ) {
                   return { found: false };
                 }
                 throw error;
@@ -217,13 +322,27 @@ export function createTwilioAdapter(config: CommsConfig, fetchImpl: Fetch = fetc
                 To: request.to,
                 Url: callback("voice-connect", request.callId),
               });
-              for (const event of ["initiated", "ringing", "answered", "completed"]) {
+              for (const event of [
+                "initiated",
+                "ringing",
+                "answered",
+                "completed",
+              ]) {
                 form.append("StatusCallbackEvent", event);
               }
-              const result = await rest("POST", "/Calls.json", "the call", form);
+              const result = await rest(
+                "POST",
+                "/Calls.json",
+                "the call",
+                form,
+              );
               const sid = typeof result.sid === "string" ? result.sid : null;
               if (!sid) {
-                throw new CommsError("Twilio accepted the call but returned no id.", "uncertain", "TWILIO_NO_SID");
+                throw new CommsError(
+                  "Twilio accepted the call but returned no id.",
+                  "uncertain",
+                  "TWILIO_NO_SID",
+                );
               }
               return { providerCallId: sid };
             },

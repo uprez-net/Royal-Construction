@@ -43,7 +43,10 @@ export function isTerminalCallStatus(status: CallStatus): boolean {
 }
 
 /** True when `next` may replace `current`. */
-export function callStatusAdvances(current: CallStatus, next: CallStatus): boolean {
+export function callStatusAdvances(
+  current: CallStatus,
+  next: CallStatus,
+): boolean {
   return RANK[next] > RANK[current];
 }
 

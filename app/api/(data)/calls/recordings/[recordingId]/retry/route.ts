@@ -5,10 +5,17 @@ import { retryCallRecording } from "@/lib/domain/comms/calls/recordings";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
 import { storeCallRecordings } from "@/lib/workflow/call-recording";
-import { errorResponse, successResponse, unauthorizedResponse } from "@/utils/validators/response";
+import {
+  errorResponse,
+  successResponse,
+  unauthorizedResponse,
+} from "@/utils/validators/response";
 
 /** Try copying a failed recording again. */
-export async function POST(_request: Request, ctx: { params: Promise<{ recordingId: string }> }) {
+export async function POST(
+  _request: Request,
+  ctx: { params: Promise<{ recordingId: string }> },
+) {
   const { recordingId } = await ctx.params;
   try {
     const principal = await signedInUserPrincipal();
@@ -20,6 +27,9 @@ export async function POST(_request: Request, ctx: { params: Promise<{ recording
     const refusal = domainErrorResponse(error);
     if (refusal) return refusal;
     console.error("[calls] Recording retry failed", error);
-    return errorResponse("Could not retry the recording.", { code: "RECORDING_RETRY_FAILED", status: 500 });
+    return errorResponse("Could not retry the recording.", {
+      code: "RECORDING_RETRY_FAILED",
+      status: 500,
+    });
   }
 }

@@ -132,7 +132,10 @@ export async function sendLeadSms(
         "This text may already have reached the customer — the provider never confirmed it. Check the provider's message log and mark it sent or not sent before sending again.",
       );
     }
-    if (prior.status !== SmsStatus.QUEUED && prior.status !== SmsStatus.FAILED) {
+    if (
+      prior.status !== SmsStatus.QUEUED
+      && prior.status !== SmsStatus.FAILED
+    ) {
       return { alreadySent: true, message: toSmsMessageRecord(prior) };
     }
   }
@@ -149,11 +152,14 @@ export async function sendLeadSms(
 
   const eligibility = evaluateSmsEligibility({ channel, lead });
   if (!eligibility.allowed) {
-    throw new DomainTransitionError(eligibility.reason ?? "This lead can't be texted.");
+    throw new DomainTransitionError(
+      eligibility.reason ?? "This lead can't be texted.",
+    );
   }
   const sender = eligibility.sender;
   const to = eligibility.phone.e164;
-  if (!sender || !to) throw new DomainTransitionError("This lead can't be texted.");
+  if (!sender || !to)
+    throw new DomainTransitionError("This lead can't be texted.");
   if (sender.provider !== port.provider) {
     // The configured sender and the adapter disagree: a misconfiguration,
     // and sending from a number the carrier does not own would be refused
@@ -179,7 +185,12 @@ export async function sendLeadSms(
     const intent = await enqueueOutboxEvent(tx, {
       key: outboxKey,
       kind: OutboxEventKind.LEAD_SMS_SEND,
-      payload: { from: sender.e164, leadId: lead.id, provider: port.provider, to },
+      payload: {
+        from: sender.e164,
+        leadId: lead.id,
+        provider: port.provider,
+        to,
+      },
     });
     if (intent.status === OutboxEventStatus.SUCCEEDED) {
       return { replay: true as const, stale: false as const };
@@ -243,7 +254,11 @@ export async function sendLeadSms(
       update: fields,
       where: { idempotencyKey: outboxKey },
     });
-    return { messageId: message.id, replay: false as const, stale: false as const };
+    return {
+      messageId: message.id,
+      replay: false as const,
+      stale: false as const,
+    };
   });
 
   if (prepared.stale) {
@@ -271,7 +286,11 @@ export async function sendLeadSms(
 
   let providerMessageId: string;
   try {
-    ({ providerMessageId } = await port.sendSms({ body, from: sender.e164, to }));
+    ({ providerMessageId } = await port.sendSms({
+      body,
+      from: sender.e164,
+      to,
+    }));
   } catch (error) {
     const definite = commsDefinitelyNotSent(error);
     const failedAt = new Date();
@@ -286,7 +305,9 @@ export async function sendLeadSms(
         data: definite
           ? {
               failedAt,
-              providerErrorCode: isCommsError(error) ? error.providerCode : null,
+              providerErrorCode: isCommsError(error)
+                ? error.providerCode
+                : null,
               providerErrorTitle: isCommsError(error) ? error.message : null,
               status: SmsStatus.FAILED,
               statusAt: failedAt,
@@ -379,7 +400,10 @@ export async function reconcileLeadSms(
   if (!canAccessLead(principal, message.lead)) {
     throw new DomainAuthorizationError("You do not have access to this lead");
   }
-  if (message.direction !== CommsDirection.OUTBOUND || !message.needsReconciliation) {
+  if (
+    message.direction !== CommsDirection.OUTBOUND
+    || !message.needsReconciliation
+  ) {
     throw new DomainTransitionError("This text doesn't need reconciling.");
   }
   const now = new Date();
@@ -389,7 +413,8 @@ export async function reconcileLeadSms(
         input.outcome === "sent"
           ? {
               needsReconciliation: false,
-              providerErrorTitle: "Confirmed sent by staff after checking the provider.",
+              providerErrorTitle:
+                "Confirmed sent by staff after checking the provider.",
               status: SmsStatus.SENT,
               statusAt: now,
             }

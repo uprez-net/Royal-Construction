@@ -11,12 +11,12 @@ import type { CommsChannel, CommsProviderName } from "../../ports/comms";
 import type { DomainPrincipal } from "../../principal";
 import {
   findBusinessNumber,
-  isUniqueViolation,
   leadsWithNumber,
   maskNumber,
   providerColumn,
   recordCommsHistory,
 } from "../shared";
+import { isUniqueViolation } from "../../leads/whatsapp/records";
 import { isOptInMessage, isOptOutMessage } from "./policy";
 
 // A customer's text arriving from a carrier.
@@ -73,7 +73,11 @@ export async function recordInboundSms(
     );
   }
   const provider = providerColumn(input.provider);
-  const business = findBusinessNumber(context.channel, input.to, input.provider);
+  const business = findBusinessNumber(
+    context.channel,
+    input.to,
+    input.provider,
+  );
   const body = inboundSmsBody(input.body, input.mediaCount);
 
   try {

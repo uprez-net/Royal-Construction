@@ -76,7 +76,10 @@ export async function getCall(
     throw new DomainAuthorizationError("Calls are for members of staff.");
   }
   const row = await db.call.findUnique({
-    select: { ...CALL_SELECT, lead: { select: { assignedId: true, id: true, name: true } } },
+    select: {
+      ...CALL_SELECT,
+      lead: { select: { assignedId: true, id: true, name: true } },
+    },
     where: { id: input.callId },
   });
   if (!row || (row.lead && !canAccessLead(principal, row.lead))) {
