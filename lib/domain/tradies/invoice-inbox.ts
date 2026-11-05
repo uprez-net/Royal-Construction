@@ -180,8 +180,13 @@ export type QueueEmailedInvoiceOutcome =
   | { readonly outcome: "already-recorded" };
 
 function day(value: string | null): Date | null {
-  return value && /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ? new Date(`${value}T00:00:00.000Z`)
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  // A date the reader got wrong (2026-13-01, or 2026-02-31, which Date rolls
+  // into March) is left for the office to fill in, never stored or thrown on.
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime())
+    && date.toISOString().slice(0, 10) === value
+    ? date
     : null;
 }
 

@@ -76,7 +76,10 @@ export const EmailPreviewFrame = forwardRef<
   const observerRef = useRef<MutationObserver | null>(null);
   const [size, setSize] = useState<{
     contentH: number;
+    contentW: number;
     scale: number;
+    /** Wider than the panel even at `minScale`. */
+    overflowsX: boolean;
   } | null>(null);
 
   useImperativeHandle(
@@ -117,7 +120,13 @@ export const EmailPreviewFrame = forwardRef<
       maxHeight / contentH,
       1,
     );
-    setSize({ contentH, scale: Math.max(scale, minScale) });
+    const fitted = Math.max(scale, minScale);
+    setSize({
+      contentH,
+      contentW,
+      overflowsX: Math.ceil(contentW * fitted) > container.clientWidth,
+      scale: fitted,
+    });
   }, [layoutWidth, maxHeight, minScale]);
 
   const handleLoad = useCallback(() => {
@@ -149,10 +158,15 @@ export const EmailPreviewFrame = forwardRef<
 
   useEffect(() => () => observerRef.current?.disconnect(), []);
 
+  // Below `minScale` the document is wider than the panel: scroll it
+  // sideways rather than cut off its right edge.
+  const scaledW = size ? Math.ceil(size.contentW * size.scale) : null;
+  const overflowsX = size?.overflowsX ?? false;
+
   return (
     <div
       ref={containerRef}
-      className="relative w-full overflow-hidden rounded-md border bg-transparent"
+      className={`relative w-full rounded-md border bg-transparent ${overflowsX ? "overflow-x-auto overflow-y-hidden" : "overflow-hidden"}`}
       style={{
         height: size
           ? Math.ceil(size.contentH * size.scale)
@@ -161,19 +175,30 @@ export const EmailPreviewFrame = forwardRef<
             : 560,
       }}
     >
-      <iframe
-        ref={iframeRef}
-        srcDoc={editable ? withEditableBody(html) : html}
-        title={title}
-        sandbox="allow-same-origin allow-scripts"
-        onLoad={handleLoad}
-        style={{
-          width: layoutWidth,
-          transformOrigin: "top left",
-          transform: size ? `scale(${size.scale})` : undefined,
-        }}
-        className="block border-0 bg-background"
-      />
+      {/* A transform does not change layout size, so this box is what the
+          panel measures and scrolls: the iframe as it looks once scaled. */}
+      <div
+        className="overflow-hidden"
+        style={
+          size && scaledW !== null
+            ? { height: Math.ceil(size.contentH * size.scale), width: scaledW }
+            : undefined
+        }
+      >
+        <iframe
+          ref={iframeRef}
+          srcDoc={editable ? withEditableBody(html) : html}
+          title={title}
+          sandbox="allow-same-origin allow-scripts"
+          onLoad={handleLoad}
+          style={{
+            width: layoutWidth,
+            transformOrigin: "top left",
+            transform: size ? `scale(${size.scale})` : undefined,
+          }}
+          className="block border-0 bg-background"
+        />
+      </div>
     </div>
   );
 });

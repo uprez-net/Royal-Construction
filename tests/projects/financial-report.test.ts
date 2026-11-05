@@ -272,6 +272,9 @@ describe("consolidation", () => {
     const [parent] = report.stages[0].activities;
     assert.equal(parent.own.tenderCents, 0);
     assert.equal(parent.figures.tenderCents, 250_00);
+    // What the price editor sends back as the figure it edited: it must be the
+    // stored budget, or setMilestonePrice refuses the edit as stale.
+    assert.equal(parent.priceCents, 100_00);
   });
 
   test("a child tagged with another stage stays under its parent's stage", () => {

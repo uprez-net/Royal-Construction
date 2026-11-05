@@ -139,5 +139,8 @@ export async function readTradieInvoiceBytes(input: {
     name: input.fileName,
     timeoutMs: OCR_TIMEOUT_MS,
   });
+  // A photo of the work, or a scan with no printed text, is not an invoice.
+  // Throwing here would make the workflow step retry the OCR call.
+  if (!text.trim()) return tradieInvoiceExtractionSchema.parse({});
   return readInvoiceText(text, input.fileName);
 }

@@ -46,7 +46,8 @@ const conflictSchema = z.object({
   note: z.string().optional(),
 });
 
-const paymentStageSchema = z.object({
+/** One payment stage, as extracted and as stored on `Project.requirements`. */
+export const paymentStageSchema = z.object({
   label: z.string().min(1),
   percentage: nullableNumberSchema,
   amount: nullableNumberSchema,

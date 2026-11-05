@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Pencil, X } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,15 @@ export function ActivityPriceCell({
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const editButton = useRef<HTMLButtonElement>(null);
+  // Set when the editor closes, so focus goes back to this row's pencil
+  // rather than to the page once the field it was in is gone.
+  const returnFocus = useRef(false);
+  useEffect(() => {
+    if (editing || !returnFocus.current) return;
+    returnFocus.current = false;
+    editButton.current?.focus();
+  }, [editing]);
 
   const fieldId = `activity-price-${activity.id}`;
   const errorId = `${fieldId}-error`;
@@ -48,6 +57,7 @@ export function ActivityPriceCell({
   }
 
   function close() {
+    returnFocus.current = true;
     setEditing(false);
     setError(null);
   }
@@ -154,6 +164,7 @@ export function ActivityPriceCell({
           size="icon"
           variant="ghost"
           className="size-7 text-muted-foreground hover:text-foreground"
+          ref={editButton}
           onClick={open}
           aria-label={`Edit the quoted price for ${activity.name}`}
           title="Edit quoted price"
