@@ -6,7 +6,6 @@ import {
   Search,
   CalendarCheck,
   MessageSquare,
-  MessageCircle,
   Archive,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -36,6 +35,7 @@ import { fetchOpenTasks, type LeadTaskRow } from "@/lib/leads/task-service";
 import { fetchWhatsAppSummaries } from "@/lib/leads/whatsapp-service";
 import type { WhatsAppSummaryDto } from "@/lib/leads/whatsapp-types";
 import { LeadWhatsAppModal } from "@/components/leads/whatsapp/lead-whatsapp-modal";
+import { WhatsAppGlyph } from "@/components/whatsapp/whatsapp-logo";
 import {
   WhatsAppBadge,
   WhatsAppLastSeen,
@@ -449,7 +449,10 @@ export default function TableView({
                                 }}
                                 disabled={actions.whatsapp.disabled}
                               >
-                                <MessageCircle size={15} />
+                                <WhatsAppGlyph
+                                  brand={!actions.whatsapp.disabled}
+                                  className="size-[15px]"
+                                />
                                 {!actions.whatsapp.disabled ? (
                                   <WhatsAppBadge
                                     summary={whatsappSummaries.get(lead.id)}
@@ -654,7 +657,10 @@ export default function TableView({
                           )}
                           disabled={actions.whatsapp.disabled}
                         >
-                          <MessageCircle size={15} />
+                          <WhatsAppGlyph
+                            brand={!actions.whatsapp.disabled}
+                            className="size-[15px]"
+                          />
                           WhatsApp
                           {!actions.whatsapp.disabled ? (
                             <>
