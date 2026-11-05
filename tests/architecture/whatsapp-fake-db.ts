@@ -55,6 +55,13 @@ const NESTED_CREATES: Record<string, Record<string, [string, string]>> = {
   whatsAppUnmatchedMessage: { media: ["whatsAppMedia", "unmatchedMessageId"] },
 };
 
+/** One-to-many relations an update may clear with `{ deleteMany: {} }`. */
+const NESTED_CHILDREN: Record<string, Record<string, [string, string]>> = {
+  projectWhatsAppGroup: {
+    participants: ["projectWhatsAppParticipant", "groupId"],
+  },
+};
+
 const COMPOUND_WHERE: Record<string, string> = {
   leadId_businessPhoneNumberId_customerPhoneE164: "compound",
   providerMessageId_status: "compound",
@@ -284,6 +291,28 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
     return row;
   };
 
+  /** Apply an update's nested `deleteMany` to the row's children; return the rest. */
+  const nestedDeletes = (model: string, row: Row, data: Row): Row => {
+    const own: Row = { ...data };
+    for (const [field, [child, fk]] of Object.entries(
+      NESTED_CHILDREN[model] ?? {},
+    )) {
+      const value = own[field] as Row | undefined;
+      if (!value || typeof value !== "object" || !("deleteMany" in value))
+        continue;
+      if (Object.keys(value.deleteMany as Row).length > 0) {
+        throw new Error(
+          "fake db: only an empty nested deleteMany is supported",
+        );
+      }
+      tables[child] = table(child).filter(
+        (candidate) => candidate[fk] !== row.id,
+      );
+      delete own[field];
+    }
+    return own;
+  };
+
   const models = new Proxy(
     {},
     {
@@ -371,7 +400,10 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
             );
             if (index < 0)
               throw new Error(`fake db: ${model}.update matched nothing`);
-            const updated = applyData(rows[index], args.data as Row);
+            const updated = applyData(
+              rows[index],
+              nestedDeletes(model, rows[index], args.data as Row),
+            );
             assertUnique(model, updated, rows[index]);
             rows[index] = updated;
             return withRelations(model, updated);
@@ -396,7 +428,10 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
             if (index < 0) {
               return withRelations(model, create(model, args.create as Row));
             }
-            rows[index] = applyData(rows[index], args.update as Row);
+            rows[index] = applyData(
+              rows[index],
+              nestedDeletes(model, rows[index], args.update as Row),
+            );
             return withRelations(model, rows[index]);
           },
         };

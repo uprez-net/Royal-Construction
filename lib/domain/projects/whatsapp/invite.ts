@@ -219,7 +219,10 @@ export async function sendProjectWhatsAppInvite(
 
   const html = projectWhatsAppInviteHtml({ body, inviteLink, senderName });
 
-  let outcome: { replayed: boolean; result: { emailIds: string[] } };
+  // The effect is the send and nothing else. Writing the trail inside it would
+  // let a database hiccup after Graph accepted the mail fail the intent — and
+  // report "nothing went out" for an email the owners already have.
+  let outcome: { replayed: boolean; result: { sentAt: string } };
   try {
     outcome = await runOutboxEffectWithOutcome(
       db,
@@ -230,46 +233,90 @@ export async function sendProjectWhatsAppInvite(
       },
       async () => {
         await ports.sendMail({ body: html, subject, to });
-        const sentAt = new Date();
-        const from = ports.fromAddress.trim().toLowerCase();
-        const emailIds: string[] = [];
-        for (const recipient of to) {
-          const email = await db.leadEmails.create({
-            data: {
-              body: html,
-              checksum: createHash("sha256")
-                .update(
-                  JSON.stringify({ body: html, from, subject, to: recipient }),
-                )
-                .digest("hex"),
-              emailFrom: from,
-              emailTo: recipient.toLowerCase(),
-              leadId: project.leadId,
-              sentAt,
-              subject,
-            },
-            select: { id: true },
-          });
-          emailIds.push(email.id);
-        }
-        return { emailIds };
+        return { sentAt: new Date().toISOString() };
       },
     );
   } catch (error) {
     if (error instanceof DomainTransitionError) throw error;
+    // A failed Graph call is not proof the mail stayed put: a timeout can
+    // follow a send that went through.
     throw new DomainSideEffectError(
-      "The invite email couldn't be sent. Nothing went out; check the mailbox connection and try again.",
+      "The invite email may not have been sent. Check Sent Items in the mailbox before sending it again.",
       "email",
       false,
       { cause: error },
     );
   }
 
+  const emailIds = outcome.replayed
+    ? []
+    : await recordInviteTrail(db, {
+        from: ports.fromAddress,
+        html,
+        leadId: project.leadId,
+        sentAt: new Date(outcome.result.sentAt),
+        subject,
+        to,
+      });
+
   return {
     alreadySent: outcome.replayed,
-    emailIds: outcome.result.emailIds,
+    emailIds,
     recipients: to,
   };
+}
+
+/**
+ * Put a sent invite on the lead's email trail, one row per owner.
+ *
+ * The mail has already gone, so a failure here is logged and the send still
+ * reported as sent: the owners have the email whether or not the trail does.
+ */
+async function recordInviteTrail(
+  db: DomainDb,
+  input: {
+    readonly from: string;
+    readonly html: string;
+    readonly leadId: number;
+    readonly sentAt: Date;
+    readonly subject: string;
+    readonly to: readonly string[];
+  },
+): Promise<string[]> {
+  const from = input.from.trim().toLowerCase();
+  const emailIds: string[] = [];
+  try {
+    for (const recipient of input.to) {
+      const email = await db.leadEmails.create({
+        data: {
+          body: input.html,
+          checksum: createHash("sha256")
+            .update(
+              JSON.stringify({
+                body: input.html,
+                from,
+                subject: input.subject,
+                to: recipient,
+              }),
+            )
+            .digest("hex"),
+          emailFrom: from,
+          emailTo: recipient.toLowerCase(),
+          leadId: input.leadId,
+          sentAt: input.sentAt,
+          subject: input.subject,
+        },
+        select: { id: true },
+      });
+      emailIds.push(email.id);
+    }
+  } catch (error) {
+    console.error(
+      `[whatsapp-invite] The invite was sent but ${input.to.length - emailIds.length} trail row(s) could not be written.`,
+      error,
+    );
+  }
+  return emailIds;
 }
 
 function escapeHtml(value: string) {

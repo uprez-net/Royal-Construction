@@ -65,6 +65,18 @@ const STALE_CREATE_REASON =
 /** A create younger than this is "still being created", not stuck. */
 const GROUP_CREATE_FRESH_MS = 2 * 60 * 1000;
 
+/**
+ * When the current attempt began: when it went to Meta, or else when it was
+ * asked for. Never `updatedAt` — restarting a stalled workflow writes the row,
+ * and a deadline that every restart pushed back would never arrive.
+ */
+function createStartedAt(row: {
+  readonly requestedAt: Date | null;
+  readonly createdAt: Date;
+}): Date {
+  return row.requestedAt ?? row.createdAt;
+}
+
 export const WHATSAPP_GROUP_REFUSALS = {
   disabled:
     "WhatsApp groups aren't turned on. Meta only offers groups to Official Business Accounts — see Admin › WhatsApp.",
@@ -194,7 +206,7 @@ export async function requestProjectWhatsAppGroup(
     select: {
       ...PROJECT_WHATSAPP_GROUP_SELECT,
       createAttempt: true,
-      updatedAt: true,
+      createdAt: true,
     },
     where: { projectId: project.id },
   });
@@ -210,7 +222,7 @@ export async function requestProjectWhatsAppGroup(
       );
     }
     if (existing.status === ProjectWhatsAppGroupStatus.CREATING) {
-      const since = (existing.requestedAt ?? existing.updatedAt).getTime();
+      const since = createStartedAt(existing).getTime();
       if (now.getTime() - since < GROUP_CREATE_DEADLINE_MS) {
         // A double-click, or the post-create hook and a person at once: one
         // group, and the second caller is told it is on its way.
@@ -256,8 +268,16 @@ export async function requestProjectWhatsAppGroup(
     },
     select: PROJECT_WHATSAPP_GROUP_SELECT,
     // Only a FAILED or DELETED group reaches here: the old one is gone or was
-    // never made, so this is a fresh attempt under a fresh outbox key.
-    update: { ...fields, createAttempt: { increment: 1 } },
+    // never made, so this is a fresh attempt under a fresh outbox key. The row
+    // now stands for the new attempt — its clock starts again, and the old
+    // group's members are not members of the new one. One write, so a reused
+    // row can never carry the old memberships.
+    update: {
+      ...fields,
+      createAttempt: { increment: 1 },
+      createdAt: now,
+      participants: { deleteMany: {} },
+    },
     where: { projectId: project.id },
   });
   return { group: toProjectWhatsAppGroupRecord(row), start: true };
@@ -432,12 +452,12 @@ export async function resolveCreatingProjectWhatsAppGroup(
   const row = await db.projectWhatsAppGroup.findUnique({
     select: {
       businessPhoneNumberId: true,
+      createdAt: true,
       id: true,
       providerGroupId: true,
       requestedAt: true,
       status: true,
       subject: true,
-      updatedAt: true,
     },
     where: { id: input.groupRowId },
   });
@@ -451,7 +471,10 @@ export async function resolveCreatingProjectWhatsAppGroup(
   if (!row.requestedAt) {
     // Never reached Meta (the step died before the call, or never ran). Past
     // the deadline that is a failure to report, not something to wait on.
-    if (now.getTime() - row.updatedAt.getTime() > GROUP_CREATE_DEADLINE_MS) {
+    if (
+      now.getTime() - createStartedAt(row).getTime()
+      > GROUP_CREATE_DEADLINE_MS
+    ) {
       await db.projectWhatsAppGroup.updateMany({
         data: {
           failureReason: STALE_CREATE_REASON,
@@ -644,7 +667,7 @@ export async function linkProjectWhatsAppGroup(
   const now = context.now ?? new Date();
 
   const existing = await db.projectWhatsAppGroup.findUnique({
-    select: { requestedAt: true, status: true, updatedAt: true },
+    select: { createdAt: true, requestedAt: true, status: true },
     where: { projectId: project.id },
   });
   if (
@@ -658,7 +681,7 @@ export async function linkProjectWhatsAppGroup(
   }
   if (
     existing?.status === ProjectWhatsAppGroupStatus.CREATING
-    && now.getTime() - (existing.requestedAt ?? existing.updatedAt).getTime()
+    && now.getTime() - createStartedAt(existing).getTime()
       < GROUP_CREATE_DEADLINE_MS
   ) {
     throw new DomainTransitionError(
@@ -752,7 +775,9 @@ export async function linkProjectWhatsAppGroup(
         projectId: project.id,
       },
       select: { id: true },
-      update: fields,
+      // A reused row held a failed or deleted group; its members are not in
+      // this one. The linked group's own members are written just below.
+      update: { ...fields, participants: { deleteMany: {} } },
       where: { projectId: project.id },
     });
 
@@ -921,7 +946,7 @@ export async function applyWhatsAppGroupEvent(
 
   if (event.kind === "created" || event.kind === "create_failed") {
     const row = await db.projectWhatsAppGroup.findFirst({
-      select: { id: true, status: true },
+      select: { failureReason: true, id: true, status: true },
       where: {
         OR: [
           ...(event.requestId ? [{ createRequestId: event.requestId }] : []),
@@ -930,6 +955,12 @@ export async function applyWhatsAppGroupEvent(
       },
     });
     if (!row) return { outcome: "unknown_group" };
+    // Given up on only because WhatsApp was slow: the group it now confirms
+    // is this request's, so it becomes the project's group after all.
+    const awaitingConfirmation =
+      row.status === ProjectWhatsAppGroupStatus.CREATING
+      || (row.status === ProjectWhatsAppGroupStatus.FAILED
+        && row.failureReason === STALE_CREATE_REASON);
     if (event.kind === "created") {
       await db.projectWhatsAppGroup.update({
         data: {
@@ -940,8 +971,7 @@ export async function applyWhatsAppGroupEvent(
             : {}),
           ...(event.subject ? { subject: event.subject } : {}),
           // Without a link the resolver fetches one and activates it.
-          ...(event.inviteLink
-          && row.status === ProjectWhatsAppGroupStatus.CREATING
+          ...(event.inviteLink && awaitingConfirmation
             ? { status: ProjectWhatsAppGroupStatus.ACTIVE }
             : {}),
         },

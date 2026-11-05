@@ -18,9 +18,9 @@ import { createProjectWhatsAppGroup } from "@/lib/workflow/whatsapp-group";
  *
  * - Files still PENDING an hour after they arrived (the webhook could not
  *   start the copy, or the run died) are handed to the media workflow again.
- * - Groups still CREATING are checked: one never sent to Meta gets its create
- *   workflow, one sent but unconfirmed is resolved — found, or failed with a
- *   reason — so nothing sits "being created" for ever.
+ * - Groups still CREATING are resolved — found, or failed with a reason once
+ *   past the deadline — so nothing sits "being created" for ever. One never
+ *   sent to Meta and still inside the deadline gets its create workflow.
  *
  * Nothing here repeats an effect: the media copy is idempotent per file and
  * the group create is behind an outbox key.
@@ -67,14 +67,15 @@ export async function GET(request: Request) {
   for (const group of groups) {
     let outcome: string;
     try {
-      if (group.submitted) {
-        ({ outcome } = await resolveCreatingProjectWhatsAppGroup(
-          PRINCIPAL,
-          { groupRowId: group.id },
-          prisma,
-          { groups: port?.groups ?? null },
-        ));
-      } else {
+      // The domain decides first — including that an unsent request past its
+      // deadline has failed — and only one still worth waiting on is started.
+      ({ outcome } = await resolveCreatingProjectWhatsAppGroup(
+        PRINCIPAL,
+        { groupRowId: group.id },
+        prisma,
+        { groups: port?.groups ?? null },
+      ));
+      if (!group.submitted && outcome === "waiting") {
         await start(createProjectWhatsAppGroup, [group.id]);
         outcome = "started";
       }

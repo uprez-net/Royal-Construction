@@ -229,26 +229,38 @@ days).
 One WhatsApp group per project, so the owners, the office and site talk in one
 place and the chat is kept with the project (Communications → WhatsApp).
 
-**Eligibility — check this first.** Meta's Groups API is only open to
-**Official Business Accounts**, on a number running on the Cloud API (not the
-WhatsApp Business app or coexistence). A group holds at most **8
-participants**, people join **only through the invite link**, and the API can
-only see groups **it created** — a group made on a phone can never be linked or
-read. Admin › WhatsApp shows whether Meta reports the number as an OBA.
+**Eligibility — verify this first.** The app was built against Meta's Groups
+API as documented when it was written (late 2026). Meta changes these terms,
+so treat each of the following as something to confirm against Meta's current
+Groups API documentation and Royal's own account, not as settled fact:
 
-Turning it on:
+- the API is open only to **Official Business Accounts**, on a number running
+  on the Cloud API (not the WhatsApp Business app or coexistence);
+- a group holds at most **8 participants**;
+- people join **only through the invite link**;
+- the API sees only groups **it created**, so a group made on a phone can never
+  be linked or read;
+- the webhook fields below are the ones that carry group events.
+
+If any of these has changed, the code may need changing before groups are
+turned on. Admin › WhatsApp shows whether Meta reports the number as an OBA.
+
+Turning it on — only once every point above is confirmed:
 
 1. Confirm OBA status on Admin › WhatsApp.
-2. In the Meta app → WhatsApp → Configuration → Webhook, subscribe
+2. In the Meta app → WhatsApp → Configuration → Webhook, check that these
+   fields still exist and subscribe them as well as `messages`:
    `group_lifecycle_update`, `group_participants_update`,
-   `group_settings_update` and `group_status_update` as well as `messages`.
+   `group_settings_update` and `group_status_update`.
 3. Set `WHATSAPP_GROUPS_ENABLED="true"` and redeploy.
 
 How it behaves:
 
 - **New projects** ask for a group as soon as they are created (the wizard and
   the offer handoff). Eve's handoff records the request; the App starts it the
-  first time anyone opens the project, or the daily sweep does.
+  first time anyone opens the project. The daily sweep starts one that is still
+  inside its 30 minutes, and marks one older than that **failed** — it can be
+  created again from the project header.
 - **Ongoing projects**: the project header offers *Create WhatsApp group* and
   *Link an existing group*. Linking lists only the business's own API-made
   groups that no project has. Messages posted in a group before it was linked

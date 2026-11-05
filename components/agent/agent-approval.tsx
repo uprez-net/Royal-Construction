@@ -63,11 +63,17 @@ export function AgentApproval({
   const whatsapp = isApproval ? approvalWhatsApp(toolName, input) : null;
   const outreach = isApproval && !whatsapp ? approvalOutreach(input) : null;
   // The email or WhatsApp body is the approval when there is one, so it is
-  // rendered rather than repeated as a raw argument below the preview.
+  // rendered rather than repeated as a raw argument below the preview. The
+  // lead id stays: the preview names the lead only by number, and this row is
+  // where the looked-up lead name appears.
   const fields = (isApproval ? toInputFields(input) : []).filter(
     (field) =>
       !(outreach && OUTREACH_KEYS.has(field.key))
-      && !(whatsapp && WHATSAPP_APPROVAL_KEYS.has(field.key)),
+      && !(
+        whatsapp
+        && field.key !== "leadId"
+        && WHATSAPP_APPROVAL_KEYS.has(field.key)
+      ),
   );
   const targetLabels = useApprovalTargetLabels(isApproval ? input : undefined);
   const hasOptions = (request.options?.length ?? 0) > 0;

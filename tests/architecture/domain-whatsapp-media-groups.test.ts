@@ -463,6 +463,104 @@ describe("project groups", () => {
     );
   });
 
+  test("an unsent request's deadline runs from the request, not the last restart", async () => {
+    const fake = seedProject();
+    const now = new Date("2026-11-04T02:00:00Z");
+    const group = fake.seed("projectWhatsAppGroup", {
+      businessDisplayNumber: OFFICE.displayNumber,
+      businessPhoneNumberId: OFFICE.phoneNumberId,
+      createAttempt: 1,
+      createdAt: new Date("2026-11-04T01:00:00Z"),
+      origin: "CREATED",
+      projectId: "p1",
+      requestedAt: null,
+      status: "CREATING",
+      subject: "Royal Constructions · 12 Smith St, Kellyville",
+      // A restart a minute ago wrote the row.
+      updatedAt: new Date("2026-11-04T01:59:00Z"),
+    });
+    const resolved = await resolveCreatingProjectWhatsAppGroup(
+      workflow,
+      { groupRowId: String(group.id), now },
+      fake.db,
+      { groups: null },
+    );
+    assert.equal(resolved.outcome, "failed");
+    assert.equal(fake.rows("projectWhatsAppGroup")[0].status, "FAILED");
+  });
+
+  test("a create WhatsApp confirms after it was given up on becomes the project's group", async () => {
+    const fake = seedProject();
+    const { group } = await requestProjectWhatsAppGroup(
+      admin,
+      { projectId: "p1" },
+      fake.db,
+      { channel: channel() },
+    );
+    const { port } = groupsPort();
+    const requested = new Date("2026-11-04T00:00:00Z");
+    await submitProjectWhatsAppGroupCreate(
+      workflow,
+      { groupRowId: group.id, now: requested },
+      fake.db,
+      { groups: port },
+    );
+    const late = await resolveCreatingProjectWhatsAppGroup(
+      workflow,
+      { groupRowId: group.id, now: new Date("2026-11-04T00:31:00Z") },
+      fake.db,
+      { groups: port },
+    );
+    assert.equal(late.outcome, "failed");
+
+    await applyWhatsAppGroupEvent(
+      webhook,
+      {
+        at: new Date("2026-11-04T00:40:00Z"),
+        groupId: "GROUP-1",
+        inviteLink: "https://chat.whatsapp.com/LINK",
+        kind: "created",
+        requestId: "REQ-1",
+        subject: null,
+      },
+      fake.db,
+    );
+    const [row] = fake.rows("projectWhatsAppGroup");
+    assert.equal(row.status, "ACTIVE");
+    assert.equal(row.failureReason, null);
+    assert.equal(row.inviteLink, "https://chat.whatsapp.com/LINK");
+  });
+
+  test("asking again after a failed group starts the new one with no members", async () => {
+    const fake = seedProject();
+    const old = fake.seed("projectWhatsAppGroup", {
+      businessDisplayNumber: OFFICE.displayNumber,
+      businessPhoneNumberId: OFFICE.phoneNumberId,
+      createAttempt: 1,
+      failureReason: "WhatsApp couldn't create the group: no.",
+      origin: "CREATED",
+      projectId: "p1",
+      status: "FAILED",
+      subject: "Royal Constructions · 12 Smith St, Kellyville",
+    });
+    fake.seed("projectWhatsAppParticipant", {
+      groupId: old.id,
+      joinedAt: new Date("2026-10-01T00:00:00Z"),
+      leftAt: null,
+      phoneE164: "+61412345678",
+      waId: "61412345678",
+    });
+    const { group } = await requestProjectWhatsAppGroup(
+      admin,
+      { projectId: "p1" },
+      fake.db,
+      { channel: channel() },
+    );
+    assert.equal(group.id, old.id);
+    assert.equal(group.status, "CREATING");
+    assert.deepEqual(fake.rows("projectWhatsAppParticipant"), []);
+  });
+
   test("a group message is the project's; an unlinked group's waits and is filed on link", async () => {
     const fake = seedProject();
     const message = {
@@ -683,5 +781,76 @@ describe("inviting the owners", () => {
     assert.equal(sent.length, 1);
     assert.deepEqual(sent[0].to, ["ann@example.com", "bob@example.com"]);
     assert.equal(fake.rows("leadEmails").length, 2);
+  });
+
+  test("a sent invite is reported sent even when the trail cannot be written", async () => {
+    const fake = seedProject();
+    activeGroup(fake);
+    let sends = 0;
+    const db = new Proxy(fake.db, {
+      get: (target, key) =>
+        key === "leadEmails"
+          ? {
+              create: async () => {
+                throw new Error("database unavailable");
+              },
+            }
+          : Reflect.get(target, key),
+    });
+    const quiet = console.error;
+    console.error = () => undefined;
+    try {
+      const result = await sendProjectWhatsAppInvite(
+        admin,
+        {
+          body: `Join here: ${LINK}`,
+          idempotencyKey: "i4",
+          projectId: "p1",
+          recipients: ["ann@example.com"],
+          senderName: "Sam",
+          subject: "Join the group",
+        },
+        db,
+        {
+          fromAddress: "info@royal.example",
+          sendMail: async () => void (sends += 1),
+        },
+      );
+      assert.equal(result.alreadySent, false);
+      assert.deepEqual(result.emailIds, []);
+    } finally {
+      console.error = quiet;
+    }
+    assert.equal(sends, 1);
+    const [intent] = fake.rows("outboxEvent");
+    assert.equal(intent.status, "SUCCEEDED");
+  });
+
+  test("a failed send says it may have gone, not that nothing did", async () => {
+    const fake = seedProject();
+    activeGroup(fake);
+    await assert.rejects(
+      sendProjectWhatsAppInvite(
+        admin,
+        {
+          body: `Join here: ${LINK}`,
+          idempotencyKey: "i5",
+          projectId: "p1",
+          recipients: ["ann@example.com"],
+          senderName: "Sam",
+          subject: "Join the group",
+        },
+        fake.db,
+        {
+          fromAddress: "info@royal.example",
+          sendMail: async () => {
+            throw new Error("socket hang up");
+          },
+        },
+      ),
+      (error: unknown) =>
+        error instanceof DomainSideEffectError
+        && /Sent Items/.test(error.message),
+    );
   });
 });

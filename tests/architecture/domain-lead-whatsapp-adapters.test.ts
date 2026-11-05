@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Role } from "@prisma/client";
 import { beforeEach, describe, test } from "vitest";
 
@@ -19,6 +20,7 @@ import { WHATSAPP_TEMPLATES } from "@/lib/domain/leads/whatsapp/templates";
 import type { WhatsAppPort } from "@/lib/domain/ports/whatsapp";
 import { userPrincipal } from "@/lib/domain/principal";
 
+import { REPO_ROOT } from "../support/repo-root";
 import { fakeWhatsAppDb, type FakeWhatsAppDb } from "./whatsapp-fake-db";
 
 // The acceptance test issue #333 asks for: the same domain command, reached
@@ -335,7 +337,7 @@ describe("App and Eve reach the same WhatsApp send", () => {
 });
 
 describe("the real adapters still make this call", () => {
-  const read = (path: string) => readFileSync(path, "utf8");
+  const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
 
   test("the App route sends through the domain with the header key and the injected port", () => {
     const route = read(
