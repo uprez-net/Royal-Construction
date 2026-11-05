@@ -25,6 +25,13 @@ const isPublicRoute = createRouteMatcher([
   // WHATSAPP_WEBHOOK_VERIFY_TOKEN; every POST is authenticated by the
   // X-Hub-Signature-256 HMAC over the raw body (lib/whatsapp/webhook-handler.ts).
   "/api/whatsapp/webhook(.*)",
+  // SMS and call callbacks — Twilio or Telnyx calls them. Every request is
+  // authenticated by the carrier's signature (X-Twilio-Signature HMAC, Telnyx
+  // Ed25519) over the exact URL and raw body (lib/comms/webhook-handler.ts).
+  // Only the two carriers; /api/comms/voice/* (browser credentials) is not
+  // public.
+  "/api/comms/twilio/(.*)",
+  "/api/comms/telnyx/(.*)",
   // Xero OAuth consent + callback. "Public" here only means the blanket
   // /api/ JSON-401 below does not apply: both legs are BROWSER navigations
   // (the admin clicks Connect; Xero redirects back with ?code), and answering

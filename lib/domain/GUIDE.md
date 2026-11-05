@@ -61,6 +61,8 @@ lib/domain/
   identity/       users, team, customers, site managers
   admin/          admin-owned content (offer boilerplate)
   agent/          Eve's own owner-scoped session reads
+  comms/          SMS and phone calls: sends, inbound, statuses, the call
+                  router, recordings — carriers arrive through ports/comms
   compliance/     certifier engagement, documents, file reclamation
   email/          ad-hoc and campaign email rules
   insurance/      HBCF reads

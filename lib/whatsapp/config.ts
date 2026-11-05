@@ -164,6 +164,7 @@ export function readWhatsAppConfig(env: Env = process.env): WhatsAppConfig {
 
   const templates = value(env, "WHATSAPP_ENABLED_TEMPLATES");
   const groupsEnabled = env.WHATSAPP_GROUPS_ENABLED?.trim() === "true";
+  const callingEnabled = env.WHATSAPP_CALLING_ENABLED?.trim() === "true";
 
   return {
     accessToken,
@@ -182,6 +183,7 @@ export function readWhatsAppConfig(env: Env = process.env): WhatsAppConfig {
                   .map((name) => name.trim())
                   .filter(Boolean)
               : null,
+            callingEnabled,
             groupsEnabled,
             numbers: parsed.numbers,
             sendingAvailable: Boolean(accessToken),

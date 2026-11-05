@@ -43,6 +43,11 @@ export type WhatsAppChannel = {
    * status and someone turns this on.
    */
   readonly groupsEnabled: boolean;
+  /**
+   * WHATSAPP_CALLING_ENABLED. Calling must also be switched on for the
+   * number in WhatsApp Manager; Meta refuses calls on a number without it.
+   */
+  readonly callingEnabled?: boolean;
 };
 
 export type WhatsAppTextMessage = {
@@ -76,6 +81,43 @@ export type WhatsAppPort = {
   ) => Promise<WhatsAppSendReceipt>;
   /** Present only when `channel.groupsEnabled` and sending is available. */
   readonly groups?: WhatsAppGroupsPort | null;
+  /** Present only when `channel.callingEnabled` and sending is available. */
+  readonly calls?: WhatsAppCallsPort | null;
+};
+
+// ── Calling (Meta's Calling API) ──────────────────────────────────────
+//
+// Media flows between WhatsApp and a staff browser over WebRTC; these calls
+// only exchange SDP and signal the call's state. Every one may throw
+// WhatsAppSendError, classified `not_sent` or `ambiguous`.
+
+export type WhatsAppCallTarget = {
+  readonly fromPhoneNumberId: string;
+  readonly providerCallId: string;
+};
+
+export type WhatsAppCallsPort = {
+  /** Ring a customer who has granted permission. */
+  readonly connect: (request: {
+    readonly fromPhoneNumberId: string;
+    readonly to: string;
+    readonly sdpOffer: string;
+    /** Echoed on every webhook for the call: Royal's WhatsAppCall.id. */
+    readonly bizOpaqueCallbackData: string;
+  }) => Promise<{ readonly providerCallId: string }>;
+  /** Answer a customer's call: pre-accept starts media, accept connects it. */
+  readonly preAccept: (
+    call: WhatsAppCallTarget & { readonly sdpAnswer: string },
+  ) => Promise<void>;
+  readonly accept: (
+    call: WhatsAppCallTarget & { readonly sdpAnswer: string },
+  ) => Promise<void>;
+  readonly reject: (call: WhatsAppCallTarget) => Promise<void>;
+  readonly terminate: (call: WhatsAppCallTarget) => Promise<void>;
+  /** The interactive "Allow calls" message. Only delivered inside the 24-hour window. */
+  readonly sendPermissionRequest: (
+    message: WhatsAppTextMessage,
+  ) => Promise<WhatsAppSendReceipt>;
 };
 
 // ── Groups (Meta's Groups API) ────────────────────────────────────────

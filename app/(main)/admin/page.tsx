@@ -8,6 +8,7 @@ import {
   HardHat,
   LucideIcon,
   PenLine,
+  Phone,
   Plug,
   Sparkles,
   Users,
@@ -75,6 +76,13 @@ export default function AdminPage() {
         "See the connected WhatsApp number, where its webhook points, and which features are on.",
       icon: WhatsAppGlyph,
       href: "/admin/whatsapp",
+    },
+    {
+      label: "Phone & SMS",
+      description:
+        "See which phone provider is active, its numbers and webhooks, and file texts and calls from unknown numbers.",
+      icon: Phone,
+      href: "/admin/comms",
     },
   ];
 

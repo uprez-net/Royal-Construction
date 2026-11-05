@@ -1,3 +1,5 @@
+import { connection } from "next/server";
+
 import prisma from "@/lib/prisma";
 import { signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
 import { listUnmatchedWhatsAppMessages } from "@/lib/domain/leads/whatsapp/unmatched";
@@ -14,6 +16,10 @@ import {
  * Pending only: attached and dismissed messages have been dealt with.
  */
 export async function GET() {
+  // Per request, never prerendered: the list depends on who is asking, and
+  // under Cache Components a parameterless GET is otherwise built once at
+  // deploy time with no session.
+  await connection();
   try {
     const principal = await signedInUserPrincipal();
     if (!principal) return unauthorizedResponse();

@@ -225,6 +225,7 @@ export function LeadHeader({
   onArchiveClick,
   onSendTextClick,
   onWhatsAppClick,
+  onPhoneClick,
   onLeadUpdate,
 }: {
   lead: Lead;
@@ -233,6 +234,11 @@ export function LeadHeader({
   onSendTextClick: () => void;
   /** Opens the shared WhatsApp conversation (LeadWhatsAppModal). */
   onWhatsAppClick: () => void;
+  /**
+   * Opens calls and texts (LeadCommsModal). Absent when this deployment has
+   * no phone provider set up; the plain tel: link stays either way.
+   */
+  onPhoneClick?: () => void;
   onLeadUpdate: (lead: Lead) => void;
 }) {
   const router = useRouter();
@@ -392,6 +398,19 @@ export function LeadHeader({
                   <Phone className="mr-1.5 size-4" aria-hidden="true" />
                   Call
                 </a>
+              </Button>
+            ) : null}
+            {onPhoneClick && actions.call.visible ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onPhoneClick}
+                disabled={actions.call.disabled}
+                title={actions.call.disabledReason ?? undefined}
+                className="h-9 rounded-lg px-3.5 text-sm font-medium"
+              >
+                <Phone className="mr-1.5 size-4" aria-hidden="true" />
+                Phone &amp; SMS
               </Button>
             ) : null}
             {actions.sendText.visible ? (

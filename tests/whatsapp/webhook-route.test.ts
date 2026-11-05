@@ -465,3 +465,55 @@ test("a group message goes to the project that owns the group, not a lead", asyn
   assert.equal(data.body, "Slab looks great");
   assert.equal(data.senderName, "Ann");
 });
+
+test("a redelivered call-permission reply changes the permission once and writes one history row", async () => {
+  const PERMISSION_DELIVERY = delivery({
+    messages: [
+      {
+        from: "61412345678",
+        id: "wamid.PERM",
+        interactive: {
+          call_permission_reply: {
+            expiration_timestamp: 1762905600,
+            is_permanent: false,
+            response: "accept",
+          },
+          type: "call_permission_reply",
+        },
+        timestamp: "1762300800",
+        type: "interactive",
+      },
+    ],
+  });
+  // One database across both deliveries, with the unique claim enforced.
+  const claimed = new Set<string>();
+  const recorder = recordingDb({
+    "lead.findMany": [{ id: 42 }],
+    "whatsAppCallPermissionReplyEvent.createMany": (args: {
+      data: { providerMessageId: string }[];
+    }) => {
+      const id = args.data[0].providerMessageId;
+      if (claimed.has(id)) return { count: 0 };
+      claimed.add(id);
+      return { count: 1 };
+    },
+  });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await handleWhatsAppWebhookDelivery(
+      post(PERMISSION_DELIVERY),
+      { allow: allowAll, config, db: recorder.transactionalDb, log: quiet },
+    );
+    assert.equal(response.status, 200);
+  }
+  const ops = recorder.operations();
+  assert.equal(
+    ops.filter((op) => op === "whatsAppCallPermissionReplyEvent.createMany")
+      .length,
+    2,
+  );
+  assert.equal(
+    ops.filter((op) => op === "whatsAppCallPermission.upsert").length,
+    1,
+  );
+  assert.equal(ops.filter((op) => op === "leadHistory.create").length, 1);
+});

@@ -7,6 +7,7 @@ import { WhatsAppGlyph } from "@/components/whatsapp/whatsapp-logo";
 import { cn } from "@/lib/utils";
 
 import { LeadWhatsAppConversation } from "./lead-whatsapp-conversation";
+import { WhatsAppCallButton } from "./whatsapp-call-button";
 
 export type LeadWhatsAppModalLead = {
   id: number;
@@ -47,6 +48,7 @@ export function LeadWhatsAppModal({
     >
       <LeadWhatsAppConversation
         lead={lead}
+        headerActions={<WhatsAppCallButton lead={lead} />}
         className={cn(isFullScreen ? "h-full flex-1" : "h-[min(72dvh,680px)]")}
       />
     </ModalShell>

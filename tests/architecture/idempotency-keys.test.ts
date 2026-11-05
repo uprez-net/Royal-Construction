@@ -157,6 +157,37 @@ const SEND_PATHS: ReadonlyArray<{
       /\$\{base\(projectId\)\}\/invite`,\s*\{\s*body[\s\S]*?\.\.\.idempotencyHeader\(idempotencyKey\)/,
     route: "app/api/(data)/projects/[projectId]/whatsapp/invite/route.ts",
   },
+  {
+    // A text to a lead: one key per composed message, no derived fallback.
+    caller: "lib/leads/comms-service.ts",
+    // Bounded to sendSms: the header must appear before its closing brace,
+    // so a later function's header cannot satisfy it.
+    evidence:
+      /export function sendSms\((?:(?!\n\})[\s\S])*?`\/api\/leads\/\$\{leadId\}\/sms`,\s*\{\s*body(?:(?!\n\})[\s\S])*?\.\.\.idempotencyHeader\(idempotencyKey\)/,
+    route: "app/api/(data)/leads/[leadId]/sms/route.ts",
+  },
+  {
+    // Ringing a lead: a double click must not ring the customer twice.
+    caller: "lib/leads/comms-service.ts",
+    evidence:
+      // Bounded to placeLeadCall, for the same reason.
+      /export function placeLeadCall\((?:(?!\n\})[\s\S])*?`\/api\/leads\/\$\{leadId\}\/calls`,\s*\{\s*body(?:(?!\n\})[\s\S])*?\.\.\.idempotencyHeader\(idempotencyKey\)/,
+    route: "app/api/(data)/leads/[leadId]/calls/route.ts",
+  },
+  {
+    // Meta allows one call-permission request a day; a retry must not spend it.
+    caller: "lib/leads/comms-service.ts",
+    evidence:
+      /call-permission`,\s*\{\s*headers: idempotencyHeader\(idempotencyKey\)/,
+    route: "app/api/(data)/leads/[leadId]/whatsapp/call-permission/route.ts",
+  },
+  {
+    // A WhatsApp call to a lead.
+    caller: "lib/leads/comms-service.ts",
+    evidence:
+      /whatsapp\/calls`,\s*\{[\s\S]*?\.\.\.idempotencyHeader\(idempotencyKey\)/,
+    route: "app/api/(data)/leads/[leadId]/whatsapp/calls/route.ts",
+  },
 ];
 
 test("the WhatsApp conversation holds one key per message and rotates only after success", () => {
