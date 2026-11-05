@@ -17,6 +17,11 @@ import {
   type InboundProjectWhatsAppOutcome,
 } from "@/lib/domain/projects/whatsapp/inbound";
 import { systemPrincipal } from "@/lib/domain/principal";
+import { recordWhatsAppCallPermissionReply } from "@/lib/domain/whatsapp/call-permissions";
+import {
+  recordWhatsAppCallEvent,
+  type WhatsAppCallEventOutcome,
+} from "@/lib/domain/whatsapp/calls";
 import {
   createFixedWindowRateLimiter,
   requestAddress,
@@ -178,6 +183,13 @@ export async function handleWhatsAppWebhookDelivery(
     unknown_group: 0,
   };
   const mediaIds: string[] = [];
+  const calls: Record<WhatsAppCallEventOutcome, number> = {
+    applied: 0,
+    duplicate: 0,
+    ringing: 0,
+    unknown_call: 0,
+  };
+  let permissionReplies = 0;
   const statuses: Record<WhatsAppStatusOutcome, number> = {
     applied: 0,
     awaiting_message: 0,
@@ -231,6 +243,25 @@ export async function handleWhatsAppWebhookDelivery(
         );
       }
     }
+    // Calls first among the rest: a ringing customer is the one thing here a
+    // person is waiting on.
+    for (const event of parsed.callEvents) {
+      const outcome = await recordWhatsAppCallEvent(
+        WHATSAPP_WEBHOOK_PRINCIPAL,
+        event,
+        deps.db,
+        { channel: config.channel },
+      );
+      calls[outcome] += 1;
+    }
+    for (const reply of parsed.callPermissionReplies) {
+      await recordWhatsAppCallPermissionReply(
+        WHATSAPP_WEBHOOK_PRINCIPAL,
+        reply,
+        deps.db,
+      );
+      permissionReplies += 1;
+    }
     for (const event of parsed.groupEvents) {
       const result = await applyWhatsAppGroupEvent(
         WHATSAPP_WEBHOOK_PRINCIPAL,
@@ -264,7 +295,7 @@ export async function handleWhatsAppWebhookDelivery(
   }
 
   log.info(
-    `[whatsapp-webhook] messages ${JSON.stringify(inbound)}; group messages ${JSON.stringify(group)}; group events ${JSON.stringify(groupEvents)}; media ${mediaIds.length}; statuses ${JSON.stringify(statuses)}${
+    `[whatsapp-webhook] messages ${JSON.stringify(inbound)}; group messages ${JSON.stringify(group)}; group events ${JSON.stringify(groupEvents)}; media ${mediaIds.length}; statuses ${JSON.stringify(statuses)}; calls ${JSON.stringify(calls)}; call permission replies ${permissionReplies}${
       parsed.ignored.length
         ? `; ignored ${parsed.ignored.length}: ${parsed.ignored.join("; ")}`
         : ""

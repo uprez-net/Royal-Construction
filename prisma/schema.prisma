@@ -154,6 +154,8 @@ enum HistoryType {
   /// A WhatsApp message sent or received. The body stays on
   /// LeadWhatsAppMessage; the history row only says that it happened.
   WHATSAPP
+  /// An SMS sent or received. The body stays on SmsMessage.
+  SMS
 }
 
 enum AnnotationStatus {
@@ -587,6 +589,16 @@ enum OutboxEventKind {
   PROJECT_WHATSAPP_SEND
   /// The email inviting a project's owners to join its WhatsApp group.
   PROJECT_WHATSAPP_INVITE_SEND
+  /// One SMS to a lead, through whichever provider COMMUNICATIONS_PROVIDER
+  /// names. Keyed per composed message, like LEAD_WHATSAPP_SEND.
+  LEAD_SMS_SEND
+  /// Asking the phone provider to ring a lead. Keyed per click: a second
+  /// call somebody pressed is a new intent, a replayed request is not.
+  LEAD_CALL_PLACE
+  /// The WhatsApp message asking a customer for permission to call them.
+  WHATSAPP_CALL_PERMISSION_REQUEST
+  /// Asking Meta to ring a customer on WhatsApp.
+  WHATSAPP_CALL_CONNECT
 }
 
 enum AgentMemoryProvenance {
@@ -1234,13 +1246,16 @@ model Customer {
 }
 
 model User {
-  id         String  @id @default(uuid())
-  name       String
-  email      String  @unique
-  phone      String  @unique
-  role       Role    @default(CUSTOMER)
-  customerId String?
-  clerkId    String  @unique
+  id                 String    @id @default(uuid())
+  name               String
+  email              String    @unique
+  phone              String    @unique
+  role               Role      @default(CUSTOMER)
+  customerId         String?
+  clerkId            String    @unique
+  /// Last time this user's browser asked for a calling credential. Inbound
+  /// calls ring the browsers of staff seen recently (lib/domain/comms).
+  commsBrowserSeenAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1258,6 +1273,10 @@ model User {
   whatsappUnmatchedResolved WhatsAppUnmatchedMessage[] @relation("WhatsAppUnmatchedResolver")
   projectWhatsAppGroups     ProjectWhatsAppGroup[]     @relation("ProjectWhatsAppGroupCreator")
   projectWhatsAppMessages   ProjectWhatsAppMessage[]   @relation("ProjectWhatsAppMessageAuthor")
+  smsMessages               SmsMessage[]               @relation("SmsMessageAuthor")
+  smsResolved               SmsMessage[]               @relation("SmsMessageResolver")
+  callsPlaced               Call[]                     @relation("CallStaffUser")
+  whatsappCallsAnswered     WhatsAppCall[]             @relation("WhatsAppCallStaffUser")
   reviews                   TradieRating[]
   approvalRequests          TradieApproval[]
   tradieRequests            TradieRequest[]            @relation("TradieRequestCreatedBy")
@@ -1515,6 +1534,11 @@ model Lead {
   /// send, including replies inside an open window.
   whatsappOptedOutAt          DateTime?
 
+  // ── SMS and calls ─────────────────────────────────────────────────
+  /// Set when the lead texted STOP (or an operator recorded the request).
+  /// Blocks every SMS until cleared; calls are unaffected.
+  smsOptedOutAt DateTime?
+
   // ── Deal economics ────────────────────────────────────────────────
   /// Numeric deal value. Auto-filled from the active offer's contract price
   /// unless estimatedValueSource is MANUAL. `budget` above remains a
@@ -1548,6 +1572,10 @@ model Lead {
   whatsappConversations     LeadWhatsAppConversation[]
   whatsappMessages          LeadWhatsAppMessage[]
   whatsappConsentRecordedBy User?                      @relation("LeadWhatsAppConsentRecorder", fields: [whatsappConsentRecordedById], references: [id])
+  smsMessages               SmsMessage[]
+  calls                     Call[]
+  whatsappCalls             WhatsAppCall[]
+  whatsappCallPermissions   WhatsAppCallPermission[]
   assignedUser              User?                      @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
   project                   Project?                   @relation("LeadProject")
 
@@ -2353,6 +2381,337 @@ model ProjectWhatsAppMessage {
 
   @@index([groupId, occurredAt])
   @@index([projectId, occurredAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// SMS and phone calls (Twilio or Telnyx)
+//
+// Provider-neutral. COMMUNICATIONS_PROVIDER picks who carries NEW outbound
+// work; every row records the provider that carried it, so a callback, a
+// hang-up or a recording download always goes back to the provider that owns
+// it even after the setting changes. Provider specifics stay in lib/comms.
+// Rules live in lib/domain/comms; docs/twilio-plivo-comms is the design.
+// ─────────────────────────────────────────────────────────────────────
+
+enum CommsProvider {
+  TWILIO
+  TELNYX
+}
+
+enum CommsDirection {
+  OUTBOUND
+  INBOUND
+}
+
+/// QUEUED → SENT → DELIVERED, or → FAILED. RECEIVED is inbound only.
+/// Transitions only move forward (lib/domain/comms/sms/status.ts).
+enum SmsStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  RECEIVED
+}
+
+enum SmsUnmatchedReason {
+  /// No lead has this number.
+  NO_MATCH
+  /// More than one lead has this number; attaching to either is a guess.
+  AMBIGUOUS
+  /// Sent to a number this deployment does not list in COMMS_PHONE_NUMBERS.
+  UNKNOWN_BUSINESS_NUMBER
+}
+
+enum SmsReviewStatus {
+  PENDING
+  ATTACHED
+  DISMISSED
+}
+
+/// One SMS, either way. An inbound message that matches no single lead is
+/// kept with `leadId` null and `reviewStatus` PENDING until a person files it.
+model SmsMessage {
+  id                  String              @id @default(uuid())
+  leadId              Int?
+  direction           CommsDirection
+  provider            CommsProvider
+  /// The Royal number, E.164.
+  businessNumber      String
+  /// The customer's number, E.164.
+  customerNumber      String
+  body                String              @db.Text
+  /// MMS attachments are not copied; the office is told they arrived.
+  mediaCount          Int                 @default(0)
+  /// Twilio MessageSid / Telnyx message id. Unique per provider so a
+  /// replayed webhook cannot insert a second row.
+  providerMessageId   String?
+  status              SmsStatus
+  statusAt            DateTime
+  providerErrorCode   String?
+  providerErrorTitle  String?
+  /// The provider may have accepted this send but the answer never arrived.
+  /// Nothing is retried until an operator reconciles it.
+  needsReconciliation Boolean             @default(false)
+  /// The outbox key of an outbound send.
+  idempotencyKey      String?             @unique
+  authorId            String?
+  occurredAt          DateTime
+  deliveredAt         DateTime?
+  failedAt            DateTime?
+  /// Inbound only: when someone opened the thread after it arrived.
+  readAt              DateTime?
+  unmatchedReason     SmsUnmatchedReason?
+  reviewStatus        SmsReviewStatus?
+  candidateLeadIds    Int[]
+  resolvedById        String?
+  resolvedAt          DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  lead       Lead? @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  author     User? @relation("SmsMessageAuthor", fields: [authorId], references: [id])
+  resolvedBy User? @relation("SmsMessageResolver", fields: [resolvedById], references: [id])
+
+  @@unique([provider, providerMessageId])
+  @@index([leadId, occurredAt])
+  @@index([reviewStatus, occurredAt])
+  @@index([customerNumber])
+}
+
+/// Every SMS delivery callback, deduplicated. Kept even when no message
+/// matches yet: a status can arrive before the send stored the provider id.
+model SmsStatusEvent {
+  id                String        @id @default(uuid())
+  provider          CommsProvider
+  providerMessageId String
+  status            SmsStatus
+  occurredAt        DateTime
+  errorCode         String?
+  appliedAt         DateTime?
+  createdAt         DateTime      @default(now())
+
+  @@unique([provider, providerMessageId, status])
+  @@index([appliedAt])
+}
+
+/// The persisted call vocabulary every adapter maps into. Ranked
+/// QUEUED < INITIATED < RINGING < IN_PROGRESS < terminal; a call only moves
+/// forward and a terminal call never reopens (lib/domain/comms/calls/state.ts).
+enum CallStatus {
+  QUEUED
+  INITIATED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  BUSY
+  NO_ANSWER
+  FAILED
+  CANCELED
+}
+
+/// Where a call is in Royal's own flow, as opposed to the provider's status.
+enum CallFlowStep {
+  /// Outbound: the customer's phone is ringing.
+  DIALING_CUSTOMER
+  /// Asking the customer whether the call may be recorded.
+  RECORDING_CONSENT
+  RINGING_BROWSER
+  RINGING_MOBILE
+  CONNECTED
+  VOICEMAIL
+  ENDED
+}
+
+enum CallStaffTarget {
+  BROWSER
+  MOBILE
+}
+
+enum CallAnsweredBy {
+  BROWSER
+  MOBILE
+  VOICEMAIL
+}
+
+enum RecordingConsent {
+  NOT_ASKED
+  GRANTED
+  DECLINED
+}
+
+/// One phone call with a customer. `providerCallId` is the customer's leg.
+model Call {
+  id                  String           @id @default(uuid())
+  provider            CommsProvider
+  direction           CommsDirection
+  leadId              Int?
+  /// Inbound calls whose number matched more than one lead.
+  candidateLeadIds    Int[]
+  businessNumber      String
+  customerNumber      String
+  /// Twilio CallSid / Telnyx call_control_id. Opaque: never parsed.
+  providerCallId      String?
+  status              CallStatus
+  flowStep            CallFlowStep
+  staffTarget         CallStaffTarget?
+  /// Who placed an outbound call.
+  staffUserId         String?
+  answeredBy          CallAnsweredBy?
+  recordingConsent    RecordingConsent @default(NOT_ASKED)
+  startedAt           DateTime
+  answeredAt          DateTime?
+  connectedAt         DateTime?
+  endedAt             DateTime?
+  durationSeconds     Int?
+  hangupCause         String?
+  providerErrorCode   String?
+  providerErrorTitle  String?
+  /// The provider may have placed this call but never said so.
+  needsReconciliation Boolean          @default(false)
+  idempotencyKey      String?          @unique
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  lead       Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  staffUser  User?           @relation("CallStaffUser", fields: [staffUserId], references: [id])
+  recordings CallRecording[]
+
+  @@unique([provider, providerCallId])
+  @@index([leadId, startedAt])
+  @@index([status, startedAt])
+}
+
+enum CallRecordingKind {
+  CALL
+  VOICEMAIL
+}
+
+/// PENDING → STORED, or → FAILED once retrying cannot help.
+enum CallRecordingStatus {
+  PENDING
+  STORED
+  FAILED
+}
+
+/// A recording copied off the provider into Blob storage. The provider copy
+/// is deleted once ours is stored (Privacy Act: keep one copy, ours).
+model CallRecording {
+  id                  String              @id @default(uuid())
+  callId              String
+  provider            CommsProvider
+  kind                CallRecordingKind
+  providerRecordingId String
+  status              CallRecordingStatus @default(PENDING)
+  durationSeconds     Int?
+  mimeType            String?
+  byteSize            Int?
+  blobUrl             String?
+  blobPathname        String?
+  attempts            Int                 @default(0)
+  failureReason       String?
+  storedAt            DateTime?
+  providerDeletedAt   DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerRecordingId])
+  @@index([status, createdAt])
+}
+
+/// Event-style provider callbacks already processed, so a retried delivery
+/// is a no-op. Markup callbacks (TwiML) are not recorded: answering them
+/// twice with the same instructions is the right behaviour.
+model CommsWebhookEvent {
+  id          String        @id @default(uuid())
+  provider    CommsProvider
+  dedupeKey   String
+  kind        String
+  receivedAt  DateTime      @default(now())
+  processedAt DateTime?
+
+  @@unique([provider, dedupeKey])
+  @@index([receivedAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// WhatsApp calling (Meta Cloud API, answered in a staff browser)
+//
+// Meta's calling API: a customer's call arrives on the WhatsApp webhook with
+// an SDP offer, and a staff browser answers it over WebRTC. WhatsApp calls
+// cannot be forwarded to a phone. Calling a customer needs their permission,
+// asked for with a WhatsApp message (lib/domain/whatsapp/calls).
+// ─────────────────────────────────────────────────────────────────────
+
+/// RINGING → ACCEPTED → COMPLETED, or RINGING → REJECTED | MISSED | FAILED.
+enum WhatsAppCallStatus {
+  RINGING
+  ACCEPTED
+  COMPLETED
+  REJECTED
+  MISSED
+  FAILED
+}
+
+model WhatsAppCall {
+  id                    String             @id @default(uuid())
+  /// Meta's call id. Null for an outbound call until Meta accepts it.
+  providerCallId        String?            @unique
+  direction             CommsDirection
+  leadId                Int?
+  businessPhoneNumberId String
+  businessDisplayNumber String
+  customerPhoneE164     String
+  status                WhatsAppCallStatus
+  /// Meta's SDP: the offer of an inbound call, the answer of an outbound one.
+  remoteSdp             String?            @db.Text
+  /// Who answered (inbound) or placed (outbound) it.
+  staffUserId           String?
+  idempotencyKey        String?            @unique
+  needsReconciliation   Boolean            @default(false)
+  failureReason         String?
+  startedAt             DateTime
+  answeredAt            DateTime?
+  endedAt               DateTime?
+  durationSeconds       Int?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  lead      Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  staffUser User? @relation("WhatsAppCallStaffUser", fields: [staffUserId], references: [id])
+
+  @@index([status, startedAt])
+  @@index([leadId, startedAt])
+}
+
+enum WhatsAppCallPermissionStatus {
+  REQUESTED
+  GRANTED
+  REJECTED
+}
+
+/// Whether a customer has let Royal call them on WhatsApp, per business
+/// number. Meta enforces the same rules; this is what the screen explains.
+model WhatsAppCallPermission {
+  id                    String                       @id @default(uuid())
+  leadId                Int?
+  businessPhoneNumberId String
+  customerPhoneE164     String
+  status                WhatsAppCallPermissionStatus
+  permanent             Boolean                      @default(false)
+  /// When a temporary grant lapses (Meta: seven days).
+  expiresAt             DateTime?
+  /// Every request sent, newest last: Meta allows one a day, two a week.
+  requestedAt           DateTime[]
+  respondedAt           DateTime?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@unique([businessPhoneNumberId, customerPhoneE164])
+  @@index([leadId])
 }
 
 model AdminOfferContent {

@@ -1,6 +1,7 @@
 import {
   WhatsAppMediaError,
   WhatsAppSendError,
+  type WhatsAppCallsPort,
   type WhatsAppGroupsPort,
   type WhatsAppGroupSummary,
   type WhatsAppMediaPort,
@@ -314,6 +315,104 @@ function createGroupsPort(
   };
 }
 
+/**
+ * Meta's Calling API: signalling for calls a staff browser carries over
+ * WebRTC. POST /{phone-number-id}/calls with an action (VERIFY the field
+ * names against a real call before launch — docs/twilio-plivo-comms/01 §14).
+ */
+function createCallsPort(
+  config: WhatsAppConfig,
+  fetchImpl: Fetch,
+): WhatsAppCallsPort {
+  const call = (phoneNumberId: string, body: Json, what: string) =>
+    graph(
+      config,
+      {
+        body: { messaging_product: "whatsapp", ...body },
+        method: "POST",
+        path: `${encodeURIComponent(phoneNumberId)}/calls`,
+        what,
+      },
+      fetchImpl,
+    );
+  return {
+    accept: async (target) => {
+      await call(
+        target.fromPhoneNumberId,
+        {
+          action: "accept",
+          call_id: target.providerCallId,
+          session: { sdp: target.sdpAnswer, sdp_type: "answer" },
+        },
+        "accepting a call",
+      );
+    },
+    connect: async (request) => {
+      const body = await call(
+        request.fromPhoneNumberId,
+        {
+          action: "connect",
+          biz_opaque_callback_data: request.bizOpaqueCallbackData,
+          session: { sdp: request.sdpOffer, sdp_type: "offer" },
+          to: request.to.replace(/^\+/, ""),
+        },
+        "placing a call",
+      );
+      const id = stringOrNull(
+        (body.calls as { id?: unknown }[] | undefined)?.[0]?.id,
+      );
+      if (!id) {
+        throw new WhatsAppSendError(
+          "WhatsApp accepted the call but returned no call id; it may be ringing.",
+          "ambiguous",
+        );
+      }
+      return { providerCallId: id };
+    },
+    preAccept: async (target) => {
+      await call(
+        target.fromPhoneNumberId,
+        {
+          action: "pre_accept",
+          call_id: target.providerCallId,
+          session: { sdp: target.sdpAnswer, sdp_type: "answer" },
+        },
+        "pre-accepting a call",
+      );
+    },
+    reject: async (target) => {
+      await call(
+        target.fromPhoneNumberId,
+        { action: "reject", call_id: target.providerCallId },
+        "declining a call",
+      );
+    },
+    sendPermissionRequest: (message) =>
+      sendMessage(
+        config,
+        message.fromPhoneNumberId,
+        {
+          interactive: {
+            action: { name: "call_permission_request" },
+            body: { text: message.body },
+            type: "call_permission_request",
+          },
+          recipient_type: "individual",
+          to: message.to,
+          type: "interactive",
+        },
+        fetchImpl,
+      ),
+    terminate: async (target) => {
+      await call(
+        target.fromPhoneNumberId,
+        { action: "terminate", call_id: target.providerCallId },
+        "ending a call",
+      );
+    },
+  };
+}
+
 /** A port over the Cloud API for this configuration. */
 export function createCloudApiWhatsAppPort(
   config: WhatsAppConfig,
@@ -321,6 +420,10 @@ export function createCloudApiWhatsAppPort(
 ): WhatsAppPort | null {
   if (!config.enabled || !config.channel) return null;
   return {
+    calls:
+      config.channel.callingEnabled && config.accessToken
+        ? createCallsPort(config, fetchImpl)
+        : null,
     channel: config.channel,
     groups:
       config.channel.groupsEnabled && config.accessToken

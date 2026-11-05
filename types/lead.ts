@@ -57,6 +57,7 @@ const historyTypeMap: Record<PrismaHistoryType, HistoryItem["type"]> = {
   EMAIL: "email",
   REFERRAL: "referral",
   WHATSAPP: "whatsapp",
+  SMS: "sms",
 };
 
 export const historyTypeToPrisma: Record<
@@ -68,6 +69,7 @@ export const historyTypeToPrisma: Record<
   email: "EMAIL",
   referral: "REFERRAL",
   whatsapp: "WHATSAPP",
+  sms: "SMS",
 };
 
 /**

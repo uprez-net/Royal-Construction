@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { InboundWhatsAppMessage } from "@/lib/domain/leads/whatsapp/inbound";
 import type { WhatsAppStatusUpdate } from "@/lib/domain/leads/whatsapp/status";
 import type { WhatsAppGroupEvent } from "@/lib/domain/projects/whatsapp/groups";
+import type { WhatsAppCallPermissionReply } from "@/lib/domain/whatsapp/call-permissions";
+import type { WhatsAppCallEvent } from "@/lib/domain/whatsapp/calls";
 import {
   whatsappMediaTypeOf,
   type InboundWhatsAppMedia,
@@ -56,6 +58,14 @@ const messageSchema = z
         type: z.string().optional(),
         button_reply: z.object({ title: z.string().optional() }).optional(),
         list_reply: z.object({ title: z.string().optional() }).optional(),
+        call_permission_reply: z
+          .object({
+            response: z.string().optional(),
+            is_permanent: z.boolean().optional(),
+            expiration_timestamp: z.union([z.string(), z.number()]).optional(),
+          })
+          .partial()
+          .optional(),
       })
       .optional(),
   })
@@ -66,6 +76,9 @@ const statusSchema = z
     id: z.string().min(1),
     status: z.string().min(1),
     timestamp: z.string().regex(/^\d+$/),
+    /** "call" for a call's ringing/accepted/rejected status. */
+    type: z.string().optional(),
+    biz_opaque_callback_data: z.string().optional(),
     errors: z
       .array(
         z
@@ -100,6 +113,8 @@ const valueSchema = z
     statuses: z.array(z.unknown()).optional(),
     /** The group_* fields carry their events here. */
     groups: z.array(z.unknown()).optional(),
+    /** The `calls` field carries its events here. */
+    calls: z.array(z.unknown()).optional(),
   })
   .passthrough();
 
@@ -174,6 +189,8 @@ export type ParsedWhatsAppWebhook = {
   readonly messages: readonly InboundWhatsAppMessage[];
   readonly statuses: readonly WhatsAppStatusUpdate[];
   readonly groupEvents: readonly WhatsAppGroupEvent[];
+  readonly callEvents: readonly WhatsAppCallEvent[];
+  readonly callPermissionReplies: readonly WhatsAppCallPermissionReply[];
   /** Why parts of the delivery were skipped. Safe to log. */
   readonly ignored: readonly string[];
 };
@@ -333,6 +350,86 @@ function groupEvent(
   }
 }
 
+const callSchema = z
+  .object({
+    id: z.string().min(1).max(200),
+    event: z.string().optional(),
+    from: z.string().max(40).optional(),
+    to: z.string().max(40).optional(),
+    direction: z.string().optional(),
+    timestamp: z.union([z.string(), z.number()]).optional(),
+    session: z
+      .object({ sdp_type: z.string().max(20), sdp: z.string().max(20_000) })
+      .optional(),
+    status: z.union([z.string(), z.array(z.string())]).optional(),
+    duration: z.union([z.number(), z.string()]).optional(),
+    biz_opaque_callback_data: z.string().max(512).optional(),
+  })
+  .passthrough();
+
+/** One calls[] entry (Meta's Calling API), or why it was skipped. */
+function callEvent(
+  raw: unknown,
+  phoneNumberId: string,
+): { event: WhatsAppCallEvent } | { ignored: string } {
+  const parsed = callSchema.safeParse(raw);
+  if (!parsed.success) return { ignored: "call event without an id" };
+  const value = parsed.data;
+  const at = eventTime(value.timestamp);
+  const opaque = value.biz_opaque_callback_data?.trim() || null;
+  if (value.event === "connect") {
+    const businessInitiated = value.direction === "BUSINESS_INITIATED";
+    const customer = businessInitiated ? value.to : value.from;
+    const sdpType = value.session?.sdp_type?.toLowerCase();
+    if (!customer) return { ignored: "call connect without the customer" };
+    return {
+      event: {
+        at,
+        bizOpaqueCallbackData: opaque,
+        businessPhoneNumberId: phoneNumberId,
+        customerWaId: customer,
+        kind: "connect",
+        providerCallId: value.id,
+        sdp: value.session?.sdp ?? null,
+        sdpType: sdpType === "offer" || sdpType === "answer" ? sdpType : null,
+      },
+    };
+  }
+  if (value.event === "terminate") {
+    const status = [value.status].flat().join(",").toUpperCase();
+    const duration = Number(value.duration);
+    return {
+      event: {
+        at,
+        bizOpaqueCallbackData: opaque,
+        durationSeconds:
+          Number.isFinite(duration) && duration >= 0 ? Math.round(duration) : null,
+        kind: "terminate",
+        providerCallId: value.id,
+        status: status.includes("FAILED") ? "FAILED" : "COMPLETED",
+      },
+    };
+  }
+  return { ignored: "call event is not handled" };
+}
+
+/** A call's ringing/accepted/rejected status, from statuses[] with type "call". */
+function callStatusEvent(
+  status: z.infer<typeof statusSchema>,
+): WhatsAppCallEvent | null {
+  const value = status.status.toUpperCase();
+  if (value !== "RINGING" && value !== "ACCEPTED" && value !== "REJECTED") {
+    return null;
+  }
+  return {
+    at: secondsToDate(status.timestamp),
+    bizOpaqueCallbackData: status.biz_opaque_callback_data?.trim() || null,
+    kind: "status",
+    providerCallId: status.id,
+    status: value,
+  };
+}
+
 /**
  * Parse one delivery. Returns null when the body is not a WhatsApp Business
  * Account webhook at all — the route answers 400 to that, since retrying the
@@ -350,6 +447,8 @@ export function parseWhatsAppWebhook(
   const messages: InboundWhatsAppMessage[] = [];
   const statuses: WhatsAppStatusUpdate[] = [];
   const groupEvents: WhatsAppGroupEvent[] = [];
+  const callEvents: WhatsAppCallEvent[] = [];
+  const callPermissionReplies: WhatsAppCallPermissionReply[] = [];
   const ignored: string[] = [];
 
   parsed.data.entry.forEach((entry, entryIndex) => {
@@ -366,6 +465,28 @@ export function parseWhatsAppWebhook(
           const result = groupEvent(raw);
           if ("event" in result) groupEvents.push(result.event);
           else ignored.push(where + " group " + index + ": " + result.ignored);
+        });
+        return;
+      }
+      if (change.field === "calls") {
+        const callValue = valueSchema.safeParse(change.value);
+        const callNumber = callValue.success
+          ? callValue.data.metadata?.phone_number_id
+          : undefined;
+        if (!callValue.success || !callNumber) {
+          ignored.push(where + ": value did not match the calls shape");
+          return;
+        }
+        (callValue.data.calls ?? []).forEach((raw, index) => {
+          const result = callEvent(raw, callNumber);
+          if ("event" in result) callEvents.push(result.event);
+          else ignored.push(where + " call " + index + ": " + result.ignored);
+        });
+        (callValue.data.statuses ?? []).forEach((raw, index) => {
+          const status = statusSchema.safeParse(raw);
+          const event = status.success ? callStatusEvent(status.data) : null;
+          if (event) callEvents.push(event);
+          else ignored.push(where + " call status " + index + ": not tracked");
         });
         return;
       }
@@ -394,6 +515,28 @@ export function parseWhatsAppWebhook(
           );
           return;
         }
+        const permission = message.data.interactive?.call_permission_reply;
+        if (
+          message.data.type === "interactive"
+          && message.data.interactive?.type === "call_permission_reply"
+          && permission
+        ) {
+          // The customer's tap on Allow or Decline. Never an ordinary reply:
+          // only this tap grants permission (file 01 section 14).
+          const expires = Number(permission.expiration_timestamp);
+          callPermissionReplies.push({
+            accepted: permission.response === "accept",
+            at: secondsToDate(message.data.timestamp),
+            businessPhoneNumberId: phoneNumberId,
+            expiresAt:
+              Number.isFinite(expires) && expires > 0
+                ? new Date(expires * 1000)
+                : null,
+            fromWaId: message.data.from,
+            permanent: permission.is_permanent === true,
+          });
+          return;
+        }
         const contact = value.data.contacts?.find(
           (candidate) => candidate.wa_id === message.data.from,
         );
@@ -416,6 +559,11 @@ export function parseWhatsAppWebhook(
           ignored.push(
             `${where} status ${index}: missing id, status or timestamp`,
           );
+          return;
+        }
+        if (status.data.type === "call") {
+          const event = callStatusEvent(status.data);
+          if (event) callEvents.push(event);
           return;
         }
         const mapped = STATUS_MAP[status.data.status];
@@ -441,5 +589,13 @@ export function parseWhatsAppWebhook(
     });
   });
 
-  return { businessAccountIds, groupEvents, ignored, messages, statuses };
+  return {
+    businessAccountIds,
+    callEvents,
+    callPermissionReplies,
+    groupEvents,
+    ignored,
+    messages,
+    statuses,
+  };
 }
