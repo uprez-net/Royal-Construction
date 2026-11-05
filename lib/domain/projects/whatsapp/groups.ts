@@ -972,13 +972,16 @@ export async function applyWhatsAppGroupEvent(
           ...(event.subject ? { subject: event.subject } : {}),
           // Without a link it goes (back) to CREATING, so the resolver and
           // the sweep fetch one and activate it — a FAILED row is never
-          // looked at again.
+          // looked at again. `requestedAt` is set so the resolver treats it
+          // as sent (not "never reached Meta") and a resubmit reports
+          // already_submitted instead of asking for a second group.
           ...(awaitingConfirmation
-            ? {
-                status: event.inviteLink
-                  ? ProjectWhatsAppGroupStatus.ACTIVE
-                  : ProjectWhatsAppGroupStatus.CREATING,
-              }
+            ? event.inviteLink
+              ? { status: ProjectWhatsAppGroupStatus.ACTIVE }
+              : {
+                  requestedAt: event.at,
+                  status: ProjectWhatsAppGroupStatus.CREATING,
+                }
             : {}),
         },
         where: { id: row.id },

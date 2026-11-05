@@ -89,7 +89,7 @@ recording in this repository (see the [runbook](../comms-runbook.md)); it has no
 stream support. Existing numbers, active calls, recordings and approvals do **not** migrate
 automatically.
 
-**Plivo is not implemented yet.** `COMMS_PROVIDER` (alias `COMMUNICATIONS_PROVIDER`)
+**Plivo is not implemented yet.** `COMMUNICATIONS_PROVIDER` (legacy alias `COMMS_PROVIDER`)
 accepts only `twilio` or `telnyx`; the Plivo-specific steps below cannot be completed until
 a Plivo adapter ships.
 

@@ -359,6 +359,8 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
       const audio = new WhatsAppCallSession(iceServers, () => {
         closeWhatsApp();
         setActive(null);
+        // The audio dropped: end it at WhatsApp too, or the customer stays on.
+        void hangupWhatsAppCall(call.call.id).catch(() => {});
       });
       session.current = audio;
       const sdp = await audio.answer(call.call.remoteSdp ?? "");
@@ -440,11 +442,16 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
         return false;
       }
       let audio: WhatsAppCallSession | null = null;
+      // Known once the call request returns; a drop before then has no call to end.
+      let placedCallId: string | null = null;
       try {
         const { iceServers } = await fetchIceServers();
         audio = new WhatsAppCallSession(iceServers, () => {
           closeWhatsApp();
           setActive(null);
+          if (placedCallId) {
+            void hangupWhatsAppCall(placedCallId).catch(() => {});
+          }
         });
         session.current = audio;
         const offer = await audio.offer();
@@ -453,6 +460,7 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
           offer,
           idempotencyKey,
         );
+        placedCallId = placed.call.id;
         setActive({
           call: { ...placed.call, leadName: placed.call.leadName ?? lead.name },
           kind: "whatsapp",

@@ -8,6 +8,7 @@ import {
   type WhatsAppPort,
   type WhatsAppSendReceipt,
 } from "@/lib/domain/ports/whatsapp";
+import { readBoundedBody } from "@/lib/http/bounded-body";
 
 import { readWhatsAppConfig, type WhatsAppConfig } from "./config";
 import { describeWhatsAppError } from "./errors";
@@ -573,8 +574,8 @@ export function createCloudApiMediaPort(
         String(response.status),
       );
     }
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > options.maxBytes) {
+    const bytes = await readBoundedBody(response, options.maxBytes);
+    if (!bytes) {
       throw new WhatsAppMediaError(
         `This file is larger than the ${Math.floor(options.maxBytes / 1_048_576)} MB the app keeps. Open it in WhatsApp on the business phone.`,
         true,

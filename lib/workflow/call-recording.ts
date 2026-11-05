@@ -1,6 +1,6 @@
 import { FatalError, RetryableError, getStepMetadata } from "workflow";
 
-import { vercelBlobPut } from "@/lib/blob-port";
+import { vercelPrivateBlobPut } from "@/lib/blob-port";
 import { commsRuntimeFromEnv } from "@/lib/comms/factory";
 import { storeCallRecording } from "@/lib/domain/comms/calls/recordings";
 import { DomainSideEffectError, isDomainError } from "@/lib/domain/errors";
@@ -25,7 +25,7 @@ async function storeOne(recordingId: string): Promise<string> {
       systemPrincipal("workflow:call-recording"),
       { recordingId },
       prisma,
-      { put: vercelBlobPut, recordingsFor: runtime.recordingsFor },
+      { put: vercelPrivateBlobPut, recordingsFor: runtime.recordingsFor },
     );
   } catch (error) {
     if (error instanceof DomainSideEffectError && error.retryable) {

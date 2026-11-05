@@ -122,7 +122,8 @@ export function smsSegments(body: string): {
     if (basic.includes(char)) septets += 1;
     else if (extended.includes(char)) septets += 2;
     else {
-      const units = [...body].length;
+      // UCS-2 is billed in UTF-16 code units: an emoji is two.
+      const units = body.length;
       return {
         encoding: "UCS-2",
         segments: units <= 70 ? 1 : Math.ceil(units / 67),

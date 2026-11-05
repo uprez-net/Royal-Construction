@@ -1,4 +1,5 @@
 import { CommsError } from "@/lib/domain/ports/comms";
+import { readBoundedBody } from "@/lib/http/bounded-body";
 
 // One carrier REST call, classified (file 06 §3.2).
 //
@@ -101,16 +102,8 @@ export async function readCapped(
   maxBytes: number,
   provider: "TWILIO" | "TELNYX",
 ): Promise<Uint8Array> {
-  const declared = Number(response.headers.get("content-length") ?? "0");
-  if (declared > maxBytes) {
-    throw new CommsError(
-      "The recording is larger than the app keeps.",
-      "rejected",
-      `${provider}_TOO_LARGE`,
-    );
-  }
-  const buffer = new Uint8Array(await response.arrayBuffer());
-  if (buffer.byteLength > maxBytes) {
+  const buffer = await readBoundedBody(response, maxBytes);
+  if (!buffer) {
     throw new CommsError(
       "The recording is larger than the app keeps.",
       "rejected",

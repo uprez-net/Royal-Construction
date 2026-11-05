@@ -198,8 +198,10 @@ Flow: the `voice` route receives `call.answered` for the customer leg → it ask
 domain what to do (`answeredOutboundCall`, same as the Twilio `customer-connect` route)
 → `callControl.execute(callId, [{ op: "dialBrowser", identity, … }])` which issues a
 `transfer` (or `bridge` to a leg created by dialling the agent) to the agent's SIP URI.
-Because outbound calls never play a recording notice and are never recorded, there is no
-prompt step.
+In `consented` recording mode the customer is first asked for recording consent
+(`gather_using_speak`), the same as inbound calls (`decideCallStart`); recording starts
+only after they consent and the call connects (section 7). Otherwise the call connects
+straight away and is not recorded.
 
 ### Commands used (names from the Telnyx index; confirm paths)
 

@@ -1,4 +1,4 @@
-import { del, put } from "@vercel/blob";
+import { del, get, put } from "@vercel/blob";
 
 import type { BlobDeletePort, BlobPutPort } from "@/lib/domain/ports/blob";
 
@@ -32,3 +32,87 @@ export const vercelBlobPut: BlobPutPort = async (input) => {
   });
   return { url: stored.url };
 };
+
+const PRIVATE_BLOB_HOST_SUFFIX = ".private.blob.vercel-storage.com";
+
+/**
+ * The read-write token of the private Blob store, or null if none is set up.
+ *
+ * Vercel fixes a store's access mode when the store is created, and the main
+ * store (BLOB_READ_WRITE_TOKEN) is public. Private objects such as call
+ * recordings need a second store, created as private, with its own token.
+ */
+function privateBlobToken(): string | null {
+  const token = process.env.BLOB_PRIVATE_READ_WRITE_TOKEN?.trim();
+  return token ? token : null;
+}
+
+/**
+ * Put for objects nobody should reach without signing in (call recordings).
+ *
+ * Writes to the private store when one is configured. Until then it falls
+ * back to the public store under the caller's unguessable path. Either way
+ * the stored URL must only be read through `readStoredBlob` in an
+ * authenticated route, never handed to a browser.
+ */
+export const vercelPrivateBlobPut: BlobPutPort = async (input) => {
+  const token = privateBlobToken();
+  if (!token) {
+    console.warn(
+      "[blob] BLOB_PRIVATE_READ_WRITE_TOKEN is not set; storing a private object in the public store.",
+    );
+    return vercelBlobPut(input);
+  }
+  const body =
+    typeof input.body === "string"
+      ? input.body
+      : Buffer.from(input.body as ArrayBuffer);
+  const stored = await put(input.pathname, body, {
+    access: "private",
+    addRandomSuffix: false,
+    allowOverwrite: input.allowOverwrite ?? false,
+    contentType: input.contentType,
+    token,
+  });
+  return { url: stored.url };
+};
+
+/**
+ * Open a stored object for streaming from the server, public or private.
+ * `range` is passed through so an audio player can seek. Null on a miss.
+ */
+export async function readStoredBlob(
+  url: string,
+  options: { readonly range?: string | null } = {},
+): Promise<{
+  readonly stream: ReadableStream<Uint8Array>;
+  readonly contentType: string;
+  readonly contentLength: string | null;
+  /** Set when a range was asked for and served (a 206). */
+  readonly contentRange: string | null;
+  readonly etag: string | null;
+} | null> {
+  const isPrivate = new URL(url).hostname
+    .toLowerCase()
+    .endsWith(PRIVATE_BLOB_HOST_SUFFIX);
+  const token = isPrivate ? privateBlobToken() : undefined;
+  if (isPrivate && !token) {
+    throw new Error(
+      "BLOB_PRIVATE_READ_WRITE_TOKEN is not set, so a private object can't be read.",
+    );
+  }
+  const result = await get(url, {
+    access: isPrivate ? "private" : "public",
+    ...(token ? { token } : {}),
+    ...(options.range ? { headers: { range: options.range } } : {}),
+    useCache: false,
+  });
+  if (!result || result.statusCode !== 200) return null;
+  return {
+    contentLength: result.headers.get("content-length"),
+    contentRange: result.headers.get("content-range"),
+    contentType: result.blob.contentType,
+    etag: result.headers.get("etag"),
+    stream: result.stream,
+  };
+}

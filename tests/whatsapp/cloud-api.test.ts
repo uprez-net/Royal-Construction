@@ -298,3 +298,37 @@ test("expired media (code 100) is permanent; the token goes on the download too"
   assert.equal(file.mimeType, "image/jpeg");
   assert.deepEqual(auth, [`Bearer ${TOKEN}`, `Bearer ${TOKEN}`]);
 });
+
+test("media with no declared size stops downloading once it passes the limit", async () => {
+  const { createCloudApiMediaPort } = await import("@/lib/whatsapp/cloud-api");
+  let pulled = 0;
+  let cancelled = false;
+  const download = createCloudApiMediaPort(groupsConfig, (async (
+    url: string | URL | Request,
+  ) =>
+    String(url).includes("lookaside")
+      ? new Response(
+          new ReadableStream<Uint8Array>(
+            {
+              cancel() {
+                cancelled = true;
+              },
+              pull(controller) {
+                pulled += 1;
+                controller.enqueue(new Uint8Array(1_024));
+              },
+            },
+            { highWaterMark: 0 },
+          ),
+        )
+      : json({
+          mime_type: "video/mp4",
+          url: "https://lookaside.example/x",
+        })) as typeof fetch);
+  await assert.rejects(
+    download!("media-3", { maxBytes: 4_096 }),
+    (error: unknown) => (error as { permanent?: boolean }).permanent === true,
+  );
+  assert.equal(cancelled, true, "the download was cancelled");
+  assert.ok(pulled <= 6, `read ${pulled} chunks of an endless body`);
+});

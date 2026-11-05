@@ -331,6 +331,28 @@ function requireStaff(principal: DomainPrincipal) {
   return principal;
 }
 
+/**
+ * The same rule getWhatsAppCall and the PSTN endCall use: a call on a lead
+ * is for whoever may see that lead. The person who placed or answered the
+ * call may always end it. Refused as "not found", like getWhatsAppCall.
+ */
+function requireCallAccess(
+  staff: ReturnType<typeof requireStaff>,
+  call: {
+    readonly lead: {
+      readonly id: number;
+      readonly assignedId: string | null;
+    } | null;
+    readonly staffUserId: string | null;
+  },
+  options: { readonly allowCallOwner: boolean },
+): void {
+  if (options.allowCallOwner && call.staffUserId === staff.userId) return;
+  if (call.lead && !canAccessLead(staff, call.lead)) {
+    throw new DomainNotFoundError("Call not found");
+  }
+}
+
 async function readCall(db: DomainDb, id: string): Promise<WhatsAppCallRecord> {
   const row = await db.whatsAppCall.findUnique({
     select: WHATSAPP_CALL_SELECT,
@@ -469,7 +491,9 @@ export async function answerWhatsAppCall(
     await calls.preAccept(target);
     await calls.accept(target);
   } catch (error) {
-    await db.whatsAppCall.update({
+    // Only while still ringing: a terminate webhook that landed meanwhile
+    // has already recorded how the call ended.
+    await db.whatsAppCall.updateMany({
       data: {
         endedAt: now,
         failureReason: isWhatsAppSendError(error)
@@ -477,17 +501,17 @@ export async function answerWhatsAppCall(
           : "WhatsApp didn't accept the answer.",
         status: WhatsAppCallStatus.FAILED,
       },
-      where: { id: call.id },
+      where: { id: call.id, status: WhatsAppCallStatus.RINGING },
     });
     throw sideEffect(error, "The call couldn't be answered");
   }
-  await db.whatsAppCall.update({
+  await db.whatsAppCall.updateMany({
     data: {
       answeredAt: now,
       remoteSdp: null,
       status: WhatsAppCallStatus.ACCEPTED,
     },
-    where: { id: call.id },
+    where: { id: call.id, status: WhatsAppCallStatus.RINGING },
   });
   return readCall(db, call.id);
 }
@@ -498,7 +522,7 @@ export async function rejectWhatsAppCall(
   db: TransactionalDomainDb,
   ports: { readonly whatsapp?: WhatsAppPort | null },
 ): Promise<WhatsAppCallRecord> {
-  requireStaff(principal);
+  const staff = requireStaff(principal);
   const calls = ports.whatsapp?.calls;
   if (!calls)
     throw new DomainSideEffectError(
@@ -510,12 +534,15 @@ export async function rejectWhatsAppCall(
     select: {
       businessPhoneNumberId: true,
       id: true,
+      lead: { select: { assignedId: true, id: true } },
       providerCallId: true,
+      staffUserId: true,
       status: true,
     },
     where: { id: input.callId },
   });
   if (!call?.providerCallId) throw new DomainNotFoundError("Call not found");
+  requireCallAccess(staff, call, { allowCallOwner: false });
   if (call.status !== WhatsAppCallStatus.RINGING) return readCall(db, call.id);
   try {
     await calls.reject({
@@ -543,7 +570,7 @@ export async function endWhatsAppCall(
   db: TransactionalDomainDb,
   ports: { readonly whatsapp?: WhatsAppPort | null },
 ): Promise<WhatsAppCallRecord> {
-  requireStaff(principal);
+  const staff = requireStaff(principal);
   const calls = ports.whatsapp?.calls;
   if (!calls)
     throw new DomainSideEffectError(
@@ -555,12 +582,15 @@ export async function endWhatsAppCall(
     select: {
       businessPhoneNumberId: true,
       id: true,
+      lead: { select: { assignedId: true, id: true } },
       providerCallId: true,
+      staffUserId: true,
       status: true,
     },
     where: { id: input.callId },
   });
   if (!call) throw new DomainNotFoundError("Call not found");
+  requireCallAccess(staff, call, { allowCallOwner: true });
   if (TERMINAL.has(call.status) || !call.providerCallId)
     return readCall(db, call.id);
   try {

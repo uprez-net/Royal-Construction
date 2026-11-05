@@ -459,4 +459,9 @@ test("opt-out keywords are whole messages, and segments are counted as carriers 
     encoding: "UCS-2",
     segments: 1,
   });
+  // An emoji is two UTF-16 units: 69 letters plus one is 71, past one segment.
+  assert.deepEqual(smsSegments(`${"a".repeat(69)}👍`), {
+    encoding: "UCS-2",
+    segments: 2,
+  });
 });

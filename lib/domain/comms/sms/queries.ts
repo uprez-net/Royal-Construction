@@ -170,7 +170,8 @@ export async function resolveUnmatchedSms(
   }
   const now = new Date();
   return db.$transaction(async (tx) => {
-    const updated = await tx.smsMessage.update({
+    // Conditional on PENDING, so a second click or tab can't refile it.
+    const claimed = await tx.smsMessage.updateMany({
       data:
         input.action === "attach"
           ? {
@@ -184,9 +185,11 @@ export async function resolveUnmatchedSms(
               resolvedById: principal.userId,
               reviewStatus: SmsReviewStatus.DISMISSED,
             },
-      select: SMS_MESSAGE_SELECT,
-      where: { id: message.id },
+      where: { id: message.id, reviewStatus: SmsReviewStatus.PENDING },
     });
+    if (claimed.count !== 1) {
+      throw new DomainTransitionError("This text has already been filed.");
+    }
     if (input.action === "attach") {
       await recordCommsHistory(tx, {
         action: "SMS filed",
@@ -197,6 +200,10 @@ export async function resolveUnmatchedSms(
         type: "SMS",
       });
     }
+    const updated = await tx.smsMessage.findUniqueOrThrow({
+      select: SMS_MESSAGE_SELECT,
+      where: { id: message.id },
+    });
     return toSmsMessageRecord(updated);
   });
 }
