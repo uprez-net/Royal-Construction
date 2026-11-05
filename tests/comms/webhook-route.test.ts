@@ -5,7 +5,10 @@ import { test } from "vitest";
 import { commsRuntimeFromEnv } from "@/lib/comms/factory";
 import { twilioSignature } from "@/lib/comms/providers/twilio/signature";
 import { decodeClientState } from "@/lib/comms/providers/telnyx/client-state";
-import { handleCommsWebhook } from "@/lib/comms/webhook-handler";
+import {
+  COMMS_WEBHOOK_MAX_BODY_BYTES,
+  handleCommsWebhook,
+} from "@/lib/comms/webhook-handler";
 import { requestLeadCall } from "@/lib/domain/comms/calls/outbound";
 import type { VoicePort } from "@/lib/domain/ports/comms";
 
@@ -90,6 +93,39 @@ function deps(
     },
     recorder,
   };
+}
+
+// A chunked request body that notices when the reader gives up on it.
+function streamedRequest(
+  url: string,
+  headers: Record<string, string>,
+  chunks: number,
+  chunkSize: number,
+) {
+  const seen = { cancelled: false, pulled: 0 };
+  const body = new ReadableStream<Uint8Array>(
+    {
+      cancel() {
+        seen.cancelled = true;
+      },
+      pull(controller) {
+        if (seen.pulled >= chunks) {
+          controller.close();
+          return;
+        }
+        seen.pulled += 1;
+        controller.enqueue(new Uint8Array(chunkSize).fill(0x78));
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  const request = new Request(url, {
+    body,
+    duplex: "half",
+    headers,
+    method: "POST",
+  } as RequestInit);
+  return { request, seen };
 }
 
 const NO_STAFF_ONLINE = { "user.findMany": [] };
@@ -506,3 +542,33 @@ test("retrying a refused call on the same key rings whichever target this attemp
     "MOBILE",
   );
 });
+
+for (const [label, headers] of [
+  ["missing", {}],
+  ["understated", { "content-length": "10" }],
+] as const) {
+  test(`a body over the cap with a ${label} content-length is cut off and refused`, async () => {
+    const { deps: d, recorder } = deps({});
+    const chunk = 4 * 1024;
+    const chunks = Math.ceil(COMMS_WEBHOOK_MAX_BODY_BYTES / chunk) + 50;
+    const { request, seen } = streamedRequest(
+      `${ORIGIN}/api/comms/twilio/sms-inbound`,
+      {
+        ...headers,
+        "content-type": "application/x-www-form-urlencoded",
+        "x-twilio-signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      },
+      chunks,
+      chunk,
+    );
+    const response = await handleCommsWebhook(
+      request,
+      { event: "sms-inbound", provider: "twilio" },
+      d,
+    );
+    assert.equal(response.status, 413);
+    assert.equal(seen.cancelled, true, "the upload was cancelled");
+    assert.ok(seen.pulled < chunks, `stopped early (read ${seen.pulled})`);
+    assert.deepEqual(recorder.calls, []);
+  });
+}

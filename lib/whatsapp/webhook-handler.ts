@@ -22,6 +22,7 @@ import {
   recordWhatsAppCallEvent,
   type WhatsAppCallEventOutcome,
 } from "@/lib/domain/leads/whatsapp/calls";
+import { readBoundedBody } from "@/lib/http/bounded-body";
 import {
   createFixedWindowRateLimiter,
   requestAddress,
@@ -132,18 +133,15 @@ export async function handleWhatsAppWebhookDelivery(
     return text(401, "Unauthorized");
   }
 
-  const declared = Number(request.headers.get("content-length") ?? "0");
-  if (declared > WHATSAPP_WEBHOOK_MAX_BODY_BYTES) {
-    return text(413, "Payload too large");
-  }
   // The raw body, before any parse: the signature is over these exact bytes.
-  const raw = await request.text();
-  if (Buffer.byteLength(raw, "utf8") > WHATSAPP_WEBHOOK_MAX_BODY_BYTES) {
-    return text(413, "Payload too large");
-  }
-  if (!verifyWhatsAppSignature(request.headers, raw, config.appSecret)) {
+  // Counted as it arrives, since content-length can be missing or understated;
+  // the stream is cancelled the moment it passes the cap.
+  const bytes = await readBoundedBody(request, WHATSAPP_WEBHOOK_MAX_BODY_BYTES);
+  if (!bytes) return text(413, "Payload too large");
+  if (!verifyWhatsAppSignature(request.headers, bytes, config.appSecret)) {
     return text(401, "Unauthorized");
   }
+  const raw = new TextDecoder().decode(bytes);
 
   let json: unknown;
   try {

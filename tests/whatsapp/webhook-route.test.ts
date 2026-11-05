@@ -83,6 +83,39 @@ function post(body: string, signature?: string | null) {
   return new Request(URL_BASE, { body, headers, method: "POST" });
 }
 
+// A chunked request body that notices when the reader gives up on it.
+function streamedRequest(
+  url: string,
+  headers: Record<string, string>,
+  chunks: number,
+  chunkSize: number,
+) {
+  const seen = { cancelled: false, pulled: 0 };
+  const body = new ReadableStream<Uint8Array>(
+    {
+      cancel() {
+        seen.cancelled = true;
+      },
+      pull(controller) {
+        if (seen.pulled >= chunks) {
+          controller.close();
+          return;
+        }
+        seen.pulled += 1;
+        controller.enqueue(new Uint8Array(chunkSize).fill(0x78));
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  const request = new Request(url, {
+    body,
+    duplex: "half",
+    headers,
+    method: "POST",
+  } as RequestInit);
+  return { request, seen };
+}
+
 // ── GET handshake ──────────────────────────────────────────────────────────
 
 test("the subscription handshake echoes the challenge only for the right token", async () => {
@@ -164,6 +197,33 @@ test("an oversized body is refused before it is verified or parsed", async () =>
   assert.equal(response.status, 413);
   assert.deepEqual(recorder.calls, []);
 });
+
+for (const [label, headers] of [
+  ["missing", {}],
+  ["understated", { "content-length": "10" }],
+] as const) {
+  test(`a body over the cap with a ${label} content-length is cut off and refused`, async () => {
+    const recorder = recordingDb();
+    const chunk = 64 * 1024;
+    const chunks = Math.ceil(WHATSAPP_WEBHOOK_MAX_BODY_BYTES / chunk) + 50;
+    const { request, seen } = streamedRequest(
+      URL_BASE,
+      { ...headers, "content-type": "application/json" },
+      chunks,
+      chunk,
+    );
+    const response = await handleWhatsAppWebhookDelivery(request, {
+      allow: allowAll,
+      config,
+      db: recorder.transactionalDb,
+      log: quiet,
+    });
+    assert.equal(response.status, 413);
+    assert.equal(seen.cancelled, true, "the upload was cancelled");
+    assert.ok(seen.pulled < chunks, `stopped early (read ${seen.pulled})`);
+    assert.deepEqual(recorder.calls, []);
+  });
+}
 
 test("the rate limit answers 429 before anything else", async () => {
   const recorder = recordingDb();

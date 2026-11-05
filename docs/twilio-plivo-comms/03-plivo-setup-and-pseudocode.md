@@ -108,7 +108,7 @@ function verifyPlivoWebhook(req): VerifiedRequest | null {
   const header = req.headers["x-plivo-signature-v3"]
   if (!nonce || !header) return null
   const raw = readBodyCapped(req, 64 * 1024)
-  const url = env("PUBLIC_WEBHOOK_ORIGIN") + req.path + req.rawQuery
+  const url = env("COMMS_WEBHOOK_ORIGIN") + req.path + req.rawQuery
   const params = req.method === "POST" ? formDecode(raw) : {} // GET params are inside url
   const signed = plivoSignedString(req.method, url, params) + "." + nonce
   const candidates = header.split(",").map((s) => s.trim())

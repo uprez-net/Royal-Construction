@@ -48,7 +48,7 @@ The pseudocode uses only these. Map each one to what the project already has.
 
 ```
 COMMS_PROVIDER              = "twilio" | "plivo" | "telnyx" # new outbound work (this repo: COMMUNICATIONS_PROVIDER)
-PUBLIC_WEBHOOK_ORIGIN       = "https://app.example.com"   # exact public origin providers call; used in signatures
+COMMS_WEBHOOK_ORIGIN        = "https://app.example.com"   # exact public origin providers call; used in signatures
 BUSINESS_NUMBER_E164        = "+61…"                       # AU mobile number: voice + SMS (+ WhatsApp sender)
 STAFF_FORWARD_E164          = "+61…"                       # optional: staff mobile/landline for bridged calls
 DEFAULT_TIMEZONE            = "Australia/Sydney"           # quiet hours, business hours
@@ -278,7 +278,7 @@ type CallInstruction =
   | { op: "hangup" }
 ```
 
-All URLs passed to the DSL are absolute: `PUBLIC_WEBHOOK_ORIGIN + "/webhooks/<provider>/…"`.
+All URLs passed to the DSL are absolute: `COMMS_WEBHOOK_ORIGIN + "/webhooks/<provider>/…"`.
 Each adapter's route table is listed in its file.
 
 ## 6. Webhook pipeline (every inbound HTTP callback)
@@ -332,7 +332,7 @@ async function handleWebhook(
 
 Rules:
 
-- **Signature URL = public URL.** Behind a proxy, rebuild it from `PUBLIC_WEBHOOK_ORIGIN` plus
+- **Signature URL = public URL.** Behind a proxy, rebuild it from `COMMS_WEBHOOK_ORIGIN` plus
   the request path and the exact query string. Do not use the internal host.
 - **Read the raw body once**, cap its size (64 KB is plenty) and decode it yourself, so the
   signed bytes equal the parsed fields.
@@ -493,7 +493,7 @@ ledger/outbox), because the provider is waiting for markup.
 
 ```ts
 function decideInboundCall(call: InboundCall, ctx): CallInstruction[] {
-  const base = env("PUBLIC_WEBHOOK_ORIGIN") + "/webhooks/" + ctx.provider
+  const base = env("COMMS_WEBHOOK_ORIGIN") + "/webhooks/" + ctx.provider
 
   if (call.channel === "whatsapp") {
     // WhatsApp calls cannot go to PSTN on either provider: browser/SIP only.

@@ -68,7 +68,7 @@ function verifyTwilioWebhook(req): VerifiedRequest | null {
   const sig = req.headers["x-twilio-signature"]
   if (!sig) return null
   const raw = readBodyCapped(req, 64 * 1024)
-  const url = env("PUBLIC_WEBHOOK_ORIGIN") + req.path + req.rawQuery // exactly as Twilio called it
+  const url = env("COMMS_WEBHOOK_ORIGIN") + req.path + req.rawQuery // exactly as Twilio called it
   let params: Record<string, string> = {}
   let data: string
 

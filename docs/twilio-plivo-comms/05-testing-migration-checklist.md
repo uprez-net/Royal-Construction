@@ -127,7 +127,7 @@ A WhatsApp sender belongs to a WABA through one provider (BSP) at a time. Moving
 
 ### Step 4: Cut-over
 
-1. Set `COMMS_PROVIDER` to the new provider (`twilio` or `telnyx` today) for **new
+1. Set `COMMUNICATIONS_PROVIDER` to the new provider (`twilio` or `telnyx` today) for **new
    outbound** work. Inbound continues to be handled by whichever provider owns each number.
    For a Plivo migration this step is blocked: `plivo` is not an accepted value until the
    Plivo adapter is supported.
@@ -140,14 +140,14 @@ A WhatsApp sender belongs to a WABA through one provider (BSP) at a time. Moving
 
 ### Rollback
 
-Flip `COMMS_PROVIDER` back for outbound. A port cannot be undone quickly, so for voice and SMS
+Flip `COMMUNICATIONS_PROVIDER` back for outbound. A port cannot be undone quickly, so for voice and SMS
 the rollback for a ported number is a port back (days). This is why the 30-day dual-adapter
 overlap and a pre-agreed rollback window with the provider matter.
 
 ## 4. Launch checklist (either provider)
 
 - [ ] Production subaccount/sub-account; MFA; secrets in the secret store; no secrets in logs.
-- [ ] `PUBLIC_WEBHOOK_ORIGIN` matches the console URLs exactly; fallback URLs set and static.
+- [ ] `COMMS_WEBHOOK_ORIGIN` matches the console URLs exactly; fallback URLs set and static.
 - [ ] Number regulatory bundle/compliance application approved; mobile number has voice + SMS.
 - [ ] Spam Act: consent capture, sender identification, `STOP` handling; alpha sender IDs
       registered with ACMA if used.

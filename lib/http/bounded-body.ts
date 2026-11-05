@@ -1,5 +1,5 @@
 /**
- * Read a response body, stopping as soon as it passes `maxBytes`.
+ * Read a response (or request) body, stopping as soon as it passes `maxBytes`.
  *
  * `Content-Length` is checked first as a fast refusal, but it can be missing
  * (chunked) or wrong, so the stream is counted as it arrives and cancelled the
@@ -7,7 +7,7 @@
  * Returns null when the body is larger than `maxBytes`.
  */
 export async function readBoundedBody(
-  response: Response,
+  response: Pick<Response, "headers" | "body">,
   maxBytes: number,
 ): Promise<Uint8Array | null> {
   const declared = Number(response.headers.get("content-length") ?? Number.NaN);

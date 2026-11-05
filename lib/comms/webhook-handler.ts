@@ -6,6 +6,7 @@ import type { TransactionalDomainDb } from "@/lib/domain/db";
 import { isDomainError } from "@/lib/domain/errors";
 import type { CallInstruction, CommsEvent } from "@/lib/domain/ports/comms";
 import { systemPrincipal } from "@/lib/domain/principal";
+import { readBoundedBody } from "@/lib/http/bounded-body";
 import {
   createFixedWindowRateLimiter,
   requestAddress,
@@ -104,13 +105,11 @@ export async function handleCommsWebhook(
     log.warn("[comms-webhook] COMMS_WEBHOOK_ORIGIN is not set; rejecting.");
     return text(401, "Unauthorized");
   }
-  const declared = Number(request.headers.get("content-length") ?? "0");
-  if (declared > COMMS_WEBHOOK_MAX_BODY_BYTES)
-    return text(413, "Payload too large");
-  const rawBody = await request.text();
-  if (Buffer.byteLength(rawBody, "utf8") > COMMS_WEBHOOK_MAX_BODY_BYTES) {
-    return text(413, "Payload too large");
-  }
+  // Counted as it arrives: content-length can be missing or understated, and
+  // the stream is cancelled the moment it passes the cap.
+  const bytes = await readBoundedBody(request, COMMS_WEBHOOK_MAX_BODY_BYTES);
+  if (!bytes) return text(413, "Payload too large");
+  const rawBody = new TextDecoder().decode(bytes);
 
   const webhook: WebhookRequest = {
     event: params.event,

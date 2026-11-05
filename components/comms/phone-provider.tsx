@@ -166,6 +166,19 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
               setStatus((current) => (current === "ready" ? current : "error"));
             },
             onIncoming: (incoming) => {
+              if (activeRef.current?.kind === "whatsapp") {
+                // One call at a time, as both dialers already do for a second
+                // PSTN ring: reject it so the server rings the next person,
+                // and leave the WhatsApp call untouched. Rejecting ends only
+                // this leg; onEnded keeps a WhatsApp call in place.
+                if (expected.current === incoming.callId)
+                  expected.current = null;
+                dialer.current?.reject();
+                toast.info(
+                  "A phone call came in during the WhatsApp call and was passed on.",
+                );
+                return;
+              }
               if (incoming.callId && expected.current === incoming.callId) {
                 // This person just pressed Call: the customer answered and is
                 // being put through. Pick up without making them click twice.
