@@ -23,12 +23,15 @@ import { reviveRow } from "../sql-json";
  * module's canonical shape, so it is read through Prisma, alongside this.
  *
  * Applies only the scope it is given; the caller passes
- * `projectReadScope(principal)`.
+ * `projectReadScope(principal)`. Staff notes on each milestone are read only
+ * when `milestoneNotes` is set — `canSeeMilestoneNotes(principal)` — and are
+ * an empty list otherwise, so a customer's payload never carries one.
  */
 export async function readProjectDetailRow(
   projectId: string,
   scope: { customerId?: string },
   db: DomainDb,
+  options: { milestoneNotes: boolean },
 ): Promise<Record<string, unknown> | null> {
   // A scope rule this statement does not know about must not be dropped
   // silently: that would widen what a caller can read.
@@ -42,6 +45,17 @@ export async function readProjectDetailRow(
     scope.customerId !== undefined
       ? Prisma.sql`AND p."customerId" = ${scope.customerId}`
       : Prisma.empty;
+  const milestoneNotes = options.milestoneNotes
+    ? Prisma.sql`(
+        SELECT coalesce(jsonb_agg(
+          to_jsonb(n) || jsonb_build_object('author', (
+            SELECT jsonb_build_object('id', u.id, 'name', u.name) FROM "User" u WHERE u.id = n."authorId"
+          ))
+          ORDER BY n."createdAt" DESC, n.id ASC
+        ), '[]')
+        FROM "MilestoneNote" n WHERE n."milestoneId" = m.id
+      )`
+    : Prisma.sql`'[]'::jsonb`;
 
   const rows = await db.$queryRaw<{ project: Record<string, unknown> }[]>`
     SELECT to_jsonb(p) || jsonb_build_object(
@@ -92,7 +106,8 @@ export async function readProjectDetailRow(
             'files', (
               SELECT coalesce(jsonb_agg(to_jsonb(f)), '[]')
               FROM "File" f WHERE f."milestoneId" = m.id
-            )
+            ),
+            'notes', ${milestoneNotes}
           )
           ORDER BY m."order" ASC
         ), '[]')

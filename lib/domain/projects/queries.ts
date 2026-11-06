@@ -18,6 +18,7 @@ import { serializeInvoice, serializeListInvoice } from "../invoices/serialize";
 import type { DomainPrincipal } from "../principal";
 import { bookingBilling } from "../tradies/billing-rules";
 import { readProjectDetailRow } from "./detail-read";
+import { canSeeMilestoneNotes } from "./milestone-note-rules";
 import { readProjectDocuments } from "./documents";
 
 // Every read of a project, its list, its KPIs and its lookup — one place, one
@@ -188,6 +189,15 @@ export const projectDetailInclude = {
         include: {
           author: authorSummary,
         },
+      },
+      // Staff notes, newest first. Empty for a customer: see
+      // `canSeeMilestoneNotes` and `readProjectDetailRow`.
+      notes: {
+        orderBy: [
+          { createdAt: "desc" },
+          { id: "asc" },
+        ] as Prisma.MilestoneNoteOrderByWithRelationInput[],
+        include: { author: authorSummary },
       },
       // Not a duplicate of the project's `files`: a milestone photo can carry
       // only its `milestoneId`.
@@ -535,7 +545,9 @@ export async function getProjectDetail(
   // engagement in the compliance module's own shape, and its documents. The
   // last two are dropped unless the scoped read finds the project.
   const [found, certifierEngagement, documents] = await Promise.all([
-    readProjectDetailRow(projectId, projectReadScope(principal), db),
+    readProjectDetailRow(projectId, projectReadScope(principal), db, {
+      milestoneNotes: canSeeMilestoneNotes(principal),
+    }),
     db.certifierEngagement.findUnique({
       where: { projectId },
       include: certifierEngagementInclude,

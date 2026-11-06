@@ -46,7 +46,13 @@ async function ProjectDetailContent({
     notFound();
   }
 
-  return <ProjectDetailScreen project={project} role={user!.role} />;
+  return (
+    <ProjectDetailScreen
+      project={project}
+      role={user!.role}
+      viewerId={user!.id}
+    />
+  );
 }
 
 export default function ProjectDetailPage({
