@@ -57,7 +57,6 @@ export interface HistoryItem {
   author?: {
     id: string;
     name: string;
-    email: string;
   } | null;
 }
 

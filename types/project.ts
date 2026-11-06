@@ -161,6 +161,19 @@ export interface SiteUpdateWithAuthor extends SiteUpdate {
   author: UserSummary;
 }
 
+/**
+ * A staff note on one activity. Dates arrive as `Date` from the read and as
+ * ISO strings once they have crossed to the browser, as everywhere else here.
+ */
+export interface MilestoneNoteItem {
+  id: string;
+  milestoneId: string;
+  body: string;
+  createdAt: Date | string;
+  authorId: string | null;
+  author: UserSummary | null;
+}
+
 export interface SiteUpdateWithAuthorAndMilestone extends SiteUpdateWithAuthor {
   milestone: SafeMilestone;
 }
@@ -275,6 +288,8 @@ export type MilestoneUpdateResult = SafeMilestone & {
 export interface MilestoneWithFilesTradiesUpdates extends SafeMilestone {
   files: ProjectFile[];
   siteUpdates: SiteUpdateWithAuthor[];
+  /** Staff notes, newest first. Always empty on a customer's payload. */
+  notes: MilestoneNoteItem[];
 }
 
 export interface ProjectWithStats extends SafeProject {

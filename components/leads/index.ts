@@ -12,7 +12,6 @@ export type {
 export {
   fetchLeads,
   fetchLead,
-  fetchLeadsStats,
   createLead,
   updateLead,
   deleteLead,

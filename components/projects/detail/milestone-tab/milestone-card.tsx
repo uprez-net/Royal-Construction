@@ -38,7 +38,10 @@ import {
 import { currency, formatStatus } from "@/utils/formatters";
 import { MilestoneStatus } from "@prisma/client";
 
+import type { UserPrincipal } from "@/lib/domain/principal";
+
 import { MilestoneActionGroup } from "./milestone-action-button";
+import { MilestoneNotes } from "./milestone-notes";
 import { missingMilestoneTrades } from "@/lib/domain/projects/tradie-dependencies";
 import { milestoneEndDate } from "@/lib/domain/projects/milestone-schedule";
 import { bookingTrade } from "@/lib/domain/tradies/request-rules";
@@ -154,6 +157,7 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
  */
 export function MilestoneCard({
   isAdmin,
+  notesViewer,
   isActiveStage,
   milestone,
   project,
@@ -168,6 +172,8 @@ export function MilestoneCard({
   onCreateVariation,
 }: {
   isAdmin: boolean;
+  /** Who is reading staff notes; null hides them (a customer). */
+  notesViewer: UserPrincipal | null;
   isActiveStage: boolean;
   milestone: UIMilestone;
   project: ProjectDetail;
@@ -427,6 +433,14 @@ export function MilestoneCard({
             </div>
           ) : null}
 
+          {notesViewer ? (
+            <MilestoneNotes
+              projectId={project.id}
+              milestone={milestone}
+              viewer={notesViewer}
+            />
+          ) : null}
+
           {hasChildren ? (
             <CollapsibleTrigger asChild>
               <button
@@ -474,6 +488,7 @@ export function MilestoneCard({
                 <MilestoneCard
                   key={child.id}
                   isAdmin={isAdmin}
+                  notesViewer={notesViewer}
                   isActiveStage={isActiveStage}
                   milestone={child}
                   project={project}

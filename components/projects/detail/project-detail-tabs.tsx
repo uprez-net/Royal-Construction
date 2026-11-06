@@ -20,6 +20,8 @@ import {
   type VisibleProjectDetailTabKey,
 } from "./project-tab-navigation";
 import { Role } from "@prisma/client";
+import type { UserPrincipal } from "@/lib/domain/principal";
+import { canSeeMilestoneNotes } from "@/lib/domain/projects/milestone-note-rules";
 import { UploadHintScope } from "@/components/common/upload-hints";
 import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 
@@ -106,11 +108,19 @@ const TAB_UPLOAD_HINTS: Record<
 export function ProjectDetailTabs({
   project,
   role,
+  viewerId,
 }: {
   project: ProjectDetail;
   role: Role;
+  viewerId: string;
 }) {
   const isAdmin = role === "ADMIN";
+  // The viewer as the note rules see them, or null for an account that may
+  // not see staff notes at all (a customer).
+  const notesViewer = useMemo<UserPrincipal | null>(() => {
+    const principal: UserPrincipal = { kind: "user", userId: viewerId, role };
+    return canSeeMilestoneNotes(principal) ? principal : null;
+  }, [role, viewerId]);
   const dispatch = useAppDispatch();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -188,7 +198,11 @@ export function ProjectDetailTabs({
             <ProjectOverviewTab project={project} isAdmin={isAdmin} />
           ) : null}
           {activeTab === "milestones" ? (
-            <ProjectMilestonesTab project={project} isAdmin={isAdmin} />
+            <ProjectMilestonesTab
+              project={project}
+              isAdmin={isAdmin}
+              notesViewer={notesViewer}
+            />
           ) : null}
           {activeTab === "payments" && isAdmin ? (
             <ProjectPaymentsTab project={project} />

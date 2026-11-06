@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import { LeadDetailScreen } from "@/components/leads/detail/lead-detail-screen";
-import { findLeadById } from "@/lib/data/leads";
+import { getLeadForPage } from "@/lib/data/leads";
 
 import LeadDetailLoading from "./loading";
 
@@ -21,7 +21,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const leadId = parseLeadId(id);
-  const lead = leadId === null ? null : await findLeadById(leadId);
+  const lead = leadId === null ? null : await getLeadForPage(leadId);
 
   if (lead) {
     return {
@@ -48,7 +48,7 @@ async function LeadDetailContent({
     notFound();
   }
 
-  const lead = await findLeadById(leadId);
+  const lead = await getLeadForPage(leadId);
 
   if (!lead) {
     notFound();

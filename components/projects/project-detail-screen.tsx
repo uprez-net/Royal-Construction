@@ -29,9 +29,12 @@ type ProjectRequirementsHeader = {
 export function ProjectDetailScreen({
   project,
   role,
+  viewerId,
 }: {
   project: ProjectDetail;
   role: Role;
+  /** The signed-in user's id: whose notes they may delete. */
+  viewerId: string;
 }) {
   const dispatch = useAppDispatch();
   const activeProject = useAppSelector((state) => state.projects.activeProject);
@@ -70,7 +73,11 @@ export function ProjectDetailScreen({
         <ProjectStatCards role={role} />
         <ProjectComplianceAlert project={displayedProject} />
         <ProjectAlerts project={displayedProject} />
-        <ProjectDetailTabs project={displayedProject} role={role} />
+        <ProjectDetailTabs
+          project={displayedProject}
+          role={role}
+          viewerId={viewerId}
+        />
       </div>
     </UploadHintScope>
   );

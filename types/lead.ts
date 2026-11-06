@@ -1,13 +1,11 @@
 import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 import type { SafeForecast, SafePipelineMetrics } from "@/lib/data/leads";
 import type {
-  ChatSession,
   HistoryType as PrismaHistoryType,
   Lead as PrismaLead,
   LeadHistory as PrismaLeadHistory,
   LeadStage as PrismaLeadStage,
   LeadEmails,
-  User,
   File,
 } from "@prisma/client";
 import type { HistoryItem, Lead as UiLead, LeadStage } from "@/lib/leads/types";
@@ -98,7 +96,7 @@ export function toTimeOnly(date: Date | null): string | null {
 }
 
 export function mapHistory(
-  history: PrismaLeadHistory & { author: User | null },
+  history: PrismaLeadHistory & { author: { id: string; name: string } | null },
 ): HistoryItem {
   return {
     date: toDateOnly(history.actionDate) ?? "",
@@ -107,19 +105,18 @@ export function mapHistory(
     detail: history.detail,
     type: historyTypeMap[history.type],
     author: history.author
-      ? {
-          id: history.author.id,
-          name: history.author.name,
-          email: history.author.email,
-        }
+      ? { id: history.author.id, name: history.author.name }
       : null,
   };
 }
 
 export function mapLead(
   lead: PrismaLead & {
-    history: (PrismaLeadHistory & { author: User | null })[];
-    chatSessions: ChatSession[];
+    history: (PrismaLeadHistory & {
+      author: { id: string; name: string } | null;
+    })[];
+    /** Only whether there is one: `creatingOffer`. */
+    chatSessions: { id: string }[];
     assignedUser?: { id: string; name: string; email: string } | null;
     /**
      * The one task that decides this lead's follow-up date.
@@ -146,7 +143,18 @@ export function mapLead(
       resolvedAt: Date | null;
     }>;
     emails: LeadEmails[];
-    files: File[];
+    files: Pick<
+      File,
+      | "id"
+      | "filename"
+      | "filesize"
+      | "url"
+      | "fileType"
+      | "createdAt"
+      | "origin"
+      | "tags"
+      | "projectId"
+    >[];
   },
 ): UiLead {
   const assignedUserFromRelation = lead.assignedUser ?? null;

@@ -21,6 +21,7 @@ import {
   type MilestoneUpdateResult,
   type BudgetSummary,
   TradieScheduleWithTradieAndMilestone,
+  type MilestoneNoteItem,
 } from "@/types/project";
 import { reviveMilestoneDates } from "@/lib/projects/milestone-dates";
 import { reviveComplianceEngagementDates } from "@/lib/domain/compliance/engagement-dates";
@@ -1600,6 +1601,40 @@ const projectsSlice = createSlice({
     syncProjectFromDetail(state, action: PayloadAction<ProjectDetail>) {
       syncProjectState(state, action.payload);
     },
+    /** A note the server saved; newest first, as the read returns them. */
+    milestoneNoteAdded(
+      state,
+      action: PayloadAction<{ projectId: string; note: MilestoneNoteItem }>,
+    ) {
+      const { projectId, note } = action.payload;
+      if (state.activeProject?.id !== projectId) return;
+      const milestone = state.activeProject.milestones.find(
+        (row) => row.id === note.milestoneId,
+      );
+      if (!milestone) return;
+      milestone.notes = [
+        note,
+        ...(milestone.notes ?? []).filter((row) => row.id !== note.id),
+      ];
+    },
+    milestoneNoteRemoved(
+      state,
+      action: PayloadAction<{
+        projectId: string;
+        milestoneId: string;
+        noteId: string;
+      }>,
+    ) {
+      const { projectId, milestoneId, noteId } = action.payload;
+      if (state.activeProject?.id !== projectId) return;
+      const milestone = state.activeProject.milestones.find(
+        (row) => row.id === milestoneId,
+      );
+      if (!milestone) return;
+      milestone.notes = (milestone.notes ?? []).filter(
+        (row) => row.id !== noteId,
+      );
+    },
     appendFileToProject(
       state,
       action: PayloadAction<{ projectId: string; file: ProjectFiles }>,
@@ -2147,6 +2182,8 @@ export const {
   appendFileToProject,
   removeFileFromProject,
   updateProjectTradieSchedule,
+  milestoneNoteAdded,
+  milestoneNoteRemoved,
 } = projectsSlice.actions;
 
 export const selectProjectsState = (state: RootState) => state.projects;
