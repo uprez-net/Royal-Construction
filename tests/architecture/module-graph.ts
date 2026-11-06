@@ -49,8 +49,22 @@ export function collectSourceFiles(
   return found;
 }
 
+// Parsed once per file per test process. The architecture tests walk the graph
+// once per route or adapter, and re-parsing every reachable file on every walk
+// was most of their run time. Source does not change while the suite runs.
+const specifierCache = new Map<string, string[]>();
+const resolveCache = new Map<string, string | null>();
+
 /** Module specifiers this file imports for their values. */
 export function valueSpecifiers(file: string): string[] {
+  const cached = specifierCache.get(file);
+  if (cached) return cached;
+  const specifiers = parseValueSpecifiers(file);
+  specifierCache.set(file, specifiers);
+  return specifiers;
+}
+
+function parseValueSpecifiers(file: string): string[] {
   const extension = extname(file);
   const scriptKind =
     extension === ".tsx"
@@ -125,11 +139,17 @@ export function resolveAuthored(
   const base = specifier.startsWith("@/")
     ? join(ROOT, specifier.slice(2))
     : resolve(dirname(importer), specifier);
+  if (resolveCache.has(base)) return resolveCache.get(base) ?? null;
+  let found: string | null = null;
   for (const suffix of MODULE_SUFFIXES) {
     const candidate = base + suffix;
-    if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+    if (existsSync(candidate) && statSync(candidate).isFile()) {
+      found = candidate;
+      break;
+    }
   }
-  return null;
+  resolveCache.set(base, found);
+  return found;
 }
 
 export type Violation = {

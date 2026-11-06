@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { cacheTag, cacheLife } from "next/cache";
 
 import prisma from "@/lib/prisma";
@@ -104,6 +105,17 @@ export async function getProjectById(
     throw error;
   }
 }
+
+/**
+ * `getProjectById`, once per request. The project page asks for the project
+ * twice, for its metadata and for its body, and both share this one read.
+ *
+ * React's `cache` lasts for one server render, so it never carries a project
+ * from one request (or one caller) into the next. The route handlers that
+ * re-read a project after writing it call `getProjectById` directly, so they
+ * always see their own write.
+ */
+export const getProjectForPage = cache(getProjectById);
 
 export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
   try {
