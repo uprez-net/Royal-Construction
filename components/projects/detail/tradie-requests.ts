@@ -6,6 +6,7 @@ import {
   activityAcceptsTrade,
   bookingTrade,
   isRequestableMilestone,
+  isRequestAttachable,
   sameTrade,
 } from "@/lib/domain/tradies/request-rules";
 import {
@@ -47,6 +48,31 @@ export type RequestMilestone = Pick<
 >;
 
 const INACTIVE = new Set<TradieScheduleStatus>(INACTIVE_SCHEDULE_STATUSES);
+
+/**
+ * The project's files a request email can carry, for the wizard's picker:
+ * newest first, each labelled by the activity it was filed under.
+ */
+export function requestAttachmentOptions(
+  project: Pick<ProjectDetail, "files" | "milestones">,
+): { fileId: string; filename: string; documentLabel: string }[] {
+  const milestoneName = new Map(
+    project.milestones.map((milestone) => [milestone.id, milestone.name]),
+  );
+  return project.files
+    .filter(isRequestAttachable)
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )
+    .map((file) => ({
+      documentLabel:
+        (file.milestoneId && milestoneName.get(file.milestoneId))
+        || "Project file",
+      fileId: file.id,
+      filename: file.filename,
+    }));
+}
 
 /** Holds the tradie's time: the same test the duplicate-booking rule applies. */
 export function isActiveSchedule(status: TradieScheduleStatus): boolean {

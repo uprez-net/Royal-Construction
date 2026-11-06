@@ -1,4 +1,4 @@
-import { createGraphContext } from "@/lib/graph/client";
+import { createGraphContext, type EmailAttachment } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
 
 const globalForGraph = globalThis as typeof globalThis & {
@@ -18,15 +18,15 @@ interface EmailInput {
   to: string | string[];
   cc?: string | string[];
   bcc?: string | string[];
-  attachments?: { name: string; contentBytes: string }[];
+  attachments?: EmailAttachment[];
 }
 /**
  * Wrapper function to send an email using Microsoft Graph API. It ensures that the 'to' field is properly handled, allowing for both string and array inputs, and validates that the 'to' field is not empty.
  * @param email - An object containing the email details, including subject, body, recipients (`to`, `cc`, `bcc`), and `attachments`. The `to` field can be a single string or an array of strings. If an array is provided, the first email will be used as the primary recipient, and the rest will be added to the CC list.
  * @throws Will throw an error if the 'to' field is an empty array or contains empty strings.
  *
- *
- * CC, BCC and attachments are not operational in this implementation, but the function is structured to allow for future enhancements to include these features.
+ * Attachments are handed to Graph as they are; it sends a large set through an
+ * upload session and refuses one over the mailbox's send limit.
  */
 export async function sendEmail(email: EmailInput) {
   const graphClient = await graphClientPromise;
@@ -56,5 +56,6 @@ export async function sendEmail(email: EmailInput) {
     to: toList,
     cc: ccList,
     bcc: bccList,
+    attachments: email.attachments,
   });
 }

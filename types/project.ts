@@ -26,6 +26,8 @@ import {
 } from "@prisma/client";
 import { ProjectRequirementsPayload } from "./project-flow";
 import type { CertifierEngagementDetail } from "./compliance";
+import type { BookingBillingState } from "@/lib/domain/tradies/billing-rules";
+import type { ProjectDocument } from "@/lib/domain/projects/document-tags";
 
 export interface SafeProject extends Omit<
   Project,
@@ -132,8 +134,21 @@ export interface SafeTradie extends Omit<Tradie, "lastQuotedPrice" | "rating"> {
   rating?: string;
 }
 
-export interface SafeVariation extends Omit<Variation, "cost"> {
+export interface SafeVariation extends Omit<
+  Variation,
+  | "cost"
+  | "invoiceAmountPaid"
+  | "invoiceTax"
+  | "invoiceTotal"
+  | "newPrice"
+  | "previousPrice"
+> {
   cost: string;
+  invoiceAmountPaid: string | null;
+  invoiceTax: string | null;
+  invoiceTotal: string | null;
+  newPrice: string | null;
+  previousPrice: string | null;
 }
 
 export interface SiteUpdateWithAuthor extends SiteUpdate {
@@ -183,6 +198,11 @@ export type TradieQuoteSummary = {
 
 export interface TradieScheduleWithTradieAndMilestone extends TradieScheduleWithTradie {
   milestone?: SafeMilestone;
+  /**
+   * Where the booking is up to with its invoices. Null when it is neither
+   * committed nor billed; absent on a row the store built itself.
+   */
+  billing?: BookingBillingState | null;
   requestRecipient?: TradieRequestDeliverySummary | null;
   quote?: TradieQuoteSummary | null;
 }
@@ -276,6 +296,11 @@ export interface ProjectDetail extends SafeProject {
   variations: SafeVariation[];
   tradieSchedules: TradieScheduleWithTradieAndMilestone[];
   files: ProjectFile[];
+  /**
+   * Every document the project holds, from every place one can be put, with
+   * its tags. The Documents tab's rows; `files` stays the project's own uploads.
+   */
+  documents: ProjectDocument[];
   materials: SafeMaterial[];
   /** Null until someone presses "Connect with Certifier". */
   certifierEngagement: CertifierEngagementDetail | null;
@@ -546,13 +571,6 @@ export type CreateProjectRequest = {
   estimatedEndDate?: string | null;
   notes?: string;
   quoteFile?: File | null;
-};
-
-export type CreateVariationRequest = {
-  projectId: string;
-  description: string;
-  cost: number;
-  requestedDate?: string;
 };
 
 export type AddProjectUpdateRequest = {

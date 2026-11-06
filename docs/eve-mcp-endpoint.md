@@ -151,7 +151,8 @@ the supported areas are:
 - **Projects** — search, read a project with its milestones, schedules, site
   updates, files and customer, create and update milestones, read and update
   project requirements, list assignable site managers and reassign a
-  project's site manager (administrators only).
+  project's site manager (administrators only), read a project's profit and
+  loss and reprice one activity in it (administrators only).
 - **Compliance** — start an engagement, read it, set a document required,
   resolve a document, prepare and send outreach and follow-ups.
 - **Tradies** — search and read the directory, create and update a tradie,

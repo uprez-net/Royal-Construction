@@ -3,9 +3,11 @@ import { readFile } from "node:fs/promises";
 import { test } from "vitest";
 import {
   assignSiteManagerInputSchema,
+  getProjectFinancialsInputSchema,
   getProjectRequirementsInputSchema,
   listSiteManagersInputSchema,
   prepareComplianceOutreachInputSchema,
+  setActivityPriceInputSchema,
   updateProjectRequirementsInputSchema,
 } from "@/agent/lib/project-contracts";
 
@@ -112,4 +114,59 @@ test("site manager reassignment takes an id from the lookup and goes through the
     "utf8",
   );
   assert.match(tool, /approval: ownerOnlyApproval\(\)/);
+});
+
+test("the profit-and-loss tool reads the Financials tab's report, not a copy of it", async () => {
+  assert.equal(
+    getProjectFinancialsInputSchema.safeParse({ projectId }).success,
+    true,
+  );
+  assert.equal(
+    getProjectFinancialsInputSchema.safeParse({ projectId: "job X" }).success,
+    false,
+  );
+  const source = await readFile("agent/lib/project-operations.ts", "utf8");
+  // One margin, shared with the screen: the agent formats it and decides
+  // nothing, so the office is never told two different figures.
+  assert.match(source, /getProjectFinancials\(/);
+  assert.doesNotMatch(source, /prisma\.tradieInvoice|agentDb\.tradieInvoice/);
+  const tool = await readFile(
+    "agent/subagents/project-operations/tools/get_project_financials.ts",
+    "utf8",
+  );
+  assert.match(tool, /getAuthorizedProjectFinancials/);
+});
+
+test("repricing an activity is the Financials tab's command, behind owner approval", async () => {
+  const milestoneId = "123e4567-e89b-42d3-a456-426614174001";
+  assert.equal(
+    setActivityPriceInputSchema.safeParse({
+      expectedPrice: 5000,
+      milestoneId,
+      price: 6500.5,
+    }).success,
+    true,
+  );
+  for (const bad of [
+    { expectedPrice: 5000, milestoneId, price: -1 },
+    { expectedPrice: 5000, milestoneId, price: 10.005 },
+    { milestoneId, price: 6500 },
+  ]) {
+    assert.equal(setActivityPriceInputSchema.safeParse(bad).success, false);
+  }
+
+  const source = await readFile("agent/lib/project-operations.ts", "utf8");
+  // One rule, shared with the inline edit: no budget written from here.
+  assert.match(source, /setMilestonePrice\(/);
+  assert.doesNotMatch(source, /milestone\.update(Many)?\(\{[^}]*budget/);
+  // The read tool hands back what the write tool needs.
+  assert.match(source, /milestoneId: activity\.id/);
+  assert.match(source, /price: activity\.priceCents \/ 100/);
+
+  const tool = await readFile(
+    "agent/subagents/project-operations/tools/set_activity_price.ts",
+    "utf8",
+  );
+  assert.match(tool, /approval: ownerOnlyApproval\(\)/);
+  assert.match(tool, /setAuthorizedActivityPrice/);
 });

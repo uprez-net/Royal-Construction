@@ -120,6 +120,8 @@ export async function createHandoffFile(
     readonly fileName: string;
     readonly leadId: number;
     readonly url: string;
+    /** Which executed document it is, for its tags. */
+    readonly kind?: "tender" | "contract";
   },
   db: DomainDb,
 ) {
@@ -137,6 +139,13 @@ export async function createHandoffFile(
       leadId: input.leadId,
       uploadedBy: actorId,
       url: input.url,
+      tags: [
+        "Offer",
+        "Signed",
+        ...(input.kind === "tender" ? ["Tender"] : []),
+        ...(input.kind === "contract" ? ["Contract"] : []),
+      ],
+      origin: "Offer › Project handoff",
     },
   });
 }

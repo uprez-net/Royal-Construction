@@ -180,9 +180,9 @@ async function readAttachments(
 
   if (report.names.length > 0) {
     console.log(
-      `  Certifier attachments on ${messageId}: ${report.files.length} read, ` +
-        `${report.skipped.length} skipped` +
-        (report.skipped.length > 0
+      `  Certifier attachments on ${messageId}: ${report.files.length} read, `
+        + `${report.skipped.length} skipped`
+        + (report.skipped.length > 0
           ? ` — ${report.skipped.map((item) => `${item.name}: ${item.reason}`).join("; ")}`
           : ""),
     );
@@ -376,6 +376,8 @@ async function archiveAttachments(
           filename: file.name,
           fileType: file.mediaType,
           filesize: data.byteLength,
+          tags: ["Compliance", "Received by email", "Certifier reply"],
+          origin: "Email › Certifier reply",
         },
       });
 
@@ -435,8 +437,8 @@ async function classifyStoredDocuments(
     try {
       const result = await classifyDocumentAtUrl(item.url, item.name);
       if (
-        result.documentType === ComplianceDocumentType.UNKNOWN ||
-        !INBOUND_CLASSIFIABLE.has(result.documentType)
+        result.documentType === ComplianceDocumentType.UNKNOWN
+        || !INBOUND_CLASSIFIABLE.has(result.documentType)
       ) {
         console.log(`  "${item.name}" left unclassified: ${result.message}`);
         continue;
@@ -468,8 +470,8 @@ async function classifyStoredDocuments(
       // be extracted over the document everything else already points at. A
       // certifier who attaches two checklists is answered with the first.
       if (
-        result.documentType === ComplianceDocumentType.CHECKLIST &&
-        !checklistDocumentId
+        result.documentType === ComplianceDocumentType.CHECKLIST
+        && !checklistDocumentId
       ) {
         checklistDocumentId = placed.documentId;
       }
@@ -562,8 +564,8 @@ async function recordCertifierVerdicts(
   });
 
   if (
-    correspondence.requested.length === 0 &&
-    correspondence.rejected.length === 0
+    correspondence.requested.length === 0
+    && correspondence.rejected.length === 0
   ) {
     return { created: 0, rejected: 0 };
   }

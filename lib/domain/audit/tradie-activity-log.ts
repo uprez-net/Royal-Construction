@@ -31,6 +31,11 @@ type Write<T extends TradieActivityLogType> = {
   readonly data: TradieActivityLogDataMap[T];
   /** Who did it; null for a cron with no principal. */
   readonly principal: DomainPrincipal | null;
+  /**
+   * When it happened, where that is not now: an email copied from Sent Items
+   * a day later is placed at the moment it was sent.
+   */
+  readonly at?: Date;
 };
 
 function render<T extends TradieActivityLogType>(write: Write<T>) {
@@ -54,7 +59,7 @@ async function insert<T extends TradieActivityLogType>(
   await db.tradieActivityLog.create({
     data: {
       authorId: write.principal ? attributionUserId(write.principal) : null,
-      createdAt: new Date(entry.timestamp),
+      createdAt: write.at ?? new Date(entry.timestamp),
       id: entry.id,
       message: entry.message,
       milestoneId: entry.milestoneId ?? null,

@@ -187,6 +187,7 @@ export async function sendTradieRequestsForProject(
           milestoneId: activity.milestoneId,
           scheduledDate: new Date(`${activity.scheduledDate}T00:00:00.000Z`),
         })),
+        attachmentFileIds: input.attachmentFileIds,
         kind: input.kind,
         note: input.note,
         projectId: input.projectId,

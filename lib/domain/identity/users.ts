@@ -60,16 +60,18 @@ export async function findAdminUserIds(db: DomainDb): Promise<string[]> {
 }
 
 /**
- * Clerk ids for a set of application user ids, for notification dispatch.
+ * Clerk id and email for a set of application user ids, for notification
+ * dispatch: the id is the Novu subscriber, the email what production's muted
+ * list is matched on.
  *
  * Blank and duplicate ids are dropped before the query rather than sent, and
  * an empty list short-circuits: `{ in: [] }` is a query that reads every row
  * in some engines and none in others, and neither is what the caller meant.
  */
-export async function resolveClerkIds(
+export async function resolveNotificationRecipients(
   userIds: readonly (string | null | undefined)[],
   db: DomainDb,
-): Promise<string[]> {
+): Promise<{ clerkId: string; email: string }[]> {
   const ids = [
     ...new Set(
       userIds.map((id) => id?.trim()).filter((id): id is string => Boolean(id)),
@@ -77,11 +79,10 @@ export async function resolveClerkIds(
   ];
   if (ids.length === 0) return [];
 
-  const users = await db.user.findMany({
-    select: { clerkId: true },
+  return db.user.findMany({
+    select: { clerkId: true, email: true },
     where: { id: { in: ids } },
   });
-  return users.map((user) => user.clerkId);
 }
 
 /**
@@ -258,8 +259,9 @@ export async function findPhonesByClerkIds(
   return Object.fromEntries(users.map((user) => [user.clerkId, user.phone]));
 }
 
-/** Every application user's Clerk id, for a broadcast notification. */
-export async function listAllClerkIds(db: DomainDb): Promise<string[]> {
-  const users = await db.user.findMany({ select: { clerkId: true } });
-  return users.map((user) => user.clerkId);
+/** Every application user's Clerk id and email, for a broadcast. */
+export async function listAllNotificationRecipients(
+  db: DomainDb,
+): Promise<{ clerkId: string; email: string }[]> {
+  return db.user.findMany({ select: { clerkId: true, email: true } });
 }

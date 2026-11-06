@@ -16,6 +16,8 @@ import type { DomainDb } from "../db";
 import { DomainNotFoundError } from "../errors";
 import { serializeInvoice, serializeListInvoice } from "../invoices/serialize";
 import type { DomainPrincipal } from "../principal";
+import { bookingBilling } from "../tradies/billing-rules";
+import { readProjectDocuments } from "./documents";
 
 // Every read of a project, its list, its KPIs and its lookup — one place, one
 // scope (issue #301, phase 4).
@@ -194,6 +196,9 @@ const projectDetailInclude = {
           },
         },
       },
+      // Status and amount only: enough for the booking's billing state on the
+      // Tradies tab, without putting the invoices themselves on the page.
+      invoices: { select: { status: true, subTotal: true } },
       quote: {
         select: {
           id: true,
@@ -494,8 +499,11 @@ export async function getProjectDetail(
 
   if (!project) return null;
 
+  const documents = await readProjectDocuments(project, db);
+
   return {
     ...project,
+    documents,
     lead: {
       id: project.Lead.id,
       email: project.Lead.email,
@@ -536,25 +544,36 @@ export async function getProjectDetail(
         },
       })),
     })),
+    // Every Decimal as a string: the detail crosses into client components,
+    // which cannot receive a Decimal.
     variations: project.variations.map((variation) => ({
       ...variation,
       cost: variation.cost.toString(),
+      invoiceAmountPaid: variation.invoiceAmountPaid?.toString() ?? null,
+      invoiceTax: variation.invoiceTax?.toString() ?? null,
+      invoiceTotal: variation.invoiceTotal?.toString() ?? null,
+      newPrice: variation.newPrice?.toString() ?? null,
+      previousPrice: variation.previousPrice?.toString() ?? null,
     })),
-    tradieSchedules: project.tradieSchedules.map((schedule) => ({
-      ...schedule,
-      tradie: {
-        ...schedule.tradie,
-        lastQuotedPrice: schedule.tradie.lastQuotedPrice?.toString(),
-        rating: schedule.tradie.rating?.toString(),
-      },
-      milestone: schedule.milestone
-        ? {
-            ...schedule.milestone,
-            budget: schedule.milestone.budget.toString(),
-            spend: schedule.milestone.spend?.toString(),
-          }
-        : undefined,
-    })),
+    tradieSchedules: project.tradieSchedules.map(
+      ({ invoices, ...schedule }) => ({
+        ...schedule,
+        // The same rule the Financials tab and the record command use.
+        billing: bookingBilling({ ...schedule, invoices }),
+        tradie: {
+          ...schedule.tradie,
+          lastQuotedPrice: schedule.tradie.lastQuotedPrice?.toString(),
+          rating: schedule.tradie.rating?.toString(),
+        },
+        milestone: schedule.milestone
+          ? {
+              ...schedule.milestone,
+              budget: schedule.milestone.budget.toString(),
+              spend: schedule.milestone.spend?.toString(),
+            }
+          : undefined,
+      }),
+    ),
   };
 }
 

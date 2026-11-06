@@ -45,6 +45,15 @@ export type ExtraAttachment = {
 };
 
 /**
+ * What the picker needs off a file already on the job. A compliance vault row
+ * is one; so is a plain project file, offered by the tradie request wizard.
+ */
+export type AttachableFileOption = Pick<
+  VaultAttachmentOption,
+  "fileId" | "filename" | "documentLabel"
+>;
+
+/**
  * "Attach something else", on every modal that sends a party a message.
  *
  * Each of those modals already lists what the message will carry, resolved from
@@ -105,13 +114,16 @@ export function ExtraAttachmentsField({
    * not own, so it says, and the caller gates.
    */
   onUploadingChange,
+  uploadHints,
 }: {
+  /** Where the field sits, for the uploaded files' tags and origin. */
+  uploadHints?: { trail?: readonly string[]; tags?: readonly string[] };
   projectId: string;
   value: ExtraAttachment[];
   onChange: (next: ExtraAttachment[]) => void;
   disabled?: boolean;
   label?: string;
-  vaultOptions?: readonly VaultAttachmentOption[];
+  vaultOptions?: readonly AttachableFileOption[];
   hint?: string;
   onUploadingChange?: (uploading: boolean) => void;
 }) {
@@ -166,7 +178,7 @@ export function ExtraAttachmentsField({
     [value],
   );
 
-  const toggleVaultFile = (option: VaultAttachmentOption) => {
+  const toggleVaultFile = (option: AttachableFileOption) => {
     if (picked.has(option.fileId)) {
       onChange(
         value.filter((attachment) => attachment.fileId !== option.fileId),
@@ -196,7 +208,11 @@ export function ExtraAttachmentsField({
     // uploaded beside it, which the sender would then have to find again.
     const results = await Promise.allSettled(
       chosen.map((file) =>
-        uploadFile(file, `extra-attachment:${file.name}:${file.size}`),
+        uploadFile(file, `extra-attachment:${file.name}:${file.size}`, {
+          rootTrail: true,
+          trail: [...(uploadHints?.trail ?? ["Project"]), "Email attachments"],
+          tags: [...(uploadHints?.tags ?? []), "Email attachment"],
+        }),
       ),
     );
 

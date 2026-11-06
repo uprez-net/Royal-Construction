@@ -10,6 +10,7 @@ import {
   ChevronDown,
   CircleAlert,
   DollarSign,
+  FilePlus2,
   Users,
 } from "lucide-react";
 
@@ -164,6 +165,7 @@ export function MilestoneCard({
   onStartMilestone,
   onSendReminder,
   onOpenViewPicture,
+  onCreateVariation,
 }: {
   isAdmin: boolean;
   isActiveStage: boolean;
@@ -180,6 +182,8 @@ export function MilestoneCard({
   onMarkasNotRequired: (id: string) => void;
   onSendReminder: (tradieReminder: TradieScheduleListItem) => void;
   onOpenViewPicture: (imageUrls: string[], selectedIndex: number) => void;
+  /** Raise a variation on this activity. Admin only, so absent otherwise. */
+  onCreateVariation?: (id: string) => void;
 }) {
   const children = milestone.childrenMilestones;
   const hasChildren = children.length > 0;
@@ -446,6 +450,17 @@ export function MilestoneCard({
             onStartMilestone={onStartMilestone}
             onMarkasNotRequired={onMarkasNotRequired}
           />
+          {onCreateVariation ? (
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label={`Create a variation for ${milestone.name}`}
+              title="Create variation"
+              onClick={() => onCreateVariation(milestone.id)}
+            >
+              <FilePlus2 className="size-4" aria-hidden="true" />
+            </Button>
+          ) : null}
         </div>
 
         {hasChildren ? (
@@ -466,6 +481,7 @@ export function MilestoneCard({
                   onSendReminder={onSendReminder}
                   onOpenViewPicture={onOpenViewPicture}
                   onMarkasNotRequired={onMarkasNotRequired}
+                  onCreateVariation={onCreateVariation}
                 />
               ))}
             </ul>

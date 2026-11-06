@@ -46,6 +46,10 @@ export const getProjectRequirementsInputSchema = z.object({
   projectId: projectIdSchema,
 });
 
+export const getProjectFinancialsInputSchema = z.object({
+  projectId: projectIdSchema,
+});
+
 export const updateProjectRequirementsInputSchema = z.object({
   projectId: projectIdSchema,
   expectedUpdatedAt: z.iso.datetime(),
@@ -163,6 +167,26 @@ export const createMilestoneInputSchema = z.object({
   }),
   parentId: milestoneIdSchema.optional(),
   projectStage: z.enum(projectStages),
+});
+
+/**
+ * Reprice one activity. Both figures are dollars ex GST, before variations —
+ * the `price` get_project_financials returns for the activity — and the
+ * expected one is the figure just read, so a price that moved in between is
+ * refused instead of overwritten.
+ */
+export const setActivityPriceInputSchema = z.object({
+  milestoneId: milestoneIdSchema,
+  price: z.number().finite().nonnegative().refine(hasAtMostTwoDecimalPlaces, {
+    message: "Price must have at most two decimal places.",
+  }),
+  expectedPrice: z
+    .number()
+    .finite()
+    .nonnegative()
+    .refine(hasAtMostTwoDecimalPlaces, {
+      message: "Expected price must have at most two decimal places.",
+    }),
 });
 
 export const updateMilestoneInputSchema = z.object({

@@ -124,6 +124,8 @@ export const sendTradieRequestsSchema = z.object({
     .record(z.string().min(1).max(120), z.string().max(4000))
     .refine((copy) => Object.keys(copy).length <= 400, "Too many edits.")
     .optional(),
+  /** Project files to attach, in the order picked; the domain checks them. */
+  attachmentFileIds: z.array(z.string().trim().min(1)).max(50).default([]),
 });
 
 export type SendTradieRequestsFormInput = z.input<

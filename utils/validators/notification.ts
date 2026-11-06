@@ -80,6 +80,42 @@ export const notificationSchemas = {
     reason: z.string(),
   }),
 
+  tradieInvoiceNeedsAllocation: z.object({
+    projectId: z.string(),
+    projectName: z.string(),
+    tradieName: z.string(),
+    /** Formatted ex GST, e.g. "$4,500.00". */
+    amount: z.string(),
+    invoiceNumber: z.string().nullish(),
+  }),
+
+  tradieInvoiceDuplicateNumber: z.object({
+    projectId: z.string(),
+    tradieName: z.string(),
+    amount: z.string(),
+    invoiceNumber: z.string(),
+  }),
+
+  tradieInvoiceEmailed: z.object({
+    projectId: z.string(),
+    projectName: z.string(),
+    tradieName: z.string(),
+    count: z.number().int().min(1),
+  }),
+
+  tradieInvoiceEmailUnmatched: z.object({
+    tradieId: z.string(),
+    tradieName: z.string(),
+    subject: z.string(),
+  }),
+
+  tradieInvoiceUnmatched: z.object({
+    tradieId: z.string(),
+    tradieName: z.string(),
+    amount: z.string(),
+    invoiceNumber: z.string().nullish(),
+  }),
+
   tradieScheduleUpdated: z.object({
     projectId: z.string(),
     projectName: z.string(),

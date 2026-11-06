@@ -286,7 +286,11 @@ export function ConnectPartyModal({
     setIsAttachingDeed(true);
 
     try {
-      const uploaded = await uploadFile(file, deedScope);
+      const uploaded = await uploadFile(file, deedScope, {
+        rootTrail: true,
+        trail: ["Project", "Compliance", `Connect with ${label}`, "Land deed"],
+        tags: ["Compliance", label, "Land deed"],
+      });
       // The same settle the tab's own uploads wait out: the File row is written
       // by /api/upload and is not always visible to the next query immediately.
       await new Promise((resolve) => setTimeout(resolve, 850));
@@ -562,6 +566,10 @@ export function ConnectPartyModal({
               </div>
 
               <ExtraAttachmentsField
+                uploadHints={{
+                  trail: ["Project", "Compliance", `Connect with ${label}`],
+                  tags: ["Compliance", label],
+                }}
                 onUploadingChange={setIsAttachingExtras}
                 projectId={projectId}
                 value={extras}

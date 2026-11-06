@@ -44,7 +44,10 @@ import {
   activityAcceptsTrade,
   bookingTrade,
   isRequestableMilestone,
+  isRequestAttachable,
   MAX_REQUEST_ACTIVITIES,
+  MAX_REQUEST_ATTACHMENT_BYTES,
+  MAX_REQUEST_ATTACHMENTS,
   MAX_REQUEST_TRADIES,
   tradeList,
   tradieCoversTrade,
@@ -119,6 +122,18 @@ export type SendTradieRequestsInput = {
   readonly activities: readonly TradieRequestActivityInput[];
   readonly subject: string;
   readonly note?: string | null;
+  /**
+   * Project files every copy of the email carries, in the order picked: files
+   * already on the project, or ones uploaded to it from the wizard.
+   */
+  readonly attachmentFileIds?: readonly string[];
+};
+
+/** A file a request email carries, as the mail adapter needs it to attach. */
+export type TradieRequestAttachment = {
+  readonly filename: string;
+  readonly url: string;
+  readonly fileType: string;
 };
 
 export type TradieRequestActivity = {
@@ -148,6 +163,7 @@ export type TradieRequestMailPorts = {
     readonly cc: readonly string[];
     readonly subject: string;
     readonly html: string;
+    readonly attachments: readonly TradieRequestAttachment[];
   }) => Promise<void>;
   /** What a thrown send means: see `RequestSendFailure`. */
   readonly classifyFailure: (error: unknown) => RequestSendFailure;
@@ -178,6 +194,10 @@ export type SentTradieRequests = {
     readonly milestoneName: string | null;
   }[];
 };
+
+function megabytes(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, "");
+}
 
 function assertDistinct(ids: readonly string[], what: string): void {
   if (new Set(ids).size !== ids.length) {
@@ -233,6 +253,14 @@ export async function sendTradieRequests(
     input.activities.map((activity) => activity.milestoneId),
     "activity",
   );
+  const attachmentFileIds = [...(input.attachmentFileIds ?? [])];
+  assertDistinct(attachmentFileIds, "attachment");
+  if (attachmentFileIds.length > MAX_REQUEST_ATTACHMENTS) {
+    throw new DomainValidationError(
+      `A request can carry at most ${MAX_REQUEST_ATTACHMENTS} attachments.`,
+      "attachmentFileIds",
+    );
+  }
   for (const activity of input.activities) {
     if (!Number.isInteger(activity.durationDays) || activity.durationDays < 1) {
       throw new DomainValidationError(
@@ -265,6 +293,30 @@ export async function sendTradieRequests(
       `${unreachable.name} has no email address. Add one in the tradie directory before sending a request.`,
       "tradieIds",
     );
+  }
+
+  if (attachmentFileIds.length > 0) {
+    const files = await db.file.findMany({
+      select: { filesize: true, id: true, incidentId: true },
+      where: { id: { in: attachmentFileIds }, projectId: project.id },
+    });
+    // Every one, or the request is refused: an email that goes out short of a
+    // file the office picked reads to the tradie as the whole package.
+    if (
+      files.length !== attachmentFileIds.length
+      || !files.every(isRequestAttachable)
+    ) {
+      throw new DomainNotFoundError(
+        "One of the attachments is not a file on this project. Remove it and pick it again.",
+      );
+    }
+    const bytes = files.reduce((total, file) => total + file.filesize, 0);
+    if (bytes > MAX_REQUEST_ATTACHMENT_BYTES) {
+      throw new DomainValidationError(
+        `The attachments come to ${megabytes(bytes)} MB; one email can carry ${megabytes(MAX_REQUEST_ATTACHMENT_BYTES)} MB. Remove some, or put a link to the larger files in the note.`,
+        "attachmentFileIds",
+      );
+    }
   }
 
   const milestones = await db.milestone.findMany({
@@ -352,6 +404,7 @@ export async function sendTradieRequests(
 
     const request = await tx.tradieRequest.create({
       data: {
+        attachmentFileIds,
         createdById: attributionUserId(principal),
         kind,
         note: input.note?.trim() || null,
@@ -584,6 +637,9 @@ async function claimTradeForBooking(
 const WITHDRAWN_REQUEST_EMAIL =
   "Not sent: every booking this email asked about has since been cancelled.";
 
+const MISSING_ATTACHMENT_EMAIL =
+  "Not sent: a file attached to this email has since been deleted from the project, so it cannot go out as it was reviewed.";
+
 /**
  * Make one attempt at one tradie's request email, and record where it stands.
  *
@@ -624,7 +680,7 @@ export async function deliverTradieRequest(
       lastAttemptAt: true,
       lastError: true,
       nextAttemptAt: true,
-      request: { select: { projectId: true } },
+      request: { select: { attachmentFileIds: true, projectId: true } },
       subject: true,
       toAddress: true,
       tradie: { select: { archivedAt: true, name: true } },
@@ -709,6 +765,32 @@ export async function deliverTradieRequest(
   // through, rather than at each of those: an email about work that is no
   // longer offered must not reach the tradie, by robot or by Retry. The
   // initial send is exempt: its bookings were written in the same request.
+  //
+  // Not sending is terminal: FAILED with no next attempt, so the retry
+  // workflow stops. A person pressing Retry is told why instead.
+  const notSent = async (reason: string): Promise<TradieRequestDelivery> => {
+    if (input.trigger === "manual") throw new DomainTransitionError(reason);
+    await noteDelivery(
+      principal,
+      recipient,
+      { attempt: recipient.attempts, reason },
+      db,
+    );
+    const stopped = {
+      deliveryStatus: TradieRequestDeliveryStatus.FAILED,
+      lastError: reason,
+      nextAttemptAt: null,
+    };
+    await db.tradieRequestRecipient.updateMany({
+      data: stopped,
+      where: {
+        attempts: recipient.attempts,
+        deliveryStatus: recipient.deliveryStatus,
+        id: recipient.id,
+      },
+    });
+    return describe({ ...stopped, attempts: recipient.attempts });
+  };
   if (input.trigger !== "initial") {
     const open = await db.tradieSchedule.count({
       where: {
@@ -716,35 +798,32 @@ export async function deliverTradieRequest(
         status: { notIn: INACTIVE_SCHEDULE_STATUSES },
       },
     });
-    if (open === 0) {
-      if (input.trigger === "manual") {
-        throw new DomainTransitionError(WITHDRAWN_REQUEST_EMAIL);
-      }
-      await noteDelivery(
-        principal,
-        recipient,
-        {
-          attempt: recipient.attempts,
-          reason: WITHDRAWN_REQUEST_EMAIL,
-        },
-        db,
-      );
-      // Terminal: FAILED with no next attempt, so the retry workflow stops.
-      // No alert follows — attention skips emails on closed bookings.
-      const withdrawn = {
-        deliveryStatus: TradieRequestDeliveryStatus.FAILED,
-        lastError: WITHDRAWN_REQUEST_EMAIL,
-        nextAttemptAt: null,
-      };
-      await db.tradieRequestRecipient.updateMany({
-        data: withdrawn,
-        where: {
-          attempts: recipient.attempts,
-          deliveryStatus: recipient.deliveryStatus,
-          id: recipient.id,
-        },
+    // No alert follows — attention skips emails on closed bookings.
+    if (open === 0) return notSent(WITHDRAWN_REQUEST_EMAIL);
+  }
+
+  // Read again on every attempt, from the ids stored with the request:
+  // retrying resends what was reviewed, so a file deleted since stops the send
+  // rather than letting it go out a file short.
+  const attachmentFileIds = recipient.request.attachmentFileIds ?? [];
+  const attachments: TradieRequestAttachment[] = [];
+  if (attachmentFileIds.length > 0) {
+    const files = await db.file.findMany({
+      select: { fileType: true, filename: true, id: true, url: true },
+      where: {
+        id: { in: [...attachmentFileIds] },
+        projectId: recipient.request.projectId,
+      },
+    });
+    const byId = new Map(files.map((file) => [file.id, file]));
+    for (const id of attachmentFileIds) {
+      const file = byId.get(id);
+      if (!file) return notSent(MISSING_ATTACHMENT_EMAIL);
+      attachments.push({
+        fileType: file.fileType,
+        filename: file.filename,
+        url: file.url,
       });
-      return describe({ ...withdrawn, attempts: recipient.attempts });
     }
   }
 
@@ -782,6 +861,7 @@ export async function deliverTradieRequest(
       },
       async () => {
         await ports.send({
+          attachments,
           cc: recipient.ccAddresses,
           html: recipient.html,
           subject: recipient.subject,

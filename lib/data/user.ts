@@ -10,8 +10,8 @@ import {
   deleteUserByClerkId,
   findAdminUserIds,
   findUserByClerkId,
-  listAllClerkIds,
-  resolveClerkIds,
+  listAllNotificationRecipients,
+  resolveNotificationRecipients,
   updateUserByClerkId,
 } from "@/lib/domain/identity/users";
 
@@ -91,16 +91,16 @@ export async function getUserByClerkIdCached(clerkId: string) {
   return findUserByClerkId(clerkId, prisma);
 }
 
-/** Clerk identifiers for every application user, for broadcast notifications. */
-export async function getAllUserClerkIds() {
-  return listAllClerkIds(prisma);
+/** Clerk id and email of every application user, for a broadcast notification. */
+export async function getAllNotificationRecipients() {
+  return listAllNotificationRecipients(prisma);
 }
 
-/** Resolves internal user IDs into Clerk identifiers, for Novu dispatch. */
-export async function resolveUserIdsToClerkIds(
+/** Clerk id and email for internal user ids, for Novu dispatch. */
+export async function getNotificationRecipients(
   userIds: Array<string | null | undefined>,
-): Promise<string[]> {
-  return resolveClerkIds(userIds, prisma);
+) {
+  return resolveNotificationRecipients(userIds, prisma);
 }
 
 /** Every ADMIN's application id — who an approval request has to reach. */

@@ -221,6 +221,10 @@ export function PartyRevisionModal({
             </div>
 
             <ExtraAttachmentsField
+              uploadHints={{
+                trail: ["Project", "Compliance", `Revision from the ${label}`],
+                tags: ["Compliance", label, "Revision"],
+              }}
               onUploadingChange={setIsAttachingExtras}
               projectId={projectId}
               value={extras}

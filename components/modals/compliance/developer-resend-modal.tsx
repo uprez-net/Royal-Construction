@@ -149,6 +149,10 @@ export function DeveloperResendModal({
           ) : null}
 
           <ExtraAttachmentsField
+            uploadHints={{
+              trail: ["Project", "Compliance", "Resend to developer"],
+              tags: ["Compliance", "Developer approval"],
+            }}
             onUploadingChange={setIsAttaching}
             projectId={projectId}
             value={extras}

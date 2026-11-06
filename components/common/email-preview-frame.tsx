@@ -42,6 +42,11 @@ function withoutEditableBody(html: string): string {
  * `transform: scale()` to fit the panel width and `maxHeight`. The wrapper
  * reserves only the scaled footprint so the dialog around it stays compact.
  *
+ * `layoutWidth` lays a fluid email out at that width instead of the iframe's
+ * default 300px, which would otherwise squeeze it into a narrow column. Pass
+ * `maxHeight={Infinity}` to fit the width only, so the text stays readable and
+ * the caller scrolls the panel.
+ *
  * Remount it (`key`) to throw away in-place edits; changing `html` reloads it
  * too.
  */
@@ -53,9 +58,17 @@ export const EmailPreviewFrame = forwardRef<
     editable?: boolean;
     maxHeight?: number;
     minScale?: number;
+    layoutWidth?: number;
   }
 >(function EmailPreviewFrame(
-  { html, title, editable = true, maxHeight = 560, minScale = 0.7 },
+  {
+    html,
+    title,
+    editable = true,
+    maxHeight = 560,
+    minScale = 0.7,
+    layoutWidth,
+  },
   ref,
 ) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -63,7 +76,10 @@ export const EmailPreviewFrame = forwardRef<
   const observerRef = useRef<MutationObserver | null>(null);
   const [size, setSize] = useState<{
     contentH: number;
+    contentW: number;
     scale: number;
+    /** Wider than the panel even at `minScale`. */
+    overflowsX: boolean;
   } | null>(null);
 
   useImperativeHandle(
@@ -87,7 +103,7 @@ export const EmailPreviewFrame = forwardRef<
     const contentW = Math.max(
       doc.documentElement.scrollWidth,
       doc.body.scrollWidth,
-      0,
+      layoutWidth ?? 0,
     );
     const contentH = Math.max(
       doc.documentElement.scrollHeight,
@@ -104,8 +120,14 @@ export const EmailPreviewFrame = forwardRef<
       maxHeight / contentH,
       1,
     );
-    setSize({ contentH, scale: Math.max(scale, minScale) });
-  }, [maxHeight, minScale]);
+    const fitted = Math.max(scale, minScale);
+    setSize({
+      contentH,
+      contentW,
+      overflowsX: Math.ceil(contentW * fitted) > container.clientWidth,
+      scale: fitted,
+    });
+  }, [layoutWidth, maxHeight, minScale]);
 
   const handleLoad = useCallback(() => {
     const doc = iframeRef.current?.contentDocument;
@@ -136,10 +158,15 @@ export const EmailPreviewFrame = forwardRef<
 
   useEffect(() => () => observerRef.current?.disconnect(), []);
 
+  // Below `minScale` the document is wider than the panel: scroll it
+  // sideways rather than cut off its right edge.
+  const scaledW = size ? Math.ceil(size.contentW * size.scale) : null;
+  const overflowsX = size?.overflowsX ?? false;
+
   return (
     <div
       ref={containerRef}
-      className="relative w-full overflow-hidden rounded-md border bg-transparent"
+      className={`relative w-full rounded-md border bg-transparent ${overflowsX ? "overflow-x-auto overflow-y-hidden" : "overflow-hidden"}`}
       style={{
         height: size
           ? Math.ceil(size.contentH * size.scale)
@@ -148,18 +175,30 @@ export const EmailPreviewFrame = forwardRef<
             : 560,
       }}
     >
-      <iframe
-        ref={iframeRef}
-        srcDoc={editable ? withEditableBody(html) : html}
-        title={title}
-        sandbox="allow-same-origin allow-scripts"
-        onLoad={handleLoad}
-        style={{
-          transformOrigin: "top left",
-          transform: size ? `scale(${size.scale})` : undefined,
-        }}
-        className="block border-0 bg-background"
-      />
+      {/* A transform does not change layout size, so this box is what the
+          panel measures and scrolls: the iframe as it looks once scaled. */}
+      <div
+        className="overflow-hidden"
+        style={
+          size && scaledW !== null
+            ? { height: Math.ceil(size.contentH * size.scale), width: scaledW }
+            : undefined
+        }
+      >
+        <iframe
+          ref={iframeRef}
+          srcDoc={editable ? withEditableBody(html) : html}
+          title={title}
+          sandbox="allow-same-origin allow-scripts"
+          onLoad={handleLoad}
+          style={{
+            width: layoutWidth,
+            transformOrigin: "top left",
+            transform: size ? `scale(${size.scale})` : undefined,
+          }}
+          className="block border-0 bg-background"
+        />
+      </div>
     </div>
   );
 });

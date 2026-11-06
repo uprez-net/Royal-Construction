@@ -134,6 +134,8 @@ export async function archiveLeadAttachments(
         fileName: file.name,
         fileType: file.mediaType,
         fileSize: data.byteLength,
+        tags: ["Lead enquiry", "Received by email"],
+        origin: "Email › Lead enquiry",
       });
 
       archived += 1;

@@ -12,6 +12,7 @@ import type {
 } from "@prisma/client";
 import type { HistoryItem, Lead as UiLead, LeadStage } from "@/lib/leads/types";
 import { coerceLeadNotesDocument } from "@/lib/rich-text/lead-notes";
+import { inferFileTags, normalizeFileTags } from "@/lib/domain/file-tags";
 import {
   resolveFollowup,
   type NextFollowupTask,
@@ -220,6 +221,15 @@ export function mapLead(
       name: file.filename,
       size: file.filesize,
       url: file.url,
+      fileType: file.fileType || null,
+      createdAt: file.createdAt.toISOString(),
+      origin: file.origin ?? null,
+      // What the screen said, then what the record and the name say.
+      tags: normalizeFileTags(
+        file.tags,
+        file.projectId ? ["On project"] : [],
+        inferFileTags(file.filename, file.fileType),
+      ),
     })),
   };
 }

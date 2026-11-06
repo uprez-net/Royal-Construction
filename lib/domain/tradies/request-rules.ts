@@ -8,6 +8,26 @@ import { MilestoneStatus, type Prisma } from "@prisma/client";
 export const MAX_REQUEST_TRADIES = 10;
 export const MAX_REQUEST_ACTIVITIES = 20;
 
+/** Files one request email may carry. */
+export const MAX_REQUEST_ATTACHMENTS = 10;
+/**
+ * Their combined size. Below the mailbox's own send limit (about 26 MB of file
+ * content at Exchange's 35 MB default, `lib/graph/client.ts`) so a request is
+ * refused on screen before it is written, and small enough that a tradie's
+ * mail server takes it too.
+ */
+export const MAX_REQUEST_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
+/**
+ * A project file that may go to a tradie with a request. An incident report is
+ * internal to the office: it can be about another tradie.
+ */
+export function isRequestAttachable(file: {
+  readonly incidentId: string | null;
+}): boolean {
+  return file.incidentId === null;
+}
+
 /** Milestones nobody can still be asked to do. */
 const CLOSED_MILESTONE_STATUSES: readonly MilestoneStatus[] = [
   MilestoneStatus.DONE,

@@ -49,6 +49,7 @@ import { isRetryableGraphError, withGraphRetry } from "@/lib/graph/retry";
 import { checkLeadPresentWithEmailPhone } from "@/lib/leads/existing-lead";
 import { processInboundLead } from "@/lib/workflow/lead-extraction";
 import { storeOfferReplyAttachments } from "@/lib/workflow/offer-reply-attachments";
+import { processTradieInvoiceEmail } from "@/lib/workflow/tradie-invoice-email";
 import { start } from "workflow/api";
 import { after } from "next/server";
 import { isOwnMailbox, isSenderCopy } from "@/lib/graph/mailbox";
@@ -101,6 +102,42 @@ async function isMessageAlreadyProcessed(messageId: string): Promise<boolean> {
       error,
     );
     return false;
+  }
+}
+
+/**
+ * A tradie's email that carries attachments may be an invoice. Reading them
+ * is the slow half, so it is a workflow of its own; it queues any invoice for
+ * the office to confirm and counts nothing itself. Never throws: a failure to
+ * enqueue is logged, and the rest of the batch still runs.
+ */
+async function startTradieInvoiceEmail(input: {
+  message: { id: string; subject?: string | null; receivedDateTime?: string };
+  mailbox: "business" | "admin";
+  from: string;
+  tradieId: string;
+  content: string;
+}) {
+  try {
+    const run = await start(processTradieInvoiceEmail, [
+      {
+        body: input.content,
+        from: input.from,
+        graphMessageId: input.message.id,
+        mailbox: input.mailbox,
+        receivedAt: input.message.receivedDateTime || new Date().toISOString(),
+        subject: input.message.subject ?? "",
+        tradieId: input.tradieId,
+      },
+    ]);
+    console.log(
+      `  Tradie ${input.tradieId}: invoice email workflow started for message ${input.message.id}: run ${run.runId}`,
+    );
+  } catch (error) {
+    console.error(
+      `  Tradie ${input.tradieId}: couldn't start the invoice email workflow`,
+      error,
+    );
   }
 }
 
@@ -961,6 +998,15 @@ async function processNotifications(
                 `The reply quotes ${tradieReference.token} (${tradieReference.projectName}) but came from ${message.from || "an unknown sender"}, which is not an address on ${tradieReference.tradie.name}'s record. Check it and update the booking by hand.`,
               );
             } else {
+              if (message.hasAttachments) {
+                await startTradieInvoiceEmail({
+                  content,
+                  from: message.from,
+                  mailbox,
+                  message,
+                  tradieId: tradieReference.tradie.id,
+                });
+              }
               await handleTradieReply({
                 content,
                 reference: tradieReference,
@@ -977,6 +1023,18 @@ async function processNotifications(
               where: { email: message.from },
             });
             if (!tradie) continue;
+            if (
+              message.hasAttachments
+              && !isMachineGenerated(message.headers)
+            ) {
+              await startTradieInvoiceEmail({
+                content,
+                from: message.from,
+                mailbox,
+                message,
+                tradieId: tradie.id,
+              });
+            }
             await handleTradieReply({
               content,
               reference: null,

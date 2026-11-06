@@ -20,6 +20,8 @@ interface SaveFileParams {
   fileName: string;
   fileType: string;
   fileSize: number;
+  tags?: readonly unknown[] | null;
+  origin?: string | null;
 }
 
 /**
@@ -67,6 +69,8 @@ export async function saveFile({
   fileType,
   fileSize,
   leadId,
+  tags,
+  origin,
 }: SaveFileParams) {
   try {
     const uploader = await prisma.user.findUnique({ where: { id: userId } });
@@ -83,6 +87,8 @@ export async function saveFile({
         milestoneId,
         projectId,
         storagePath,
+        tags,
+        origin,
         userId,
       },
       prisma,
@@ -98,6 +104,7 @@ export async function saveFile({
           fileName: newFile.filename,
           fileType: newFile.fileType,
           fileSize: newFile.filesize,
+          origin: newFile.origin,
         });
         await logAction(activityEntryLog);
       }

@@ -12,10 +12,8 @@ import type { RootState } from "@/lib/store";
 import {
   MilestoneWithFilesTradiesUpdates,
   SafeMaterial,
-  SafeVariation,
   TradieScheduleListItem,
   type AddProjectUpdateRequest,
-  type CreateVariationRequest,
   type ProjectDetail,
   type ProjectMutationState,
   type ProjectUploadRecord,
@@ -90,7 +88,6 @@ import { milestoneTargetDates } from "@/lib/domain/projects/milestone-schedule";
 
 type MutationKey =
   | "createProject"
-  | "createVariation"
   | "addUpdate"
   | "addMaterial"
   | "createTradieSchedule"
@@ -146,7 +143,6 @@ const defaultDetailUiState = {
 
 const initialMutationState = (): ProjectsMutationState => ({
   createProject: { status: "idle", error: null },
-  createVariation: { status: "idle", error: null },
   addUpdate: { status: "idle", error: null },
   addMaterial: { status: "idle", error: null },
   createTradieSchedule: { status: "idle", error: null },
@@ -220,30 +216,6 @@ export const addMaterialToProject = createAsyncThunk<
       error instanceof Error
         ? error.message
         : "Unable to add material to project",
-    );
-  }
-});
-
-export const createVariation = createAsyncThunk<
-  SafeVariation,
-  CreateVariationRequest,
-  { rejectValue: string }
->("projects/createVariation", async ({ projectId, ...payload }, thunkApi) => {
-  try {
-    const response = await fetchJson<SafeVariation>(
-      `/api/projects/${projectId}/variations`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      },
-      "Unable to create variation",
-    );
-
-    return response.data;
-  } catch (error) {
-    return thunkApi.rejectWithValue(
-      error instanceof Error ? error.message : "Unable to create variation",
     );
   }
 });
@@ -1645,6 +1617,9 @@ const projectsSlice = createSlice({
       project.files = project.files.filter(
         (file) => file.id !== action.payload.fileId,
       );
+      project.documents = project.documents.filter(
+        (document) => document.fileId !== action.payload.fileId,
+      );
       for (const update of project.siteUpdates) {
         update.photoUrls = update.photoUrls.filter(
           (url) => url !== action.payload.url,
@@ -1854,21 +1829,6 @@ const projectsSlice = createSlice({
             action.payload?.message
             ?? action.error.message
             ?? "Unable to create project",
-        };
-      })
-      .addCase(createVariation.pending, (state) => {
-        state.mutations.createVariation = { status: "pending", error: null };
-      })
-      .addCase(createVariation.fulfilled, (state, action) => {
-        state.mutations.createVariation = { status: "succeeded", error: null };
-        if (state.activeProject?.id === action.payload.projectId) {
-          state.activeProject.variations.push(action.payload);
-        }
-      })
-      .addCase(createVariation.rejected, (state, action) => {
-        state.mutations.createVariation = {
-          status: "failed",
-          error: action.error.message ?? "Unable to create variation",
         };
       })
       .addCase(addProjectUpdate.pending, (state) => {

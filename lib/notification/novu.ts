@@ -1,12 +1,42 @@
-"use server";
+// Server code only, not a Server Action: as "use server" this was an endpoint
+// any signed-in browser could post an arbitrary notification through.
+import "server-only";
+import { auth } from "@clerk/nextjs/server";
 import { Novu } from "@novu/api";
-import { getAllUserClerkIds, resolveUserIdsToClerkIds } from "../data/user";
+
+import {
+  getAllNotificationRecipients,
+  getNotificationRecipients,
+} from "../data/user";
+import {
+  notificationEnvironment,
+  notificationSubscriberId,
+  selectNotificationRecipients,
+  serverNotificationOrigin,
+  type NotificationRecipient,
+} from "./environment";
 
 const novu = new Novu({ secretKey: process.env.NOVU_SECRET_KEY });
 
 const WORKFLOW_IDENTIFIER = "royal-consturction";
 
-type NotificationResult = { success: true } | { success: false; error: string };
+type NotificationResult =
+  | { success: true; delivered: number }
+  | { success: false; error: string };
+
+/**
+ * The signed-in person behind this request, when there is one. A cron, a
+ * webhook or a workflow step has none, and `auth()` may throw outside a
+ * request; either way the answer is "nobody".
+ */
+async function currentRequester(): Promise<NotificationRecipient | null> {
+  try {
+    const { userId } = await auth();
+    return userId ? { clerkId: userId, email: "" } : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Sends an in-app notification through Novu to one or more users.
@@ -14,11 +44,15 @@ type NotificationResult = { success: true } | { success: false; error: string };
  * Recipients can be explicitly provided via user IDs or, if no recipients are
  * supplied, the notification is broadcast to all users in the system.
  *
- * User IDs are resolved to their corresponding Clerk subscriber IDs before
- * dispatching the notification through the configured Novu workflow.
+ * Who actually receives it depends on where this runs (see
+ * lib/notification/environment.ts): production skips the muted test accounts;
+ * staging and local development send only to the person who made the request.
+ * Each origin has its own Novu subscriber per person, so staging's
+ * notifications never show in production's inbox, or the other way round.
  *
- * If no valid recipients can be resolved, the notification is not sent and a
- * failure result is returned.
+ * A send the environment rules deliberately skip is a success with nothing
+ * delivered, not a failure: the reminder crons retry failures, and must not
+ * retry a reminder that was never meant to go out here.
  *
  * @param userId - Array of application user IDs. Pass an empty array to send
  * the notification to all users.
@@ -26,9 +60,6 @@ type NotificationResult = { success: true } | { success: false; error: string };
  * @param content.title - Notification title.
  * @param content.message - Notification body.
  * @param content.url - URL to open when the notification is clicked.
- *
- * @returns A result object indicating whether the notification was sent
- * successfully. On failure, an error message describing the reason is returned.
  */
 export async function triggerNotification(
   userId: Array<string | null | undefined>,
@@ -39,25 +70,38 @@ export async function triggerNotification(
   },
 ): Promise<NotificationResult> {
   try {
-    let users: string[] = [];
-    if (userId.length === 0) {
-      users = await getAllUserClerkIds();
-    } else {
-      users = await resolveUserIdsToClerkIds(userId);
-    }
-    if (users.length === 0) {
+    const recipients =
+      userId.length === 0
+        ? await getAllNotificationRecipients()
+        : await getNotificationRecipients(userId);
+    if (recipients.length === 0) {
       return { success: false, error: "No notification recipients found" };
     }
+
+    const environment = notificationEnvironment(process.env);
+    const origin = serverNotificationOrigin(process.env);
+    const selected = selectNotificationRecipients({
+      environment,
+      recipients,
+      requester: environment === "production" ? null : await currentRequester(),
+    });
+    if (selected.length === 0) return { success: true, delivered: 0 };
+
     await novu.trigger({
       workflowId: WORKFLOW_IDENTIFIER,
-      to: users.map((id) => ({ subscriberId: id })),
+      to: selected.map((recipient) => ({
+        subscriberId: notificationSubscriberId(recipient.clerkId, origin),
+      })),
       payload: {
         subject: content.title,
         body: content.message,
         url: content.url,
+        // Where it was raised, so Novu's activity log says which deployment
+        // a notification came from.
+        origin,
       },
     });
-    return { success: true };
+    return { success: true, delivered: selected.length };
   } catch (error) {
     console.error("Error triggering notification:", error);
     return { success: false, error: "Failed to trigger notification" };

@@ -213,7 +213,11 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
   fileUploaded: (data) => ({
     id: uuidv4(),
     type: "fileUploaded",
-    message: `File ${data.fileName} uploaded for project ${data.projectId}`,
+    // The project id said nothing a reader of the project's own history did
+    // not already know; where it was uploaded from does.
+    message: data.origin
+      ? `${data.fileName} uploaded from ${data.origin}`
+      : `${data.fileName} uploaded`,
     authorId: "system",
     timestamp: new Date().toISOString(),
     projectId: data.projectId,
@@ -224,6 +228,16 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
     id: uuidv4(),
     type: "milestoneStatusChanged",
     message: `Milestone ${data.milestoneName} status changed to ${data.newStatus}`,
+    authorId: "system",
+    timestamp: new Date().toISOString(),
+    projectId: data.projectId,
+    milestoneId: data.milestoneId,
+  }),
+
+  milestonePriceChanged: (data) => ({
+    id: uuidv4(),
+    type: "milestonePriceChanged",
+    message: `${data.milestoneName} quoted price changed from ${data.previousPrice} to ${data.price}`,
     authorId: "system",
     timestamp: new Date().toISOString(),
     projectId: data.projectId,

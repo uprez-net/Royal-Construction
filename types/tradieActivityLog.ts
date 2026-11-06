@@ -70,6 +70,7 @@ const STATUS_WORDS: Record<TradieScheduleStatus, string> = {
 const VIA_WORDS: Record<string, string> = {
   "graph:tradie-email-reply": "from the tradie's emailed reply",
   "workflow:tradie-request-retry": "by the automatic retry",
+  "xero:bill-webhook": "from Xero",
   [TRADIE_REMINDER_CRON]: "by the daily reminder run",
 };
 
@@ -152,6 +153,21 @@ export const tradieActivityLogTemplates: TradieActivityLogTemplateFactory = {
       : `Quote of ${data.amount} recorded by the office${via(data.via)}`,
   }),
 
+  invoiceRecorded: (data) => ({
+    ...bookingRef(data),
+    message: `Invoice${data.invoiceNumber ? ` ${data.invoiceNumber}` : ""} for ${data.amount} ex GST ${data.source === "XERO" ? "received from Xero" : "recorded by the office"}${via(data.via)}`,
+  }),
+
+  invoiceAllocated: (data) => ({
+    ...bookingRef(data),
+    message: `Invoice${data.invoiceNumber ? ` ${data.invoiceNumber}` : ""} for ${data.amount} ex GST allocated to this booking${via(data.via)}`,
+  }),
+
+  invoiceVoided: (data) => ({
+    ...bookingRef(data),
+    message: `Invoice${data.invoiceNumber ? ` ${data.invoiceNumber}` : ""} for ${data.amount} ex GST voided: ${data.reason}${via(data.via)}`,
+  }),
+
   requestEmailSent: (data) => ({
     projectId: data.projectId,
     tradieId: data.tradieId,
@@ -204,6 +220,11 @@ export const tradieActivityLogTemplates: TradieActivityLogTemplateFactory = {
   incidentResolved: (data) => ({
     tradieId: data.tradieId,
     message: `Incident resolved: ${data.resolution}`,
+  }),
+
+  outlookEmailSent: (data) => ({
+    tradieId: data.tradieId,
+    message: `Emailed from Outlook: "${data.subject}"`,
   }),
 };
 

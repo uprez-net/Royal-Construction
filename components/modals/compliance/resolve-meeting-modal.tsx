@@ -228,6 +228,10 @@ export function ResolveMeetingModal({
               file to. */}
           {outcome === "rescheduled" ? (
             <ExtraAttachmentsField
+              uploadHints={{
+                trail: ["Project", "Compliance", "Meeting resolution"],
+                tags: ["Compliance", "Client meeting"],
+              }}
               onUploadingChange={setIsAttaching}
               projectId={projectId}
               value={extras}
