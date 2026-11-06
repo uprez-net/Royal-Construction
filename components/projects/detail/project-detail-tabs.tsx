@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import type { ProjectDetail } from "@/types/project";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
@@ -60,13 +60,9 @@ export function ProjectDetailTabs({
 }) {
   const isAdmin = role === "ADMIN";
   const dispatch = useAppDispatch();
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const urlTab = searchParams.get("activeTab");
-  // `searchParams` is a fresh object on every navigation; the serialized string
-  // is what handleTabChange actually needs, and it keeps the callback stable.
-  const searchParamsString = searchParams.toString();
 
   const selector = useMemo(
     () => selectProjectDetailUiState(project.id),
@@ -83,24 +79,30 @@ export function ProjectDetailTabs({
     : "overview";
 
   // URL → store. Runs on mount for deep links and again on back/forward.
-  // Converges because it only dispatches when the two disagree.
+  // Only when the URL itself moves: a click updates the store first, and the
+  // URL catching up a render later must not snap the tab back.
+  const seenUrlTab = useRef<string | null>(null);
   useEffect(() => {
+    if (urlTab === seenUrlTab.current) return;
+    seenUrlTab.current = urlTab;
     if (urlTab && isVisibleProjectDetailTab(urlTab) && urlTab !== activeTab) {
       dispatch(setProjectDetailTab({ projectId: project.id, tab: urlTab }));
     }
   }, [activeTab, dispatch, project.id, urlTab]);
 
   // Store → URL, so a tab can be deep-linked, shared and reached with the
-  // browser's back button.
+  // browser's back button. replaceState rather than router.replace: every tab
+  // renders from data already on the page, and router.replace re-renders the
+  // whole server page on each click.
   const handleTabChange = useCallback(
     (tab: VisibleProjectDetailTabKey) => {
       dispatch(setProjectDetailTab({ projectId: project.id, tab }));
 
-      const params = new URLSearchParams(searchParamsString);
+      const params = new URLSearchParams(window.location.search);
       params.set("activeTab", tab);
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
     },
-    [dispatch, pathname, project.id, router, searchParamsString],
+    [dispatch, pathname, project.id],
   );
 
   return (

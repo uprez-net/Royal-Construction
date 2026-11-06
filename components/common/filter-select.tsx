@@ -1,6 +1,7 @@
 "use client";
 
 import { useId } from "react";
+import type { LucideIcon } from "lucide-react";
 
 import {
   Select,
@@ -18,7 +19,23 @@ export type FilterOption = {
   label: string;
   /** How many rows carry it, shown beside the label. */
   count?: number;
+  /** Shown before the label, in the list and in the closed dropdown. */
+  icon?: LucideIcon;
+  /** The icon's colour. */
+  iconClassName?: string;
 };
+
+function OptionIcon({
+  icon: Icon,
+  className,
+}: {
+  icon?: LucideIcon;
+  className?: string;
+}) {
+  return Icon ? (
+    <Icon className={cn("size-4 shrink-0", className)} aria-hidden="true" />
+  ) : null;
+}
 
 /**
  * A labelled filter dropdown with an "All" choice. An empty string is "All",
@@ -33,8 +50,11 @@ export function FilterSelect({
   className,
   disabled,
   hideLabel,
+  icon,
 }: {
   label: string;
+  /** The filter's own icon, on the "All" choice and on options without one. */
+  icon?: LucideIcon;
   /** Keep the label for screen readers only, for a compact toolbar. */
   hideLabel?: boolean;
   value: string;
@@ -72,10 +92,22 @@ export function FilterSelect({
           <SelectValue placeholder={allLabel} />
         </SelectTrigger>
         <SelectContent className="max-h-72">
-          <SelectItem value={ALL}>{allLabel}</SelectItem>
-          {known ? null : <SelectItem value={value}>{value}</SelectItem>}
+          <SelectItem value={ALL}>
+            <OptionIcon icon={icon} className="text-muted-foreground" />
+            {allLabel}
+          </SelectItem>
+          {known ? null : (
+            <SelectItem value={value}>
+              <OptionIcon icon={icon} className="text-muted-foreground" />
+              {value}
+            </SelectItem>
+          )}
           {options.map((option) => (
             <SelectItem key={option.value} value={option.value}>
+              <OptionIcon
+                icon={option.icon ?? icon}
+                className={option.iconClassName ?? "text-muted-foreground"}
+              />
               <span className="truncate">{option.label}</span>
               {option.count !== undefined ? (
                 <span className="ml-auto pl-2 font-mono text-xs text-muted-foreground tabular-nums">
