@@ -106,9 +106,9 @@ export function ReviewPlansModal({
   };
 
   const canSubmit =
-    !isPending &&
-    !isAttaching &&
-    (approved === "yes" || Boolean(feedback.trim()));
+    !isPending
+    && !isAttaching
+    && (approved === "yes" || Boolean(feedback.trim()));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

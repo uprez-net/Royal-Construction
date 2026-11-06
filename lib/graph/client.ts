@@ -125,9 +125,9 @@ function assertAttachmentsSendable(decoded: DecodedAttachment[]): void {
   if (totalBytes > MAX_TOTAL_ATTACHMENT_BYTES) {
     const toMb = (bytes: number) => (bytes / (1024 * 1024)).toFixed(1);
     throw new Error(
-      `Attachments total ${toMb(totalBytes)} MB, over the ${toMb(MAX_TOTAL_ATTACHMENT_BYTES)} MB ` +
-        `budget for a single message (Exchange Online caps the encoded message at ` +
-        `${EXCHANGE_MAX_SEND_SIZE_BYTES / (1024 * 1024)} MB by default).`,
+      `Attachments total ${toMb(totalBytes)} MB, over the ${toMb(MAX_TOTAL_ATTACHMENT_BYTES)} MB `
+        + `budget for a single message (Exchange Online caps the encoded message at `
+        + `${EXCHANGE_MAX_SEND_SIZE_BYTES / (1024 * 1024)} MB by default).`,
     );
   }
 }
@@ -178,8 +178,8 @@ async function uploadAttachmentToDraft(
     if (!response.ok) {
       const detail = await toJson(response);
       throw new Error(
-        `Graph upload failed for "${attachment.name}" at bytes ${start}-${end}: ` +
-          `${response.status} ${JSON.stringify(detail)}`,
+        `Graph upload failed for "${attachment.name}" at bytes ${start}-${end}: `
+          + `${response.status} ${JSON.stringify(detail)}`,
       );
     }
   }
@@ -534,8 +534,8 @@ export async function createGraphContext(
 
   if (useExplicitMailbox && !normalizedSender) {
     throw new Error(
-      `${config.mailbox === "admin" ? "Admin Graph mailbox" : "GRAPH_SENDER_UPN"} ` +
-        "is required for an explicit mailbox context.",
+      `${config.mailbox === "admin" ? "Admin Graph mailbox" : "GRAPH_SENDER_UPN"} `
+        + "is required for an explicit mailbox context.",
     );
   }
 
@@ -723,8 +723,8 @@ export async function createGraphContext(
       // what is there.
       const list = await graphRequest<{ value: GraphApiAttachment[] }>(
         "GET",
-        `https://graph.microsoft.com/v1.0${messagesPath}/${encodeURIComponent(messageId)}` +
-          "/attachments?$select=id,name,contentType,size,isInline",
+        `https://graph.microsoft.com/v1.0${messagesPath}/${encodeURIComponent(messageId)}`
+          + "/attachments?$select=id,name,contentType,size,isInline",
         token,
       );
 
@@ -752,8 +752,8 @@ export async function createGraphContext(
       // would hand back base64 inside JSON — a third more bytes over the wire
       // and a decode on top.
       const url =
-        `https://graph.microsoft.com/v1.0${messagesPath}/${encodeURIComponent(messageId)}` +
-        `/attachments/${encodeURIComponent(attachmentId)}/$value`;
+        `https://graph.microsoft.com/v1.0${messagesPath}/${encodeURIComponent(messageId)}`
+        + `/attachments/${encodeURIComponent(attachmentId)}/$value`;
 
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -871,8 +871,8 @@ export async function createGraphContext(
       // Anything past the inline ceiling can't ride along in the sendMail body,
       // so build it as a draft, stream the files in, and send that instead.
       if (
-        totalAttachmentBytesOf(decodedAttachments) >
-        GRAPH_INLINE_ATTACHMENT_LIMIT_BYTES
+        totalAttachmentBytesOf(decodedAttachments)
+        > GRAPH_INLINE_ATTACHMENT_LIMIT_BYTES
       ) {
         const draft = await graphRequest<{ id?: string }>(
           "POST",
@@ -963,8 +963,8 @@ export async function createGraphContext(
         changeType: "created",
         notificationUrl,
         resource:
-          resource ??
-          (!useExplicitMailbox
+          resource
+          ?? (!useExplicitMailbox
             ? "/me/mailFolders('Inbox')/messages"
             : `/users/${encodeURIComponent(normalizedSender || "")}/mailFolders('Inbox')/messages`),
         expirationDateTime: new Date(
@@ -990,8 +990,8 @@ export async function createGraphContext(
     }) => {
       const token = await getAccessToken();
       const targetResource =
-        resource ??
-        (!useExplicitMailbox
+        resource
+        ?? (!useExplicitMailbox
           ? "/me/mailFolders('Inbox')/messages"
           : `/users/${encodeURIComponent(normalizedSender || "")}/mailFolders('Inbox')/messages`);
       const subscriptions = await graphRequest<{ value?: GraphSubscription[] }>(

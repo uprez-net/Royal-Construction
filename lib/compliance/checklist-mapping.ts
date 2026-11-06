@@ -643,8 +643,8 @@ export async function fillChecklistLinesFor(params: {
     // keeps this agreeing with the rest of the tab if one ever slips through.
     const source = documents.find(
       (document) =>
-        document.documentType === params.documentType &&
-        document.files.length > 0,
+        document.documentType === params.documentType
+        && document.files.length > 0,
     );
     if (!source) return empty;
 

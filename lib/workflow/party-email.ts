@@ -176,9 +176,9 @@ async function readAttachments(
 
   if (report.names.length > 0) {
     console.log(
-      `  Party attachments on ${messageId}: ${report.files.length} read, ` +
-        `${report.skipped.length} skipped` +
-        (report.skipped.length > 0
+      `  Party attachments on ${messageId}: ${report.files.length} read, `
+        + `${report.skipped.length} skipped`
+        + (report.skipped.length > 0
           ? ` — ${report.skipped.map((item) => `${item.name}: ${item.reason}`).join("; ")}`
           : ""),
     );
@@ -465,8 +465,8 @@ async function classifyStoredDocuments(
     try {
       const result = await classifyDocumentAtUrl(item.url, item.name);
       if (
-        result.documentType === ComplianceDocumentType.UNKNOWN ||
-        !allowed.has(result.documentType)
+        result.documentType === ComplianceDocumentType.UNKNOWN
+        || !allowed.has(result.documentType)
       ) {
         console.log(`  "${item.name}" left unclassified: ${result.message}`);
         continue;
@@ -504,8 +504,8 @@ async function classifyStoredDocuments(
       labelled += 1;
 
       if (
-        result.documentType ===
-        ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS
+        result.documentType
+        === ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS
       ) {
         preliminaryPlans += 1;
       }
@@ -527,8 +527,8 @@ async function classifyStoredDocuments(
       }
 
       if (
-        result.documentType ===
-        ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL
+        result.documentType
+        === ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL
       ) {
         titleSearches.push({ url: item.url, name: item.name });
       }
@@ -707,8 +707,8 @@ async function recordCouncilRequests(
   });
 
   if (
-    correspondence.requested.length === 0 &&
-    correspondence.rejected.length === 0
+    correspondence.requested.length === 0
+    && correspondence.rejected.length === 0
   ) {
     return { created: 0, rejected: 0 };
   }
@@ -1039,8 +1039,8 @@ export const processInboundPartyEmail = async (
     // stamped -- and a developer sending back the copy they just approved must
     // not read as the consultant having redone it.
     if (
-      classification.bushfireReports > 0 &&
-      outreach.party === "BUSHFIRE_CONSULTANT"
+      classification.bushfireReports > 0
+      && outreach.party === "BUSHFIRE_CONSULTANT"
     ) {
       await closeBushfireRevisionLoop({
         projectId,
@@ -1049,8 +1049,8 @@ export const processInboundPartyEmail = async (
     }
 
     if (
-      classification.architecturalDesigns > 0 &&
-      outreach.party === "ARCHITECT"
+      classification.architecturalDesigns > 0
+      && outreach.party === "ARCHITECT"
     ) {
       await closeArchitecturalDesignRevisionLoop({
         projectId,

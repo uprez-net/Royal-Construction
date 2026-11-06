@@ -334,8 +334,8 @@ export default function ReportTradieModal({
               placeholder="Describe what happened in detail…"
               value={formData.incidentDescription}
               aria-invalid={
-                touched.incidentDescription &&
-                !formData.incidentDescription.trim()
+                touched.incidentDescription
+                && !formData.incidentDescription.trim()
               }
               onChange={(e) =>
                 setFormData((prev) => ({
@@ -398,9 +398,9 @@ export default function ReportTradieModal({
               variant="destructive"
               onClick={handleSubmit}
               disabled={
-                isPending ||
-                !formData.incidentType ||
-                !formData.incidentDescription.trim()
+                isPending
+                || !formData.incidentType
+                || !formData.incidentDescription.trim()
               }
             >
               <Send className="mr-2 h-4 w-4" aria-hidden="true" />
