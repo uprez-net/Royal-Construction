@@ -32,8 +32,11 @@ export function FilterSelect({
   allLabel,
   className,
   disabled,
+  hideLabel,
 }: {
   label: string;
+  /** Keep the label for screen readers only, for a compact toolbar. */
+  hideLabel?: boolean;
   value: string;
   onChange: (value: string) => void;
   options: readonly FilterOption[];
@@ -47,10 +50,13 @@ export function FilterSelect({
   const known = !value || options.some((option) => option.value === value);
 
   return (
-    <div className={cn("min-w-0 space-y-1.5", className)}>
+    <div className={cn("min-w-0", !hideLabel && "space-y-1.5", className)}>
       <label
         htmlFor={id}
-        className="block text-xs font-medium text-muted-foreground"
+        className={cn(
+          "block text-xs font-medium text-muted-foreground",
+          hideLabel && "sr-only",
+        )}
       >
         {label}
       </label>

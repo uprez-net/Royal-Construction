@@ -12,7 +12,6 @@ import { DataTable } from "@/components/common/data-table";
 import { FilterSelect } from "@/components/common/filter-select";
 import { UploadDropzone } from "@/components/common/upload-dropzone";
 import { useUploadHints } from "@/components/common/upload-hints";
-import { FileTagList } from "@/components/files/file-tag-list";
 import {
   useUploadQueue,
   type QueuedUploadFile,
@@ -27,6 +26,7 @@ import {
   TIME_WINDOWS,
   TIME_WINDOW_LABEL,
   countValues,
+  displayFileName,
   fileKind,
   isTimeWindow,
   isWithinWindow,
@@ -43,6 +43,7 @@ import type { Lead } from "@/lib/leads/types";
 import {
   buildBlobPath,
   dataTimeFormat,
+  dateFormat,
   formatFileSize,
 } from "@/utils/formatters";
 import { filePreviewModal } from "@/utils/file-preview";
@@ -54,18 +55,12 @@ const MAX_FILES = 5;
 const PARAMS = [
   "fileQ",
   "fileType",
-  "fileTag",
   "fileUploaded",
   "fileFrom",
   "fileTo",
 ] as const;
 
 type LeadFile = Lead["uploadedFiles"][number];
-
-function formatUploadedAt(value: string) {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? "—" : dataTimeFormat.format(parsed);
-}
 
 export function LeadDocumentsTab({
   lead,
@@ -120,9 +115,6 @@ export function LeadDocumentsTab({
           count,
         }),
       ),
-      tags: countValues(files.flatMap((file) => file.tags)).map(
-        ({ value, count }) => ({ value, label: value, count }),
-      ),
     }),
     [files, kindOf],
   );
@@ -131,21 +123,14 @@ export function LeadDocumentsTab({
     ? filters.fileUploaded
     : null;
   const committedQuery = filters.fileQ.trim().toLowerCase();
-  const activeFilterCount = [
-    filters.fileQ,
-    filters.fileType,
-    filters.fileTag,
-    uploadedWindow,
-  ].filter(Boolean).length;
-  const isFiltered = activeFilterCount > 0;
+  const isFiltered = [filters.fileQ, filters.fileType, uploadedWindow].some(
+    Boolean,
+  );
 
   const visibleFiles = useMemo(
     () =>
       files.filter((file) => {
         if (filters.fileType && kindOf.get(file.id) !== filters.fileType) {
-          return false;
-        }
-        if (filters.fileTag && !file.tags.includes(filters.fileTag)) {
           return false;
         }
         if (
@@ -156,11 +141,14 @@ export function LeadDocumentsTab({
         ) {
           return false;
         }
-        if (!committedQuery) return true;
-        return [file.name, file.origin ?? "", ...file.tags]
+        // Tags and the upload trail are searched but never shown: they are
+        // how "plans" finds a file whose name does not say so.
+        const haystack = [file.name, file.origin ?? "", ...file.tags]
           .join(" ")
-          .toLowerCase()
-          .includes(committedQuery);
+          .toLowerCase();
+        return committedQuery
+          .split(/\s+/)
+          .every((word) => haystack.includes(word));
       }),
     [committedQuery, files, filters, kindOf, now, uploadedWindow],
   );
@@ -287,8 +275,6 @@ export function LeadDocumentsTab({
     }
   };
 
-  const quickTags = options.tags.slice(0, 8);
-
   return (
     <section className="space-y-4">
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
@@ -359,25 +345,26 @@ export function LeadDocumentsTab({
       </Card>
 
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
-        <CardHeader className="space-y-4 border-b border-border/70 px-4 pb-4 sm:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-1">
-              <CardTitle
-                as="h2"
-                className="text-base font-semibold text-foreground"
-              >
-                Uploaded files
-              </CardTitle>
-              <p
-                className="text-sm text-muted-foreground tabular-nums"
-                aria-live="polite"
-              >
-                {isFiltered
-                  ? `${visibleFiles.length} of ${files.length} matching`
-                  : `${files.length} ${files.length === 1 ? "file" : "files"}`}
-              </p>
-            </div>
-            <div className="relative w-full sm:w-64">
+        <CardHeader className="space-y-3 border-b border-border/70 px-4 pb-4 sm:px-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <CardTitle
+              as="h2"
+              className="text-base font-semibold text-foreground"
+            >
+              Uploaded files
+            </CardTitle>
+            <p
+              className="text-sm text-muted-foreground tabular-nums"
+              aria-live="polite"
+            >
+              {isFiltered
+                ? `${visibleFiles.length} of ${files.length}`
+                : `${files.length} ${files.length === 1 ? "file" : "files"}`}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-56 flex-1">
               <Search
                 className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
                 aria-hidden="true"
@@ -386,24 +373,24 @@ export function LeadDocumentsTab({
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search name, tag or origin"
+                placeholder="Search files"
                 className="h-9 rounded-lg pl-9 text-sm"
                 aria-label="Search files"
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <FilterSelect
+              hideLabel
               label="File type"
               allLabel="All types"
               value={filters.fileType}
               onChange={(fileType) => setFilters({ fileType })}
               options={options.kinds}
+              className="w-[calc(50%-0.25rem)] sm:w-36"
             />
             <FilterSelect
+              hideLabel
               label="Uploaded"
-              allLabel="Any time"
+              allLabel="Any date"
               value={uploadedWindow ?? ""}
               onChange={(fileUploaded) =>
                 setFilters(
@@ -416,20 +403,26 @@ export function LeadDocumentsTab({
                 value: window,
                 label: TIME_WINDOW_LABEL[window],
               }))}
+              className="w-[calc(50%-0.25rem)] sm:w-40"
             />
-            <FilterSelect
-              label="Tag"
-              allLabel="All tags"
-              value={filters.fileTag}
-              onChange={(fileTag) => setFilters({ fileTag })}
-              options={options.tags}
-            />
+            {isFiltered ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 text-xs"
+                onClick={clearFilters}
+              >
+                <X data-icon="inline-start" aria-hidden="true" />
+                Clear
+              </Button>
+            ) : null}
           </div>
 
           {uploadedWindow === "custom" ? (
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
-                <span className="block">From</span>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <label className="flex items-center gap-2">
+                From
                 <Input
                   type="date"
                   value={filters.fileFrom}
@@ -437,11 +430,11 @@ export function LeadDocumentsTab({
                   onChange={(event) =>
                     setFilters({ fileFrom: event.target.value })
                   }
-                  className="h-9 w-40"
+                  className="h-8 w-40"
                 />
               </label>
-              <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
-                <span className="block">To</span>
+              <label className="flex items-center gap-2">
+                to
                 <Input
                   type="date"
                   value={filters.fileTo}
@@ -449,34 +442,9 @@ export function LeadDocumentsTab({
                   onChange={(event) =>
                     setFilters({ fileTo: event.target.value })
                   }
-                  className="h-9 w-40"
+                  className="h-8 w-40"
                 />
               </label>
-            </div>
-          ) : null}
-
-          {quickTags.length > 0 || isFiltered ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {quickTags.length > 0 ? (
-                <FileTagList
-                  tags={quickTags.map(({ value }) => value)}
-                  activeTag={filters.fileTag}
-                  onSelect={(fileTag) => setFilters({ fileTag })}
-                  max={quickTags.length}
-                />
-              ) : null}
-              {isFiltered ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="ml-auto h-7 text-xs"
-                  onClick={clearFilters}
-                >
-                  <X data-icon="inline-start" aria-hidden="true" />
-                  Clear filters
-                </Button>
-              ) : null}
             </div>
           ) : null}
         </CardHeader>
@@ -496,53 +464,46 @@ export function LeadDocumentsTab({
               if (action) dispatch(openModal(action));
             }}
             rowLabel={(index) => `Open ${visibleFiles[index]?.name ?? "file"}`}
-            caption="Files uploaded against this lead, with tags, type, size and upload time."
-            headers={["Name", "Tags", "Type", "Size", "Uploaded"]}
-            align={["start", "start", "start", "end", "start"]}
-            rows={visibleFiles.map((file) => [
-              <span
-                key={`${file.id}-name`}
-                className="block min-w-0 space-y-0.5"
-              >
-                <span className="block truncate font-medium text-primary underline-offset-4 hover:underline">
-                  {file.name}
-                </span>
-                {file.origin ? (
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {file.origin}
-                  </span>
-                ) : null}
-              </span>,
+            caption="Files uploaded against this lead, with type, upload date and size."
+            headers={["Name", "Type", "Uploaded", "Size"]}
+            align={["start", "start", "start", "end"]}
+            rows={visibleFiles.map((file) => {
+              const uploadedAt = new Date(file.createdAt);
+              const hasDate = !Number.isNaN(uploadedAt.getTime());
+              return [
+                <span
+                  key={`${file.id}-name`}
+                  className="block max-w-[min(36rem,60vw)] truncate font-medium text-primary underline-offset-4 hover:underline"
+                  title={file.name}
+                >
+                  {displayFileName(file.name)}
+                </span>,
 
-              <FileTagList
-                key={`${file.id}-tags`}
-                tags={file.tags}
-                activeTag={filters.fileTag}
-                onSelect={(fileTag) => setFilters({ fileTag })}
-                className="max-w-72"
-              />,
+                <span
+                  key={`${file.id}-type`}
+                  className="text-sm text-muted-foreground"
+                >
+                  {FILE_KIND_LABEL[kindOf.get(file.id) ?? "other"]}
+                </span>,
 
-              <span
-                key={`${file.id}-type`}
-                className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-foreground"
-              >
-                {FILE_KIND_LABEL[kindOf.get(file.id) ?? "other"]}
-              </span>,
+                <span
+                  key={`${file.id}-uploaded`}
+                  className="text-sm whitespace-nowrap tabular-nums"
+                  title={
+                    hasDate ? dataTimeFormat.format(uploadedAt) : undefined
+                  }
+                >
+                  {hasDate ? dateFormat.format(uploadedAt) : "—"}
+                </span>,
 
-              <span
-                key={`${file.id}-size`}
-                className="font-mono text-foreground tabular-nums"
-              >
-                {file.size > 0 ? formatFileSize(file.size) : "—"}
-              </span>,
-
-              <span
-                key={`${file.id}-uploaded`}
-                className="font-mono text-sm whitespace-nowrap tabular-nums"
-              >
-                {formatUploadedAt(file.createdAt)}
-              </span>,
-            ])}
+                <span
+                  key={`${file.id}-size`}
+                  className="text-sm text-muted-foreground tabular-nums"
+                >
+                  {file.size > 0 ? formatFileSize(file.size) : "—"}
+                </span>,
+              ];
+            })}
             emptyState={
               <div className="mx-auto flex max-w-md flex-col items-center gap-3">
                 <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
@@ -553,13 +514,11 @@ export function LeadDocumentsTab({
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-foreground">
-                    {isFiltered
-                      ? "No files match these filters"
-                      : "No documents yet"}
+                    {isFiltered ? "No files match" : "No documents yet"}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {isFiltered
-                      ? `Clear the filters to see all ${files.length} files.`
+                      ? `Clear the search and filters to see all ${files.length} files.`
                       : "Plans, quotes and supporting paperwork uploaded against this lead appear here."}
                   </p>
                 </div>

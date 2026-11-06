@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/common/data-table";
 import { FilterSelect } from "@/components/common/filter-select";
-import { FileTagList } from "@/components/files/file-tag-list";
 import {
   useDebouncedSearchParam,
   useSearchParamFilters,
@@ -35,12 +34,13 @@ import {
   TIME_WINDOWS,
   TIME_WINDOW_LABEL,
   countValues,
+  displayFileName,
   fileKind,
   isTimeWindow,
   isWithinWindow,
   type FileKind,
 } from "@/lib/files/file-filters";
-import { dataTimeFormat, formatFileSize } from "@/utils/formatters";
+import { dataTimeFormat, dateFormat, formatFileSize } from "@/utils/formatters";
 import { ProjectDetail } from "@/types/project";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -58,7 +58,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { cn } from "@/lib/utils";
 
 interface ProjectDocumentsTabProps {
   project: ProjectDetail;
@@ -70,16 +69,11 @@ const PARAMS = [
   "docQ",
   "docType",
   "docSource",
-  "docTag",
   "docUploaded",
   "docFrom",
   "docTo",
   "docMilestone",
-  "docBy",
 ] as const;
-
-/** How many of the most used tags sit above the table as one-press filters. */
-const QUICK_TAG_COUNT = 10;
 
 const KIND_ICON: Record<FileKind, typeof FileIcon> = {
   pdf: FileText,
@@ -95,9 +89,28 @@ function isAdminOnly(document: ProjectDocument) {
   return name.includes("tender") || name.includes("contract");
 }
 
-function formatUploadedAt(value: string) {
+function parseDate(value: string) {
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? "—" : dataTimeFormat.format(parsed);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * What the search box matches. The tags and the upload trail are in here but
+ * never on screen: they are how "survey", "slab" or "certifier" finds a file
+ * whose name says none of those things.
+ */
+function searchText(document: ProjectDocument, kind: FileKind) {
+  return [
+    document.name,
+    document.milestoneName ?? "",
+    document.uploadedBy ?? "",
+    document.origin ?? "",
+    PROJECT_DOCUMENT_SOURCE_LABEL[document.source],
+    FILE_KIND_LABEL[kind],
+    ...document.tags,
+  ]
+    .join(" ")
+    .toLowerCase();
 }
 
 export function ProjectDocumentsTab({
@@ -155,89 +168,66 @@ export function ProjectDocumentsTab({
     project.milestones,
   ]);
 
-  const kindOf = useMemo(
+  const indexed = useMemo(
     () =>
-      new Map(
-        documents.map((document) => [
-          document.key,
-          fileKind(document.fileType, document.name),
-        ]),
-      ),
+      documents.map((document) => {
+        const kind = fileKind(document.fileType, document.name);
+        return { document, kind, haystack: searchText(document, kind) };
+      }),
     [documents],
   );
 
   // Options come from the rows, with counts, so no choice leads to nothing.
-  const options = useMemo(() => {
-    const kinds = countValues(documents.map((d) => kindOf.get(d.key)!));
-    const sources = countValues(documents.map((d) => d.source));
-    const tags = countValues(documents.flatMap((d) => d.tags));
-    const milestones = countValues(
-      documents.flatMap((d) => (d.milestoneName ? [d.milestoneName] : [])),
-    );
-    const uploaders = countValues(
-      documents.flatMap((d) => (d.uploadedBy ? [d.uploadedBy] : [])),
-    );
-    return {
-      kinds: kinds.map(({ value, count }) => ({
-        value,
-        label: FILE_KIND_LABEL[value as FileKind] ?? value,
-        count,
-      })),
-      sources: sources.map(({ value, count }) => ({
-        value,
-        label:
-          PROJECT_DOCUMENT_SOURCE_LABEL[value as ProjectDocumentSource]
-          ?? value,
-        count,
-      })),
-      tags: tags.map(({ value, count }) => ({ value, label: value, count })),
-      milestones: milestones.map(({ value, count }) => ({
-        value,
-        label: value,
-        count,
-      })),
-      uploaders: uploaders.map(({ value, count }) => ({
-        value,
-        label: value,
-        count,
-      })),
-    };
-  }, [documents, kindOf]);
+  const options = useMemo(
+    () => ({
+      kinds: countValues(indexed.map((row) => row.kind)).map(
+        ({ value, count }) => ({
+          value,
+          label: FILE_KIND_LABEL[value as FileKind] ?? value,
+          count,
+        }),
+      ),
+      sources: countValues(indexed.map((row) => row.document.source)).map(
+        ({ value, count }) => ({
+          value,
+          label:
+            PROJECT_DOCUMENT_SOURCE_LABEL[value as ProjectDocumentSource]
+            ?? value,
+          count,
+        }),
+      ),
+      milestones: countValues(
+        indexed.flatMap((row) =>
+          row.document.milestoneName ? [row.document.milestoneName] : [],
+        ),
+      ).map(({ value, count }) => ({ value, label: value, count })),
+    }),
+    [indexed],
+  );
 
   const uploadedWindow = isTimeWindow(filters.docUploaded)
     ? filters.docUploaded
     : null;
   const committedQuery = filters.docQ.trim().toLowerCase();
-  const activeFilterCount = [
+  const isFiltered = [
     filters.docQ,
     filters.docType,
     filters.docSource,
-    filters.docTag,
     uploadedWindow,
     filters.docMilestone,
-    filters.docBy,
-  ].filter(Boolean).length;
-  const isFiltered = activeFilterCount > 0;
+  ].some(Boolean);
 
-  const visibleDocuments = useMemo(
+  const visible = useMemo(
     () =>
-      documents.filter((document) => {
-        if (filters.docType && kindOf.get(document.key) !== filters.docType) {
-          return false;
-        }
+      indexed.filter(({ document, kind, haystack }) => {
+        if (filters.docType && kind !== filters.docType) return false;
         if (filters.docSource && document.source !== filters.docSource) {
-          return false;
-        }
-        if (filters.docTag && !document.tags.includes(filters.docTag)) {
           return false;
         }
         if (
           filters.docMilestone
           && document.milestoneName !== filters.docMilestone
         ) {
-          return false;
-        }
-        if (filters.docBy && document.uploadedBy !== filters.docBy) {
           return false;
         }
         if (
@@ -248,21 +238,13 @@ export function ProjectDocumentsTab({
         ) {
           return false;
         }
-        if (!committedQuery) return true;
-        return [
-          document.name,
-          document.origin ?? "",
-          document.uploadedBy ?? "",
-          document.milestoneName ?? "",
-          PROJECT_DOCUMENT_SOURCE_LABEL[document.source],
-          FILE_KIND_LABEL[kindOf.get(document.key)!],
-          ...document.tags,
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(committedQuery);
+        // Every word must match somewhere, so "slab photo" narrows rather
+        // than needing the words side by side.
+        return committedQuery
+          .split(/\s+/)
+          .every((word) => haystack.includes(word));
       }),
-    [committedQuery, documents, filters, kindOf, now, uploadedWindow],
+    [committedQuery, filters, indexed, now, uploadedWindow],
   );
 
   const clearFilters = () => {
@@ -314,29 +296,28 @@ export function ProjectDocumentsTab({
     }
   };
 
-  const quickTags = options.tags.slice(0, QUICK_TAG_COUNT);
-
   return (
     <Card className="rounded-xl border-border/70 bg-card shadow-sm">
-      <CardHeader className="space-y-4 border-b border-border/70 pb-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <CardTitle
-              as="h2"
-              className="text-base font-semibold text-foreground"
-            >
-              Project documents
-            </CardTitle>
-            <p
-              className="text-sm text-muted-foreground tabular-nums"
-              aria-live="polite"
-            >
-              {isFiltered
-                ? `${visibleDocuments.length} of ${documents.length} matching`
-                : `${documents.length} ${documents.length === 1 ? "document" : "documents"} from uploads, milestones, compliance, the lead, invoices and variations`}
-            </p>
-          </div>
-          <div className="relative w-full sm:w-72">
+      <CardHeader className="space-y-3 border-b border-border/70 pb-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <CardTitle
+            as="h2"
+            className="text-base font-semibold text-foreground"
+          >
+            Project documents
+          </CardTitle>
+          <p
+            className="text-sm text-muted-foreground tabular-nums"
+            aria-live="polite"
+          >
+            {isFiltered
+              ? `${visible.length} of ${documents.length}`
+              : `${documents.length} ${documents.length === 1 ? "document" : "documents"}`}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-56 flex-1">
             <Search
               className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
               aria-hidden="true"
@@ -345,24 +326,24 @@ export function ProjectDocumentsTab({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search name, tag, origin or uploader"
+              placeholder="Search documents"
               className="h-9 rounded-lg pl-9 text-sm"
               aria-label="Search documents"
             />
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           <FilterSelect
+            hideLabel
             label="File type"
             allLabel="All types"
             value={filters.docType}
             onChange={(docType) => setFilters({ docType })}
             options={options.kinds}
+            className="w-[calc(50%-0.25rem)] sm:w-36"
           />
           <FilterSelect
+            hideLabel
             label="Uploaded"
-            allLabel="Any time"
+            allLabel="Any date"
             value={uploadedWindow ?? ""}
             onChange={(docUploaded) =>
               setFilters(
@@ -375,42 +356,46 @@ export function ProjectDocumentsTab({
               value: window,
               label: TIME_WINDOW_LABEL[window],
             }))}
+            className="w-[calc(50%-0.25rem)] sm:w-40"
           />
           <FilterSelect
+            hideLabel
             label="Source"
             allLabel="All sources"
             value={filters.docSource}
             onChange={(docSource) => setFilters({ docSource })}
             options={options.sources}
+            className="w-[calc(50%-0.25rem)] sm:w-40"
           />
-          <FilterSelect
-            label="Tag"
-            allLabel="All tags"
-            value={filters.docTag}
-            onChange={(docTag) => setFilters({ docTag })}
-            options={options.tags}
-          />
-          <FilterSelect
-            label="Milestone"
-            allLabel="All milestones"
-            value={filters.docMilestone}
-            onChange={(docMilestone) => setFilters({ docMilestone })}
-            options={options.milestones}
-            disabled={options.milestones.length === 0 && !filters.docMilestone}
-          />
-          <FilterSelect
-            label="Uploaded by"
-            allLabel="Anyone"
-            value={filters.docBy}
-            onChange={(docBy) => setFilters({ docBy })}
-            options={options.uploaders}
-          />
+          {options.milestones.length > 0 || filters.docMilestone ? (
+            <FilterSelect
+              hideLabel
+              label="Milestone"
+              allLabel="All milestones"
+              value={filters.docMilestone}
+              onChange={(docMilestone) => setFilters({ docMilestone })}
+              options={options.milestones}
+              className="w-[calc(50%-0.25rem)] sm:w-44"
+            />
+          ) : null}
+          {isFiltered ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-9 text-xs"
+              onClick={clearFilters}
+            >
+              <X data-icon="inline-start" aria-hidden="true" />
+              Clear
+            </Button>
+          ) : null}
         </div>
 
         {uploadedWindow === "custom" ? (
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
-              <span className="block">From</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <label className="flex items-center gap-2">
+              From
               <Input
                 type="date"
                 value={filters.docFrom}
@@ -418,64 +403,19 @@ export function ProjectDocumentsTab({
                 onChange={(event) =>
                   setFilters({ docFrom: event.target.value })
                 }
-                className="h-9 w-40"
+                className="h-8 w-40"
               />
             </label>
-            <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
-              <span className="block">To</span>
+            <label className="flex items-center gap-2">
+              to
               <Input
                 type="date"
                 value={filters.docTo}
                 min={filters.docFrom || undefined}
                 onChange={(event) => setFilters({ docTo: event.target.value })}
-                className="h-9 w-40"
+                className="h-8 w-40"
               />
             </label>
-          </div>
-        ) : null}
-
-        {quickTags.length > 0 || isFiltered ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {quickTags.length > 0 ? (
-              <span className="text-xs font-medium text-muted-foreground">
-                Popular tags
-              </span>
-            ) : null}
-            {quickTags.map(({ value, count }) => {
-              const active = filters.docTag === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setFilters({ docTag: active ? null : value })}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
-                    active
-                      ? "border-primary/50 bg-primary/10 text-primary"
-                      : "border-border/70 bg-background text-foreground hover:border-primary/40 hover:text-primary",
-                  )}
-                >
-                  {value}
-                  <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-            {isFiltered ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="ml-auto h-7 text-xs"
-                onClick={clearFilters}
-              >
-                <X data-icon="inline-start" aria-hidden="true" />
-                Clear {activeFilterCount}{" "}
-                {activeFilterCount === 1 ? "filter" : "filters"}
-              </Button>
-            ) : null}
           </div>
         ) : null}
       </CardHeader>
@@ -487,93 +427,84 @@ export function ProjectDocumentsTab({
             // The gallery covers every image in the filtered list, so the
             // filters define "the rest of the images" here.
             const action = filePreviewModal(
-              visibleDocuments.map((candidate) => ({
-                url: candidate.url,
-                name: candidate.name,
-                fileType: candidate.fileType ?? undefined,
+              visible.map(({ document }) => ({
+                url: document.url,
+                name: document.name,
+                fileType: document.fileType ?? undefined,
               })),
               index,
             );
             if (action) dispatch(openModal(action));
           }}
           rowLabel={(index) =>
-            `Open ${visibleDocuments[index]?.name ?? "document"}`
+            `Open ${visible[index]?.document.name ?? "document"}`
           }
-          caption="Every document on this project, with its tags, where it came from, its milestone, size and upload time."
+          caption="Every document on this project, with where it came from, when it was uploaded and its size."
           headers={[
             "Name",
-            "Tags",
             "Source",
-            "Milestone",
-            "Size",
             "Uploaded",
-            ...(isAdmin ? ["Actions"] : []),
+            "Size",
+            ...(isAdmin ? [""] : []),
           ]}
           align={[
             "start",
             "start",
             "start",
-            "start",
             "end",
-            "start",
             ...(isAdmin ? ["end" as const] : []),
           ]}
-          rows={visibleDocuments.map((document) => {
-            const kind = kindOf.get(document.key) ?? "other";
+          rows={visible.map(({ document, kind }) => {
             const Icon = KIND_ICON[kind];
+            const uploadedAt = parseDate(document.createdAt);
             return [
               <span
                 key={`${document.key}-name`}
-                className="flex min-w-0 items-start gap-2.5"
+                className="flex min-w-0 items-center gap-2.5"
               >
-                <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                  <Icon className="size-4" aria-hidden="true" />
-                </span>
-                <span className="min-w-0 space-y-0.5">
-                  <span className="block truncate font-medium text-primary underline-offset-4 hover:underline">
-                    {document.name}
+                <Icon
+                  className="size-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <span className="max-w-[min(32rem,55vw)] min-w-0">
+                  <span
+                    className="block truncate font-medium text-primary underline-offset-4 hover:underline"
+                    title={document.name}
+                  >
+                    {displayFileName(document.name)}
                   </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {document.origin ?? FILE_KIND_LABEL[kind]}
-                  </span>
+                  {document.milestoneName ? (
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {document.milestoneName}
+                    </span>
+                  ) : null}
                 </span>
-              </span>,
-
-              <FileTagList
-                key={`${document.key}-tags`}
-                tags={document.tags}
-                activeTag={filters.docTag}
-                onSelect={(docTag) => setFilters({ docTag })}
-                className="max-w-72"
-              />,
-
-              <span key={`${document.key}-source`} className="text-sm">
-                {PROJECT_DOCUMENT_SOURCE_LABEL[document.source]}
-              </span>,
-
-              <span key={`${document.key}-milestone`} className="text-sm">
-                {document.milestoneName ?? "—"}
               </span>,
 
               <span
-                key={`${document.key}-size`}
-                className="font-mono text-sm text-foreground tabular-nums"
+                key={`${document.key}-source`}
+                className="text-sm text-muted-foreground"
               >
-                {document.size !== null ? formatFileSize(document.size) : "—"}
+                {PROJECT_DOCUMENT_SOURCE_LABEL[document.source]}
               </span>,
 
               <span
                 key={`${document.key}-uploadedAt`}
-                className="block space-y-0.5"
+                className="text-sm whitespace-nowrap tabular-nums"
+                title={
+                  uploadedAt
+                    ? `${dataTimeFormat.format(uploadedAt)}${document.uploadedBy ? ` · ${document.uploadedBy}` : ""}`
+                    : undefined
+                }
               >
-                <span className="block font-mono text-sm whitespace-nowrap tabular-nums">
-                  {formatUploadedAt(document.createdAt)}
-                </span>
-                {document.uploadedBy ? (
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {document.uploadedBy}
-                  </span>
-                ) : null}
+                {uploadedAt ? dateFormat.format(uploadedAt) : "—"}
+              </span>,
+
+              <span
+                key={`${document.key}-size`}
+                className="text-sm text-muted-foreground tabular-nums"
+              >
+                {document.size !== null ? formatFileSize(document.size) : "—"}
               </span>,
               ...(isAdmin
                 ? [
@@ -584,8 +515,8 @@ export function ProjectDocumentsTab({
                         variant="ghost"
                         size="icon-sm"
                         disabled={isDeleting}
-                        aria-label={`Delete ${document.name}`}
-                        title={`Delete ${document.name}`}
+                        aria-label={`Delete ${displayFileName(document.name)}`}
+                        title={`Delete ${displayFileName(document.name)}`}
                         onClick={(event) => {
                           event.stopPropagation();
                           setDeleteError(null);
@@ -595,13 +526,7 @@ export function ProjectDocumentsTab({
                         <Trash2 aria-hidden="true" />
                       </Button>
                     ) : (
-                      <span
-                        key={`${document.key}-delete`}
-                        className="text-xs text-muted-foreground"
-                        title={`Managed from ${PROJECT_DOCUMENT_SOURCE_LABEL[document.source]}`}
-                      >
-                        —
-                      </span>
+                      <span key={`${document.key}-delete`} />
                     ),
                   ]
                 : []),
@@ -618,14 +543,12 @@ export function ProjectDocumentsTab({
 
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">
-                  {isFiltered
-                    ? "No documents match these filters"
-                    : "No documents yet"}
+                  {isFiltered ? "No documents match" : "No documents yet"}
                 </p>
 
                 <p className="text-xs text-muted-foreground">
                   {isFiltered
-                    ? `Nothing matches. Clear the filters to see all ${documents.length} documents.`
+                    ? `Clear the search and filters to see all ${documents.length} documents.`
                     : "Plans, quotes, permits, compliance documents and invoices for this project appear here."}
                 </p>
               </div>

@@ -17,6 +17,7 @@ import {
 } from "@/lib/domain/projects/document-tags";
 import { readProjectDocuments } from "@/lib/domain/projects/documents";
 import {
+  displayFileName,
   fileKind,
   isWithinWindow,
   parseDateInput,
@@ -269,5 +270,24 @@ test("history entries are grouped by what they are about", () => {
   assert.equal(
     activityTitle("complianceDocumentApproved"),
     "Compliance document approved",
+  );
+});
+
+test("stored names lose their upload id and storage suffix on screen only", () => {
+  assert.equal(
+    displayFileName(
+      "24e19b97-d9f4-4c3d-96da-a387ed5f49c2-Lot-9028-signed-tender--Xzt8gvtlN5S8tIRvSWi6J9NqSKQKfm.pdf",
+    ),
+    "Lot-9028-signed-tender.pdf",
+  );
+  assert.equal(
+    displayFileName("Contract_for_Lot_9028-3dFkq4ulw6vWCA9lyIPCA9wQvoNoy1.pdf"),
+    "Contract_for_Lot_9028.pdf",
+  );
+  assert.equal(displayFileName("Wheat St Tender.pdf"), "Wheat St Tender.pdf");
+  // A long ordinary word is part of the name, not a storage suffix.
+  assert.equal(
+    displayFileName("Site-Intercontinentalisation.pdf"),
+    "Site-Intercontinentalisation.pdf",
   );
 });

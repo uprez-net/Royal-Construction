@@ -157,3 +157,19 @@ export function countValues(
     .map(([value, count]) => ({ value, count }))
     .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
 }
+
+const LEADING_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[-_]/i;
+// Blob's random suffix, and the one older uploads carry, before the extension.
+// It always holds a digit, which keeps a long ordinary word in the name.
+const STORAGE_SUFFIX = /-+(?=[A-Za-z]*\d)[A-Za-z0-9]{16,}(?=\.[A-Za-z0-9]+$)/;
+
+/**
+ * A stored file name as a person would have named it: without the upload id
+ * some paths put in front, or the storage suffix some put before the
+ * extension. Display only; the stored name is unchanged.
+ */
+export function displayFileName(name: string): string {
+  const cleaned = name.replace(LEADING_ID, "").replace(STORAGE_SUFFIX, "");
+  return cleaned.trim() || name;
+}
