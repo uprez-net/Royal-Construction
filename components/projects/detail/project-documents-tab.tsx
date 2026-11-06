@@ -2,15 +2,21 @@
 
 import { useMemo, useRef, useState } from "react";
 import {
-  File as FileIcon,
-  FileImage,
-  FileSpreadsheet,
-  FileText,
+  CalendarDays,
   Files,
+  Flag,
+  FolderUp,
+  Layers,
   Loader2,
+  Receipt,
   Search,
+  ShieldCheck,
   Trash2,
+  TriangleAlert,
+  UserRound,
+  PencilRuler,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -19,6 +25,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/common/data-table";
 import { FilterSelect } from "@/components/common/filter-select";
+import {
+  FILE_KIND_ICON,
+  TIME_WINDOW_ICON,
+  TIME_WINDOW_ICON_CLASS,
+} from "@/components/common/file-filter-icons";
 import {
   useDebouncedSearchParam,
   useSearchParamFilters,
@@ -75,13 +86,29 @@ const PARAMS = [
   "docMilestone",
 ] as const;
 
-const KIND_ICON: Record<FileKind, typeof FileIcon> = {
-  pdf: FileText,
-  image: FileImage,
-  word: FileText,
-  spreadsheet: FileSpreadsheet,
-  text: FileText,
-  other: FileIcon,
+const SOURCE_ICON: Record<
+  ProjectDocumentSource,
+  { icon: LucideIcon; className: string }
+> = {
+  project: { icon: FolderUp, className: "text-primary" },
+  milestone: { icon: Flag, className: "text-orange-600 dark:text-orange-400" },
+  compliance: {
+    icon: ShieldCheck,
+    className: "text-emerald-600 dark:text-emerald-400",
+  },
+  lead: { icon: UserRound, className: "text-sky-600 dark:text-sky-400" },
+  incident: {
+    icon: TriangleAlert,
+    className: "text-amber-600 dark:text-amber-400",
+  },
+  "tradie-invoice": {
+    icon: Receipt,
+    className: "text-violet-600 dark:text-violet-400",
+  },
+  variation: {
+    icon: PencilRuler,
+    className: "text-pink-600 dark:text-pink-400",
+  },
 };
 
 function isAdminOnly(document: ProjectDocument) {
@@ -185,6 +212,8 @@ export function ProjectDocumentsTab({
           value,
           label: FILE_KIND_LABEL[value as FileKind] ?? value,
           count,
+          icon: FILE_KIND_ICON[value as FileKind]?.icon,
+          iconClassName: FILE_KIND_ICON[value as FileKind]?.className,
         }),
       ),
       sources: countValues(indexed.map((row) => row.document.source)).map(
@@ -194,13 +223,20 @@ export function ProjectDocumentsTab({
             PROJECT_DOCUMENT_SOURCE_LABEL[value as ProjectDocumentSource]
             ?? value,
           count,
+          icon: SOURCE_ICON[value as ProjectDocumentSource]?.icon,
+          iconClassName: SOURCE_ICON[value as ProjectDocumentSource]?.className,
         }),
       ),
       milestones: countValues(
         indexed.flatMap((row) =>
           row.document.milestoneName ? [row.document.milestoneName] : [],
         ),
-      ).map(({ value, count }) => ({ value, label: value, count })),
+      ).map(({ value, count }) => ({
+        value,
+        label: value,
+        count,
+        iconClassName: "text-orange-600 dark:text-orange-400",
+      })),
     }),
     [indexed],
   );
@@ -335,6 +371,7 @@ export function ProjectDocumentsTab({
             hideLabel
             label="File type"
             allLabel="All types"
+            icon={Files}
             value={filters.docType}
             onChange={(docType) => setFilters({ docType })}
             options={options.kinds}
@@ -344,6 +381,7 @@ export function ProjectDocumentsTab({
             hideLabel
             label="Uploaded"
             allLabel="Any date"
+            icon={CalendarDays}
             value={uploadedWindow ?? ""}
             onChange={(docUploaded) =>
               setFilters(
@@ -355,6 +393,8 @@ export function ProjectDocumentsTab({
             options={TIME_WINDOWS.map((window) => ({
               value: window,
               label: TIME_WINDOW_LABEL[window],
+              icon: TIME_WINDOW_ICON[window],
+              iconClassName: TIME_WINDOW_ICON_CLASS,
             }))}
             className="w-[calc(50%-0.25rem)] sm:w-40"
           />
@@ -362,6 +402,7 @@ export function ProjectDocumentsTab({
             hideLabel
             label="Source"
             allLabel="All sources"
+            icon={Layers}
             value={filters.docSource}
             onChange={(docSource) => setFilters({ docSource })}
             options={options.sources}
@@ -372,6 +413,7 @@ export function ProjectDocumentsTab({
               hideLabel
               label="Milestone"
               allLabel="All milestones"
+              icon={Flag}
               value={filters.docMilestone}
               onChange={(docMilestone) => setFilters({ docMilestone })}
               options={options.milestones}
@@ -455,7 +497,8 @@ export function ProjectDocumentsTab({
             ...(isAdmin ? ["end" as const] : []),
           ]}
           rows={visible.map(({ document, kind }) => {
-            const Icon = KIND_ICON[kind];
+            const { icon: Icon, className: iconClassName } =
+              FILE_KIND_ICON[kind];
             const uploadedAt = parseDate(document.createdAt);
             return [
               <span
@@ -463,7 +506,7 @@ export function ProjectDocumentsTab({
                 className="flex min-w-0 items-center gap-2.5"
               >
                 <Icon
-                  className="size-4 shrink-0 text-muted-foreground"
+                  className={`size-4 shrink-0 ${iconClassName}`}
                   aria-hidden="true"
                 />
                 <span className="max-w-[min(32rem,55vw)] min-w-0">

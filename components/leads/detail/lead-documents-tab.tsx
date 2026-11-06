@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
-import { Files, Loader2, Search, Upload, X } from "lucide-react";
+import { CalendarDays, Files, Loader2, Search, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/common/data-table";
 import { FilterSelect } from "@/components/common/filter-select";
+import {
+  FILE_KIND_ICON,
+  TIME_WINDOW_ICON,
+  TIME_WINDOW_ICON_CLASS,
+} from "@/components/common/file-filter-icons";
 import { UploadDropzone } from "@/components/common/upload-dropzone";
 import { useUploadHints } from "@/components/common/upload-hints";
 import {
@@ -113,6 +118,8 @@ export function LeadDocumentsTab({
           value,
           label: FILE_KIND_LABEL[value as FileKind] ?? value,
           count,
+          icon: FILE_KIND_ICON[value as FileKind]?.icon,
+          iconClassName: FILE_KIND_ICON[value as FileKind]?.className,
         }),
       ),
     }),
@@ -382,6 +389,7 @@ export function LeadDocumentsTab({
               hideLabel
               label="File type"
               allLabel="All types"
+              icon={Files}
               value={filters.fileType}
               onChange={(fileType) => setFilters({ fileType })}
               options={options.kinds}
@@ -391,6 +399,7 @@ export function LeadDocumentsTab({
               hideLabel
               label="Uploaded"
               allLabel="Any date"
+              icon={CalendarDays}
               value={uploadedWindow ?? ""}
               onChange={(fileUploaded) =>
                 setFilters(
@@ -402,6 +411,8 @@ export function LeadDocumentsTab({
               options={TIME_WINDOWS.map((window) => ({
                 value: window,
                 label: TIME_WINDOW_LABEL[window],
+                icon: TIME_WINDOW_ICON[window],
+                iconClassName: TIME_WINDOW_ICON_CLASS,
               }))}
               className="w-[calc(50%-0.25rem)] sm:w-40"
             />

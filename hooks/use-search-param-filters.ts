@@ -1,15 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 /**
  * A table's filters, kept in the URL so a reload, a shared link and the back
  * button all land on the same view. Each key is a search parameter; an empty
  * value removes it.
+ *
+ * Written with the browser's replaceState, not router.replace: the filters
+ * only narrow rows already on the page, and router.replace re-renders the
+ * whole server page and holds the URL back until that finishes. On a large
+ * project that took long enough to time out, so a filter seemed to do nothing.
+ * Next keeps useSearchParams in step with replaceState.
  */
 export function useSearchParamFilters<K extends string>(keys: readonly K[]) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
@@ -24,7 +29,9 @@ export function useSearchParamFilters<K extends string>(keys: readonly K[]) {
 
   const setValues = useCallback(
     (changes: Partial<Record<K, string | null>>) => {
-      const params = new URLSearchParams(searchParamsString);
+      // The live URL, so two changes in one tick both land.
+      const current = window.location.search.replace(/^\?/, "");
+      const params = new URLSearchParams(current);
       for (const [key, value] of Object.entries(changes) as [
         K,
         string | null | undefined,
@@ -33,12 +40,14 @@ export function useSearchParamFilters<K extends string>(keys: readonly K[]) {
         else params.delete(key);
       }
       const next = params.toString();
-      if (next === searchParamsString) return;
-      router.replace(next ? `${pathname}?${next}` : pathname, {
-        scroll: false,
-      });
+      if (next === current) return;
+      window.history.replaceState(
+        null,
+        "",
+        next ? `${pathname}?${next}` : pathname,
+      );
     },
-    [pathname, router, searchParamsString],
+    [pathname],
   );
 
   return [values, setValues] as const;

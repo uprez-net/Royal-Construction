@@ -10,7 +10,7 @@ import { openModal } from "@/lib/store/slices/uiSlice";
 import { TradieAttentionCard } from "./tradie-attention-card";
 import { useTradieAttention } from "./tradie-attention";
 import { useCallback, useMemo } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { sameTrade } from "@/lib/domain/tradies/request-rules";
 import { projectTrades, tradeOverview } from "./tradie-requests";
 import { TradeList, TradeWorkbench } from "./tradie-trade-overview";
@@ -22,10 +22,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
 
   // The trade being looked at lives in the URL, beside `activeTab`, so it
   // survives a reload and the back button, and a fresh visit starts on "All".
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const searchParamsString = searchParams.toString();
   const trades = useMemo(() => projectTrades(project), [project]);
   const tradeParam = searchParams.get("trade");
   const trade = tradeParam
@@ -34,12 +32,14 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
 
   const selectTrade = useCallback(
     (next: string | null) => {
-      const params = new URLSearchParams(searchParamsString);
+      // replaceState, not router.replace: picking a trade must not re-render
+      // the whole server page.
+      const params = new URLSearchParams(window.location.search);
       if (next) params.set("trade", next);
       else params.delete("trade");
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
     },
-    [pathname, router, searchParamsString],
+    [pathname],
   );
 
   const overviews = useMemo(
