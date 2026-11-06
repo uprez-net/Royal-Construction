@@ -3,16 +3,14 @@ import {
   HistoryItem,
   Lead,
   LeadNoteAnnotationInput,
-  LeadsStats,
   LeadStage,
 } from "./types";
 import { FetchError, fetchJson } from "@/utils/fetch";
 import {
   findLeadById,
   getAllLeads,
-  getAnalyticsData,
   getFollowupStats,
-  getLeadsStats,
+  getLeadsOverview,
 } from "../actions/leads";
 import type { PaginatedLeadsResult } from "../data/leads";
 import { sendCampaignEmail } from "../data/email-ad-hock";
@@ -54,8 +52,8 @@ export type LeadCreatePayload = Omit<
  */
 
 // ── Fetch all leads ──
-export async function fetchLeadAnalyticsData() {
-  return getAnalyticsData();
+export async function fetchLeadsOverview() {
+  return getLeadsOverview();
 }
 
 export async function fetchAllLeads(): Promise<Lead[]> {
@@ -109,10 +107,6 @@ export async function fetchLeads(params: {
 export async function fetchLead(id: number): Promise<Lead | null> {
   const lead = await findLeadById(id);
   return lead;
-}
-
-export async function fetchLeadsStats(): Promise<LeadsStats> {
-  return getLeadsStats();
 }
 
 export async function fetchFollowupStats() {

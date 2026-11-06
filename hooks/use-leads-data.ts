@@ -3,11 +3,7 @@ import { Lead, LeadStage, LeadsStats } from "@/lib/leads/types";
 import { useAppSelector } from "@/lib/store/hooks";
 import { LeadAnalyticsData } from "@/types/lead";
 import { WIN_RATE_WINDOW_DAYS } from "@/lib/leads/pipeline-stages";
-import {
-  fetchLeads,
-  fetchLeadsStats,
-  fetchLeadAnalyticsData,
-} from "@/lib/leads/leads-service";
+import { fetchLeads, fetchLeadsOverview } from "@/lib/leads/leads-service";
 import type { LeadEmails } from "@prisma/client";
 
 interface PageInfo {
@@ -127,10 +123,7 @@ export function useLeadsData() {
     const run = ++statsRun.current;
     // No follow-up stats here any more. The Follow-ups tab derives its counts
     // from the task list it renders, so a second source could not agree with it.
-    const [statsData, analytics] = await Promise.all([
-      fetchLeadsStats(),
-      fetchLeadAnalyticsData(),
-    ]);
+    const { stats: statsData, analytics } = await fetchLeadsOverview();
     // A newer refresh started while this one was in flight; that one wins.
     if (run !== statsRun.current) return;
     setStats(statsData);
@@ -209,23 +202,22 @@ export function useLeadsData() {
         // Settled separately: a newer table request supersedes only this
         // one's rows, so the cards must neither wait on nor be swallowed by
         // the table's fate.
-        const [leadsResult, statsResult, analyticsResult] =
-          await Promise.allSettled([
-            // "pendingFollowup" is not a stage — resolveStatusFilter maps it to
-            // an empty array — so without hasOpenTask the initial load for a
-            // bookmarked ?status=pendingFollowup fetched every lead and raced
-            // the filtered request the metric effect fires straight after.
-            fetchLeadListPage(params),
-            fetchLeadsStats(),
-            fetchLeadAnalyticsData(),
-          ]);
-        if (statsResult.status === "fulfilled") setStats(statsResult.value);
-        if (analyticsResult.status === "fulfilled") {
-          setAnalyticsData(analyticsResult.value);
+        const [leadsResult, overviewResult] = await Promise.allSettled([
+          // "pendingFollowup" is not a stage — resolveStatusFilter maps it to
+          // an empty array — so without hasOpenTask the initial load for a
+          // bookmarked ?status=pendingFollowup fetched every lead and raced
+          // the filtered request the metric effect fires straight after.
+          fetchLeadListPage(params),
+          // The cards and the analytics in one Server Action: two were
+          // dispatched one after the other.
+          fetchLeadsOverview(),
+        ]);
+        if (overviewResult.status === "fulfilled") {
+          setStats(overviewResult.value.stats);
+          setAnalyticsData(overviewResult.value.analytics);
         }
-        const cardFailures = [statsResult, analyticsResult].flatMap((result) =>
-          result.status === "rejected" ? [result.reason] : [],
-        );
+        const cardFailures =
+          overviewResult.status === "rejected" ? [overviewResult.reason] : [];
         if (cardFailures.length > 0) {
           console.error(...cardFailures);
           setError("Failed to load leads data");

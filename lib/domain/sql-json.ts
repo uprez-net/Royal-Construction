@@ -23,8 +23,12 @@ const MODELS = new Map<string, Map<string, FieldInfo>>(
 /**
  * `value`, a row of `model` (or a list of them) as JSON, with Prisma's types
  * restored: a `DateTime` becomes a `Date`, a `Decimal` a `Prisma.Decimal`, and
- * relations are walked by their own model. Keys the model does not have are
- * passed through untouched.
+ * relations are walked by their own model.
+ *
+ * Keys the model does not have are dropped, as Prisma drops them. `to_jsonb`
+ * prints every column the table has, and a shared database can be ahead of
+ * this schema: staging carried six WhatsApp columns from another branch's
+ * migration, and they rode along on every lead until this was added.
  */
 export function reviveRow(value: unknown, model: string): unknown {
   if (value === null || typeof value !== "object") return value;
@@ -34,7 +38,8 @@ export function reviveRow(value: unknown, model: string): unknown {
   const out: Record<string, unknown> = {};
   for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
     const field = fields.get(key);
-    if (!field || raw === null) {
+    if (!field) continue;
+    if (raw === null) {
       out[key] = raw;
     } else if (field.kind === "object") {
       out[key] = reviveRow(raw, field.type);
