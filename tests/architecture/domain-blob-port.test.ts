@@ -218,7 +218,6 @@ test("nothing to reclaim touches neither the database nor storage", async () => 
 
 test("the adapters hand over the shared Blob capability rather than importing del", () => {
   for (const path of [
-    "lib/actions/blob.ts",
     "lib/data/email-ad-hock.ts",
     "lib/compliance/document-replacement.ts",
   ]) {

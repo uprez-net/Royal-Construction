@@ -7,7 +7,9 @@ import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
-import { NEXT_FOLLOWUP_TASK } from "@/lib/leads/followup-resolution";
+import { readLeadRows } from "@/lib/domain/leads/row-read";
+import { canAccessLead } from "@/lib/domain/access/leads";
+import { cache } from "react";
 import {
   computeForecast,
   computePipelineMetrics,
@@ -182,21 +184,7 @@ export interface FollowupStats {
  */
 export async function getAllLeads(): Promise<UiLead[]> {
   try {
-    const leads = await prisma.lead.findMany({
-      include: {
-        history: { orderBy: { actionDate: "asc" }, include: { author: true } },
-        chatSessions: true,
-        assignedUser: { select: { id: true, name: true, email: true } },
-        noteAnnotations: { orderBy: { createdAt: "desc" } },
-        emails: { orderBy: { createdAt: "desc" } },
-        files: true,
-        // The one task that decides the Follow-up cell. Not filtered to open
-        // work: mapLead has to tell "the follow-up is done" apart from "this
-        // lead never had one", and `where: { completedAt: null }` collapsed
-        // both to an empty array. See NEXT_FOLLOWUP_TASK.
-        tasks: NEXT_FOLLOWUP_TASK,
-      },
-    });
+    const leads = await readLeadRows("all", prisma);
     return leads.map((lead) => mapLead(lead));
   } catch (error) {
     console.error("Error fetching all leads:", error);
@@ -411,28 +399,25 @@ export async function getLeads(
         },
       }),
     };
-    const leads = await prisma.lead.findMany({
-      where: finalWhere,
-      include: {
-        history: { orderBy: { actionDate: "asc" }, include: { author: true } },
-        chatSessions: true,
-        assignedUser: { select: { id: true, name: true, email: true } },
-        noteAnnotations: { orderBy: { createdAt: "desc" } },
-        emails: { orderBy: { createdAt: "desc" } },
-        files: true,
-        // The one task that decides the Follow-up cell. Not filtered to open
-        // work: mapLead has to tell "the follow-up is done" apart from "this
-        // lead never had one", and `where: { completedAt: null }` collapsed
-        // both to an empty array. See NEXT_FOLLOWUP_TASK.
-        tasks: NEXT_FOLLOWUP_TASK,
-      },
-      orderBy: { createdAt: "desc" },
-      skip: (safePage - 1) * safeLimit,
-      take: safeLimit,
-    });
-    const totalCount = await prisma.lead.count({
-      where: finalWhere,
-    });
+    // The page's ids and the count side by side, then the rows in one
+    // statement: two round trips instead of five. The filter stays a Prisma
+    // `where`, so it is written once.
+    const [page, totalCount] = await Promise.all([
+      prisma.lead.findMany({
+        where: finalWhere,
+        select: { id: true },
+        // id breaks ties, so a page boundary cannot fall between two leads
+        // created in the same millisecond and show one of them twice.
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (safePage - 1) * safeLimit,
+        take: safeLimit,
+      }),
+      prisma.lead.count({ where: finalWhere }),
+    ]);
+    const leads = await readLeadRows(
+      page.map((lead) => lead.id),
+      prisma,
+    );
 
     const items = leads.map((lead) => mapLead(lead));
 
@@ -465,60 +450,29 @@ type CreateLeadOptions = {
  * @returns The mapped lead or null if not found.
  */
 export async function findLeadById(id: number): Promise<UiLead | null> {
-  const lead = await prisma.lead.findUnique({
-    where: { id },
-    include: {
-      history: {
-        orderBy: { actionDate: "asc" },
-        include: { author: true },
-      },
-      chatSessions: true,
-      assignedUser: { select: { id: true, name: true, email: true } },
-      noteAnnotations: { orderBy: { createdAt: "desc" } },
-      emails: { orderBy: { createdAt: "desc" } },
-      files: true,
-      // mapLead cannot resolve a follow-up date without it, and omitting it
-      // used to be silent: `tasks` was optional, so this query returned the
-      // retired column even for a lead with a live open task.
-      tasks: NEXT_FOLLOWUP_TASK,
-    },
-  });
-  if (!lead) return null;
-  return mapLead(lead);
+  const [lead] = await readLeadRows([id], prisma);
+  return lead ? mapLead(lead) : null;
 }
 
 /**
- * Retrieves a lead using its unique identifier.
+ * The lead page's read: its metadata and its body share one call per request.
+ * Route handlers keep calling `findLeadById`, so they read their own writes.
  *
- * Includes all related entities required by the CRM UI.
- *
- * @param id - Lead identifier.
- * @returns The mapped lead or null if not found.
- *
- * @remarks
- * Despite its name, this function currently performs a lookup by lead ID
- * rather than by email address.
+ * Applies `canAccessLead` to the row it read, which costs nothing extra: the
+ * caller is resolved alongside the read, and the page used to apply no check
+ * at all where the Server Action path ran `authorizeLeadAccess`. A lead the
+ * caller may not open is answered as not found.
  */
-export async function findLeadByEmail(id: number): Promise<UiLead | null> {
-  const lead = await prisma.lead.findUnique({
-    where: { id },
-    include: {
-      history: { orderBy: { actionDate: "asc" }, include: { author: true } },
-      chatSessions: true,
-      assignedUser: { select: { id: true, name: true, email: true } },
-      noteAnnotations: { orderBy: { createdAt: "desc" } },
-      emails: { orderBy: { createdAt: "desc" } },
-      files: true,
-      // mapLead cannot resolve a follow-up date without it, and omitting it
-      // used to be silent: `tasks` was optional, so this query returned the
-      // retired column even for a lead with a live open task.
-      tasks: NEXT_FOLLOWUP_TASK,
-    },
-  });
-  if (!lead) return null;
-
-  return mapLead(lead);
-}
+export const getLeadForPage = cache(
+  async (id: number): Promise<UiLead | null> => {
+    const [principal, [lead]] = await Promise.all([
+      currentLeadPrincipal(),
+      readLeadRows([id], prisma),
+    ]);
+    if (!lead || !canAccessLead(principal, lead)) return null;
+    return mapLead(lead);
+  },
+);
 
 // export async function handleCalendarFollowup(
 //   lead: Lead,
@@ -1027,14 +981,16 @@ export async function getFollowupStats(): Promise<FollowupStats> {
  * @returns Analytics datasets for chart rendering.
  */
 export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
-  const [sourceRows, trendRows, lostReasonRows] = await Promise.all([
-    prisma.$queryRaw<
-      {
-        source: string;
-        total: bigint;
-        won: bigint;
-      }[]
-    >`
+  // All four side by side: the pipeline read used to wait for the other three.
+  const [sourceRows, trendRows, lostReasonRows, leadsForMetrics] =
+    await Promise.all([
+      prisma.$queryRaw<
+        {
+          source: string;
+          total: bigint;
+          won: bigint;
+        }[]
+      >`
     SELECT
       COALESCE(source, "sourceDetail", 'Website') AS source,
       COUNT(*) AS total,
@@ -1046,13 +1002,13 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
     ORDER BY total DESC
   `,
 
-    prisma.$queryRaw<
-      {
-        month: Date;
-        leads: bigint;
-        converted: bigint;
-      }[]
-    >`
+      prisma.$queryRaw<
+        {
+          month: Date;
+          leads: bigint;
+          converted: bigint;
+        }[]
+      >`
     SELECT
       DATE_TRUNC('month', "createdAt") AS month,
       COUNT(*) AS leads,
@@ -1065,12 +1021,12 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
     ORDER BY month ASC
   `,
 
-    prisma.$queryRaw<
-      {
-        name: string | null;
-        value: bigint;
-      }[]
-    >`
+      prisma.$queryRaw<
+        {
+          name: string | null;
+          value: bigint;
+        }[]
+      >`
     SELECT
       COALESCE("lostReason", 'Unknown') AS name,
       COUNT(*) AS value
@@ -1079,7 +1035,8 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
     GROUP BY COALESCE("lostReason", 'Unknown')
     ORDER BY value DESC
   `,
-  ]);
+      fetchLeadsForMetrics(),
+    ]);
 
   const sourceData = sourceRows.map((row) => ({
     name: row.source,
@@ -1119,7 +1076,6 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
   }));
 
   const now = new Date();
-  const leadsForMetrics = await fetchLeadsForMetrics();
   const current = fyQuarterOf(now);
 
   return {
@@ -1134,6 +1090,26 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
       computeForecast(leadsForMetrics, current.fy, current.quarter),
     ),
   };
+}
+
+export type LeadsOverview = {
+  stats: LeadsStats;
+  analytics: LeadAnalyticsData;
+};
+
+/**
+ * The cards and the analytics, read together.
+ *
+ * One call rather than two on purpose: the screen reaches these through
+ * Server Actions, and the client dispatches Server Actions one at a time, so
+ * two actions meant the analytics waited for the cards to finish.
+ */
+export async function getLeadsOverview(): Promise<LeadsOverview> {
+  const [stats, analytics] = await Promise.all([
+    getLeadsStats(),
+    getAnalyticsData(),
+  ]);
+  return { stats, analytics };
 }
 
 /* ── Pipeline metrics & forecast ──────────────────────────────────────

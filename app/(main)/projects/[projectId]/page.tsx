@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 
 import { ProjectDetailScreen } from "@/components/projects/project-detail-screen";
-import { getProjectById } from "@/lib/data/projects";
+import { getProjectForPage } from "@/lib/data/projects";
 import ProjectDetailLoading from "./loading";
 import type { Metadata } from "next";
 import { getUserByClerkIdCached } from "@/lib/data/user";
@@ -14,7 +14,7 @@ export async function generateMetadata({
   params: Promise<{ projectId: string }>;
 }): Promise<Metadata> {
   const { projectId } = await params;
-  const project = await getProjectById(projectId);
+  const project = await getProjectForPage(projectId);
 
   if (project) {
     return {
@@ -36,7 +36,7 @@ async function ProjectDetailContent({
 }) {
   const { projectId } = await params;
   const [project, user] = await Promise.all([
-    getProjectById(projectId),
+    getProjectForPage(projectId),
     auth().then(({ userId }) =>
       userId ? getUserByClerkIdCached(userId) : null,
     ),
@@ -46,7 +46,13 @@ async function ProjectDetailContent({
     notFound();
   }
 
-  return <ProjectDetailScreen project={project} role={user!.role} />;
+  return (
+    <ProjectDetailScreen
+      project={project}
+      role={user!.role}
+      viewerId={user!.id}
+    />
+  );
 }
 
 export default function ProjectDetailPage({

@@ -5,7 +5,6 @@
 // a React bundler. Chromium cannot load in a browser bundle regardless.
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
-import puppeteerDev from "puppeteer";
 
 type GeneratePDFOptions = {
   html?: string;
@@ -24,6 +23,9 @@ export async function generatePDF({
   // 3️⃣ Launch Chromium (Vercel-safe)
   let browser;
   if (process.env.NODE_ENV === "development") {
+    // Full puppeteer (with its own Chromium) is a dev dependency, loaded only
+    // here: production uses puppeteer-core with @sparticuz/chromium below.
+    const { default: puppeteerDev } = await import("puppeteer");
     browser = await puppeteerDev.launch({
       headless: true,
     });

@@ -694,6 +694,7 @@ model Milestone {
   updatedAt DateTime @updatedAt
 
   siteUpdates        SiteUpdate[]
+  notes              MilestoneNote[]
   tradieSchedules    TradieSchedule[]
   variations         Variation[]
   activityLogs       ActivityLog[]
@@ -928,6 +929,25 @@ model SiteUpdate {
 
   @@index([projectId])
   @@index([milestoneId])
+}
+
+/// A staff note on one activity in the Milestones tab: the office's working
+/// remarks, apart from the site updates and photos that make up the job's
+/// record. Internal only — never part of a payload a CUSTOMER is served.
+/// Written and deleted through lib/domain/projects/milestone-notes.ts.
+model MilestoneNote {
+  id          String  @id @default(uuid())
+  milestoneId String
+  /// Null once the author's account is deleted; the note outlives it.
+  authorId    String?
+  body        String  @db.Text
+
+  createdAt DateTime @default(now())
+
+  milestone Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  author    User?     @relation("MilestoneNoteAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([milestoneId, createdAt])
 }
 
 model Variation {
@@ -1245,6 +1265,7 @@ model User {
   files               File[]               @relation("UserFiles")
   siteManagerProjects Project[]            @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
+  milestoneNotes      MilestoneNote[]      @relation("MilestoneNoteAuthor")
   activityLogs        ActivityLog[]
   tradieActivityLogs  TradieActivityLog[]
   assignedLeads       Lead[]               @relation("LeadAssignee")

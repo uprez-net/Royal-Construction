@@ -15,7 +15,10 @@ import {
   describeProjectFile,
   mergeDocumentsByUrl,
 } from "@/lib/domain/projects/document-tags";
-import { readProjectDocuments } from "@/lib/domain/projects/documents";
+import {
+  describeProjectDocuments,
+  type ProjectDocumentSources,
+} from "@/lib/domain/projects/documents";
 import {
   displayFileName,
   fileKind,
@@ -173,9 +176,9 @@ test("copies of one stored object list once, with every copy's tags, and cannot 
   assert.equal(merged[0].deletable, false);
 });
 
-test("the Documents tab reads files, tradie invoices and variations into one list", async () => {
-  const { db } = recordingDb({
-    "file.findMany": [
+test("the Documents tab reads files, tradie invoices and variations into one list", () => {
+  const sources = {
+    files: [
       {
         ...baseFile,
         User: { name: "Office" },
@@ -184,7 +187,7 @@ test("the Documents tab reads files, tradie invoices and variations into one lis
         incident: null,
       },
     ],
-    "tradieInvoice.findMany": [
+    invoices: [
       {
         id: "ti_1",
         documentUrl: "https://blob.test/inv.pdf",
@@ -197,8 +200,8 @@ test("the Documents tab reads files, tradie invoices and variations into one lis
         schedule: { milestone: { id: "m_1", name: "Slab" } },
       },
     ],
-    "tradieInvoiceInbox.findMany": [],
-    "variation.findMany": [
+    inbox: [],
+    variations: [
       {
         id: "v_1",
         number: 3,
@@ -209,8 +212,8 @@ test("the Documents tab reads files, tradie invoices and variations into one lis
         raisedBy: null,
       },
     ],
-  });
-  const rows = await readProjectDocuments({ id: "p_1", leadId: 7 }, db);
+  } as unknown as ProjectDocumentSources;
+  const rows = describeProjectDocuments("p_1", sources);
   assert.deepEqual(
     rows.map((row) => row.key),
     ["tradie-invoice:ti_1", "variation:v_1", "f_1"],

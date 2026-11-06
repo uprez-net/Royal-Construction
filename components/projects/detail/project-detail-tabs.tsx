@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import dynamic from "next/dynamic";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import type { ProjectDetail } from "@/types/project";
@@ -10,12 +11,7 @@ import {
   setProjectDetailTab,
 } from "@/lib/store/slices/projectsSlice";
 
-import { ProjectMilestonesTab } from "./project-milestones-tab";
 import { ProjectOverviewTab } from "./project-overview-tab";
-import { ProjectPaymentsTab } from "./project-payments-tab";
-import { ProjectFinancialsTab } from "./financials-tab/project-financials-tab";
-import { ProjectVariationsTab } from "./project-variations-tab";
-import { ProjectDocumentsTab } from "./project-documents-tab";
 import {
   ProjectTabNavigation,
   isVisibleProjectDetailTab,
@@ -23,12 +19,70 @@ import {
   projectTabTriggerId,
   type VisibleProjectDetailTabKey,
 } from "./project-tab-navigation";
-import { ProjectTradiesTab } from "./project-tradies-tab";
-import { ProjectHistoryTabs } from "./project-history-tabs";
-import { ProjectCommunicationTabs } from "./project-communication-tabs";
-import { ProjectComplianceTab } from "./compliance-tab/project-compliance-tab";
 import { Role } from "@prisma/client";
+import type { UserPrincipal } from "@/lib/domain/principal";
+import { canSeeMilestoneNotes } from "@/lib/domain/projects/milestone-note-rules";
 import { UploadHintScope } from "@/components/common/upload-hints";
+import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
+
+/** Shown for the moment a tab's code is fetched, the first time it opens. */
+function TabLoading() {
+  return (
+    <PageSkeleton label="Loading tab" className="space-y-3">
+      <Skeleton className="h-10 w-full" />
+      <Skeleton className="h-40 w-full" />
+    </PageSkeleton>
+  );
+}
+
+// Overview is the tab a project opens on, so it ships with the page. Every
+// other tab is fetched when it is first opened, or rendered on the server when
+// a link opens on it. Together they are most of this page's code (issue #411).
+const ProjectMilestonesTab = dynamic(
+  () => import("./project-milestones-tab").then((m) => m.ProjectMilestonesTab),
+  { loading: TabLoading },
+);
+const ProjectPaymentsTab = dynamic(
+  () => import("./project-payments-tab").then((m) => m.ProjectPaymentsTab),
+  { loading: TabLoading },
+);
+const ProjectFinancialsTab = dynamic(
+  () =>
+    import("./financials-tab/project-financials-tab").then(
+      (m) => m.ProjectFinancialsTab,
+    ),
+  { loading: TabLoading },
+);
+const ProjectVariationsTab = dynamic(
+  () => import("./project-variations-tab").then((m) => m.ProjectVariationsTab),
+  { loading: TabLoading },
+);
+const ProjectDocumentsTab = dynamic(
+  () => import("./project-documents-tab").then((m) => m.ProjectDocumentsTab),
+  { loading: TabLoading },
+);
+const ProjectTradiesTab = dynamic(
+  () => import("./project-tradies-tab").then((m) => m.ProjectTradiesTab),
+  { loading: TabLoading },
+);
+const ProjectHistoryTabs = dynamic(
+  () => import("./project-history-tabs").then((m) => m.ProjectHistoryTabs),
+  { loading: TabLoading },
+);
+const ProjectCommunicationTabs = dynamic(
+  () =>
+    import("./project-communication-tabs").then(
+      (m) => m.ProjectCommunicationTabs,
+    ),
+  { loading: TabLoading },
+);
+const ProjectComplianceTab = dynamic(
+  () =>
+    import("./compliance-tab/project-compliance-tab").then(
+      (m) => m.ProjectComplianceTab,
+    ),
+  { loading: TabLoading },
+);
 
 /**
  * What an upload made inside each tab is filed under: the step of its origin
@@ -54,11 +108,19 @@ const TAB_UPLOAD_HINTS: Record<
 export function ProjectDetailTabs({
   project,
   role,
+  viewerId,
 }: {
   project: ProjectDetail;
   role: Role;
+  viewerId: string;
 }) {
   const isAdmin = role === "ADMIN";
+  // The viewer as the note rules see them, or null for an account that may
+  // not see staff notes at all (a customer).
+  const notesViewer = useMemo<UserPrincipal | null>(() => {
+    const principal: UserPrincipal = { kind: "user", userId: viewerId, role };
+    return canSeeMilestoneNotes(principal) ? principal : null;
+  }, [role, viewerId]);
   const dispatch = useAppDispatch();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -82,6 +144,13 @@ export function ProjectDetailTabs({
   // Only when the URL itself moves: a click updates the store first, and the
   // URL catching up a render later must not snap the tab back.
   const seenUrlTab = useRef<string | null>(null);
+  // Each time the page is shown anew the URL decides again. The screen's
+  // cleanup resets the stored tab (StrictMode re-runs it in dev, and Next's
+  // Activity re-runs effects when a hidden route is shown again), but the ref
+  // survives, so without this the deep-linked tab would be lost.
+  useEffect(() => {
+    seenUrlTab.current = null;
+  }, [project.id]);
   useEffect(() => {
     if (urlTab === seenUrlTab.current) return;
     seenUrlTab.current = urlTab;
@@ -129,7 +198,11 @@ export function ProjectDetailTabs({
             <ProjectOverviewTab project={project} isAdmin={isAdmin} />
           ) : null}
           {activeTab === "milestones" ? (
-            <ProjectMilestonesTab project={project} isAdmin={isAdmin} />
+            <ProjectMilestonesTab
+              project={project}
+              isAdmin={isAdmin}
+              notesViewer={notesViewer}
+            />
           ) : null}
           {activeTab === "payments" && isAdmin ? (
             <ProjectPaymentsTab project={project} />
