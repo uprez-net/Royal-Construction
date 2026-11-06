@@ -3,6 +3,11 @@ import { Loader2, Send } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import {
+  ExtraAttachmentsField,
+  extraAttachmentIds,
+  type ExtraAttachment,
+} from "@/components/modals/compliance/extra-attachments-field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,6 +22,7 @@ import { getTradieGroupedByCategoryCached } from "@/lib/data/tradie-management";
 import { TRADIE_REF_PREVIEW } from "@/lib/domain/tradies/reply-reference";
 import {
   MAX_REQUEST_ACTIVITIES,
+  MAX_REQUEST_ATTACHMENTS,
   MAX_REQUEST_TRADIES,
   bookingTrade,
   sameTrade,
@@ -45,6 +51,7 @@ import {
 import {
   activeRequestFor,
   defaultActivityDate,
+  requestAttachmentOptions,
   requestTradeOptions,
   type RequestMilestone,
 } from "../tradie-requests";
@@ -155,6 +162,8 @@ export default function TradieRequestWizard({
   const [workLines, setWorkLines] = useState<Record<string, string[]>>({});
   const [drafting, setDrafting] = useState<ReadonlySet<string>>(new Set());
   const [draftError, setDraftError] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<ExtraAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [previewTradieId, setPreviewTradieId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SentTradieRequestsResult | null>(null);
@@ -185,6 +194,10 @@ export default function TradieRequestWizard({
   }, [open, dispatch]);
 
   const milestones: RequestMilestone[] = project.milestones;
+  const attachmentOptions = useMemo(
+    () => requestAttachmentOptions(project),
+    [project],
+  );
   const milestoneById = useMemo(
     () => new Map(milestones.map((milestone) => [milestone.id, milestone])),
     [milestones],
@@ -539,7 +552,8 @@ export default function TradieRequestWizard({
   ]);
 
   const submit = async () => {
-    if (submitting || !trade) return;
+    // Not while a file is still uploading: the email would go out without it.
+    if (submitting || uploading || !trade) return;
     if (!effectiveSubject.trim()) {
       setStepErrors({ subject: "Give the email a subject." });
       return;
@@ -558,6 +572,7 @@ export default function TradieRequestWizard({
               .map((line) => line.trim())
               .filter(Boolean),
           })),
+          attachmentFileIds: extraAttachmentIds(attachments),
           copy: preview?.copy,
           kind,
           note: note.trim() || undefined,
@@ -620,6 +635,8 @@ export default function TradieRequestWizard({
     setNote("");
     setCopyEdits({});
     setWorkLines({});
+    setAttachments([]);
+    setUploading(false);
     setDraftError(null);
     setResult(null);
     draftedRef.current = new Set();
@@ -756,6 +773,22 @@ export default function TradieRequestWizard({
               }}
               onCopyReset={() => setCopyEdits({})}
               subjectError={stepErrors.subject}
+              attachments={
+                <ExtraAttachmentsField
+                  projectId={project.id}
+                  label="Attachments (optional)"
+                  value={attachments}
+                  onChange={setAttachments}
+                  vaultOptions={attachmentOptions}
+                  disabled={submitting}
+                  onUploadingChange={setUploading}
+                  hint={
+                    recipients.length > 1
+                      ? `Plans, a scope or site photos. Pick from this project's files or upload new ones; every tradie's email carries them. Up to ${MAX_REQUEST_ATTACHMENTS}.`
+                      : `Plans, a scope or site photos. Pick from this project's files or upload new ones. Up to ${MAX_REQUEST_ATTACHMENTS}.`
+                  }
+                />
+              }
             />
           ) : result ? (
             <DeliveryReport projectId={project.id} result={result} />
@@ -786,7 +819,7 @@ export default function TradieRequestWizard({
                   <Button
                     variant="outline"
                     onClick={() => setStep("activities")}
-                    disabled={submitting}
+                    disabled={submitting || uploading}
                   >
                     Back
                   </Button>
@@ -796,7 +829,7 @@ export default function TradieRequestWizard({
                 ) : (
                   <Button
                     onClick={submit}
-                    disabled={submitting || drafting.size > 0}
+                    disabled={submitting || uploading || drafting.size > 0}
                     aria-busy={submitting}
                   >
                     {submitting ? (
@@ -809,11 +842,13 @@ export default function TradieRequestWizard({
                     )}
                     {submitting
                       ? "Sending…"
-                      : booking
-                        ? "Send booking"
-                        : recipients.length === 1
-                          ? "Send request"
-                          : `Send ${recipients.length} requests`}
+                      : uploading
+                        ? "Uploading…"
+                        : booking
+                          ? "Send booking"
+                          : recipients.length === 1
+                            ? "Send request"
+                            : `Send ${recipients.length} requests`}
                   </Button>
                 )}
               </div>

@@ -1,6 +1,6 @@
 import type { TradieRequestKind } from "@prisma/client";
 import { Loader2, Plus, RotateCcw, Sparkles, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,6 +110,8 @@ export interface RequestEmailStepProps {
   onCopyEdit: (key: string, text: string) => void;
   onCopyReset: () => void;
   subjectError?: string;
+  /** The files every copy of the email carries, under the note. */
+  attachments?: ReactNode;
 }
 
 export function RequestEmailStep({
@@ -132,6 +134,7 @@ export function RequestEmailStep({
   onCopyEdit,
   onCopyReset,
   subjectError,
+  attachments,
 }: RequestEmailStepProps) {
   const empty = activities
     .filter((activity) => (workLines[activity.milestoneId] ?? []).length === 0)
@@ -398,6 +401,8 @@ export function RequestEmailStep({
             onChange={(event) => onNoteChange(event.target.value)}
           />
         </div>
+
+        {attachments}
       </section>
 
       {/* Canvas */}
