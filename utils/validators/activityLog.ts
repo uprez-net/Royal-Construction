@@ -137,6 +137,7 @@ export const activityLogSchemas = {
     fileName: z.string(),
     fileType: z.string(),
     fileSize: z.number(),
+    origin: z.string().nullable().optional(),
   }),
 
   milestoneStatusChanged: z.object({

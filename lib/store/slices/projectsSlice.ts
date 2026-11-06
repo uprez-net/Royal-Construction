@@ -1617,6 +1617,9 @@ const projectsSlice = createSlice({
       project.files = project.files.filter(
         (file) => file.id !== action.payload.fileId,
       );
+      project.documents = project.documents.filter(
+        (document) => document.fileId !== action.payload.fileId,
+      );
       for (const update of project.siteUpdates) {
         update.photoUrls = update.photoUrls.filter(
           (url) => url !== action.payload.url,

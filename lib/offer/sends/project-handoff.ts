@@ -242,7 +242,7 @@ export async function handOffOfferToProject(
       const fileName = `Executed-${kind === "tender" ? "Tender" : "Contract"}-${reference}.pdf`;
       const file = await createHandoffFile(
         principal,
-        { fileName, leadId: offer.lead!.id, url },
+        { fileName, kind, leadId: offer.lead!.id, url },
         db,
       );
       createdFileIds.push(file.id);

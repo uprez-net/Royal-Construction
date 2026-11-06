@@ -129,6 +129,16 @@ export type AddressSuggestionsResponse = z.infer<
 >;
 
 /**
+ * Upload hints: the tags and origin trail the screen attaches to an upload.
+ * Loose bounds only, to keep a payload from growing without limit; the domain
+ * normalises the values (lib/domain/file-tags.ts) before storing them.
+ */
+export const fileUploadHintsShape = {
+  tags: z.array(z.string().max(200)).max(40).optional(),
+  origin: z.string().max(500).nullable().optional(),
+};
+
+/**
  * Client payload schema - validated before token generation
  */
 export const clientPayloadSchema = z.object({
@@ -148,6 +158,7 @@ export const clientPayloadSchema = z.object({
   uploadType: z
     .enum(["email-template", "email-attachment", "project-file"])
     .optional(),
+  ...fileUploadHintsShape,
 });
 
 export type ClientPayload = z.infer<typeof clientPayloadSchema>;

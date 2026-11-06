@@ -114,7 +114,10 @@ export function ExtraAttachmentsField({
    * not own, so it says, and the caller gates.
    */
   onUploadingChange,
+  uploadHints,
 }: {
+  /** Where the field sits, for the uploaded files' tags and origin. */
+  uploadHints?: { trail?: readonly string[]; tags?: readonly string[] };
   projectId: string;
   value: ExtraAttachment[];
   onChange: (next: ExtraAttachment[]) => void;
@@ -205,7 +208,11 @@ export function ExtraAttachmentsField({
     // uploaded beside it, which the sender would then have to find again.
     const results = await Promise.allSettled(
       chosen.map((file) =>
-        uploadFile(file, `extra-attachment:${file.name}:${file.size}`),
+        uploadFile(file, `extra-attachment:${file.name}:${file.size}`, {
+          rootTrail: true,
+          trail: [...(uploadHints?.trail ?? ["Project"]), "Email attachments"],
+          tags: [...(uploadHints?.tags ?? []), "Email attachment"],
+        }),
       ),
     );
 

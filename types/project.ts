@@ -27,6 +27,7 @@ import {
 import { ProjectRequirementsPayload } from "./project-flow";
 import type { CertifierEngagementDetail } from "./compliance";
 import type { BookingBillingState } from "@/lib/domain/tradies/billing-rules";
+import type { ProjectDocument } from "@/lib/domain/projects/document-tags";
 
 export interface SafeProject extends Omit<
   Project,
@@ -295,6 +296,11 @@ export interface ProjectDetail extends SafeProject {
   variations: SafeVariation[];
   tradieSchedules: TradieScheduleWithTradieAndMilestone[];
   files: ProjectFile[];
+  /**
+   * Every document the project holds, from every place one can be put, with
+   * its tags. The Documents tab's rows; `files` stays the project's own uploads.
+   */
+  documents: ProjectDocument[];
   materials: SafeMaterial[];
   /** Null until someone presses "Connect with Certifier". */
   certifierEngagement: CertifierEngagementDetail | null;

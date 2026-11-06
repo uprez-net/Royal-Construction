@@ -376,6 +376,8 @@ async function archiveAttachments(
           filename: file.name,
           fileType: file.mediaType,
           filesize: data.byteLength,
+          tags: ["Compliance", "Received by email", "Certifier reply"],
+          origin: "Email › Certifier reply",
         },
       });
 

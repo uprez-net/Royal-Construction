@@ -361,6 +361,8 @@ async function archiveAttachments(
           filename: file.name,
           fileType: file.mediaType,
           filesize: data.byteLength,
+          tags: ["Compliance", "Received by email", "Consultant reply"],
+          origin: "Email › Consultant reply",
         },
       });
 

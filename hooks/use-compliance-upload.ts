@@ -4,6 +4,10 @@ import { upload } from "@vercel/blob/client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
+import {
+  useUploadHints,
+  type UploadHintExtras,
+} from "@/components/common/upload-hints";
 import { buildBlobPath } from "@/utils/formatters";
 import type { ClientPayload } from "@/utils/validators";
 
@@ -57,6 +61,7 @@ export function useComplianceUpload(projectId: string) {
     {},
   );
   const controllersRef = useRef(new Map<string, AbortController>());
+  const hintsFor = useUploadHints();
 
   // A tab switch or a closed modal mid-upload should stop every transfer rather
   // than leave them running against an unmounted component.
@@ -79,7 +84,12 @@ export function useComplianceUpload(projectId: string) {
   );
 
   const uploadFile = useCallback(
-    async (file: File, key: string): Promise<UploadedComplianceFile> => {
+    async (
+      file: File,
+      key: string,
+      /** What this control uploads for, on top of the screen's hints. */
+      hints?: UploadHintExtras,
+    ): Promise<UploadedComplianceFile> => {
       const fileId = uuidv4();
       const controller = new AbortController();
       // Two transfers on one key should not happen — the control is disabled
@@ -103,6 +113,7 @@ export function useComplianceUpload(projectId: string) {
               fileName: file.name,
               fileSize: file.size,
               isOfferFile: false,
+              ...hintsFor(hints),
             } satisfies ClientPayload),
             abortSignal: controller.signal,
             onUploadProgress: ({ percentage }) =>
@@ -127,7 +138,7 @@ export function useComplianceUpload(projectId: string) {
         }
       }
     },
-    [patch, projectId],
+    [hintsFor, patch, projectId],
   );
 
   const isUploading = useCallback(

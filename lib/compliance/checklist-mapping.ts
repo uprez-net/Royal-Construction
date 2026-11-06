@@ -11,6 +11,7 @@ import {
   MAPPABLE_DOCUMENT_TYPES,
 } from "@/constants/complianceDocuments";
 import prisma from "@/lib/prisma";
+import { normalizeFileTags } from "@/lib/domain/file-tags";
 import { checklistItemDetail } from "@/types/compliance";
 
 /**
@@ -313,6 +314,8 @@ type SourceFile = {
   filesize: number;
   uploadedBy: string;
   projectId: string | null;
+  tags?: readonly string[];
+  origin?: string | null;
 };
 type SourceDocument = { id: string | null; files: SourceFile[] };
 
@@ -446,6 +449,10 @@ async function copyOntoChecklistLine(
         filename: file.filename,
         fileType: file.fileType,
         filesize: file.filesize,
+        // Where the original came from stays true of the copy; that it now
+        // also answers a checklist line is the new fact.
+        tags: normalizeFileTags(file.tags, ["Compliance", "Checklist"]),
+        origin: file.origin ?? null,
       })),
       // The replay guard. A step that ran, wrote its rows and then lost its
       // result finds them already here.

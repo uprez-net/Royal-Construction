@@ -93,6 +93,8 @@ import {
   updateExtractionField,
 } from "./form/extracted-components";
 import { compareSignedAndStartDates, formatDisplayDate } from "@/utils/date";
+import { useUploadHints } from "@/components/common/upload-hints";
+import type { ClientPayload } from "@/utils/validators/files";
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -123,6 +125,7 @@ export function CreateProjectModal({
   onSuccess,
 }: CreateProjectModalProps) {
   const dispatch = useAppDispatch();
+  const hintsFor = useUploadHints();
   const router = useRouter();
   const leadSearch = useLeadSearch("", 1, true);
   const siteManagers = useAppSelector((state) => state.siteManagers);
@@ -462,7 +465,12 @@ export function CreateProjectModal({
             fileName: queuedFile.file.name,
             fileSize: queuedFile.file.size,
             isOfferFile: false,
-          }),
+            ...hintsFor({
+              rootTrail: true,
+              trail: ["Projects", "Create project"],
+              tags: ["Project setup"],
+            }),
+          } satisfies ClientPayload),
           abortSignal: controller.signal,
           onUploadProgress: ({ percentage }) =>
             dispatch(

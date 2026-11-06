@@ -886,6 +886,14 @@ model File {
   url                  String
   storagePath          String?
   uploadedBy           String
+  /// Hints captured when the file came in: the screen, section and purpose it
+  /// was uploaded for ("Compliance", "Survey", "Site update"). Normalised by
+  /// lib/domain/file-tags.ts. Tags that follow from a relation (the milestone,
+  /// the compliance document) are derived when read, not stored here.
+  tags                 String[] @default([])
+  /// Where it was uploaded from, as a trail a person reads:
+  /// "Project › Compliance › Surveyor documents › Survey".
+  origin               String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 

@@ -1163,6 +1163,10 @@ function HbcfInsuranceBlock({
             projectId={projectId}
             maxFiles={1}
             accept="application/pdf,.pdf"
+            hints={{
+              trail: ["HBCF insurance"],
+              tags: ["HBCF insurance", "Insurance certificate"],
+            }}
             onUpload={onUpload}
           />
           {extracting ? (

@@ -775,6 +775,10 @@ export default function TradieRequestWizard({
               subjectError={stepErrors.subject}
               attachments={
                 <ExtraAttachmentsField
+                  uploadHints={{
+                    trail: ["Project", "Tradies", "Tradie request"],
+                    tags: ["Tradies", "Tradie request"],
+                  }}
                   projectId={project.id}
                   label="Attachments (optional)"
                   value={attachments}

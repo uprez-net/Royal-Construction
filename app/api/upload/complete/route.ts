@@ -16,6 +16,7 @@ import {
   unauthorizedResponse,
 } from "@/utils/validators/response";
 import { parseBodyWithResponse } from "@/utils/validators/response";
+import { fileUploadHintsShape } from "@/utils/validators/files";
 
 const completionSchema = z.object({
   projectId: z.string().trim().min(1),
@@ -24,6 +25,7 @@ const completionSchema = z.object({
   // Preserve the original name: buildBlobPath sanitizes its spaces into dashes.
   fileName: z.string().min(1).max(255),
   fileUrl: z.url(),
+  ...fileUploadHintsShape,
 });
 
 export async function POST(request: NextRequest) {

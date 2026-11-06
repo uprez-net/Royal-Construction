@@ -197,6 +197,10 @@ export function ReviewPlansModal({
               sends; this is the same gate. */}
           {approved === "no" ? (
             <ExtraAttachmentsField
+              uploadHints={{
+                trail: ["Project", "Compliance", "Plan review"],
+                tags: ["Compliance", "Plan review"],
+              }}
               onUploadingChange={setIsAttaching}
               projectId={projectId}
               value={extras}

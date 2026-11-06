@@ -18,6 +18,7 @@ import {
 import type { BlobDeletePort } from "./ports/blob";
 import type { BlobUploadHeadPort } from "./ports/blob";
 import { buildBlobPath } from "@/utils/formatters";
+import { normalizeFileUploadHints } from "./file-tags";
 
 export type SaveFileInput = {
   readonly userId: string;
@@ -30,6 +31,9 @@ export type SaveFileInput = {
   readonly fileName: string;
   readonly fileType: string;
   readonly fileSize: number;
+  /** Upload hints from the screen it came from. Normalised here. */
+  readonly tags?: readonly unknown[] | null;
+  readonly origin?: string | null;
 };
 
 /**
@@ -140,6 +144,8 @@ export async function saveFile(
     await authorizeLead(principal, leadId, db);
   }
 
+  // The browser normalised these too, but its copy is not the one to trust.
+  const hints = normalizeFileUploadHints(input);
   const data = {
     filename: input.fileName,
     fileType: input.fileType,
@@ -148,8 +154,10 @@ export async function saveFile(
     incidentId: null,
     leadId: input.leadId ? Number(input.leadId) : null,
     milestoneId: input.milestoneId ?? null,
+    origin: hints.origin,
     projectId,
     storagePath: input.storagePath,
+    tags: [...hints.tags],
     uploadedBy: input.userId,
     url: input.fileUrl,
   };
@@ -202,6 +210,8 @@ export async function completeProjectFileUpload(
     readonly fileId: string;
     readonly fileName: string;
     readonly fileUrl: string;
+    readonly tags?: readonly unknown[] | null;
+    readonly origin?: string | null;
   },
   db: DomainDb,
   inspectBlob: BlobUploadHeadPort,

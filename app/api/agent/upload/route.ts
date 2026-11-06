@@ -54,6 +54,8 @@ export async function POST(request: Request) {
       fileName: file.name,
       fileType: file.type,
       fileSize: file.size,
+      tags: ["Eve assistant"],
+      origin: "Eve assistant",
     });
   } catch (error) {
     try {

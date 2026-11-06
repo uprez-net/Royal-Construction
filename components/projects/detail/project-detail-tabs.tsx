@@ -28,6 +28,28 @@ import { ProjectHistoryTabs } from "./project-history-tabs";
 import { ProjectCommunicationTabs } from "./project-communication-tabs";
 import { ProjectComplianceTab } from "./compliance-tab/project-compliance-tab";
 import { Role } from "@prisma/client";
+import { UploadHintScope } from "@/components/common/upload-hints";
+
+/**
+ * What an upload made inside each tab is filed under: the step of its origin
+ * trail, and the tag the tab implies. Overview implies nothing on its own; its
+ * upload controls name what they are for.
+ */
+const TAB_UPLOAD_HINTS: Record<
+  VisibleProjectDetailTabKey,
+  { trail: string; tags: string[] }
+> = {
+  overview: { trail: "Overview", tags: [] },
+  milestones: { trail: "Milestones", tags: ["Milestone"] },
+  payments: { trail: "Payments", tags: ["Payments"] },
+  financials: { trail: "Financials", tags: ["Financials"] },
+  variations: { trail: "Variations", tags: ["Variation"] },
+  tradies: { trail: "Tradies", tags: ["Tradies"] },
+  docs: { trail: "Documents", tags: ["Project document"] },
+  history: { trail: "History", tags: [] },
+  communications: { trail: "Communications", tags: ["Communication"] },
+  compliance: { trail: "Compliance", tags: ["Compliance"] },
+};
 
 export function ProjectDetailTabs({
   project,
@@ -97,36 +119,41 @@ export function ProjectDetailTabs({
         tabIndex={0}
         className="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
-        {activeTab === "overview" ? (
-          <ProjectOverviewTab project={project} isAdmin={isAdmin} />
-        ) : null}
-        {activeTab === "milestones" ? (
-          <ProjectMilestonesTab project={project} isAdmin={isAdmin} />
-        ) : null}
-        {activeTab === "payments" && isAdmin ? (
-          <ProjectPaymentsTab project={project} />
-        ) : null}
-        {activeTab === "financials" && isAdmin ? (
-          <ProjectFinancialsTab project={project} />
-        ) : null}
-        {activeTab === "variations" && isAdmin ? (
-          <ProjectVariationsTab project={project} />
-        ) : null}
-        {activeTab === "tradies" ? (
-          <ProjectTradiesTab project={project} />
-        ) : null}
-        {activeTab === "docs" ? (
-          <ProjectDocumentsTab project={project} isAdmin={isAdmin} />
-        ) : null}
-        {activeTab === "history" ? (
-          <ProjectHistoryTabs project={project} />
-        ) : null}
-        {activeTab === "communications" ? (
-          <ProjectCommunicationTabs project={project} />
-        ) : null}
-        {activeTab === "compliance" ? (
-          <ProjectComplianceTab project={project} isAdmin={isAdmin} />
-        ) : null}
+        <UploadHintScope
+          trail={TAB_UPLOAD_HINTS[activeTab]?.trail}
+          tags={TAB_UPLOAD_HINTS[activeTab]?.tags}
+        >
+          {activeTab === "overview" ? (
+            <ProjectOverviewTab project={project} isAdmin={isAdmin} />
+          ) : null}
+          {activeTab === "milestones" ? (
+            <ProjectMilestonesTab project={project} isAdmin={isAdmin} />
+          ) : null}
+          {activeTab === "payments" && isAdmin ? (
+            <ProjectPaymentsTab project={project} />
+          ) : null}
+          {activeTab === "financials" && isAdmin ? (
+            <ProjectFinancialsTab project={project} />
+          ) : null}
+          {activeTab === "variations" && isAdmin ? (
+            <ProjectVariationsTab project={project} />
+          ) : null}
+          {activeTab === "tradies" ? (
+            <ProjectTradiesTab project={project} />
+          ) : null}
+          {activeTab === "docs" ? (
+            <ProjectDocumentsTab project={project} isAdmin={isAdmin} />
+          ) : null}
+          {activeTab === "history" ? (
+            <ProjectHistoryTabs project={project} />
+          ) : null}
+          {activeTab === "communications" ? (
+            <ProjectCommunicationTabs project={project} />
+          ) : null}
+          {activeTab === "compliance" ? (
+            <ProjectComplianceTab project={project} isAdmin={isAdmin} />
+          ) : null}
+        </UploadHintScope>
       </div>
     </section>
   );

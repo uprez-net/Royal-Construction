@@ -258,7 +258,20 @@ export function CertifierDiscoveryModal({
   ) => {
     setActiveUpload({ index, documentType });
     try {
-      const uploaded = await uploadFile(file, rowScope(documentType));
+      const uploaded = await uploadFile(file, rowScope(documentType), {
+        rootTrail: true,
+        trail: [
+          "Project",
+          "Compliance",
+          "Certifier discovery",
+          complianceDocumentLabel(documentType),
+        ],
+        tags: [
+          "Compliance",
+          "Certifier discovery",
+          complianceDocumentLabel(documentType),
+        ],
+      });
       await dispatch(
         uploadComplianceDocument({
           projectId,

@@ -38,6 +38,7 @@ import {
 import { upload } from "@vercel/blob/client";
 import { buildBlobPath, formatStatus } from "@/utils/formatters";
 import { ClientPayload } from "@/utils/validators";
+import { useUploadHints } from "@/components/common/upload-hints";
 
 interface ReportTradieModalProps {
   open: boolean;
@@ -81,6 +82,7 @@ export default function ReportTradieModal({
   // Filing a tradie id under that key raw risks a collision that would silently
   // drop this modal's upload progress, so the tradie id space is namespaced.
   const uploadScopeKey = `tradie:${tradie.id}`;
+  const hintsFor = useUploadHints();
   const [formData, setFormData] = useState<
     Omit<ReportIncidentInput, "tradieId" | "fileIds">
   >({
@@ -143,6 +145,11 @@ export default function ReportTradieModal({
             fileName: queuedFile.file.name,
             fileSize: queuedFile.file.size,
             isOfferFile: false,
+            ...hintsFor({
+              rootTrail: true,
+              trail: ["Tradies", tradie.name, "Report incident"],
+              tags: ["Incident report", "Tradie", tradie.name],
+            }),
           } satisfies ClientPayload),
           abortSignal: controller.signal,
           onUploadProgress: ({ percentage }) => {

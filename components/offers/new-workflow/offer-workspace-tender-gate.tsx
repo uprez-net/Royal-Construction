@@ -123,6 +123,10 @@ export function TenderGatePanel({
                     <UploadButton
                       leadId={leadId?.toString()}
                       maxFiles={1}
+                      hints={{
+                        trail: ["Offer", "Tender gate", "Architectural plan"],
+                        tags: ["Offer", "Architectural plan"],
+                      }}
                       accept=".pdf,.doc,.docx,.xls,.xlsx,image/*"
                       onUpload={(files: DBFile[]) => {
                         const file = files[0];

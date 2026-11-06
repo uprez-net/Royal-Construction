@@ -17,6 +17,7 @@ import { DomainNotFoundError } from "../errors";
 import { serializeInvoice, serializeListInvoice } from "../invoices/serialize";
 import type { DomainPrincipal } from "../principal";
 import { bookingBilling } from "../tradies/billing-rules";
+import { readProjectDocuments } from "./documents";
 
 // Every read of a project, its list, its KPIs and its lookup — one place, one
 // scope (issue #301, phase 4).
@@ -498,8 +499,11 @@ export async function getProjectDetail(
 
   if (!project) return null;
 
+  const documents = await readProjectDocuments(project, db);
+
   return {
     ...project,
+    documents,
     lead: {
       id: project.Lead.id,
       email: project.Lead.email,
