@@ -2029,12 +2029,6 @@ const projectsSlice = createSlice({
             : undefined;
           if (schedule.milestone && status) schedule.milestone.status = status;
         }
-        for (const row of project.milestones) {
-          for (const schedule of row.tradieSchedules) {
-            if (completed.has(schedule.id)) schedule.status = "COMPLETED";
-            if (cancelled.has(schedule.id)) schedule.status = "CANCELLED";
-          }
-        }
       })
       .addCase(dismissTradieAlerts.fulfilled, (state, action) => {
         if (state.activeProject?.id !== action.meta.arg.projectId) return;

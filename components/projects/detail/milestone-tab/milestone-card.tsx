@@ -193,6 +193,10 @@ export function MilestoneCard({
     project.tradieSchedules,
   );
   const runningOverdueDays = activeOverdueDays(milestone, new Date());
+  // The project's own list, so a booking made on this page shows here at once.
+  const bookings = project.tradieSchedules.filter(
+    (schedule) => schedule.milestoneId === milestone.id,
+  );
 
   // Finished parents open on request; anything still in flight opens by default,
   // because its children are where the work actually is.
@@ -315,10 +319,10 @@ export function MilestoneCard({
             </ul>
           ) : null}
 
-          {milestone.tradieSchedules.length > 0 ? (
+          {bookings.length > 0 ? (
             <div className="mt-1 text-xs text-muted-foreground">
               <MetaItem icon={<Users className="size-3.5" />}>
-                {milestone.tradieSchedules
+                {bookings
                   .map(
                     (schedule) =>
                       `${schedule.tradie.name} — ${bookingTrade(schedule)}`,

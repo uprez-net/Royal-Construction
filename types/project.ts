@@ -151,8 +151,14 @@ export interface SafeVariation extends Omit<
   previousPrice: string | null;
 }
 
+/** Who wrote a row, as the project detail carries it: the name is what shows. */
+export type UserSummary = Pick<User, "id" | "name">;
+
+/** The site manager as the project detail carries it. */
+export type SiteManagerSummary = Pick<User, "id" | "name" | "email" | "phone">;
+
 export interface SiteUpdateWithAuthor extends SiteUpdate {
-  author: User;
+  author: UserSummary;
 }
 
 export interface SiteUpdateWithAuthorAndMilestone extends SiteUpdateWithAuthor {
@@ -196,8 +202,23 @@ export type TradieQuoteSummary = {
   enteredBy: { name: string } | null;
 };
 
+/** The activity a booking is for, as far as a booking row needs it. */
+export type BookingMilestone = Pick<
+  SafeMilestone,
+  | "id"
+  | "name"
+  | "status"
+  | "targetDate"
+  | "startDate"
+  | "budget"
+  | "spend"
+  | "parentId"
+  | "order"
+  | "projectStage"
+>;
+
 export interface TradieScheduleWithTradieAndMilestone extends TradieScheduleWithTradie {
-  milestone?: SafeMilestone;
+  milestone?: BookingMilestone;
   /**
    * Where the booking is up to with its invoices. Null when it is neither
    * committed nor billed; absent on a row the store built itself.
@@ -247,10 +268,13 @@ export type MilestoneUpdateResult = SafeMilestone & {
   };
 };
 
+/**
+ * A milestone on the project detail. Its bookings are not on it: they are
+ * `ProjectDetail.tradieSchedules` with this `milestoneId`.
+ */
 export interface MilestoneWithFilesTradiesUpdates extends SafeMilestone {
   files: ProjectFile[];
   siteUpdates: SiteUpdateWithAuthor[];
-  tradieSchedules: TradieScheduleWithTradie[];
 }
 
 export interface ProjectWithStats extends SafeProject {
@@ -277,12 +301,12 @@ export interface ProjectWithStats extends SafeProject {
 }
 
 export interface ActivityLogWithAuthor extends ActivityLog {
-  author: User | null;
+  author: UserSummary | null;
 }
 
 export interface ProjectDetail extends SafeProject {
   customer: Customer;
-  siteManager: User | null;
+  siteManager: SiteManagerSummary | null;
   lead: {
     id: number;
     email: string;
