@@ -6,6 +6,8 @@ import type {
 } from "@/lib/domain/ports/comms";
 import { carrierNumberToE164 } from "@/lib/domain/comms/shared";
 
+import { VOICE_AGENT_SECRET_MIN_LENGTH } from "./voice-agent/token";
+
 // SMS and phone configuration, read from the environment.
 //
 // Node-safe on purpose — no `server-only`, no Next — so a cron, a workflow
@@ -46,6 +48,18 @@ export type TelnyxConfig = {
   readonly messagingProfileId: string | null;
 };
 
+/**
+ * Mili, the voice agent. The carrier — Twilio or Telnyx — streams an answered
+ * inbound call's audio over a WebSocket to this app
+ * (/api/comms/voice-agent/<provider>), which bridges it to the live model on
+ * AI Gateway. Off unless COMMS_AGENT_ENABLED is "true" and the secret is set.
+ */
+export type VoiceAgentConfig = {
+  readonly enabled: boolean;
+  /** Signs the token a carrier's stream must present (voice-agent/token.ts). */
+  readonly secret: string | null;
+};
+
 export type CommsConfig = {
   /** The provider that carries new outbound work. Null when misconfigured. */
   readonly provider: CommsProviderName | null;
@@ -58,6 +72,7 @@ export type CommsConfig = {
   readonly staffForwardNumber: string | null;
   readonly twilio: TwilioConfig;
   readonly telnyx: TelnyxConfig;
+  readonly voiceAgent: VoiceAgentConfig;
   /** Misconfigurations worth a log line, never containing a secret. */
   readonly problems: readonly string[];
 };
@@ -165,6 +180,19 @@ function origin(env: Env, problems: string[]): string | null {
   }
 }
 
+function voiceAgent(env: Env, problems: string[]): VoiceAgentConfig {
+  if (!flag(env, "COMMS_AGENT_ENABLED"))
+    return { enabled: false, secret: null };
+  const secret = value(env, "COMMS_AGENT_SECRET");
+  if (!secret || secret.length < VOICE_AGENT_SECRET_MIN_LENGTH) {
+    problems.push(
+      `COMMS_AGENT_SECRET must be set to at least ${VOICE_AGENT_SECRET_MIN_LENGTH} random characters; Mili is off.`,
+    );
+    return { enabled: false, secret: null };
+  }
+  return { enabled: true, secret };
+}
+
 export function readCommsConfig(env: Env = process.env): CommsConfig {
   const problems: string[] = [];
   const active = readActiveProvider(env);
@@ -187,6 +215,7 @@ export function readCommsConfig(env: Env = process.env): CommsConfig {
   const smsEnabled = flag(env, "COMMS_SMS_ENABLED");
   const callsEnabled = flag(env, "COMMS_CALLS_ENABLED");
   const webhookOrigin = origin(env, problems);
+  const agent = voiceAgent(env, problems);
   if ((smsEnabled || callsEnabled) && !webhookOrigin) {
     problems.push(
       "COMMS_WEBHOOK_ORIGIN is not set, so carriers have nowhere to report back.",
@@ -227,6 +256,7 @@ export function readCommsConfig(env: Env = process.env): CommsConfig {
       edge: value(env, "TWILIO_EDGE"),
       previousAuthToken: value(env, "TWILIO_PREVIOUS_AUTH_TOKEN"),
     },
+    voiceAgent: agent,
     webhookOrigin,
   };
 }
@@ -260,6 +290,19 @@ export function browserCallingConfigured(
   return Boolean(config.telnyx.apiKey && config.telnyx.webrtcConnectionId);
 }
 
+/**
+ * Can inbound calls be handed to Mili? Both carriers stream call audio
+ * (Twilio Media Streams, Telnyx media streaming) to the same route, so this
+ * does not depend on which carrier is active.
+ */
+export function voiceAgentConfigured(config: CommsConfig): boolean {
+  return (
+    config.callsEnabled
+    && config.voiceAgent.enabled
+    && Boolean(config.voiceAgent.secret && config.webhookOrigin)
+  );
+}
+
 /** The non-secret channel the domain is handed. */
 export function commsChannel(config: CommsConfig): CommsChannel | null {
   const provider = config.provider;
@@ -273,7 +316,6 @@ export function commsChannel(config: CommsConfig): CommsChannel | null {
   return {
     browserCalling:
       config.callsEnabled && browserCallingConfigured(config, provider),
-    browserRingGroup: provider === "twilio",
     callsAvailable: config.callsEnabled && callsConfigured,
     defaultNumber:
       config.numbers.find((number) => number.provider === provider) ?? null,
@@ -282,5 +324,6 @@ export function commsChannel(config: CommsConfig): CommsChannel | null {
     recordingMode: config.recordingMode,
     smsAvailable: config.smsEnabled && configured,
     staffForwardNumber: config.staffForwardNumber,
+    voiceAgent: callsConfigured && voiceAgentConfigured(config),
   };
 }

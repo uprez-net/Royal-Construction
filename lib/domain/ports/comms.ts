@@ -38,13 +38,18 @@ export type CommsChannel = {
   readonly smsAvailable: boolean;
   /** COMMS_CALLS_ENABLED and the active provider can place calls. */
   readonly callsAvailable: boolean;
-  /** The provider can ring a staff browser (it issues credentials). */
+  /**
+   * The provider can put a customer through to a staff browser (it issues
+   * credentials). Only outbound calls use it: an inbound call never rings a
+   * browser.
+   */
   readonly browserCalling: boolean;
   /**
-   * The provider can ring several browsers at once. Twilio dials every
-   * identity in one <Dial>; Telnyx transfers to one SIP endpoint.
+   * Inbound calls are answered by Mili, the voice agent: the provider can
+   * stream the call's audio and the relay that bridges it is configured.
    */
-  readonly browserRingGroup: boolean;
+  readonly voiceAgent: boolean;
+  /** Outbound only: inbound calls always announce that they are recorded. */
   readonly recordingMode: RecordingMode;
   /** The office mobile calls fall back to, E.164, or null. */
   readonly staffForwardNumber: string | null;
@@ -208,6 +213,20 @@ export type CallInstruction =
       readonly op: "recordVoicemail";
       readonly maxSeconds: number;
     }
+  | {
+      /** Hand the caller to Mili: stream the call's audio to the voice agent. */
+      readonly op: "connectAgent";
+      /** Record the conversation (dual channel) from now on. */
+      readonly record: boolean;
+      /** Whole-conversation ceiling; the relay ends the session after it. */
+      readonly maxSeconds: number;
+    }
+  | {
+      /** Take the caller back from Mili before the next step. */
+      readonly op: "stopAgent";
+      /** Also stop the call recording (a voicemail starts its own). */
+      readonly stopRecording: boolean;
+    }
   | { readonly op: "hangup" };
 
 /**
@@ -231,6 +250,16 @@ export type DialOutcome =
   | "busy"
   | "failed"
   | "canceled";
+
+/**
+ * How Mili's conversation ended.
+ *
+ * - `completed`: the conversation is over; hang up.
+ * - `transfer`: the caller asked for a person.
+ * - `failed`: the agent could not be reached or stopped working; the caller
+ *   still needs somebody.
+ */
+export type AgentOutcome = "completed" | "transfer" | "failed";
 
 export type CommsEvent =
   | {
@@ -297,4 +326,19 @@ export type CommsEvent =
       readonly callId: string | null;
       readonly providerRecordingId: string;
       readonly durationSeconds: number | null;
+      /**
+       * What the adapter knows the recording is, when it started it for a
+       * reason the flow step no longer shows (a conversation recording that
+       * is saved after the call moved on to voicemail).
+       */
+      readonly kind?: "call" | "voicemail";
+    }
+  | {
+      /** Mili's conversation ended, or never started. */
+      readonly type: "call.agentEnded";
+      readonly providerCallId: string;
+      readonly callId: string | null;
+      readonly outcome: AgentOutcome;
+      /** "Caller: …" / "Mili: …" lines. Null when nothing was said. */
+      readonly transcript: string | null;
     };

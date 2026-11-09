@@ -13,6 +13,7 @@ import type { CallInstruction } from "@/lib/domain/ports/comms";
 //   r  "a" — the customer's leg; "b" — a staff leg created by a transfer
 //   a  the customer leg's call_control_id (on a staff leg)
 //   rec  record the conversation once the staff leg answers
+//   rk  this recording is the conversation's (with Mili), not a voicemail
 //   n  instructions to run when the current asynchronous command ends
 
 const instruction: z.ZodType<CallInstruction> = z.union([
@@ -41,6 +42,12 @@ const instruction: z.ZodType<CallInstruction> = z.union([
     maxSeconds: z.number().int().min(1).max(600),
     op: z.literal("recordVoicemail"),
   }),
+  z.object({
+    maxSeconds: z.number().int().min(1).max(3600),
+    op: z.literal("connectAgent"),
+    record: z.boolean(),
+  }),
+  z.object({ op: z.literal("stopAgent"), stopRecording: z.boolean() }),
   z.object({ op: z.literal("hangup") }),
 ]);
 
@@ -50,6 +57,7 @@ const schema = z.object({
   n: z.array(instruction).max(6).optional(),
   r: z.enum(["a", "b"]),
   rec: z.literal(1).optional(),
+  rk: z.literal(1).optional(),
 });
 
 export type TelnyxClientState = z.infer<typeof schema>;

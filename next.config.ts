@@ -11,7 +11,10 @@ const nextConfig: NextConfig = {
   // resolve it with native require at runtime instead, and suppress the
   // parse issue its externals-tracing pass reports during `next build`
   // (the SDK still loads fine at runtime via require).
-  serverExternalPackages: ["docusign-esign"],
+  // ws (Mili's call audio, lib/comms/voice-agent) breaks when bundled — its
+  // optional native helpers resolve to stubs ("bufferUtil.mask is not a
+  // function") — so it is required from node_modules at runtime too.
+  serverExternalPackages: ["docusign-esign", "ws"],
   typescript: {
     // `next build` runs the project-local `tsc` itself, which is the same work
     // `pnpm typecheck` does -- ~18s cold, ~8s warm. CI runs that check in its

@@ -189,7 +189,7 @@ test("a bad signature is a 403 with no database access", async () => {
   assert.deepEqual(recorder.calls, []);
 });
 
-test("Twilio: an inbound call rings the office mobile when no browser is open, as TwiML", async () => {
+test("Twilio without Mili: an inbound call is told it is recorded, then rings the office mobile, as TwiML", async () => {
   const { deps: d, recorder } = deps({
     ...NO_STAFF_ONLINE,
     "call.create": { id: "call-1" },
@@ -208,9 +208,11 @@ test("Twilio: an inbound call rings the office mobile when no browser is open, a
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /xml/);
   const xml = await response.text();
+  assert.match(xml, /this call is being recorded/);
+  assert.doesNotMatch(xml, /<Client/, "an inbound call never rings a browser");
   assert.match(
     xml,
-    /<Dial callerId="\+61280001234"[^>]*action="https:\/\/royal\.example\/api\/comms\/twilio\/voice-dial\?callId=call-1"/,
+    /<Dial callerId="\+61280001234"[^>]*action="https:\/\/royal\.example\/api\/comms\/twilio\/voice-dial\?callId=call-1"[^>]*record="record-from-answer-dual"/,
   );
   assert.match(xml, /<Number [^>]*>\+61400000000<\/Number>/);
   const created = recorder
@@ -427,7 +429,7 @@ test("switching provider changes no business behaviour: the same call writes the
       {
         channel: {
           browserCalling: true,
-          browserRingGroup: provider === "twilio",
+          voiceAgent: false,
           callsAvailable: true,
           defaultNumber: { e164: "+61280001234", label: "Office", provider },
           numbers: [],
@@ -513,7 +515,7 @@ test("retrying a refused call on the same key rings whichever target this attemp
     {
       channel: {
         browserCalling: true,
-        browserRingGroup: true,
+        voiceAgent: false,
         callsAvailable: true,
         defaultNumber: {
           e164: "+61280001234",

@@ -4,10 +4,12 @@ import { commsCallbackUrl } from "../../callbacks";
 import {
   browserCallingConfigured,
   providerConfigured,
+  voiceAgentConfigured,
   type CommsConfig,
 } from "../../config";
 import { carrierRequest, readCapped, type Fetch } from "../../http";
 import type { CommsAdapter, RespondContext } from "../../types";
+import { voiceAgentStream } from "../../voice-agent/stream";
 import { encodeClientState } from "./client-state";
 import { parseTelnyxWebhook, TELNYX_WEBHOOK_EVENTS } from "./parse";
 import { verifyTelnyxSignature } from "./signature";
@@ -73,6 +75,7 @@ export function createTelnyxAdapter(
   const origin = config.webhookOrigin ?? "";
   const browserCalling =
     config.callsEnabled && browserCallingConfigured(config, "telnyx");
+  const voiceAgent = callsConfigured && voiceAgentConfigured(config);
 
   async function rest(
     method: "GET" | "POST" | "DELETE",
@@ -214,8 +217,8 @@ export function createTelnyxAdapter(
           return;
         case "dialBrowser":
         case "dialNumber": {
-          // Telnyx transfers to one destination. With several staff browsers
-          // the most recently seen one rings (capabilities.browserRingGroup).
+          // Telnyx transfers to one destination: the browser of whoever
+          // placed the call, or the office mobile.
           const to =
             step.op === "dialNumber"
               ? step.to
@@ -265,11 +268,86 @@ export function createTelnyxAdapter(
             timeout_secs: 5,
           });
           return;
+        case "connectAgent": {
+          if (step.record) {
+            // Both sides, from the moment Mili picks up; the caller has just
+            // heard the declaration. Marked so a late save is filed as the
+            // conversation, not a voicemail.
+            await action(callControlId, "record_start", "recording the call", {
+              channels: "dual",
+              client_state: encodeClientState({
+                c: callId ?? undefined,
+                r: "a",
+                rk: 1,
+              }),
+              format: "mp3",
+            });
+          }
+          // Bidirectional: the caller's audio goes to the voice-agent route as 8 kHz
+          // μ-law, and Mili's comes back the same way (VERIFY field names).
+          await action(
+            callControlId,
+            "streaming_start",
+            "putting the caller through to Mili",
+            {
+              client_state: stateA(),
+              stream_bidirectional_codec: "PCMU",
+              stream_bidirectional_mode: "rtp",
+              stream_track: "inbound_track",
+              stream_url: streamUrl(callControlId, callId, step.maxSeconds),
+            },
+          );
+          continue;
+        }
+        case "stopAgent":
+          await bestEffort(
+            callControlId,
+            "streaming_stop",
+            "taking the caller back from Mili",
+          );
+          if (step.stopRecording) {
+            await bestEffort(
+              callControlId,
+              "record_stop",
+              "stopping the call recording",
+            );
+          }
+          continue;
         case "hangup":
           await hangup(callControlId);
           return;
       }
     }
+  }
+
+  /** A command on a call that may already have ended: 404/422 is fine. */
+  async function bestEffort(
+    callControlId: string,
+    name: string,
+    what: string,
+  ): Promise<void> {
+    try {
+      await action(callControlId, name, what);
+    } catch (error) {
+      if (carrierStatusIs(error, 404, 422)) return;
+      throw error;
+    }
+  }
+
+  /** The voice-agent address for this call, signed so only this stream opens it. */
+  function streamUrl(
+    callControlId: string,
+    callId: string | null,
+    maxSeconds: number,
+  ): string {
+    const stream = voiceAgentStream(config, "telnyx", {
+      callId,
+      maxSeconds,
+      providerCallId: callControlId,
+    });
+    const url = new URL(stream.url);
+    url.searchParams.set("token", stream.token);
+    return url.toString();
   }
 
   async function hangup(callControlId: string): Promise<void> {
@@ -323,13 +401,13 @@ export function createTelnyxAdapter(
   return {
     capabilities: {
       browserCalling,
-      browserRingGroup: false,
       browserSdkBundled: true,
       callControl: "commands",
       inboundCallFlow: true,
       outboundCalls: callsConfigured,
       recordings: configured,
       sms: configured,
+      voiceAgent,
     },
     issueBrowserCredential: browserCalling
       ? async (identity, ttlSeconds) => {
@@ -452,6 +530,7 @@ export function createTelnyxAdapter(
             },
           }
         : null,
+    updateLiveCall: execute,
     startCallRecording: async (callControlId, callId) => {
       await action(callControlId, "record_start", "recording the call", {
         channels: "dual",

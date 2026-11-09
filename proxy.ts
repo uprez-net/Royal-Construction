@@ -32,6 +32,10 @@ const isPublicRoute = createRouteMatcher([
   // public.
   "/api/comms/twilio/(.*)",
   "/api/comms/telnyx/(.*)",
+  // Mili's audio: the carrier opens a WebSocket here for an answered inbound
+  // call. It has no session; the stream is accepted only with a token the app
+  // signed for that call under COMMS_AGENT_SECRET (lib/comms/voice-agent).
+  "/api/comms/voice-agent/(.*)",
   // Xero OAuth consent + callback. "Public" here only means the blanket
   // /api/ JSON-401 below does not apply: both legs are BROWSER navigations
   // (the admin clicks Connect; Xero redirects back with ?code), and answering

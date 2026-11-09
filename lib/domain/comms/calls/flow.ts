@@ -6,10 +6,12 @@ import {
 } from "@prisma/client";
 
 import type {
+  AgentOutcome,
   CallInstruction,
   CommsChannel,
   DialOutcome,
 } from "../../ports/comms";
+import { VOICE_AGENT_MAX_SECONDS } from "./voice-agent";
 
 // What a call does next, as neutral instructions (file 01 §10).
 //
@@ -18,11 +20,18 @@ import type {
 // functions writes the returned step onto the Call row; the adapter renders
 // or executes the instructions.
 //
-// Inbound:   [consent?] → ring staff browsers → office mobile → voicemail
+// Inbound:   "this call is recorded" → Mili, the voice agent
+//            → (asked for a person, or Mili unreachable) office mobile
+//            → voicemail
 // Outbound:  customer answers → [consent?] → "connecting you" → staff
 //            (browser or office mobile) → if nobody picks up, apologise
 //
-// Recording only ever starts after a customer pressed 1. Silence, any other
+// An inbound call never rings a staff browser: the business number itself
+// answers every call, and the office mobile is only the fallback.
+//
+// Inbound calls are always recorded, and the first thing the caller hears is
+// a declaration saying so — they are told, not asked (DECLARED). Outbound
+// recording only ever starts after a customer pressed 1; silence, any other
 // key, or recording switched off means the call is not recorded. A voicemail
 // is the caller choosing to leave a message, which the prompt says is
 // recorded.
@@ -34,8 +43,12 @@ export const VOICEMAIL_MAX_SECONDS = 120;
 export const OUTBOUND_RING_SECONDS = 30;
 
 export const PROMPTS = {
-  inboundConsent:
-    "Thanks for calling Royal Constructions. Calls may be recorded for quality and training. Press 1 to allow recording, or 2 to continue without recording.",
+  /** Played, word for word, before anything else on every inbound call. */
+  recordingDeclaration:
+    "Thanks for calling Royal Constructions. Please note this call is being recorded for quality and training purposes.",
+  agentTransfer: "No worries. I'll put you through to the team now.",
+  agentUnavailable:
+    "Sorry, our assistant isn't available just now. I'll put you through to the team.",
   outboundConsent:
     "Hello, this is Royal Constructions. Calls may be recorded for quality and training. Press 1 to allow recording, or 2 to continue without recording.",
   outboundConnecting: "Hello, this is Royal Constructions. Connecting you now.",
@@ -50,13 +63,8 @@ export const PROMPTS = {
 export type CallFlowContext = {
   readonly channel: Pick<
     CommsChannel,
-    | "recordingMode"
-    | "staffForwardNumber"
-    | "browserCalling"
-    | "browserRingGroup"
+    "recordingMode" | "staffForwardNumber" | "browserCalling" | "voiceAgent"
   >;
-  /** Identities of staff browsers that registered recently, newest first. */
-  readonly browserIdentities: readonly string[];
 };
 
 export type CallForFlow = {
@@ -117,46 +125,48 @@ function ringMobile(call: CallForFlow, ctx: CallFlowContext, record: boolean) {
   } satisfies FlowDecision;
 }
 
-function ringBrowsers(
-  call: CallForFlow,
-  ctx: CallFlowContext,
-  record: boolean,
-) {
-  if (!ctx.channel.browserCalling || ctx.browserIdentities.length === 0) {
-    return null;
-  }
-  const identities = ctx.channel.browserRingGroup
-    ? ctx.browserIdentities
-    : ctx.browserIdentities.slice(0, 1);
-  return {
-    instructions: [
-      {
-        callerId: call.customerNumber,
-        identities,
-        op: "dialBrowser",
-        record,
-        timeoutSeconds: RING_BROWSER_SECONDS,
-      },
-    ],
-    step: CallFlowStep.RINGING_BROWSER,
-  } satisfies FlowDecision;
-}
-
 function consented(call: CallForFlow): boolean {
-  return call.recordingConsent === RecordingConsent.GRANTED;
+  return (
+    call.recordingConsent === RecordingConsent.GRANTED
+    || call.recordingConsent === RecordingConsent.DECLARED
+  );
 }
 
-/** Inbound: the staff ring sequence, from the first ring. */
+/** Inbound, when Mili cannot take the call: the office mobile, then voicemail. */
 function ringInboundStaff(
   call: CallForFlow,
   ctx: CallFlowContext,
 ): FlowDecision {
-  const record = consented(call);
-  return (
-    ringBrowsers(call, ctx, record)
-    ?? ringMobile(call, ctx, record)
-    ?? voicemail()
-  );
+  return ringMobile(call, ctx, consented(call)) ?? voicemail();
+}
+
+/** Inbound: the declaration, then Mili — or the staff sequence without her. */
+function answerInbound(call: CallForFlow, ctx: CallFlowContext): FlowDecision {
+  const declared = {
+    ...call,
+    recordingConsent: RecordingConsent.DECLARED,
+  };
+  const declaration: CallInstruction = {
+    op: "say",
+    text: PROMPTS.recordingDeclaration,
+  };
+  const next: FlowDecision = ctx.channel.voiceAgent
+    ? {
+        instructions: [
+          {
+            maxSeconds: VOICE_AGENT_MAX_SECONDS,
+            op: "connectAgent",
+            record: true,
+          },
+        ],
+        step: CallFlowStep.AGENT,
+      }
+    : ringInboundStaff(declared, ctx);
+  return {
+    instructions: [declaration, ...next.instructions],
+    recordingConsent: RecordingConsent.DECLARED,
+    step: next.step,
+  };
 }
 
 /** Outbound: put the customer through to whoever placed the call. */
@@ -204,17 +214,10 @@ export function decideCallStart(
   call: CallForFlow,
   ctx: CallFlowContext,
 ): FlowDecision {
-  const ask = ctx.channel.recordingMode === "consented";
   if (call.direction === CommsDirection.INBOUND) {
-    if (ask) {
-      return {
-        instructions: [consentGather(PROMPTS.inboundConsent)],
-        step: CallFlowStep.RECORDING_CONSENT,
-      };
-    }
-    return ringInboundStaff(call, ctx);
+    return answerInbound(call, ctx);
   }
-  if (ask) {
+  if (ctx.channel.recordingMode === "consented") {
     return {
       instructions: [consentGather(PROMPTS.outboundConsent)],
       step: CallFlowStep.RECORDING_CONSENT,
@@ -223,7 +226,7 @@ export function decideCallStart(
   return connectOutbound(call, ctx, PROMPTS.outboundConnecting);
 }
 
-/** The customer answered the consent question (or did not). */
+/** The customer answered the consent question (or did not). Outbound only. */
 export function decideAfterConsent(
   call: CallForFlow,
   ctx: CallFlowContext,
@@ -239,6 +242,43 @@ export function decideAfterConsent(
       ? ringInboundStaff(decided, ctx)
       : connectOutbound(decided, ctx, PROMPTS.connecting);
   return { ...next, recordingConsent };
+}
+
+/**
+ * Mili's conversation ended while the caller is still on the line.
+ *
+ * Finished: hang up. Asked for a person, or Mili never got going: take the
+ * caller back and try the office mobile, then voicemail — a caller who wanted
+ * somebody is never just hung up on.
+ */
+export function decideAfterAgent(
+  call: CallForFlow,
+  ctx: CallFlowContext,
+  outcome: AgentOutcome,
+): FlowDecision {
+  if (outcome === "completed") {
+    return { instructions: [{ op: "hangup" }], step: CallFlowStep.ENDED };
+  }
+  const next = ringInboundStaff(call, ctx);
+  return {
+    ...next,
+    instructions: [
+      // A voicemail starts its own recording; the conversation's stops here.
+      { op: "stopAgent", stopRecording: next.step === CallFlowStep.VOICEMAIL },
+      ...(next.step === CallFlowStep.VOICEMAIL
+        ? []
+        : [
+            {
+              op: "say" as const,
+              text:
+                outcome === "transfer"
+                  ? PROMPTS.agentTransfer
+                  : PROMPTS.agentUnavailable,
+            },
+          ]),
+      ...next.instructions,
+    ],
+  };
 }
 
 /** A dial step finished. Answered means the conversation happened and is over. */

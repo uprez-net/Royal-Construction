@@ -26,6 +26,7 @@ import {
 } from "../shared";
 import { isUniqueViolation } from "../../leads/whatsapp/records";
 import {
+  decideAfterAgent,
   decideAfterConsent,
   decideAfterDial,
   decideCallStart,
@@ -33,7 +34,7 @@ import {
   type CallForFlow,
   type FlowDecision,
 } from "./flow";
-import { browserRingIdentities } from "./presence";
+import { VOICE_AGENT_NAME } from "./voice-agent";
 import {
   callStatusAdvances,
   callStatusOf,
@@ -61,7 +62,8 @@ type CallEvent = Extract<
       | "call.gathered"
       | "call.connected"
       | "call.dialed"
-      | "call.recording";
+      | "call.recording"
+      | "call.agentEnded";
   }
 >;
 
@@ -122,18 +124,13 @@ function forFlow(call: CallForEvent): CallForFlow {
   };
 }
 
-async function flowContext(
-  db: DomainDb,
-  channel: CommsChannel | null,
-  now: Date,
-): Promise<CallFlowContext> {
+function flowContext(channel: CommsChannel | null): CallFlowContext {
   return {
-    browserIdentities: await browserRingIdentities(db, now),
     channel: channel ?? {
       browserCalling: false,
-      browserRingGroup: false,
       recordingMode: "off",
       staffForwardNumber: null,
+      voiceAgent: false,
     },
   };
 }
@@ -175,6 +172,16 @@ function describeEnd(
   seconds: number | null,
 ) {
   const inbound = call.direction === CommsDirection.INBOUND;
+  if (
+    status === CallStatus.COMPLETED
+    && call.connectedAt
+    && call.answeredBy === CallAnsweredBy.AGENT
+  ) {
+    return {
+      action: `Call answered by ${VOICE_AGENT_NAME}`,
+      detail: `${VOICE_AGENT_NAME} spoke with ${maskNumber(call.customerNumber)} for ${formatDuration(seconds)}. The transcript is on the call.`,
+    };
+  }
   if (status === CallStatus.COMPLETED && call.connectedAt) {
     return {
       action: inbound ? "Call received" : "Call made",
@@ -202,6 +209,22 @@ function describeEnd(
   return {
     action: "Call attempted",
     detail: `Called ${maskNumber(call.customerNumber)}: ${label[status] ?? "the call ended before anyone was connected"}.`,
+  };
+}
+
+/**
+ * Mili picking up counts as the call being answered: it is a conversation,
+ * not a missed call, unless she never got going.
+ */
+function agentAnswered(
+  call: CallForEvent,
+  decision: FlowDecision,
+  now: Date,
+): Prisma.CallUpdateInput {
+  if (decision.step !== CallFlowStep.AGENT) return {};
+  return {
+    answeredBy: CallAnsweredBy.AGENT,
+    connectedAt: call.connectedAt ?? now,
   };
 }
 
@@ -255,7 +278,7 @@ export async function applyCallEvent(
 
     switch (event.type) {
       case "call.answered": {
-        const ctx = await flowContext(tx, context.channel, now);
+        const ctx = flowContext(context.channel);
         const fresh =
           call.direction === CommsDirection.OUTBOUND
             ? call.flowStep === CallFlowStep.DIALING_CUSTOMER
@@ -268,6 +291,7 @@ export async function applyCallEvent(
             call.flowStep === CallFlowStep.ENDED
             || call.flowStep === CallFlowStep.VOICEMAIL
             || call.flowStep === CallFlowStep.CONNECTED
+            || call.flowStep === CallFlowStep.AGENT
           ) {
             return ignored(call.id);
           }
@@ -280,6 +304,7 @@ export async function applyCallEvent(
         }
         const decision = decideCallStart(forFlow(call), ctx);
         await applyDecision(tx, call, decision, {
+          ...agentAnswered(call, decision, now),
           answeredAt: call.answeredAt ?? now,
           ...(callStatusAdvances(call.status, CallStatus.IN_PROGRESS)
             ? { status: CallStatus.IN_PROGRESS }
@@ -363,7 +388,7 @@ export async function applyCallEvent(
       case "call.gathered": {
         if (call.flowStep !== CallFlowStep.RECORDING_CONSENT)
           return ignored(call.id);
-        const ctx = await flowContext(tx, context.channel, now);
+        const ctx = flowContext(context.channel);
         const decision = decideAfterConsent(forFlow(call), ctx, event.digits);
         await applyDecision(tx, call, decision);
         return {
@@ -402,7 +427,7 @@ export async function applyCallEvent(
 
       case "call.dialed": {
         if (!RINGING_STEPS.has(call.flowStep)) return ignored(call.id);
-        const ctx = await flowContext(tx, context.channel, now);
+        const ctx = flowContext(context.channel);
         const decision = decideAfterDial(forFlow(call), ctx, event.outcome);
         const answered = event.outcome === "answered";
         await applyDecision(tx, call, decision, {
@@ -426,9 +451,12 @@ export async function applyCallEvent(
 
       case "call.recording": {
         const kind =
-          call.flowStep === CallFlowStep.VOICEMAIL
-            ? CallRecordingKind.VOICEMAIL
-            : CallRecordingKind.CALL;
+          event.kind === "call"
+            ? CallRecordingKind.CALL
+            : event.kind === "voicemail"
+                || call.flowStep === CallFlowStep.VOICEMAIL
+              ? CallRecordingKind.VOICEMAIL
+              : CallRecordingKind.CALL;
         const existing = await tx.callRecording.findUnique({
           select: { id: true },
           where: {
@@ -462,6 +490,39 @@ export async function applyCallEvent(
           recordingId: recording.id,
         };
       }
+
+      case "call.agentEnded": {
+        const transcript = event.transcript
+          ? { agentTranscript: event.transcript }
+          : {};
+        if (call.flowStep !== CallFlowStep.AGENT) {
+          // The caller hung up first, or a repeated report: keep what was
+          // said, and leave the call where it is.
+          if (event.transcript) {
+            await tx.call.update({ data: transcript, where: { id: call.id } });
+          }
+          return ignored(call.id);
+        }
+        const decision = decideAfterAgent(
+          forFlow(call),
+          flowContext(context.channel),
+          event.outcome,
+        );
+        await applyDecision(tx, call, decision, {
+          ...transcript,
+          // Mili never got going: the caller has not been answered yet, so
+          // an unanswered fallback reads as a missed call, not "received".
+          ...(event.outcome === "failed" && !event.transcript
+            ? { answeredBy: null, connectedAt: null }
+            : {}),
+        });
+        return {
+          callId: call.id,
+          instructions: decision.instructions,
+          outcome: "applied" as const,
+          recordingId: null,
+        };
+      }
     }
   });
 }
@@ -476,7 +537,7 @@ async function recordIncomingCall(
   const provider = providerColumn(context.provider);
   try {
     return await db.$transaction(async (tx) => {
-      const ctx = await flowContext(tx, context.channel, now);
+      const ctx = flowContext(context.channel);
       const existing = await tx.call.findUnique({
         select: CALL_FOR_EVENT,
         where: {
@@ -509,7 +570,7 @@ async function recordIncomingCall(
         businessNumber: business?.e164 ?? event.to,
         customerNumber: event.from,
         direction: CommsDirection.INBOUND,
-        flowStep: CallFlowStep.RINGING_BROWSER,
+        flowStep: CallFlowStep.AGENT,
         recordingConsent: "NOT_ASKED",
         staffIdentity: null,
         staffTarget: null,
@@ -525,6 +586,16 @@ async function recordIncomingCall(
           leadId,
           provider,
           providerCallId: event.providerCallId,
+          // Every inbound call is told it is recorded, from the first word.
+          ...(decision.recordingConsent
+            ? { recordingConsent: decision.recordingConsent }
+            : {}),
+          // Mili answers it. A markup carrier (Twilio) sends no separate
+          // "answered" callback for an inbound call, so it is recorded here;
+          // if she never gets going, `call.agentEnded` clears it again.
+          ...(decision.step === CallFlowStep.AGENT
+            ? { answeredBy: CallAnsweredBy.AGENT, connectedAt: now }
+            : {}),
           startedAt: now,
           status: CallStatus.RINGING,
         },

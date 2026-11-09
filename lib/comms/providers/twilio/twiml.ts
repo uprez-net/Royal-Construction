@@ -20,9 +20,24 @@ export function xmlEscape(text: string): string {
     .replace(/'/g, "&apos;");
 }
 
+export type TwimlContext = {
+  readonly origin: string;
+  readonly callId: string | null;
+  /**
+   * The voice-agent address and token for Mili's stream. Throws when the voice
+   * agent is not configured; the caller then hears an apology, not silence.
+   */
+  readonly agentStream?: (maxSeconds: number) => {
+    readonly url: string;
+    readonly token: string;
+  };
+};
+
+const AGENT_UNREACHABLE = `<Say ${VOICE}>Sorry, we can't take your call right now. Please call back shortly.</Say><Hangup/>`;
+
 export function renderTwiml(
   instructions: readonly CallInstruction[] | null,
-  context: { readonly origin: string; readonly callId: string | null },
+  context: TwimlContext,
 ): string {
   const url = (event: string) =>
     xmlEscape(
@@ -69,6 +84,38 @@ export function renderTwiml(
         parts.push(
           `<Record maxLength="${step.maxSeconds}" playBeep="true" timeout="5" action="${url("voice-voicemail-done")}" method="POST" recordingStatusCallback="${url("voice-recording")}" recordingStatusCallbackMethod="POST" recordingStatusCallbackEvent="completed"/>`,
         );
+        break;
+      case "connectAgent": {
+        // A bidirectional Media Stream to the voice-agent route. Twilio drops a query
+        // string on the stream URL, so the token rides as a <Parameter> in
+        // the "start" frame. The stream's status callback starts the
+        // recording once audio flows; <Connect>'s action is only requested
+        // when the stream ends without Mili having moved the call on —
+        // her session never got going (VERIFY attribute names on a live call).
+        let stream: { url: string; token: string } | null = null;
+        try {
+          stream = context.agentStream?.(step.maxSeconds) ?? null;
+        } catch {
+          stream = null;
+        }
+        if (!stream) {
+          parts.push(AGENT_UNREACHABLE);
+          break;
+        }
+        const status = xmlEscape(
+          commsCallbackUrl(context.origin, "twilio", "voice-agent-stream", {
+            callId: context.callId,
+            record: step.record ? "1" : null,
+          }),
+        );
+        parts.push(
+          `<Connect action="${url("voice-agent-done")}" method="POST"><Stream url="${xmlEscape(stream.url)}" statusCallback="${status}" statusCallbackMethod="POST"><Parameter name="token" value="${xmlEscape(stream.token)}"/></Stream></Connect>`,
+        );
+        break;
+      }
+      case "stopAgent":
+        // Replacing the call's TwiML ends the stream; the recording, when it
+        // must stop, is stopped over REST by the adapter (updateLiveCall).
         break;
       case "hangup":
         parts.push("<Hangup/>");

@@ -44,6 +44,7 @@ export async function GET() {
     recordingMode: config.recordingMode,
     smsEnabled: config.smsEnabled,
     staffForwardNumber: config.staffForwardNumber,
+    voiceAgent: channel?.voiceAgent ?? false,
     webhookOrigin: config.webhookOrigin,
   });
 }

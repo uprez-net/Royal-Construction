@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
+  Bot,
   Loader2,
   MonitorSmartphone,
   PhoneIncoming,
@@ -26,9 +27,13 @@ import {
 import type { CallDto, LeadCallsDto } from "@/lib/leads/comms-types";
 import { formatSydneyStamp } from "@/lib/leads/whatsapp-format";
 
+import { CallTranscript } from "./call-transcript";
+
 // Ringing a lead, and every call with them. The server places the call and
 // rings the lead first; when they pick up it puts them through to this
-// browser (answered automatically) or to the office mobile.
+// browser (answered automatically) or to the office mobile. Calls the lead
+// makes to the business number are answered by Mili, the voice agent, and
+// show her transcript.
 
 const POLL_MS = 5_000;
 
@@ -59,6 +64,8 @@ function duration(seconds: number | null): string | null {
 function CallIcon({ call }: { call: CallDto }) {
   if (call.answeredBy === "VOICEMAIL")
     return <Voicemail className="size-4 text-amber-600" aria-hidden="true" />;
+  if (call.answeredBy === "AGENT")
+    return <Bot className="size-4 text-emerald-600" aria-hidden="true" />;
   if (call.direction === "INBOUND") {
     return call.connectedAt ? (
       <PhoneIncoming className="size-4 text-emerald-600" aria-hidden="true" />
@@ -101,9 +108,14 @@ function CallRow({
               call.staffTarget === "MOBILE" ? " (office mobile)" : ""
             }`
           : `From ${call.customerNumber === "withheld" ? "a withheld number" : formatE164ForDisplay(call.customerNumber)}`}
+        {call.answeredBy === "AGENT" ? " · answered by Mili" : null}
         {call.recordingConsent === "GRANTED" ? " · recording allowed" : null}
+        {call.recordingConsent === "DECLARED"
+          ? " · told it was recorded"
+          : null}
         {call.recordingConsent === "DECLINED" ? " · not recorded" : null}
       </p>
+      <CallTranscript transcript={call.agentTranscript} />
       {call.problem ? (
         <p
           className={

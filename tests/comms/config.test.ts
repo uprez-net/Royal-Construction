@@ -46,7 +46,6 @@ test("COMMUNICATIONS_PROVIDER picks the sender, and the legacy alias still works
     readCommsConfig({ ...BASE, COMMUNICATIONS_PROVIDER: "telnyx" }),
   );
   assert.equal(channel?.defaultNumber?.e164, "+61290001234");
-  assert.equal(channel?.browserRingGroup, false);
 });
 
 test("an unknown provider fails loudly instead of falling back", () => {
@@ -121,12 +120,53 @@ test("every adapter answers the same contract", () => {
       "outboundCalls",
       "browserCalling",
       "browserSdkBundled",
-      "browserRingGroup",
+      "voiceAgent",
       "callControl",
       "inboundCallFlow",
       "recordings",
     ]) {
       assert.ok(key in adapter.capabilities, `${name} declares ${key}`);
     }
+    assert.equal(typeof adapter.updateLiveCall, "function");
   }
+});
+
+const MILI = {
+  COMMS_AGENT_ENABLED: "true",
+  COMMS_AGENT_SECRET: "s".repeat(32),
+};
+
+test("Mili answers on either carrier once she is switched on", () => {
+  for (const provider of ["twilio", "telnyx"] as const) {
+    const config = readCommsConfig({
+      ...BASE,
+      ...MILI,
+      COMMUNICATIONS_PROVIDER: provider,
+    });
+    assert.equal(commsChannel(config)?.voiceAgent, true, provider);
+    assert.equal(commsAdapter(provider, config).capabilities.voiceAgent, true);
+    assert.deepEqual(config.problems, []);
+  }
+  assert.equal(commsChannel(readCommsConfig(BASE))?.voiceAgent, false);
+});
+
+test("Mili stays off without a strong secret, and says why", () => {
+  for (const secret of ["", "too-short"]) {
+    const config = readCommsConfig({
+      ...BASE,
+      ...MILI,
+      COMMS_AGENT_SECRET: secret,
+    });
+    assert.equal(commsChannel(config)?.voiceAgent, false, secret);
+    assert.ok(
+      config.problems.some((problem) => problem.includes("Mili is off")),
+      secret,
+    );
+  }
+  // Calls switched off: Mili is off too, quietly.
+  assert.equal(
+    commsChannel(readCommsConfig({ ...BASE, ...MILI, COMMS_CALLS_ENABLED: "" }))
+      ?.voiceAgent,
+    false,
+  );
 });

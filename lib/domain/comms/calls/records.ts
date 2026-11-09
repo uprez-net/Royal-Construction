@@ -14,6 +14,7 @@ import type { CommsProviderName } from "../../ports/comms";
 import { providerName } from "../shared";
 
 export const CALL_SELECT = {
+  agentTranscript: true,
   answeredAt: true,
   answeredBy: true,
   businessNumber: true,
@@ -85,10 +86,13 @@ export type CallRecord = {
   readonly needsReconciliation: boolean;
   readonly problem: string | null;
   readonly recordings: readonly CallRecordingRecord[];
+  /** What the caller and Mili said, one "Speaker: text" line per turn. */
+  readonly agentTranscript: string | null;
 };
 
 export function toCallRecord(row: CallRow): CallRecord {
   return {
+    agentTranscript: row.agentTranscript,
     answeredAt: row.answeredAt,
     answeredBy: row.answeredBy,
     businessNumber: row.businessNumber,

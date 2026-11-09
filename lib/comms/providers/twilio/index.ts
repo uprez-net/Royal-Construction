@@ -4,14 +4,16 @@ import { commsCallbackUrl } from "../../callbacks";
 import {
   browserCallingConfigured,
   providerConfigured,
+  voiceAgentConfigured,
   type CommsConfig,
 } from "../../config";
 import { carrierRequest, readCapped, type Fetch } from "../../http";
 import type { CommsAdapter } from "../../types";
+import { voiceAgentStream } from "../../voice-agent/stream";
 import { parseTwilioWebhook, TWILIO_WEBHOOK_EVENTS } from "./parse";
 import { verifyTwilioSignature } from "./signature";
 import { twilioVoiceAccessToken } from "./token";
-import { renderTwiml } from "./twiml";
+import { renderTwiml, type TwimlContext } from "./twiml";
 
 // The Twilio adapter (file 02). Raw HTTPS against the 2010-04-01 REST API —
 // no SDK — form-encoded bodies, Basic auth with an API key when there is one.
@@ -83,17 +85,44 @@ export function createTwilioAdapter(
 
   const browserCalling =
     config.callsEnabled && browserCallingConfigured(config, "twilio");
+  const voiceAgent =
+    configured && config.callsEnabled && voiceAgentConfigured(config);
+
+  const twimlContext = (
+    callSid: string | null,
+    callId: string | null,
+  ): TwimlContext => ({
+    agentStream: (maxSeconds) => {
+      if (!callSid) {
+        throw new CommsError(
+          "There is no call to stream to Mili.",
+          "unsupported",
+          "TWILIO_NO_CALL",
+        );
+      }
+      return voiceAgentStream(config, "twilio", {
+        callId,
+        maxSeconds,
+        providerCallId: callSid,
+      });
+    },
+    callId,
+    origin,
+  });
+
+  const notFound = (error: unknown) =>
+    error instanceof CommsError && error.providerCode === "TWILIO_20404";
 
   return {
     capabilities: {
       browserCalling,
-      browserRingGroup: true,
       browserSdkBundled: true,
       callControl: "markup",
       inboundCallFlow: true,
       outboundCalls: configured,
       recordings: configured,
       sms: configured,
+      voiceAgent,
     },
     issueBrowserCredential: browserCalling
       ? async (identity, ttlSeconds) => ({
@@ -204,7 +233,10 @@ export function createTwilioAdapter(
       : null,
     respond: async (instructions, context) =>
       new Response(
-        renderTwiml(instructions, { callId: context.callId, origin }),
+        renderTwiml(
+          instructions,
+          twimlContext(context.providerCallId, context.callId),
+        ),
         {
           headers: {
             "Cache-Control": "no-store",
@@ -241,6 +273,56 @@ export function createTwilioAdapter(
             },
           }
         : null,
+    startCallRecording: async (callSid, callId) => {
+      // Both sides of the conversation with Mili. The status callback is
+      // marked so a late save is filed as the conversation, not a voicemail.
+      await rest(
+        "POST",
+        `/Calls/${encodeURIComponent(callSid)}/Recordings.json`,
+        "recording the call",
+        new URLSearchParams({
+          RecordingChannels: "dual",
+          RecordingStatusCallback: commsCallbackUrl(
+            origin,
+            "twilio",
+            "voice-recording",
+            { callId, kind: "call" },
+          ),
+          RecordingStatusCallbackEvent: "completed",
+          RecordingStatusCallbackMethod: "POST",
+        }),
+      );
+    },
+    updateLiveCall: async (callSid, callId, instructions) => {
+      // A voicemail is about to record on its own: stop the conversation's
+      // recording first. Already stopped (or never started) is fine.
+      if (
+        instructions.some(
+          (step) => step.op === "stopAgent" && step.stopRecording,
+        )
+      ) {
+        try {
+          await rest(
+            "POST",
+            `/Calls/${encodeURIComponent(callSid)}/Recordings/Twilio.CURRENT.json`,
+            "stopping the call recording",
+            new URLSearchParams({ Status: "stopped" }),
+          );
+        } catch (error) {
+          if (!notFound(error)) throw error;
+        }
+      }
+      // New TwiML on the live call: it ends the stream to Mili and runs the
+      // next steps (VERIFY: <Connect>'s action is not requested after it).
+      await rest(
+        "POST",
+        `/Calls/${encodeURIComponent(callSid)}.json`,
+        "moving the call on from Mili",
+        new URLSearchParams({
+          Twiml: renderTwiml(instructions, twimlContext(callSid, callId)),
+        }),
+      );
+    },
     verifyWebhook: (request) =>
       verifyTwilioSignature({
         authTokens: [t.authToken, t.previousAuthToken],

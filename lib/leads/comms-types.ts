@@ -72,8 +72,8 @@ export type CallDto = {
   flowStep: string;
   staffTarget: "BROWSER" | "MOBILE" | null;
   staffName: string | null;
-  answeredBy: "BROWSER" | "MOBILE" | "VOICEMAIL" | null;
-  recordingConsent: "NOT_ASKED" | "GRANTED" | "DECLINED";
+  answeredBy: "BROWSER" | "MOBILE" | "VOICEMAIL" | "AGENT" | null;
+  recordingConsent: "NOT_ASKED" | "GRANTED" | "DECLINED" | "DECLARED";
   startedAt: string;
   answeredAt: string | null;
   connectedAt: string | null;
@@ -90,6 +90,8 @@ export type CallDto = {
     available: boolean;
     failureReason: string | null;
   }[];
+  /** What the caller and Mili said, one "Speaker: text" line per turn. */
+  agentTranscript: string | null;
 };
 
 export type LeadCallsDto = {
@@ -162,6 +164,8 @@ export type CommsStatusDto = CommsAvailabilityDto & {
   smsEnabled: boolean;
   callsEnabled: boolean;
   browserCalling: boolean;
+  /** Inbound calls are answered by Mili. */
+  voiceAgent: boolean;
   recordingMode: "off" | "consented";
   staffForwardNumber: string | null;
   webhookOrigin: string | null;

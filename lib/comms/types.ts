@@ -16,7 +16,8 @@ export type CommsCapabilities = {
   readonly browserCalling: boolean;
   /** The app ships a browser SDK for this provider (components/comms/dialer). */
   readonly browserSdkBundled: boolean;
-  readonly browserRingGroup: boolean;
+  /** Inbound calls can be handed to Mili (COMMS_AGENT_ENABLED and its secret). */
+  readonly voiceAgent: boolean;
   /** "markup": answer the webhook with call XML. "commands": REST on the live call. */
   readonly callControl: "markup" | "commands";
   readonly inboundCallFlow: boolean;
@@ -114,9 +115,19 @@ export type CommsAdapter = {
    * for networks that block UDP. Absent when this provider offers none.
    */
   readonly iceServers?: () => Promise<readonly IceServer[]>;
-  /** See `ParsedWebhook.recordAfterConnect`. Absent for markup providers. */
+  /** See `ParsedWebhook.recordAfterConnect`. */
   readonly startCallRecording?: (
     providerCallId: string,
     callId: string | null,
+  ) => Promise<void>;
+  /**
+   * Issue instructions on a live call outside a carrier request — when the
+   * voice agent finishes with a caller. Telnyx runs them as
+   * commands; Twilio replaces the call's TwiML. Throws CommsError.
+   */
+  readonly updateLiveCall: (
+    providerCallId: string,
+    callId: string | null,
+    instructions: readonly CallInstruction[],
   ) => Promise<void>;
 };

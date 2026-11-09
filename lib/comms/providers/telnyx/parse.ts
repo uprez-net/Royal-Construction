@@ -299,11 +299,26 @@ export function parseTelnyxWebhook(
             providerCallId: callControlId,
             providerRecordingId: recordingId,
             type: "call.recording",
+            // Started for the conversation with Mili; it may be saved after
+            // the call has moved on to voicemail.
+            ...(state?.rk === 1 ? { kind: "call" as const } : {}),
           },
         ],
         { pending: continuation(state) },
       );
     }
+    case "streaming.failed":
+      // The voice-agent route could not be reached (VERIFY the event name): Mili never
+      // picked up, and the caller still needs somebody.
+      return ack([
+        {
+          callId,
+          outcome: "failed",
+          providerCallId: callControlId,
+          transcript: null,
+          type: "call.agentEnded",
+        },
+      ]);
     default:
       return ignore(`call event ${type}`);
   }

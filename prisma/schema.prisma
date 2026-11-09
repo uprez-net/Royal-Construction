@@ -2553,6 +2553,8 @@ enum CallFlowStep {
   CONNECTED
   VOICEMAIL
   ENDED
+  /// Inbound: Mili, the voice agent, is talking with the caller.
+  AGENT
 }
 
 enum CallStaffTarget {
@@ -2564,12 +2566,16 @@ enum CallAnsweredBy {
   BROWSER
   MOBILE
   VOICEMAIL
+  /// Mili, the voice agent.
+  AGENT
 }
 
 enum RecordingConsent {
   NOT_ASKED
   GRANTED
   DECLINED
+  /// Told the call is recorded (inbound), rather than asked.
+  DECLARED
 }
 
 /// One phone call with a customer. `providerCallId` is the customer's leg.
@@ -2601,6 +2607,8 @@ model Call {
   providerErrorTitle  String?
   /// The provider may have placed this call but never said so.
   needsReconciliation Boolean          @default(false)
+  /// What the caller and Mili said, one "Speaker: text" line per turn.
+  agentTranscript     String?
   idempotencyKey      String?          @unique
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt

@@ -30,7 +30,7 @@ import {
 
 const channel = (provider: "twilio" | "telnyx" = "twilio"): CommsChannel => ({
   browserCalling: true,
-  browserRingGroup: provider === "twilio",
+  voiceAgent: false,
   callsAvailable: true,
   defaultNumber: { e164: "+61280001234", label: "Office", provider },
   numbers: [{ e164: "+61280001234", label: "Office", provider }],

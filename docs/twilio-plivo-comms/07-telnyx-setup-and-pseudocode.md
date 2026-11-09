@@ -288,11 +288,12 @@ browser in the `X-Royal-Call-Id` custom header (**VERIFY** against a live accoun
 
 **Inbound call flow: implemented** (`capabilities.inboundCallFlow = true`). An incoming
 call is answered with the `answer` command; its `call.answered` event asks the domain for
-the next steps, which run as commands: the recording question (`gather_using_speak`), a
-`transfer` to the staff browser or the office mobile, then voicemail (`record_start`). A
-step that finishes later carries the remaining steps in `client_state`, and the matching
-`.ended`/`.saved` event continues them. With calling switched off, a ringing call is hung
-up without being answered.
+the next steps, which run as commands: the recording declaration (`speak`), then Mili
+(below) — or, without her, a `transfer` to the office mobile, then voicemail
+(`record_start`). An inbound call never rings a browser. A step that finishes later
+carries the remaining steps in `client_state`, and the matching `.ended`/`.saved` event
+continues them. With calling switched off, a ringing call is hung up without being
+answered.
 
 **Recordings: implemented** (`capabilities.recordings = true` when Telnyx is configured).
 Consented calls start `record_start` (dual channel, mp3) once connected; voicemails use the
@@ -300,10 +301,16 @@ same command. The "recording saved" event files the recording; the copy job asks
 `GET /recordings/{id}` for a fresh download link (the link in the callback is never
 fetched), stores the audio privately, then `DELETE`s it at Telnyx.
 
-**AI voice agent: not implemented.** Telnyx offers a "Streaming start" command (WebSocket
-audio), but the frame format, codec and event names were not verified. When adding it,
-capture real frames first and write the `StreamCodec` against fixtures, as file 03 §6 does
-for Plivo.
+**AI voice agent (Mili): implemented, not yet verified on a live account.** After the
+declaration, `connectAgent` issues `record_start` (dual, marked `rk` in `client_state` so
+a late save is filed as the conversation) and `streaming_start` with
+`stream_url=wss://<origin>/api/comms/voice-agent/telnyx?token=…`, bidirectional RTP,
+PCMU. The route bridges the audio to `openai/gpt-live-1` on AI Gateway
+(`lib/comms/voice-agent`). When she finishes, the domain decides the next step and the
+adapter runs it (`streaming_stop`, then `speak`/`transfer`/`hangup`). A
+`streaming.failed` event sends the caller to the office mobile, then voicemail. Capture
+real stream frames and the `streaming.*` events and add them to `tests/comms` before
+relying on it; Twilio uses the same route through `<Connect><Stream>`.
 
 Field names on all of the above are still **VERIFY** items; see the
 [runbook](../comms-runbook.md#not-yet-verified-against-a-live-account).

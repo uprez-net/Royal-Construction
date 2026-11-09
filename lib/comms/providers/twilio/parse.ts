@@ -25,6 +25,8 @@ export const TWILIO_WEBHOOK_EVENTS = new Set([
   "voice-leg",
   "voice-recording",
   "voice-voicemail-done",
+  "voice-agent-stream",
+  "voice-agent-done",
 ]);
 
 const CALL_STATES: ReadonlySet<string> = new Set<CallState>([
@@ -246,10 +248,43 @@ export function parseTwilioWebhook(
             providerCallId: callSid ?? "",
             providerRecordingId: recordingSid,
             type: "call.recording",
+            // The conversation with Mili, started by the adapter; it may be
+            // saved after the call moved on to voicemail.
+            ...(request.query.get("kind") === "call"
+              ? { kind: "call" as const }
+              : {}),
           },
         ],
         `rec:${recordingSid}`,
       );
+    }
+    case "voice-agent-stream": {
+      // Mili's Media Stream changed state. Once audio flows, record the
+      // conversation (the caller has heard the declaration).
+      if (!callSid) return null;
+      const streamSid = get("StreamSid");
+      if (get("StreamEvent") !== "stream-started") return ack([]);
+      return {
+        ...ack([], streamSid ? `stream:${streamSid}:started` : null),
+        recordAfterConnect:
+          request.query.get("record") === "1"
+            ? { callId, providerCallId: callSid }
+            : null,
+      };
+    }
+    case "voice-agent-done": {
+      // <Connect> ended without the voice agent moving the call on: Mili never
+      // got going, or her session dropped. The caller still needs somebody.
+      if (!callSid) return null;
+      return markup([
+        {
+          callId,
+          outcome: "failed",
+          providerCallId: callSid,
+          transcript: null,
+          type: "call.agentEnded",
+        },
+      ]);
     }
     default:
       return null;

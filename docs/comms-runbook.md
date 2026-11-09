@@ -13,8 +13,8 @@ to paste into the carrier's console.
 | --- | --- |
 | SMS | Text a lead from **Phone & SMS** on the lead page (or the lead list's Call button). Replies land on the lead; a number no lead has waits on `/admin/comms`. `STOP` opts the lead out at once; `START` opts back in. |
 | Outbound calls | The carrier rings the lead first. When they answer they hear "Connecting you now" (or the recording question) and are put through to **your browser** (picked up automatically) or the **office mobile**. A browser credential can only receive calls, so it can never dial anyone. |
-| Inbound calls | Rings every staff browser with the app open (Twilio; Telnyx rings the most recently active one), then the office mobile, then voicemail. |
-| Recording | Off unless `COMMS_RECORDING_MODE=consented`. Then the customer is asked to press 1; anything else means not recorded. Recordings and voicemails are copied to Blob storage and deleted at the carrier. |
+| Inbound calls | Never ring a browser. The caller hears "this call is being recorded", then **Mili**, the voice agent, answers and takes a message (see below). If Mili is off or can't be reached, or the caller asks for a person, the office mobile rings, then voicemail. Mili's transcript and the recording land on the lead's call. |
+| Recording | Inbound: always, announced by the declaration (shown as "told it was recorded"). Outbound: off unless `COMMS_RECORDING_MODE=consented`, then the lead is asked to press 1; anything else means not recorded. Recordings and voicemails are copied to Blob storage and deleted at the carrier. |
 | WhatsApp calls | Customers' WhatsApp calls ring the browser dock; staff can call a lead who tapped **Allow calls** (asked from the WhatsApp chat's **Ask to call** button, inside the 24-hour window). WhatsApp calls cannot go to a phone. |
 
 Everything external is behind the outbox: a double click or a retry never
@@ -58,7 +58,35 @@ configure.
    attach the number and an outbound voice profile that allows Australia →
    `TELNYX_CONNECTION_ID`.
 5. **Credential connection** for browser logins → `TELNYX_WEBRTC_CONNECTION_ID`.
-   Turn on simultaneous ringing so every tab of the same user rings.
+   Only outbound calls use it (the browser takes the second leg of a call its
+   user placed).
+
+## Mili, the voice agent
+
+Mili answers every inbound call on either carrier, after the recording
+declaration. She runs on `openai/gpt-live-1` through AI Gateway with a female
+voice, takes the caller's name, number, suburb and what they need, and never
+quotes a price, a date or a commitment (the rules are in
+`lib/domain/comms/calls/voice-agent.ts`). She can end the call or hand the
+caller to the office mobile.
+
+How it works: the carrier streams the call's audio over a WebSocket to
+`wss://{origin}/api/comms/voice-agent/{twilio|telnyx}`, a route on this app
+that Vercel upgrades and keeps alive for the conversation (up to 270 s, inside
+the route's 300 s limit; she is asked to wrap up 45 s before). Each stream must
+present a token the app signed for that call. When she finishes, the
+transcript is saved and the call moves on (hang up, mobile, voicemail).
+
+1. `COMMS_AGENT_ENABLED=true` and `COMMS_AGENT_SECRET` (`openssl rand -hex 32`).
+2. `AI_GATEWAY_API_KEY` set (or Vercel OIDC on the deployment).
+3. Optional: `COMMS_AGENT_VOICE` (`marin` default, `coral`, `shimmer`, `sage`),
+   `COMMS_STAFF_FORWARD_NUMBER` for handovers.
+4. No carrier console setup beyond the voice webhooks above — the app gives
+   the carrier the stream address on each call.
+
+Only a Vercel deployment can upgrade the WebSocket. Under `next dev` the stream
+is refused and calls go to the mobile, then voicemail — test Mili on a preview
+deployment with `COMMS_WEBHOOK_ORIGIN` set to it.
 
 ## WhatsApp calling
 
@@ -75,6 +103,12 @@ Coded from the docs (file 07 marks these `VERIFY`). Before relying on them,
 capture one real signed request of each and add it to `tests/comms` as a
 fixture:
 
+- **Mili**: Twilio `<Connect><Stream>` with a `statusCallback` and `action`,
+  and that a live-call TwiML update does not then request the action; Telnyx
+  `streaming_start` field names (`stream_bidirectional_mode`, `…_codec`), the
+  `streaming.failed` event name, and both carriers' stream frame shapes
+  (`lib/comms/voice-agent/frames.ts`); the AI Gateway realtime session for
+  `openai/gpt-live-1` accepting 24 kHz PCM, `response-create` and tools.
 - **Telnyx**: field names on `call.*` and `message.*` events; `client_state` on
   the legs a `transfer` creates; hangup causes; the telephony-credential token
   endpoint returning plain text; `GET /calls/{id}` after a call ends; the
@@ -95,7 +129,9 @@ fixture:
 - [ ] Text the number from a phone no lead has; it appears on `/admin/comms`; file it onto a lead.
 - [ ] Call a lead from the browser; your browser picks up when they answer. Hang up from each end.
 - [ ] Call via office mobile.
-- [ ] Ring the business number with the app open (browser rings), closed (mobile rings), and with nobody answering (voicemail is stored and plays on the lead).
-- [ ] With `COMMS_RECORDING_MODE=consented`: press 1 (recorded), press 2 and stay silent (not recorded). Check the carrier's console shows the recording deleted after the copy.
+- [ ] Ring the business number: hear the declaration, then Mili. Leave a message and say goodbye; the call shows "answered by Mili" with a transcript and a recording on the lead.
+- [ ] Ask Mili for a person: the office mobile rings. Don't answer: voicemail is stored and plays on the lead.
+- [ ] With `COMMS_AGENT_ENABLED=false`: the declaration, then the office mobile, then voicemail. No browser rings.
+- [ ] With `COMMS_RECORDING_MODE=consented`, on an outbound call: press 1 (recorded), press 2 and stay silent (not recorded). Check the carrier's console shows the recording deleted after the copy.
 - [ ] WhatsApp: ask permission, allow it on the phone, call from the chat; call the business on WhatsApp and answer in the dock.
 - [ ] Next morning, the `comms-sweep` cron log shows no stale calls.

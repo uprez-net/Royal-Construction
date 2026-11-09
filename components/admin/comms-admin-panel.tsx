@@ -7,6 +7,7 @@ import { AlertTriangle, CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { CallTranscript } from "@/components/leads/comms/call-transcript";
 import { formatE164ForDisplay } from "@/lib/domain/leads/whatsapp/phone";
 import {
   fetchCommsStatus,
@@ -210,10 +211,11 @@ export function CommsAdminPanel() {
               on={status.callsAvailable}
               label={status.callsEnabled ? "Calls" : "Calls (off)"}
             />
-            <Flag on={status.browserCalling} label="Browser phone" />
+            <Flag on={status.browserCalling} label="Browser phone (outbound)" />
+            <Flag on={status.voiceAgent} label="Mili answers inbound calls" />
             <Flag
               on={status.recordingMode === "consented"}
-              label="Recording (with consent)"
+              label="Outbound recording (with consent)"
             />
             <Flag
               on={Boolean(status.staffForwardNumber)}
@@ -317,10 +319,13 @@ export function CommsAdminPanel() {
                     · {formatSydneyStamp(call.startedAt)} ·{" "}
                     {call.answeredBy === "VOICEMAIL"
                       ? "voicemail"
-                      : call.connectedAt
-                        ? "answered"
-                        : "missed"}
+                      : call.answeredBy === "AGENT"
+                        ? "answered by Mili"
+                        : call.connectedAt
+                          ? "answered"
+                          : "missed"}
                   </span>
+                  <CallTranscript transcript={call.agentTranscript} />
                   {call.recordings
                     .filter((recording) => recording.available)
                     .map((recording) => (
