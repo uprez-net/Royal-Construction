@@ -164,9 +164,9 @@ matches on date alone, so a fixture record created by hand survives it.
 
 The suite must never complete these, however they are reached:
 
-client emails · compliance outreach and follow-ups · DocuSign envelope
-creation, sending or voiding · team invitations and revocations · role changes
-· the Xero disconnection
+client emails · WhatsApp messages to leads · compliance outreach and
+follow-ups · DocuSign envelope creation, sending or voiding · team invitations
+and revocations · role changes · the Xero disconnection
 
 Cases for them test the approval boundary and always answer `cancel`. Three
 things enforce it: the `approve` helper throws before the request leaves the

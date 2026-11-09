@@ -50,14 +50,13 @@ export const stageToPrismaMap: Record<LeadStage, PrismaLeadStage> = {
   Disqualified: "DISQUALIFIED",
 };
 
-const historyTypeMap: Record<
-  "SYSTEM" | "CALL" | "EMAIL" | "REFERRAL",
-  HistoryItem["type"]
-> = {
+const historyTypeMap: Record<PrismaHistoryType, HistoryItem["type"]> = {
   SYSTEM: "system",
   CALL: "call",
   EMAIL: "email",
   REFERRAL: "referral",
+  WHATSAPP: "whatsapp",
+  SMS: "sms",
 };
 
 export const historyTypeToPrisma: Record<
@@ -68,6 +67,8 @@ export const historyTypeToPrisma: Record<
   call: "CALL",
   email: "EMAIL",
   referral: "REFERRAL",
+  whatsapp: "WHATSAPP",
+  sms: "SMS",
 };
 
 /**

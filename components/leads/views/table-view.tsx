@@ -32,6 +32,17 @@ import { ToastContainer, useToast } from "@/components/common/use-toast";
 import type { LeadEmails } from "@prisma/client";
 import LeadCommModal from "../modal-ui/lead-comm-modal";
 import { fetchOpenTasks, type LeadTaskRow } from "@/lib/leads/task-service";
+import { fetchWhatsAppSummaries } from "@/lib/leads/whatsapp-service";
+import type { WhatsAppSummaryDto } from "@/lib/leads/whatsapp-types";
+import { LeadWhatsAppModal } from "@/components/leads/whatsapp/lead-whatsapp-modal";
+import { LeadCommsModal } from "@/components/leads/comms/lead-comms-modal";
+import { useCommsAvailability } from "@/hooks/use-comms-availability";
+import { WhatsAppGlyph } from "@/components/whatsapp/whatsapp-logo";
+import {
+  WhatsAppBadge,
+  WhatsAppLastSeen,
+  whatsappSummaryTitle,
+} from "@/components/leads/whatsapp/whatsapp-row-indicator";
 import { useAppSelector } from "@/lib/store/hooks";
 import { cn } from "@/lib/utils";
 import { DataTableSkeleton, PageSkeleton } from "@/components/ui/skeleton";
@@ -48,6 +59,16 @@ interface TableViewProps {
     clerkUserId: string | null;
     fullName: string | null;
   };
+}
+
+function whatsappActionLabel(
+  leadName: string,
+  summary: WhatsAppSummaryDto | undefined,
+): string {
+  const unreadCount = summary?.unreadCount ?? 0;
+  return unreadCount > 0
+    ? `WhatsApp ${leadName}, ${unreadCount} unread WhatsApp message${unreadCount === 1 ? "" : "s"}`
+    : `WhatsApp ${leadName}`;
 }
 
 export default function TableView({
@@ -72,6 +93,15 @@ export default function TableView({
   const [tasksLead, setTasksLead] = React.useState<Lead | null>(null);
   const [assignedLead, setAssignedLead] = React.useState<Lead | null>(null);
   const [commLead, setCommLead] = React.useState<string | null>(null);
+  const [whatsappLead, setWhatsappLead] = React.useState<Lead | null>(null);
+  const [phoneLead, setPhoneLead] = React.useState<Lead | null>(null);
+  const comms = useCommsAvailability();
+  const [whatsappSummaries, setWhatsappSummaries] = React.useState<
+    Map<number, WhatsAppSummaryDto>
+  >(() => new Map());
+  // Bumped when the WhatsApp modal closes, so the row indicator picks up the
+  // messages just sent or read without refetching on every render.
+  const [whatsappVersion, setWhatsappVersion] = React.useState(0);
   const [openTasks, setOpenTasks] = React.useState<LeadTaskRow[]>([]);
   const [tasksLoaded, setTasksLoaded] = React.useState(false);
   // Failed is not the same as empty. Without this the catch marked the fetch
@@ -113,6 +143,23 @@ export default function TableView({
       });
     return () => controller.abort();
   }, [tasksVersion, leadIdsKey]);
+
+  // One summary request for the page on screen — never one per row, and never
+  // the full threads. A failure leaves the indicators blank; the WhatsApp
+  // action itself is gated on the phone alone and still works.
+  useEffect(() => {
+    const controller = new AbortController();
+    const leadIds = leadIdsKey === "" ? [] : leadIdsKey.split(",").map(Number);
+    fetchWhatsAppSummaries(leadIds, controller.signal)
+      .then((rows) =>
+        setWhatsappSummaries(new Map(rows.map((row) => [row.leadId, row]))),
+      )
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setWhatsappSummaries(new Map());
+      });
+    return () => controller.abort();
+  }, [leadIdsKey, whatsappVersion]);
 
   const tasksReady = tasksLoaded && !tasksError;
 
@@ -160,6 +207,12 @@ export default function TableView({
   };
 
   const handleCall = (lead: Lead) => {
+    // Through the phone provider when one is set up, so the call is placed,
+    // logged and (with consent) recorded; otherwise the device's own dialler.
+    if (comms.calls) {
+      setPhoneLead(lead);
+      return;
+    }
     const dial = dialablePhone(lead.phone);
     if (dial) window.location.assign(`tel:${dial}`);
   };
@@ -375,7 +428,7 @@ export default function TableView({
                                   actions.sendText.disabledReason
                                   ?? `Send message to ${lead.name}`
                                 }
-                                aria-label={`Send message to ${lead.name}`}
+                                aria-label={`Open email thread with ${lead.name}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setCommLead(lead.id.toString());
@@ -383,6 +436,38 @@ export default function TableView({
                                 disabled={actions.sendText.disabled}
                               >
                                 <MessageSquare size={15} />
+                              </button>
+                            )}
+                            {actions.whatsapp.visible && (
+                              <button
+                                type="button"
+                                className="action-btn-icon relative"
+                                title={
+                                  actions.whatsapp.disabledReason
+                                  ?? whatsappSummaryTitle(
+                                    whatsappSummaries.get(lead.id),
+                                  )
+                                  ?? `WhatsApp ${lead.name}`
+                                }
+                                aria-label={whatsappActionLabel(
+                                  lead.name,
+                                  whatsappSummaries.get(lead.id),
+                                )}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setWhatsappLead(lead);
+                                }}
+                                disabled={actions.whatsapp.disabled}
+                              >
+                                <WhatsAppGlyph
+                                  brand={!actions.whatsapp.disabled}
+                                  className="size-[15px]"
+                                />
+                                {!actions.whatsapp.disabled ? (
+                                  <WhatsAppBadge
+                                    summary={whatsappSummaries.get(lead.id)}
+                                  />
+                                ) : null}
                               </button>
                             )}
                             {actions.archive.visible && (
@@ -557,11 +642,46 @@ export default function TableView({
                           className="mobile-action-btn"
                           onClick={() => setCommLead(lead.id.toString())}
                           title={actions.sendText.disabledReason ?? undefined}
-                          aria-label={`Communicate with ${lead.name}`}
+                          aria-label={`Open email thread with ${lead.name}`}
                           disabled={actions.sendText.disabled}
                         >
                           <MessageSquare size={15} />
-                          Text
+                          Emails
+                        </button>
+                      )}
+                      {actions.whatsapp.visible && (
+                        <button
+                          type="button"
+                          className="mobile-action-btn relative"
+                          onClick={() => setWhatsappLead(lead)}
+                          title={
+                            actions.whatsapp.disabledReason
+                            ?? whatsappSummaryTitle(
+                              whatsappSummaries.get(lead.id),
+                            )
+                            ?? undefined
+                          }
+                          aria-label={whatsappActionLabel(
+                            lead.name,
+                            whatsappSummaries.get(lead.id),
+                          )}
+                          disabled={actions.whatsapp.disabled}
+                        >
+                          <WhatsAppGlyph
+                            brand={!actions.whatsapp.disabled}
+                            className="size-[15px]"
+                          />
+                          WhatsApp
+                          {!actions.whatsapp.disabled ? (
+                            <>
+                              <WhatsAppLastSeen
+                                summary={whatsappSummaries.get(lead.id)}
+                              />
+                              <WhatsAppBadge
+                                summary={whatsappSummaries.get(lead.id)}
+                              />
+                            </>
+                          ) : null}
                         </button>
                       )}
                       {actions.bookMeeting.visible && (
@@ -596,6 +716,24 @@ export default function TableView({
           isOpen={!!commLead}
           onClose={() => setCommLead(null)}
           appendEmailToLead={appendEmailToLead}
+        />
+      )}
+
+      {phoneLead && (
+        <LeadCommsModal
+          key={phoneLead.id}
+          lead={phoneLead}
+          onClose={() => setPhoneLead(null)}
+        />
+      )}
+      {whatsappLead && (
+        <LeadWhatsAppModal
+          key={whatsappLead.id}
+          lead={whatsappLead}
+          onClose={() => {
+            setWhatsappLead(null);
+            setWhatsappVersion((version) => version + 1);
+          }}
         />
       )}
 

@@ -39,6 +39,7 @@ import { historyTypeToPrisma, stageToPrismaMap } from "@/types/lead";
 // The domain boundary test names exactly that chain.
 import { requiredLeadEmail } from "@/utils/validators/lead";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
+import { leadPhoneE164 } from "./whatsapp/phone";
 
 // Creating, editing and archiving a lead.
 //
@@ -224,6 +225,9 @@ export async function createLead(
       data: {
         name: input.name,
         phone: normalizedPhone,
+        // What inbound WhatsApp matches on (issue #333); null when the raw
+        // phone does not normalise, which is also what keeps it unmatched.
+        phoneE164: leadPhoneE164(normalizedPhone),
         email: normalizedEmail,
         location: input.location ?? "",
         secondaryName: input.secondaryName,
@@ -300,7 +304,12 @@ export async function updateLead(
   if (!existingLead) throw new DomainNotFoundError("Lead not found");
 
   if (input.name !== undefined) updateData.name = String(input.name);
-  if (input.phone !== undefined) updateData.phone = input.phone ?? "";
+  if (input.phone !== undefined) {
+    updateData.phone = input.phone ?? "";
+    // Kept in step with `phone` on every write, or inbound WhatsApp would
+    // match the number the lead used to have.
+    updateData.phoneE164 = leadPhoneE164(input.phone);
+  }
   if (input.email !== undefined) updateData.email = input.email ?? "";
   if (input.location !== undefined) updateData.location = input.location ?? "";
   if (input.secondaryName !== undefined)

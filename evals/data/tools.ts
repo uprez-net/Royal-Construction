@@ -30,7 +30,13 @@ export const READ_TOOLS = {
     "list_approvals",
     "list_team",
   ],
-  "lead-operations": ["get_lead", "list_lead_tasks", "search_leads"],
+  "lead-operations": [
+    "get_lead",
+    "get_lead_whatsapp",
+    "list_lead_tasks",
+    "prepare_lead_whatsapp_message",
+    "search_leads",
+  ],
   "offer-operations": [
     "check_offer_lists",
     "draft_offer_highlights",
@@ -69,7 +75,9 @@ export const WRITE_TOOLS = {
     "create_lead",
     "create_lead_task",
     "reopen_lead_task",
+    "schedule_lead_whatsapp_follow_up",
     "send_lead_email",
+    "send_lead_whatsapp_message",
     "update_lead",
   ],
   "offer-operations": [

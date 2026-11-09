@@ -23,7 +23,7 @@ export const listLeadTasksInputSchema = z.object({
 
 export const createLeadTaskInputSchema = z.object({
   leadId: leadIdSchema,
-  type: z.enum(["CALL", "EMAIL", "MEETING", "WAITING"]),
+  type: z.enum(["CALL", "EMAIL", "MEETING", "WAITING", "WHATSAPP"]),
   dueAt: z.string().datetime({ offset: true }),
   dueTime: z
     .string()

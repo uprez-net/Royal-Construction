@@ -432,3 +432,55 @@ export function withOwnerContacts(
     },
   };
 }
+
+// ── Who the owners are, for writing to them ─────────────────────────────
+
+/** The columns `projectOwnerRows` reads, for a caller's `select`. */
+export const PROJECT_OWNER_SELECT = {
+  customer: { select: { email: true, name: true, phone: true } },
+  customers: {
+    orderBy: { position: "asc" },
+    select: { customer: { select: { email: true, name: true, phone: true } } },
+  },
+} as const;
+
+export type ProjectOwnerRow = {
+  readonly name: string;
+  readonly email: string;
+  readonly phone: string | null;
+};
+
+/**
+ * A project's owners, in contract order.
+ *
+ * Every owner is a ProjectCustomer; the primary customer is the fallback only
+ * for a row the migration could have missed, as the Xero contact does.
+ */
+export function projectOwnerRows(project: {
+  readonly customer: ProjectOwnerRow;
+  readonly customers: readonly { readonly customer: ProjectOwnerRow }[];
+}): ProjectOwnerRow[] {
+  return project.customers.length > 0
+    ? project.customers.map((row) => row.customer)
+    : [project.customer];
+}
+
+/**
+ * The owners who can be emailed: one entry per address, trimmed, the first
+ * owner with an address keeping it. Variations and the WhatsApp group invite
+ * both email "the owners on the contract", and both mean exactly this list.
+ */
+export function ownerEmailRecipients(
+  owners: readonly ProjectOwnerRow[],
+): { email: string; name: string }[] {
+  const seen = new Set<string>();
+  const recipients: { email: string; name: string }[] = [];
+  for (const owner of owners) {
+    const email = owner.email.trim();
+    const key = email.toLowerCase();
+    if (!email || seen.has(key)) continue;
+    seen.add(key);
+    recipients.push({ email, name: owner.name.trim() });
+  }
+  return recipients;
+}

@@ -129,6 +129,10 @@ jobs:
       - name: Pull Vercel Environment Information
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
       - name: Build Vercel Project
+        # `next build` type-checks here (SKIP_BUILD_TYPECHECK is unset), and a
+        # cold check of this repo needs ~3 GB — past Node's default heap.
+        env:
+          NODE_OPTIONS: "--max-old-space-size=6144"
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
       - name: Deploy to Vercel
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
@@ -185,6 +189,10 @@ jobs:
       - name: Pull Preview Environment
         run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
       - name: Build Vercel Project for Staging
+        # `next build` type-checks here (SKIP_BUILD_TYPECHECK is unset), and a
+        # cold check of this repo needs ~3 GB — past Node's default heap.
+        env:
+          NODE_OPTIONS: "--max-old-space-size=6144"
         run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
       - name: Deploy to Vercel for Staging
         run: >-

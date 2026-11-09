@@ -21,6 +21,8 @@ interface ModalShellProps {
   isFullScreenable?: boolean;
   isFullScreen?: boolean;
   onToggleFullScreen?: (minimize: boolean) => void;
+  /** Replaces the body's padding and scrolling, for content that owns both. */
+  bodyClassName?: string;
   children: React.ReactNode;
 }
 
@@ -34,6 +36,7 @@ export function ModalShell({
   isFullScreenable = false,
   isFullScreen = false,
   onToggleFullScreen,
+  bodyClassName,
   children,
 }: ModalShellProps) {
   React.useEffect(() => {
@@ -105,7 +108,8 @@ export function ModalShell({
         </div>
         <div
           className={cn(
-            "min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5",
+            bodyClassName
+              ?? "min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5",
             isFullScreen && "flex-1",
           )}
         >

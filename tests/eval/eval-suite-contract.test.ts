@@ -107,6 +107,8 @@ describe("the staging never-approve list", () => {
     for (const tool of [
       "send_compliance_outreach",
       "send_compliance_follow_up",
+      "send_lead_email",
+      "send_lead_whatsapp_message",
       "recall_offer_envelope",
       "invite_team_member",
       "revoke_team_invitation",

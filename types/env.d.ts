@@ -93,6 +93,21 @@ namespace NodeJS {
     EVE_OPERATIONS_AGENT_ENABLED: string;
     EVE_OPERATIONS_SPECIALISTS_ENABLED: string;
 
+    // WhatsApp Business (Meta Cloud API), issue #333. All read through
+    // lib/whatsapp/config.ts, which treats every one as possibly unset —
+    // WHATSAPP_ENABLED must be exactly "true" for the channel to exist.
+    // Server-only: none of these may gain a NEXT_PUBLIC_ twin.
+    WHATSAPP_ENABLED: string;
+    WHATSAPP_ACCESS_TOKEN: string;
+    WHATSAPP_APP_SECRET: string;
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN: string;
+    WHATSAPP_BUSINESS_ACCOUNT_ID: string;
+    // `<phone_number_id>=<E.164>=<label>`, comma-separated.
+    WHATSAPP_PHONE_NUMBERS: string;
+    WHATSAPP_DEFAULT_PHONE_NUMBER_ID: string;
+    WHATSAPP_GRAPH_API_VERSION: string;
+    WHATSAPP_ENABLED_TEMPLATES: string;
+
     // Upstash Redis
     UPSTASH_REDIS_REST_URL: string;
     UPSTASH_REDIS_REST_TOKEN: string;

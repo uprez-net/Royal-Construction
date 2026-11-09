@@ -139,6 +139,7 @@ const UNMAPPED: Record<string, string> = {
   "app/api/cron/meeting-review-reminder/route.ts": MACHINE_CALLER,
   "app/api/cron/sync-sent-mail/route.ts": MACHINE_CALLER,
   "app/api/cron/tradie-reminders/route.ts": MACHINE_CALLER,
+  "app/api/cron/whatsapp-sweep/route.ts": MACHINE_CALLER,
   "app/api/graph/notifications/route.ts": MACHINE_CALLER,
   "app/api/webhook/clerk/route.ts": MACHINE_CALLER,
   "app/api/xero/notification/route.ts": MACHINE_CALLER,

@@ -20,9 +20,12 @@ import {
   ChevronRight,
   RotateCcw,
   Trash2,
+  MessageCircle,
 } from "lucide-react";
 import { Lead } from "@/lib/leads/types";
 import { EmailFlowModal } from "@/components/leads/modal-ui/email-flow-modal";
+import { LeadWhatsAppModal } from "@/components/leads/whatsapp/lead-whatsapp-modal";
+import { normaliseLeadPhone } from "@/lib/domain/leads/whatsapp/phone";
 import { dialablePhone } from "@/lib/leads/lead-helpers";
 import { LEAD_TASK_TYPES } from "@/lib/leads/task-presets";
 import {
@@ -235,7 +238,11 @@ function FollowupItem({
   showToast,
 }: FollowupItemProps) {
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showWhatsApp, setShowWhatsApp] = useState(false);
   const [closing, setClosing] = useState(false);
+  // The same phone rule the lead list and the send use. A WhatsApp task on a
+  // lead without a usable number says why instead of opening a dead composer.
+  const whatsappPhone = normaliseLeadPhone(task.lead.phone);
   const handleCall = () => {
     const dial = dialablePhone(task.lead.phone ?? "");
     if (dial) window.location.href = `tel:${dial}`;
@@ -265,6 +272,15 @@ function FollowupItem({
               onClose={() => setShowEmailModal(false)}
               onLeadUpdate={onLeadUpdate}
               showToast={showToast}
+            />,
+            document.body,
+          )
+        : null}
+      {showWhatsApp
+        ? createPortal(
+            <LeadWhatsAppModal
+              lead={{ id: task.leadId, name: task.lead.name }}
+              onClose={() => setShowWhatsApp(false)}
             />,
             document.body,
           )
@@ -359,6 +375,22 @@ function FollowupItem({
             >
               <Mail aria-hidden="true" />
               <span className="md:sr-only">Email</span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="cursor-pointer"
+              title={
+                whatsappPhone.usable
+                  ? `WhatsApp ${task.lead.name}`
+                  : whatsappPhone.reason
+              }
+              aria-label={`WhatsApp ${task.lead.name}`}
+              disabled={!whatsappPhone.usable}
+              onClick={() => setShowWhatsApp(true)}
+            >
+              <MessageCircle aria-hidden="true" />
             </Button>
             <Button
               type="button"

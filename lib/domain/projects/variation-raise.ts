@@ -20,6 +20,11 @@ import {
 import { toCents, type Cents } from "../tradies/billing-rules";
 import { billingContactName } from "./billing-contact";
 import {
+  ownerEmailRecipients,
+  PROJECT_OWNER_SELECT,
+  projectOwnerRows,
+} from "./owners";
+import {
   activityClientPriceCents,
   formatVariationNumber,
   variationCharge,
@@ -108,11 +113,7 @@ export async function loadVariationContext(
 ): Promise<VariationProjectContext> {
   const project = await db.project.findUnique({
     select: {
-      customer: { select: { email: true, name: true } },
-      customers: {
-        orderBy: { position: "asc" },
-        select: { customer: { select: { email: true, name: true } } },
-      },
+      ...PROJECT_OWNER_SELECT,
       id: true,
       location: true,
       milestones: {
@@ -142,21 +143,8 @@ export async function loadVariationContext(
   });
   if (!project) throw new DomainNotFoundError("Project not found");
 
-  // Every owner is a ProjectCustomer; the primary customer is the fallback
-  // only for a row the migration could have missed, as the Xero contact does.
-  const ownerRows =
-    project.customers.length > 0
-      ? project.customers.map((row) => row.customer)
-      : [project.customer];
-  const seen = new Set<string>();
-  const owners: VariationRecipient[] = [];
-  for (const owner of ownerRows) {
-    const email = owner.email.trim();
-    const key = email.toLowerCase();
-    if (!email || seen.has(key)) continue;
-    seen.add(key);
-    owners.push({ email, name: owner.name.trim() });
-  }
+  const ownerRows = projectOwnerRows(project);
+  const owners: VariationRecipient[] = ownerEmailRecipients(ownerRows);
 
   return {
     clientNames: billingContactName(ownerRows.map((owner) => owner.name)),
