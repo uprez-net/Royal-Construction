@@ -32,14 +32,16 @@ export function LeadCommsModal({
       onClose={onClose}
       title={`Phone & SMS · ${lead.name}`}
       maxWidthClass="max-w-[640px]"
-      bodyClassName="flex min-h-0 flex-col overflow-hidden"
+      // The panels own their scrolling; the padding is restored here because
+      // replacing the body class drops the shell's own.
+      bodyClassName="flex min-h-0 flex-col overflow-hidden px-4 pb-4 pt-3 sm:px-5"
     >
       <Tabs
         value={tab}
         onValueChange={(value) => setTab(value as LeadCommsTab)}
-        className="flex h-[min(70dvh,620px)] min-h-0 flex-col gap-3"
+        className="flex h-[min(70dvh,620px)] min-h-0 flex-col gap-4"
       >
-        <TabsList>
+        <TabsList className="self-start">
           <TabsTrigger value="calls">
             <Phone className="size-4" aria-hidden="true" />
             Calls

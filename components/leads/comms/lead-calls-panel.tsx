@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   Bot,
   Loader2,
   MonitorSmartphone,
+  Phone,
   PhoneIncoming,
   PhoneMissed,
   PhoneOutgoing,
@@ -84,7 +86,7 @@ function CallRow({
   onRetried: () => void;
 }) {
   return (
-    <li className="flex flex-col gap-1.5 border-b border-border/60 py-3 last:border-0">
+    <li className="flex flex-col gap-1.5 border-b border-border/60 px-3 py-3 last:border-0">
       <div className="flex items-center gap-2 text-sm">
         <CallIcon call={call} />
         <span className="font-medium text-foreground">
@@ -256,58 +258,73 @@ export function LeadCallsPanel({
 
   const options = data?.options;
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <section className="rounded-lg border border-border bg-muted/30 p-3">
-        {options?.to ? (
-          <p className="mb-2 text-sm text-muted-foreground">
-            Call{" "}
-            <span className="font-mono tabular-nums text-foreground">
-              {formatE164ForDisplay(options.to)}
-            </span>
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-sm text-muted-foreground">
+            {options?.to ? (
+              <>
+                Call{" "}
+                <span className="font-mono font-medium tabular-nums text-foreground">
+                  {formatE164ForDisplay(options.to)}
+                </span>
+              </>
+            ) : (
+              "Call this lead"
+            )}
           </p>
-        ) : null}
-        <div className="flex flex-wrap gap-2">
-          {options?.browser ? (
-            <Button
-              type="button"
-              disabled={!options.allowed || placing !== null}
-              onClick={() => void place("browser")}
-            >
-              {placing === "browser" ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <MonitorSmartphone className="size-4" aria-hidden="true" />
-              )}
-              Call from this browser
-            </Button>
-          ) : null}
-          {options?.mobile ? (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!options.allowed || placing !== null}
-              onClick={() => void place("mobile")}
-            >
-              {placing === "mobile" ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Smartphone className="size-4" aria-hidden="true" />
-              )}
-              Call via office mobile
-            </Button>
-          ) : null}
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            aria-label="Refresh calls"
+            size="sm"
+            className="shrink-0 text-muted-foreground"
             onClick={() => void load()}
           >
-            <RefreshCw className="size-4" aria-hidden="true" />
+            <RefreshCw className="size-3.5" aria-hidden="true" />
+            Refresh
           </Button>
         </div>
+        {options?.browser || options?.mobile ? (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {options.browser ? (
+              <Button
+                type="button"
+                disabled={!options.allowed || placing !== null}
+                onClick={() => void place("browser")}
+              >
+                {placing === "browser" ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <MonitorSmartphone className="size-4" aria-hidden="true" />
+                )}
+                Call from this browser
+              </Button>
+            ) : null}
+            {options.mobile ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!options.allowed || placing !== null}
+                onClick={() => void place("mobile")}
+              >
+                {placing === "mobile" ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Smartphone className="size-4" aria-hidden="true" />
+                )}
+                Call via office mobile
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
         {options && !options.allowed ? (
-          <p className="mt-2 text-sm text-amber-700">{options.reason}</p>
+          <p className="mt-3 flex items-start gap-2 rounded-md bg-amber-50 px-2.5 py-2 text-sm text-amber-800">
+            <AlertTriangle
+              className="mt-0.5 size-4 shrink-0"
+              aria-hidden="true"
+            />
+            {options.reason}
+          </p>
         ) : null}
         {options?.browser
         && phone
@@ -322,20 +339,31 @@ export function LeadCallsPanel({
         ) : null}
       </section>
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      {!data && !error ? (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Loading
-          calls…
+      {error ? (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
         </p>
+      ) : null}
+      {!data && !error ? (
+        <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          Loading calls…
+        </div>
       ) : null}
       {data && data.calls.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No calls with this lead yet.
-        </p>
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border px-6 py-8 text-center">
+          <span className="flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <Phone className="size-4" aria-hidden="true" />
+          </span>
+          <p className="text-sm font-medium text-foreground">No calls yet</p>
+          <p className="max-w-xs text-xs text-muted-foreground">
+            Calls you place to {lead.name}, and calls they make to the office
+            number, show here with recordings and Mili&apos;s transcripts.
+          </p>
+        </div>
       ) : null}
       {data && data.calls.length > 0 ? (
-        <ul className="min-h-0 flex-1 overflow-y-auto pr-1">
+        <ul className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border bg-background">
           {data.calls.map((call) => (
             <CallRow key={call.id} call={call} onRetried={() => void load()} />
           ))}

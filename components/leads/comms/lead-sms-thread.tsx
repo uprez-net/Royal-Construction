@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Send } from "lucide-react";
+import { AlertCircle, AlertTriangle, Loader2, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,31 +43,52 @@ function Bubble({
   reconciling: boolean;
 }) {
   const outbound = message.direction === "OUTBOUND";
+  // A text that never reached the lead must not look like one that did.
+  const failed = outbound && message.status === "FAILED";
   return (
     <li className={cn("flex", outbound ? "justify-end" : "justify-start")}>
       <div
         className={cn(
           "max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words",
-          outbound
-            ? "rounded-br-sm bg-primary text-primary-foreground"
-            : "rounded-bl-sm bg-muted text-foreground",
+          failed
+            ? "rounded-br-sm border border-destructive/40 bg-destructive/5 text-foreground"
+            : outbound
+              ? "rounded-br-sm bg-primary text-primary-foreground"
+              : "rounded-bl-sm bg-muted text-foreground",
         )}
       >
         {message.body}
         <div
           className={cn(
-            "mt-1 text-[11px]",
-            outbound ? "text-primary-foreground/80" : "text-muted-foreground",
+            "mt-1 flex flex-wrap items-center gap-x-1 text-[11px]",
+            failed
+              ? "text-muted-foreground"
+              : outbound
+                ? "text-primary-foreground/80"
+                : "text-muted-foreground",
           )}
         >
-          {formatSydneyStamp(message.occurredAt)}
-          {outbound && message.authorName ? ` · ${message.authorName}` : ""}
-          {outbound && !message.needsReconciliation
-            ? ` · ${STATUS_LABEL[message.status]}`
-            : ""}
+          <span>{formatSydneyStamp(message.occurredAt)}</span>
+          {outbound && message.authorName ? (
+            <span>· {message.authorName}</span>
+          ) : null}
+          {outbound && !message.needsReconciliation ? (
+            <span
+              className={cn(
+                failed
+                  && "inline-flex items-center gap-1 font-medium text-destructive",
+              )}
+            >
+              ·{" "}
+              {failed ? (
+                <AlertCircle className="size-3" aria-hidden="true" />
+              ) : null}
+              {STATUS_LABEL[message.status]}
+            </span>
+          ) : null}
         </div>
-        {message.status === "FAILED" && message.providerErrorTitle ? (
-          <p className="mt-1 text-[11px] font-medium">
+        {failed && message.providerErrorTitle ? (
+          <p className="mt-1.5 border-t border-destructive/20 pt-1.5 text-xs text-destructive">
             {message.providerErrorTitle}
           </p>
         ) : null}
@@ -216,24 +237,26 @@ export function LeadSmsThread({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {eligibility?.to ? (
-        <p className="text-xs text-muted-foreground">
-          To{" "}
-          <span className="font-mono tabular-nums">
+        <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground">
+          <span>To</span>
+          <span className="font-mono font-medium tabular-nums text-foreground">
             {formatE164ForDisplay(eligibility.to)}
           </span>
           {eligibility.from ? (
             <>
-              {" "}
-              from {eligibility.fromLabel} (
+              <span>from {eligibility.fromLabel}</span>
               <span className="font-mono tabular-nums">
                 {formatE164ForDisplay(eligibility.from)}
               </span>
-              )
             </>
           ) : null}
         </p>
       ) : null}
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
       <ul
         ref={listRef}
         className="flex min-h-40 flex-1 flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-background p-3"
@@ -245,8 +268,8 @@ export function LeadSmsThread({
           </li>
         ) : null}
         {thread && thread.messages.length === 0 ? (
-          <li className="m-auto text-sm text-muted-foreground">
-            No texts with {lead.name} yet.
+          <li className="m-auto max-w-xs text-center text-sm text-muted-foreground">
+            No texts with {lead.name} yet. Their replies show here.
           </li>
         ) : null}
         {thread?.messages.map((message) => (
@@ -259,7 +282,11 @@ export function LeadSmsThread({
         ))}
       </ul>
       {eligibility && !eligibility.allowed ? (
-        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <AlertTriangle
+            className="mt-0.5 size-4 shrink-0"
+            aria-hidden="true"
+          />
           {eligibility.reason}
         </p>
       ) : null}
@@ -285,8 +312,8 @@ export function LeadSmsThread({
             }
           }}
         />
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-muted-foreground">
+        <div className="flex items-center justify-between gap-3">
+          <span className="min-w-0 text-xs text-muted-foreground">
             {segments
               ? `${draft.length} characters · ${segments.segments} SMS${segments.segments === 1 ? "" : " segments"}${
                   segments.encoding === "UCS-2"
@@ -297,6 +324,7 @@ export function LeadSmsThread({
           </span>
           <Button
             type="submit"
+            className="shrink-0"
             disabled={!eligibility?.allowed || sending || !draft.trim()}
           >
             {sending ? (
