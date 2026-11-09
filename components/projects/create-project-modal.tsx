@@ -93,6 +93,8 @@ import {
   updateExtractionField,
 } from "./form/extracted-components";
 import { compareSignedAndStartDates, formatDisplayDate } from "@/utils/date";
+import { useUploadHints } from "@/components/common/upload-hints";
+import type { ClientPayload } from "@/utils/validators/files";
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -123,6 +125,7 @@ export function CreateProjectModal({
   onSuccess,
 }: CreateProjectModalProps) {
   const dispatch = useAppDispatch();
+  const hintsFor = useUploadHints();
   const router = useRouter();
   const leadSearch = useLeadSearch("", 1, true);
   const siteManagers = useAppSelector((state) => state.siteManagers);
@@ -172,8 +175,8 @@ export function CreateProjectModal({
 
   const selectedSiteManager = useMemo(() => {
     return (
-      siteManagers.items.find((manager) => manager.id === selectedManagerId) ??
-      null
+      siteManagers.items.find((manager) => manager.id === selectedManagerId)
+      ?? null
     );
   }, [selectedManagerId, siteManagers.items]);
   const { extractingTender, startListening, stopListening } =
@@ -462,7 +465,12 @@ export function CreateProjectModal({
             fileName: queuedFile.file.name,
             fileSize: queuedFile.file.size,
             isOfferFile: false,
-          }),
+            ...hintsFor({
+              rootTrail: true,
+              trail: ["Projects", "Create project"],
+              tags: ["Project setup"],
+            }),
+          } satisfies ClientPayload),
           abortSignal: controller.signal,
           onUploadProgress: ({ percentage }) =>
             dispatch(
@@ -590,10 +598,10 @@ export function CreateProjectModal({
     }
 
     if (
-      !selectedLeadId ||
-      !selectedLocation ||
-      !selectedSiteManager ||
-      !sourceDocuments
+      !selectedLeadId
+      || !selectedLocation
+      || !selectedSiteManager
+      || !sourceDocuments
     ) {
       return;
     }
@@ -605,8 +613,9 @@ export function CreateProjectModal({
       // safeParse, not parse: a schema throw here used to surface as the same
       // generic "Unable to create project" toast as a server outage, with no
       // indication of which field was wrong.
-      const parsedExtraction =
-        projectExtractionSchema.safeParse(submittedExtraction());
+      const parsedExtraction = projectExtractionSchema.safeParse(
+        submittedExtraction(),
+      );
       if (!parsedExtraction.success) {
         setStage("review");
         failWith(
@@ -636,15 +645,15 @@ export function CreateProjectModal({
       const createdProject = await dispatch(
         createProject({
           projectName:
-            normalizeString(normalizedExtraction.projectName) ||
-            siteAddress ||
-            "New Project",
+            normalizeString(normalizedExtraction.projectName)
+            || siteAddress
+            || "New Project",
           leadId: selectedLeadId,
           lotSize: normalizedExtraction.lotSize ?? 0,
           startDate:
-            normalizedSigingDate ||
-            startDate ||
-            format(new Date(), "yyyy-MM-dd"),
+            normalizedSigingDate
+            || startDate
+            || format(new Date(), "yyyy-MM-dd"),
           estimatedEndDate: format(
             addMonths(
               new Date(normalizedSigingDate || startDate || new Date()),
@@ -653,12 +662,10 @@ export function CreateProjectModal({
             "yyyy-MM-dd",
           ),
           address:
-            normalizeString(
-              normalizedExtraction.legalAdministrationSiteAddress,
-            ) ||
-            siteAddress ||
-            selectedLocation.label ||
-            "",
+            normalizeString(normalizedExtraction.legalAdministrationSiteAddress)
+            || siteAddress
+            || selectedLocation.label
+            || "",
           council: selectedLocation.council,
           siteManagerId: selectedSiteManager.id,
           extraction: normalizedExtraction,
@@ -749,9 +756,9 @@ export function CreateProjectModal({
     // existing review-stage inputs.
     const signedDateRaw = extraction.legalAdministrationSignedDate;
     const effectiveStartDate =
-      normalizeDateString(signedDateRaw) ||
-      startDate ||
-      format(new Date(), "yyyy-MM-dd");
+      normalizeDateString(signedDateRaw)
+      || startDate
+      || format(new Date(), "yyyy-MM-dd");
 
     const comparison = compareSignedAndStartDates(
       signedDateRaw,
@@ -759,8 +766,8 @@ export function CreateProjectModal({
     );
 
     if (
-      comparison.state === "start_before_signed" ||
-      comparison.state === "signed_far_before_start"
+      comparison.state === "start_before_signed"
+      || comparison.state === "signed_far_before_start"
     ) {
       setDateConfirmPrompt({
         signedDate:
@@ -914,8 +921,8 @@ export function CreateProjectModal({
               <div>
                 <p className="text-sm font-semibold">Extraction failed</p>
                 <p className="text-sm text-red-800">
-                  {extractionError ||
-                    "The OCR/extraction pipeline could not read one or both PDFs."}
+                  {extractionError
+                    || "The OCR/extraction pipeline could not read one or both PDFs."}
                 </p>
               </div>
             </div>
@@ -1076,8 +1083,8 @@ export function CreateProjectModal({
                     Extraction notes
                   </Label>
                   <p className="mt-2 text-sm text-foreground">
-                    {extractionMessage ||
-                      "Extraction completed. Review any blank fields before submitting."}
+                    {extractionMessage
+                      || "Extraction completed. Review any blank fields before submitting."}
                   </p>
                 </div>
               </div>
@@ -1186,8 +1193,8 @@ export function CreateProjectModal({
                 disabled={isSubmitting}
                 onClick={() => {
                   if (
-                    activeSectionIndex >=
-                    projectExtractionSections.length - 1
+                    activeSectionIndex
+                    >= projectExtractionSections.length - 1
                   ) {
                     void handleSubmit();
                     return;
@@ -1231,14 +1238,14 @@ export function CreateProjectModal({
                     <p className="text-sm text-warning-ink/90">
                       Signed (contract executed):{" "}
                       <span className="font-mono tabular-nums">
-                        {formatDisplayDate(dateConfirmPrompt.signedDate) ??
-                          dateConfirmPrompt.signedDate}
+                        {formatDisplayDate(dateConfirmPrompt.signedDate)
+                          ?? dateConfirmPrompt.signedDate}
                       </span>
                       <br />
                       Start date (on-site):{" "}
                       <span className="font-mono tabular-nums">
-                        {formatDisplayDate(dateConfirmPrompt.startDate) ??
-                          dateConfirmPrompt.startDate}
+                        {formatDisplayDate(dateConfirmPrompt.startDate)
+                          ?? dateConfirmPrompt.startDate}
                       </span>
                     </p>
                     <p className="text-xs text-warning-ink/80">

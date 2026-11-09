@@ -8,6 +8,7 @@ import {
   type DomainPrincipal,
 } from "../principal";
 import { authorizeLead } from "../access/leads";
+import { LEAD_ROW_INCLUDE, type LeadRow } from "./row-read";
 import {
   closeDatePatch,
   isClosedUnsuccessful,
@@ -26,7 +27,6 @@ import {
 } from "@/lib/leads/lead-helpers";
 import { offerListingLeadChanged } from "@/lib/offer/offer-listing-query";
 import { coerceMoney } from "@/lib/leads/pipeline-math";
-import { NEXT_FOLLOWUP_TASK } from "@/lib/leads/followup-resolution";
 import {
   sydneyDateOnly,
   sydneyTimeOnly,
@@ -63,20 +63,9 @@ import { leadPhoneE164 } from "./whatsapp/phone";
 // The command returns what actually changed instead, so the adapter no longer
 // has to infer it — see `LeadWriteOutcome`.
 
-/** The relations every lead read hands back, shared by both writes. */
-export const LEAD_WRITE_INCLUDE = {
-  history: { orderBy: { actionDate: "asc" }, include: { author: true } },
-  chatSessions: true,
-  assignedUser: { select: { id: true, name: true, email: true } },
-  noteAnnotations: { orderBy: { createdAt: "desc" } },
-  emails: { orderBy: { createdAt: "desc" } },
-  files: true,
-  tasks: NEXT_FOLLOWUP_TASK,
-} satisfies Prisma.LeadInclude;
-
-export type LeadWithRelations = Prisma.LeadGetPayload<{
-  include: typeof LEAD_WRITE_INCLUDE;
-}>;
+// The relations every lead write hands back are the ones every lead read
+// does, so `mapLead` has one shape to accept. See `row-read.ts`.
+export type LeadWithRelations = LeadRow;
 
 export type CreateLeadOutcome =
   | { readonly kind: "created"; readonly lead: LeadWithRelations }
@@ -227,7 +216,7 @@ export async function createLead(
       const existing = await tx.lead.findFirst({
         where: { OR: orConditions },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        include: LEAD_WRITE_INCLUDE,
+        include: LEAD_ROW_INCLUDE,
       });
       if (existing) return { existing, kind: "duplicate" as const };
     }
@@ -277,7 +266,7 @@ export async function createLead(
         urgent: input.urgent ?? false,
         history: { create: historyCreate },
       },
-      include: LEAD_WRITE_INCLUDE,
+      include: LEAD_ROW_INCLUDE,
     });
 
     return { kind: "created" as const, lead };
@@ -607,7 +596,7 @@ export async function updateLead(
     const updated = await tx.lead.update({
       where: { id },
       data: updateData,
-      include: LEAD_WRITE_INCLUDE,
+      include: LEAD_ROW_INCLUDE,
     });
     if (input.assignedId !== undefined) {
       await tx.leadTask.updateMany({

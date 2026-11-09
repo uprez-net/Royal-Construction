@@ -7,6 +7,7 @@ import { upload } from "@vercel/blob/client";
 import { buildBlobPath } from "@/utils/formatters";
 import { v4 as uuidv4 } from "uuid";
 import { ClientPayload } from "@/utils/validators/files";
+import { useUploadHints, type UploadHintExtras } from "./upload-hints";
 
 interface UploadButtonProps {
   maxFiles?: number;
@@ -15,6 +16,11 @@ interface UploadButtonProps {
   milestoneId?: string;
   incidentId?: string;
   accept?: string;
+  /**
+   * What this button uploads for, on top of the screen's own upload hints:
+   * a step of the origin trail and the tags it implies.
+   */
+  hints?: UploadHintExtras;
   onUpload: (file: DBFile[]) => void;
 }
 
@@ -41,7 +47,9 @@ export function UploadButton({
     .pdf
         `,
   onUpload,
+  hints,
 }: UploadButtonProps) {
+  const hintsFor = useUploadHints();
   const [isUploading, startTransition] = useTransition();
   const [uploadingFiles, setUploadingFiles] = useState<number>(0);
   const [overallProgress, setOverallProgress] = useState<number>(0);
@@ -72,6 +80,7 @@ export function UploadButton({
   const uploader = async (file: File, controller: AbortController) => {
     try {
       const fileId = uuidv4(); // Generate a unique ID for the file
+      const { tags, origin } = hintsFor(hints);
       const blob = await upload(
         buildBlobPath({
           fileId: fileId,
@@ -92,6 +101,8 @@ export function UploadButton({
             fileSize: file.size,
             leadId,
             isOfferFile: false, // Set to true if this file is related to an offer
+            tags,
+            origin,
           } satisfies ClientPayload),
           abortSignal: controller.signal,
           onUploadProgress: ({ percentage }) => {
@@ -119,6 +130,8 @@ export function UploadButton({
         updatedAt: new Date(),
         incidentId: incidentId ?? null,
         complianceDocumentId: null,
+        tags,
+        origin,
       } satisfies DBFile;
     } catch (error) {
       console.error("Error uploading file:", error);

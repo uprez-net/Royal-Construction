@@ -67,9 +67,6 @@ namespace NodeJS {
     // AI Gateway
     AI_GATEWAY_API_KEY: string;
 
-    // Scrapedo (Web Scraping)
-    SCRAPEDO_TOKEN: string;
-
     // Xero. The connection uses the authorization-code grant, so the
     // tenant and tokens are discovered at consent and held in
     // XeroConnection rather than configured here.

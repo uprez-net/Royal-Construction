@@ -1,4 +1,6 @@
-import type { ProjectRequirementsPayload } from "@/types/project-flow";
+import { z } from "zod";
+
+import { paymentStageSchema } from "@/lib/agent/projectExtraction-validators";
 
 import type { DomainDb } from "../db";
 import { authorizeProject } from "../access/projects";
@@ -110,9 +112,7 @@ export async function getProjectFinancials(
       }),
     ]);
 
-  const commercials = (
-    contract.requirements as ProjectRequirementsPayload | null
-  )?.commercialsAndClaims;
+  const commercials = stageCommercials(contract.requirements);
 
   const report = buildProjectFinancialReport({
     bookings: schedules.map((schedule) => ({
@@ -164,11 +164,17 @@ export async function getProjectFinancials(
       status: milestone.status,
     })),
     // The stage prices the Milestones tab shows and the stage invoices bill.
-    stagePrices: resolveStagePrices({
-      gstIncluded: commercials?.gstIncluded,
-      paymentStages: commercials?.paymentStages,
-      totalBudget: Number(contract.totalBudget),
-    }),
+    // Unreadable stages are left out, and the report falls back to summing
+    // its activities, rather than the whole tab failing to load.
+    ...(commercials.ok
+      ? {
+          stagePrices: resolveStagePrices({
+            gstIncluded: commercials.value?.gstIncluded,
+            paymentStages: commercials.value?.paymentStages,
+            totalBudget: Number(contract.totalBudget),
+          }),
+        }
+      : {}),
     variations: variations.map((variation) => ({
       costCents: toCents(variation.cost),
       kind: variation.kind,
@@ -182,4 +188,29 @@ export async function getProjectFinancials(
     emailedInvoices: await listPendingEmailedInvoices(project.id, db),
     projectId: project.id,
   };
+}
+
+// `Project.requirements` is JSON. Only the two fields stage prices need are
+// read, and checked: a malformed `paymentStages` would otherwise throw while
+// the Financials tab loads.
+const stageCommercialsSchema = z.object({
+  gstIncluded: z.boolean().nullable().optional(),
+  paymentStages: z.array(paymentStageSchema).nullable().optional(),
+});
+
+function stageCommercials(
+  requirements: unknown,
+):
+  | { ok: true; value: z.infer<typeof stageCommercialsSchema> | null }
+  | { ok: false } {
+  const commercials =
+    requirements && typeof requirements === "object"
+      ? (requirements as { commercialsAndClaims?: unknown })
+          .commercialsAndClaims
+      : undefined;
+  if (commercials === undefined || commercials === null) {
+    return { ok: true, value: null };
+  }
+  const parsed = stageCommercialsSchema.safeParse(commercials);
+  return parsed.success ? { ok: true, value: parsed.data } : { ok: false };
 }

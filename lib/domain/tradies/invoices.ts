@@ -703,10 +703,47 @@ export async function syncTradieBillFromExternal(
         scheduleId = placement.scheduleId;
       }
     }
-    await db.tradieInvoice.update({
-      data: { ...billFields(bill), scheduleId },
-      where: { id: existing.id },
-    });
+    // The bookkeeper may have changed the number to one another live bill of
+    // this tradie already holds. Answered as a duplicate, like a new bill, so
+    // the office hears of it; this row keeps what it had. Read first, because
+    // hitting the unique index aborts the transaction it runs in; the catch
+    // covers only two deliveries racing past this read.
+    const invoiceNumber = invoiceNumberKey(bill.invoiceNumber);
+    const duplicate: TradieBillSyncResult | null = invoiceNumber
+      ? {
+          invoiceNumber,
+          kind: "duplicate-number",
+          projectId: existing.projectId,
+          subTotalCents,
+          tradieId: existing.tradie.id,
+          tradieName: existing.tradie.name,
+        }
+      : null;
+    if (
+      duplicate
+      && bill.status !== InvoiceStatus.VOIDED
+      && bill.status !== InvoiceStatus.DELETED
+    ) {
+      const clash = await db.tradieInvoice.findFirst({
+        select: { id: true },
+        where: {
+          id: { not: existing.id },
+          invoiceNumber: { equals: invoiceNumber, mode: "insensitive" },
+          status: { notIn: [InvoiceStatus.VOIDED, InvoiceStatus.DELETED] },
+          tradieId: existing.tradie.id,
+        },
+      });
+      if (clash) return duplicate;
+    }
+    try {
+      await db.tradieInvoice.update({
+        data: { ...billFields(bill), scheduleId },
+        where: { id: existing.id },
+      });
+    } catch (error) {
+      if (isUniqueViolation(error) && duplicate) return duplicate;
+      throw error;
+    }
     if (scheduleId && !existing.scheduleId) {
       await logPlacedBill(principal, { ...bill, scheduleId }, db);
     }

@@ -313,6 +313,7 @@ export function ProjectHeader({
           <UploadButton
             projectId={project.id}
             maxFiles={5}
+            hints={{ trail: ["Upload documents"], tags: ["Project document"] }}
             onUpload={(uploadedFiles) => {
               uploadedFiles.forEach((file) => {
                 dispatch(

@@ -721,6 +721,7 @@ model Milestone {
   updatedAt DateTime @updatedAt
 
   siteUpdates        SiteUpdate[]
+  notes              MilestoneNote[]
   tradieSchedules    TradieSchedule[]
   variations         Variation[]
   activityLogs       ActivityLog[]
@@ -913,6 +914,14 @@ model File {
   url                  String
   storagePath          String?
   uploadedBy           String
+  /// Hints captured when the file came in: the screen, section and purpose it
+  /// was uploaded for ("Compliance", "Survey", "Site update"). Normalised by
+  /// lib/domain/file-tags.ts. Tags that follow from a relation (the milestone,
+  /// the compliance document) are derived when read, not stored here.
+  tags                 String[] @default([])
+  /// Where it was uploaded from, as a trail a person reads:
+  /// "Project › Compliance › Surveyor documents › Survey".
+  origin               String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -947,6 +956,25 @@ model SiteUpdate {
 
   @@index([projectId])
   @@index([milestoneId])
+}
+
+/// A staff note on one activity in the Milestones tab: the office's working
+/// remarks, apart from the site updates and photos that make up the job's
+/// record. Internal only — never part of a payload a CUSTOMER is served.
+/// Written and deleted through lib/domain/projects/milestone-notes.ts.
+model MilestoneNote {
+  id          String  @id @default(uuid())
+  milestoneId String
+  /// Null once the author's account is deleted; the note outlives it.
+  authorId    String?
+  body        String  @db.Text
+
+  createdAt DateTime @default(now())
+
+  milestone Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  author    User?     @relation("MilestoneNoteAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([milestoneId, createdAt])
 }
 
 model Variation {
@@ -1062,15 +1090,19 @@ model TradieSchedule {
 
 /// One request: a trade and its activities, emailed to one or more tradies.
 model TradieRequest {
-  id          String            @id @default(uuid())
-  projectId   String
+  id                String            @id @default(uuid())
+  projectId         String
   /// The trade label as the request named it.
-  trade       String
-  kind        TradieRequestKind @default(QUOTE)
-  subject     String
-  note        String?           @db.Text
-  createdById String?
-  createdAt   DateTime          @default(now())
+  trade             String
+  kind              TradieRequestKind @default(QUOTE)
+  subject           String
+  note              String?           @db.Text
+  /// Project `File` ids every copy of the email carries, in the order picked.
+  /// Ids rather than a relation, so a file deleted before a retry is noticed
+  /// instead of quietly leaving the email one attachment short.
+  attachmentFileIds String[]          @default([])
+  createdById       String?
+  createdAt         DateTime          @default(now())
 
   project    Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy  User?                    @relation("TradieRequestCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -1263,6 +1295,7 @@ model User {
   files                     File[]                     @relation("UserFiles")
   siteManagerProjects       Project[]                  @relation("SiteManagerProjects")
   siteUpdates               SiteUpdate[]
+  milestoneNotes            MilestoneNote[]            @relation("MilestoneNoteAuthor")
   activityLogs              ActivityLog[]
   tradieActivityLogs        TradieActivityLog[]
   assignedLeads             Lead[]                     @relation("LeadAssignee")

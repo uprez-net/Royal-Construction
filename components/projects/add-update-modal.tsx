@@ -43,6 +43,7 @@ import { QueuedUploadFile, useUploadQueue } from "@/hooks/use-upload-queue";
 import { ClientPayload } from "@/utils/validators";
 import { buildBlobPath } from "@/utils/formatters";
 import { completeProjectUpload as confirmProjectUpload } from "@/lib/files/complete-project-upload";
+import { useUploadHints } from "@/components/common/upload-hints";
 
 const maxFiles = 5;
 
@@ -70,6 +71,18 @@ export function AddUpdateModal({
   onSuccess: () => void;
 }) {
   const dispatch = useAppDispatch();
+  const hintsFor = useUploadHints();
+  // The milestone is read from the selection at upload time, not render time.
+  const uploadHints = () =>
+    hintsFor({
+      rootTrail: true,
+      trail: ["Project", "Site update"],
+      tags: [
+        "Site update",
+        "Site photo",
+        milestones.find((milestone) => milestone.id === milestoneId)?.name,
+      ],
+    });
   const mutation = useAppSelector(
     (state) => state.projects.mutations.addUpdate,
   );
@@ -183,6 +196,7 @@ export function AddUpdateModal({
                 fileSize: queuedFile.file.size,
                 isOfferFile: false,
                 uploadType: "project-file",
+                ...uploadHints(),
               } satisfies ClientPayload),
               abortSignal: controller.signal,
               onUploadProgress: ({ percentage }) => {
@@ -207,6 +221,7 @@ export function AddUpdateModal({
           fileId: queuedFile.id,
           fileName: queuedFile.file.name,
           fileUrl: blob.url,
+          ...uploadHints(),
         },
         controller.signal,
       );

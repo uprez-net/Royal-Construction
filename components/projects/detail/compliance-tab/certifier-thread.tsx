@@ -130,7 +130,11 @@ export function CertifierThread({
 
   const handleAttach = async (file: File) => {
     try {
-      const uploaded = await uploadFile(file, COMPOSER_UPLOAD_KEY);
+      const uploaded = await uploadFile(file, COMPOSER_UPLOAD_KEY, {
+        rootTrail: true,
+        trail: ["Project", "Compliance", "Certifier thread"],
+        tags: ["Compliance", "Certifier email", "Email attachment"],
+      });
       setPending((current) => [
         ...current,
         { fileId: uploaded.fileId, name: uploaded.name, url: uploaded.url },

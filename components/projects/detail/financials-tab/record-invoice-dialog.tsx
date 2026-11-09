@@ -156,6 +156,13 @@ export function RecordInvoiceDialog({
   // a file already replaced — or from before the dialog was closed — cannot
   // fill the form with the wrong invoice or attach it.
   const documentRun = useRef(0);
+  // The read during which the person last picked a booking themselves. The
+  // supplier match below must not replace a booking chosen while it ran.
+  const bookingPickedInRun = useRef<number | null>(null);
+  function chooseBooking(value: string) {
+    bookingPickedInRun.current = documentRun.current;
+    setScheduleId(value);
+  }
   useEffect(() => {
     documentRun.current += 1;
   }, [open]);
@@ -213,7 +220,10 @@ export function RecordInvoiceDialog({
       : null;
 
   /** Fill in what the document gave; answers the names of what it filled. */
-  function applyFields(fields: TradieInvoiceDocumentFields): string[] {
+  function applyFields(
+    fields: TradieInvoiceDocumentFields,
+    run: number,
+  ): string[] {
     const filled: string[] = [];
     if (fields.invoiceNumber) {
       setInvoiceNumber(fields.invoiceNumber);
@@ -236,7 +246,9 @@ export function RecordInvoiceDialog({
       setGstTouched(true);
       filled.push("GST");
     }
-    if (!scheduleId) {
+    // `scheduleId` is as it was when the file was chosen; a booking picked
+    // since is caught by the run check.
+    if (!scheduleId && bookingPickedInRun.current !== run) {
       const match = bookingForSupplier(bookings, fields.supplierName);
       if (match) {
         setScheduleId(match);
@@ -316,7 +328,7 @@ export function RecordInvoiceDialog({
       });
       if (!current()) return;
       if (result.ok) {
-        filled = applyFields(result.fields);
+        filled = applyFields(result.fields, run);
         note = filled.length
           ? `Filled in the ${filled.join(", ")} from the document. Check them before saving.`
           : "Nothing could be read from the document. It is still attached; fill in the details by hand.";
@@ -506,7 +518,7 @@ export function RecordInvoiceDialog({
 
           <div className="space-y-1.5">
             <Label htmlFor="record-invoice-booking">Booking</Label>
-            <Select value={scheduleId} onValueChange={setScheduleId}>
+            <Select value={scheduleId} onValueChange={chooseBooking}>
               <SelectTrigger
                 id="record-invoice-booking"
                 className="w-full"

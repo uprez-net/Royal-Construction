@@ -528,6 +528,50 @@ describe("syncTradieBillFromExternal", () => {
     assert.equal(result.kind, "stale");
     assert.deepEqual(recorder.writes(), []);
   });
+
+  describe("a mirrored bill renumbered to one another live bill holds", () => {
+    const mirrored = {
+      id: "invoice-1",
+      project: { name: PROJECT.name },
+      projectId: PROJECT.id,
+      scheduleId: SCHEDULE.id,
+      status: InvoiceStatus.AUTHORISED,
+      tradie: SCHEDULE.tradie,
+      xeroUpdatedAt: new Date("2026-11-09T00:00:00.000Z"),
+    };
+    const expected = {
+      invoiceNumber: "INV-001",
+      kind: "duplicate-number",
+      projectId: PROJECT.id,
+      subTotalCents: 1000_00,
+      tradieId: SCHEDULE.tradie.id,
+      tradieName: SCHEDULE.tradie.name,
+    };
+
+    test("is reported, and the mirrored row keeps what it had", async () => {
+      const recorder = recordingDb({
+        "tradieInvoice.findFirst": { id: "other-xero-bill" },
+        "tradieInvoice.findUnique": mirrored,
+      });
+      const result = await syncTradieBillFromExternal(XERO, BILL, recorder.db);
+      assert.deepEqual(result, expected);
+      assert.deepEqual(recorder.writes(), []);
+    });
+
+    test("is reported when a racing delivery hits the unique index", async () => {
+      const recorder = recordingDb({
+        "tradieInvoice.findFirst": null,
+        "tradieInvoice.findUnique": mirrored,
+        "tradieInvoice.update": () => {
+          throw Object.assign(new Error("Unique constraint failed"), {
+            code: "P2002",
+          });
+        },
+      });
+      const result = await syncTradieBillFromExternal(XERO, BILL, recorder.db);
+      assert.deepEqual(result, expected);
+    });
+  });
 });
 
 describe("getProjectFinancials", () => {
@@ -542,5 +586,29 @@ describe("getProjectFinancials", () => {
       DomainAuthorizationError,
     );
     assert.deepEqual(recorder.calls, []);
+  });
+
+  test("stored payment stages that don't parse leave the stage prices out, not the tab", async () => {
+    const recorder = recordingDb({
+      "milestone.findMany": [],
+      "project.findUnique": PROJECT,
+      "project.findUniqueOrThrow": {
+        // Not an array: once enough to throw while the tab loaded.
+        requirements: {
+          commercialsAndClaims: { paymentStages: { length: 2 } },
+        },
+        totalBudget: "500000",
+      },
+      "tradieInvoice.findMany": [],
+      "tradieInvoiceInbox.findMany": [],
+      "tradieSchedule.findMany": [],
+      "variation.findMany": [],
+    });
+    const financials = await getProjectFinancials(
+      adminPrincipal(),
+      { projectId: PROJECT.id },
+      recorder.db,
+    );
+    assert.equal(financials.projectId, PROJECT.id);
   });
 });

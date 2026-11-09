@@ -38,6 +38,7 @@ import {
   useUploadQueue,
   type QueuedUploadFile,
 } from "@/hooks/use-upload-queue";
+import { useUploadHints } from "@/components/common/upload-hints";
 
 const maxFiles = 5;
 
@@ -55,6 +56,13 @@ export default function AddMilestonePictureModal({
   onClose,
 }: AddMilestonePictureProps) {
   const dispatch = useAppDispatch();
+  const hintsFor = useUploadHints();
+  const uploadHints = () =>
+    hintsFor({
+      rootTrail: true,
+      trail: ["Project", "Milestones", "Add milestone photos"],
+      tags: ["Milestone", "Milestone photo"],
+    });
   const [isPending, startTransition] = useTransition();
   const {
     files: queuedFiles,
@@ -208,6 +216,7 @@ export default function AddMilestonePictureModal({
                 fileSize: queuedFile.file.size,
                 isOfferFile: false,
                 uploadType: "project-file",
+                ...uploadHints(),
               } satisfies ClientPayload),
               abortSignal: controller.signal,
               onUploadProgress: ({ percentage }) => {
@@ -232,6 +241,7 @@ export default function AddMilestonePictureModal({
           fileId: queuedFile.id,
           fileName: queuedFile.file.name,
           fileUrl: blob.url,
+          ...uploadHints(),
         },
         controller.signal,
       );

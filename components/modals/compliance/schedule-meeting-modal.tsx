@@ -141,6 +141,10 @@ export function ScheduleMeetingModal({
           </div>
 
           <ExtraAttachmentsField
+            uploadHints={{
+              trail: ["Project", "Compliance", "Schedule client meeting"],
+              tags: ["Compliance", "Client meeting"],
+            }}
             onUploadingChange={setIsAttaching}
             projectId={projectId}
             value={extras}

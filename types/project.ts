@@ -27,6 +27,7 @@ import {
 import { ProjectRequirementsPayload } from "./project-flow";
 import type { CertifierEngagementDetail } from "./compliance";
 import type { BookingBillingState } from "@/lib/domain/tradies/billing-rules";
+import type { ProjectDocument } from "@/lib/domain/projects/document-tags";
 
 export interface SafeProject extends Omit<
   Project,
@@ -150,8 +151,27 @@ export interface SafeVariation extends Omit<
   previousPrice: string | null;
 }
 
+/** Who wrote a row, as the project detail carries it: the name is what shows. */
+export type UserSummary = Pick<User, "id" | "name">;
+
+/** The site manager as the project detail carries it. */
+export type SiteManagerSummary = Pick<User, "id" | "name" | "email" | "phone">;
+
 export interface SiteUpdateWithAuthor extends SiteUpdate {
-  author: User;
+  author: UserSummary;
+}
+
+/**
+ * A staff note on one activity. Dates arrive as `Date` from the read and as
+ * ISO strings once they have crossed to the browser, as everywhere else here.
+ */
+export interface MilestoneNoteItem {
+  id: string;
+  milestoneId: string;
+  body: string;
+  createdAt: Date | string;
+  authorId: string | null;
+  author: UserSummary | null;
 }
 
 export interface SiteUpdateWithAuthorAndMilestone extends SiteUpdateWithAuthor {
@@ -195,8 +215,23 @@ export type TradieQuoteSummary = {
   enteredBy: { name: string } | null;
 };
 
+/** The activity a booking is for, as far as a booking row needs it. */
+export type BookingMilestone = Pick<
+  SafeMilestone,
+  | "id"
+  | "name"
+  | "status"
+  | "targetDate"
+  | "startDate"
+  | "budget"
+  | "spend"
+  | "parentId"
+  | "order"
+  | "projectStage"
+>;
+
 export interface TradieScheduleWithTradieAndMilestone extends TradieScheduleWithTradie {
-  milestone?: SafeMilestone;
+  milestone?: BookingMilestone;
   /**
    * Where the booking is up to with its invoices. Null when it is neither
    * committed nor billed; absent on a row the store built itself.
@@ -246,10 +281,15 @@ export type MilestoneUpdateResult = SafeMilestone & {
   };
 };
 
+/**
+ * A milestone on the project detail. Its bookings are not on it: they are
+ * `ProjectDetail.tradieSchedules` with this `milestoneId`.
+ */
 export interface MilestoneWithFilesTradiesUpdates extends SafeMilestone {
   files: ProjectFile[];
   siteUpdates: SiteUpdateWithAuthor[];
-  tradieSchedules: TradieScheduleWithTradie[];
+  /** Staff notes, newest first. Always empty on a customer's payload. */
+  notes: MilestoneNoteItem[];
 }
 
 export interface ProjectWithStats extends SafeProject {
@@ -276,12 +316,12 @@ export interface ProjectWithStats extends SafeProject {
 }
 
 export interface ActivityLogWithAuthor extends ActivityLog {
-  author: User | null;
+  author: UserSummary | null;
 }
 
 export interface ProjectDetail extends SafeProject {
   customer: Customer;
-  siteManager: User | null;
+  siteManager: SiteManagerSummary | null;
   lead: {
     id: number;
     email: string;
@@ -295,6 +335,11 @@ export interface ProjectDetail extends SafeProject {
   variations: SafeVariation[];
   tradieSchedules: TradieScheduleWithTradieAndMilestone[];
   files: ProjectFile[];
+  /**
+   * Every document the project holds, from every place one can be put, with
+   * its tags. The Documents tab's rows; `files` stays the project's own uploads.
+   */
+  documents: ProjectDocument[];
   materials: SafeMaterial[];
   /** Null until someone presses "Connect with Certifier". */
   certifierEngagement: CertifierEngagementDetail | null;

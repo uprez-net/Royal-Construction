@@ -137,7 +137,7 @@ function recipientRow(id: string) {
   };
 }
 
-function database() {
+function database(overrides: Parameters<typeof recordingDb>[0] = {}) {
   return recordingDb({
     ...OUTBOX,
     "milestone.findFirst": (args: unknown) => {
@@ -165,6 +165,7 @@ function database() {
       return { ...data, id: `s_${data.tradieId}_${data.milestoneId}` };
     },
     "tradieSchedule.findFirst": null,
+    ...overrides,
   });
 }
 
@@ -930,4 +931,201 @@ test("a tradie not listed under the request's trade is refused, naming the trade
     { trade: "Gas Fitting", tradieIds: ["t_abc"] } as Partial<typeof REQUEST>,
     /ABC Plumbing Co\. is listed under Plumbing, not Gas Fitting/,
   );
+});
+
+// ---------------------------------------------------------------------------
+// Attachments
+// ---------------------------------------------------------------------------
+
+type FileRow = {
+  fileType: string;
+  filename: string;
+  filesize: number;
+  id: string;
+  incidentId: string | null;
+  url: string;
+};
+
+const FILES: FileRow[] = [
+  {
+    fileType: "application/pdf",
+    filename: "plans.pdf",
+    filesize: 2_000_000,
+    id: "f_plans",
+    incidentId: null,
+    url: "https://blob.example/projects/p_1/plans.pdf",
+  },
+  {
+    fileType: "image/jpeg",
+    filename: "site.jpg",
+    filesize: 500_000,
+    id: "f_site",
+    incidentId: null,
+    url: "https://blob.example/projects/p_1/site.jpg",
+  },
+];
+
+/** `file.findMany` answering from `files`, scoped to the project asked for. */
+function filesOnProject(files: readonly FileRow[]) {
+  return (args: unknown) => {
+    const where = (
+      args as { where: { id: { in: string[] }; projectId: string } }
+    ).where;
+    return where.projectId === "p_1"
+      ? files.filter((file) => where.id.in.includes(file.id))
+      : [];
+  };
+}
+
+test("picked project files are stored with the request and attached to every tradie's copy", async () => {
+  const recorder = database({
+    "file.findMany": filesOnProject(FILES),
+    "tradieRequestRecipient.findUnique": (args: unknown) => ({
+      ...recipientRow((args as { where: { id: string } }).where.id),
+      request: { attachmentFileIds: ["f_site", "f_plans"], projectId: "p_1" },
+    }),
+  });
+  const { ports, sent } = mail();
+
+  await sendTradieRequests(
+    adminPrincipal(),
+    { ...REQUEST, attachmentFileIds: ["f_site", "f_plans"] },
+    recorder.transactionalDb,
+    ports,
+  );
+
+  assert.deepEqual(
+    writesTo(recorder, "tradieRequest.create")[0].data.attachmentFileIds,
+    ["f_site", "f_plans"],
+  );
+  assert.equal(sent.length, 2);
+  for (const email of sent) {
+    // In the order the office picked them, not the order the database chose.
+    assert.deepEqual(
+      email.attachments.map((file) => file.filename),
+      ["site.jpg", "plans.pdf"],
+    );
+  }
+});
+
+test("a request with no attachments sends none", async () => {
+  const { ports, sent } = mail();
+  await sendTradieRequests(
+    adminPrincipal(),
+    REQUEST,
+    database().transactionalDb,
+    ports,
+  );
+  assert.ok(sent.every((email) => email.attachments.length === 0));
+});
+
+test("an attachment that is not a file on this project, or is an incident report, is refused before anything is written", async () => {
+  for (const [ids, files] of [
+    [["f_plans", "f_elsewhere"], FILES],
+    [["f_plans"], [{ ...FILES[0], incidentId: "inc_1" }]],
+  ] as const) {
+    const recorder = database({ "file.findMany": filesOnProject(files) });
+    const { ports, sent } = mail();
+    await assert.rejects(
+      sendTradieRequests(
+        adminPrincipal(),
+        { ...REQUEST, attachmentFileIds: ids },
+        recorder.transactionalDb,
+        ports,
+      ),
+      DomainNotFoundError,
+    );
+    assert.deepEqual(recorder.writes(), []);
+    assert.equal(sent.length, 0);
+  }
+});
+
+test("attachments over the size an email can carry are refused, saying how big they are", async () => {
+  const recorder = database({
+    "file.findMany": filesOnProject([
+      { ...FILES[0], filesize: 15 * 1024 * 1024 },
+      { ...FILES[1], filesize: 6 * 1024 * 1024 },
+    ]),
+  });
+  const { ports } = mail();
+  await assert.rejects(
+    sendTradieRequests(
+      adminPrincipal(),
+      { ...REQUEST, attachmentFileIds: ["f_plans", "f_site"] },
+      recorder.transactionalDb,
+      ports,
+    ),
+    (error: unknown) =>
+      error instanceof DomainValidationError
+      && /come to 21 MB; one email can carry 20 MB/.test(error.message),
+  );
+  assert.deepEqual(recorder.writes(), []);
+});
+
+test("the same attachment twice, or too many, is refused", async () => {
+  const { ports } = mail();
+  for (const ids of [
+    ["f_plans", "f_plans"],
+    Array.from({ length: 11 }, (_, index) => `f_${index}`),
+  ]) {
+    await assert.rejects(
+      sendTradieRequests(
+        adminPrincipal(),
+        { ...REQUEST, attachmentFileIds: ids },
+        database().transactionalDb,
+        ports,
+      ),
+      DomainValidationError,
+    );
+  }
+});
+
+test("a retry whose attached file was deleted since is not sent a file short, by the robot or by Retry", async () => {
+  const withAttachment = (state: Record<string, unknown>) =>
+    recordingDb({
+      ...OUTBOX,
+      "file.findMany": filesOnProject([FILES[1]]),
+      "project.findUnique": PROJECT,
+      "tradieRequestRecipient.findUnique": {
+        ...recipientRow("r_t_abc"),
+        request: {
+          attachmentFileIds: ["f_plans", "f_site"],
+          projectId: "p_1",
+        },
+        ...state,
+      },
+      "tradieSchedule.count": 1,
+    });
+  const { ports, sent } = mail();
+
+  const automatic = withAttachment({
+    attempts: 1,
+    deliveryStatus: "RETRYING",
+    nextAttemptAt: new Date(NOW.getTime() - 1000),
+  });
+  const outcome = await deliverTradieRequest(
+    SYSTEM,
+    { now: NOW, recipientId: "r_t_abc", trigger: "automatic" },
+    automatic.db,
+    ports,
+  );
+  assert.equal(outcome.status, "FAILED");
+  assert.equal(outcome.nextAttemptAt, null);
+  assert.match(outcome.reason ?? "", /deleted from the project/);
+  assert.equal(writesTo(automatic, "outboxEvent.upsert").length, 0);
+
+  const manual = withAttachment({ attempts: 2, deliveryStatus: "FAILED" });
+  await assert.rejects(
+    deliverTradieRequest(
+      adminPrincipal(),
+      { now: NOW, recipientId: "r_t_abc", trigger: "manual" },
+      manual.db,
+      ports,
+    ),
+    (error: unknown) =>
+      error instanceof DomainTransitionError
+      && /deleted from the project/.test(error.message),
+  );
+  assert.deepEqual(manual.writes(), []);
+  assert.equal(sent.length, 0);
 });

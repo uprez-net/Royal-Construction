@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
+import type { UserPrincipal } from "@/lib/domain/principal";
 import { addWeeks, format, isWithinInterval } from "date-fns";
 import {
   CalendarCheck2,
@@ -161,9 +162,12 @@ function StageStatusPill({ state }: { state: StageState }) {
 export function ProjectMilestonesTab({
   project,
   isAdmin,
+  notesViewer,
 }: {
   project: ProjectDetail;
   isAdmin: boolean;
+  /** Who is reading staff notes; null hides them (a customer). */
+  notesViewer: UserPrincipal | null;
 }) {
   const dispatch = useAppDispatch();
   const projectStageData =
@@ -644,6 +648,7 @@ export function ProjectMilestonesTab({
                                         key={milestone.id}
                                         isActiveStage={ledgerStage.isWorkable}
                                         isAdmin={isAdmin}
+                                        notesViewer={notesViewer}
                                         milestone={milestone}
                                         project={project}
                                         tradieAlertsByMilestone={
@@ -724,6 +729,7 @@ export function ProjectMilestonesTab({
                                               ledgerStage.isWorkable
                                             }
                                             isAdmin={isAdmin}
+                                            notesViewer={notesViewer}
                                             milestone={milestone}
                                             project={project}
                                             tradieAlertsByMilestone={

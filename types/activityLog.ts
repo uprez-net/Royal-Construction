@@ -213,7 +213,11 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
   fileUploaded: (data) => ({
     id: uuidv4(),
     type: "fileUploaded",
-    message: `File ${data.fileName} uploaded for project ${data.projectId}`,
+    // The project id said nothing a reader of the project's own history did
+    // not already know; where it was uploaded from does.
+    message: data.origin
+      ? `${data.fileName} uploaded from ${data.origin}`
+      : `${data.fileName} uploaded`,
     authorId: "system",
     timestamp: new Date().toISOString(),
     projectId: data.projectId,

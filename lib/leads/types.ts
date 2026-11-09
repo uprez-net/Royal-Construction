@@ -57,7 +57,6 @@ export interface HistoryItem {
   author?: {
     id: string;
     name: string;
-    email: string;
   } | null;
 }
 
@@ -152,6 +151,13 @@ export interface Lead {
     name: string;
     size: number;
     url: string;
+    /** MIME type; null for a file uploaded before it was kept. */
+    fileType: string | null;
+    /** ISO timestamp. */
+    createdAt: string;
+    /** "Lead › Documents" — where it was uploaded from. */
+    origin: string | null;
+    tags: string[];
   }[];
 }
 

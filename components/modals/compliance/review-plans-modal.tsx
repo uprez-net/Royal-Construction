@@ -106,9 +106,9 @@ export function ReviewPlansModal({
   };
 
   const canSubmit =
-    !isPending &&
-    !isAttaching &&
-    (approved === "yes" || Boolean(feedback.trim()));
+    !isPending
+    && !isAttaching
+    && (approved === "yes" || Boolean(feedback.trim()));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -197,6 +197,10 @@ export function ReviewPlansModal({
               sends; this is the same gate. */}
           {approved === "no" ? (
             <ExtraAttachmentsField
+              uploadHints={{
+                trail: ["Project", "Compliance", "Plan review"],
+                tags: ["Compliance", "Plan review"],
+              }}
               onUploadingChange={setIsAttaching}
               projectId={projectId}
               value={extras}

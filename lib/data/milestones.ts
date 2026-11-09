@@ -110,6 +110,7 @@ export async function createMilestone(
     spend: milestone.spend,
     files: [],
     siteUpdates: [],
+    notes: [],
     tradieSchedules: [],
   };
 }

@@ -17,6 +17,9 @@ import { DomainNotFoundError } from "../errors";
 import { serializeInvoice, serializeListInvoice } from "../invoices/serialize";
 import type { DomainPrincipal } from "../principal";
 import { bookingBilling } from "../tradies/billing-rules";
+import { readProjectDetailRow } from "./detail-read";
+import { canSeeMilestoneNotes } from "./milestone-note-rules";
+import { readProjectDocuments } from "./documents";
 
 // Every read of a project, its list, its KPIs and its lookup — one place, one
 // scope (issue #301, phase 4).
@@ -120,9 +123,37 @@ const projectInclude = {
   },
 } as const;
 
-const projectDetailInclude = {
+/**
+ * Who wrote a log line or a site update: the name is all the page shows. The
+ * whole `User` row would put staff phone numbers, emails and Clerk ids into a
+ * payload a CUSTOMER can be served (issue #411).
+ */
+const authorSummary = { select: { id: true, name: true } } as const;
+
+/** What the header, the picker and Eve read off the site manager. */
+const siteManagerSummary = {
+  select: { id: true, name: true, email: true, phone: true },
+} as const;
+
+/** What a booking row reads off its activity (`BookingMilestone`). */
+const bookingMilestone = {
+  select: {
+    id: true,
+    name: true,
+    status: true,
+    targetDate: true,
+    startDate: true,
+    budget: true,
+    spend: true,
+    parentId: true,
+    order: true,
+    projectStage: true,
+  },
+} as const;
+
+export const projectDetailInclude = {
   customer: true,
-  siteManager: true,
+  siteManager: siteManagerSummary,
   // Newest first: the Payments tab reads as a claim history, most recent at the
   // top, and the stage order is already carried on each row.
   invoices: { orderBy: { issuedDate: "desc" } },
@@ -140,9 +171,13 @@ const projectDetailInclude = {
   activityLogs: {
     orderBy: { createdAt: "desc" as const },
     include: {
-      author: true,
+      author: authorSummary,
     },
   },
+  // No `tradieSchedules` under each milestone: they are the project-level
+  // `tradieSchedules` again, filtered by `milestoneId`, and the two copies
+  // drifted (a new booking reached one and not the other). A milestone's
+  // bookings are `project.tradieSchedules` with its `milestoneId`.
   milestones: {
     orderBy: { order: "asc" as const },
     include: {
@@ -152,21 +187,27 @@ const projectDetailInclude = {
       },
       siteUpdates: {
         include: {
-          author: true,
+          author: authorSummary,
         },
       },
-      tradieSchedules: {
-        include: {
-          tradie: true,
-        },
+      // Staff notes, newest first. Empty for a customer: see
+      // `canSeeMilestoneNotes` and `readProjectDetailRow`.
+      notes: {
+        orderBy: [
+          { createdAt: "desc" },
+          { id: "asc" },
+        ] as Prisma.MilestoneNoteOrderByWithRelationInput[],
+        include: { author: authorSummary },
       },
+      // Not a duplicate of the project's `files`: a milestone photo can carry
+      // only its `milestoneId`.
       files: true,
     },
   },
   siteUpdates: {
     orderBy: { createdAt: "desc" as const },
     include: {
-      author: true,
+      author: authorSummary,
       milestone: true,
     },
   },
@@ -177,7 +218,7 @@ const projectDetailInclude = {
     orderBy: { scheduledDate: "asc" as const },
     include: {
       tradie: true,
-      milestone: true,
+      milestone: bookingMilestone,
       // The delivery, not the stored email: the html is only for resending.
       requestRecipient: {
         select: {
@@ -233,6 +274,14 @@ const projectDetailInclude = {
   // The canonical shape, not a copy of it.
   certifierEngagement: { include: certifierEngagementInclude },
 } as const;
+
+/**
+ * What `getProjectDetail` reads, as Prisma would type it. The include above is
+ * the contract; `detail-read.ts` is the SQL that returns it.
+ */
+type ProjectDetailRow = Prisma.ProjectGetPayload<{
+  include: typeof projectDetailInclude;
+}>;
 
 const defaultPageSize = 12;
 const defaultLookupPageSize = 10;
@@ -491,21 +540,38 @@ export async function getProjectDetail(
   projectId: string,
   db: DomainDb,
 ): Promise<ProjectDetail | null> {
-  const project = await db.project.findFirst({
-    where: { id: projectId, ...projectReadScope(principal) },
-    include: projectDetailInclude,
-  });
+  // Three reads side by side, each needing only the project's id: the project
+  // and its lists in one SQL statement (`detail-read.ts`), its certifier
+  // engagement in the compliance module's own shape, and its documents. The
+  // last two are dropped unless the scoped read finds the project.
+  const [found, certifierEngagement, documents] = await Promise.all([
+    readProjectDetailRow(projectId, projectReadScope(principal), db, {
+      milestoneNotes: canSeeMilestoneNotes(principal),
+    }),
+    db.certifierEngagement.findUnique({
+      where: { projectId },
+      include: certifierEngagementInclude,
+    }),
+    readProjectDocuments({ id: projectId }, db),
+  ]);
 
-  if (!project) return null;
+  if (!found) return null;
+  const project = {
+    ...found,
+    certifierEngagement,
+  } as unknown as ProjectDetailRow;
+  // `Lead` is the raw relation, shaped into `lead` here and not sent twice.
+  const { Lead: rawLead, ...row } = project;
 
   return {
-    ...project,
+    ...row,
+    documents,
     lead: {
-      id: project.Lead.id,
-      email: project.Lead.email,
-      type: project.Lead.type.join(", "),
-      location: project.Lead.location,
-      emails: project.Lead.emails,
+      id: rawLead.id,
+      email: rawLead.email,
+      type: rawLead.type.join(", "),
+      location: rawLead.location,
+      emails: rawLead.emails,
     },
     requirements: project.requirements as unknown as ProjectRequirementsPayload,
     materials: project.materials.map((material) => ({
@@ -531,14 +597,6 @@ export async function getProjectDetail(
       ...milestone,
       spend: milestone.spend?.toString(),
       budget: milestone.budget.toString(),
-      tradieSchedules: milestone.tradieSchedules.map((schedule) => ({
-        ...schedule,
-        tradie: {
-          ...schedule.tradie,
-          lastQuotedPrice: schedule.tradie.lastQuotedPrice?.toString(),
-          rating: schedule.tradie.rating?.toString(),
-        },
-      })),
     })),
     // Every Decimal as a string: the detail crosses into client components,
     // which cannot receive a Decimal.

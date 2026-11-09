@@ -106,28 +106,35 @@ test("open work sorts ahead of closed work, so take:1 finds it", () => {
 // ── Every query site loads it ──
 
 test("no query feeding mapLead omits the task", () => {
-  // The lead writes moved to lib/domain/leads/commands.ts (issue #301) and
-  // share one LEAD_WRITE_INCLUDE there; the reads stayed in the adapter with
-  // the include written out. Counting only the adapter would have let a moved
-  // query drop the task silently, so both are counted.
+  // Every lead read and write shares LEAD_ROW_INCLUDE (lib/domain/leads/
+  // row-read.ts): the writes load it through Prisma, the reads through the SQL
+  // beside it. A read in the adapter that wrote its own include could drop the
+  // task silently, so the adapter may not have one.
   const adapter = code("lib/data/leads.ts");
+  const rowRead = code("lib/domain/leads/row-read.ts");
   const command = code("lib/domain/leads/commands.ts");
 
   const mapLeadCalls = (adapter.match(/mapLead\(/g) ?? []).length;
   assert.ok(mapLeadCalls >= 7, `only ${mapLeadCalls} mapLead call sites found`);
-
-  const adapterIncludes = (adapter.match(/tasks: NEXT_FOLLOWUP_TASK/g) ?? [])
-    .length;
-  assert.equal(
-    adapterIncludes,
-    4,
-    `expected 4 adapter include sites, found ${adapterIncludes}`,
+  assert.doesNotMatch(
+    adapter,
+    /prisma\.lead\.find(Many|Unique|First)\(\{[^}]*include:/,
+    "a lead read in the adapter has its own include again",
+  );
+  assert.ok(
+    (adapter.match(/readLeadRows\(/g) ?? []).length >= 4,
+    "a lead read in the adapter no longer goes through readLeadRows",
   );
 
-  // One shared constant, used by every query the commands run.
-  assert.match(command, /tasks: NEXT_FOLLOWUP_TASK/);
+  // The one include names the task, and the SQL loads it in the same order.
+  assert.match(rowRead, /tasks: NEXT_FOLLOWUP_TASK/);
+  assert.match(
+    rowRead,
+    /ORDER BY lt\."completedAt" ASC NULLS FIRST, lt\."dueDate" ASC NULLS LAST, lt\.id ASC\s+LIMIT 1/,
+    "the SQL no longer picks the task NEXT_FOLLOWUP_TASK picks",
+  );
   assert.equal(
-    (command.match(/include: LEAD_WRITE_INCLUDE/g) ?? []).length,
+    (command.match(/include: LEAD_ROW_INCLUDE/g) ?? []).length,
     3,
     "a lead write is reading relations without the task include",
   );

@@ -8,6 +8,7 @@ import { fetchOpenTasks, type LeadTaskRow } from "@/lib/leads/task-service";
 import { useAppSelector } from "@/lib/store/hooks";
 
 import { LeadDocumentsTab } from "./lead-documents-tab";
+import { UploadHintScope } from "@/components/common/upload-hints";
 import { LeadNotesTab } from "./lead-notes-tab";
 import { LeadOverviewTab } from "./lead-overview-tab";
 import { LeadScheduledWorkTab } from "./lead-scheduled-work-tab";
@@ -138,7 +139,12 @@ export function LeadDetailTabs({
           />
         ) : null}
         {activeTab === "documents" ? (
-          <LeadDocumentsTab lead={lead} onFilesUploaded={onFilesUploaded} />
+          <UploadHintScope
+            trail={["Lead", "Documents"]}
+            tags={["Lead document"]}
+          >
+            <LeadDocumentsTab lead={lead} onFilesUploaded={onFilesUploaded} />
+          </UploadHintScope>
         ) : null}
         {activeTab === "notes" ? (
           <LeadNotesTab

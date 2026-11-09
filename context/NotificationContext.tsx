@@ -15,6 +15,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { certifierExtractPayloadFromUrl } from "@/components/notification/notification-item";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import { notificationSubscriberId } from "@/lib/notification/environment";
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -40,16 +41,27 @@ export const NotificationProvider = ({
   const queryClient = useQueryClient();
   const dispatch = useAppDispatch();
 
+  // The inbox for the site this page is on: staging and production share one
+  // Novu application, and each origin sends to its own subscriber (see
+  // lib/notification/environment.ts), so neither sees the other's.
+  const subscriberId =
+    isLoaded && user && typeof window !== "undefined"
+      ? notificationSubscriberId(user.id, window.location.origin)
+      : null;
+
   const novu = useMemo(() => {
-    if (!isLoaded || !user) return null;
+    if (!subscriberId) return null;
 
     return new Novu({
       applicationIdentifier,
-      subscriberId: user.id,
+      subscriberId,
     });
-  }, [isLoaded, user]);
+  }, [subscriberId]);
 
-  const queryKey = useMemo(() => ["notifications", user?.id], [user?.id]);
+  const queryKey = useMemo(
+    () => ["notifications", subscriberId],
+    [subscriberId],
+  );
 
   const {
     data: notifications = [],

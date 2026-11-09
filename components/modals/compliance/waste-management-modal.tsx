@@ -181,6 +181,10 @@ export function WasteManagementModal({
           </div>
 
           <ExtraAttachmentsField
+            uploadHints={{
+              trail: ["Project", "Compliance", "Waste management plan"],
+              tags: ["Compliance", "Waste management plan"],
+            }}
             onUploadingChange={setIsAttaching}
             projectId={projectId}
             value={extras}

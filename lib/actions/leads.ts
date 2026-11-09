@@ -4,12 +4,15 @@ import type { LeadEmails } from "@prisma/client";
 import { requireInternalUser } from "@/lib/auth/require-internal-user";
 import { authorizeLeadAccess } from "@/lib/data/offer-access";
 import * as leads from "@/lib/data/leads";
-import type { FollowupStats, SafeForecast } from "@/lib/data/leads";
+import type {
+  FollowupStats,
+  LeadsOverview,
+  SafeForecast,
+} from "@/lib/data/leads";
 import type { FyQuarter } from "@/lib/leads/fy-quarter";
-import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
+import type { Lead as UiLead } from "@/lib/leads/types";
 import { bookConsultationHref } from "@/lib/leads/lead-actions";
 import { signBookConsultationToken } from "@/lib/leads/book-consultation-token";
-import type { LeadAnalyticsData } from "@/types/lead";
 
 // The lead screens call these from the browser. lib/data/leads.ts is
 // server-only and checks nobody, since its other callers (the lead routes, MCP,
@@ -45,19 +48,15 @@ export async function findLeadById(id: number): Promise<UiLead | null> {
   return leads.findLeadById(id);
 }
 
-export async function getLeadsStats(): Promise<LeadsStats> {
-  await assertStaff();
-  return leads.getLeadsStats();
-}
-
 export async function getFollowupStats(): Promise<FollowupStats> {
   await assertStaff();
   return leads.getFollowupStats();
 }
 
-export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
+/** The lead cards and analytics, in one action: see `getLeadsOverview`. */
+export async function getLeadsOverview(): Promise<LeadsOverview> {
   await assertStaff();
-  return leads.getAnalyticsData();
+  return leads.getLeadsOverview();
 }
 
 export async function getForecast(

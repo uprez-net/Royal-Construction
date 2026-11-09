@@ -478,7 +478,9 @@ export function buildProjectFinancialReport(input: {
         name: node.name,
         order: node.order,
         own: figuresOf(ownSums),
-        priceCents: sums.tender - subtreeVariationCents,
+        // The stored budget, exactly: setMilestonePrice compares it with the
+        // row, and a late child can push the summed tender above it.
+        priceCents: node.budgetCents,
         stage: node.projectStage,
         status: node.status,
         variationCents,

@@ -616,7 +616,18 @@ export function ProjectComplianceTab({
     // scope the store will end up writing to.
     const key = complianceScope.document(target);
     try {
-      const uploaded = await uploadFile(file, key);
+      // What the file is for, so the Documents tab can say so later.
+      const existing = target.documentId
+        ? engagement?.documents.find((row) => row.id === target.documentId)
+        : undefined;
+      const documentType = existing?.documentType ?? target.documentType;
+      const documentLabel = documentType
+        ? complianceDocumentLabel(documentType, existing?.label)
+        : null;
+      const uploaded = await uploadFile(file, key, {
+        tags: [documentLabel],
+        trail: [documentLabel],
+      });
       // Set a small timeout to wait for the file entry to be created in the database before trying to attach it to a document. This is a workaround for a race condition that
       // can occur when uploading large files, where the file entry may not be immediately available in the database after the upload completes.
       await new Promise((resolve) => setTimeout(resolve, 850));
