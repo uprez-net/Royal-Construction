@@ -728,7 +728,7 @@ export const complianceDiscoverySchema = z.object({
 
 /**
  * Labelling a received document the classifier left as UNKNOWN. Narrowed at the
- * data layer to the four types a certifier actually sends.
+ * data layer to `IDENTIFIABLE_DOCUMENT_TYPES`, the list the picker offers.
  */
 export const classifyReceivedDocumentSchema = z.object({
   documentType: z.enum(ComplianceDocumentType),

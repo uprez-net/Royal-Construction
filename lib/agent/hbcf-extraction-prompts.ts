@@ -1,8 +1,8 @@
 /**
  * Prompts for reading the HBCF (Home Building Compensation Fund) certificate
- * number off an uploaded insurance certificate.
+ * number, and the date cover starts, off an uploaded insurance certificate.
  *
- * This is deliberately a single-field extraction: the certificate number is a
+ * Both fields are strict about blanks: the certificate number is a
  * legal reference that gets quoted back to iCare and to the owner, so a
  * plausible-but-wrong number is worse than no number at all. The contract below
  * therefore makes "return blank" the correct answer whenever the number is not
@@ -17,11 +17,17 @@ extraction contract:
 - Never fabricate, guess, reconstruct, or complete a number from context or from a partially legible scan.
 - Never return a date, an ABN, a licence number, a contract price, an address, or any other identifier in place of the certificate number.
 - Return exactly one value. If several candidate numbers appear, return the one labelled as the HBCF certificate/policy number.
+
+cover start date contract:
+- Return the date HBCF cover starts, converted to yyyy-MM-dd.
+- Prefer the start of the period of cover ("Period of cover from", "Cover commences", "Effective date"). When the certificate prints no separate start, use the certificate's date of issue.
+- Dates on these certificates are Australian, day before month: 03/04/2026 is 3 April 2026, returned as 2026-04-03.
+- Return a blank string ("") when no such date is printed. Never return the contract date, an expiry or end date, or a date of birth.
 `;
 
 export const HBCF_EXTRACTION_SYSTEM_PROMPT = `
 <role>
-You are an insurance document reader for Royal Constructions. You are given the OCR markdown of a single Home Building Compensation Fund (HBCF) insurance certificate — also known as Home Warranty Insurance, HBCF cover, or an iCare HBCF certificate of insurance — and you return the certificate number printed on it.
+You are an insurance document reader for Royal Constructions. You are given the OCR markdown of a single Home Building Compensation Fund (HBCF) insurance certificate — also known as Home Warranty Insurance, HBCF cover, or an iCare HBCF certificate of insurance — and you return the certificate number and the date cover starts, as printed on it.
 </role>
 
 <extraction_contract>
@@ -38,7 +44,7 @@ ${HBCF_EXTRACTION_CONTRACT}
 <do_not_confuse_with>
   <item>Builder licence number / contractor licence number</item>
   <item>ABN or ACN</item>
-  <item>Policy issue date, expiry date, or period of cover</item>
+  <item>For the number: the policy issue date, expiry date, or period of cover</item>
   <item>Contract price, premium amount, or job/quote number</item>
   <item>Job address, lot number, or DA/CDC approval number</item>
 </do_not_confuse_with>
@@ -57,11 +63,11 @@ ${HBCF_EXTRACTION_CONTRACT}
  */
 export function buildHbcfExtractionPrompt(markdown: string) {
   return `
-Read the HBCF insurance certificate below and return the certificate number printed on it.
+Read the HBCF insurance certificate below and return the certificate number and the cover start date printed on it.
 
 Certificate OCR markdown:
 ${markdown}
 
-Return the number exactly as printed. If no certificate number is printed on this document, return a blank string.
+Return the number exactly as printed and the start date as yyyy-MM-dd. Return a blank string for either one that is not printed on this document.
 `;
 }

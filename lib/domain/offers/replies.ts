@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 
 import type { DomainDb, TransactionalDomainDb } from "../db";
+import { isSignatureNoise } from "../email/attachment-noise";
 import { DomainAuthorizationError, DomainNotFoundError } from "../errors";
 import type { BlobPutPort } from "../ports/blob";
 import type { DomainPrincipal } from "../principal";
@@ -44,6 +45,7 @@ export type InboundAttachmentMetadata = {
   readonly contentType: string;
   readonly size: number;
   readonly isInline: boolean;
+  readonly contentId?: string | null;
   readonly odataType: string;
 };
 
@@ -64,11 +66,6 @@ export type OfferReplyAttachment = {
 };
 
 const FILE_ATTACHMENT_ODATA_TYPE = "#microsoft.graph.fileAttachment";
-
-// Inline attachments are overwhelmingly signature logos and tracking pixels,
-// all tiny. A pasted photo or plan is not, so the cut is on size rather than on
-// dropping every inline file. Same threshold as lib/graph/lead-attachments.
-const MIN_INLINE_BYTES = 40 * 1024;
 
 // Past this a file is a video or a CAD bundle. It stays in the mailbox and the
 // panel says so, rather than holding a workflow step on the upload.
@@ -247,7 +244,8 @@ export async function planOfferReplyAttachments(
   const listed: OfferReplyAttachment[] = [];
   try {
     for (const attachment of await ports.mail.listAttachments()) {
-      if (attachment.isInline && attachment.size < MIN_INLINE_BYTES) {
+      // The client's signature, not something they sent us.
+      if (isSignatureNoise(attachment)) {
         continue;
       }
       const base = {

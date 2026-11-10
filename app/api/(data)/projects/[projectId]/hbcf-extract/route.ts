@@ -60,9 +60,11 @@ function pageBlocksToMarkdown(pages: OCRPageObject[]) {
 }
 
 /**
- * Reads the HBCF certificate number off an uploaded certificate.
+ * Reads the HBCF certificate number and the cover start date off an uploaded
+ * certificate. Nothing is saved here: the Overview tab offers the date to the
+ * office to confirm, with the end of cover defaulted from it.
  *
- * The number may legitimately come back blank — either the certificate does not
+ * Either may legitimately come back blank — the certificate does not
  * print one, or the model could not read it. The caller keeps the document
  * reference either way and leaves the red alert up until a number exists, so a
  * blank result is a 200, not an error.
@@ -133,6 +135,7 @@ export async function POST(
     if (!markdown) {
       return successResponse({
         hbcfInsuranceNumber: "",
+        coverStartDate: "",
         fileId: body.data.fileId,
         fileName: body.data.fileName,
         url: body.data.url,
@@ -146,6 +149,7 @@ export async function POST(
 
     return successResponse({
       hbcfInsuranceNumber: extraction.hbcfInsuranceNumber,
+      coverStartDate: extraction.coverStartDate,
       fileId: body.data.fileId,
       fileName: body.data.fileName,
       url: body.data.url,

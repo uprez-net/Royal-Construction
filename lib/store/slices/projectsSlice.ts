@@ -850,6 +850,30 @@ export const identifyComplianceDocument = createAsyncThunk<
   },
 );
 
+export const dismissComplianceDocument = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string; documentId: string },
+  { rejectValue: string }
+>(
+  "projects/dismissComplianceDocument",
+  async ({ projectId, documentId }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        `/documents/${documentId}`,
+        { method: "DELETE" },
+        "Unable to dismiss the document",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to dismiss the document",
+      );
+    }
+  },
+);
+
 export const sendComplianceForReview = createAsyncThunk<
   { projectId: string; engagement: CertifierEngagementDetail | null },
   { projectId: string },
@@ -1411,6 +1435,7 @@ const complianceOperations = [
   ),
   complianceOperation(sendSignedCopies, () => complianceScope.signedCopies),
   complianceOperation(identifyComplianceDocument, complianceScope.document),
+  complianceOperation(dismissComplianceDocument, complianceScope.document),
   complianceOperation(sendComplianceForReview, () => complianceScope.review),
   complianceOperation(
     refreshCertifierEngagement,

@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Send,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -33,13 +34,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   CERTIFIER_RESPONSE_DOCUMENTS,
   COMPLIANCE_PARTY_SECTIONS,
@@ -93,6 +87,7 @@ import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import {
   complianceScope,
+  dismissComplianceDocument,
   identifyComplianceDocument,
   resolveComplianceDocument,
   selectDeveloperPendingDocument,
@@ -151,6 +146,17 @@ import { ComplianceDocumentRow } from "./compliance-document-row";
 import { ComplianceDocumentVault } from "./compliance-document-vault";
 import { ComplianceFinalPage } from "./compliance-final-page";
 import { ComplianceSectionCard } from "./compliance-section-card";
+import { IdentifyDocumentPicker } from "./identify-document-picker";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ComplianceStageFlow } from "./compliance-stage-flow";
 import { DevelopmentApplicationBanner } from "./development-application-banner";
 import { EstateDeveloperBanner } from "./estate-developer-banner";
@@ -429,6 +435,30 @@ export function ProjectComplianceTab({
       ),
     [engagement],
   );
+
+  /**
+   * Types that already hold a file, so the picker can say that choosing one
+   * replaces it rather than adding a second.
+   */
+  const filledTypes = useMemo(
+    () =>
+      new Set(
+        (engagement?.documents ?? [])
+          .filter(
+            (document) =>
+              document.documentType !== ComplianceDocumentType.UNKNOWN
+              && document.files.length > 0,
+          )
+          .map((document) => document.documentType),
+      ),
+    [engagement],
+  );
+
+  /** The unidentified attachment waiting on a "dismiss it?" confirm. */
+  const [dismissTarget, setDismissTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   /** Everything that can form the review submission. */
   const submissionDocuments = useMemo(
@@ -1469,6 +1499,19 @@ export function ProjectComplianceTab({
     }
   };
 
+  const handleDismiss = async (documentId: string) => {
+    try {
+      await dispatch(
+        dismissComplianceDocument({ projectId: project.id, documentId }),
+      ).unwrap();
+      toast.success("File dismissed.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not dismiss the file.",
+      );
+    }
+  };
+
   // ---------------------------------------------------------------------
   // Nothing started yet — one button, as specified.
   // ---------------------------------------------------------------------
@@ -2120,7 +2163,7 @@ export function ProjectComplianceTab({
           {unidentified.length > 0 ? (
             <ComplianceSectionCard
               title="Needs identifying"
-              description="Arrived from the certifier but could not be placed."
+              description="Arrived by email but could not be placed. Identify it, or dismiss it if it is not part of the job."
               icon={HelpCircle}
               badge={{
                 label: `${unidentified.length} to place`,
@@ -2149,31 +2192,69 @@ export function ProjectComplianceTab({
                         </button>
                       ))}
                     </div>
-                    <Select
-                      disabled={isScopeBusy(scopeOf(document))}
-                      onValueChange={(value) =>
-                        void handleIdentify(
-                          document.id,
-                          value as ComplianceDocumentType,
-                        )
-                      }
-                    >
-                      <SelectTrigger className="w-full sm:max-w-xs" size="sm">
-                        <SelectValue placeholder="What is this?" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CERTIFIER_RESPONSE_DOCUMENTS.map((response) => (
-                          <SelectItem key={response.type} value={response.type}>
-                            {response.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <IdentifyDocumentPicker
+                        disabled={isScopeBusy(scopeOf(document))}
+                        filledTypes={filledTypes}
+                        onSelect={(type) =>
+                          void handleIdentify(document.id, type)
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={isScopeBusy(scopeOf(document))}
+                        onClick={() =>
+                          setDismissTarget({
+                            id: document.id,
+                            name:
+                              document.files
+                                .map((file) => file.filename)
+                                .join(", ") || "this file",
+                          })
+                        }
+                        className="justify-start text-muted-foreground hover:text-destructive sm:justify-center"
+                      >
+                        <Trash2 aria-hidden="true" className="size-4" />
+                        Dismiss
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
             </ComplianceSectionCard>
           ) : null}
+
+          <AlertDialog
+            open={dismissTarget !== null}
+            onOpenChange={(open) => {
+              if (!open) setDismissTarget(null);
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Dismiss this file?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {dismissTarget?.name} will be deleted for good, and removed
+                  from the email it arrived on. Use this for signature logos and
+                  anything else that is not part of the job.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Keep it</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => {
+                    if (dismissTarget) void handleDismiss(dismissTarget.id);
+                    setDismissTarget(null);
+                  }}
+                >
+                  Dismiss
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           {/* -----------------------------------------------------------
               The required pack, one block per supplier.
