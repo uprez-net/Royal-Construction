@@ -7,6 +7,7 @@ import {
 
 import { authorizeProject } from "../access/projects";
 import type { DomainDb } from "../db";
+import { isSignatureNoise } from "../email/attachment-noise";
 import {
   DomainAuthorizationError,
   DomainNotFoundError,
@@ -46,6 +47,7 @@ export type EmailAttachment = {
   readonly contentType: string;
   readonly size: number;
   readonly isInline: boolean;
+  readonly contentId?: string | null;
   readonly odataType?: string | null;
 };
 
@@ -65,7 +67,10 @@ export function invoiceAttachmentCandidates(
   attachments: readonly EmailAttachment[],
 ): InvoiceAttachmentCandidate[] {
   return attachments.flatMap((attachment) => {
-    if (attachment.isInline) return [];
+    // Inline outright — an invoice is attached, not pasted — and the
+    // signature images Graph reports as not inline, which would otherwise be
+    // read as a photographed invoice.
+    if (attachment.isInline || isSignatureNoise(attachment)) return [];
     if (
       attachment.odataType
       && attachment.odataType !== "#microsoft.graph.fileAttachment"

@@ -7,15 +7,16 @@ import {
 } from "ai";
 import { z } from "zod";
 import { gateway, TEXT_MODEL_ID } from "@/lib/model";
+import { normalizeIsoDate } from "@/lib/projects/insurance-claim-dates";
 import {
   buildHbcfExtractionPrompt,
   HBCF_EXTRACTION_SYSTEM_PROMPT,
 } from "./hbcf-extraction-prompts";
 
 /**
- * Single-field output. Blank-tolerant on purpose: an empty string is the
- * documented answer when the certificate does not print a number, so the
- * schema must accept it rather than force the model to invent one.
+ * The number and the date cover starts. Blank-tolerant on purpose: an empty
+ * string is the documented answer when the certificate does not print one, so
+ * the schema must accept it rather than force the model to invent one.
  */
 export const hbcfExtractionSchema = z.object({
   hbcfInsuranceNumber: z
@@ -23,6 +24,12 @@ export const hbcfExtractionSchema = z.object({
     .default("")
     .describe(
       "The HBCF (Home Building Compensation Fund) certificate or policy number exactly as printed on the certificate, including any letter prefix, hyphens or slashes, and without the surrounding label text. Return an empty string if no certificate number is printed on the document — never guess, reconstruct, or substitute a licence number, ABN, date, or amount.",
+    ),
+  coverStartDate: z
+    .string()
+    .default("")
+    .describe(
+      "The date HBCF cover starts, as printed on the certificate (the start of the period of cover, or the issue date when the certificate prints no separate start), converted to yyyy-MM-dd. Australian certificates print day before month: 03/04/2026 is 2026-04-03. Return an empty string if no such date is printed — never use the contract date, an expiry date, or today's date.",
     ),
 });
 
@@ -34,6 +41,8 @@ export type HbcfExtractionInput = {
 
 export type HbcfExtractionResult = {
   hbcfInsuranceNumber: string;
+  /** `yyyy-MM-dd`, or "" when the certificate prints no readable start date. */
+  coverStartDate: string;
   message: string;
   ok: boolean;
 };
@@ -60,9 +69,13 @@ export async function handleHbcfExtractionGeneration(
 
     const parsed = hbcfExtractionSchema.parse(output);
     const hbcfInsuranceNumber = parsed.hbcfInsuranceNumber.trim();
+    // Checked rather than trusted: a malformed or impossible date is worse
+    // than none, because it would be offered to the office as a reading.
+    const coverStartDate = normalizeIsoDate(parsed.coverStartDate) ?? "";
 
     return {
       hbcfInsuranceNumber,
+      coverStartDate,
       message: hbcfInsuranceNumber
         ? "HBCF insurance number extracted successfully."
         : "No HBCF insurance number was printed on the document.",
@@ -76,6 +89,7 @@ export async function handleHbcfExtractionGeneration(
     ) {
       return {
         hbcfInsuranceNumber: "",
+        coverStartDate: "",
         message: `Structured extraction was incomplete: ${error.message}`,
         ok: false,
       };

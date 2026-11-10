@@ -1,4 +1,5 @@
 import type { GraphAttachmentMetadata } from "./client";
+import { isSignatureNoise } from "@/lib/domain/email/attachment-noise";
 import { withGraphRetry } from "./retry";
 import { isOcrConfigured, ocrFile, type OcrInput } from "@/lib/ocr";
 
@@ -142,11 +143,6 @@ const MAX_TOTAL_ATTACHMENT_BYTES = 15 * 1024 * 1024;
 // the detail and the rest only cost latency.
 const MAX_ATTACHMENT_COUNT = 5;
 
-// Inline attachments are overwhelmingly signature logos, social icons and
-// tracking pixels — all tiny. A pasted site photo or floor plan is not, so the
-// cut is on size rather than on dropping every inline file.
-const MIN_INLINE_BYTES = 40 * 1024;
-
 // One decoded text attachment should not be able to crowd the email body out
 // of the context window.
 const MAX_TEXT_CHARS = 20000;
@@ -210,9 +206,11 @@ export function selectLeadAttachments(metadata: GraphAttachmentMetadata[]): {
       continue;
     }
 
-    if (attachment.isInline && attachment.size < MIN_INLINE_BYTES) {
+    // Signature logos and tracking pixels. Checked before the count and the
+    // byte budget so a thread's worth of logos cannot crowd out a document.
+    if (isSignatureNoise(attachment)) {
       skip(
-        "inline image too small to be anything but a signature or a tracking pixel",
+        "a signature image or tracking pixel, not something the sender attached",
       );
       continue;
     }
@@ -411,7 +409,7 @@ export async function collectLeadAttachments(
     // Inline signature images are noise in the manifest too — the sender did
     // not "attach" their company logo, Outlook did.
     names: metadata
-      .filter((item) => !(item.isInline && item.size < MIN_INLINE_BYTES))
+      .filter((item) => !isSignatureNoise(item))
       .map((item) => item.name),
     files,
     skipped,

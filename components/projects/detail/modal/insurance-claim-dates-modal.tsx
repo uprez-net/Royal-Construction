@@ -8,13 +8,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+  InsuranceClaimDatesFields,
+  type InsuranceClaimDatesFieldErrors,
+  type InsuranceClaimDatesFormState,
+} from "@/components/projects/detail/insurance-claim-dates-fields";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { setActiveProject } from "@/lib/store/slices/projectsSlice";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -24,14 +22,12 @@ import {
 } from "@/lib/projects/insurance-claim-dates";
 import type { ProjectDetail } from "@/types/project";
 import { fetchJson } from "@/utils/fetch";
-import { cn } from "@/lib/utils";
 import {
   insuranceClaimDatesSchema,
   type InsuranceClaimDatesInput,
 } from "@/utils/validators";
 import { MilestoneStatus } from "@prisma/client";
-import { format } from "date-fns";
-import { AlertCircle, CalendarIcon, Loader2, ShieldCheck } from "lucide-react";
+import { AlertCircle, Loader2, ShieldCheck } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -45,26 +41,9 @@ interface InsuranceClaimDatesModalProps {
 
 type Step = "notice" | "form";
 
-type FormState = Partial<InsuranceClaimDatesInput>;
+type FormState = InsuranceClaimDatesFormState;
 
-type FieldErrors = Partial<Record<keyof InsuranceClaimDatesInput, string>>;
-
-const inputClassName =
-  "h-10 rounded-[10px] border-border/80 bg-background px-3 font-mono text-sm tabular-nums";
-
-const labelClassName = "text-xs font-medium text-foreground";
-
-function RequiredMark() {
-  return (
-    <span className="ml-0.5 text-destructive-ink" aria-hidden="true">
-      *
-    </span>
-  );
-}
-
-function startOfToday() {
-  return new Date(new Date().setHours(0, 0, 0, 0));
-}
+type FieldErrors = InsuranceClaimDatesFieldErrors;
 
 /**
  * Blocks the first Slab-stage milestone start until the project's insurance
@@ -99,15 +78,15 @@ export default function InsuranceClaimDatesModal({
   const [isPending, startTransition] = useTransition();
 
   const handleFormChange = (
-    target: keyof InsuranceClaimDatesInput,
-    value: string | undefined,
+    next: FormState,
+    changed: keyof InsuranceClaimDatesInput,
   ) => {
-    setFormState((prev) => ({ ...prev, [target]: value }));
+    setFormState(next);
     setFieldErrors((prev) => {
-      if (!prev[target]) return prev;
+      if (!prev[changed]) return prev;
 
       const nextErrors = { ...prev };
-      delete nextErrors[target];
+      delete nextErrors[changed];
       return nextErrors;
     });
   };
@@ -252,144 +231,12 @@ export default function InsuranceClaimDatesModal({
               </div>
             ) : null}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="insuranceClaimStartDate"
-                  className={labelClassName}
-                >
-                  Insurance claim start date
-                  <RequiredMark />
-                </Label>
-                <Popover modal>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="insuranceClaimStartDate"
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        inputClassName,
-                        "w-full justify-start text-left font-normal",
-                        !formState.insuranceClaimStartDate &&
-                          "text-muted-foreground",
-                      )}
-                      aria-invalid={Boolean(
-                        fieldErrors.insuranceClaimStartDate,
-                      )}
-                      aria-describedby={
-                        fieldErrors.insuranceClaimStartDate
-                          ? "insuranceClaimStartDate-error"
-                          : undefined
-                      }
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {formState.insuranceClaimStartDate ? (
-                        format(
-                          new Date(formState.insuranceClaimStartDate),
-                          "PPP",
-                        )
-                      ) : (
-                        <span>Pick a date</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={
-                        formState.insuranceClaimStartDate
-                          ? new Date(formState.insuranceClaimStartDate)
-                          : undefined
-                      }
-                      onSelect={(date) =>
-                        handleFormChange(
-                          "insuranceClaimStartDate",
-                          date ? format(date, "yyyy-MM-dd") : undefined,
-                        )
-                      }
-                      disabled={(date) => date < startOfToday()}
-                      captionLayout="dropdown"
-                    />
-                  </PopoverContent>
-                </Popover>
-                {fieldErrors.insuranceClaimStartDate ? (
-                  <p
-                    id="insuranceClaimStartDate-error"
-                    className="text-xs text-destructive"
-                  >
-                    {fieldErrors.insuranceClaimStartDate}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="insuranceClaimEndDate"
-                  className={labelClassName}
-                >
-                  Insurance claim end date
-                  <RequiredMark />
-                </Label>
-                <Popover modal>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="insuranceClaimEndDate"
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        inputClassName,
-                        "w-full justify-start text-left font-normal",
-                        !formState.insuranceClaimEndDate &&
-                          "text-muted-foreground",
-                      )}
-                      aria-invalid={Boolean(fieldErrors.insuranceClaimEndDate)}
-                      aria-describedby={
-                        fieldErrors.insuranceClaimEndDate
-                          ? "insuranceClaimEndDate-error"
-                          : undefined
-                      }
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {formState.insuranceClaimEndDate ? (
-                        format(new Date(formState.insuranceClaimEndDate), "PPP")
-                      ) : (
-                        <span>Pick a date</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={
-                        formState.insuranceClaimEndDate
-                          ? new Date(formState.insuranceClaimEndDate)
-                          : undefined
-                      }
-                      onSelect={(date) =>
-                        handleFormChange(
-                          "insuranceClaimEndDate",
-                          date ? format(date, "yyyy-MM-dd") : undefined,
-                        )
-                      }
-                      disabled={(date) =>
-                        formState.insuranceClaimStartDate
-                          ? date <= new Date(formState.insuranceClaimStartDate)
-                          : date < startOfToday()
-                      }
-                      captionLayout="dropdown"
-                    />
-                  </PopoverContent>
-                </Popover>
-                {fieldErrors.insuranceClaimEndDate ? (
-                  <p
-                    id="insuranceClaimEndDate-error"
-                    className="text-xs text-destructive"
-                  >
-                    {fieldErrors.insuranceClaimEndDate}
-                  </p>
-                ) : null}
-              </div>
-            </div>
+            <InsuranceClaimDatesFields
+              idPrefix="slab-start"
+              value={formState}
+              errors={fieldErrors}
+              onChange={handleFormChange}
+            />
 
             <div className="flex flex-col-reverse gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
               <Button

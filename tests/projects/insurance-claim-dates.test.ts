@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 
 import {
+  defaultInsuranceClaimEndDate,
   findInsuranceTriggerMilestoneId,
+  normalizeIsoDate,
   hasInsuranceClaimDates,
   readInsuranceClaimDates,
   withInsuranceClaimDates,
@@ -152,4 +154,19 @@ test("the merged payload is accepted by the project PATCH schema", () => {
     result.success && result.data.legalAdministration.insuranceClaimEndDate,
     "2027-09-01",
   );
+});
+
+test("the default end of cover is twelve months after the start", () => {
+  assert.equal(defaultInsuranceClaimEndDate("2026-04-03"), "2027-04-03");
+  // date-fns clamps to the last day of a shorter month rather than rolling over.
+  assert.equal(defaultInsuranceClaimEndDate("2028-02-29"), "2029-02-28");
+  assert.equal(defaultInsuranceClaimEndDate("not a date"), null);
+});
+
+test("only a real yyyy-MM-dd day survives normalising", () => {
+  assert.equal(normalizeIsoDate(" 2026-11-10 "), "2026-11-10");
+  assert.equal(normalizeIsoDate("2026-02-30"), null);
+  assert.equal(normalizeIsoDate("10/11/2026"), null);
+  assert.equal(normalizeIsoDate(""), null);
+  assert.equal(normalizeIsoDate(undefined), null);
 });
