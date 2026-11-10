@@ -77,6 +77,9 @@ import {
   hasWorkStarted,
   milestoneTargetDates,
 } from "@/lib/domain/projects/milestone-schedule";
+import { hasInsuranceClaimDates } from "@/lib/projects/insurance-claim-dates";
+import { HbcfCoverDatesDialog } from "@/components/projects/detail/hbcf-cover-dates-dialog";
+import { withInsuranceClaimStartDate } from "@/components/projects/detail/insurance-claim-dates-fields";
 
 // ---------------------------------------------------------------------------
 // Types & config
@@ -1557,6 +1560,11 @@ export function ProjectOverviewTab({
   // `saving` so the certificate field can be locked while it runs without
   // disabling the rest of the form.
   const [hbcfExtracting, setHbcfExtracting] = useState(false);
+  // Open after an HBCF upload on a project with no cover window yet, carrying
+  // the start date read off the certificate (null when none was found).
+  const [coverDatesPrompt, setCoverDatesPrompt] = useState<{
+    suggestedStartDate: string | null;
+  } | null>(null);
   // Validations and conflicts are produced upstream from the tender/contract
   // extraction and stored on the requirements payload — nothing in the app
   // derives them (`buildProjectRequirementsPayload` takes them as an argument),
@@ -1589,10 +1597,42 @@ export function ProjectOverviewTab({
     field: string,
     value: unknown,
   ) => {
-    editDraft((current) => ({
-      ...current,
-      [section]: { ...(current[section] as object), [field]: value },
-    }));
+    editDraft((current) => {
+      const sectionData = current[section] as
+        | Record<string, unknown>
+        | undefined;
+      // The cover end follows the start at the default twelve months until
+      // somebody sets an end of their own — the same rule the HBCF upload and
+      // the Slab-start prompt apply.
+      if (
+        section === "legalAdministration"
+        && field === "insuranceClaimStartDate"
+      ) {
+        const next = withInsuranceClaimStartDate(
+          {
+            insuranceClaimStartDate:
+              (sectionData?.insuranceClaimStartDate as string | null)
+              ?? undefined,
+            insuranceClaimEndDate:
+              (sectionData?.insuranceClaimEndDate as string | null)
+              ?? undefined,
+          },
+          (value as string | null) ?? undefined,
+        );
+        return {
+          ...current,
+          [section]: {
+            ...sectionData,
+            insuranceClaimStartDate: next.insuranceClaimStartDate ?? null,
+            insuranceClaimEndDate: next.insuranceClaimEndDate ?? null,
+          } as never,
+        };
+      }
+      return {
+        ...current,
+        [section]: { ...sectionData, [field]: value },
+      };
+    });
   };
 
   // `updateOwnerContacts` was removed with the editable owner block. Owners are
@@ -1722,10 +1762,12 @@ export function ProjectOverviewTab({
     const toastId = toast.loading("Reading the HBCF certificate…");
     setHbcfExtracting(true);
     let extractedNumber = "";
+    let coverStartDate: string | null = null;
 
     try {
       const response = await fetchJson<{
         hbcfInsuranceNumber: string;
+        coverStartDate?: string;
         ok: boolean;
         message: string;
       }>(
@@ -1743,6 +1785,7 @@ export function ProjectOverviewTab({
       );
 
       extractedNumber = (response.data.hbcfInsuranceNumber ?? "").trim();
+      coverStartDate = response.data.coverStartDate?.trim() || null;
 
       if (extractedNumber) {
         toast.success("HBCF insurance number read from the certificate", {
@@ -1776,6 +1819,12 @@ export function ProjectOverviewTab({
 
     editDraft(() => nextDraft);
     await handleSave(nextDraft);
+
+    // The cover window, offered for confirmation rather than written: see
+    // HbcfCoverDatesDialog. Dates already on the project are left alone.
+    if (!hasInsuranceClaimDates(nextDraft)) {
+      setCoverDatesPrompt({ suggestedStartDate: coverStartDate });
+    }
 
     // One certificate, filed in both places it is needed. The compliance
     // checklist asks for home insurance too, and without this the same PDF had
@@ -2202,6 +2251,26 @@ export function ProjectOverviewTab({
           </Accordion>
         </CardContent>
       </Card>
+
+      {coverDatesPrompt ? (
+        <HbcfCoverDatesDialog
+          open
+          suggestedStartDate={coverDatesPrompt.suggestedStartDate}
+          onSkip={() => setCoverDatesPrompt(null)}
+          onConfirm={async (dates) => {
+            const nextDraft: RequirementsData = {
+              ...draft,
+              legalAdministration: {
+                ...(draft.legalAdministration as object),
+                ...dates,
+              } as never,
+            };
+            editDraft(() => nextDraft);
+            await handleSave(nextDraft);
+            setCoverDatesPrompt(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

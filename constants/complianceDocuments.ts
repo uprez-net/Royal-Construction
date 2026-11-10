@@ -894,6 +894,74 @@ export const CLASSIFIABLE_DOCUMENT_TYPES = [
 ] as const;
 
 /**
+ * What an admin may place an unidentified attachment as, by hand.
+ *
+ * The classifier's whole vocabulary rather than the certifier's four. The
+ * per-party narrowing exists to stop a model reading a forwarded copy as the
+ * authoritative one; a person looking at the file is the check that narrowing
+ * stands in for, and an attachment from a surveyor or a council that nobody can
+ * place has nowhere to go otherwise. Signed copies stay out for the reason they
+ * are out of the classifier's list: a signed form is placed by its own upload.
+ */
+export const IDENTIFIABLE_DOCUMENT_TYPES: readonly ComplianceDocumentType[] =
+  CLASSIFIABLE_DOCUMENT_TYPES.filter(
+    (type) => type !== ComplianceDocumentType.UNKNOWN,
+  );
+
+export function isIdentifiableDocumentType(
+  documentType: ComplianceDocumentType,
+): boolean {
+  return IDENTIFIABLE_DOCUMENT_TYPES.includes(documentType);
+}
+
+/** Whether a type is one the certifier sends back, rather than evidence. */
+export function isCertifierResponseType(
+  documentType: ComplianceDocumentType,
+): boolean {
+  return CERTIFIER_RESPONSE_DOCUMENTS.some((doc) => doc.type === documentType);
+}
+
+const CERTIFICATE_AND_COVER_TYPES: readonly ComplianceDocumentType[] = [
+  ComplianceDocumentType.HOME_INSURANCE,
+  ComplianceDocumentType.DEVELOPMENT_CONSENT,
+  ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
+  ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE,
+];
+
+/**
+ * {@link IDENTIFIABLE_DOCUMENT_TYPES} in the groups the picker shows. The last
+ * group takes whatever the others do not name, so a type added to the
+ * classifier's list appears here without anybody remembering to.
+ */
+export const IDENTIFIABLE_DOCUMENT_GROUPS: readonly {
+  readonly heading: string;
+  readonly types: readonly ComplianceDocumentType[];
+}[] = (() => {
+  const certifier = CERTIFIER_RESPONSE_DOCUMENTS.map((doc) => doc.type);
+  const pack = [
+    ...REQUIRED_COMPLIANCE_DOCUMENTS.map((doc) => doc.type),
+    LAND_DEED_DOCUMENT.type,
+  ];
+  const named = new Set<ComplianceDocumentType>([
+    ...certifier,
+    ...pack,
+    ...CERTIFICATE_AND_COVER_TYPES,
+  ]);
+  return [
+    { heading: "From the certifier", types: certifier },
+    { heading: "Required pack", types: pack },
+    {
+      heading: "Consultants & authorities",
+      types: IDENTIFIABLE_DOCUMENT_TYPES.filter((type) => !named.has(type)),
+    },
+    { heading: "Certificates & cover", types: CERTIFICATE_AND_COVER_TYPES },
+  ].map((group) => ({
+    ...group,
+    types: group.types.filter(isIdentifiableDocumentType),
+  }));
+})();
+
+/**
  * Every type a checklist line can be *asking for*.
  *
  * Deliberately not CLASSIFIABLE_DOCUMENT_TYPES, though the two overlap almost

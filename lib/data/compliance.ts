@@ -15,8 +15,9 @@ import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 
 import {
-  CERTIFIER_RESPONSE_DOCUMENTS,
   complianceDocumentLabel,
+  isCertifierResponseType,
+  isIdentifiableDocumentType,
   isNotRequired,
   isOutstandingEvidence,
   isReviewSubmissionType,
@@ -68,6 +69,8 @@ import { resolveComplianceDocument as resolveComplianceDocumentDomain } from "@/
 import { setComplianceDocumentNotRequired as setComplianceDocumentNotRequiredDomain } from "@/lib/domain/compliance/documents";
 import { ensureDevelopmentApplicationDocuments as ensureDevelopmentApplicationDocumentsDomain } from "@/lib/domain/compliance/documents";
 import { startComplianceEngagement } from "@/lib/domain/compliance/engagements";
+import { dismissUnidentifiedComplianceDocument } from "@/lib/domain/compliance/dismiss-arrival";
+import { vercelBlobDelete } from "@/lib/blob-port";
 import { userPrincipal, type DomainPrincipal } from "@/lib/domain/principal";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -1559,30 +1562,38 @@ export async function sendSignedCopies(engagementId: string) {
  *
  * Inbound attachments land as UNKNOWN when the model is not confident, which is
  * the right default — a mislabelled document routes itself into the wrong slot
- * silently. But without this there is no way back: the four response blocks key
- * on document type, so an unclassified checklist left the whole engagement
+ * silently. But without this there is no way back: the response blocks key on
+ * document type, so an unclassified checklist left the whole engagement
  * stranded with the file stored and unreachable.
  *
- * Deliberately narrow. Only an UNKNOWN document can be relabelled, and only to
- * something a certifier actually sends, so this cannot be used to turn a
- * rejected checklist item into an approved required document.
+ * Only an UNKNOWN document can be relabelled, so this cannot be used to turn a
+ * rejected checklist item into an approved required document. It used to be
+ * narrowed to the four types a certifier sends as well, which left anything a
+ * surveyor, a consultant or a council sent that the classifier could not name
+ * with nowhere to go. The person choosing is the check now; the list is
+ * `IDENTIFIABLE_DOCUMENT_TYPES`, which the picker reads too.
  *
- * Placing it is a replacement, not a rename: the same category may already hold
- * the copy this one supersedes — the classifier is least sure precisely when a
- * certifier re-sends a revised form — so it goes through the same path the
- * workflow's own classification does.
+ * Two routes, because the two kinds of document mean different things:
+ *
+ *   - A certifier's own response (invoice, fee proposal, CDC form, checklist)
+ *     is placed the way the inbound workflow places it, keeping RECEIVED.
+ *   - Anything else is evidence for the file, and placing it by hand is the
+ *     same event as dragging it onto that row — so it goes through the upload
+ *     path and gets every follow-up an upload gets: the checklist lines it
+ *     answers, the HBCF number off an insurance certificate, the title-search
+ *     check, the certificate closing the file. Placed without those, a survey
+ *     identified here would sit on the file with its alerts still open.
+ *
+ * Either way placing is a replacement, not a rename: the category may already
+ * hold the copy this one supersedes.
  */
 export async function classifyReceivedDocument(params: {
   projectId: string;
   documentId: string;
   documentType: ComplianceDocumentType;
 }) {
-  if (
-    !CERTIFIER_RESPONSE_DOCUMENTS.some(
-      (doc) => doc.type === params.documentType,
-    )
-  ) {
-    throw new Error("That is not a document type the certifier sends.");
+  if (!isIdentifiableDocumentType(params.documentType)) {
+    throw new Error("That is not a type a received file can be placed as.");
   }
 
   const arrival = await prisma.complianceDocument.findFirst({
@@ -1591,11 +1602,30 @@ export async function classifyReceivedDocument(params: {
       documentType: ComplianceDocumentType.UNKNOWN,
       engagement: { projectId: params.projectId },
     },
-    select: { id: true, engagementId: true },
+    select: {
+      id: true,
+      engagementId: true,
+      files: { select: { id: true }, orderBy: { createdAt: "asc" } },
+    },
   });
 
-  if (!arrival) {
+  // Gone, or emptied by a second click that got here first.
+  if (!arrival || arrival.files.length === 0) {
     throw new Error("That document has already been identified.");
+  }
+
+  if (!isCertifierResponseType(params.documentType)) {
+    const document = await attachComplianceDocumentFile({
+      engagementId: arrival.engagementId,
+      projectId: params.projectId,
+      documentType: params.documentType,
+      fileId: arrival.files[0].id,
+    });
+    // The arrival's row is empty now, and nothing else points at it.
+    await prisma.complianceDocument.deleteMany({
+      where: { id: arrival.id, files: { none: {} } },
+    });
+    return { documentId: document.id, documentType: params.documentType };
   }
 
   const placed = await placeInboundDocument({
@@ -1616,4 +1646,44 @@ export async function classifyReceivedDocument(params: {
   });
 
   return { documentId: placed.documentId, documentType: params.documentType };
+}
+
+/**
+ * Throws away an unidentified attachment that is not part of the job. The rule
+ * is `dismissUnidentifiedComplianceDocument`; this adds the cache, the log
+ * line and the activity entry.
+ */
+export async function dismissReceivedDocument(params: {
+  principal: DomainPrincipal;
+  projectId: string;
+  documentId: string;
+  dismissedBy: string;
+}) {
+  const outcome = await dismissUnidentifiedComplianceDocument(
+    params.principal,
+    params,
+    prisma,
+    { deleteBlob: vercelBlobDelete },
+  );
+
+  after(() => revalidateEngagement(params.projectId));
+
+  if (outcome.reclaimError) {
+    console.error(
+      `Dismissed compliance document ${outcome.documentId}, but its storage could not be reclaimed`,
+      outcome.reclaimError,
+    );
+  }
+
+  await logAction(
+    createActivityLogEntry("complianceDocumentDismissed", {
+      projectId: params.projectId,
+      engagementId: outcome.engagementId,
+      documentId: outcome.documentId,
+      fileNames: [...outcome.fileNames],
+      dismissedBy: params.dismissedBy,
+    }),
+  );
+
+  return outcome;
 }

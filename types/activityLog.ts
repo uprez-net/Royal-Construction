@@ -561,6 +561,15 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
     projectId: data.projectId,
   }),
 
+  complianceDocumentDismissed: (data) => ({
+    id: uuidv4(),
+    type: "complianceDocumentDismissed",
+    message: `${data.fileNames.join(", ") || "An unidentified file"} dismissed as not relevant by ${data.dismissedBy}`,
+    authorId: "system",
+    timestamp: new Date().toISOString(),
+    projectId: data.projectId,
+  }),
+
   complianceDocumentRejected: (data) => ({
     id: uuidv4(),
     type: "complianceDocumentRejected",

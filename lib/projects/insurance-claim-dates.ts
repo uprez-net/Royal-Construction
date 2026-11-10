@@ -1,4 +1,5 @@
 import { MilestoneStatus, ProjectStage } from "@prisma/client";
+import { addMonths, format, isValid, parseISO } from "date-fns";
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 
 /**
@@ -26,6 +27,38 @@ export interface MilestoneStageInfo {
   parentId: string | null;
   status: MilestoneStatus;
   projectStage: ProjectStage;
+}
+
+/**
+ * How long HBCF cover runs when nobody has said otherwise. The certificate
+ * usually prints only the date cover starts, so this is the end date we fill in
+ * for the office to confirm, not a reading of the document.
+ */
+export const DEFAULT_INSURANCE_COVER_MONTHS = 12;
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A `yyyy-MM-dd` string that names a real calendar day, or null. Rejects
+ * "2026-02-30" as well as anything not in that shape, so a model's guess at a
+ * date cannot reach the project as a malformed value.
+ */
+export function normalizeIsoDate(value: string | null | undefined) {
+  const trimmed = value?.trim() ?? "";
+  if (!ISO_DATE.test(trimmed)) return null;
+  const parsed = parseISO(trimmed);
+  if (!isValid(parsed) || format(parsed, "yyyy-MM-dd") !== trimmed) return null;
+  return trimmed;
+}
+
+/** The default end of cover: the start date plus {@link DEFAULT_INSURANCE_COVER_MONTHS}. */
+export function defaultInsuranceClaimEndDate(startDate: string) {
+  const start = normalizeIsoDate(startDate);
+  if (!start) return null;
+  return format(
+    addMonths(parseISO(start), DEFAULT_INSURANCE_COVER_MONTHS),
+    "yyyy-MM-dd",
+  );
 }
 
 export function readInsuranceClaimDates(

@@ -32,6 +32,12 @@ export interface GraphAttachmentMetadata {
    */
   isInline: boolean;
   /**
+   * Set when the body can refer to the file by Content-ID. Present on embedded
+   * images Graph still reports as not inline, which is how a signature logo
+   * gets past `isInline` alone.
+   */
+  contentId?: string | null;
+  /**
    * The Graph subtype: `#microsoft.graph.fileAttachment`,
    * `#microsoft.graph.itemAttachment` (a forwarded email) or
    * `#microsoft.graph.referenceAttachment` (a cloud link). Only the first has
@@ -356,6 +362,7 @@ interface GraphApiAttachment {
   contentType?: string;
   size?: number;
   isInline?: boolean;
+  contentId?: string | null;
   "@odata.type"?: string;
 }
 
@@ -724,7 +731,7 @@ export async function createGraphContext(
       const list = await graphRequest<{ value: GraphApiAttachment[] }>(
         "GET",
         `https://graph.microsoft.com/v1.0${messagesPath}/${encodeURIComponent(messageId)}`
-          + "/attachments?$select=id,name,contentType,size,isInline",
+          + "/attachments?$select=id,name,contentType,size,isInline,contentId",
         token,
       );
 
@@ -739,6 +746,7 @@ export async function createGraphContext(
           contentType: attachment.contentType ?? "",
           size: attachment.size ?? 0,
           isInline: attachment.isInline ?? false,
+          contentId: attachment.contentId ?? null,
           odataType: attachment["@odata.type"] ?? "",
         }));
     },

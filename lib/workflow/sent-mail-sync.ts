@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { GraphMailbox } from "@prisma/client";
 import { put } from "@vercel/blob";
 
+import { isSignatureNoise } from "@/lib/domain/email/attachment-noise";
 import { systemPrincipal } from "@/lib/domain/principal";
 import {
   recordSentMessage,
@@ -41,10 +42,6 @@ const PRINCIPAL = systemPrincipal("cron:sent-mail-sync");
 /** The mailboxes the app sends from, in the order they are read. */
 const MAILBOXES = ["business", "admin"] as const;
 type MailboxName = (typeof MAILBOXES)[number];
-
-// The same cut the inbound path makes: an inline image this small is a
-// signature logo or a tracking pixel, not something anyone attached.
-const MIN_INLINE_BYTES = 40 * 1024;
 
 // Well over anything Exchange will send by default (35 MB encoded), so in
 // practice nothing real is skipped; it bounds what one step holds in memory.
@@ -160,7 +157,9 @@ async function storeAttachments(
       console.log(`${LOG}   skipped "${file.name}": not a file attachment`);
       continue;
     }
-    if (file.isInline && file.size < MIN_INLINE_BYTES) continue;
+    // The same cut every inbound path makes: our own signature is on every
+    // message we send, and storing it once per message is all this would do.
+    if (isSignatureNoise(file)) continue;
     if (file.size > MAX_ATTACHMENT_BYTES) {
       console.log(
         `${LOG}   skipped "${file.name}": ${(file.size / 1048576).toFixed(1)} MB is over the limit`,

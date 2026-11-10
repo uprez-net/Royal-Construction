@@ -3,8 +3,13 @@ import { NextRequest } from "next/server";
 import {
   complianceAccessResponse,
   requireComplianceAccess,
+  requireComplianceAdmin,
 } from "@/lib/compliance/access";
-import { classifyReceivedDocument } from "@/lib/data/compliance";
+import {
+  classifyReceivedDocument,
+  dismissReceivedDocument,
+} from "@/lib/data/compliance";
+import { userPrincipal } from "@/lib/domain/principal";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
@@ -62,5 +67,48 @@ export async function PATCH(
         : "Failed to identify the document.",
       { status: 400, code: "CLASSIFY_FAILED" },
     );
+  }
+}
+
+/**
+ * Dismisses a received document nobody could identify because it is not part
+ * of the job — a signature logo, a flyer. Deletes the row and the stored file
+ * for good, so it is ADMIN-only like the other decisions that settle a row.
+ */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ projectId: string; documentId: string }> },
+) {
+  const routeParams = parseRouteParamsWithResponse(
+    await params,
+    complianceDocumentParamSchema,
+  );
+  if (!routeParams.success) return routeParams.response;
+
+  const { projectId, documentId } = routeParams.data;
+
+  try {
+    const admin = await requireComplianceAdmin(projectId);
+    const result = await dismissReceivedDocument({
+      principal: userPrincipal(admin),
+      projectId,
+      documentId,
+      dismissedBy: admin.name || admin.email,
+    });
+    return successResponse({
+      projectId,
+      documentId: result.documentId,
+      reclaimed: result.reclaimed,
+    });
+  } catch (error) {
+    const refusal = complianceAccessResponse(error);
+    if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
+    console.error("Failed to dismiss a compliance document", error);
+    return errorResponse("Failed to dismiss the document.", {
+      status: 500,
+      code: "DISMISS_FAILED",
+    });
   }
 }
