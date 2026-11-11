@@ -5,7 +5,7 @@ import type {
 import { cn } from "@/lib/utils";
 
 // How the Financials tab writes money. Amounts arrive as whole cents from the
-// report, so nothing here does arithmetic beyond putting the dollar sign on.
+// report, including GST; the display never estimates tax from an invoice total.
 
 // To the cent, unlike the app's `currency`: an invoice is checked against the
 // tradie's own figure, and a rounded $1,200 beside an invoice for $1,199.50
@@ -87,6 +87,31 @@ export function Money({
       )}
     >
       {formatCents(cents)}
+    </span>
+  );
+}
+
+/** Keep comparisons ex GST, with their GST component directly underneath. */
+export function MoneyWithGst({
+  cents,
+  gstCents,
+  muted = false,
+  className,
+}: {
+  cents: number;
+  gstCents: number;
+  muted?: boolean;
+  className?: string;
+}) {
+  return (
+    <span className={cn("inline-flex flex-col", className)}>
+      <span>
+        <Money cents={cents} muted={muted} />
+        <span className="sr-only"> ex GST</span>
+      </span>
+      <span className="text-xs font-normal text-muted-foreground">
+        +{formatCents(gstCents)} GST
+      </span>
     </span>
   );
 }

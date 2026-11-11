@@ -22,7 +22,7 @@ import {
 } from "@/lib/domain/tradies/billing-rules";
 import { dateFormat, formatStatus } from "@/utils/formatters";
 
-import { formatCents, Money } from "./money";
+import { formatCents, Money, MoneyWithGst } from "./money";
 
 const BILLING_TONE: Record<
   BookingBillingState,
@@ -140,8 +140,9 @@ export function InvoiceList({
               muted={!invoice.counted}
               className={invoice.counted ? undefined : "line-through"}
             />
-            <span className="ml-1 text-xs text-muted-foreground">
-              ex GST · {formatCents(invoice.totalCents)} inc
+            <span className="block text-xs text-muted-foreground">
+              +{formatCents(invoice.totalTaxCents)} GST ·{" "}
+              {formatCents(invoice.totalCents)} inc GST
             </span>
           </span>
           {onVoid && invoice.counted && invoice.source === "MANUAL" ? (
@@ -215,11 +216,17 @@ export function ActivityDetail({
               <span className="ml-auto flex flex-wrap items-center gap-3 text-sm">
                 <span>
                   <span className="text-muted-foreground">Quoted </span>
-                  <Money cents={booking.agreedCents} />
+                  <MoneyWithGst
+                    cents={booking.agreedCents}
+                    gstCents={booking.agreedGstCents}
+                  />
                 </span>
                 <span>
                   <span className="text-muted-foreground">Invoiced </span>
-                  <Money cents={booking.invoicedCents} />
+                  <MoneyWithGst
+                    cents={booking.invoicedCents}
+                    gstCents={booking.invoicedGstCents}
+                  />
                 </span>
                 <Button
                   type="button"

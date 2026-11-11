@@ -5,6 +5,7 @@ import {
 } from "@prisma/client";
 
 import { parseQuotedAmount } from "../../../utils/calculations";
+import { calculateOfferLinePricing } from "@/lib/offer/pricing";
 import { tradieScheduleSpend } from "./lifecycle";
 import { APPROVED_STATUSES } from "./selection-rules";
 
@@ -62,6 +63,7 @@ export type PriceBasis =
 export type BookingPrice = {
   /** Ex GST, so it compares with the tender and with an invoice's subtotal. */
   readonly exGstCents: Cents;
+  readonly gstCents: Cents;
   readonly basis: PriceBasis;
   /**
    * False when the quote did not say whether its amount includes GST. It is
@@ -101,12 +103,17 @@ export function bookingPrice(schedule: {
         ? "RATE"
         : "NONE";
   const cents = toCents(spend);
+  const pricing = calculateOfferLinePricing({
+    gstIncluded: schedule.quoteGst === TradieQuoteGst.INCLUSIVE,
+    gstRate:
+      schedule.quoteGst === TradieQuoteGst.NOT_REGISTERED ? 0 : undefined,
+    quantity: 1,
+    unitPrice: cents / 100,
+  });
   return {
     basis,
-    exGstCents:
-      schedule.quoteGst === TradieQuoteGst.INCLUSIVE
-        ? Math.round(cents / 1.1)
-        : cents,
+    exGstCents: toCents(pricing.netLine),
+    gstCents: toCents(pricing.gstAmount),
     gstStated: basis !== "QUOTE" || schedule.quoteGst !== null,
   };
 }
