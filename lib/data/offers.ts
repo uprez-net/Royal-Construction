@@ -22,6 +22,7 @@ import type {
   PaginatedOfferGroupResult,
 } from "@/types/offer";
 
+/** Authorise and load a page of offer groups with the requested search, status and order. */
 export async function getOfferGroups(
   page?: number,
   limit?: number,

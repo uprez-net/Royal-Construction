@@ -28,13 +28,13 @@ const TABS = ["all", "pending", "approved", "rejected", "sent"] as const;
 
 const SEARCH_DEBOUNCE_MS = 300;
 
+/** Compose client search, status and sort controls while preserving the other requested filters. */
 export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
   const dispatch = useAppDispatch();
   const { offers, filters, hydrated } = useAppSelector((state) => state.offers);
   const [searchInput, setSearchInput] = useState(filters.q);
-  // Seed from the store so a re-mount after a client-side fetch (e.g. navigating
-  // into an offer and back via the browser) keeps the active tab selected.
-  const [tabId, setTabId] = useState<OfferStatusBucket>(filters.status);
+  // Follow the store on both request start and rollback after a failed fetch.
+  const tabId = filters.status;
   // The box updates on every keystroke; the fetch waits for a pause in typing,
   // so a name costs one request rather than one per letter.
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,7 +48,6 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
 
   const handleTabChange = (tab: OfferStatusBucket) => {
     if (tab === tabId) return;
-    setTabId(tab);
     // This fetch already carries the current search text. A search still
     // waiting on its debounce would refetch the previous tab over it.
     if (searchTimer.current) clearTimeout(searchTimer.current);

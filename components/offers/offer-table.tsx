@@ -33,6 +33,7 @@ const money = (value: string) => {
 const day = (value: Date | string | null) =>
   value ? dateFormat.format(new Date(value)) : "-";
 
+/** Render paginated offer groups and retain the requested filters across refreshes. */
 export function OfferTable({
   serverOffers,
 }: {

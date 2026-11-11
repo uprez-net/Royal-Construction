@@ -122,14 +122,19 @@ test("the store and updateLead use these rules", () => {
   const slice = readFileSync("lib/store/slices/offerSlice.ts", "utf8");
   assert.match(
     slice,
-    /fetchOffers\.pending[\s\S]{0,500}filtersForRequest\(/,
+    /fetchOffers\.pending[\s\S]{0,500}beginOfferListRequest\(/,
     "pending does not record the filters",
   );
   assert.match(
     slice,
-    /shouldAdoptServerOffers\(filters, offers, serverOffers\)/,
+    /shouldAdoptServerOffers\(filters, requestedPaging, serverOffers\)/,
     "syncServerOffers ignores the page",
   );
+  assert.match(
+    slice,
+    /const requestedPaging = \{ page: requestedPage, limit: offers.limit \}/,
+  );
+  assert.match(slice, /fetchOffers\(\{\s*page: requestedPage,/);
   const leads = readFileSync("lib/data/leads.ts", "utf8");
   // The assignee trigger must stay unconditional on being SET — a compare
   // against the lead read before the transaction could skip an expiry it owed.

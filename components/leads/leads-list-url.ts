@@ -1,8 +1,5 @@
 import { leadStatusSchema } from "@/utils/validators/lead";
-import {
-  readLeadListSort,
-  type LeadListSort,
-} from "@/lib/leads/list-sort";
+import { readLeadListSort, type LeadListSort } from "@/lib/leads/list-sort";
 
 export const LEAD_SORT_OPTIONS: readonly {
   value: LeadListSort;
@@ -87,6 +84,7 @@ function validTiming(value: string | null): string {
   return timing && TIMING_VALUES.includes(timing) ? timing : "all";
 }
 
+/** Read and normalise the lead table's page, filters and sort from its URL. */
 export function readLeadsListParams(params: SearchParamsLike): LeadsListParams {
   const page = Number(params.get("page"));
   return {

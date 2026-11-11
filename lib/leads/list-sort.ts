@@ -10,6 +10,7 @@ export const LEAD_LIST_SORT_VALUES = [
 
 export type LeadListSort = (typeof LEAD_LIST_SORT_VALUES)[number];
 
+/** Return a recognised sort value, using the caller's default for absent or invalid input. */
 export function readLeadListSort(
   value: string | null | undefined,
   fallback: LeadListSort = "createdAt-desc",

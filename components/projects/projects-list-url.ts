@@ -101,6 +101,7 @@ function validStatus(value: string | null): ProjectStatusFilter {
     : DEFAULT_PROJECT_STATUS_FILTER;
 }
 
+/** Resolve a recognised sort option, defaulting invalid or absent values to name A–Z. */
 function validSort(value: string | null): ProjectSort {
   return (
     PROJECT_SORT_OPTIONS.find((option) => option.value === value)?.value

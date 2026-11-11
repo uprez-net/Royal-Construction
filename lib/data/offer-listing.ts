@@ -14,6 +14,7 @@ import type { OfferStatusBucket } from "@/types/offer";
 
 export { emptyOfferGroupResult, emptyOfferKPIs };
 
+/** Load scoped offer groups through the domain listing with the selected sort. */
 export async function queryOfferGroups(
   page: number | undefined,
   limit: number | undefined,
@@ -29,6 +30,7 @@ export async function queryOfferKPIs(scope: LeadListScope) {
   return queryOfferKPIsDomain(prisma, scope);
 }
 
+/** Cache a scoped offer page by all its arguments, including the selected sort. */
 export const getOfferGroupsCached = async (
   page: number | undefined,
   limit: number | undefined,

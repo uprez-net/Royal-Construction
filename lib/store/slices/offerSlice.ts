@@ -7,11 +7,15 @@ import {
 } from "@reduxjs/toolkit";
 import { OfferStatus } from "@prisma/client";
 import {
-  filtersForRequest,
   DEFAULT_OFFER_SORT,
   shouldAdoptServerOffers,
 } from "@/lib/offer/offer-listing-view";
 import type { LeadListSort } from "@/lib/leads/list-sort";
+import {
+  beginOfferListRequest,
+  completeOfferListRequest,
+  rejectOfferListRequest,
+} from "./offer-listing-request";
 
 interface OffersState {
   offers: PaginatedOfferGroupResult;
@@ -25,6 +29,10 @@ interface OffersState {
     q: string;
     sort: LeadListSort;
   };
+  /** Filters that produced the retained rows, used to roll back a failed request. */
+  appliedFilters: OffersState["filters"];
+  /** Requested immediately, because offers.page still names the retained rows while loading. */
+  requestedPage: number;
   loading: boolean;
   error: string | null;
   /**
@@ -56,6 +64,8 @@ const initialState: OffersState = {
     q: "",
     sort: DEFAULT_OFFER_SORT,
   },
+  appliedFilters: { status: "all", q: "", sort: DEFAULT_OFFER_SORT },
+  requestedPage: 1,
   loading: false,
   error: null,
   latestRequestId: null,
@@ -122,6 +132,8 @@ const offersSlice = createSlice({
       // rows adopts its filters too. Keeping a stale tab here left the
       // tab and the rows describing different views.
       state.filters = { status: "all", q: "", sort: DEFAULT_OFFER_SORT };
+      state.appliedFilters = state.filters;
+      state.requestedPage = action.payload.page;
       state.hydrated = true;
       // Any fetch still in flight was for the view this replaces.
       state.latestRequestId = null;
@@ -131,29 +143,17 @@ const offersSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchOffers.pending, (state, action) => {
-        state.latestRequestId = action.meta.requestId;
-        // Record what the user asked for now, not when it resolves. A
-        // server refresh that lands while this is loading reads these
-        // filters, and must not re-fetch or adopt the view they left.
-        state.filters = filtersForRequest(state.filters, action.meta.arg);
-        state.loading = true;
-        state.error = null;
+        beginOfferListRequest(state, action.meta.requestId, action.meta.arg);
       })
       .addCase(fetchOffers.fulfilled, (state, action) => {
-        if (action.meta.requestId !== state.latestRequestId) return;
-        state.loading = false;
-        state.offers = action.payload;
-        state.hydrated = true;
-        // Persist the filters that produced this result so a later page
-        // change (dispatched from the table) re-applies them. Undefined
-        // means "leave the existing filter untouched", which lets the
-        // table re-fetch a page without redeclaring the active tab/q.
-        state.filters = filtersForRequest(state.filters, action.meta.arg);
+        completeOfferListRequest(state, action.meta.requestId, action.payload);
       })
       .addCase(fetchOffers.rejected, (state, action) => {
-        if (action.meta.requestId !== state.latestRequestId) return;
-        state.loading = false;
-        state.error = action.payload as string;
+        rejectOfferListRequest(
+          state,
+          action.meta.requestId,
+          action.payload as string,
+        );
       })
       .addCase(updateOffer.pending, (state) => {
         state.error = null;
@@ -201,14 +201,15 @@ export const syncServerOffers = createAsyncThunk<
   PaginatedOfferGroupResult,
   { state: { offers: OffersState } }
 >("offers/syncServerOffers", async (serverOffers, { dispatch, getState }) => {
-  const { filters, offers } = getState().offers;
-  if (shouldAdoptServerOffers(filters, offers, serverOffers)) {
+  const { filters, offers, requestedPage } = getState().offers;
+  const requestedPaging = { page: requestedPage, limit: offers.limit };
+  if (shouldAdoptServerOffers(filters, requestedPaging, serverOffers)) {
     dispatch(setOffers(serverOffers));
     return;
   }
   await dispatch(
     fetchOffers({
-      page: offers.page,
+      page: requestedPage,
       limit: offers.limit,
       status: filters.status,
       q: filters.q,

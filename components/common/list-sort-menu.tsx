@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+/** Render an exclusive sort menu whose accessible label identifies the active order. */
 export function ListSortMenu<T extends string>({
   label,
   value,

@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useRef,
+} from "react";
 import {
   UserPlus,
   CircleCheckBig,
@@ -27,6 +33,7 @@ import { EmailCampaignModal } from "@/components/leads/modal-ui/email-campaign-m
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
 import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
 import { LeadPagination } from "./lead-pagination";
+import { reloadLeadList, updateAndRefreshLeadList } from "./leads-list-refresh";
 import {
   readLeadsListParams,
   LEAD_SORT_OPTIONS,
@@ -95,6 +102,7 @@ function tableListParams(filters: TableFilters, page: number): LeadListParams {
   };
 }
 
+/** Render a fresh lead workspace for each navigation while retaining browser-back state. */
 export default function Leads() {
   // A fresh visit — the sidebar, "Back to all leads", any link — gets a fresh
   // table (tab, search box). Browser back/forward keeps the one Next preserved
@@ -104,6 +112,7 @@ export default function Leads() {
   return <LeadsWorkspace key={bfcacheId} />;
 }
 
+/** Coordinate lead tabs, URL filters, paging and mutation-driven refreshes. */
 function LeadsWorkspace() {
   const router = useRouter();
   const pathname = usePathname();
@@ -201,6 +210,13 @@ function LeadsWorkspace() {
     if (shown === null || shown === page) return;
     updateListParams({ page: shown > 1 ? String(shown) : null });
   };
+
+  // Async edit callbacks can outlive the tab or filters they were rendered for.
+  // Read the latest committed view only after their stats refresh has settled.
+  const currentListView = useRef({ activeTab, tableParams, settleTablePage });
+  useLayoutEffect(() => {
+    currentListView.current = { activeTab, tableParams, settleTablePage };
+  });
 
   const loadedRef = useRef(false);
   useEffect(() => {
@@ -532,11 +548,13 @@ function LeadsWorkspace() {
               <TableView
                 loading={loadingLeads}
                 leads={leads}
-                onLeadUpdate={async (lead) => {
-                  const updated = await updateLeadInList(lead);
-                  await refreshLeadsData(tableParams).then(settleTablePage);
-                  return updated;
-                }}
+                onLeadUpdate={(lead) =>
+                  updateAndRefreshLeadList(
+                    () => updateLeadInList(lead),
+                    () => currentListView.current,
+                    refreshLeadsData,
+                  )
+                }
                 onLeadDelete={removeLeadFromList}
                 activeMetric={activeMetric}
                 onActiveMetricChange={handleMetricClick}
@@ -582,7 +600,7 @@ function LeadsWorkspace() {
         <AddLeadModal
           onClose={() => setShowAddLead(false)}
           onSuccess={() => {
-            void loadData(tableParams).then(settleTablePage);
+            void reloadLeadList(currentListView.current, loadData);
             setShowAddLead(false);
           }}
           showToast={showToast}

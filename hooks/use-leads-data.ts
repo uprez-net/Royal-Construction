@@ -44,6 +44,7 @@ export type LeadListParams = {
   hasOpenTask?: boolean;
 };
 
+/** Fetch the requested lead cohort, stepping back if its remembered page no longer exists. */
 async function fetchLeadListPage(params: LeadListParams) {
   const request = {
     sort: params.sort,
@@ -70,6 +71,7 @@ async function fetchLeadListPage(params: LeadListParams) {
   return result;
 }
 
+/** Manage lead rows and metrics while preventing older list requests from replacing newer results. */
 export function useLeadsData() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<LeadsStats | null>(null);

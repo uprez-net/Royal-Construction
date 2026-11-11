@@ -57,6 +57,7 @@ export async function fetchAllLeads(): Promise<Lead[]> {
   return data;
 }
 
+/** Fetch a validated lead page with its search, cohort filters and selected sort. */
 export async function fetchLeads(params: {
   sort?: LeadListSort;
   q?: string;

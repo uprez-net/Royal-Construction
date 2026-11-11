@@ -55,6 +55,7 @@ export const requiredLeadEmail = z
 const dateOnlyPattern = /^(\d{4})-(\d{2})-(\d{2})$/;
 const isoDateTimeInput = z.iso.datetime();
 
+/** Parse a YYYY-MM-DD date at UTC midnight, rejecting impossible calendar dates. */
 function parseDateOnlyInput(value: string): Date | null {
   const match = dateOnlyPattern.exec(value);
   if (!match) return null;

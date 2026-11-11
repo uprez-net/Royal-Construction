@@ -17,6 +17,7 @@ interface ProjectToolbarProps {
   onSortChange: (sort: ProjectSort) => void;
 }
 
+/** Compose project search, sorting and layout controls using the current list state. */
 export function ProjectToolbar({
   searchTerm,
   onSearchTermChange,
