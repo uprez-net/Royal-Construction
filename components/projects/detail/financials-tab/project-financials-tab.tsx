@@ -68,7 +68,7 @@ import {
   forecastToneClass,
   formatCents,
   formatSignedCents,
-  Money,
+  MoneyWithGst,
   ProfitLoss,
 } from "./money";
 import { EmailedInvoices } from "./emailed-invoices";
@@ -389,7 +389,10 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
           <div>
             <dt className="text-muted-foreground">Quoted price</dt>
             <dd className="mt-1 text-lg">
-              <Money cents={totals.tenderCents} />
+              <MoneyWithGst
+                cents={totals.tenderCents}
+                gstCents={totals.tenderGstCents}
+              />
             </dd>
             {totals.chargeableVariationCents > 0 ? (
               <dd className="text-xs text-muted-foreground">
@@ -407,13 +410,19 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
           <div>
             <dt className="text-muted-foreground">Tradie quoted</dt>
             <dd className="mt-1 text-lg">
-              <Money cents={totals.quotedCents} />
+              <MoneyWithGst
+                cents={totals.quotedCents}
+                gstCents={totals.quotedGstCents}
+              />
             </dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Total invoiced</dt>
             <dd className="mt-1 text-lg">
-              <Money cents={totals.invoicedCents} />
+              <MoneyWithGst
+                cents={totals.invoicedCents}
+                gstCents={totals.invoicedGstCents}
+              />
             </dd>
             {totals.unallocatedCents > 0 ? (
               <dd className="text-xs text-muted-foreground">
