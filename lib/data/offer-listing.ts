@@ -1,6 +1,7 @@
 import { cacheLife, cacheTag } from "next/cache";
 
 import type { LeadListScope } from "@/lib/domain/access/leads";
+import type { LeadListSort } from "@/lib/leads/list-sort";
 import {
   emptyOfferGroupResult,
   emptyOfferKPIs,
@@ -13,31 +14,35 @@ import type { OfferStatusBucket } from "@/types/offer";
 
 export { emptyOfferGroupResult, emptyOfferKPIs };
 
+/** Load scoped offer groups through the domain listing with the selected sort. */
 export async function queryOfferGroups(
   page: number | undefined,
   limit: number | undefined,
   q: string | undefined,
   status: OfferStatusBucket | undefined,
   scope: LeadListScope,
+  sort?: LeadListSort,
 ) {
-  return queryOfferGroupsDomain(prisma, page, limit, q, status, scope);
+  return queryOfferGroupsDomain(prisma, page, limit, q, status, scope, sort);
 }
 
 export async function queryOfferKPIs(scope: LeadListScope) {
   return queryOfferKPIsDomain(prisma, scope);
 }
 
+/** Cache a scoped offer page by all its arguments, including the selected sort. */
 export const getOfferGroupsCached = async (
   page: number | undefined,
   limit: number | undefined,
   q: string | undefined,
   status: OfferStatusBucket | undefined,
   scope: LeadListScope,
+  sort?: LeadListSort,
 ) => {
   "use cache";
   cacheTag("offers");
   cacheLife(CACHE_PROFILES.MEDIUM);
-  return queryOfferGroups(page, limit, q, status, scope);
+  return queryOfferGroups(page, limit, q, status, scope, sort);
 };
 
 export const getOfferKPIsCached = async (scope: LeadListScope) => {

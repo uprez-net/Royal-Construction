@@ -1,4 +1,19 @@
 import type { OfferStatusBucket } from "@/types/offer";
+import type { LeadListSort } from "@/lib/leads/list-sort";
+
+export const DEFAULT_OFFER_SORT: LeadListSort = "updatedAt-desc";
+
+export const OFFER_SORT_OPTIONS: readonly {
+  value: LeadListSort;
+  label: string;
+}[] = [
+  { value: "updatedAt-desc", label: "Client updated, newest first" },
+  { value: "updatedAt-asc", label: "Client updated, oldest first" },
+  { value: "name-asc", label: "Client name A–Z" },
+  { value: "name-desc", label: "Client name Z–A" },
+  { value: "createdAt-desc", label: "Client created, newest first" },
+  { value: "createdAt-asc", label: "Client created, oldest first" },
+];
 
 // Pure view rules for the offers table, shared by the store and the
 // components. Browser-safe: no Prisma, no next/*.
@@ -11,13 +26,15 @@ import type { OfferStatusBucket } from "@/types/offer";
 export function isDefaultOfferFilters(
   status: OfferStatusBucket,
   q: string,
+  sort: LeadListSort = DEFAULT_OFFER_SORT,
 ): boolean {
-  return status === "all" && q.trim() === "";
+  return status === "all" && q.trim() === "" && sort === DEFAULT_OFFER_SORT;
 }
 
 export type OfferListFilters = {
   readonly status: OfferStatusBucket;
   readonly q: string;
+  readonly sort: LeadListSort;
 };
 
 /**
@@ -29,11 +46,12 @@ export type OfferListFilters = {
  */
 export function filtersForRequest(
   current: OfferListFilters,
-  requested: { readonly status?: OfferStatusBucket; readonly q?: string },
+  requested: Partial<OfferListFilters>,
 ): OfferListFilters {
   return {
     status: requested.status ?? current.status,
     q: requested.q ?? current.q,
+    sort: requested.sort ?? current.sort ?? DEFAULT_OFFER_SORT,
   };
 }
 
@@ -49,8 +67,8 @@ export function shouldAdoptServerOffers(
   server: { readonly page: number; readonly limit: number },
 ): boolean {
   return (
-    isDefaultOfferFilters(filters.status, filters.q) &&
-    current.page === server.page &&
-    current.limit === server.limit
+    isDefaultOfferFilters(filters.status, filters.q, filters.sort)
+    && current.page === server.page
+    && current.limit === server.limit
   );
 }

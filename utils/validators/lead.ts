@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LEAD_LIST_SORT_VALUES } from "@/lib/leads/list-sort";
 
 import type { LeadSource, LeadStage } from "@/lib/leads/types";
 import { paginationSchema } from "./common";
@@ -54,6 +55,7 @@ export const requiredLeadEmail = z
 const dateOnlyPattern = /^(\d{4})-(\d{2})-(\d{2})$/;
 const isoDateTimeInput = z.iso.datetime();
 
+/** Parse a YYYY-MM-DD date at UTC midnight, rejecting impossible calendar dates. */
 function parseDateOnlyInput(value: string): Date | null {
   const match = dateOnlyPattern.exec(value);
   if (!match) return null;
@@ -64,9 +66,9 @@ function parseDateOnlyInput(value: string): Date | null {
   const parsed = new Date(Date.UTC(year, month - 1, day));
 
   if (
-    parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() !== month - 1 ||
-    parsed.getUTCDate() !== day
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
   ) {
     return null;
   }
@@ -346,6 +348,7 @@ export const leadParamSchema = z.object({
 export type LeadParam = z.infer<typeof leadParamSchema>;
 
 export const leadLookupParamSchema = z.object({
+  sort: z.enum(LEAD_LIST_SORT_VALUES).optional(),
   ...paginationSchema.shape,
   q: z.string().trim().default(""),
   status: z.string().optional(),
