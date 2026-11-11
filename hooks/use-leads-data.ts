@@ -5,6 +5,7 @@ import { LeadAnalyticsData } from "@/types/lead";
 import { WIN_RATE_WINDOW_DAYS } from "@/lib/leads/pipeline-stages";
 import { fetchLeads, fetchLeadsOverview } from "@/lib/leads/leads-service";
 import type { LeadEmails } from "@prisma/client";
+import type { LeadListSort } from "@/lib/leads/list-sort";
 
 interface PageInfo {
   page: number;
@@ -33,6 +34,7 @@ function resolveStatusFilter(status?: string): LeadStage[] | undefined {
 }
 
 export type LeadListParams = {
+  sort?: LeadListSort;
   page?: number;
   limit?: number;
   query?: string;
@@ -42,8 +44,10 @@ export type LeadListParams = {
   hasOpenTask?: boolean;
 };
 
+/** Fetch the requested lead cohort, stepping back if its remembered page no longer exists. */
 async function fetchLeadListPage(params: LeadListParams) {
   const request = {
+    sort: params.sort,
     limit: params.limit ?? 10,
     q: params.query?.trim() || undefined,
     status: resolveStatusFilter(params.status),
@@ -67,6 +71,7 @@ async function fetchLeadListPage(params: LeadListParams) {
   return result;
 }
 
+/** Manage lead rows and metrics while preventing older list requests from replacing newer results. */
 export function useLeadsData() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<LeadsStats | null>(null);

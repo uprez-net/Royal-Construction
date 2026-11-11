@@ -12,6 +12,7 @@ import { parseLeadStageFilter } from "@/lib/leads/types";
 import { isLeadValidationError } from "@/lib/leads/lead-validation-error";
 import type { LeadStage as DBLeadStage } from "@prisma/client";
 
+/** Validate list parameters and return the matching lead page in the selected order. */
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   try {
@@ -65,6 +66,7 @@ export async function GET(request: NextRequest) {
       upcomingFollowUps,
       pendingMeetings,
       upcomingMeetings,
+      params.data.sort,
     );
     return successResponse(leads);
   } catch (error) {

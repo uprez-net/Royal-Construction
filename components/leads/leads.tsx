@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useRef,
+} from "react";
 import {
   UserPlus,
   CircleCheckBig,
@@ -28,12 +34,16 @@ import { UnmatchedWhatsAppButton } from "@/components/leads/whatsapp/unmatched-w
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
 import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
 import { LeadPagination } from "./lead-pagination";
+import { reloadLeadList, updateAndRefreshLeadList } from "./leads-list-refresh";
 import {
   readLeadsListParams,
+  LEAD_SORT_OPTIONS,
   withLeadsListParams,
   type LeadsListParamChanges,
 } from "./leads-list-url";
 import { Card, CardContent } from "@/components/ui/card";
+import { ListSortMenu } from "@/components/common/list-sort-menu";
+import type { LeadListSort } from "@/lib/leads/list-sort";
 import { Button } from "@/components/ui/button";
 import {
   LeadsContentSkeleton,
@@ -56,6 +66,7 @@ import { useUser } from "@clerk/nextjs";
 type TabType = "table" | "followups" | "analytics";
 
 type TableFilters = {
+  readonly sort: LeadListSort;
   readonly query: string;
   readonly metric: string | null;
   readonly filterTiming: string;
@@ -71,6 +82,7 @@ function tableListParams(filters: TableFilters, page: number): LeadListParams {
   const statusParam =
     filters.metric === "total" ? "total" : (filters.metric ?? undefined);
   return {
+    sort: filters.sort,
     page,
     limit: 10,
     query: filters.query.trim() || undefined,
@@ -91,6 +103,7 @@ function tableListParams(filters: TableFilters, page: number): LeadListParams {
   };
 }
 
+/** Render a fresh lead workspace for each navigation while retaining browser-back state. */
 export default function Leads() {
   // A fresh visit — the sidebar, "Back to all leads", any link — gets a fresh
   // table (tab, search box). Browser back/forward keeps the one Next preserved
@@ -100,6 +113,7 @@ export default function Leads() {
   return <LeadsWorkspace key={bfcacheId} />;
 }
 
+/** Coordinate lead tabs, URL filters, paging and mutation-driven refreshes. */
 function LeadsWorkspace() {
   const router = useRouter();
   const pathname = usePathname();
@@ -112,6 +126,7 @@ function LeadsWorkspace() {
   const urlQuery = list.query;
   const activeMetric = list.status;
   const activeFilterTiming = list.timing;
+  const activeSort = list.sort;
   const { user, isLoaded } = useUser();
 
   /* ── Hooks ── */
@@ -128,7 +143,6 @@ function LeadsWorkspace() {
     refreshStats,
     updateLeadInList,
     removeLeadFromList,
-    prependLead,
     replaceLeads,
     appendEmailToLead,
   } = useLeadsData();
@@ -150,7 +164,12 @@ function LeadsWorkspace() {
       : "0.0";
 
   const tableParams = tableListParams(
-    { query: urlQuery, metric: activeMetric, filterTiming: activeFilterTiming },
+    {
+      query: urlQuery,
+      metric: activeMetric,
+      filterTiming: activeFilterTiming,
+      sort: activeSort,
+    },
     page,
   );
 
@@ -193,6 +212,13 @@ function LeadsWorkspace() {
     updateListParams({ page: shown > 1 ? String(shown) : null });
   };
 
+  // Async edit callbacks can outlive the tab or filters they were rendered for.
+  // Read the latest committed view only after their stats refresh has settled.
+  const currentListView = useRef({ activeTab, tableParams, settleTablePage });
+  useLayoutEffect(() => {
+    currentListView.current = { activeTab, tableParams, settleTablePage };
+  });
+
   const loadedRef = useRef(false);
   useEffect(() => {
     if (!loadedRef.current) {
@@ -211,7 +237,7 @@ function LeadsWorkspace() {
     }
     // tableParams is rebuilt every render; these are what it is made of.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, page, urlQuery, activeMetric, activeFilterTiming]);
+  }, [activeTab, page, urlQuery, activeMetric, activeFilterTiming, activeSort]);
 
   // The cards, when the page is shown again after a lead (a stage changed
   // there should show up). The first load already fetched them.
@@ -479,6 +505,12 @@ function LeadsWorkspace() {
 
             {!loading && activeTab === "table" && (
               <div className="flex w-full flex-wrap items-center gap-2 pt-2 sm:ml-auto sm:w-auto sm:gap-3 sm:pt-0">
+                <ListSortMenu
+                  label="leads"
+                  value={activeSort}
+                  options={LEAD_SORT_OPTIONS}
+                  onChange={(sort) => updateListParams({ sort, page: null })}
+                />
                 <Select
                   value={activeFilterTiming}
                   onValueChange={handleFilterTimingChange}
@@ -518,7 +550,13 @@ function LeadsWorkspace() {
               <TableView
                 loading={loadingLeads}
                 leads={leads}
-                onLeadUpdate={updateLeadInList}
+                onLeadUpdate={(lead) =>
+                  updateAndRefreshLeadList(
+                    () => updateLeadInList(lead),
+                    () => currentListView.current,
+                    refreshLeadsData,
+                  )
+                }
                 onLeadDelete={removeLeadFromList}
                 activeMetric={activeMetric}
                 onActiveMetricChange={handleMetricClick}
@@ -563,8 +601,8 @@ function LeadsWorkspace() {
       {showAddLead && (
         <AddLeadModal
           onClose={() => setShowAddLead(false)}
-          onSuccess={(lead) => {
-            prependLead(lead);
+          onSuccess={() => {
+            void reloadLeadList(currentListView.current, loadData);
             setShowAddLead(false);
           }}
           showToast={showToast}

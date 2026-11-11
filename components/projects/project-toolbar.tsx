@@ -1,31 +1,23 @@
 "use client";
 
 import React from "react";
-import { ArrowDownUp, Grid3x3, List, Search } from "lucide-react";
+import { Grid3x3, List, Search } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { setProjectView } from "@/lib/store/slices/uiSlice";
-import type { ProjectListSortBy } from "@/lib/domain/projects/queries";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ListSortMenu } from "@/components/common/list-sort-menu";
 import { cn } from "@/lib/utils";
-import { PROJECT_SORT_OPTIONS } from "./projects-list-url";
+import { PROJECT_SORT_OPTIONS, type ProjectSort } from "./projects-list-url";
 
 interface ProjectToolbarProps {
   searchTerm: string;
   onSearchTermChange: (term: string) => void;
-  sort: ProjectListSortBy;
-  onSortChange: (sort: ProjectListSortBy) => void;
+  sort: ProjectSort;
+  onSortChange: (sort: ProjectSort) => void;
 }
 
+/** Compose project search, sorting and layout controls using the current list state. */
 export function ProjectToolbar({
   searchTerm,
   onSearchTermChange,
@@ -35,13 +27,10 @@ export function ProjectToolbar({
   const dispatch = useAppDispatch();
   const view = useAppSelector((state) => state.ui.projectFilters.view);
 
-  const activeSortLabel =
-    PROJECT_SORT_OPTIONS.find((option) => option.value === sort)?.label
-    ?? "Name A–Z";
-
   // 44px targets at the 0.9 zoom this app applies above 1024px; `size-11`
   // would render at ~40px, so the toggle keeps generous padding instead of an
   // icon-sized box.
+  /** Style the active layout toggle while keeping visible keyboard focus in either state. */
   const viewToggleClass = (isActive: boolean) =>
     cn(
       "inline-flex size-11 items-center justify-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
@@ -71,37 +60,12 @@ export function ProjectToolbar({
           />
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 gap-2"
-              aria-label={`Sort projects, currently ${activeSortLabel}`}
-            >
-              <ArrowDownUp className="size-4" aria-hidden="true" />
-              Sort
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={sort}
-              onValueChange={(value) => {
-                const option = PROJECT_SORT_OPTIONS.find(
-                  (candidate) => candidate.value === value,
-                );
-                if (option) onSortChange(option.value);
-              }}
-            >
-              {PROJECT_SORT_OPTIONS.map((option) => (
-                <DropdownMenuRadioItem key={option.value} value={option.value}>
-                  {option.label}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ListSortMenu
+          label="projects"
+          value={sort}
+          options={PROJECT_SORT_OPTIONS}
+          onChange={onSortChange}
+        />
       </div>
 
       <div

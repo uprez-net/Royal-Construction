@@ -65,6 +65,27 @@ test("a sort option brings its own direction to the API", () => {
   );
 });
 
+test("descending project names survive paging and a detail visit", () => {
+  const list = readProjectsListParams(
+    params("sort=name-desc&page=2&status=ACTIVE"),
+  );
+  assert.equal(projectsListQuery(list, 12).sortBy, "name");
+  assert.equal(projectsListQuery(list, 12).sortOrder, "desc");
+  assert.notEqual(
+    projectsListKey(list),
+    projectsListKey({ ...list, sort: "name" }),
+  );
+  const detail = new URL(
+    projectDetailHref("p1", "sort=name-desc&page=2&status=ACTIVE"),
+    "http://x",
+  );
+  const back = new URL(
+    projectsListHref(detail.searchParams.get("list")),
+    "http://x",
+  );
+  assert.deepEqual(readProjectsListParams(back.searchParams), list);
+});
+
 test("the same list has the same key however the URL spells it", () => {
   const key = (query: string) =>
     projectsListKey(readProjectsListParams(params(query)));

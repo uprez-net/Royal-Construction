@@ -33,6 +33,7 @@ const money = (value: string) => {
 const day = (value: Date | string | null) =>
   value ? dateFormat.format(new Date(value)) : "-";
 
+/** Render paginated offer groups and retain the requested filters across refreshes. */
 export function OfferTable({
   serverOffers,
 }: {
@@ -53,7 +54,11 @@ export function OfferTable({
   // unfiltered page whenever the store had no rows made a search or tab with no
   // matches show every offer.
   const offers = hydrated ? stateOffers : serverOffers;
-  const filtered = !isDefaultOfferFilters(filters.status, filters.q);
+  const filtered = !isDefaultOfferFilters(
+    filters.status,
+    filters.q,
+    filters.sort,
+  );
 
   // Runs on mount and on every server re-render (router.refresh()). A filtered
   // view refetches its own filters rather than being replaced by the server's
@@ -62,6 +67,7 @@ export function OfferTable({
     dispatch(syncServerOffers(serverOffers));
   }, [serverOffers, dispatch]);
 
+  /** Load another page with the current filters and close revision rows from the previous page. */
   const handlePageChange = async (page: number) => {
     try {
       // Expansion is keyed by lead id, which only identifies a row on the page
@@ -76,6 +82,7 @@ export function OfferTable({
           limit: offers.limit,
           status: filters.status,
           q: filters.q,
+          sort: filters.sort,
         }),
       ).unwrap();
     } catch (error) {

@@ -2,6 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server";
 import type { OfferStatus } from "@prisma/client";
+import type { LeadListSort } from "@/lib/leads/list-sort";
 import { revalidateTag } from "next/cache";
 
 import { getUserByClerkId } from "@/lib/data/user";
@@ -21,17 +22,19 @@ import type {
   PaginatedOfferGroupResult,
 } from "@/types/offer";
 
+/** Authorise and load a page of offer groups with the requested search, status and order. */
 export async function getOfferGroups(
   page?: number,
   limit?: number,
   q?: string,
   status?: OfferStatusBucket,
+  sort?: LeadListSort,
 ): Promise<PaginatedOfferGroupResult> {
   try {
     const { userId } = await auth();
     const user = userId ? await getUserByClerkId(userId) : null;
     if (!user) return emptyOfferGroupResult(page, limit);
-    return queryOfferGroups(page, limit, q, status, leadListScope(user));
+    return queryOfferGroups(page, limit, q, status, leadListScope(user), sort);
   } catch (error) {
     console.error("Error authorizing the offer listing:", error);
     return emptyOfferGroupResult(page, limit);
