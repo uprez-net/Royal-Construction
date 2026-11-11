@@ -1,10 +1,5 @@
 "use client";
-import {
-  HistoryItem,
-  Lead,
-  LeadNoteAnnotationInput,
-  LeadStage,
-} from "./types";
+import { HistoryItem, Lead, LeadNoteAnnotationInput, LeadStage } from "./types";
 import { FetchError, fetchJson } from "@/utils/fetch";
 import {
   findLeadById,
@@ -14,6 +9,7 @@ import {
 } from "../actions/leads";
 import type { PaginatedLeadsResult } from "../data/leads";
 import { sendCampaignEmail } from "../data/email-ad-hock";
+import type { LeadListSort } from "@/lib/leads/list-sort";
 
 export interface LeadHistoryInput extends Pick<
   HistoryItem,
@@ -62,6 +58,7 @@ export async function fetchAllLeads(): Promise<Lead[]> {
 }
 
 export async function fetchLeads(params: {
+  sort?: LeadListSort;
   q?: string;
   limit?: number;
   page?: number;
@@ -75,6 +72,7 @@ export async function fetchLeads(params: {
   upcomingMeetings?: boolean;
 }): Promise<PaginatedLeadsResult> {
   const query = new URLSearchParams();
+  if (params.sort) query.append("sort", params.sort);
   if (params.q?.trim()) query.append("q", params.q.trim());
   if (params.limit) query.append("limit", params.limit.toString());
   if (params.page) query.append("page", params.page.toString());

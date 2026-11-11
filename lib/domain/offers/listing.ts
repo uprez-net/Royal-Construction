@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 import { startOfWeek, subWeeks } from "date-fns";
 
 import type { DomainDb } from "../db";
+import { leadListOrderBy } from "../leads/list-sort";
+import { readLeadListSort, type LeadListSort } from "@/lib/leads/list-sort";
 import type { LeadListScope } from "../access/leads";
 import {
   offerListLeadWhere,
@@ -65,6 +67,7 @@ export async function queryOfferGroups(
   q: string | undefined,
   status: OfferStatusBucket | undefined,
   scope: LeadListScope,
+  sort: LeadListSort = "updatedAt-desc",
 ): Promise<PaginatedOfferGroupResult> {
   const { page: safePage, limit: safeLimit } = offerListPaging(page, limit);
   const bucketStatuses =
@@ -89,7 +92,7 @@ export async function queryOfferGroups(
   const leadWhere = offerListLeadWhere(scope, leadIdsInBucket, q);
   const [leads, totalCount, totalOfferCount] = await Promise.all([
     db.lead.findMany({
-      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      orderBy: leadListOrderBy(readLeadListSort(sort, "updatedAt-desc")),
       select: {
         email: true,
         id: true,

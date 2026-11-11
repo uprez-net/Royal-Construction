@@ -8,6 +8,8 @@ import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
 import { readLeadRows } from "@/lib/domain/leads/row-read";
+import { leadListOrderBy } from "@/lib/domain/leads/list-sort";
+import type { LeadListSort } from "@/lib/leads/list-sort";
 import { canAccessLead } from "@/lib/domain/access/leads";
 import { cache } from "react";
 import {
@@ -202,7 +204,7 @@ export async function getAllLeads(): Promise<UiLead[]> {
  * - Created date range relative to the Australia/Sydney timezone
  * - Leads without an associated project
  *
- * Results are ordered by newest first and include all related entities
+ * Results default to newest first and include all related entities
  * required by the leads interface.
  *
  * @param page - 1-based page number.
@@ -226,6 +228,7 @@ export async function getLeads(
   upcomingFollowUps?: boolean,
   pendingMeetings?: boolean,
   upcomingMeetings?: boolean,
+  sort?: LeadListSort,
 ): Promise<PaginatedLeadsResult> {
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const safeLimit =
@@ -406,9 +409,8 @@ export async function getLeads(
       prisma.lead.findMany({
         where: finalWhere,
         select: { id: true },
-        // id breaks ties, so a page boundary cannot fall between two leads
-        // created in the same millisecond and show one of them twice.
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        // The domain sort includes an id tie-breaker for stable page boundaries.
+        orderBy: leadListOrderBy(sort),
         skip: (safePage - 1) * safeLimit,
         take: safeLimit,
       }),

@@ -8,8 +8,10 @@ import {
 import { OfferStatus } from "@prisma/client";
 import {
   filtersForRequest,
+  DEFAULT_OFFER_SORT,
   shouldAdoptServerOffers,
 } from "@/lib/offer/offer-listing-view";
+import type { LeadListSort } from "@/lib/leads/list-sort";
 
 interface OffersState {
   offers: PaginatedOfferGroupResult;
@@ -21,6 +23,7 @@ interface OffersState {
   filters: {
     status: OfferStatusBucket;
     q: string;
+    sort: LeadListSort;
   };
   loading: boolean;
   error: string | null;
@@ -51,6 +54,7 @@ const initialState: OffersState = {
   filters: {
     status: "all",
     q: "",
+    sort: DEFAULT_OFFER_SORT,
   },
   loading: false,
   error: null,
@@ -66,6 +70,7 @@ export const fetchOffers = createAsyncThunk(
       limit?: number;
       q?: string;
       status?: OfferStatusBucket;
+      sort?: LeadListSort;
     },
     thunkAPI,
   ) => {
@@ -75,6 +80,7 @@ export const fetchOffers = createAsyncThunk(
         params.limit,
         params.q,
         params.status,
+        params.sort,
       );
 
       return res;
@@ -115,7 +121,7 @@ const offersSlice = createSlice({
       // The server renders the unfiltered first page, so adopting its
       // rows adopts its filters too. Keeping a stale tab here left the
       // tab and the rows describing different views.
-      state.filters = { status: "all", q: "" };
+      state.filters = { status: "all", q: "", sort: DEFAULT_OFFER_SORT };
       state.hydrated = true;
       // Any fetch still in flight was for the view this replaces.
       state.latestRequestId = null;
@@ -206,6 +212,7 @@ export const syncServerOffers = createAsyncThunk<
       limit: offers.limit,
       status: filters.status,
       q: filters.q,
+      sort: filters.sort,
     }),
   );
 });

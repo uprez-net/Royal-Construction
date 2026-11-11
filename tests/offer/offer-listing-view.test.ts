@@ -35,34 +35,47 @@ test("a search term is a filtered view", () => {
 
 test("a fetch records the tab and search it asks for", () => {
   assert.deepEqual(
-    filtersForRequest({ status: "all", q: "" }, { status: "sent", q: "smith" }),
-    { status: "sent", q: "smith" },
+    filtersForRequest(
+      { status: "all", q: "", sort: "updatedAt-desc" },
+      { status: "sent", q: "smith" },
+    ),
+    { status: "sent", q: "smith", sort: "updatedAt-desc" },
   );
 });
 
 test("a page change keeps the current tab and search", () => {
   assert.deepEqual(
-    filtersForRequest({ status: "sent", q: "smith" }, { page: 2 } as {
+    filtersForRequest({ status: "sent", q: "smith", sort: "name-desc" }, {
+      page: 2,
+    } as {
       status?: undefined;
       q?: undefined;
     }),
-    { status: "sent", q: "smith" },
+    { status: "sent", q: "smith", sort: "name-desc" },
   );
 });
 
 test("clearing the search is recorded, not ignored", () => {
   assert.deepEqual(
-    filtersForRequest({ status: "all", q: "smith" }, { q: "" }),
+    filtersForRequest(
+      { status: "all", q: "smith", sort: "name-asc" },
+      { q: "" },
+    ),
     {
       status: "all",
       q: "",
+      sort: "name-asc",
     },
   );
 });
 
 test("the server's page is adopted only for the unfiltered list on that page", () => {
   const server = { page: 1, limit: 10 };
-  const unfiltered = { status: "all" as const, q: "" };
+  const unfiltered = {
+    status: "all" as const,
+    q: "",
+    sort: "updatedAt-desc" as const,
+  };
   assert.equal(
     shouldAdoptServerOffers(unfiltered, { page: 1, limit: 10 }, server),
     true,
@@ -78,11 +91,30 @@ test("the server's page is adopted only for the unfiltered list on that page", (
   );
   assert.equal(
     shouldAdoptServerOffers(
-      { status: "sent", q: "" },
+      { status: "sent", q: "", sort: "updatedAt-desc" },
       { page: 1, limit: 10 },
       server,
     ),
     false,
+  );
+});
+
+test("a server refresh preserves a non-default sort even on the first page", () => {
+  const page = { page: 1, limit: 10 };
+  assert.equal(
+    shouldAdoptServerOffers(
+      { status: "all", q: "", sort: "name-desc" },
+      page,
+      page,
+    ),
+    false,
+  );
+  assert.deepEqual(
+    filtersForRequest(
+      { status: "sent", q: "smith", sort: "name-desc" },
+      { sort: "createdAt-asc" },
+    ),
+    { status: "sent", q: "smith", sort: "createdAt-asc" },
   );
 });
 

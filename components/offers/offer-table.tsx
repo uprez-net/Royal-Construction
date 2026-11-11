@@ -53,7 +53,11 @@ export function OfferTable({
   // unfiltered page whenever the store had no rows made a search or tab with no
   // matches show every offer.
   const offers = hydrated ? stateOffers : serverOffers;
-  const filtered = !isDefaultOfferFilters(filters.status, filters.q);
+  const filtered = !isDefaultOfferFilters(
+    filters.status,
+    filters.q,
+    filters.sort,
+  );
 
   // Runs on mount and on every server re-render (router.refresh()). A filtered
   // view refetches its own filters rather than being replaced by the server's
@@ -76,6 +80,7 @@ export function OfferTable({
           limit: offers.limit,
           status: filters.status,
           q: filters.q,
+          sort: filters.sort,
         }),
       ).unwrap();
     } catch (error) {

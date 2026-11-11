@@ -29,10 +29,13 @@ import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
 import { LeadPagination } from "./lead-pagination";
 import {
   readLeadsListParams,
+  LEAD_SORT_OPTIONS,
   withLeadsListParams,
   type LeadsListParamChanges,
 } from "./leads-list-url";
 import { Card, CardContent } from "@/components/ui/card";
+import { ListSortMenu } from "@/components/common/list-sort-menu";
+import type { LeadListSort } from "@/lib/leads/list-sort";
 import { Button } from "@/components/ui/button";
 import {
   LeadsContentSkeleton,
@@ -55,6 +58,7 @@ import { useUser } from "@clerk/nextjs";
 type TabType = "table" | "followups" | "analytics";
 
 type TableFilters = {
+  readonly sort: LeadListSort;
   readonly query: string;
   readonly metric: string | null;
   readonly filterTiming: string;
@@ -70,6 +74,7 @@ function tableListParams(filters: TableFilters, page: number): LeadListParams {
   const statusParam =
     filters.metric === "total" ? "total" : (filters.metric ?? undefined);
   return {
+    sort: filters.sort,
     page,
     limit: 10,
     query: filters.query.trim() || undefined,
@@ -111,6 +116,7 @@ function LeadsWorkspace() {
   const urlQuery = list.query;
   const activeMetric = list.status;
   const activeFilterTiming = list.timing;
+  const activeSort = list.sort;
   const { user, isLoaded } = useUser();
 
   /* ── Hooks ── */
@@ -127,7 +133,6 @@ function LeadsWorkspace() {
     refreshStats,
     updateLeadInList,
     removeLeadFromList,
-    prependLead,
     replaceLeads,
     appendEmailToLead,
   } = useLeadsData();
@@ -149,7 +154,12 @@ function LeadsWorkspace() {
       : "0.0";
 
   const tableParams = tableListParams(
-    { query: urlQuery, metric: activeMetric, filterTiming: activeFilterTiming },
+    {
+      query: urlQuery,
+      metric: activeMetric,
+      filterTiming: activeFilterTiming,
+      sort: activeSort,
+    },
     page,
   );
 
@@ -210,7 +220,7 @@ function LeadsWorkspace() {
     }
     // tableParams is rebuilt every render; these are what it is made of.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, page, urlQuery, activeMetric, activeFilterTiming]);
+  }, [activeTab, page, urlQuery, activeMetric, activeFilterTiming, activeSort]);
 
   // The cards, when the page is shown again after a lead (a stage changed
   // there should show up). The first load already fetched them.
@@ -477,6 +487,12 @@ function LeadsWorkspace() {
 
             {!loading && activeTab === "table" && (
               <div className="flex w-full flex-wrap items-center gap-2 pt-2 sm:ml-auto sm:w-auto sm:gap-3 sm:pt-0">
+                <ListSortMenu
+                  label="leads"
+                  value={activeSort}
+                  options={LEAD_SORT_OPTIONS}
+                  onChange={(sort) => updateListParams({ sort, page: null })}
+                />
                 <Select
                   value={activeFilterTiming}
                   onValueChange={handleFilterTimingChange}
@@ -516,7 +532,11 @@ function LeadsWorkspace() {
               <TableView
                 loading={loadingLeads}
                 leads={leads}
-                onLeadUpdate={updateLeadInList}
+                onLeadUpdate={async (lead) => {
+                  const updated = await updateLeadInList(lead);
+                  await refreshLeadsData(tableParams).then(settleTablePage);
+                  return updated;
+                }}
                 onLeadDelete={removeLeadFromList}
                 activeMetric={activeMetric}
                 onActiveMetricChange={handleMetricClick}
@@ -561,8 +581,8 @@ function LeadsWorkspace() {
       {showAddLead && (
         <AddLeadModal
           onClose={() => setShowAddLead(false)}
-          onSuccess={(lead) => {
-            prependLead(lead);
+          onSuccess={() => {
+            void loadData(tableParams).then(settleTablePage);
             setShowAddLead(false);
           }}
           showToast={showToast}

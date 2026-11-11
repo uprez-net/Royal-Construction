@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
       upcomingFollowUps,
       pendingMeetings,
       upcomingMeetings,
+      params.data.sort,
     );
     return successResponse(leads);
   } catch (error) {

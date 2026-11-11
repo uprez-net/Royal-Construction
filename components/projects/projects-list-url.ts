@@ -39,8 +39,10 @@ export type ProjectsListParams = {
   readonly status: ProjectStatusFilter;
   readonly page: number;
   readonly query: string;
-  readonly sort: ProjectListSortBy;
+  readonly sort: ProjectSort;
 };
+
+export type ProjectSort = ProjectListSortBy | "name-desc";
 
 type SearchParamsLike = {
   get(name: string): string | null;
@@ -52,10 +54,11 @@ type SearchParamsLike = {
 // with it rather than travelling as a second parameter that could disagree.
 export const PROJECT_SORT_OPTIONS: readonly {
   label: string;
-  value: ProjectListSortBy;
+  value: ProjectSort;
   sortOrder: "asc" | "desc";
 }[] = [
   { label: "Name A–Z", value: "name", sortOrder: "asc" },
+  { label: "Name Z–A", value: "name-desc", sortOrder: "desc" },
   { label: "Progress, high to low", value: "progress", sortOrder: "desc" },
   { label: "Budget, high to low", value: "budget", sortOrder: "desc" },
   { label: "Start date, newest first", value: "startDate", sortOrder: "desc" },
@@ -83,7 +86,7 @@ export const PROJECT_SORT_OPTIONS: readonly {
  */
 export const DEFAULT_PROJECT_STATUS_FILTER: ProjectStatusFilter = null;
 
-const DEFAULT_SORT: ProjectListSortBy = "name";
+const DEFAULT_SORT: ProjectSort = "name";
 
 const STATUS_VALUES: readonly string[] = [
   ...Object.values(ProjectStatus),
@@ -98,7 +101,7 @@ function validStatus(value: string | null): ProjectStatusFilter {
     : DEFAULT_PROJECT_STATUS_FILTER;
 }
 
-function validSort(value: string | null): ProjectListSortBy {
+function validSort(value: string | null): ProjectSort {
   return (
     PROJECT_SORT_OPTIONS.find((option) => option.value === value)?.value
     ?? DEFAULT_SORT
@@ -130,7 +133,7 @@ export function projectsListQuery(
     page: list.page,
     limit,
     search: list.query,
-    sortBy: sort.value,
+    sortBy: sort.value === "name-desc" ? "name" : sort.value,
     sortOrder: sort.sortOrder,
   };
 }

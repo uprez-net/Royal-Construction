@@ -8,6 +8,8 @@ import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { fetchOffers } from "@/lib/store/slices/offerSlice";
 import type { OfferStatusBucket } from "@/types/offer";
 import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
+import { ListSortMenu } from "@/components/common/list-sort-menu";
+import { OFFER_SORT_OPTIONS } from "@/lib/offer/offer-listing-view";
 
 interface OfferFilterProps {
   /**
@@ -56,6 +58,7 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
       fetchOffers({
         status: tab,
         q: searchInput,
+        sort: filters.sort,
         page: 1,
         limit: offers.limit || 10,
       }),
@@ -75,6 +78,7 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
         fetchOffers({
           q: query,
           status: tabId,
+          sort: filters.sort,
           page: 1,
           limit: offers.limit || 10,
         }),
@@ -156,6 +160,24 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
               onChange={handleSearchChange}
             />
           </div>
+
+          <ListSortMenu
+            label="offers"
+            value={filters.sort}
+            options={OFFER_SORT_OPTIONS}
+            onChange={(sort) => {
+              if (searchTimer.current) clearTimeout(searchTimer.current);
+              dispatch(
+                fetchOffers({
+                  sort,
+                  status: tabId,
+                  q: searchInput,
+                  page: 1,
+                  limit: offers.limit || 10,
+                }),
+              );
+            }}
+          />
 
           {/* Reflects the *current view* (filtered + searched), not the global
               KPI total — that's what `offers.totalCount` holds after a fetch,

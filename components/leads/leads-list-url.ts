@@ -1,4 +1,20 @@
 import { leadStatusSchema } from "@/utils/validators/lead";
+import {
+  readLeadListSort,
+  type LeadListSort,
+} from "@/lib/leads/list-sort";
+
+export const LEAD_SORT_OPTIONS: readonly {
+  value: LeadListSort;
+  label: string;
+}[] = [
+  { value: "createdAt-desc", label: "Created, newest first" },
+  { value: "createdAt-asc", label: "Created, oldest first" },
+  { value: "name-asc", label: "Name A–Z" },
+  { value: "name-desc", label: "Name Z–A" },
+  { value: "updatedAt-desc", label: "Updated, newest first" },
+  { value: "updatedAt-asc", label: "Updated, oldest first" },
+];
 
 /**
  * The Leads table's place — page and filters — lives in the /leads URL
@@ -9,12 +25,14 @@ import { leadStatusSchema } from "@/utils/validators/lead";
  *   ?query=smith   the applied search (five characters or more)
  *   ?status=lost   the metric card or stage chips (comma list of stages)
  *   ?timing=today  the timing filter (absent means "all")
+ *   ?sort=name-desc  the sort option (absent means created, newest first)
  */
 export const LEADS_LIST_PARAM_KEYS = [
   "page",
   "query",
   "status",
   "timing",
+  "sort",
 ] as const;
 
 type LeadsListParamKey = (typeof LEADS_LIST_PARAM_KEYS)[number];
@@ -29,6 +47,7 @@ export type LeadsListParams = {
   readonly query: string;
   readonly status: string | null;
   readonly timing: string;
+  readonly sort: LeadListSort;
 };
 
 type SearchParamsLike = {
@@ -75,6 +94,7 @@ export function readLeadsListParams(params: SearchParamsLike): LeadsListParams {
     query: params.get("query")?.trim() ?? "",
     status: validStatus(params.get("status")),
     timing: validTiming(params.get("timing")),
+    sort: readLeadListSort(params.get("sort")),
   };
 }
 

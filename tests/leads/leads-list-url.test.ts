@@ -18,13 +18,20 @@ test("the table reads its place from the URL", () => {
     readLeadsListParams(
       params("page=4&query=sandhu&status=lost&timing=this_week"),
     ),
-    { page: 4, query: "sandhu", status: "lost", timing: "this_week" },
+    {
+      page: 4,
+      query: "sandhu",
+      status: "lost",
+      timing: "this_week",
+      sort: "createdAt-desc",
+    },
   );
   assert.deepEqual(readLeadsListParams(params("")), {
     page: 1,
     query: "",
     status: null,
     timing: "all",
+    sort: "createdAt-desc",
   });
 });
 
@@ -70,5 +77,33 @@ test("Back to all leads can only ever point at the Leads table", () => {
   assert.equal(
     leadsListHref("page=2&redirect=https://evil.example"),
     "/leads?page=2",
+  );
+});
+
+test("sorting resets the page, composes with filters and survives a lead detail visit", () => {
+  const query = withLeadsListParams(
+    params("page=4&status=lost&timing=this_week&query=smith"),
+    {
+      page: null,
+      sort: "name-desc",
+    },
+  );
+  const list = readLeadsListParams(params(query));
+  assert.deepEqual(list, {
+    page: 1,
+    status: "lost",
+    timing: "this_week",
+    query: "smith",
+    sort: "name-desc",
+  });
+  const detail = new URL(leadDetailHref(44, query), "http://x");
+  const back = new URL(
+    leadsListHref(detail.searchParams.get("list")),
+    "http://x",
+  );
+  assert.deepEqual(readLeadsListParams(back.searchParams), list);
+  assert.equal(
+    readLeadsListParams(params("sort=invalid")).sort,
+    "createdAt-desc",
   );
 });
