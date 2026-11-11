@@ -46,6 +46,7 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
     [],
   );
 
+  /** Apply a status on page 1 and cancel a pending search that still targets the old status. */
   const handleTabChange = (tab: OfferStatusBucket) => {
     if (tab === tabId) return;
     // This fetch already carries the current search text. A search still
@@ -64,6 +65,7 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
     );
   };
 
+  /** Debounce search requests, including clear, while retaining the selected status and sort. */
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
     setSearchInput(query);

@@ -67,6 +67,7 @@ export function OfferTable({
     dispatch(syncServerOffers(serverOffers));
   }, [serverOffers, dispatch]);
 
+  /** Load another page with the current filters and close revision rows from the previous page. */
   const handlePageChange = async (page: number) => {
     try {
       // Expansion is keyed by lead id, which only identifies a row on the page

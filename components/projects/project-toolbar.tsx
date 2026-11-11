@@ -30,6 +30,7 @@ export function ProjectToolbar({
   // 44px targets at the 0.9 zoom this app applies above 1024px; `size-11`
   // would render at ~40px, so the toggle keeps generous padding instead of an
   // icon-sized box.
+  /** Style the active layout toggle while keeping visible keyboard focus in either state. */
   const viewToggleClass = (isActive: boolean) =>
     cn(
       "inline-flex size-11 items-center justify-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
