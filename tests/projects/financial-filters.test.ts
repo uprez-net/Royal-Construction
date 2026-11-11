@@ -24,7 +24,12 @@ const report = buildProjectFinancialReport({
     {
       id: "b-loss",
       milestoneId: "roof",
-      price: { basis: "QUOTE", exGstCents: 100_00, gstStated: true },
+      price: {
+        basis: "QUOTE",
+        exGstCents: 100_00,
+        gstCents: 10_00,
+        gstStated: true,
+      },
       scheduledDate: "2026-11-02T00:00:00.000Z",
       status: TradieScheduleStatus.CONFIRMED,
       trade: "Roofing",

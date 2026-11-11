@@ -31,7 +31,12 @@ const report = buildProjectFinancialReport({
     {
       id: "b-roof",
       milestoneId: "roof",
-      price: { basis: "QUOTE", exGstCents: 100_00, gstStated: true },
+      price: {
+        basis: "QUOTE",
+        exGstCents: 100_00,
+        gstCents: 10_00,
+        gstStated: true,
+      },
       scheduledDate: "2026-11-02T00:00:00.000Z",
       status: TradieScheduleStatus.CONFIRMED,
       trade: "Roofing",
@@ -161,6 +166,15 @@ describe("StageFinancialsCard", () => {
 });
 
 describe("StageFinancialsCard pricing", () => {
+  test("quoted and invoiced figures show their GST below the ex-GST amount", () => {
+    const html = render(true);
+    assert.match(html, /\+\$50\.00 GST/);
+    assert.match(html, /\+\$20\.00 GST/);
+    assert.match(html, /\+\$10\.00 GST/);
+    assert.match(html, /\+\$30\.00 GST/);
+    assert.match(html, /ex GST/);
+  });
+
   test("every activity row offers to edit its quoted price", () => {
     const html = render(true);
     assert.match(html, /aria-label="Edit the quoted price for Lock-up works"/);

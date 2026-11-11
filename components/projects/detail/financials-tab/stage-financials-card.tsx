@@ -43,7 +43,12 @@ import { formatStatus } from "@/utils/formatters";
 
 import { ActivityDetail, type InvoiceActions } from "./activity-detail";
 import { ActivityPriceCell } from "./activity-price-cell";
-import { formatCents, Money, outcomeRowClass, ProfitLoss } from "./money";
+import {
+  formatCents,
+  MoneyWithGst,
+  outcomeRowClass,
+  ProfitLoss,
+} from "./money";
 
 /** An activity as the table holds it: with the names above it, for search. */
 type FinancialRow = {
@@ -164,8 +169,9 @@ function columnsFor(
       cell: ({ row }) => {
         const { figures } = row.original.activity;
         return (
-          <Money
+          <MoneyWithGst
             cents={figures.quotedCents}
+            gstCents={figures.quotedGstCents}
             muted={figures.quotedCents === 0}
           />
         );
@@ -177,8 +183,9 @@ function columnsFor(
       cell: ({ row }) => {
         const { figures } = row.original.activity;
         return (
-          <Money
+          <MoneyWithGst
             cents={figures.invoicedCents}
+            gstCents={figures.invoicedGstCents}
             muted={figures.invoicedCents === 0}
           />
         );
@@ -373,19 +380,28 @@ export function StageFinancialsCard({
             </span>
             <span className="grid w-full grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:flex lg:w-auto lg:items-start lg:gap-x-0">
               <StageMetric label="Quoted price" className={METRIC_WIDTH.tender}>
-                <Money cents={figures.tenderCents} />
+                <MoneyWithGst
+                  cents={figures.tenderCents}
+                  gstCents={figures.tenderGstCents}
+                />
               </StageMetric>
               <StageMetric
                 label="Tradie quoted"
                 className={METRIC_WIDTH.quoted}
               >
-                <Money cents={figures.quotedCents} />
+                <MoneyWithGst
+                  cents={figures.quotedCents}
+                  gstCents={figures.quotedGstCents}
+                />
               </StageMetric>
               <StageMetric
                 label="Total invoiced"
                 className={METRIC_WIDTH.invoiced}
               >
-                <Money cents={figures.invoicedCents} />
+                <MoneyWithGst
+                  cents={figures.invoicedCents}
+                  gstCents={figures.invoicedGstCents}
+                />
               </StageMetric>
               <StageMetric label="Profit/Loss" className={METRIC_WIDTH.profit}>
                 <ProfitLoss figures={figures} />

@@ -14,6 +14,7 @@ import {
   type WithChildren,
 } from "@/lib/projects/milestone-tree";
 import { resolveStageClaims } from "@/lib/projects/stage-claim";
+import { calculateOfferLinePricing } from "@/lib/offer/pricing";
 import type { ProjectPaymentStage } from "@/types/project-flow";
 
 import {
@@ -63,8 +64,11 @@ export type FinancialOutcome = "PROFIT" | "LOSS" | "EVEN" | "NOT_INVOICED";
 
 export type FinancialFigures = {
   readonly tenderCents: Cents;
+  readonly tenderGstCents: Cents;
   readonly quotedCents: Cents;
+  readonly quotedGstCents: Cents;
   readonly invoicedCents: Cents;
+  readonly invoicedGstCents: Cents;
   /** What the work will cost: per booking, the larger of B and C. */
   readonly forecastCostCents: Cents;
   /** A − C, or null while nothing is invoiced. */
@@ -117,9 +121,11 @@ export type FinancialBooking = {
   readonly committed: boolean;
   /** B for this booking: its price when committed, else 0. */
   readonly agreedCents: Cents;
+  readonly agreedGstCents: Cents;
   readonly priceBasis: PriceBasis;
   readonly gstStated: boolean;
   readonly invoicedCents: Cents;
+  readonly invoicedGstCents: Cents;
   readonly billing: BookingBillingState;
   readonly invoices: readonly FinancialInvoice[];
 };
@@ -261,8 +267,11 @@ export function resolveStagePrices(input: {
 /** The sums a set of figures is derived from. */
 type Sums = {
   tender: Cents;
+  tenderGst: Cents;
   quoted: Cents;
+  quotedGst: Cents;
   invoiced: Cents;
+  invoicedGst: Cents;
   forecastCost: Cents;
   bookingOver: boolean;
   quoteMissing: boolean;
@@ -274,10 +283,23 @@ const ZERO: Sums = {
   forecastCost: 0,
   gstAssumed: false,
   invoiced: 0,
+  invoicedGst: 0,
   quoteMissing: false,
   quoted: 0,
+  quotedGst: 0,
   tender: 0,
+  tenderGst: 0,
 };
+
+function gstOnPrice(exGstCents: Cents): Cents {
+  const pricing = calculateOfferLinePricing({
+    gstIncluded: false,
+    gstRate: GST_RATE,
+    quantity: 1,
+    unitPrice: exGstCents / 100,
+  });
+  return Math.round(pricing.gstAmount * 100);
+}
 
 function add(a: Sums, b: Sums): Sums {
   return {
@@ -285,9 +307,12 @@ function add(a: Sums, b: Sums): Sums {
     forecastCost: a.forecastCost + b.forecastCost,
     gstAssumed: a.gstAssumed || b.gstAssumed,
     invoiced: a.invoiced + b.invoiced,
+    invoicedGst: a.invoicedGst + b.invoicedGst,
     quoteMissing: a.quoteMissing || b.quoteMissing,
     quoted: a.quoted + b.quoted,
+    quotedGst: a.quotedGst + b.quotedGst,
     tender: a.tender + b.tender,
+    tenderGst: a.tenderGst + b.tenderGst,
   };
 }
 
@@ -318,6 +343,7 @@ function figuresOf(sums: Sums): FinancialFigures {
     forecastProfitCents: forecastProfit,
     gstAssumed: sums.gstAssumed,
     invoicedCents: sums.invoiced,
+    invoicedGstCents: sums.invoicedGst,
     outcome,
     // B is short by an unknown amount when a price is missing, so C > B on the
     // activity says nothing; a single booking billed past its own price still
@@ -329,7 +355,9 @@ function figuresOf(sums: Sums): FinancialFigures {
     profitPercent: profit === null ? null : percentOf(profit, sums.tender),
     quoteMissing: sums.quoteMissing,
     quotedCents: sums.quoted,
+    quotedGstCents: sums.quotedGst,
     tenderCents: sums.tender,
+    tenderGstCents: sums.tenderGst,
   };
 }
 
@@ -339,9 +367,12 @@ function bookingSums(booking: FinancialBooking): Sums {
     forecastCost: Math.max(booking.agreedCents, booking.invoicedCents),
     gstAssumed: booking.committed && !booking.gstStated,
     invoiced: booking.invoicedCents,
+    invoicedGst: booking.invoicedGstCents,
     quoteMissing: booking.committed && booking.priceBasis === "NONE",
     quoted: booking.agreedCents,
+    quotedGst: booking.agreedGstCents,
     tender: 0,
+    tenderGst: 0,
   };
 }
 
@@ -401,16 +432,24 @@ export function buildProjectFinancialReport(input: {
     const committed = isCommittedBooking(booking.status);
     if (!committed && invoices.length === 0) continue;
     const agreedCents = committed ? booking.price.exGstCents : 0;
-    const invoicedCents = invoices
-      .filter((invoice) => invoice.counted)
-      .reduce((total, invoice) => total + invoice.subTotalCents, 0);
+    const countedInvoices = invoices.filter((invoice) => invoice.counted);
+    const invoicedCents = countedInvoices.reduce(
+      (total, invoice) => total + invoice.subTotalCents,
+      0,
+    );
+    const invoicedGstCents = countedInvoices.reduce(
+      (total, invoice) => total + invoice.totalTaxCents,
+      0,
+    );
     const row: FinancialBooking = {
       agreedCents,
+      agreedGstCents: committed ? booking.price.gstCents : 0,
       billing: bookingBillingState({ agreedCents, invoicedCents }),
       committed,
       gstStated: booking.price.gstStated,
       id: booking.id,
       invoicedCents,
+      invoicedGstCents,
       invoices: [...invoices].sort((a, b) =>
         a.issuedDate.localeCompare(b.issuedDate),
       ),
@@ -459,6 +498,10 @@ export function buildProjectFinancialReport(input: {
     const ownSums: Sums = {
       ...sumBookings(bookings),
       tender: Math.max(0, node.budgetCents - childTender) + variationCents,
+      // Round each activity's share once, then roll it up with its children.
+      tenderGst:
+        gstOnPrice(Math.max(0, node.budgetCents - childTender))
+        + gstOnPrice(variationCents),
     };
     const sums = children.map((child) => child.sums).reduce(add, ownSums);
     const subtreeVariationCents = children.reduce(
@@ -506,7 +549,14 @@ export function buildProjectFinancialReport(input: {
     );
     const price = input.stagePrices?.[stage] ?? null;
     const sums: Sums = price
-      ? { ...activitySums, tender: price.exGstCents + stageVariationCents }
+      ? {
+          ...activitySums,
+          tender: price.exGstCents + stageVariationCents,
+          tenderGst:
+            (price.gstIncluded
+              ? price.claimCents - price.exGstCents
+              : gstOnPrice(price.exGstCents)) + gstOnPrice(stageVariationCents),
+        }
       : activitySums;
     stageTotals = add(stageTotals, sums);
     stages.push({
@@ -527,6 +577,9 @@ export function buildProjectFinancialReport(input: {
     ...ZERO,
     forecastCost: unallocatedCents,
     invoiced: unallocatedCents,
+    invoicedGst: unallocatedInvoices
+      .filter((invoice) => invoice.counted)
+      .reduce((total, invoice) => total + invoice.totalTaxCents, 0),
   });
 
   // Profit to date counts only the activities that have been invoiced — the

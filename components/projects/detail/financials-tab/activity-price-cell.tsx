@@ -4,23 +4,27 @@ import { Check, Pencil, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import type { FinancialActivity } from "@/lib/domain/projects/financial-report";
+import { calculateOfferLinePricing } from "@/lib/offer/pricing";
+import { GST_RATE } from "@/lib/domain/projects/variation-rules";
 
-import { formatCents, Money } from "./money";
+import { formatCents, MoneyWithGst } from "./money";
 
 /** Dollars typed into the field, or null when it does not read as an amount. */
 function parseDollars(value: string): number | null {
   const cleaned = value.replace(/[$,\s]/g, "");
   if (!/^\d+(\.\d{0,2})?$/.test(cleaned)) return null;
-  return Number(cleaned);
+  const amount = Number(cleaned);
+  return Number.isFinite(amount) ? amount : null;
 }
 
 /**
  * An activity's Quoted price, with a pencil that turns it into a field.
  *
- * The field edits the activity's own price — ex GST, without its variations,
+ * The field edits the activity's own price including GST, without its variations,
  * which are priced on their own and keep being added on top. Enter saves,
  * Escape puts the figure back. The row's figures come back from the server
  * whole, so the cell shows the saved number, never the one typed.
@@ -49,9 +53,26 @@ export function ActivityPriceCell({
 
   const fieldId = `activity-price-${activity.id}`;
   const errorId = `${fieldId}-error`;
+  const hintId = `${fieldId}-hint`;
+  const total = parseDollars(value);
+  const pricing =
+    total === null
+      ? null
+      : calculateOfferLinePricing({
+          gstIncluded: true,
+          gstRate: GST_RATE,
+          quantity: 1,
+          unitPrice: total,
+        });
 
   function open() {
-    setValue((activity.priceCents / 100).toFixed(2));
+    const current = calculateOfferLinePricing({
+      gstIncluded: false,
+      gstRate: GST_RATE,
+      quantity: 1,
+      unitPrice: activity.priceCents / 100,
+    });
+    setValue(current.totalPrice.toFixed(2));
     setError(null);
     setEditing(true);
   }
@@ -65,18 +86,18 @@ export function ActivityPriceCell({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (saving) return;
-    const price = parseDollars(value);
-    if (price === null) {
+    if (pricing === null) {
       setError("Enter an amount in dollars, to the cent.");
       return;
     }
-    if (Math.round(price * 100) === activity.priceCents) {
+    if (Math.round(pricing.netLine * 100) === activity.priceCents) {
       close();
       return;
     }
     setSaving(true);
     try {
-      if (await onSave(activity, price)) close();
+      // The existing command stores ex GST; only the editor accepts a total.
+      if (await onSave(activity, pricing.netLine)) close();
     } finally {
       setSaving(false);
     }
@@ -88,69 +109,83 @@ export function ActivityPriceCell({
         onSubmit={(event) => void submit(event)}
         className="flex flex-col items-end gap-1"
       >
-        <label htmlFor={fieldId} className="sr-only">
-          Quoted price for {activity.name}, ex GST, excluding variations
-        </label>
-        <span className="flex items-center gap-1">
-          <span className="text-muted-foreground" aria-hidden="true">
-            $
-          </span>
-          <Input
-            id={fieldId}
-            value={value}
-            onChange={(event) => {
-              setValue(event.target.value);
-              setError(null);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.preventDefault();
-                close();
-              }
-            }}
-            inputMode="decimal"
-            autoComplete="off"
-            autoFocus
-            disabled={saving}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? errorId : undefined}
-            className="h-8 w-32 text-right font-mono tabular-nums"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            variant="ghost"
-            className="size-8"
-            disabled={saving}
-            aria-label={`Save the quoted price for ${activity.name}`}
-          >
-            {saving ? (
-              <Spinner className="size-4" />
-            ) : (
-              <Check className="size-4" aria-hidden="true" />
-            )}
-          </Button>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="size-8"
-            onClick={close}
-            disabled={saving}
-            aria-label="Cancel"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </Button>
-        </span>
-        {error ? (
-          <span id={errorId} className="text-xs text-destructive-ink">
-            {error}
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground">
-            Ex GST, before variations
-          </span>
-        )}
+        <FieldGroup>
+          <Field data-invalid={error ? true : undefined} data-disabled={saving}>
+            <FieldLabel htmlFor={fieldId} className="sr-only">
+              Quoted price for {activity.name}, inc GST, excluding variations
+            </FieldLabel>
+            <Input
+              id={fieldId}
+              value={value}
+              onChange={(event) => {
+                setValue(event.target.value);
+                setError(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  close();
+                }
+              }}
+              inputMode="decimal"
+              autoComplete="off"
+              autoFocus
+              disabled={saving}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? `${hintId} ${errorId}` : hintId}
+              className="h-8 text-right font-mono tabular-nums"
+            />
+            <span className="flex items-center justify-end gap-1">
+              <Button
+                type="submit"
+                size="icon"
+                variant="ghost"
+                className="size-8"
+                disabled={saving}
+                aria-label={`Save the quoted price for ${activity.name}`}
+              >
+                {saving ? (
+                  <Spinner className="size-4" />
+                ) : (
+                  <Check aria-hidden="true" />
+                )}
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="size-8"
+                onClick={close}
+                disabled={saving}
+                aria-label="Cancel"
+              >
+                <X aria-hidden="true" />
+              </Button>
+            </span>
+            <span
+              id={hintId}
+              className="flex flex-col items-end text-xs text-muted-foreground"
+              aria-live="polite"
+            >
+              <span>Inc GST, before variations</span>
+              {pricing ? (
+                <>
+                  <span>
+                    {formatCents(Math.round(pricing.netLine * 100))} ex GST
+                  </span>
+                  <span>
+                    {formatCents(Math.round(pricing.gstAmount * 100))} GST
+                  </span>
+                </>
+              ) : null}
+            </span>
+            {error ? (
+              <span id={errorId} className="text-xs text-destructive-ink">
+                {error}
+              </span>
+            ) : null}
+          </Field>
+        </FieldGroup>
       </form>
     );
   }
@@ -158,7 +193,10 @@ export function ActivityPriceCell({
   return (
     <span className="flex flex-col items-end">
       <span className="flex items-center gap-1">
-        <Money cents={activity.figures.tenderCents} />
+        <MoneyWithGst
+          cents={activity.figures.tenderCents}
+          gstCents={activity.figures.tenderGstCents}
+        />
         <Button
           type="button"
           size="icon"

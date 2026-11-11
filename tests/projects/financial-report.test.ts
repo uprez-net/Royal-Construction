@@ -45,7 +45,7 @@ const booking = (
     milestoneId: string | null;
   },
 ): ReportBooking => ({
-  price: { basis: "QUOTE", exGstCents: 0, gstStated: true },
+  price: { basis: "QUOTE", exGstCents: 0, gstCents: 0, gstStated: true },
   scheduledDate: "2026-11-02T00:00:00.000Z",
   status: TradieScheduleStatus.CONFIRMED,
   trade: "Carpentry",
@@ -78,7 +78,12 @@ const invoice = (
 });
 
 const priced = (exGstCents: number) =>
-  ({ basis: "QUOTE", exGstCents, gstStated: true }) as const;
+  ({
+    basis: "QUOTE",
+    exGstCents,
+    gstCents: Math.round(exGstCents / 10),
+    gstStated: true,
+  }) as const;
 
 describe("activity profit and loss", () => {
   test("A − C with its percentage of A, as the issue writes it", () => {
@@ -209,7 +214,7 @@ describe("activity profit and loss", () => {
         booking({
           id: "b2",
           milestoneId: "m1",
-          price: { basis: "NONE", exGstCents: 0, gstStated: true },
+          price: { basis: "NONE", exGstCents: 0, gstCents: 0, gstStated: true },
         }),
       ],
       invoices: [invoice({ scheduleId: "b2", subTotalCents: 250_00 })],
@@ -368,7 +373,150 @@ describe("profit to date under a parent", () => {
   });
 });
 
+describe("financial GST rollups", () => {
+  test("actual tax rolls through children, stages and project totals, including costs on no activity", () => {
+    const report = buildProjectFinancialReport({
+      milestones: [
+        milestone({ id: "parent", budgetCents: 500_00 }),
+        milestone({ id: "child", parentId: "parent", budgetCents: 200_00 }),
+      ],
+      bookings: [
+        booking({
+          id: "child-booking",
+          milestoneId: "child",
+          price: priced(100_00),
+        }),
+        booking({
+          id: "exempt",
+          milestoneId: "parent",
+          price: { ...priced(50_00), gstCents: 0 },
+        }),
+        booking({ id: "unassigned", milestoneId: null, price: priced(20_00) }),
+        booking({
+          id: "cancelled",
+          milestoneId: "child",
+          price: priced(999_00),
+          status: TradieScheduleStatus.CANCELLED,
+        }),
+      ],
+      invoices: [
+        invoice({
+          scheduleId: "child-booking",
+          subTotalCents: 100_00,
+          totalTaxCents: 7_50,
+        }),
+        invoice({
+          scheduleId: "exempt",
+          subTotalCents: 50_00,
+          totalTaxCents: 0,
+        }),
+        invoice({
+          scheduleId: "unassigned",
+          subTotalCents: 20_00,
+          totalTaxCents: 1_00,
+        }),
+        invoice({
+          scheduleId: null,
+          subTotalCents: 30_00,
+          totalTaxCents: 2_00,
+        }),
+        invoice({
+          scheduleId: "child-booking",
+          status: InvoiceStatus.VOIDED,
+          subTotalCents: 999_00,
+          totalTaxCents: 99_90,
+        }),
+        invoice({
+          scheduleId: null,
+          status: InvoiceStatus.DELETED,
+          subTotalCents: 999_00,
+          totalTaxCents: 99_90,
+        }),
+        invoice({
+          scheduleId: "cancelled",
+          subTotalCents: 0,
+          totalTaxCents: 0,
+        }),
+      ],
+    });
+    const stage = report.stages[0];
+    const parent = stage.activities[0];
+    assert.equal(parent.children[0].figures.tenderGstCents, 20_00);
+    assert.equal(parent.children[0].figures.quotedGstCents, 10_00);
+    assert.equal(parent.children[0].figures.invoicedGstCents, 7_50);
+    assert.equal(parent.figures.tenderGstCents, 50_00);
+    assert.equal(parent.figures.quotedGstCents, 10_00);
+    assert.equal(parent.figures.invoicedGstCents, 7_50);
+    assert.equal(stage.figures.invoicedGstCents, 7_50);
+    assert.equal(report.unassigned.figures.invoicedGstCents, 1_00);
+    assert.equal(report.totals.quotedGstCents, 12_00);
+    assert.equal(report.totals.invoicedGstCents, 10_50);
+    assert.equal(report.totals.invoicedCents, 200_00);
+    assert.equal(report.totals.profitCents, 300_00);
+  });
+
+  test("a stage keeps the contract's exact GST remainder and adds chargeable variations", () => {
+    const report = buildProjectFinancialReport({
+      bookings: [],
+      invoices: [],
+      milestones: [milestone({ id: "m1", budgetCents: 10_00 })],
+      stagePrices: {
+        Frame: {
+          claimCents: 11_05,
+          exGstCents: 10_05,
+          gstIncluded: true,
+          percentage: 25,
+        },
+      },
+      variations: [
+        {
+          milestoneId: "m1",
+          kind: "CHARGEABLE",
+          status: "APPROVED",
+          costCents: 1_00,
+        },
+        {
+          milestoneId: "m1",
+          kind: "PROMOTIONAL",
+          status: "APPROVED",
+          costCents: 2_00,
+        },
+      ],
+    });
+    assert.equal(report.stages[0].figures.tenderCents, 11_05);
+    assert.equal(report.stages[0].figures.tenderGstCents, 1_10);
+    assert.equal(report.totals.tenderGstCents, 1_10);
+  });
+});
+
 describe("booking price and billing state", () => {
+  test("a non-registered tradie's quote carries no GST", () => {
+    const price = bookingPrice({
+      durationDays: 1,
+      quoteGst: TradieQuoteGst.NOT_REGISTERED,
+      quotedPrice: "1100.00",
+      requiresQuote: true,
+      status: TradieScheduleStatus.CONFIRMED,
+      tradie: { lastQuotedPrice: null, lastQuotedPriceUnit: "FIXED" },
+    });
+    assert.equal(price.exGstCents, 1_100_00);
+    assert.equal(price.gstCents, 0);
+  });
+
+  test("an inclusive quote keeps its GST remainder to the cent", () => {
+    const price = bookingPrice({
+      durationDays: 1,
+      quoteGst: TradieQuoteGst.INCLUSIVE,
+      quotedPrice: "11.05",
+      requiresQuote: true,
+      status: TradieScheduleStatus.CONFIRMED,
+      tradie: { lastQuotedPrice: null, lastQuotedPriceUnit: "FIXED" },
+    });
+    assert.equal(price.exGstCents, 10_05);
+    assert.equal(price.gstCents, 1_00);
+    assert.equal(price.exGstCents + price.gstCents, 11_05);
+  });
+
   test("a GST-inclusive quote is brought back to ex GST", () => {
     const price = bookingPrice({
       durationDays: 1,
@@ -381,6 +529,7 @@ describe("booking price and billing state", () => {
     assert.deepEqual(price, {
       basis: "QUOTE",
       exGstCents: 1_000_00,
+      gstCents: 100_00,
       gstStated: true,
     });
   });
@@ -407,7 +556,12 @@ describe("booking price and billing state", () => {
       status: TradieScheduleStatus.CONFIRMED,
       tradie: { lastQuotedPrice: null, lastQuotedPriceUnit: "FIXED" },
     });
-    assert.deepEqual(price, { basis: "NONE", exGstCents: 0, gstStated: true });
+    assert.deepEqual(price, {
+      basis: "NONE",
+      exGstCents: 0,
+      gstCents: 0,
+      gstStated: true,
+    });
   });
 
   test("a price written before quotes were normalised still reads", () => {
