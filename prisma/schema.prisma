@@ -573,6 +573,9 @@ enum OutboxEventKind {
   /// One attempt at emailing a variation to the client. Keyed per attempt,
   /// like TRADIE_REQUEST_SEND, so a resend is something somebody pressed.
   VARIATION_EMAIL_SEND
+  /// One attempt at emailing a tradie about a checklist issue. Keyed per
+  /// attempt: a retry somebody pressed is a new email, a replay is not.
+  CHECKLIST_ISSUE_EMAIL_SEND
 }
 
 enum AgentMemoryProvenance {
@@ -647,6 +650,7 @@ model Project {
   tradeSelections     TradeSelection[]
   tradieInvoices      TradieInvoice[]
   emailedInvoices     TradieInvoiceInbox[]
+  checklists          ProjectChecklist[]
 
   @@index([name])
   @@index([customerId])
@@ -790,6 +794,7 @@ model Tradie {
   emailedInvoices   TradieInvoiceInbox[]
 
   complianceOutreaches ComplianceOutreach[] @relation("TradieComplianceOutreaches")
+  checklistIssues      ChecklistIssue[]     @relation("ChecklistIssueTradie")
 
   @@index([name])
   @@index([trade])
@@ -898,12 +903,13 @@ model File {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  project            Project?            @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
-  milestone          Milestone?          @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
-  lead               Lead?               @relation("LeadFiles", fields: [leadId], references: [id], onDelete: Cascade)
-  incident           TradieIncident?     @relation("TradieIncidentFiles", fields: [incidentId], references: [id], onDelete: Cascade)
-  complianceDocument ComplianceDocument? @relation("ComplianceDocumentFiles", fields: [complianceDocumentId], references: [id], onDelete: Cascade)
-  User               User                @relation("UserFiles", fields: [uploadedBy], references: [id])
+  project             Project?             @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
+  milestone           Milestone?           @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
+  lead                Lead?                @relation("LeadFiles", fields: [leadId], references: [id], onDelete: Cascade)
+  incident            TradieIncident?      @relation("TradieIncidentFiles", fields: [incidentId], references: [id], onDelete: Cascade)
+  complianceDocument  ComplianceDocument?  @relation("ComplianceDocumentFiles", fields: [complianceDocumentId], references: [id], onDelete: Cascade)
+  User                User                 @relation("UserFiles", fields: [uploadedBy], references: [id])
+  checklistAttachment ChecklistAttachment?
 
   @@index([projectId])
   @@index([milestoneId])
@@ -3439,4 +3445,258 @@ model TradieInvoiceInbox {
   @@unique([graphMessageId, attachmentId])
   @@index([projectId, status])
   @@index([tradieId])
+}
+
+/// Where a project checklist is up to. Closing is the end: a closed checklist
+/// is read-only until somebody reopens it on purpose, with a reason.
+enum ChecklistStatus {
+  OPEN
+  CLOSED
+}
+
+/// What the reviewer decided about one inspection row.
+enum ChecklistItemState {
+  /// Not looked at yet. Blocks closure.
+  UNCHECKED
+  /// Inspected and accepted.
+  CHECKED
+  /// The room or fitting is not in this house. Carries a reason, so the row
+  /// is answered rather than silently dropped from the client's document.
+  NOT_APPLICABLE
+}
+
+/// A defect raised against one inspection row. Only VERIFIED stops blocking
+/// closure: a tradie saying it is fixed (RESOLVED) is not the reviewer
+/// looking at it.
+enum ChecklistIssueStatus {
+  OPEN
+  IN_PROGRESS
+  /// Rectification reported; the reviewer still has to inspect it.
+  RESOLVED
+  /// The reviewer inspected the fix and signed it off.
+  VERIFIED
+}
+
+/// Whether the responsible tradie has been told about an issue.
+enum ChecklistNotificationStatus {
+  /// Saved without an email: unassigned, or the reviewer chose not to send.
+  NOT_SENT
+  SENT
+  /// The last attempt failed; the issue and its photos are kept for a retry.
+  FAILED
+}
+
+enum ChecklistIssueEventKind {
+  CREATED
+  STATUS_CHANGED
+  ASSIGNED
+  COMMENT
+  EMAIL_SENT
+  EMAIL_FAILED
+  EVIDENCE_ADDED
+}
+
+/// Whose signature a ChecklistSignature is.
+enum ChecklistSignaturePurpose {
+  /// The reviewer closing the checklist.
+  CHECKLIST_CLOSURE
+  /// The reviewer signing off one issue's rectification.
+  ISSUE_VERIFICATION
+  /// The reviewer named on a downloaded document.
+  EXPORT
+}
+
+/// One of a project's six stage checklists. Checklist N verifies contract
+/// stage N (Deposit, Slab, Frame, Lock Up, Interior Fit-Out, Final), so the
+/// Milestones tab and the Checklists tab open the same row. Checklist 6, the
+/// Final stage, is the handover inspection; 1-5 have no rows yet.
+///
+/// Written through lib/domain/projects/checklist*.ts only.
+model ProjectChecklist {
+  id          String          @id @default(uuid())
+  projectId   String
+  /// 1-6, the position of `stage` in the contract.
+  number      Int
+  stage       ProjectStage
+  /// Which inventory the rows were copied from ("handover-v1", "empty"). The
+  /// rows are a snapshot: editing the template later does not move them.
+  templateKey String
+  title       String
+  status      ChecklistStatus @default(OPEN)
+  /// Bumped on every change, so a downloaded document names the revision it
+  /// printed.
+  version     Int             @default(1)
+  /// "Additional Comments" on the source document.
+  comments    String?         @db.Text
+  /// "Checked and completed by" on the source document.
+  checkedBy   String?
+  closedAt    DateTime?
+  closedById  String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  project    Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items      ChecklistItem[]
+  issues     ChecklistIssue[]
+  signatures ChecklistSignature[]
+  exports    ChecklistExport[]
+
+  @@unique([projectId, number])
+  @@index([projectId])
+}
+
+/// One inspection row, copied from the checklist's template when the
+/// checklist was created. `label` and `section` are the source document's
+/// exact wording.
+model ChecklistItem {
+  id           String             @id @default(uuid())
+  checklistId  String
+  /// Stable within a template ("kitchen.cupboards-benchtops").
+  key          String
+  section      String
+  sectionOrder Int
+  label        String
+  /// Order across the whole checklist.
+  order        Int
+  state        ChecklistItemState @default(UNCHECKED)
+  /// Why a row does not apply to this house. Required for NOT_APPLICABLE.
+  naReason     String?
+  reviewedAt   DateTime?
+  reviewedById String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  checklist   ProjectChecklist      @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  issues      ChecklistIssue[]
+  attachments ChecklistAttachment[]
+
+  @@unique([checklistId, key])
+  @@index([checklistId, order])
+}
+
+/// A photo on an inspection row, and, once it is evidence, on an issue. The
+/// image itself is a project File (tagged "Checklist"), so it also shows in
+/// the Documents tab; this row says which inspection it belongs to.
+model ChecklistAttachment {
+  id           String   @id @default(uuid())
+  itemId       String
+  /// Set when the photo is evidence for an issue. Evidence cannot be removed.
+  issueId      String?
+  fileId       String   @unique
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  item  ChecklistItem   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  issue ChecklistIssue? @relation(fields: [issueId], references: [id], onDelete: SetNull)
+  file  File            @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([issueId])
+}
+
+/// A defect found on one inspection row. Blocks closing the checklist until
+/// it is VERIFIED. Every change is a ChecklistIssueEvent.
+model ChecklistIssue {
+  id               String               @id @default(uuid())
+  checklistId      String
+  itemId           String
+  /// "#3": per checklist, in the order issues were raised.
+  number           Int
+  description      String               @db.Text
+  comments         String?              @db.Text
+  status           ChecklistIssueStatus @default(OPEN)
+  assignedTradieId String?
+  /// The browser's key for one press of Save, so a double-click or a retry
+  /// after a timeout returns the issue it already raised.
+  requestKey       String?              @unique
+
+  notificationStatus ChecklistNotificationStatus @default(NOT_SENT)
+  /// The last send's failure, in words an operator can act on.
+  notificationError  String?
+  notifiedAt         DateTime?
+  notifiedTo         String?
+  /// The email as the reviewer last edited it; a retry sends this.
+  emailSubject       String?
+  emailBody          String?                     @db.Text
+
+  resolvedAt       DateTime?
+  verifiedAt       DateTime?
+  verifiedById     String?
+  verificationNote String?   @db.Text
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  checklist      ProjectChecklist      @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  item           ChecklistItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  assignedTradie Tradie?               @relation("ChecklistIssueTradie", fields: [assignedTradieId], references: [id], onDelete: SetNull)
+  events         ChecklistIssueEvent[]
+  attachments    ChecklistAttachment[]
+  signatures     ChecklistSignature[]
+
+  @@unique([checklistId, number])
+  @@index([checklistId, status])
+  @@index([itemId])
+  @@index([assignedTradieId])
+}
+
+/// An issue's history: who moved it, when, and what was said or sent.
+model ChecklistIssueEvent {
+  id         String                  @id @default(uuid())
+  issueId    String
+  kind       ChecklistIssueEventKind
+  fromStatus ChecklistIssueStatus?
+  toStatus   ChecklistIssueStatus?
+  note       String?                 @db.Text
+  /// Snapshot of who did it: the account may be renamed or deleted later.
+  actorId    String?
+  actorName  String?
+  createdAt  DateTime                @default(now())
+
+  issue ChecklistIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId, createdAt])
+}
+
+/// A captured signature: closing a checklist, verifying an issue, or naming
+/// the reviewer on a downloaded document. Kept apart so each is auditable.
+model ChecklistSignature {
+  id           String                    @id @default(uuid())
+  purpose      ChecklistSignaturePurpose
+  checklistId  String?
+  issueId      String?
+  reviewerName String
+  /// A PNG data URL from the signature pad. Small, and never served publicly.
+  imageDataUrl String                    @db.Text
+  signedById   String?
+  signedAt     DateTime                  @default(now())
+
+  checklist ProjectChecklist? @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  issue     ChecklistIssue?   @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  exports   ChecklistExport[]
+
+  @@index([checklistId])
+  @@index([issueId])
+}
+
+/// One downloaded document: which revision it printed, whether it was the
+/// final signed copy or a draft, and who it names as reviewer.
+model ChecklistExport {
+  id             String          @id @default(uuid())
+  checklistId    String
+  /// ProjectChecklist.version when it was generated.
+  version        Int
+  /// True only for a closed checklist. A draft is marked as one.
+  final          Boolean
+  statusAtExport ChecklistStatus
+  reviewerName   String
+  signatureId    String?
+  generatedById  String?
+  generatedAt    DateTime        @default(now())
+
+  checklist ProjectChecklist    @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  signature ChecklistSignature? @relation(fields: [signatureId], references: [id], onDelete: SetNull)
+
+  @@index([checklistId, generatedAt])
 }
