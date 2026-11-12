@@ -131,9 +131,12 @@ jobs:
       - name: Build Vercel Project
         # `next build` type-checks here (SKIP_BUILD_TYPECHECK is unset), and a
         # cold check of this repo needs ~3 GB — past Node's default heap.
+        # Retries only an eve sandbox-template race with a concurrent staging
+        # deploy; see scripts/ci/vercel-build.sh.
         env:
           NODE_OPTIONS: "--max-old-space-size=6144"
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: bash scripts/ci/vercel-build.sh --prod
       - name: Deploy to Vercel
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
 
@@ -191,9 +194,12 @@ jobs:
       - name: Build Vercel Project for Staging
         # `next build` type-checks here (SKIP_BUILD_TYPECHECK is unset), and a
         # cold check of this repo needs ~3 GB — past Node's default heap.
+        # Retries only an eve sandbox-template race with a concurrent
+        # production deploy; see scripts/ci/vercel-build.sh.
         env:
           NODE_OPTIONS: "--max-old-space-size=6144"
-        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: bash scripts/ci/vercel-build.sh
       - name: Deploy to Vercel for Staging
         run: >-
           vercel deploy --prebuilt
