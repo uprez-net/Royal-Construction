@@ -9,7 +9,7 @@ export default defineTool({
   inputSchema: getLeadWhatsAppInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   label: {
-    start: ({ leadId }) => `Load WhatsApp for lead ${leadId}`,
+    start: () => "Load lead WhatsApp",
   },
   execute(input, ctx) {
     return getAuthorizedLeadWhatsApp(ctx, input);

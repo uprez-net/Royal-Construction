@@ -16,7 +16,7 @@ export default defineTool({
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
   label: {
-    start: ({ leadId }) => `Schedule WhatsApp follow-up for lead ${leadId}`,
+    start: () => "Schedule WhatsApp follow-up",
   },
   async execute(input, ctx) {
     const actor = await requireCurrentAgentActor(ctx);

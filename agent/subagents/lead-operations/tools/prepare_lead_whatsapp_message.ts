@@ -9,7 +9,7 @@ export default defineTool({
   inputSchema: prepareLeadWhatsAppMessageInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   label: {
-    start: ({ leadId, mode }) => `Preview WhatsApp ${mode} for lead ${leadId}`,
+    start: ({ mode }) => `Preview WhatsApp ${mode}`,
   },
   execute(input, ctx) {
     return prepareAuthorizedLeadWhatsAppMessage(ctx, input);

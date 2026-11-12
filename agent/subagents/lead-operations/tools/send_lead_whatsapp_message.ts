@@ -11,7 +11,7 @@ export default defineTool({
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
   label: {
-    start: ({ leadId, mode }) => `Send WhatsApp ${mode} to lead ${leadId}`,
+    start: ({ mode }) => `Send WhatsApp ${mode}`,
   },
   execute(input, ctx) {
     // runAuditedAgentOperation (inside) gives the call its audit row and its
