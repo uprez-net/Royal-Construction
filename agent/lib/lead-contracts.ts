@@ -4,10 +4,14 @@ import { leadSources, leadStages } from "@/utils/validators/lead";
 export const leadIdSchema = z.number().int().positive();
 export const leadTaskIdSchema = z.number().int().positive();
 
+// One tool for finding a lead and for listing the pipeline: an empty query
+// lists every lead, `page` walks the rest, and the result carries the total.
 export const searchLeadsInputSchema = z.object({
-  query: z.string().trim().min(2).max(120),
+  query: z.string().trim().max(120).default(""),
+  stages: z.array(z.enum(leadStages)).max(leadStages.length).default([]),
   includeArchived: z.boolean().default(false),
-  limit: z.number().int().min(1).max(10).default(5),
+  page: z.number().int().min(1).max(10_000).default(1),
+  limit: z.number().int().min(1).max(50).default(10),
 });
 
 export const getLeadInputSchema = z.object({

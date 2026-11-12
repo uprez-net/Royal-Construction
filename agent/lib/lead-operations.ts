@@ -19,6 +19,7 @@ import {
   listLeadTasks,
   searchLeads,
 } from "@/lib/domain/leads/queries";
+import { leadReference, leadSearchEnvelope } from "@/agent/lib/lead-envelopes";
 import { authorizeLead as authorizeLeadRecord } from "@/lib/domain/access/leads";
 import { isDomainError } from "@/lib/domain/errors";
 import { findUserById } from "@/lib/domain/identity/users";
@@ -27,7 +28,7 @@ import { isLeadValidationError } from "@/lib/leads/lead-validation-error";
 import { sendComposedLeadEmail } from "@/lib/leads/lead-email-send";
 import { sendEmail } from "@/lib/azureClient";
 import { generateEmailSubject } from "@/utils/generate-email-subject";
-import { stageMap } from "@/types/lead";
+import { stageMap, stageToPrismaMap } from "@/types/lead";
 import { createLeadSchema, updateLeadSchema } from "@/utils/validators/lead";
 import {
   AgentAuthorizationError,
@@ -36,6 +37,7 @@ import {
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
 import type {
   createLeadInputSchema,
+  searchLeadsInputSchema,
   sendLeadEmailInputSchema,
   updateLeadInputSchema,
 } from "@/agent/lib/lead-contracts";
@@ -47,22 +49,6 @@ function boundedUntrustedText(value: string) {
   return value.length <= MAX_UNTRUSTED_TEXT
     ? value
     : `${value.slice(0, MAX_UNTRUSTED_TEXT)}…`;
-}
-
-function leadReference(lead: {
-  id: number;
-  name: string;
-  stage: keyof typeof stageMap;
-}) {
-  return {
-    type: "lead" as const,
-    id: String(lead.id),
-    display: {
-      label: lead.name,
-      secondaryText: stageMap[lead.stage],
-      href: `/leads/${lead.id}`,
-    },
-  };
 }
 
 async function assertAgentCanAccessLead(
@@ -111,29 +97,23 @@ async function requireTaskOnLead(
 
 export async function searchAuthorizedLeads(
   ctx: SessionContext,
-  input: { includeArchived: boolean; limit: number; query: string },
+  input: z.infer<typeof searchLeadsInputSchema>,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   const query = input.query.trim();
-  const leads = await searchLeads(userPrincipal(actor), input, agentDb);
-
-  return agentResultEnvelopeSchema.parse({
-    version: 1,
-    kind: "entity-summary",
-    title: "Lead search results",
-    summary: `${leads.length} authorized lead${leads.length === 1 ? "" : "s"} matched.`,
-    data: {
-      leads: leads.map((lead) => ({
-        entityRef: leadReference(lead),
-        archived: lead.isArchived,
-        location: lead.location,
-        projectTypes: lead.type,
-        stage: stageMap[lead.stage],
-        updatedAt: lead.updatedAt.toISOString(),
-      })),
+  const result = await searchLeads(
+    userPrincipal(actor),
+    {
+      includeArchived: input.includeArchived,
+      limit: input.limit,
+      page: input.page,
       query,
+      stages: input.stages.map((stage) => stageToPrismaMap[stage]),
     },
-  });
+    agentDb,
+  );
+
+  return leadSearchEnvelope({ ...input, query }, result);
 }
 
 export async function getAuthorizedLead(
@@ -161,7 +141,7 @@ export async function getAuthorizedLead(
     version: 1,
     kind: "entity-summary",
     entityRef,
-    title: lead.name,
+    title: entityRef.display.label,
     summary: `${stageMap[lead.stage]} lead in ${lead.location || "an unspecified location"}.`,
     links: [{ label: "Open lead", href: entityRef.display.href }],
     data: {
