@@ -13,6 +13,7 @@ import {
   type HbcfProjectClaim,
   type HbcfTimelinePayload,
 } from "@/lib/insurance/hbcf";
+import { hbcfClaimTotal, readHbcfClaimDocuments } from "./hbcf-claims";
 
 function readClaimWindow(requirements: unknown) {
   const legal = (requirements as ProjectRequirementsPayload | null)
@@ -27,9 +28,18 @@ function readClaimAmount(
   requirements: unknown,
   totalBudget: unknown,
 ): number | null {
-  const commercials = (requirements as ProjectRequirementsPayload | null)
-    ?.commercialsAndClaims;
-  const candidates = [commercials?.totalContractSum, Number(totalBudget)];
+  const payload = requirements as ProjectRequirementsPayload | null;
+  // The confirmed HBCF claim documents are the real figure (issue #423); the
+  // contract sum and budget are what the pool used before any were recorded.
+  const confirmed = hbcfClaimTotal(
+    readHbcfClaimDocuments(payload?.legalAdministration),
+  ).total;
+  const commercials = payload?.commercialsAndClaims;
+  const candidates = [
+    confirmed,
+    commercials?.totalContractSum,
+    Number(totalBudget),
+  ];
   for (const candidate of candidates) {
     const value = Number(candidate);
     if (Number.isFinite(value) && value > 0) return Math.round(value);

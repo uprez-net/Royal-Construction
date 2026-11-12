@@ -6,7 +6,7 @@ import { test } from "vitest";
 import {
   type LedgerMilestone,
   type StageState,
-  activeOverdueDays,
+  openOverdueDays,
   daysLate,
   duenessOf,
   findWorkingStageIndex,
@@ -291,37 +291,39 @@ test("dueness counts calendar days, so a later clock time is still 'today'", () 
   // Elapsed-hours arithmetic would call 23:00 tonight "in 0.5d" and round it
   // into tomorrow; the builder cares which day it is, not how many hours.
   const today = new Date("2026-08-25T23:30:00");
+  const fiveDays = { estimatedDays: 5 };
 
-  assert.deepEqual(duenessOf({ targetDate: "2026-08-20T07:00:00" }, today), {
-    kind: "today",
-    days: 0,
-  });
-  assert.deepEqual(duenessOf({ targetDate: "2026-08-21T07:00:00" }, today), {
-    kind: "soon",
-    days: 1,
-  });
+  assert.deepEqual(
+    duenessOf({ targetDate: "2026-08-20T07:00:00", ...fiveDays }, today),
+    { kind: "today", days: 0 },
+  );
+  assert.deepEqual(
+    duenessOf({ targetDate: "2026-08-21T07:00:00", ...fiveDays }, today),
+    { kind: "soon", days: 1 },
+  );
 });
 
 test("only lateness is reported; landing early or on time reports nothing", () => {
   // Stage-level target dates make "24d early" common and meaningless, and it
   // reads as a data error. Late is the half that carries a consequence.
+  const fiveDays = { estimatedDays: 5 };
   assert.equal(
     daysLate(
-      { targetDate: "2026-08-09T00:00:00" },
+      { targetDate: "2026-08-09T00:00:00", ...fiveDays },
       new Date("2026-08-16T00:00:00"),
     ),
     2,
   );
   assert.equal(
     daysLate(
-      { targetDate: "2026-08-09T00:00:00" },
+      { targetDate: "2026-08-09T00:00:00", ...fiveDays },
       new Date("2026-08-14T00:00:00"),
     ),
     0,
   );
   assert.equal(
     daysLate(
-      { targetDate: "2026-08-22T00:00:00" },
+      { targetDate: "2026-08-22T00:00:00", ...fiveDays },
       new Date("2026-08-03T00:00:00"),
     ),
     0,
@@ -475,11 +477,8 @@ test("an active activity becomes overdue after its estimated calendar duration, 
     estimatedDays: 5,
   };
 
-  assert.equal(
-    activeOverdueDays(started, new Date("2026-09-19T16:00:00")),
-    null,
-  );
-  assert.equal(activeOverdueDays(started, new Date("2026-09-20T08:00:00")), 1);
+  assert.equal(openOverdueDays(started, new Date("2026-09-19T16:00:00")), null);
+  assert.equal(openOverdueDays(started, new Date("2026-09-20T08:00:00")), 1);
 });
 
 test("longer activity estimates are respected and public holidays count as calendar days", () => {
@@ -490,13 +489,10 @@ test("longer activity estimates are respected and public holidays count as calen
     estimatedDays: 10,
   };
 
+  assert.equal(openOverdueDays(started, new Date("2026-10-09T09:00:00")), null);
+  assert.equal(openOverdueDays(started, new Date("2026-10-13T09:00:00")), 1);
   assert.equal(
-    activeOverdueDays(started, new Date("2026-10-09T09:00:00")),
-    null,
-  );
-  assert.equal(activeOverdueDays(started, new Date("2026-10-13T09:00:00")), 1);
-  assert.equal(
-    activeOverdueDays(
+    openOverdueDays(
       { ...started, estimatedDays: 5 },
       new Date("2026-10-09T09:00:00"),
     ),
@@ -504,33 +500,43 @@ test("longer activity estimates are respected and public holidays count as calen
   );
 });
 
-test("active activities fall back to the planned start, while pending and settled rows have no running-overdue badge", () => {
+test("open activities fall back to the planned start and the two-day default; settled rows have no running-overdue badge", () => {
   const now = new Date("2026-09-07T09:00:00");
   const longAgo = new Date("2026-09-01T09:00:00");
 
+  // Planned 1 Sep, two-day default: due 3 Sep, four days overdue on the 7th.
   assert.equal(
-    activeOverdueDays(
+    openOverdueDays(
       { status: ACTIVE, targetDate: longAgo, startDate: null },
       now,
     ),
-    1,
+    4,
+  );
+  // Issue #422: never started and past its deadline is overdue too.
+  assert.equal(
+    openOverdueDays(
+      { status: PENDING, targetDate: longAgo, estimatedDays: 2 },
+      now,
+    ),
+    4,
   );
   assert.equal(
-    activeOverdueDays(
-      { status: PENDING, targetDate: longAgo, startDate: longAgo },
+    openOverdueDays(
+      { status: PENDING, targetDate: longAgo, estimatedDays: 6 },
       now,
     ),
     null,
+    "due today is not overdue until the day has passed",
   );
   assert.equal(
-    activeOverdueDays(
+    openOverdueDays(
       { status: DONE, targetDate: longAgo, startDate: longAgo },
       now,
     ),
     null,
   );
   assert.equal(
-    activeOverdueDays(
+    openOverdueDays(
       { status: NOT_REQUIRED, targetDate: longAgo, startDate: longAgo },
       now,
     ),

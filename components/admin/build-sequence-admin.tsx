@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { TemplateCostLinePicker } from "./template-cost-line-picker";
+import { DEFAULT_ACTIVITY_DURATION_DAYS } from "@/lib/domain/projects/milestone-schedule";
 import { TemplateActivityTree } from "./template-activity-tree";
 import { TemplateMultiSelect } from "./template-multi-select";
 import { TemplateSingleSelect } from "./template-single-select";
@@ -144,7 +145,7 @@ export function BuildSequenceAdmin({
       parentId: null,
       projectStage: selected?.projectStage ?? ProjectStage.Deposit,
       relatedCostLines: [],
-      estimatedDays: 5,
+      estimatedDays: DEFAULT_ACTIVITY_DURATION_DAYS,
       requiredTradeTypeIds: [],
     };
     setActivities([...activities, row]);
@@ -407,8 +408,10 @@ export function BuildSequenceAdmin({
                       }
                     />
                     <FieldDescription>
-                      Calendar days until the next activity&apos;s target. The
-                      first activity is due on the project start date.
+                      Calendar days this activity takes. It is due this many
+                      days after the activity before it closes; the first one
+                      counts from the project start date. Changing it updates
+                      every project activity not yet completed.
                     </FieldDescription>
                   </Field>
                   <Field>

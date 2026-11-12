@@ -4,10 +4,10 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/types/project";
 import { ComplianceDocumentType, type File as DBFile } from "@prisma/client";
 import type {
+  HbcfClaimDocument,
   ProjectRequirementsPayload,
   ProjectFlowSectionKey,
   ProjectPaymentStage,
-  ProjectSourceDocumentReference,
   ProjectValidationResult,
   ProjectConflictResult,
 } from "@/types/project-flow";
@@ -64,7 +64,6 @@ import {
   Pencil,
   Lock,
 } from "lucide-react";
-import { UploadButton } from "@/components/common/upload-button";
 import { useAppDispatch } from "@/lib/store/hooks";
 import {
   setActiveProject,
@@ -80,6 +79,12 @@ import {
 import { hasInsuranceClaimDates } from "@/lib/projects/insurance-claim-dates";
 import { HbcfCoverDatesDialog } from "@/components/projects/detail/hbcf-cover-dates-dialog";
 import { withInsuranceClaimStartDate } from "@/components/projects/detail/insurance-claim-dates-fields";
+import { HbcfClaimsBlock } from "@/components/projects/detail/hbcf-claims-block";
+import {
+  appendHbcfClaimDocuments,
+  hbcfClaimDate,
+  readHbcfClaimDocuments,
+} from "@/lib/domain/insurance/hbcf-claims";
 
 // ---------------------------------------------------------------------------
 // Types & config
@@ -393,6 +398,7 @@ function StartDateField({
   value,
   milestones,
   locked,
+  claimDate,
   onSaved,
 }: {
   projectId: string;
@@ -400,6 +406,11 @@ function StartDateField({
   milestones: ProjectDetail["milestones"];
   /** Work has started on site: the date is the day it began, and fixed. */
   locked: boolean;
+  /**
+   * The saved HBCF claim date, `yyyy-MM-dd`. While one is recorded the start
+   * date follows it (issue #421) and is not edited here.
+   */
+  claimDate: string | null;
   onSaved: (project: ProjectDetail) => void;
 }) {
   const milestoneCount = milestones.length;
@@ -466,10 +477,19 @@ function StartDateField({
   const displayDate = (date: Date) => format(date, "d MMM yyyy");
 
   const hintId = `${id}-hint`;
+  const followsClaim = Boolean(claimDate) && !locked;
   const hint = locked ? (
     <p id={hintId} className="text-[11px] leading-snug text-muted-foreground">
       Set to the day the first milestone started. It can&apos;t be changed once
       work has started.
+      {claimDate && claimDate !== current
+        ? ` The HBCF claim date is ${displayDate(parse(claimDate, "yyyy-MM-dd", new Date()))}.`
+        : null}
+    </p>
+  ) : followsClaim ? (
+    <p id={hintId} className="text-[11px] leading-snug text-muted-foreground">
+      Follows the HBCF claim date. Change the Insurance Claim Start Date under
+      Legal &amp; Administration to move it and reschedule every milestone.
     </p>
   ) : (
     <p id={hintId} className="text-[11px] leading-snug text-muted-foreground">
@@ -478,7 +498,7 @@ function StartDateField({
     </p>
   );
 
-  if (!editing || locked) {
+  if (!editing || locked || followsClaim) {
     return (
       <FieldShell label="Start date (on-site)">
         <div
@@ -498,13 +518,15 @@ function StartDateField({
               ? displayDate(parse(current, "yyyy-MM-dd", new Date()))
               : "Not set"}
           </span>
-          {locked ? (
+          {locked || followsClaim ? (
             <span className="mr-2 flex items-center">
               <Lock
                 className="size-3.5 text-muted-foreground"
                 aria-hidden="true"
               />
-              <span className="sr-only">Locked</span>
+              <span className="sr-only">
+                {locked ? "Locked" : "Set from the HBCF claim date"}
+              </span>
             </span>
           ) : (
             <Button
@@ -1108,122 +1130,6 @@ function OwnerContactsBlock({
   );
 }
 
-/**
- * HBCF (Home Building Compensation Fund) certificate number and the certificate
- * it was read from.
- *
- * The number is the thing site staff quote back to iCare and to the owner, so
- * it stays editable by hand: OCR on a photographed certificate is not reliable
- * enough to be the only way in. The alert is driven by the number rather than
- * by the presence of a document, so uploading an unreadable certificate leaves
- * the prompt up instead of silently marking the job compliant.
- */
-function HbcfInsuranceBlock({
-  projectId,
-  insuranceNumber,
-  document,
-  extracting,
-  onNumberChange,
-  onUpload,
-}: {
-  projectId: string;
-  insuranceNumber: string | null;
-  document: ProjectSourceDocumentReference | null;
-  extracting: boolean;
-  onNumberChange: (value: string | null) => void;
-  onUpload: (files: DBFile[]) => void;
-}) {
-  const id = useId();
-  const dispatch = useAppDispatch();
-  const hasNumber = (insuranceNumber ?? "").trim().length > 0;
-
-  return (
-    <div className="space-y-3 rounded-xl border border-border bg-muted/40 p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h4 className="text-sm font-semibold text-foreground">
-          HBCF insurance
-        </h4>
-        <p className="text-xs text-muted-foreground">
-          Upload the certificate to read the number automatically, or type it in
-          if the scan is unreadable.
-        </p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <FieldShell label="HBCF insurance no." htmlFor={id}>
-          <Input
-            id={id}
-            value={displayValue(insuranceNumber)}
-            onChange={(e) => onNumberChange(emptyToNull(e.target.value))}
-            placeholder="Not recorded yet"
-            disabled={extracting}
-            className={FIELD_CONTROL_CLASS}
-          />
-        </FieldShell>
-
-        <div className="flex flex-col justify-end gap-1.5">
-          <UploadButton
-            projectId={projectId}
-            maxFiles={1}
-            accept="application/pdf,.pdf"
-            hints={{
-              trail: ["HBCF insurance"],
-              tags: ["HBCF insurance", "Insurance certificate"],
-            }}
-            onUpload={onUpload}
-          />
-          {extracting ? (
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />
-              Reading the certificate&hellip;
-            </p>
-          ) : null}
-        </div>
-      </div>
-
-      {hasNumber ? null : (
-        <div
-          role="alert"
-          className={cn(
-            "flex items-start gap-2.5 rounded-lg border px-3 py-2 text-sm",
-            "border-destructive/25 bg-destructive-light text-destructive-ink",
-          )}
-        >
-          <AlertTriangle
-            aria-hidden="true"
-            className="mt-0.5 h-4 w-4 shrink-0"
-          />
-          <p>Upload the insurance document to update the no.</p>
-        </div>
-      )}
-
-      {document?.url ? (
-        <Button
-          type="button"
-          onClick={() =>
-            dispatch(
-              openModal({
-                type: "previewFile",
-                payload: { fileUrl: document.url },
-              }),
-            )
-          }
-          aria-label={`Open the hbcf insurance document in a new tab`}
-          variant="ghost"
-          size="sm"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-        >
-          <FileText aria-hidden="true" className="h-3.5 w-3.5" />
-          <span className="wrap-break-word">
-            {document.fileName || "HBCF insurance certificate"}
-          </span>
-          <ExternalLink aria-hidden="true" className="h-3 w-3 shrink-0" />
-        </Button>
-      ) : null}
-    </div>
-  );
-}
-
 function PaymentStagesTable({
   stages,
   onChange,
@@ -1564,6 +1470,7 @@ export function ProjectOverviewTab({
   // the start date read off the certificate (null when none was found).
   const [coverDatesPrompt, setCoverDatesPrompt] = useState<{
     suggestedStartDate: string | null;
+    conflictingDates: string[];
   } | null>(null);
   // Validations and conflicts are produced upstream from the tender/contract
   // extraction and stored on the requirements payload — nothing in the app
@@ -1572,6 +1479,25 @@ export function ProjectOverviewTab({
   // server does not have. Instead, track whether the form has unsaved edits and
   // label the counts honestly while it does.
   const [dirty, setDirty] = useState(false);
+  // The draft as of the last render. The HBCF upload awaits OCR for several
+  // seconds; it merges its documents into this rather than into the draft it
+  // started from, so edits made while the documents were being read survive.
+  const draftRef = useRef(draft);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+  // Same for the estimated end date, which is state of its own.
+  const estimatedEndDateRef = useRef(stateEstimatedEndDate);
+  useEffect(() => {
+    estimatedEndDateRef.current = stateEstimatedEndDate;
+  }, [stateEstimatedEndDate]);
+
+  // Open while a save would move the start date onto a changed HBCF claim
+  // date, which reschedules every milestone: the same deliberate step the
+  // start date field asks for when it is moved by hand.
+  const [claimDateConfirm, setClaimDateConfirm] = useState<{
+    claimDate: string;
+  } | null>(null);
 
   // Every edit path goes through this so `dirty` can never drift from `draft`.
   const editDraft = (
@@ -1700,9 +1626,12 @@ export function ProjectOverviewTab({
    *   State updates are async, so a flow that edits the draft and saves in the
    *   same tick (the HBCF upload) has to hand the new payload in directly or it
    *   would PATCH the pre-edit draft.
+   * @returns Whether the save landed, so a flow that continues after it (the
+   *   HBCF upload) can stop instead of acting on something never saved.
    */
-  const handleSave = async (override?: RequirementsData) => {
+  const handleSave = async (override?: RequirementsData): Promise<boolean> => {
     const payload = override ?? draft;
+    const estimatedEndDateAtSave = estimatedEndDateRef.current;
     setSaving(true);
     try {
       const response = await fetchJson<ProjectDetail>(
@@ -1713,139 +1642,275 @@ export function ProjectOverviewTab({
           body: JSON.stringify({
             requirements: payload,
             name: payload.projectName,
-            // The start date is saved on its own by `StartDateField`.
-            estimatedEndDate: stateEstimatedEndDate,
+            // The start date is saved on its own by `StartDateField`. Read
+            // through the ref: the HBCF upload saves after a long OCR wait,
+            // and the value captured when it began may be out of date.
+            estimatedEndDate: estimatedEndDateAtSave,
           }),
         },
         "Unable to update project",
       );
-      toast.success("Project sections updated");
+      const meta = response.meta ?? {};
+      if (meta.startDateFollowedHbcfClaim) {
+        const rescheduled = Number(meta.rescheduledMilestones ?? 0);
+        toast.success(
+          rescheduled > 0
+            ? `Project sections updated. The start date moved to the HBCF claim date and ${rescheduled} milestone target dates were rescheduled.`
+            : "Project sections updated. The start date moved to the HBCF claim date.",
+        );
+      } else if (meta.startDateHeldByStartedWork) {
+        toast.info(
+          "Project sections updated. The HBCF claim date was saved, but the start date stays on the day work began because work has started.",
+        );
+      } else {
+        toast.success("Project sections updated");
+      }
       // The header is a sibling reading `projects.activeProject`, not this
       // tab's draft, so a saved HBCF number or PCA inspector kept showing
       // "Not set" until a full reload. The PATCH returns the whole project,
       // so hand it to the store the header actually reads.
       dispatch(setActiveProject(response.data));
-      setDraft((response.data.requirements ?? payload) as RequirementsData);
-      setStateEstimatedEndDate(
-        toDateInputValue(response.data.estimatedEndDate),
-      );
-      setDirty(false);
+      // Edits made while the request was in flight are newer than what was
+      // saved; replacing them with the response would lose them silently.
+      // Every edit makes a new draft object, so the draft is unedited only
+      // while it is still the very object this save sent.
+      if (
+        draftRef.current === payload
+        && estimatedEndDateRef.current === estimatedEndDateAtSave
+      ) {
+        setDraft((response.data.requirements ?? payload) as RequirementsData);
+        setStateEstimatedEndDate(
+          toDateInputValue(response.data.estimatedEndDate),
+        );
+        setDirty(false);
+      }
+      return true;
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Unable to update project",
       );
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
   /**
-   * Links an uploaded HBCF certificate to the project and fills in the number
-   * read off it.
+   * The Save button. A changed HBCF claim date moves the start date and
+   * reschedules every milestone (issue #421) unless work has started, so that
+   * save is confirmed first, the way a hand-moved start date is.
+   */
+  const requestSave = () => {
+    const pendingClaim = hbcfClaimDate(
+      draft.legalAdministration as Parameters<typeof hbcfClaimDate>[0],
+    );
+    if (
+      pendingClaim
+      && pendingClaim !== savedClaimDate
+      && pendingClaim !== toDateInputValue(project.startDate)
+      && !hasWorkStarted(project.milestones)
+    ) {
+      setClaimDateConfirm({ claimDate: pendingClaim });
+      return;
+    }
+    void handleSave();
+  };
+
+  /**
+   * Adds uploaded HBCF documents to the project's claim (issue #423), with the
+   * number, cover date and amount read off each.
    *
-   * Extraction failure is not upload failure: the document reference is saved
-   * either way, so the certificate stays one click away and the red alert keeps
-   * asking for a number instead of the upload being lost.
-   * @param files - Result of the single-file HBCF upload.
+   * Every document already on the project is kept. Extraction failure is not
+   * upload failure: a document that could not be read is still added, with no
+   * amount, so it stays one click away and is plainly not counted.
+   *
+   * The claim date is never taken from a document without asking: with no
+   * claim date yet, the dates read are offered for confirmation (none is
+   * suggested when they disagree); with one already set, a document that
+   * disagrees is flagged and the date is left alone.
+   * @param files - Result of the HBCF upload, one or more PDFs.
    */
   const handleHbcfUpload = async (files: DBFile[]) => {
-    const file = files[0];
-    if (!file) return;
+    if (files.length === 0) return;
 
-    const hbcfInsuranceDocument: ProjectSourceDocumentReference = {
-      fileId: file.id,
-      fileName: file.filename,
-      url: file.url,
-      kind: "hbcfInsurance",
-    };
-
-    const toastId = toast.loading("Reading the HBCF certificate…");
+    const toastId = toast.loading(
+      files.length === 1
+        ? "Reading the HBCF document…"
+        : `Reading ${files.length} HBCF documents…`,
+    );
     setHbcfExtracting(true);
-    let extractedNumber = "";
-    let coverStartDate: string | null = null;
 
-    try {
-      const response = await fetchJson<{
-        hbcfInsuranceNumber: string;
-        coverStartDate?: string;
-        ok: boolean;
-        message: string;
-      }>(
-        `/api/projects/${project.id}/hbcf-extract`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            url: file.url,
+    const readings = await Promise.all(
+      files.map(
+        async (file): Promise<HbcfClaimDocument & { read: boolean }> => {
+          const base = {
+            amountConfirmed: false,
+            certificateNumber: null,
+            claimAmount: null,
+            coverStartDate: null,
             fileId: file.id,
             fileName: file.filename,
-          }),
+            url: file.url,
+          };
+          try {
+            const response = await fetchJson<{
+              hbcfInsuranceNumber: string;
+              coverStartDate?: string;
+              claimAmount?: number | null;
+              ok: boolean;
+              message: string;
+            }>(
+              `/api/projects/${project.id}/hbcf-extract`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  url: file.url,
+                  fileId: file.id,
+                  fileName: file.filename,
+                }),
+              },
+              "Unable to read the HBCF insurance document",
+            );
+            return {
+              ...base,
+              certificateNumber:
+                response.data.hbcfInsuranceNumber?.trim() || null,
+              claimAmount: response.data.claimAmount ?? null,
+              coverStartDate: response.data.coverStartDate?.trim() || null,
+              read: true,
+            };
+          } catch {
+            return { ...base, read: false };
+          }
         },
-        "Unable to read the HBCF insurance document",
-      );
+      ),
+    );
+    setHbcfExtracting(false);
 
-      extractedNumber = (response.data.hbcfInsuranceNumber ?? "").trim();
-      coverStartDate = response.data.coverStartDate?.trim() || null;
+    const unread = readings.filter((reading) => !reading.read).length;
+    const added: HbcfClaimDocument[] = readings.map((reading) => ({
+      amountConfirmed: reading.amountConfirmed,
+      certificateNumber: reading.certificateNumber,
+      claimAmount: reading.claimAmount,
+      coverStartDate: reading.coverStartDate,
+      fileId: reading.fileId,
+      fileName: reading.fileName,
+      url: reading.url,
+    }));
+    const firstNumber =
+      added.find((document) => document.certificateNumber)?.certificateNumber
+      ?? null;
 
-      if (extractedNumber) {
-        toast.success("HBCF insurance number read from the certificate", {
-          id: toastId,
-        });
-      } else {
-        toast.warning(
-          "No HBCF insurance number was found on the certificate. Enter it manually.",
-          { id: toastId },
-        );
-      }
-    } catch (error) {
+    if (unread === readings.length) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Unable to read the HBCF insurance document",
+        "The HBCF documents were added, but could not be read. Enter the number and amounts manually.",
         { id: toastId },
       );
-    } finally {
-      setHbcfExtracting(false);
+    } else if (unread > 0) {
+      toast.warning(
+        `${unread} of ${readings.length} documents could not be read. Enter their amounts manually.`,
+        { id: toastId },
+      );
+    } else if (firstNumber || added.some((d) => d.claimAmount !== null)) {
+      toast.success(
+        "Read the HBCF documents. Check and confirm each claim amount.",
+        { id: toastId },
+      );
+    } else {
+      toast.warning(
+        "No HBCF number or amount was found on the documents. Enter them manually.",
+        { id: toastId },
+      );
     }
 
+    // The draft now, not the one this upload started from: OCR took a while,
+    // and anything typed meanwhile must not be thrown away by this save.
+    const latest = draftRef.current;
+    const legal = (latest.legalAdministration ?? {}) as Record<string, unknown>;
+    const previous = readHbcfClaimDocuments(
+      legal as Parameters<typeof readHbcfClaimDocuments>[0],
+    );
+    const documents = appendHbcfClaimDocuments(previous, added);
+    const currentNumber = (legal.hbcfInsuranceNumber as string | null) ?? null;
+    const primary = documents[0];
+
     const nextDraft: RequirementsData = {
-      ...draft,
+      ...latest,
       legalAdministration: {
-        ...(draft.legalAdministration as object),
-        hbcfInsuranceNumber: extractedNumber || null,
-        hbcfInsuranceDocument,
+        ...legal,
+        // A number already on the project is the one quoted to iCare; an
+        // additional document does not replace it.
+        hbcfInsuranceNumber: currentNumber?.trim()
+          ? currentNumber
+          : firstNumber,
+        hbcfClaimDocuments: documents,
+        // The first document stays the one the compliance checklist reads.
+        hbcfInsuranceDocument: primary
+          ? {
+              fileId: primary.fileId,
+              fileName: primary.fileName,
+              kind: "hbcfInsurance",
+              url: primary.url,
+            }
+          : null,
       } as never,
     };
 
     editDraft(() => nextDraft);
-    await handleSave(nextDraft);
+    // Nothing below may act on documents that were not saved: no date prompt
+    // and no compliance filing for a certificate the project does not hold.
+    // The documents stay in the draft, so Save can retry them.
+    if (!(await handleSave(nextDraft))) return;
 
-    // The cover window, offered for confirmation rather than written: see
-    // HbcfCoverDatesDialog. Dates already on the project are left alone.
+    const datesOf = (list: readonly HbcfClaimDocument[]) =>
+      [
+        ...new Set(
+          list
+            .map((document) => document.coverStartDate)
+            .filter((date): date is string => Boolean(date)),
+        ),
+      ].sort();
+    const readDates = datesOf(added);
     if (!hasInsuranceClaimDates(nextDraft)) {
-      setCoverDatesPrompt({ suggestedStartDate: coverStartDate });
+      // Every document on the claim, not just the new ones: a certificate
+      // added earlier (when the prompt was skipped) may disagree with this one,
+      // and suggesting the new date alone would hide that.
+      const allDates = datesOf(documents);
+      setCoverDatesPrompt({
+        conflictingDates: allDates.length > 1 ? allDates : [],
+        suggestedStartDate: allDates.length === 1 ? allDates[0] : null,
+      });
+    } else {
+      const claimDate = hbcfClaimDate(
+        nextDraft.legalAdministration as Parameters<typeof hbcfClaimDate>[0],
+      );
+      if (claimDate && readDates.some((date) => date !== claimDate)) {
+        toast.warning(
+          "A new HBCF document shows a different cover start date from the project's claim date. The claim date was not changed; check it under Legal & Administration.",
+        );
+      }
     }
 
-    // One certificate, filed in both places it is needed. The compliance
-    // checklist asks for home insurance too, and without this the same PDF had
-    // to be uploaded a second time over there — against a row the certifier is
-    // waiting on, which is the half more likely to be forgotten.
+    // The first certificate on the project is also filed on the compliance
+    // checklist, which asks for home insurance too; without this the same PDF
+    // had to be uploaded a second time over there. Additional documents are
+    // not: the checklist line wants the certificate, not every claim.
     //
     // Only when an engagement exists to file it against, and never fatal: the
-    // number and the document reference are already saved above, and a project
-    // with no certifier yet has nowhere to put this and needs nothing doing.
-    if (project.certifierEngagement) {
+    // documents are already saved above.
+    if (project.certifierEngagement && previous.length === 0 && primary) {
       try {
         await dispatch(
           uploadComplianceDocument({
             projectId: project.id,
-            fileId: file.id,
+            fileId: primary.fileId,
             documentType: ComplianceDocumentType.HOME_INSURANCE,
           }),
         ).unwrap();
       } catch (error) {
         console.error(
-          "Saved the HBCF certificate, but could not file it on the compliance checklist",
+          "Saved the HBCF document, but could not file it on the compliance checklist",
           error,
         );
       }
@@ -1878,11 +1943,13 @@ export function ProjectOverviewTab({
   const hbcfInsuranceNumber =
     (legalAdministration?.hbcfInsuranceNumber as string | null | undefined)
     ?? null;
-  const hbcfInsuranceDocument =
-    (legalAdministration?.hbcfInsuranceDocument as
-      | ProjectSourceDocumentReference
-      | null
-      | undefined) ?? null;
+  const hbcfClaimDocuments = readHbcfClaimDocuments(
+    legalAdministration as Parameters<typeof readHbcfClaimDocuments>[0],
+  );
+  const savedClaimDate = hbcfClaimDate(
+    (project.requirements as RequirementsData | null)
+      ?.legalAdministration as Parameters<typeof hbcfClaimDate>[0],
+  );
 
   // Header chips and the compliance banner deep-link here via
   // `#legalAdministration`. Re-apply on hashchange too — a click while
@@ -1970,7 +2037,7 @@ export function ProjectOverviewTab({
               </Badge>
             ) : null}
             <Button
-              onClick={() => handleSave()}
+              onClick={requestSave}
               disabled={!dirty || saving}
               aria-busy={saving}
             >
@@ -2008,6 +2075,7 @@ export function ProjectOverviewTab({
               value={project.startDate}
               milestones={project.milestones}
               locked={hasWorkStarted(project.milestones)}
+              claimDate={savedClaimDate}
               // The header and the milestone tab read the store, not this
               // tab, so the saved project goes back there.
               onSaved={(saved) => dispatch(setActiveProject(saved))}
@@ -2159,11 +2227,17 @@ export function ProjectOverviewTab({
                     ) : null}
 
                     {key === "legalAdministration" ? (
-                      <HbcfInsuranceBlock
+                      <HbcfClaimsBlock
                         projectId={project.id}
                         insuranceNumber={hbcfInsuranceNumber}
-                        document={hbcfInsuranceDocument}
+                        documents={hbcfClaimDocuments}
+                        claimDate={hbcfClaimDate(
+                          legalAdministration as Parameters<
+                            typeof hbcfClaimDate
+                          >[0],
+                        )}
                         extracting={hbcfExtracting}
+                        canRemove={isAdmin}
                         onNumberChange={(value) =>
                           updateSectionField(
                             "legalAdministration",
@@ -2171,6 +2245,24 @@ export function ProjectOverviewTab({
                             value,
                           )
                         }
+                        onDocumentsChange={(documents) => {
+                          const primary = documents[0];
+                          editDraft((current) => ({
+                            ...current,
+                            legalAdministration: {
+                              ...(current.legalAdministration as object),
+                              hbcfClaimDocuments: documents,
+                              hbcfInsuranceDocument: primary
+                                ? {
+                                    fileId: primary.fileId,
+                                    fileName: primary.fileName,
+                                    kind: "hbcfInsurance",
+                                    url: primary.url,
+                                  }
+                                : null,
+                            } as never,
+                          }));
+                        }}
                         onUpload={handleHbcfUpload}
                       />
                     ) : null}
@@ -2252,10 +2344,74 @@ export function ProjectOverviewTab({
         </CardContent>
       </Card>
 
+      <AlertDialog
+        open={claimDateConfirm !== null}
+        onOpenChange={(open) => {
+          if (!open && !saving) setClaimDateConfirm(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {claimDateConfirm
+                ? `Move the start date to ${format(parse(claimDateConfirm.claimDate, "yyyy-MM-dd", new Date()), "d MMM yyyy")}?`
+                : "Move the start date?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  The project start date follows the HBCF claim date, so saving
+                  this claim date moves it
+                  {project.milestones.length > 0
+                    ? ` and reschedules all ${project.milestones.length} milestone target dates from it`
+                    : ""}
+                  .
+                </p>
+                <p>
+                  Any target date set by hand is replaced. It cannot be undone
+                  from here.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={saving}
+              aria-busy={saving}
+              onClick={(event) => {
+                // Stay open until the save answers, so a failure is not
+                // mistaken for a dialog that simply closed.
+                event.preventDefault();
+                // Closed only once saved; a failure leaves it open to retry.
+                void handleSave().then((saved) => {
+                  if (saved) setClaimDateConfirm(null);
+                });
+              }}
+            >
+              {saving ? (
+                <Loader2
+                  className="size-4 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+              ) : null}
+              {saving ? "Saving…" : "Save and move start date"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {coverDatesPrompt ? (
         <HbcfCoverDatesDialog
           open
           suggestedStartDate={coverDatesPrompt.suggestedStartDate}
+          conflictingDates={coverDatesPrompt.conflictingDates}
+          // The rule `planStartDateFromHbcfClaim` applies on the server: once
+          // an activity has started, the start date stays where it is.
+          startDateHeld={hasWorkStarted(project.milestones)}
+          rescheduleCount={
+            hasWorkStarted(project.milestones) ? 0 : project.milestones.length
+          }
           onSkip={() => setCoverDatesPrompt(null)}
           onConfirm={async (dates) => {
             const nextDraft: RequirementsData = {
@@ -2266,7 +2422,10 @@ export function ProjectOverviewTab({
               } as never,
             };
             editDraft(() => nextDraft);
-            await handleSave(nextDraft);
+            // Rejecting keeps the dialog open with its own error line.
+            if (!(await handleSave(nextDraft))) {
+              throw new Error("The cover dates were not saved. Try again.");
+            }
             setCoverDatesPrompt(null);
           }}
         />

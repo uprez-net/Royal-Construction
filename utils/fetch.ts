@@ -23,9 +23,9 @@ export class FetchError extends Error {
  */
 export function fetchErrorMessage(responseBody: unknown, fallback: string) {
   if (
-    responseBody &&
-    typeof responseBody === "object" &&
-    "error" in responseBody
+    responseBody
+    && typeof responseBody === "object"
+    && "error" in responseBody
   ) {
     const message = (responseBody as { error?: unknown }).error;
 
@@ -40,6 +40,7 @@ interface FetchJsonResponse<T> {
   data: T;
   success: boolean;
   timestamp: string;
+  meta?: Record<string, unknown>;
 }
 
 /**

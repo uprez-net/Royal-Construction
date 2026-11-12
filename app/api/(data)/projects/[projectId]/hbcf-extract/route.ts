@@ -1,12 +1,11 @@
-import { auth } from "@clerk/nextjs/server";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import { NextRequest } from "next/server";
-import { Role } from "@prisma/client";
 import type { OCRPageObject } from "@mistralai/mistralai/models/components";
 import { z } from "zod";
 
 import prisma from "@/lib/prisma";
-import { getUserByClerkIdCached } from "@/lib/data/user";
+import { currentPrincipal } from "@/lib/data/current-principal";
+import { authorizeProjectEdit } from "@/lib/domain/access/projects";
 import { processPDFWithMistral } from "@/lib/ocr";
 import { handleHbcfExtractionGeneration } from "@/lib/agent/hbcfExtractionAgent";
 import {
@@ -14,9 +13,6 @@ import {
   parseRouteParamsWithResponse,
   parseBodyWithResponse,
   successResponse,
-  unauthorizedResponse,
-  forbiddenResponse,
-  notFoundResponse,
   errorResponse,
 } from "@/utils/validators";
 
@@ -60,8 +56,8 @@ function pageBlocksToMarkdown(pages: OCRPageObject[]) {
 }
 
 /**
- * Reads the HBCF certificate number and the cover start date off an uploaded
- * certificate. Nothing is saved here: the Overview tab offers the date to the
+ * Reads the HBCF certificate number, the cover start date and the amount
+ * covered off an uploaded certificate. Nothing is saved here: the Overview tab offers the date to the
  * office to confirm, with the end of cover defaulted from it.
  *
  * Either may legitimately come back blank — the certificate does not
@@ -73,16 +69,6 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
-  const { userId } = await auth();
-  if (!userId) {
-    return unauthorizedResponse();
-  }
-
-  const user = await getUserByClerkIdCached(userId);
-  if (!user) {
-    return unauthorizedResponse();
-  }
-
   const resolvedParams = await params;
   const routeParams = parseRouteParamsWithResponse(
     resolvedParams,
@@ -96,38 +82,12 @@ export async function POST(
   const projectId = routeParams.data.projectId;
 
   try {
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: {
-        id: true,
-        customerId: true,
-        siteManagerId: true,
-        Lead: {
-          select: {
-            assignedId: true,
-          },
-        },
-      },
-    });
-
-    if (!project) {
-      return notFoundResponse("Project");
-    }
-
-    // Same edit gate as PATCH /api/projects/[projectId]: whoever may write the
-    // number by hand may also have it read off a certificate.
-    const canEditProject =
-      user.role === Role.ADMIN
-      || project.siteManagerId === user.id
-      || project.Lead.assignedId === user.id
-      || (user.role === Role.CUSTOMER
-        && user.customerId === project.customerId);
-
-    if (!canEditProject) {
-      return forbiddenResponse(
-        "You do not have access to update this project.",
-      );
-    }
+    // The edit gate PATCH /api/projects/[projectId] uses, called rather than
+    // copied: whoever may write the number by hand may have it read off a
+    // certificate. The inline copy this replaces also let a CUSTOMER through,
+    // which the PATCH it fed never did -- so they could spend an OCR run on a
+    // save that was then refused.
+    await authorizeProjectEdit(await currentPrincipal(), projectId, prisma);
 
     const pages = await processPDFWithMistral(body.data.url);
     const markdown = pageBlocksToMarkdown(pages).trim();
@@ -136,6 +96,7 @@ export async function POST(
       return successResponse({
         hbcfInsuranceNumber: "",
         coverStartDate: "",
+        claimAmount: null,
         fileId: body.data.fileId,
         fileName: body.data.fileName,
         url: body.data.url,
@@ -150,6 +111,7 @@ export async function POST(
     return successResponse({
       hbcfInsuranceNumber: extraction.hbcfInsuranceNumber,
       coverStartDate: extraction.coverStartDate,
+      claimAmount: extraction.claimAmount,
       fileId: body.data.fileId,
       fileName: body.data.fileName,
       url: body.data.url,

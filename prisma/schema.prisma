@@ -717,8 +717,15 @@ model Milestone {
   status             MilestoneStatus @default(PENDING)
   isPhotoRequired    Boolean         @default(false)
   parentId           String?
-  /// Snapshot from the build sequence. Later template edits do not change this job.
-  estimatedDays      Int             @default(5)
+  /// Calendar days the activity is expected to take, copied from the build
+  /// sequence. An admin changing the build sequence's duration updates it on
+  /// every activity not yet completed (`saveMilestoneTemplate`); a completed
+  /// activity keeps the duration it was planned with.
+  estimatedDays      Int             @default(2)
+  /// The build-sequence row this activity was created from. Null for an
+  /// activity added by hand on the project, and when the row is removed from
+  /// the build sequence -- the activity keeps its own snapshot either way.
+  templateId         String?
   requiredTradeTypes TradeType[]     @relation("MilestoneRequiredTrades")
 
   createdAt DateTime @default(now())
@@ -735,10 +742,12 @@ model Milestone {
   tradies            Tradie[]            @relation("TradieMilestones")
   parentMilestone    Milestone?          @relation("MilestoneHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   childrenMilestones Milestone[]         @relation("MilestoneHierarchy")
+  template           MilestoneTemplate?  @relation("TemplateMilestones", fields: [templateId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, order])
   @@index([projectId])
   @@index([status])
+  @@index([templateId])
 }
 
 /// The admin-managed build sequence used only when a project is created.
@@ -751,8 +760,11 @@ model MilestoneTemplate {
   parent             MilestoneTemplate?  @relation("TemplateHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
   children           MilestoneTemplate[] @relation("TemplateHierarchy")
   relatedCostLines   String[]            @default([])
-  estimatedDays      Int                 @default(5)
+  /// Calendar days the activity is expected to take. Each activity's
+  /// estimated completion is the day the one before it closed plus this.
+  estimatedDays      Int                 @default(2)
   requiredTradeTypes TradeType[]         @relation("TemplateRequiredTrades")
+  milestones         Milestone[]         @relation("TemplateMilestones")
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 

@@ -36,7 +36,8 @@
     "backfill:converted-to-won": "tsx scripts/backfill-converted-to-won.ts",
     "backfill:lead-stage-from-offers": "tsx scripts/backfill-lead-stage-from-offers.ts",
     "backfill:ceiling-upgrade-variation-rule": "tsx scripts/fill-ceiling-upgrade-variation-rule.ts",
-    "whatsapp:backfill-phones": "tsx scripts/backfill-lead-phone-e164.ts"
+    "whatsapp:backfill-phones": "tsx scripts/backfill-lead-phone-e164.ts",
+    "backfill:project-start-from-hbcf": "tsx scripts/backfill-project-start-from-hbcf.ts"
   },
   "dependencies": {
     "@azure/identity": "^4.14.1",

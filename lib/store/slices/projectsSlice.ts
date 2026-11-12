@@ -2076,6 +2076,18 @@ const projectsSlice = createSlice({
         if (effects.projectStatus) project.status = effects.projectStatus;
         if (effects.projectStartDate)
           startScheduleInStore(project, new Date(effects.projectStartDate));
+        // The server already re-planned these; the store only copies the dates.
+        for (const change of effects.replanned ?? []) {
+          const row = project.milestones.find(
+            (candidate) => candidate.id === change.id,
+          );
+          if (row) row.targetDate = new Date(change.targetDate);
+          for (const schedule of project.tradieSchedules) {
+            if (schedule.milestoneId === change.id && schedule.milestone) {
+              schedule.milestone.targetDate = new Date(change.targetDate);
+            }
+          }
+        }
         const completed = new Set(effects.settledBookings.completed);
         const cancelled = new Set(effects.settledBookings.cancelled);
         const statusById = new Map(

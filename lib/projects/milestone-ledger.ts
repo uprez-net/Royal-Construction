@@ -213,15 +213,23 @@ export function duenessOf(milestone: MilestoneTiming, today: Date): Dueness {
 }
 
 /**
- * Calendar days an active activity has exceeded its estimated end date.
- * The badge and due line share one deadline; an absent actual start uses the
- * planned start rather than an unrelated fixed working-week threshold.
+ * Calendar days an open activity has gone past its estimated completion, or
+ * null when it is not overdue.
+ *
+ * Open means PENDING or ACTIVE (issue #422): an activity that was due to be
+ * finished and has not even started is the most overdue kind there is, and
+ * hiding the badge until somebody pressed Start hid exactly that one. A
+ * completed or waived activity is never overdue -- its history says whether
+ * it finished late. Due today is not overdue; the day after is.
  */
-export function activeOverdueDays(
+export function openOverdueDays(
   milestone: MilestoneTiming & { status: MilestoneStatus },
   now: Date,
 ): number | null {
-  if (milestone.status !== MilestoneStatus.ACTIVE) {
+  if (
+    milestone.status !== MilestoneStatus.ACTIVE
+    && milestone.status !== MilestoneStatus.PENDING
+  ) {
     return null;
   }
 

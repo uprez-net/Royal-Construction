@@ -11,6 +11,13 @@ import { MilestoneStatus } from "@prisma/client";
 /** Calendar days between one activity's target date and the next. */
 export const MILESTONE_SPACING_DAYS = 5;
 
+/**
+ * How long an activity takes when nothing says otherwise: two calendar days
+ * after the one before it closed (issue #422). The build sequence stores a
+ * duration on every row, so this is only reached by a caller that has none.
+ */
+export const DEFAULT_ACTIVITY_DURATION_DAYS = 2;
+
 export interface MilestoneTiming {
   /** Planned start, retained as targetDate in the database. */
   targetDate: Date | string;
@@ -22,7 +29,7 @@ export interface MilestoneTiming {
 export function milestoneEndDate(milestone: MilestoneTiming): Date {
   return addDays(
     new Date(milestone.startDate ?? milestone.targetDate),
-    milestone.estimatedDays ?? MILESTONE_SPACING_DAYS,
+    milestone.estimatedDays ?? DEFAULT_ACTIVITY_DURATION_DAYS,
   );
 }
 
@@ -50,9 +57,73 @@ export function milestoneTargetDates(
   let elapsed = 0;
   return milestones.map((milestone) => {
     const target = addDays(startDate, elapsed);
-    elapsed += milestone.estimatedDays ?? MILESTONE_SPACING_DAYS;
+    elapsed += milestone.estimatedDays ?? DEFAULT_ACTIVITY_DURATION_DAYS;
     return target;
   });
+}
+
+/** One row of a project's sequence, as the re-planner reads it. */
+export interface SequencedActivity {
+  readonly id: string;
+  readonly status: MilestoneStatus;
+  readonly targetDate: Date | string;
+  readonly startDate?: Date | string | null;
+  readonly actualDate?: Date | string | null;
+  readonly estimatedDays?: number;
+}
+
+/**
+ * Re-plan the activities after one whose dates just became a fact.
+ *
+ * Walks `ordered` (the project's activities in `order`) from `afterIndex + 1`,
+ * carrying a cursor that starts at `from` -- the day the closed activity was
+ * completed, or the new end of an activity whose duration changed:
+ *
+ * - **PENDING** is planned to start on the cursor, and so is due on the cursor
+ *   plus its own duration; the cursor moves to that day.
+ * - **ACTIVE** is already under way. Its planned start is left alone, and the
+ *   cursor moves to its own estimated end.
+ * - **DONE** keeps every date it has. The cursor moves to the day it was
+ *   actually completed, so an activity finished out of sequence still anchors
+ *   what follows it rather than being planned over.
+ * - **NOT_REQUIRED** takes no time on site and is skipped.
+ *
+ * Only PENDING rows ever change, so a completed activity's history is never
+ * rewritten. Returns just the rows whose planned start actually moves, which
+ * is what makes re-running it a no-op rather than a drift.
+ */
+export function replanFollowingActivities(
+  ordered: readonly SequencedActivity[],
+  afterIndex: number,
+  from: Date,
+): { id: string; targetDate: Date }[] {
+  const changes: { id: string; targetDate: Date }[] = [];
+  let cursor = from;
+  for (const activity of ordered.slice(afterIndex + 1)) {
+    switch (activity.status) {
+      case MilestoneStatus.PENDING: {
+        if (new Date(activity.targetDate).getTime() !== cursor.getTime()) {
+          changes.push({ id: activity.id, targetDate: cursor });
+        }
+        cursor = addDays(
+          cursor,
+          activity.estimatedDays ?? DEFAULT_ACTIVITY_DURATION_DAYS,
+        );
+        break;
+      }
+      case MilestoneStatus.ACTIVE:
+        cursor = milestoneEndDate(activity);
+        break;
+      case MilestoneStatus.DONE:
+        cursor = activity.actualDate
+          ? new Date(activity.actualDate)
+          : milestoneEndDate(activity);
+        break;
+      case MilestoneStatus.NOT_REQUIRED:
+        break;
+    }
+  }
+  return changes;
 }
 
 /**

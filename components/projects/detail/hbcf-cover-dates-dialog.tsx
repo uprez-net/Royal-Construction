@@ -2,6 +2,7 @@
 
 import { AlertCircle, Loader2, ShieldCheck } from "lucide-react";
 import { useState, useTransition } from "react";
+import { format, parse } from "date-fns";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -34,12 +35,31 @@ import {
 export function HbcfCoverDatesDialog({
   open,
   suggestedStartDate,
+  conflictingDates = [],
+  rescheduleCount = 0,
+  startDateHeld = false,
   onConfirm,
   onSkip,
 }: {
   open: boolean;
   /** `yyyy-MM-dd` read off the certificate, or null when none was found. */
   suggestedStartDate: string | null;
+  /**
+   * Different cover start dates printed on the documents just uploaded. When
+   * there is more than one, no date is suggested: the office picks the claim
+   * date, because choosing one of them here would be a guess.
+   */
+  conflictingDates?: readonly string[];
+  /**
+   * Milestones that saving these dates will reschedule, because the start
+   * date follows the claim start date. 0 once work has started.
+   */
+  rescheduleCount?: number;
+  /**
+   * Work has started, so saving these dates leaves the project start date on
+   * the day work began rather than moving it to the claim start date.
+   */
+  startDateHeld?: boolean;
   /** Resolves once saved; rejects to keep the dialog open. */
   onConfirm: (dates: InsuranceClaimDatesInput) => Promise<void>;
   onSkip: () => void;
@@ -90,9 +110,16 @@ export function HbcfCoverDatesDialog({
             HBCF cover dates
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            {suggestedStartDate
-              ? "The start date was read from the certificate. Check it against the document before saving."
-              : "No cover start date could be read from the certificate. Enter it from the document."}
+            {conflictingDates.length > 1
+              ? "The documents show different cover start dates. Enter the project's HBCF claim date."
+              : suggestedStartDate
+                ? "The start date was read from the certificate. Check it against the document before saving."
+                : "No cover start date could be read from the certificate. Enter it from the document."}{" "}
+            {startDateHeld
+              ? "Work has started, so the project start date stays on the day work began; only the cover dates are saved."
+              : rescheduleCount > 0
+                ? `Saving moves the project start date to the claim start date and reschedules all ${rescheduleCount} milestone target dates.`
+                : "Saving moves the project start date to the claim start date."}
           </DialogDescription>
         </DialogHeader>
 
@@ -105,6 +132,27 @@ export function HbcfCoverDatesDialog({
             startTransition(async () => await handleSubmit());
           }}
         >
+          {conflictingDates.length > 1 ? (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-[12px] border border-warning/40 bg-warning-light px-3.5 py-3 text-sm text-warning-ink"
+            >
+              <AlertCircle
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden="true"
+              />
+              <p>
+                Dates on the documents:{" "}
+                {conflictingDates
+                  .map((date) =>
+                    format(parse(date, "yyyy-MM-dd", new Date()), "d MMM yyyy"),
+                  )
+                  .join(", ")}
+                .
+              </p>
+            </div>
+          ) : null}
+
           {submitError ? (
             <div
               role="alert"

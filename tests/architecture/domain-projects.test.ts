@@ -573,6 +573,7 @@ test("a requirements save that lost the race is refused, not applied", async () 
   await assert.rejects(
     () =>
       updateProjectRequirements(
+        systemPrincipal("test"),
         {
           expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
           patch: { legalAdministration: { pcaInspector: "A. Inspector" } },
@@ -597,6 +598,7 @@ test("the optimistic guard is in the where clause, not read-then-write", async (
   });
 
   const result = await updateProjectRequirements(
+    systemPrincipal("test"),
     {
       expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
       patch: { legalAdministration: { pcaInspector: "A. Inspector" } },
