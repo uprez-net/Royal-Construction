@@ -637,15 +637,30 @@ export async function updateAuthorizedProjectRequirements(
     },
     execute: async (tx) => {
       try {
-        const result = await updateProjectRequirements(input, tx ?? agentDb);
+        const result = await updateProjectRequirements(
+          userPrincipal(actor),
+          input,
+          tx ?? agentDb,
+        );
         return actionEnvelope({
           entityRef: projectReference(project),
           data: {
             changedSections: result.changedSections,
+            rescheduledMilestones: result.rescheduledMilestones,
+            startDate: result.startDate,
             updatedAt: result.updatedAt,
           },
-          summary: `Project requirements updated (${result.changedSections.join(", ")}).`,
+          summary: result.startDate
+            ? `Project requirements updated (${result.changedSections.join(", ")}). The start date now follows the HBCF claim date, ${result.startDate}.`
+            : `Project requirements updated (${result.changedSections.join(", ")}).`,
           title: "Project requirements updated",
+          // Not silent: a claim date was saved and the start date did not
+          // follow it, so the operator is told why.
+          warnings: result.startDateHeldByStartedWork
+            ? [
+                "The HBCF claim date was saved, but the start date was not moved: work has already started, so the start date stays on the day it began.",
+              ]
+            : [],
         });
       } catch (error) {
         // A stale version and a malformed payload are both refusals the
@@ -1280,6 +1295,12 @@ export async function updateAuthorizedMilestone(
           projectStatus: outcome.projectStatus,
           rolledUpParentId: outcome.rolledUpParentId,
           stageClaimDue: outcome.stageClaim?.projectStage ?? null,
+          // The open activities this completion re-planned, so the operator
+          // is told the schedule moved rather than finding out on the tab.
+          replannedActivities: outcome.replannedActivities.map((change) => ({
+            milestoneId: change.id,
+            targetDate: change.targetDate.toISOString(),
+          })),
         },
         summary: `Milestone ${updated.name} is now ${updated.status}.`,
         title: "Milestone updated",

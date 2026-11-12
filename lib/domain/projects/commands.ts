@@ -15,6 +15,10 @@ import {
   type DomainPrincipal,
 } from "../principal";
 
+import {
+  assertStartDateMatchesHbcfClaim,
+  planStartDateFromHbcfClaim,
+} from "./hbcf-start-date";
 import { STARTED_MILESTONE_STATUSES } from "./milestone-schedule";
 import { rescheduleProjectFromStart } from "./milestones";
 import {
@@ -51,12 +55,21 @@ export type UpdateProjectResult = {
   readonly warnings: readonly string[];
   /** Activities re-dated because the start date moved; 0 when it did not. */
   readonly rescheduledMilestones: number;
+  /** True when this save moved the start date onto the HBCF claim date. */
+  readonly startDateFollowedHbcfClaim: boolean;
+  /**
+   * True when the HBCF claim date differs from the start date but work has
+   * started, so the start date stayed on the day work began.
+   */
+  readonly startDateHeldByStartedWork: boolean;
 };
 
 type PersistedLegalAdministration = {
   signedDate?: string | null;
   pcaInspector?: string | null;
   hbcfInsuranceNumber?: string | null;
+  /** The HBCF claim date, which the start date follows (issue #421). */
+  insuranceClaimStartDate?: string | null;
 };
 
 /**
@@ -89,13 +102,29 @@ export async function updateProject(
     merged as { legalAdministration?: PersistedLegalAdministration }
   ).legalAdministration;
 
+  // Issue #421: saving a claim date moves the start date onto it, unless the
+  // caller is setting the start date itself (refused below if it disagrees).
+  const claimPlan =
+    input.startDate === undefined && input.requirements !== undefined
+      ? await planStartDateFromHbcfClaim(
+          {
+            currentStartDate: existing.startDate,
+            projectId: input.projectId,
+            requirements: merged,
+          },
+          db,
+        )
+      : { heldByStartedWork: false, startDate: null };
+  const requestedStartDate =
+    input.startDate ?? claimPlan.startDate?.toISOString();
+
   const rawSignedDate = legal?.signedDate ?? null;
   const effectiveSignedDate = rawSignedDate
     ? (normalizeDateString(rawSignedDate) ?? rawSignedDate)
     : null;
 
   const effectiveStartDate =
-    input.startDate ?? existing.startDate.toISOString();
+    requestedStartDate ?? existing.startDate.toISOString();
 
   const blockers = collectProjectDateBlockers({
     hbcfInsuranceNumber: legal?.hbcfInsuranceNumber ?? null,
@@ -122,7 +151,9 @@ export async function updateProject(
 
   // Compared by instant, so re-sending the stored date — a form saving its
   // other fields — never rewrites a schedule nobody asked to move.
-  const nextStartDate = input.startDate ? new Date(input.startDate) : null;
+  const nextStartDate = requestedStartDate
+    ? new Date(requestedStartDate)
+    : null;
   const startDateMoved =
     nextStartDate !== null
     && nextStartDate.getTime() !== existing.startDate.getTime();
@@ -130,6 +161,9 @@ export async function updateProject(
   // Once an activity has started, the start date is the day work began — set
   // by `updateMilestone` — and moving it would re-date a schedule already under
   // way. Refused for every caller, not just hidden on the Overview tab.
+  if (startDateMoved && input.startDate !== undefined && nextStartDate) {
+    assertStartDateMatchesHbcfClaim(merged, nextStartDate);
+  }
   if (startDateMoved) {
     const started = await db.milestone.count({
       where: {
@@ -155,7 +189,9 @@ export async function updateProject(
         ...(input.description !== undefined
           ? { description: input.description }
           : {}),
-        ...(input.startDate ? { startDate: new Date(input.startDate) } : {}),
+        ...(requestedStartDate
+          ? { startDate: new Date(requestedStartDate) }
+          : {}),
         ...(input.estimatedEndDate
           ? { estimatedEndDate: new Date(input.estimatedEndDate) }
           : {}),
@@ -200,6 +236,8 @@ export async function updateProject(
   return {
     projectId: input.projectId,
     rescheduledMilestones,
+    startDateFollowedHbcfClaim: claimPlan.startDate !== null,
+    startDateHeldByStartedWork: claimPlan.heldByStartedWork,
     warnings: warns.map((warn) => warn.label),
   };
 }

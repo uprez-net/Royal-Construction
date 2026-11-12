@@ -16,6 +16,7 @@ import {
   updateMilestone,
 } from "@/lib/domain/projects/milestones";
 import { ProjectDateBlockerError } from "@/lib/domain/projects/readiness";
+import { updateProjectRequirements } from "@/lib/domain/projects/requirements";
 
 import { adminPrincipal, recordingDb } from "./domain-harness";
 import { milestoneTemplates } from "@/constants/milestoneTemplate";
@@ -43,7 +44,12 @@ function projectDb(
       startDate: STORED_START,
       status: ProjectStatus.ON_TRACK,
     },
-    "milestone.findMany": [{ id: "m_a" }, { id: "m_b" }, { id: "m_c" }],
+    // Every activity carries its own duration (the column is never null).
+    "milestone.findMany": [
+      { id: "m_a", estimatedDays: 5 },
+      { id: "m_b", estimatedDays: 5 },
+      { id: "m_c", estimatedDays: 5 },
+    ],
     // Nothing started yet, so the start date is still a plan.
     "milestone.count": 0,
     ...extra,
@@ -233,7 +239,10 @@ function startingDb(startedAlready: number) {
   return recordingDb({
     "milestone.aggregate": { _sum: { spend: null } },
     "milestone.count": startedAlready,
-    "milestone.findMany": [{ id: "m_a" }, { id: "m_b" }],
+    "milestone.findMany": [
+      { id: "m_a", estimatedDays: 5 },
+      { id: "m_b", estimatedDays: 5 },
+    ],
     "milestone.findUnique": { projectId: "p_1" },
     "milestone.findUniqueOrThrow": {
       id: "m_a",
@@ -331,5 +340,190 @@ test("starting a later activity leaves the start date and schedule alone", async
     recorder.writes().filter((write) => write.operation === "milestone.update")
       .length,
     1,
+  );
+});
+
+/* ------------------------------------- the start date follows the HBCF claim */
+
+const withClaim = (claimDate: string, extra: Record<string, unknown> = {}) => ({
+  legalAdministration: {
+    insuranceClaimEndDate: "2027-06-08",
+    insuranceClaimStartDate: claimDate,
+    ...extra,
+  },
+});
+
+test("recording an HBCF claim date moves the start date onto it and re-dates the schedule", async () => {
+  const recorder = projectDb();
+
+  const result = await updateProject(
+    adminPrincipal(),
+    { projectId: "p_1", requirements: withClaim("2026-06-08") },
+    recorder.db,
+  );
+
+  assert.equal(result.startDateFollowedHbcfClaim, true);
+  assert.equal(result.rescheduledMilestones, 3);
+  const projectWrite = recorder
+    .writes()
+    .find((write) => write.operation === "project.update");
+  // The calendar day on the claim, at the instant the project stores a day:
+  // no time zone can move it.
+  assert.equal(
+    (
+      projectWrite?.args as { data: { startDate: Date } }
+    ).data.startDate.toISOString(),
+    "2026-06-08T00:00:00.000Z",
+  );
+  assert.deepEqual(milestoneWrites(recorder.writes()), [
+    ["m_a", "2026-06-08"],
+    ["m_b", "2026-06-13"],
+    ["m_c", "2026-06-18"],
+  ]);
+});
+
+test("a claim date already matching the start date moves nothing", async () => {
+  const recorder = projectDb();
+  const result = await updateProject(
+    adminPrincipal(),
+    { projectId: "p_1", requirements: withClaim("2026-06-01") },
+    recorder.db,
+  );
+  assert.equal(result.startDateFollowedHbcfClaim, false);
+  assert.deepEqual(milestoneWrites(recorder.writes()), []);
+});
+
+test("a missing or impossible claim date never replaces a valid start date", async () => {
+  for (const claim of ["", "2026-02-30", "08/06/2026"]) {
+    const recorder = projectDb();
+    await updateProject(
+      adminPrincipal(),
+      { projectId: "p_1", requirements: withClaim(claim) },
+      recorder.db,
+    );
+    const projectWrite = recorder
+      .writes()
+      .find((write) => write.operation === "project.update");
+    assert.equal(
+      "startDate" in (projectWrite?.args as { data: object }).data,
+      false,
+      claim,
+    );
+  }
+});
+
+test("once work has started, a corrected claim date is saved but the start date stays", async () => {
+  const recorder = projectDb({ "milestone.count": 1 });
+
+  const result = await updateProject(
+    adminPrincipal(),
+    { projectId: "p_1", requirements: withClaim("2026-06-08") },
+    recorder.db,
+  );
+
+  assert.equal(result.startDateHeldByStartedWork, true);
+  assert.equal(result.startDateFollowedHbcfClaim, false);
+  const projectWrite = recorder
+    .writes()
+    .find((write) => write.operation === "project.update");
+  const data = (projectWrite?.args as { data: Record<string, unknown> }).data;
+  assert.equal("startDate" in data, false);
+  assert.ok("requirements" in data, "the claim date itself is still saved");
+  assert.deepEqual(milestoneWrites(recorder.writes()), []);
+});
+
+test("a hand-set start date that disagrees with the recorded claim date is refused", async () => {
+  const recorder = projectDb(
+    {},
+    withClaim("2026-06-01") as Record<string, unknown>,
+  );
+
+  await assert.rejects(
+    () =>
+      updateProject(
+        adminPrincipal(),
+        { projectId: "p_1", startDate: "2026-06-08" },
+        recorder.db,
+      ),
+    (error: unknown) =>
+      error instanceof DomainValidationError
+      && /follows the HBCF claim date \(1 Jun 2026\)/.test(error.message),
+  );
+  assert.deepEqual(recorder.writes(), []);
+});
+
+test("a claim date before the contract was signed is refused whole", async () => {
+  const recorder = projectDb();
+  await assert.rejects(
+    () =>
+      updateProject(
+        adminPrincipal(),
+        {
+          projectId: "p_1",
+          requirements: withClaim("2026-06-08", { signedDate: "2026-06-10" }),
+        },
+        recorder.db,
+      ),
+    ProjectDateBlockerError,
+  );
+  assert.deepEqual(recorder.writes(), []);
+});
+
+/** A complete, versioned requirements payload: what Eve's patch requires. */
+const completeRequirements = () => ({
+  automationTriggers: {
+    noticeCountdowns: true,
+    orderReminders: true,
+    rainDelayCalculations: true,
+  },
+  commercialsAndClaims: { totalContractSum: 500_000 },
+  conflicts: [],
+  inclusionsAndExclusions: { exclusions: [], inclusions: [] },
+  legalAdministration: { signedDate: "2026-01-01" },
+  projectName: "Job",
+  projectType: "Granny flat",
+  safetyAndSiteLogistics: {},
+  sourceDocuments: {},
+  subStructureAndGround: {},
+  summary: "",
+  utilityInfrastructure: {},
+  validations: [],
+  version: 1,
+  wetAreaCompliance: {},
+});
+
+test("Eve's requirements patch follows the same rule as the Overview save", async () => {
+  const recorder = recordingDb({
+    "project.findUnique": {
+      requirements: completeRequirements(),
+      startDate: STORED_START,
+      status: ProjectStatus.ON_TRACK,
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+    "project.findUniqueOrThrow": {
+      updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+    },
+    "project.updateMany": { count: 1 },
+    "milestone.count": 0,
+    "milestone.findMany": [{ id: "m_a", estimatedDays: 2 }],
+  });
+
+  const result = await updateProjectRequirements(
+    adminPrincipal(),
+    {
+      expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
+      patch: { legalAdministration: { insuranceClaimStartDate: "2026-06-08" } },
+      projectId: "p_1",
+    },
+    recorder.db,
+  );
+
+  assert.equal(result.startDate, "2026-06-08");
+  assert.equal(result.rescheduledMilestones, 1);
+  const [write] = recorder.writes();
+  assert.equal(write.operation, "project.updateMany");
+  assert.equal(
+    (write.args as { data: { startDate: Date } }).data.startDate.toISOString(),
+    "2026-06-08T00:00:00.000Z",
   );
 });

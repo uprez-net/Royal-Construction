@@ -46,6 +46,34 @@ export interface ProjectSourceDocumentReference {
   kind: "tender" | "contract" | "hbcfInsurance";
 }
 
+/**
+ * One HBCF claim document on a project (issue #423), and the claim amount it
+ * carries.
+ *
+ * A project can hold several -- a certificate per stage of cover, or a later
+ * top-up -- and the project's Total HBCF Claim Amount is the sum of their
+ * confirmed amounts (`hbcfClaimTotal`). An amount read off the PDF arrives
+ * unconfirmed and is not counted until somebody has looked at it: a misread
+ * total is a figure the office then quotes, so a human has to agree to it.
+ */
+export interface HbcfClaimDocument {
+  fileId: string;
+  fileName: string;
+  url: string;
+  /** AUD, as read off the document or typed in. Null when not known. */
+  claimAmount: number | null;
+  /** Counted toward the total only once true. Typing an amount confirms it. */
+  amountConfirmed: boolean;
+  /** The certificate number printed on this document, if one was read. */
+  certificateNumber: string | null;
+  /**
+   * The cover start date printed on this document, `yyyy-MM-dd`. For review
+   * only: the project's claim date is `insuranceClaimStartDate`, and a
+   * document whose date disagrees with it is flagged, never applied.
+   */
+  coverStartDate: string | null;
+}
+
 export interface ProjectAutomationTriggers {
   orderReminders: boolean;
   rainDelayCalculations: boolean;
@@ -91,6 +119,14 @@ export interface ProjectLegalAdministrationSection {
    * filled in manually.
    */
   hbcfInsuranceDocument: ProjectSourceDocumentReference | null;
+  /**
+   * Every HBCF claim document on the project, in the order they were added.
+   * Optional: a payload written before multiple documents were supported has
+   * only `hbcfInsuranceDocument`, which `readHbcfClaimDocuments` reads as a
+   * one-document list. `hbcfInsuranceDocument` is kept pointing at the first
+   * entry, so the compliance checklist mapping that reads it is unchanged.
+   */
+  hbcfClaimDocuments?: HbcfClaimDocument[];
 }
 
 export interface ProjectCommercialSection {

@@ -23,11 +23,16 @@ cover start date contract:
 - Prefer the start of the period of cover ("Period of cover from", "Cover commences", "Effective date"). When the certificate prints no separate start, use the certificate's date of issue.
 - Dates on these certificates are Australian, day before month: 03/04/2026 is 3 April 2026, returned as 2026-04-03.
 - Return a blank string ("") when no such date is printed. Never return the contract date, an expiry or end date, or a date of birth.
+
+claim amount contract:
+- Return the amount the certificate covers: the figure labelled "Contract price", "Contract value", "Value of work" or "Amount insured".
+- Return it as a plain number in Australian dollars, with no "$", no commas and no spaces: $485,000.00 is 485000.
+- Return a blank string ("") when no such amount is printed. Never return the premium, GST, stamp duty, a fee, or a sum you calculated from several figures.
 `;
 
 export const HBCF_EXTRACTION_SYSTEM_PROMPT = `
 <role>
-You are an insurance document reader for Royal Constructions. You are given the OCR markdown of a single Home Building Compensation Fund (HBCF) insurance certificate — also known as Home Warranty Insurance, HBCF cover, or an iCare HBCF certificate of insurance — and you return the certificate number and the date cover starts, as printed on it.
+You are an insurance document reader for Royal Constructions. You are given the OCR markdown of a single Home Building Compensation Fund (HBCF) insurance certificate — also known as Home Warranty Insurance, HBCF cover, or an iCare HBCF certificate of insurance — and you return the certificate number, the date cover starts and the amount covered, as printed on it.
 </role>
 
 <extraction_contract>
@@ -63,11 +68,11 @@ ${HBCF_EXTRACTION_CONTRACT}
  */
 export function buildHbcfExtractionPrompt(markdown: string) {
   return `
-Read the HBCF insurance certificate below and return the certificate number and the cover start date printed on it.
+Read the HBCF insurance certificate below and return the certificate number, the cover start date and the amount covered printed on it.
 
 Certificate OCR markdown:
 ${markdown}
 
-Return the number exactly as printed and the start date as yyyy-MM-dd. Return a blank string for either one that is not printed on this document.
+Return the number exactly as printed, the start date as yyyy-MM-dd and the amount as a plain number. Return a blank string for any of them that is not printed on this document.
 `;
 }

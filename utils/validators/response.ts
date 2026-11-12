@@ -17,6 +17,8 @@ export interface ApiSuccessResponse<T = unknown> {
   success: true;
   data: T;
   timestamp: string;
+  /** What else the call did, beside the record in `data`. Optional. */
+  meta?: Record<string, unknown>;
 }
 
 /**
@@ -56,13 +58,14 @@ export interface ApiPaginatedResponse<T = unknown> {
  */
 export function successResponse<T>(
   data: T,
-  options?: { status?: number },
+  options?: { status?: number; meta?: Record<string, unknown> },
 ): NextResponse<ApiSuccessResponse<T>> {
   return NextResponse.json(
     {
       success: true,
       data,
       timestamp: new Date().toISOString(),
+      ...(options?.meta ? { meta: options.meta } : {}),
     },
     {
       status: options?.status ?? 200,

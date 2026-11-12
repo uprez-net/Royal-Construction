@@ -91,6 +91,9 @@ function fixture(initial = [row("a", 1), row("b", 2)]) {
   const transactions: { options: unknown; operations: string[] }[] = [];
   const recorder = recordingDb({
     "user.findUnique": () => ({ id: "owner", name: "Owner", role }),
+    // No project activity is open against a changed duration here; the
+    // propagation itself is covered in tests/projects/milestone-template.
+    "milestone.findMany": [],
     "agentSession.findUnique": () => ({
       id: "registered-session",
       ownerUserId: owner,
@@ -345,7 +348,9 @@ test("the admin read returns live hierarchy, revision and the screen's category 
     { id: "plumbing", label: "Plumbing", icon: "wrench", archived: false },
     { id: "archived", label: "Old trade", icon: "hammer", archived: true },
   ]);
-  assert.match(result.summary, /existing projects keep/);
+  // Issue #422: a duration change reaches open activities on existing
+  // projects, so the admin is told before editing rather than reassured.
+  assert.match(result.summary, /not yet completed on an existing project/);
   assert.equal(result.links[0].href, "/admin/build-sequence");
   assert.deepEqual(db.recorder.writes(), []);
 });
