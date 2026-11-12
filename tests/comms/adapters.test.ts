@@ -490,6 +490,106 @@ test("Telnyx: ringing a browser looks up the identity's SIP user and transfers t
   });
 });
 
+test("Telnyx: an identity with two credentials is always rung on the oldest", async () => {
+  // Two tabs on cold instances each created one. The login token is issued
+  // for the oldest too, so ringing a different one never reaches the browser.
+  const fake = fakeFetch([
+    {
+      body: {
+        data: [
+          {
+            created_at: "2026-11-09T06:38:41.522Z",
+            id: "cred-new",
+            sip_username: "gencrednew",
+          },
+          {
+            created_at: "2026-11-09T06:38:41.321Z",
+            id: "cred-old",
+            sip_username: "gencredold",
+          },
+        ],
+      },
+      status: 200,
+    },
+    { body: {}, status: 200 },
+  ]);
+  const adapter = createTelnyxAdapter(config, fake.impl);
+  await adapter.respond(
+    [
+      {
+        callerId: "+61412345678",
+        identities: ["crm_twice"],
+        op: "dialBrowser",
+        record: false,
+        timeoutSeconds: 20,
+      },
+    ],
+    { callId: "call-1", providerCallId: "v3:abc", trigger: "call.answered" },
+  );
+  const transfer = JSON.parse(fake.requests[1].body ?? "");
+  assert.equal(transfer.to, "sip:gencredold@sip.telnyx.com");
+});
+
+test("Telnyx: a WAV-only recording (the number's own recording) is downloaded as WAV", async () => {
+  const fake = fakeFetch([
+    {
+      body: {
+        data: {
+          download_urls: { wav: "https://recordings.example/r.wav?sig=1" },
+        },
+      },
+      status: 200,
+    },
+    { body: "RIFF....WAVE", status: 200 },
+  ]);
+  const adapter = createTelnyxAdapter(config, fake.impl);
+  const download = await adapter.recordings!.fetchRecording("rec-wav", {
+    maxBytes: 1024,
+  });
+  assert.equal(download.mimeType, "audio/wav");
+  assert.equal(fake.requests[1].url, "https://recordings.example/r.wav?sig=1");
+});
+
+test("Telnyx: an MP3 recording is preferred and stored as MP3", async () => {
+  const fake = fakeFetch([
+    {
+      body: {
+        data: {
+          download_urls: {
+            mp3: "https://recordings.example/r.mp3",
+            wav: "https://recordings.example/r.wav",
+          },
+        },
+      },
+      status: 200,
+    },
+    { body: "ID3", status: 200 },
+  ]);
+  const adapter = createTelnyxAdapter(config, fake.impl);
+  const download = await adapter.recordings!.fetchRecording("rec-mp3", {
+    maxBytes: 1024,
+  });
+  assert.equal(download.mimeType, "audio/mpeg");
+  assert.equal(fake.requests[1].url, "https://recordings.example/r.mp3");
+});
+
+test("Telnyx: a recording with no https download link is refused", async () => {
+  const adapter = createTelnyxAdapter(
+    config,
+    fakeFetch([
+      {
+        body: { data: { download_urls: { mp3: "http://insecure/r.mp3" } } },
+        status: 200,
+      },
+    ]).impl,
+  );
+  await assert.rejects(
+    adapter.recordings!.fetchRecording("rec-x", { maxBytes: 1024 }),
+    (error: unknown) =>
+      error instanceof CommsError && error.kind === "rejected",
+  );
+});
+
 test("Telnyx: a failing command still answers 200 (a retried event cannot redo it)", async () => {
   const adapter = createTelnyxAdapter(
     config,

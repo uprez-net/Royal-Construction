@@ -125,21 +125,33 @@ export function createTelnyxAdapter(
   const voiceUrl = (callId: string | null) =>
     commsCallbackUrl(origin, "telnyx", "voice", { callId });
 
+  /**
+   * The identity's oldest credential. Two tabs opening at once on cold
+   * instances have each created one; the login token and the transfer must
+   * agree on which, or the browser is registered as one and rung as the other.
+   */
+  async function oldestCredential(
+    identity: string,
+  ): Promise<Record<string, unknown> | undefined> {
+    const found = await rest(
+      "GET",
+      `/telephony_credentials?filter[tag]=${encodeURIComponent(identity)}&page[size]=20`,
+      "looking up a browser credential",
+    );
+    const records =
+      ((found.json ?? {}) as { data?: Record<string, unknown>[] }).data ?? [];
+    const key = (record: Record<string, unknown>) =>
+      `${typeof record.created_at === "string" ? record.created_at : "~"}|${typeof record.id === "string" ? record.id : ""}`;
+    return [...records].sort((a, b) => key(a).localeCompare(key(b)))[0];
+  }
+
   /** The telephony credential for a browser identity, created on first use. */
   async function credentialFor(
     identity: string,
   ): Promise<{ id: string; sipUsername: string }> {
-    const found = await rest(
-      "GET",
-      `/telephony_credentials?filter[tag]=${encodeURIComponent(identity)}&page[size]=1`,
-      "looking up a browser credential",
-    );
-    const existing = (
-      (found.json ?? {}) as { data?: Record<string, unknown>[] }
-    ).data?.[0];
-    const record =
-      existing
-      ?? data(
+    let record = await oldestCredential(identity);
+    if (!record) {
+      const created = data(
         (
           await rest(
             "POST",
@@ -153,6 +165,9 @@ export function createTelnyxAdapter(
           )
         ).json,
       );
+      // Settle on the oldest, in case another instance created one too.
+      record = (await oldestCredential(identity)) ?? created;
+    }
     const id = typeof record.id === "string" ? record.id : null;
     const sipUsername =
       typeof record.sip_username === "string" ? record.sip_username : null;
@@ -475,9 +490,17 @@ export function createTelnyxAdapter(
                 )
               ).json,
             );
+            // Royal's own recordings are MP3, but the number's call recording
+            // setting makes single-channel WAVs on the same calls; take
+            // whichever this one is rather than failing it for good.
             const urls = (found.download_urls ?? {}) as Record<string, unknown>;
-            const url = typeof urls.mp3 === "string" ? urls.mp3 : null;
-            if (!url || !url.startsWith("https://")) {
+            const format = (["mp3", "wav"] as const).find(
+              (key) =>
+                typeof urls[key] === "string"
+                && (urls[key] as string).startsWith("https://"),
+            );
+            const url = format ? (urls[format] as string) : null;
+            if (!format || !url) {
               throw new CommsError(
                 "Telnyx gave no download link for the recording.",
                 "rejected",
@@ -505,7 +528,7 @@ export function createTelnyxAdapter(
             }
             return {
               bytes: await readCapped(response, options.maxBytes, "TELNYX"),
-              mimeType: "audio/mpeg",
+              mimeType: format === "wav" ? "audio/wav" : "audio/mpeg",
             };
           },
           provider: "telnyx",

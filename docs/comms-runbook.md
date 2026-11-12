@@ -59,7 +59,15 @@ configure.
    `TELNYX_CONNECTION_ID`.
 5. **Credential connection** for browser logins → `TELNYX_WEBRTC_CONNECTION_ID`.
    Only outbound calls use it (the browser takes the second leg of a call its
-   user placed).
+   user placed). Under Authentication and routing set **Receive SIP URI calls**
+   to **Only from my Connections**. Left at "Not enabled", Telnyx refuses every
+   transfer to the browser with SIP 403 (`hangup_cause: user_busy`) before the
+   browser sees it: the customer hears "we couldn't connect you" and the
+   browser never rings. Do not attach the number here — it belongs on the Call
+   Control application (step 4).
+6. The number's own **call recording** setting records every call again, as
+   single-channel WAV, on top of the recordings Royal starts. The app copies
+   those too, but leave it off: Royal decides when a call is recorded.
 
 ## Mili, the voice agent
 
@@ -111,9 +119,10 @@ fixture:
   `openai/gpt-live-1` accepting 24 kHz PCM, `response-create` and tools.
 - **Telnyx**: field names on `call.*` and `message.*` events; `client_state` on
   the legs a `transfer` creates; hangup causes; the telephony-credential token
-  endpoint returning plain text; `GET /calls/{id}` after a call ends; the
-  `X-Royal-Call-Id` custom header reaching `@telnyx/webrtc`; `client_state`'s
-  size limit.
+  endpoint returning plain text; `GET /calls/{id}` after a call ends;
+  `client_state`'s size limit. (Verified 2026-11-12: the `X-Royal-Call-Id`
+  header on a `transfer` reaches `@telnyx/webrtc` as
+  `dialogParams.custom_headers` on the invite.)
 - **Twilio**: the signature algorithm matches Twilio's published example (see
   `tests/comms/signatures.test.ts`); everything else follows long-stable APIs,
   but run the checklist below once.

@@ -124,7 +124,7 @@ export async function storeCallRecording(
   // Reuse the path on a retry so a replayed step overwrites, never orphans.
   const pathname =
     recording.blobPathname
-    ?? `call-recordings/${recording.callId}/${randomBytes(16).toString("hex")}.mp3`;
+    ?? `call-recordings/${recording.callId}/${randomBytes(16).toString("hex")}.${extensionFor(download.mimeType)}`;
   const stored = await ports.put({
     allowOverwrite: true,
     body: download.bytes,
@@ -150,6 +150,10 @@ export async function storeCallRecording(
     port,
   );
   return "stored";
+}
+
+function extensionFor(mimeType: string): string {
+  return /wav/i.test(mimeType) ? "wav" : "mp3";
 }
 
 async function deleteProviderCopy(
