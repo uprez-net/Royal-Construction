@@ -208,10 +208,11 @@ function PileNumberField({
           onBlur={() => setEditingText(null)}
           onChange={(event) => {
             setEditingText(event.target.value);
-            const parsed = parseNonNegativeNumberInput(event.target.value);
-            if (parsed !== null) {
-              onChange(parsed);
-            }
+            // Text that is not a usable number clears the stored value
+            // rather than leaving the last good one priced under it: 0 is
+            // refused by pricePiles, so the error shows and sending is blocked
+            // until the field is corrected.
+            onChange(parseNonNegativeNumberInput(event.target.value) ?? 0);
           }}
         />
         {suffix ? (

@@ -117,6 +117,13 @@ function isPositiveFinite(value: number): boolean {
   return Number.isFinite(value) && value > 0;
 }
 
+// The bored-pile length that is priced AND printed, to the centimetre. Pricing
+// the raw entry while showing it rounded would put "8.13 m" beside a price
+// worked from 8.125 m.
+export function pricedPileLengthM(piles: OfferPilesConfig): number {
+  return Math.round((piles.lengthPerPileM + Number.EPSILON) * 100) / 100;
+}
+
 export function priceFixedExtra(
   extra: OfferFixedExtraCost,
   label: string,
@@ -144,7 +151,7 @@ export function pricePiles(piles: OfferPilesConfig): PricedExtraCost {
       "Enter the number of piles on the Slab card as a whole number above zero.",
     );
   }
-  if (piles.type === "bored" && !isPositiveFinite(piles.lengthPerPileM)) {
+  if (piles.type === "bored" && !isPositiveFinite(pricedPileLengthM(piles))) {
     return invalid(
       "Enter the length of each bored pile, in metres, on the Slab card.",
     );
@@ -157,7 +164,7 @@ export function pricePiles(piles: OfferPilesConfig): PricedExtraCost {
   const amount =
     piles.type === "screw"
       ? piles.quantity * piles.rate
-      : piles.quantity * piles.lengthPerPileM * piles.rate;
+      : piles.quantity * pricedPileLengthM(piles) * piles.rate;
   return { amount: roundCurrency(amount), issue: null };
 }
 
@@ -225,7 +232,9 @@ export function describePileCalculation(piles: OfferPilesConfig): string {
     return "";
   }
   const length =
-    piles.type === "bored" ? ` × ${metres.format(piles.lengthPerPileM)} m` : "";
+    piles.type === "bored"
+      ? ` × ${metres.format(pricedPileLengthM(piles))} m`
+      : "";
   return `${piles.quantity}${length} × ${formatExtraCostCurrency(piles.rate)} = ${formatExtraCostCurrency(priced.amount)}`;
 }
 
@@ -295,7 +304,7 @@ export function extraCostLines(
           itemName: label,
           offerTenderLineItem:
             piles.type === "bored"
-              ? `${label} — ${count} at ${metres.format(piles.lengthPerPileM)} m each`
+              ? `${label} — ${count} at ${metres.format(pricedPileLengthM(piles))} m each`
               : `${label} — ${count}`,
           notesOrSpec: describePileCalculation(piles),
         },

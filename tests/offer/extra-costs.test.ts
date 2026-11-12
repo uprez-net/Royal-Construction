@@ -128,6 +128,21 @@ describe("piles", () => {
     );
   });
 
+  test("a bored length is priced at the precision it is shown", () => {
+    const piles = { ...BORED_10_X_8, lengthPerPileM: 8.125 };
+    assert.equal(pricePiles(piles).amount, 6504);
+    assert.equal(
+      describePileCalculation(piles),
+      "10 × 8.13 m × $80.00 = $6,504.00",
+    );
+    assert.match(
+      extraCostLines({ ...INITIAL_EXTRA_COSTS, piles })[0].offerTenderLineItem,
+      /at 8\.13 m each/,
+    );
+    // Under half a centimetre prices as no length at all, and says so.
+    assert.equal(pricePiles({ ...piles, lengthPerPileM: 0.004 }).amount, null);
+  });
+
   test("piles switched off contribute $0", () => {
     assert.deepEqual(pricePiles({ ...BORED_10_X_8, included: false }), {
       amount: 0,
