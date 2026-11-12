@@ -14,7 +14,7 @@ to paste into the carrier's console.
 | SMS | Text a lead from **Phone & SMS** on the lead page (or the lead list's Call button). Replies land on the lead; a number no lead has waits on `/admin/comms`. `STOP` opts the lead out at once; `START` opts back in. |
 | Outbound calls | The carrier rings the lead first. When they answer they hear "Connecting you now" (or the recording question) and are put through to **your browser** (picked up automatically) or the **office mobile**. A browser credential can only receive calls, so it can never dial anyone. |
 | Inbound calls | Never ring a browser. The caller hears "this call is being recorded", then **Mili**, the voice agent, answers and takes a message (see below). If Mili is off or can't be reached, or the caller asks for a person, the office mobile rings, then voicemail. Mili's transcript and the recording land on the lead's call. |
-| Recording | Inbound: always, announced by the declaration (shown as "told it was recorded"). Outbound: off unless `COMMS_RECORDING_MODE=consented`, then the lead is asked to press 1; anything else means not recorded. Recordings and voicemails are copied to Blob storage and deleted at the carrier. |
+| Recording | Inbound: always, announced by the declaration (shown as "told it was recorded"). Outbound: off unless `COMMS_RECORDING_MODE=consented`, then the lead is told the call is recorded and staying on the line is consent (shown as "told it was recorded"); nobody is asked to press a key. Recordings and voicemails are copied to Blob storage and deleted at the carrier. |
 | WhatsApp calls | Customers' WhatsApp calls ring the browser dock; staff can call a lead who tapped **Allow calls** (asked from the WhatsApp chat's **Ask to call** button, inside the 24-hour window). WhatsApp calls cannot go to a phone. |
 
 Everything external is behind the outbox: a double click or a retry never
@@ -132,6 +132,6 @@ fixture:
 - [ ] Ring the business number: hear the declaration, then Mili. Leave a message and say goodbye; the call shows "answered by Mili" with a transcript and a recording on the lead.
 - [ ] Ask Mili for a person: the office mobile rings. Don't answer: voicemail is stored and plays on the lead.
 - [ ] With `COMMS_AGENT_ENABLED=false`: the declaration, then the office mobile, then voicemail. No browser rings.
-- [ ] With `COMMS_RECORDING_MODE=consented`, on an outbound call: press 1 (recorded), press 2 and stay silent (not recorded). Check the carrier's console shows the recording deleted after the copy.
+- [ ] With `COMMS_RECORDING_MODE=consented`, on an outbound call: the recording announcement plays, the call is put straight through, and the conversation is recorded. Check the carrier's console shows the recording deleted after the copy.
 - [ ] WhatsApp: ask permission, allow it on the phone, call from the chat; call the business on WhatsApp and answer in the dock.
 - [ ] Next morning, the `comms-sweep` cron log shows no stale calls.

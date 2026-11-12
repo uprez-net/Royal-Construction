@@ -23,22 +23,24 @@ import { VOICE_AGENT_MAX_SECONDS } from "./voice-agent";
 // Inbound:   "this call is recorded" → Mili, the voice agent
 //            → (asked for a person, or Mili unreachable) office mobile
 //            → voicemail
-// Outbound:  customer answers → [consent?] → "connecting you" → staff
-//            (browser or office mobile) → if nobody picks up, apologise
+// Outbound:  customer answers → greeting [+ "this call is recorded"]
+//            → staff (browser or office mobile) → if nobody picks up,
+//            apologise
 //
 // An inbound call never rings a staff browser: the business number itself
 // answers every call, and the office mobile is only the fallback.
 //
 // Inbound calls are always recorded, and the first thing the caller hears is
 // a declaration saying so — they are told, not asked (DECLARED). Outbound
-// recording only ever starts after a customer pressed 1; silence, any other
-// key, or recording switched off means the call is not recorded. A voicemail
-// is the caller choosing to leave a message, which the prompt says is
-// recorded.
+// calls work the same way when recording is switched on: the customer is told
+// the call is recorded, and staying on the line is their consent (DECLARED).
+// They used to be asked to press 1; nobody did, and the question — repeated —
+// kept them from the person who rang them. With recording off, nothing is
+// said and nothing is recorded. A voicemail is the caller choosing to leave a
+// message, which the prompt says is recorded.
 
 export const RING_BROWSER_SECONDS = 20;
 export const RING_MOBILE_SECONDS = 20;
-export const CONSENT_TIMEOUT_SECONDS = 6;
 export const VOICEMAIL_MAX_SECONDS = 120;
 export const OUTBOUND_RING_SECONDS = 30;
 
@@ -49,9 +51,10 @@ export const PROMPTS = {
   agentTransfer: "No worries. I'll put you through to the team now.",
   agentUnavailable:
     "Sorry, our assistant isn't available just now. I'll put you through to the team.",
-  outboundConsent:
-    "Hello, this is Royal Constructions. Calls may be recorded for quality and training. Press 1 to allow recording, or 2 to continue without recording.",
   outboundConnecting: "Hello, this is Royal Constructions. Connecting you now.",
+  /** Played, word for word, when an outbound call is recorded. */
+  outboundRecordedConnecting:
+    "Hello, this is Royal Constructions. Please note this call is being recorded for quality and training purposes. Connecting you now.",
   connecting: "Thanks. Connecting you now.",
   voicemail:
     "Sorry, nobody is available to take your call. Please leave your name, number and a short message after the tone, and we'll call you back. Your message will be recorded.",
@@ -84,15 +87,6 @@ export type FlowDecision = {
   /** Set when the decision settles the consent question. */
   readonly recordingConsent?: RecordingConsent;
 };
-
-function consentGather(prompt: string): CallInstruction {
-  return {
-    numDigits: 1,
-    op: "gatherDigits",
-    prompt,
-    timeoutSeconds: CONSENT_TIMEOUT_SECONDS,
-  };
-}
 
 function voicemail(): FlowDecision {
   return {
@@ -218,15 +212,24 @@ export function decideCallStart(
     return answerInbound(call, ctx);
   }
   if (ctx.channel.recordingMode === "consented") {
+    // Told, not asked: staying on the line is consent.
+    const declared = {
+      ...call,
+      recordingConsent: RecordingConsent.DECLARED,
+    };
     return {
-      instructions: [consentGather(PROMPTS.outboundConsent)],
-      step: CallFlowStep.RECORDING_CONSENT,
+      ...connectOutbound(declared, ctx, PROMPTS.outboundRecordedConnecting),
+      recordingConsent: RecordingConsent.DECLARED,
     };
   }
   return connectOutbound(call, ctx, PROMPTS.outboundConnecting);
 }
 
-/** The customer answered the consent question (or did not). Outbound only. */
+/**
+ * The customer answered the consent question (or did not). Outbound calls no
+ * longer ask it; this settles a call that was already asking when that
+ * changed.
+ */
 export function decideAfterConsent(
   call: CallForFlow,
   ctx: CallFlowContext,

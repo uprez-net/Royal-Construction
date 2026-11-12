@@ -215,7 +215,7 @@ export function CommsAdminPanel() {
             <Flag on={status.voiceAgent} label="Mili answers inbound calls" />
             <Flag
               on={status.recordingMode === "consented"}
-              label="Outbound recording (with consent)"
+              label="Outbound recording (announced)"
             />
             <Flag
               on={Boolean(status.staffForwardNumber)}

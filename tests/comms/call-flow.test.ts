@@ -180,12 +180,31 @@ test("an unanswered mobile after Mili goes to voicemail", () => {
   });
 });
 
-test("outbound consented mode asks first, and only a 1 starts recording", () => {
-  const consented = ctx({ recordingMode: "consented" });
-  const ask = decideCallStart(outbound, consented);
-  assert.equal(ask.step, "RECORDING_CONSENT");
-  assert.equal(ask.instructions[0].op, "gatherDigits");
+test("outbound recording is announced, not asked: the customer is put straight through and recorded", () => {
+  const recorded = ctx({ recordingMode: "consented" });
+  const decision = decideCallStart(outbound, recorded);
+  assert.equal(decision.step, "RINGING_BROWSER");
+  assert.equal(decision.recordingConsent, "DECLARED");
+  assert.deepEqual(decision.instructions[0], {
+    op: "say",
+    text: PROMPTS.outboundRecordedConnecting,
+  });
+  assert.ok(
+    decision.instructions.every((step) => step.op !== "gatherDigits"),
+    "nobody is asked to press a key",
+  );
+  const dial = decision.instructions[1];
+  assert.equal(dial.op === "dialBrowser" && dial.record, true);
 
+  // Recording off: no announcement, nothing recorded.
+  const plain = decideCallStart(outbound, ctx());
+  assert.equal(plain.recordingConsent, undefined);
+  const plainDial = plain.instructions[1];
+  assert.equal(plainDial.op === "dialBrowser" && plainDial.record, false);
+});
+
+test("a call already asking when the question was retired is still settled by its answer", () => {
+  const consented = ctx({ recordingMode: "consented" });
   const yes = decideAfterConsent(
     { ...outbound, flowStep: "RECORDING_CONSENT" },
     consented,
