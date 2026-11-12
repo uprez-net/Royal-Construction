@@ -246,7 +246,7 @@ export async function getAuthorizedBuildSequence(ctx: SessionContext) {
   return result(
     "admin-summary",
     "Project build sequence",
-    `${template.activities.length} template activities. Changes apply to new projects; existing projects keep their own plan.`,
+    `${template.activities.length} template activities. Changes apply to new projects. Changing an activity's estimated days also updates that activity wherever it is not yet completed on an existing project, and re-plans the activities after it; completed activities keep their dates.`,
     {
       ...template,
       tradeCategories: trades.map(({ id, label, icon, archived }) => ({
@@ -260,6 +260,10 @@ export async function getAuthorizedBuildSequence(ctx: SessionContext) {
         dayType: "calendar",
         firstTarget: "project start date",
         followingTargets: "Sum of preceding activities' estimatedDays",
+        onCompletion:
+          "When an activity is completed, each open activity after it is re-planned from the actual completion date.",
+        durationChanges:
+          "Changing estimatedDays updates linked PENDING and ACTIVE activities on existing projects and re-plans the activities after them.",
       },
     },
     {
@@ -284,8 +288,9 @@ export async function updateAuthorizedBuildSequence(
     transaction,
   );
   // A changed duration also reaches every open activity on existing projects
-  // (issue #422). Eve cannot refresh the app's cache from here, so the
-  // operator is told the project screens may lag rather than left to wonder.
+  // (issue #422). Eve cannot refresh the app's cache from here -- authored
+  // agent code cannot load next/cache -- and project detail is cached with the
+  // `max` profile, so the operator is told plainly that the screens lag.
   const durationChanged = input.changes.some(
     (change) =>
       change.type === "update" && change.patch.estimatedDays !== undefined,
@@ -295,7 +300,7 @@ export async function updateAuthorizedBuildSequence(
     "Build sequence updated",
     `Saved ${input.changes.length} build sequence change${input.changes.length === 1 ? "" : "s"}. New projects will use this plan.${
       durationChanged
-        ? " Changed durations also apply to activities not yet completed on existing projects, and the activities after them are re-planned; completed activities keep their dates. Project screens may show the previous dates for a few minutes until their cache refreshes."
+        ? " Changed durations also apply to activities not yet completed on existing projects, and the activities after them are re-planned; completed activities keep their dates. Open project screens may keep showing the previous dates until that project is next updated in the app; saving the build sequence from Admin refreshes them."
         : " Existing projects keep their activities."
     }`,
     { ...template, appliedChanges: input.changes },

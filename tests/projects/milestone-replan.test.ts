@@ -209,6 +209,12 @@ test("correcting a completed activity's completion date re-plans what follows", 
     [["B", "2026-11-15"]],
   );
   assert.equal(replanWrites(recorder).length, 1);
+  assert.deepEqual(replanWrites(recorder), [
+    {
+      data: { targetDate: day("2026-11-15") },
+      where: { id: "B", status: PENDING },
+    },
+  ]);
 });
 
 test("editing only a completed activity's spend moves nothing", async () => {

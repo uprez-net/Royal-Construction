@@ -1486,6 +1486,12 @@ export function ProjectOverviewTab({
   useEffect(() => {
     draftRef.current = draft;
   }, [draft]);
+  // Same for the estimated end date, which is state of its own.
+  const estimatedEndDateRef = useRef(stateEstimatedEndDate);
+  useEffect(() => {
+    estimatedEndDateRef.current = stateEstimatedEndDate;
+  }, [stateEstimatedEndDate]);
+
   // Open while a save would move the start date onto a changed HBCF claim
   // date, which reschedules every milestone: the same deliberate step the
   // start date field asks for when it is moved by hand.
@@ -1625,6 +1631,7 @@ export function ProjectOverviewTab({
    */
   const handleSave = async (override?: RequirementsData): Promise<boolean> => {
     const payload = override ?? draft;
+    const estimatedEndDateAtSave = estimatedEndDateRef.current;
     setSaving(true);
     try {
       const response = await fetchJson<ProjectDetail>(
@@ -1635,8 +1642,10 @@ export function ProjectOverviewTab({
           body: JSON.stringify({
             requirements: payload,
             name: payload.projectName,
-            // The start date is saved on its own by `StartDateField`.
-            estimatedEndDate: stateEstimatedEndDate,
+            // The start date is saved on its own by `StartDateField`. Read
+            // through the ref: the HBCF upload saves after a long OCR wait,
+            // and the value captured when it began may be out of date.
+            estimatedEndDate: estimatedEndDateAtSave,
           }),
         },
         "Unable to update project",
@@ -1661,11 +1670,20 @@ export function ProjectOverviewTab({
       // "Not set" until a full reload. The PATCH returns the whole project,
       // so hand it to the store the header actually reads.
       dispatch(setActiveProject(response.data));
-      setDraft((response.data.requirements ?? payload) as RequirementsData);
-      setStateEstimatedEndDate(
-        toDateInputValue(response.data.estimatedEndDate),
-      );
-      setDirty(false);
+      // Edits made while the request was in flight are newer than what was
+      // saved; replacing them with the response would lose them silently.
+      // Every edit makes a new draft object, so the draft is unedited only
+      // while it is still the very object this save sent.
+      if (
+        draftRef.current === payload
+        && estimatedEndDateRef.current === estimatedEndDateAtSave
+      ) {
+        setDraft((response.data.requirements ?? payload) as RequirementsData);
+        setStateEstimatedEndDate(
+          toDateInputValue(response.data.estimatedEndDate),
+        );
+        setDirty(false);
+      }
       return true;
     } catch (error) {
       toast.error(
@@ -1845,17 +1863,23 @@ export function ProjectOverviewTab({
     // The documents stay in the draft, so Save can retry them.
     if (!(await handleSave(nextDraft))) return;
 
-    const readDates = [
-      ...new Set(
-        added
-          .map((document) => document.coverStartDate)
-          .filter((date): date is string => Boolean(date)),
-      ),
-    ].sort();
+    const datesOf = (list: readonly HbcfClaimDocument[]) =>
+      [
+        ...new Set(
+          list
+            .map((document) => document.coverStartDate)
+            .filter((date): date is string => Boolean(date)),
+        ),
+      ].sort();
+    const readDates = datesOf(added);
     if (!hasInsuranceClaimDates(nextDraft)) {
+      // Every document on the claim, not just the new ones: a certificate
+      // added earlier (when the prompt was skipped) may disagree with this one,
+      // and suggesting the new date alone would hide that.
+      const allDates = datesOf(documents);
       setCoverDatesPrompt({
-        conflictingDates: readDates.length > 1 ? readDates : [],
-        suggestedStartDate: readDates.length === 1 ? readDates[0] : null,
+        conflictingDates: allDates.length > 1 ? allDates : [],
+        suggestedStartDate: allDates.length === 1 ? allDates[0] : null,
       });
     } else {
       const claimDate = hbcfClaimDate(
@@ -2359,7 +2383,10 @@ export function ProjectOverviewTab({
                 // Stay open until the save answers, so a failure is not
                 // mistaken for a dialog that simply closed.
                 event.preventDefault();
-                void handleSave().then(() => setClaimDateConfirm(null));
+                // Closed only once saved; a failure leaves it open to retry.
+                void handleSave().then((saved) => {
+                  if (saved) setClaimDateConfirm(null);
+                });
               }}
             >
               {saving ? (
@@ -2379,6 +2406,9 @@ export function ProjectOverviewTab({
           open
           suggestedStartDate={coverDatesPrompt.suggestedStartDate}
           conflictingDates={coverDatesPrompt.conflictingDates}
+          // The rule `planStartDateFromHbcfClaim` applies on the server: once
+          // an activity has started, the start date stays where it is.
+          startDateHeld={hasWorkStarted(project.milestones)}
           rescheduleCount={
             hasWorkStarted(project.milestones) ? 0 : project.milestones.length
           }

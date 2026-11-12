@@ -37,12 +37,13 @@ export async function PUT(request: Request) {
     const { template, affectedProjectIds } =
       await saveMilestoneTemplateWithEffects(principal, input.data, prisma);
     // A changed duration re-dated open activities on these projects. The save
-    // has committed, so their cached screens are refreshed now rather than
-    // showing the old dates until the cache expires.
+    // has committed, so their cached detail is expired outright: a project is
+    // cached with the `max` profile, and stale-while-revalidate would show the
+    // old plan on the next view. `updateTag` is Server-Action only.
     if (affectedProjectIds.length > 0) {
       revalidateTag("projects", CACHE_PROFILES.MEDIUM);
       for (const projectId of affectedProjectIds) {
-        revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
+        revalidateTag(`project-${projectId}`, { expire: 0 });
       }
     }
     return successResponse(template);

@@ -37,6 +37,7 @@ export function HbcfCoverDatesDialog({
   suggestedStartDate,
   conflictingDates = [],
   rescheduleCount = 0,
+  startDateHeld = false,
   onConfirm,
   onSkip,
 }: {
@@ -54,6 +55,11 @@ export function HbcfCoverDatesDialog({
    * date follows the claim start date. 0 once work has started.
    */
   rescheduleCount?: number;
+  /**
+   * Work has started, so saving these dates leaves the project start date on
+   * the day work began rather than moving it to the claim start date.
+   */
+  startDateHeld?: boolean;
   /** Resolves once saved; rejects to keep the dialog open. */
   onConfirm: (dates: InsuranceClaimDatesInput) => Promise<void>;
   onSkip: () => void;
@@ -109,9 +115,11 @@ export function HbcfCoverDatesDialog({
               : suggestedStartDate
                 ? "The start date was read from the certificate. Check it against the document before saving."
                 : "No cover start date could be read from the certificate. Enter it from the document."}{" "}
-            {rescheduleCount > 0
-              ? `Saving moves the project start date to the claim start date and reschedules all ${rescheduleCount} milestone target dates.`
-              : "The project start date follows the claim start date."}
+            {startDateHeld
+              ? "Work has started, so the project start date stays on the day work began; only the cover dates are saved."
+              : rescheduleCount > 0
+                ? `Saving moves the project start date to the claim start date and reschedules all ${rescheduleCount} milestone target dates.`
+                : "Saving moves the project start date to the claim start date."}
           </DialogDescription>
         </DialogHeader>
 
