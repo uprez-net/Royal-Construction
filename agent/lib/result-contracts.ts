@@ -33,6 +33,15 @@ export const entityReferenceSchema = z.object({
 
 export type EntityReference = z.infer<typeof entityReferenceSchema>;
 
+/**
+ * A record's own name, fitted to the 1–200 characters an entity label and an
+ * envelope title accept. One blank or overlong name in CRM data otherwise
+ * fails the whole result it appears in.
+ */
+export function displayName(name: string, fallback: string): string {
+  return name.trim().slice(0, 200).trim() || fallback;
+}
+
 export type JsonValue =
   | null
   | boolean

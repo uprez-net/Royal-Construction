@@ -75,30 +75,105 @@ test("naming a lead and a task checks the task is actually on that lead", async 
 
 /* -------------------------------------------------------------- lead reads */
 
+const leadReads = (rows: unknown[] = [], total = rows.length) => ({
+  "lead.count": total,
+  "lead.findMany": rows,
+  "lead.groupBy": [],
+});
+
+type LeadRead = {
+  orderBy?: unknown;
+  skip?: number;
+  take?: number;
+  where: Record<string, unknown>;
+};
+const argsOf = (
+  recorder: { calls: readonly { args: unknown; operation: string }[] },
+  operation: string,
+) =>
+  recorder.calls.find((call) => call.operation === operation)!.args as LeadRead;
+
 test("lead search is filtered by the caller's own scope", async () => {
-  const staff = recordingDb({ "lead.findMany": [] });
+  const staff = recordingDb(leadReads());
   await searchLeads(
     adminPrincipal(),
-    { includeArchived: false, limit: 10, query: "smith" },
+    { includeArchived: false, limit: 10, page: 1, query: "smith" },
     staff.db,
   );
-  const staffWhere = (staff.calls[0].args as { where: Record<string, unknown> })
-    .where;
+  const staffWhere = argsOf(staff, "lead.findMany").where;
   assert.equal("assignedId" in staffWhere, false, "staff read every lead");
   assert.deepEqual(staffWhere.isArchived, false);
 
-  const scoped = recordingDb({ "lead.findMany": [] });
+  const scoped = recordingDb(leadReads());
   await searchLeads(
     customerPrincipal("u_c"),
-    { includeArchived: true, limit: 10, query: "smith" },
+    { includeArchived: true, limit: 10, page: 1, query: "smith" },
     scoped.db,
   );
-  const scopedWhere = (
-    scoped.calls[0].args as { where: Record<string, unknown> }
-  ).where;
-  assert.equal(scopedWhere.assignedId, "u_c");
-  // includeArchived drops the filter rather than inverting it.
-  assert.equal("isArchived" in scopedWhere, false);
+  // The page, the total and the stage counts all carry the scope: a count
+  // over leads the caller cannot open would leak how many there are.
+  for (const operation of ["lead.findMany", "lead.count", "lead.groupBy"]) {
+    const where = argsOf(scoped, operation).where;
+    assert.equal(where.assignedId, "u_c", operation);
+    // includeArchived drops the filter rather than inverting it.
+    assert.equal("isArchived" in where, false, operation);
+  }
+});
+
+test("an empty lead query lists the whole pipeline, a page at a time, with its total", async () => {
+  const rows = [{ id: 3 }, { id: 2 }];
+  const recorder = recordingDb({
+    ...leadReads(rows, 57),
+    "lead.groupBy": [
+      { stage: "NEW", _count: { _all: 40 } },
+      { stage: "QUOTED", _count: { _all: 17 } },
+    ],
+  });
+  const result = await searchLeads(
+    adminPrincipal(),
+    { includeArchived: false, limit: 25, page: 3, query: "  " },
+    recorder.db,
+  );
+
+  const page = argsOf(recorder, "lead.findMany");
+  // No text filter at all, rather than `contains: ""` on four columns.
+  assert.equal("OR" in page.where, false);
+  assert.equal(page.skip, 50);
+  assert.equal(page.take, 25);
+  // Creation order with an id tie-breaker, the app's list default: editing a
+  // lead mid-way through paging does not move it, so no row is skipped.
+  assert.deepEqual(page.orderBy, [{ createdAt: "desc" }, { id: "desc" }]);
+  // The total is counted over exactly the page's filter.
+  assert.deepEqual(argsOf(recorder, "lead.count").where, page.where);
+
+  assert.deepEqual(result, {
+    items: rows,
+    totalCount: 57,
+    countsByStage: { NEW: 40, QUOTED: 17 },
+  });
+});
+
+test("a stage filter narrows the page and total but not the stage breakdown", async () => {
+  const recorder = recordingDb(leadReads());
+  await searchLeads(
+    adminPrincipal(),
+    {
+      includeArchived: false,
+      limit: 10,
+      page: 1,
+      query: "smith",
+      stages: ["QUOTED", "NEGOTIATING"],
+    },
+    recorder.db,
+  );
+  const page = argsOf(recorder, "lead.findMany").where;
+  assert.deepEqual(page.stage, { in: ["QUOTED", "NEGOTIATING"] });
+  assert.deepEqual(argsOf(recorder, "lead.count").where, page);
+  // Everything but the stage filter — scope, archive filter, the query — still
+  // applies to the breakdown.
+  const withoutStage = { ...page };
+  delete withoutStage.stage;
+  assert.deepEqual(argsOf(recorder, "lead.groupBy").where, withoutStage);
 });
 
 test("listing one lead's tasks authorizes the lead first", async () => {
