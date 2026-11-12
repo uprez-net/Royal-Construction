@@ -30,6 +30,7 @@ const reads = {
   "certifierEngagement.findUnique": { id: "e_1" },
   "certifierEmail.findMany": [],
   "file.findMany": [],
+  "checklistAttachment.findFirst": null,
 };
 
 test("deleting a project file removes its photo references and records the actor", async () => {
@@ -171,4 +172,21 @@ test("storage cleanup failure is reported separately from the committed removal"
   );
   assert.equal(result.storageCleanupFailed, true);
   assert.equal(recorder.writes()[1].operation, "file.delete");
+});
+
+test("a photo that is evidence for a checklist issue is kept with the issue", async () => {
+  const recorder = recordingDb({
+    ...reads,
+    "checklistAttachment.findFirst": { issue: { number: 3 } },
+  });
+  let deleted = false;
+  await assert.rejects(
+    () =>
+      deleteProjectFile(admin, input, recorder.transactionalDb, async () => {
+        deleted = true;
+      }),
+    /evidence for checklist issue #3/,
+  );
+  assert.deepEqual(recorder.writes(), []);
+  assert.equal(deleted, false);
 });

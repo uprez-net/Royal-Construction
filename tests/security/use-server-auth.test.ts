@@ -92,6 +92,23 @@ const CALLER_CHECKS = new Set([
   "raiseVariation",
   "issueVariation",
   "getProjectVariations",
+  // Project checklists (issue #420). Each calls authorizeProject (ADMIN, or
+  // the project's site manager) before it reads or writes anything; reopening
+  // also requires an ADMIN.
+  "listProjectChecklists",
+  "getChecklistDetail",
+  "setChecklistItemState",
+  "updateChecklistDetails",
+  "attachChecklistPhotos",
+  "removeChecklistPhoto",
+  "closeChecklist",
+  "reopenChecklist",
+  "raiseChecklistIssue",
+  "sendChecklistIssueEmail",
+  "changeChecklistIssueStatus",
+  "verifyChecklistIssue",
+  "assignChecklistIssue",
+  "commentOnChecklistIssue",
 ]);
 
 // auth() alone passes every signed-in user, customers included. An export

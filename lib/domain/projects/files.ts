@@ -34,6 +34,19 @@ export async function deleteProjectFile(
         "fileId",
       );
     }
+    // A photo that is evidence for a checklist defect is the record of what
+    // the tradie was told and what was verified; it stays with the issue. A
+    // plain inspection photo goes with its file (the attachment cascades).
+    const evidence = await tx.checklistAttachment.findFirst({
+      select: { issue: { select: { number: true } } },
+      where: { fileId: file.id, issueId: { not: null } },
+    });
+    if (evidence) {
+      throw new DomainValidationError(
+        `This photo is evidence for checklist issue #${evidence.issue?.number ?? ""} and is kept with it.`,
+        "fileId",
+      );
+    }
     const updates = await tx.siteUpdate.findMany({
       where: { projectId: input.projectId, photoUrls: { has: file.url } },
       select: { id: true, photoUrls: true },

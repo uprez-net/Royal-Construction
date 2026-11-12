@@ -7,6 +7,7 @@ import {
   CalendarCheck2,
   CalendarPlus,
   ChevronDown,
+  ClipboardCheck,
   Lock,
   Plus,
 } from "lucide-react";
@@ -44,6 +45,7 @@ import {
 import { sydneyDateOnly } from "@/lib/dates/sydney";
 import { isTradieAlertLive } from "@/lib/domain/tradies/alert-rules";
 import { milestoneEndDate } from "@/lib/domain/projects/milestone-schedule";
+import { checklistNumberForStage } from "@/lib/domain/projects/checklist-templates";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { cn } from "@/lib/utils";
@@ -163,11 +165,14 @@ export function ProjectMilestonesTab({
   project,
   isAdmin,
   notesViewer,
+  onOpenChecklist,
 }: {
   project: ProjectDetail;
   isAdmin: boolean;
   /** Who is reading staff notes; null hides them (a customer). */
   notesViewer: UserPrincipal | null;
+  /** Open stage N's checklist on the Checklists tab. */
+  onOpenChecklist?: (number: number) => void;
 }) {
   const dispatch = useAppDispatch();
   const projectStageData =
@@ -552,6 +557,30 @@ export function ProjectMilestonesTab({
                                   />
                                   <span className="hidden whitespace-nowrap md:inline">
                                     Schedule tradies
+                                  </span>
+                                </Button>
+                              ) : null}
+                              {onOpenChecklist ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-primary"
+                                  aria-label={`Verify the ${ledgerStage.label} checklist`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    onOpenChecklist(
+                                      checklistNumberForStage(
+                                        ledgerStage.stage,
+                                      ),
+                                    );
+                                  }}
+                                >
+                                  <ClipboardCheck
+                                    className="size-4"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="hidden whitespace-nowrap md:inline">
+                                    Verify checklist
                                   </span>
                                 </Button>
                               ) : null}

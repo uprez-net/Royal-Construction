@@ -26,6 +26,7 @@ import {
   History,
   Mail,
   ShieldCheck,
+  ClipboardCheck,
 } from "lucide-react";
 import { ProjectDetail } from "@/types/project";
 import { useCallback, useEffect, useMemo, useRef } from "react";
@@ -42,6 +43,7 @@ import { ProjectDetailTabKey } from "@/utils/validators/projects";
 export const VISIBLE_PROJECT_DETAIL_TABS = [
   "overview",
   "milestones",
+  "checklists",
   "payments",
   "financials",
   "variations",
@@ -69,6 +71,8 @@ export const projectTabPanelId = (key: VisibleProjectDetailTabKey) =>
 const TabIcons: Record<VisibleProjectDetailTabKey, React.ElementType> = {
   overview: LayoutGrid,
   milestones: CalendarCheck,
+  // The stage inspections, handover among them (issue #420).
+  checklists: ClipboardCheck,
   payments: CreditCard,
   financials: Scale,
   variations: FileDiff,
@@ -326,6 +330,8 @@ const generateProjectDetailTabs = (
           }
         : {}),
     },
+    // Beside Milestones: each stage there opens its checklist here.
+    { key: "checklists", label: "Checklists" },
     {
       key: "payments",
       label: "Payments",

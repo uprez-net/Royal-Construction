@@ -205,7 +205,7 @@ export default function AddMilestoneModal({
           <div className="grid gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="name" className={labelClassName}>
-                Milestone name
+                Activity name
                 <RequiredMark />
               </Label>
               <Input
