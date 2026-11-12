@@ -76,6 +76,13 @@ const ProjectCommunicationTabs = dynamic(
     ),
   { loading: TabLoading },
 );
+const ProjectChecklistsTab = dynamic(
+  () =>
+    import("./checklists-tab/project-checklists-tab").then(
+      (m) => m.ProjectChecklistsTab,
+    ),
+  { loading: TabLoading },
+);
 const ProjectComplianceTab = dynamic(
   () =>
     import("./compliance-tab/project-compliance-tab").then(
@@ -95,6 +102,7 @@ const TAB_UPLOAD_HINTS: Record<
 > = {
   overview: { trail: "Overview", tags: [] },
   milestones: { trail: "Milestones", tags: ["Milestone"] },
+  checklists: { trail: "Checklists", tags: ["Checklist"] },
   payments: { trail: "Payments", tags: ["Payments"] },
   financials: { trail: "Financials", tags: ["Financials"] },
   variations: { trail: "Variations", tags: ["Variation"] },
@@ -174,6 +182,21 @@ export function ProjectDetailTabs({
     [dispatch, pathname, project.id],
   );
 
+  // "Verify checklist" on a stage opens that stage's checklist here, on the
+  // same record the Checklists tab lists.
+  const handleOpenChecklist = useCallback(
+    (number: number) => {
+      dispatch(
+        setProjectDetailTab({ projectId: project.id, tab: "checklists" }),
+      );
+      const params = new URLSearchParams(window.location.search);
+      params.set("activeTab", "checklists");
+      params.set("checklist", String(number));
+      window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
+    },
+    [dispatch, pathname, project.id],
+  );
+
   return (
     <section className="space-y-4">
       <ProjectTabNavigation
@@ -202,7 +225,11 @@ export function ProjectDetailTabs({
               project={project}
               isAdmin={isAdmin}
               notesViewer={notesViewer}
+              onOpenChecklist={handleOpenChecklist}
             />
+          ) : null}
+          {activeTab === "checklists" ? (
+            <ProjectChecklistsTab project={project} isAdmin={isAdmin} />
           ) : null}
           {activeTab === "payments" && isAdmin ? (
             <ProjectPaymentsTab project={project} />
