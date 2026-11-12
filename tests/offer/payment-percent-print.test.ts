@@ -26,6 +26,7 @@ import {
   LEGACY_CALC_VERSION,
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
+import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
 // The Tender and the emailed offer printed each stage's share with
 // toFixed(0), so a 12.5% stage read "13%" — two of them read 26% of a price
@@ -44,6 +45,7 @@ function snapshotWith(
     draft: INITIAL_OFFER_DRAFT,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    extraCosts: INITIAL_EXTRA_COSTS,
     calcVersion: LEGACY_CALC_VERSION,
     areaCalculator: INITIAL_AREA_CALCULATOR,
     workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,

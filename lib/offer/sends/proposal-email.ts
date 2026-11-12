@@ -1,3 +1,4 @@
+import { collectExtraCostIssues } from "@/lib/offer/extra-costs";
 import { randomBytes } from "node:crypto";
 import { resolveMx } from "node:dns/promises";
 import { generatePDF } from "@/lib/pdf/generate-pdf";
@@ -153,6 +154,16 @@ export async function emailOfferProposal(
     return {
       ok: false,
       error: `Complete the owner details before sending: ${ownerIssues.join(" ")}`,
+    };
+  }
+
+  // Same gate as marking the offer sent: an extra switched on but not priceable
+  // adds $0, so the client would receive a total that silently leaves it out.
+  const extraCostIssues = collectExtraCostIssues(snapshot.extraCosts);
+  if (extraCostIssues.length > 0) {
+    return {
+      ok: false,
+      error: `Finish the additional cost items before sending: ${extraCostIssues.join(" ")}`,
     };
   }
 

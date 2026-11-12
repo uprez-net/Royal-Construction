@@ -30,6 +30,7 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import { buildAreaBreakdown } from "@/lib/offer/workspace-print-template";
 import { buildWelcomeParagraphs } from "@/lib/offer/workspace-proposal-content";
+import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
 // Every renderer summed its own subset of the floor areas. For one job the
 // emailed snapshot printed 415 m² (no balcony, no void) under an "Alfresco +
@@ -61,6 +62,7 @@ function snapshotWith(job: Partial<OfferWorkspaceJob>): OfferWorkspaceSnapshot {
     draft: INITIAL_OFFER_DRAFT,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    extraCosts: INITIAL_EXTRA_COSTS,
     calcVersion: LEGACY_CALC_VERSION,
     areaCalculator: INITIAL_AREA_CALCULATOR,
     workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,

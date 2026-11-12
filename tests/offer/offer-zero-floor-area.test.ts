@@ -24,6 +24,7 @@ import {
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
 import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
+import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
 function zeroAreaSnapshot(): OfferWorkspaceSnapshot {
   return {
@@ -34,6 +35,7 @@ function zeroAreaSnapshot(): OfferWorkspaceSnapshot {
     draft: INITIAL_OFFER_DRAFT,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    extraCosts: INITIAL_EXTRA_COSTS,
     calcVersion: LEGACY_CALC_VERSION,
     areaCalculator: INITIAL_AREA_CALCULATOR,
     workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,

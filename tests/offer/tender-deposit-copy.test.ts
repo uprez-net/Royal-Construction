@@ -22,6 +22,7 @@ import {
   LEGACY_CALC_VERSION,
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
+import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
 // The Tender's cover letter, its Tender Validity term and its acceptance
 // instruction each said "5% deposit" as a literal, whatever deposit the offer's
@@ -39,6 +40,7 @@ function tenderWith(
     draft: INITIAL_OFFER_DRAFT,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    extraCosts: INITIAL_EXTRA_COSTS,
     calcVersion: LEGACY_CALC_VERSION,
     areaCalculator: INITIAL_AREA_CALCULATOR,
     workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,

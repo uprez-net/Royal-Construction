@@ -96,6 +96,10 @@ export type OfferSendReadinessInput = {
   // Location / signatory email). Block-severity so the offer can't be sent and
   // locked with party data that prints blank on the legal documents (codex #1).
   readonly ownerIssues?: readonly string[];
+  // Pump hire / benching / piles switched on but not priceable (no pile type,
+  // a missing count or length, an unset admin price). Such an item adds $0, so
+  // sending would quote a total that silently leaves it out: block.
+  readonly extraCostIssues?: readonly string[];
   // Unresolved findings from the priced -> promised -> sold consistency check.
   // WARN, never block: this is a model judgement on contract text, and a false
   // positive must not stop a live deal going out.
@@ -114,6 +118,7 @@ export function collectOfferSendBlockers({
   needsOverrideReason,
   expiryState,
   ownerIssues = [],
+  extraCostIssues = [],
   inclusionFindingCount = 0,
   adminContentStale = false,
 }: OfferSendReadinessInput): readonly OfferSendBlocker[] {
@@ -133,6 +138,15 @@ export function collectOfferSendBlockers({
       id: `owner-${index}`,
       label: issue,
       stepId: "offer-step-job-setup",
+      severity: "block",
+    });
+  });
+
+  extraCostIssues.forEach((issue, index) => {
+    blockers.push({
+      id: `extra-cost-${index}`,
+      label: issue,
+      stepId: "offer-step-cost-schedule",
       severity: "block",
     });
   });

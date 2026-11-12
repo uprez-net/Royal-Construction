@@ -15,7 +15,13 @@ import {
 } from "@/lib/offer/workspace-area";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { Info, Layers, RotateCcw } from "lucide-react";
-import { useRef, useState, type PropsWithChildren } from "react";
+import {
+  useRef,
+  useState,
+  type Dispatch,
+  type PropsWithChildren,
+  type SetStateAction,
+} from "react";
 import { isSupportedCalcVersion } from "@/lib/offer/calc-version";
 import {
   CountField,
@@ -27,6 +33,12 @@ import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency, numberInputValue } from "./offer-workspace-format";
 import { OfferWorkspaceJob } from "@/lib/offer/workspace-model";
 import { cn } from "@/lib/utils";
+import type {
+  ExtraCostAdminRates,
+  OfferExtraCosts,
+  OfferPilesConfig,
+} from "@/lib/offer/extra-costs";
+import { SlabPilesSection } from "./offer-workspace-extra-costs";
 
 type AreaCalculatorPanelProps = {
   // The offer's own calculation rules. Without this the on-screen frame figures
@@ -37,6 +49,11 @@ type AreaCalculatorPanelProps = {
   readonly basis: OfferAreaBasis;
   readonly area: OfferAreaCalculator;
   readonly rateConstants: AreaRateConstants;
+  // The Slab card's piles subsection. Priced as its own cost line, not folded
+  // into the slab total, so the slab formula line cannot count it a second time.
+  readonly piles: OfferPilesConfig;
+  readonly extraCostAdminRates: ExtraCostAdminRates;
+  readonly onExtraCostsChange: Dispatch<SetStateAction<OfferExtraCosts>>;
   readonly onJobChange: (patch: Partial<OfferWorkspaceJob>) => void;
   readonly onAreaChange: (patch: Partial<OfferAreaCalculator>) => void;
 };
@@ -74,7 +91,10 @@ export function AreaCalculatorPanel({
   basis,
   area,
   rateConstants,
+  piles,
+  extraCostAdminRates,
   onAreaChange,
+  onExtraCostsChange,
   onJobChange,
 }: AreaCalculatorPanelProps) {
   // An offer minted by a newer build names calculation rules this one does not
@@ -197,6 +217,11 @@ export function AreaCalculatorPanel({
             />
             <ResultRows
               rows={[["Total cost", formatCurrency(calc.totalSlabCost)]]}
+            />
+            <SlabPilesSection
+              piles={piles}
+              adminRates={extraCostAdminRates}
+              onExtraCostsChange={onExtraCostsChange}
             />
           </HelperSection>
 

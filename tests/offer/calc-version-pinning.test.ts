@@ -30,6 +30,7 @@ import {
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
+import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
 // The promise this file exists to enforce: an offer that already had a saved
 // workspace before the calculation pin shipped keeps pricing on the old rules
@@ -62,6 +63,7 @@ const BASE_SNAPSHOT: OfferWorkspaceSnapshot = {
   images: EMPTY_OFFER_IMAGES,
   tenderGate: INITIAL_TENDER_GATE,
   adminContentVersion: 0,
+  extraCosts: INITIAL_EXTRA_COSTS,
   rateCardProduct: "DOUBLE_STOREY",
   rateCardTier: "STANDARD",
   calcVersion: LEGACY_CALC_VERSION,
