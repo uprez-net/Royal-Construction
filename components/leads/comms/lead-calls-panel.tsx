@@ -16,6 +16,7 @@ import {
   Voicemail,
 } from "lucide-react";
 
+import { checkMicrophone } from "@/components/comms/microphone";
 import { useOptionalPhone } from "@/components/comms/phone-provider";
 import { Button } from "@/components/ui/button";
 import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
@@ -233,16 +234,31 @@ export function LeadCallsPanel({
     }
     setPlacing(target);
     try {
+      if (target === "browser") {
+        // Before the customer's phone rings: a blocked microphone found now
+        // costs nothing; found after they pick up, they hear silence.
+        const micProblem = await checkMicrophone();
+        if (micProblem) {
+          toast.error(micProblem);
+          return;
+        }
+      }
       const result = await placeLeadCall(lead.id, target, callKey.current());
       callKey.rotate();
-      if (target === "browser") phone?.expectOutboundCall(result.call.id);
-      toast.success(
-        result.alreadyPlaced
-          ? "That call was already placed — it wasn't placed again."
-          : target === "browser"
-            ? `Calling ${lead.name}. You'll be put through here when they answer.`
-            : `Calling ${lead.name}. The office mobile rings when they answer.`,
-      );
+      if (target === "browser") {
+        // The phone card takes it from here: calling, ringing, connected.
+        phone?.expectOutboundCall({
+          callId: result.call.id,
+          leadName: result.call.leadName ?? lead.name,
+        });
+      }
+      if (result.alreadyPlaced) {
+        toast.info("That call was already placed — it wasn't placed again.");
+      } else if (target === "mobile") {
+        toast.success(
+          `Calling ${lead.name}. The office mobile rings when they answer.`,
+        );
+      }
       void load();
     } catch (placeError) {
       toast.error(

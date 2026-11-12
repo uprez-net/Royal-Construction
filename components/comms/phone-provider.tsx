@@ -24,9 +24,14 @@ import {
   rejectWhatsAppCall,
   startWhatsAppCall as startWhatsAppCallRequest,
 } from "@/lib/leads/comms-service";
-import type { WhatsAppCallDto } from "@/lib/leads/comms-types";
+import type { CallDto, WhatsAppCallDto } from "@/lib/leads/comms-types";
 
-import type { Dialer, DialerCredential, DialerEvents } from "./dialer/types";
+import type {
+  CallAudioStreams,
+  Dialer,
+  DialerCredential,
+  DialerEvents,
+} from "./dialer/types";
 import { WhatsAppCallSession } from "./dialer/whatsapp-call-session";
 
 // The browser phone for the whole app: one per tab, mounted in the shell.
@@ -40,7 +45,41 @@ const WHATSAPP_POLL_MS = 3_000;
 const WHATSAPP_ACTIVE_POLL_MS = 2_000;
 const WHATSAPP_DISABLED_RECHECK_MS = 5 * 60_000;
 const CREDENTIAL_RETRY_MS = 60_000;
+const OUTBOUND_POLL_MS = 1_500;
+const NO_AUDIO: CallAudioStreams = { local: null, remote: null };
 
+/** Where a call this person placed has got to, before it reaches the browser. */
+export type OutboundProgress = "calling" | "ringing" | "answered";
+
+function outboundProgress(call: CallDto): OutboundProgress {
+  if (call.answeredAt || call.status === "IN_PROGRESS") return "answered";
+  return call.status === "RINGING" ? "ringing" : "calling";
+}
+
+function isTerminal(call: CallDto): boolean {
+  return ["COMPLETED", "BUSY", "NO_ANSWER", "FAILED", "CANCELED"].includes(
+    call.status,
+  );
+}
+
+/** Why a placed call ended before this browser was put through. */
+function outboundEndedText(call: CallDto): string {
+  const who = call.leadName ?? "The customer";
+  switch (call.status) {
+    case "NO_ANSWER":
+      return `${who} didn't answer.`;
+    case "BUSY":
+      return `${who}'s line was busy.`;
+    case "CANCELED":
+      return "The call was cancelled.";
+    case "FAILED":
+      return call.problem ?? "The call couldn't be connected.";
+    default:
+      return call.answeredAt
+        ? "The customer answered, but the call couldn't be put through to this browser."
+        : "The call ended before it was answered.";
+  }
+}
 export type PhoneStatus =
   | "off"
   | "connecting"
@@ -51,12 +90,18 @@ export type PhoneStatus =
 export type ActiveCall =
   | {
       kind: "pstn";
-      phase: "incoming" | "active";
+      /**
+       * `dialing`: this person pressed Call and the carrier is ringing the
+       * customer; the browser leg arrives once they pick up.
+       */
+      phase: "dialing" | "incoming" | "active";
       callId: string | null;
       from: string | null;
       leadName: string | null;
       startedAt: number | null;
       muted: boolean;
+      /** Only while dialing: what the server last said about the call. */
+      progress: OutboundProgress | null;
     }
   | {
       kind: "whatsapp";
@@ -75,8 +120,14 @@ type PhoneContextValue = {
   decline: () => Promise<void>;
   hangup: () => Promise<void>;
   toggleMute: () => void;
-  /** The next browser ring for this call id is the one this person placed: answer it. */
-  expectOutboundCall: (callId: string) => void;
+  /** The live call's audio, for the level meters. */
+  audioStreams: () => CallAudioStreams;
+  /**
+   * This person just placed a call to the browser: show it straight away,
+   * follow it while the customer's phone rings, and answer the browser leg
+   * when it arrives.
+   */
+  expectOutboundCall: (call: { callId: string; leadName: string }) => void;
   startWhatsAppCall: (
     lead: { id: number; name: string },
     idempotencyKey: string,
@@ -160,7 +211,11 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
                   : call,
               ),
             onEnded: () =>
-              setActive((call) => (call?.kind === "pstn" ? null : call)),
+              // A dialing call has no browser leg yet: a leg that ends now is
+              // one this tab turned away, not the call being placed.
+              setActive((call) =>
+                call?.kind === "pstn" && call.phase !== "dialing" ? null : call,
+              ),
             onError: (text) => {
               setMessage(text);
               setStatus((current) => (current === "ready" ? current : "error"));
@@ -179,6 +234,7 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
                 );
                 return;
               }
+              const placing = activeRef.current;
               if (incoming.callId && expected.current === incoming.callId) {
                 // This person just pressed Call: the customer answered and is
                 // being put through. Pick up without making them click twice.
@@ -187,12 +243,28 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
                   callId: incoming.callId,
                   from: incoming.from,
                   kind: "pstn",
-                  leadName: null,
+                  leadName: placing?.kind === "pstn" ? placing.leadName : null,
                   muted: false,
                   phase: "incoming",
+                  progress: null,
                   startedAt: null,
                 });
-                void dialer.current?.answer();
+                void dialer.current?.answer().catch((error: unknown) => {
+                  toast.error(
+                    errorText(
+                      error,
+                      "The call couldn't be answered here. Check the microphone is allowed.",
+                    ),
+                  );
+                });
+              } else if (placing?.kind === "pstn") {
+                // Someone else rang while this person is placing a call:
+                // pass it on, as the dialers do for a second ring.
+                dialer.current?.reject();
+                toast.info(
+                  "A phone call came in while you were calling out and was passed on.",
+                );
+                return;
               } else {
                 setActive({
                   callId: incoming.callId,
@@ -201,6 +273,7 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
                   leadName: null,
                   muted: false,
                   phase: "incoming",
+                  progress: null,
                   startedAt: null,
                 });
               }
@@ -354,6 +427,52 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
     };
   }, [whatsappCallId, whatsappPhase]);
 
+  // While a call this person placed is ringing the customer, follow it: the
+  // card says how far it got, and an unanswered call clears itself with the
+  // reason instead of leaving a card that never changes.
+  const dialingCallId =
+    active?.kind === "pstn" && active.phase === "dialing"
+      ? active.callId
+      : null;
+  useEffect(() => {
+    if (!dialingCallId) return;
+    let cancelled = false;
+    const stillDialing = () => {
+      const current = activeRef.current;
+      return (
+        current?.kind === "pstn"
+        && current.phase === "dialing"
+        && current.callId === dialingCallId
+      );
+    };
+    const timer = window.setInterval(async () => {
+      try {
+        const call = await fetchCall(dialingCallId);
+        if (cancelled || !stillDialing()) return;
+        if (call.endedAt || call.flowStep === "ENDED" || isTerminal(call)) {
+          expected.current = null;
+          setActive(null);
+          toast.info(outboundEndedText(call));
+          return;
+        }
+        const progress = outboundProgress(call);
+        setActive((current) =>
+          current?.kind === "pstn"
+          && current.phase === "dialing"
+          && current.progress !== progress
+            ? { ...current, progress }
+            : current,
+        );
+      } catch {
+        // A missed poll is harmless; the next one catches up.
+      }
+    }, OUTBOUND_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [dialingCallId]);
+
   const closeWhatsApp = useCallback(() => {
     session.current?.close();
     session.current = null;
@@ -411,6 +530,7 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
     const call = activeRef.current;
     if (!call) return;
     if (call.kind === "pstn") {
+      if (expected.current === call.callId) expected.current = null;
       dialer.current?.hangup();
       // If the customer leg is still up (the browser never connected), end it there too.
       if (call.callId) void hangupCall(call.callId).catch(() => {});
@@ -441,9 +561,34 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const expectOutboundCall = useCallback((callId: string) => {
-    expected.current = callId;
+  const audioStreams = useCallback((): CallAudioStreams => {
+    const call = activeRef.current;
+    if (!call) return NO_AUDIO;
+    if (call.kind === "whatsapp")
+      return session.current?.audioStreams() ?? NO_AUDIO;
+    return dialer.current?.audioStreams() ?? NO_AUDIO;
   }, []);
+
+  const expectOutboundCall = useCallback(
+    ({ callId, leadName }: { callId: string; leadName: string }) => {
+      expected.current = callId;
+      // Never cover a call already in progress; the browser leg still answers.
+      if (activeRef.current) return;
+      const dialing: ActiveCall = {
+        callId,
+        from: null,
+        kind: "pstn",
+        leadName,
+        muted: false,
+        phase: "dialing",
+        progress: "calling",
+        startedAt: null,
+      };
+      activeRef.current = dialing;
+      setActive(dialing);
+    },
+    [],
+  );
 
   const startWhatsAppCall = useCallback(
     async (
@@ -495,6 +640,7 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
     () => ({
       active,
       answer,
+      audioStreams,
       decline,
       expectOutboundCall,
       hangup,
@@ -507,6 +653,7 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
     [
       active,
       answer,
+      audioStreams,
       decline,
       expectOutboundCall,
       hangup,

@@ -50,10 +50,20 @@ function DialogOverlay({
   );
 }
 
+// The floating phone (components/comms/phone-dock.tsx) sits outside every
+// dialog yet must stay usable while one is open: hanging up a call never
+// closes the dialog it was placed from.
+function isPhoneDock(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element && target.closest("[data-phone-dock]") !== null
+  );
+}
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
@@ -63,6 +73,10 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        onInteractOutside={(event) => {
+          if (isPhoneDock(event.target)) event.preventDefault();
+          onInteractOutside?.(event);
+        }}
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none",
           "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",

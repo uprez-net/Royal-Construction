@@ -86,6 +86,15 @@ export class WhatsAppCallSession {
     }
   }
 
+  /** The microphone as sent and the customer as heard, for the level meters. */
+  audioStreams(): { local: MediaStream | null; remote: MediaStream | null } {
+    const remote = this.audio.srcObject;
+    return {
+      local: this.stream,
+      remote: remote instanceof MediaStream ? remote : null,
+    };
+  }
+
   mute(muted: boolean): void {
     for (const track of this.stream?.getAudioTracks() ?? [])
       track.enabled = !muted;

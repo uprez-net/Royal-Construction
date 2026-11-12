@@ -29,6 +29,10 @@ export function createTwilioDialer(events: DialerEvents): Dialer {
     answer: async () => {
       current?.accept();
     },
+    audioStreams: () => ({
+      local: current?.getLocalStream() ?? null,
+      remote: current?.getRemoteStream() ?? null,
+    }),
     destroy: () => {
       current?.disconnect();
       device?.destroy();

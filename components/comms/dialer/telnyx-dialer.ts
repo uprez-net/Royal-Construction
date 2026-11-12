@@ -84,6 +84,10 @@ export function createTelnyxDialer(events: DialerEvents): Dialer {
       // Plays through client.remoteElement, set when the client connected.
       await current?.answer();
     },
+    audioStreams: () => ({
+      local: current?.localStream ?? null,
+      remote: current?.remoteStream ?? null,
+    }),
     destroy: () => {
       void current?.hangup();
       client?.disconnect();

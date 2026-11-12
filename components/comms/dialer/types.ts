@@ -39,5 +39,14 @@ export interface Dialer {
   reject(): void;
   hangup(): void;
   mute(muted: boolean): void;
+  /** The live call's audio, for the level meters; null before the SDK has it. */
+  audioStreams(): CallAudioStreams;
   destroy(): void;
 }
+
+export type CallAudioStreams = {
+  /** This person's microphone, as sent. */
+  local: MediaStream | null;
+  /** The other party, as heard. */
+  remote: MediaStream | null;
+};

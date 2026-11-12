@@ -456,11 +456,17 @@ test("Telnyx: ringing a browser looks up the identity's SIP user and transfers t
   );
   const transfer = JSON.parse(fake.requests[1].body ?? "");
   assert.equal(transfer.to, "sip:gencredabc@sip.telnyx.com");
-  assert.deepEqual(decodeClientState(transfer.client_state), {
+  // The staff marker belongs to the new leg; the customer leg keeps its own,
+  // or its hang-up would be read as the staff leg ending.
+  assert.deepEqual(decodeClientState(transfer.target_leg_client_state), {
     a: "v3:abc",
     c: "call-1",
     r: "b",
     rec: 1,
+  });
+  assert.deepEqual(decodeClientState(transfer.client_state), {
+    c: "call-1",
+    r: "a",
   });
 });
 

@@ -232,12 +232,19 @@ export function createTelnyxAdapter(
               "TELNYX_NO_TARGET",
             );
           }
+          // Two states, one per leg. `client_state` rides on the CUSTOMER
+          // leg's later webhooks (this command is issued against it), and
+          // `target_leg_client_state` on the new staff leg's. Putting the
+          // staff marker in `client_state` made the customer's hang-up parse
+          // as the staff leg ending: the staff answer was never seen and the
+          // call stayed "In progress" for good.
           await action(
             callControlId,
             "transfer",
             "putting the caller through",
             {
-              client_state: encodeClientState({
+              client_state: stateA(),
+              target_leg_client_state: encodeClientState({
                 a: callControlId,
                 c: callId ?? undefined,
                 r: "b",
