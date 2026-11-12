@@ -1,3 +1,4 @@
+import { formatSydneyDate } from "@/lib/dates/sydney";
 import type { DomainDb } from "../db";
 import { isDomainError } from "../errors";
 import type { DomainPrincipal } from "../principal";
@@ -100,10 +101,12 @@ async function leadLabel(
   if (leadId === null) return null;
   await authorizeLead(principal, leadId, db);
   const lead = await db.lead.findUnique({
-    select: { name: true },
+    select: { location: true, name: true },
     where: { id: leadId },
   });
-  return lead ? `${lead.name} (lead #${leadId})` : null;
+  // Name and site, not the database number: the office knows a client by
+  // who and where, and the site tells apart two leads with the same name.
+  return lead ? withPlace(lead.name, lead.location) : null;
 }
 
 async function leadTaskLabel(
@@ -114,12 +117,28 @@ async function leadTaskLabel(
   const taskId = asInteger(value);
   if (taskId === null) return null;
   const task = await db.leadTask.findUnique({
-    select: { lead: { select: { name: true } }, leadId: true, type: true },
+    select: {
+      dueDate: true,
+      dueTime: true,
+      lead: { select: { name: true } },
+      leadId: true,
+      notes: true,
+      type: true,
+    },
     where: { id: taskId },
   });
   if (!task) return null;
   await authorizeLead(principal, task.leadId, db);
-  return `${humanize(task.type)} task #${taskId} · ${task.lead.name}`;
+  // A lead often has several open tasks of one type (four meetings on one
+  // lead is ordinary), so the type alone does not say which one is being
+  // changed. The due date and what the task is for do.
+  const due = task.dueDate
+    ? `due ${formatSydneyDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ""}`
+    : null;
+  const what = task.notes ? excerpt(task.notes, 60) : null;
+  return [`${humanize(task.type)} task`, due, what, task.lead.name]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 async function offerLabel(
@@ -234,6 +253,16 @@ async function complianceRecordLabel(
     where: { engagementId: engagement.id, id: value },
   });
   return alert ? `${humanize(alert.type)} alert` : null;
+}
+
+function withPlace(name: string, location: string | null | undefined) {
+  const place = location?.trim();
+  return place ? `${name} — ${place}` : name;
+}
+
+function excerpt(text: string, max: number) {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length <= max ? flat : `${flat.slice(0, max - 1).trimEnd()}…`;
 }
 
 function asInteger(value: unknown): number | null {

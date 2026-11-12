@@ -114,6 +114,7 @@ export default defineWorkflowTool({
     "Specialists do not see this conversation: put every name, id, date and constraint they need in the request, goal or sharedContext.",
     "For one specialist send `specialist` + `request`. For work that spans areas send `tasks`: tasks without `after` run in parallel, and a task with `after` waits for those tasks and receives their findings (record ids included), so it does not search again.",
     "Parallel tasks are for reads and for independent changes the person has already asked for; a change that depends on another result goes in a later task with `after`.",
+    "A change that comes back cancelled or declined at approval is the person's answer: never delegate it again.",
     "Specialists:",
     ...DELEGATE_TARGETS.map((name) => `- ${name}: ${SPECIALISTS[name]}`),
   ].join("\n"),

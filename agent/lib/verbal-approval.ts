@@ -1,3 +1,5 @@
+import { isRecordIdField } from "@/lib/agent/id-fields";
+
 // Spoken and typed answers to an approval, for the surfaces with no buttons.
 //
 // In the /agent workspace an approval is two buttons. Over MCP it is an
@@ -185,7 +187,6 @@ export function hasWordsOnlyResponse(responses: readonly InputResponse[]) {
   );
 }
 
-const ID_FIELD = /(^id$|Id$|Ids$)/;
 const MAX_DETAIL_FIELDS = 8;
 
 function humanizeToolName(toolName: string) {
@@ -212,7 +213,7 @@ function inputDetails(input: Record<string, unknown>): string[] {
   const visit = (record: Record<string, unknown>, prefix: string) => {
     for (const [field, value] of Object.entries(record)) {
       if (details.length >= MAX_DETAIL_FIELDS) return;
-      if (ID_FIELD.test(field) || field.startsWith("expected")) continue;
+      if (isRecordIdField(field) || field.startsWith("expected")) continue;
       if (
         value
         && typeof value === "object"
