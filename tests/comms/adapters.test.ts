@@ -429,6 +429,26 @@ test("Telnyx: an incoming call is answered first; its answered event asks for th
   assert.match(fake.requests[0].url, /\/actions\/answer$/);
 });
 
+test("Telnyx: the consent question is asked once, not Telnyx's default three times", async () => {
+  const fake = fakeFetch([{ body: {}, status: 200 }]);
+  const adapter = createTelnyxAdapter(config, fake.impl);
+  await adapter.respond(
+    [
+      {
+        numDigits: 1,
+        op: "gatherDigits",
+        prompt: "Press 1",
+        timeoutSeconds: 6,
+      },
+    ],
+    { callId: "call-1", providerCallId: "v3:abc", trigger: "call.answered" },
+  );
+  assert.match(fake.requests[0].url, /\/actions\/gather_using_speak$/);
+  const gather = JSON.parse(fake.requests[0].body ?? "");
+  assert.equal(gather.maximum_tries, 1);
+  assert.equal(gather.timeout_millis, 6000);
+});
+
 test("Telnyx: ringing a browser looks up the identity's SIP user and transfers to it", async () => {
   const fake = fakeFetch([
     {

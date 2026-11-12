@@ -69,6 +69,7 @@ function usePreviewMicrophone(enabled: boolean) {
 const DIALING_TEXT = {
   answered: "Answered — putting you through…",
   calling: "Calling…",
+  consent: "Answered — asking about recording…",
   ringing: "Ringing…",
 } as const;
 

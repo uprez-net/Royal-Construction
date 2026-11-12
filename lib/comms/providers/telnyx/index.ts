@@ -208,6 +208,11 @@ export function createTelnyxAdapter(
               ...VOICE,
               client_state: stateA(),
               maximum_digits: step.numDigits,
+              // Ask once, as Twilio's <Gather> does. Telnyx's default is 3
+              // plays, each followed by the full timeout: a customer heard
+              // the recording question three times, ~50 s, before anyone
+              // came on the line.
+              maximum_tries: 1,
               minimum_digits: 1,
               payload: step.prompt,
               timeout_millis: step.timeoutSeconds * 1000,

@@ -49,9 +49,10 @@ const OUTBOUND_POLL_MS = 1_500;
 const NO_AUDIO: CallAudioStreams = { local: null, remote: null };
 
 /** Where a call this person placed has got to, before it reaches the browser. */
-export type OutboundProgress = "calling" | "ringing" | "answered";
+export type OutboundProgress = "calling" | "ringing" | "consent" | "answered";
 
 function outboundProgress(call: CallDto): OutboundProgress {
+  if (call.flowStep === "RECORDING_CONSENT") return "consent";
   if (call.answeredAt || call.status === "IN_PROGRESS") return "answered";
   return call.status === "RINGING" ? "ringing" : "calling";
 }
@@ -75,9 +76,12 @@ function outboundEndedText(call: CallDto): string {
     case "FAILED":
       return call.problem ?? "The call couldn't be connected.";
     default:
-      return call.answeredAt
-        ? "The customer answered, but the call couldn't be put through to this browser."
-        : "The call ended before it was answered.";
+      if (!call.answeredAt) return "The call ended before it was answered.";
+      // COMPLETED: the customer's own line hung up. Still live: the flow
+      // gave up on reaching this browser and is telling them so.
+      return call.status === "COMPLETED"
+        ? `${who} hung up before being put through.`
+        : `${who} answered, but the call couldn't be put through to this browser.`;
   }
 }
 export type PhoneStatus =
