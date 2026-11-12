@@ -8,6 +8,7 @@ import {
 import { z } from "zod";
 import { gateway, TEXT_MODEL_ID } from "@/lib/model";
 import { normalizeIsoDate } from "@/lib/projects/insurance-claim-dates";
+import { normalizeClaimAmount } from "@/lib/domain/insurance/hbcf-claims";
 import {
   buildHbcfExtractionPrompt,
   HBCF_EXTRACTION_SYSTEM_PROMPT,
@@ -31,6 +32,12 @@ export const hbcfExtractionSchema = z.object({
     .describe(
       "The date HBCF cover starts, as printed on the certificate (the start of the period of cover, or the issue date when the certificate prints no separate start), converted to yyyy-MM-dd. Australian certificates print day before month: 03/04/2026 is 2026-04-03. Return an empty string if no such date is printed — never use the contract date, an expiry date, or today's date.",
     ),
+  claimAmount: z
+    .string()
+    .default("")
+    .describe(
+      'The amount this HBCF certificate covers, as printed (usually labelled "Contract price", "Contract value" or "Amount insured"), as a plain number in Australian dollars with no currency symbol or thousands separators, e.g. 485000 or 2500.50. Return an empty string if no such amount is printed — never return the premium, the GST, a fee, or a total you calculated.',
+    ),
 });
 
 export type HbcfExtractionData = z.infer<typeof hbcfExtractionSchema>;
@@ -43,6 +50,12 @@ export type HbcfExtractionResult = {
   hbcfInsuranceNumber: string;
   /** `yyyy-MM-dd`, or "" when the certificate prints no readable start date. */
   coverStartDate: string;
+  /**
+   * AUD, or null when no amount was printed or it was unreadable. Always an
+   * unconfirmed reading: the Overview asks a person to confirm it before it
+   * counts toward the project's HBCF claim total.
+   */
+  claimAmount: number | null;
   message: string;
   ok: boolean;
 };
@@ -72,10 +85,15 @@ export async function handleHbcfExtractionGeneration(
     // Checked rather than trusted: a malformed or impossible date is worse
     // than none, because it would be offered to the office as a reading.
     const coverStartDate = normalizeIsoDate(parsed.coverStartDate) ?? "";
+    // Same: a figure that does not parse as a positive amount is no reading.
+    const claimAmount = normalizeClaimAmount(
+      parsed.claimAmount.replace(/[$,\s]/g, ""),
+    );
 
     return {
       hbcfInsuranceNumber,
       coverStartDate,
+      claimAmount,
       message: hbcfInsuranceNumber
         ? "HBCF insurance number extracted successfully."
         : "No HBCF insurance number was printed on the document.",
@@ -90,6 +108,7 @@ export async function handleHbcfExtractionGeneration(
       return {
         hbcfInsuranceNumber: "",
         coverStartDate: "",
+        claimAmount: null,
         message: `Structured extraction was incomplete: ${error.message}`,
         ok: false,
       };

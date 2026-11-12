@@ -76,6 +76,22 @@ const projectExtractionDraftSchema = z.object({
     // before that feature carries them.
     hbcfInsuranceNumber: blankTolerantStringSchema.optional(),
     hbcfInsuranceDocument: sourceDocumentReferenceSchema.nullable().optional(),
+    // Issue #423: several HBCF claim documents, each with its own amount.
+    // Optional for the same reason as the two fields above.
+    hbcfClaimDocuments: z
+      .array(
+        z.object({
+          fileId: z.string().min(1),
+          fileName: z.string().default(""),
+          url: z.string().default(""),
+          claimAmount: z.number().finite().nonnegative().nullable(),
+          amountConfirmed: z.boolean().default(false),
+          certificateNumber: z.string().nullable().default(null),
+          coverStartDate: z.string().nullable().default(null),
+        }),
+      )
+      .max(50)
+      .optional(),
   }),
   commercialsAndClaims: z.object({
     totalContractSum: nullableNumberSchema,

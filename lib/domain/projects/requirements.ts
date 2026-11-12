@@ -3,6 +3,15 @@ import type { Prisma } from "@prisma/client";
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 
 import type { DomainDb } from "../db";
+import type { DomainPrincipal } from "../principal";
+
+import { planStartDateFromHbcfClaim } from "./hbcf-start-date";
+import { rescheduleProjectFromStart } from "./milestones";
+import {
+  collectProjectDateBlockers,
+  partitionBlockers,
+  ProjectDateBlockerError,
+} from "./readiness";
 import {
   DomainNotFoundError,
   DomainStaleVersionError,
@@ -177,6 +186,12 @@ export type UpdateProjectRequirementsResult = {
   readonly projectId: string;
   readonly updatedAt: string;
   readonly changedSections: readonly string[];
+  /** The start date this patch moved onto the HBCF claim date, if it did. */
+  readonly startDate: string | null;
+  /** Activities re-dated with it; 0 when the start date did not move. */
+  readonly rescheduledMilestones: number;
+  /** True when the claim date differs but work has started, so the start stayed. */
+  readonly startDateHeldByStartedWork: boolean;
 };
 
 /**
@@ -185,8 +200,13 @@ export type UpdateProjectRequirementsResult = {
  * Authorization is the caller's: both channels resolve the project through
  * `authorizeProject` first, and this command is also reachable inside that
  * transaction. It owns the shape rule and the version check.
+ *
+ * A patch that records an HBCF claim date moves the start date onto it, under
+ * the same rule as the Overview's save (`planStartDateFromHbcfClaim`), and is
+ * refused whole if that start date is impossible against the signed date.
  */
 export async function updateProjectRequirements(
+  principal: DomainPrincipal,
   input: UpdateProjectRequirementsInput,
   db: DomainDb,
 ): Promise<UpdateProjectRequirementsResult> {
@@ -200,7 +220,12 @@ export async function updateProjectRequirements(
 
   const current = await db.project.findUnique({
     where: { id: input.projectId },
-    select: { requirements: true, updatedAt: true },
+    select: {
+      requirements: true,
+      startDate: true,
+      status: true,
+      updatedAt: true,
+    },
   });
   if (!current) throw new DomainNotFoundError("Project not found");
 
@@ -222,16 +247,59 @@ export async function updateProjectRequirements(
     );
   }
 
-  const updated = await db.project.updateMany({
-    where: { id: input.projectId, updatedAt: expectedUpdatedAt },
-    data: { requirements: candidate as unknown as Prisma.InputJsonValue },
-  });
-
-  if (updated.count !== 1) {
-    throw new DomainStaleVersionError(
-      "The project changed since you read it. Reload the requirements and try again.",
+  const claimPlan = await planStartDateFromHbcfClaim(
+    {
+      currentStartDate: current.startDate,
+      projectId: input.projectId,
+      requirements: candidate,
+    },
+    db,
+  );
+  if (claimPlan.startDate) {
+    const { blocks } = partitionBlockers(
+      collectProjectDateBlockers({
+        hbcfInsuranceNumber: candidate.legalAdministration.hbcfInsuranceNumber,
+        pcaInspector: candidate.legalAdministration.pcaInspector,
+        signedDate: candidate.legalAdministration.signedDate,
+        startDate: claimPlan.startDate.toISOString(),
+        status: current.status,
+      }),
     );
+    if (blocks.length > 0) throw new ProjectDateBlockerError(blocks);
   }
+
+  const write = async (tx: DomainDb) => {
+    const updated = await tx.project.updateMany({
+      where: { id: input.projectId, updatedAt: expectedUpdatedAt },
+      data: {
+        requirements: candidate as unknown as Prisma.InputJsonValue,
+        ...(claimPlan.startDate ? { startDate: claimPlan.startDate } : {}),
+      },
+    });
+
+    if (updated.count !== 1) {
+      throw new DomainStaleVersionError(
+        "The project changed since you read it. Reload the requirements and try again.",
+      );
+    }
+    if (!claimPlan.startDate) return 0;
+    return rescheduleProjectFromStart(
+      principal,
+      {
+        previousStartDate: current.startDate,
+        projectId: input.projectId,
+        startDate: claimPlan.startDate,
+      },
+      tx,
+    );
+  };
+
+  // Re-dating the schedule is one write per activity; it lands with the
+  // requirements or not at all.
+  const rescheduledMilestones =
+    claimPlan.startDate && "$transaction" in db
+      ? await db.$transaction(write, { timeout: 30_000 })
+      : await write(db);
 
   const saved = await db.project.findUniqueOrThrow({
     where: { id: input.projectId },
@@ -241,6 +309,9 @@ export async function updateProjectRequirements(
   return {
     changedSections: Object.keys(input.patch),
     projectId: input.projectId,
+    rescheduledMilestones,
+    startDate: claimPlan.startDate?.toISOString().slice(0, 10) ?? null,
+    startDateHeldByStartedWork: claimPlan.heldByStartedWork,
     updatedAt: saved.updatedAt.toISOString(),
   };
 }
