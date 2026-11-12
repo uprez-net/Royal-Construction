@@ -93,15 +93,37 @@ export async function readStoredBlob(
   const isPrivate = new URL(url).hostname
     .toLowerCase()
     .endsWith(PRIVATE_BLOB_HOST_SUFFIX);
-  const token = isPrivate ? privateBlobToken() : undefined;
-  if (isPrivate && !token) {
+  if (!isPrivate) {
+    // A public object is a plain CDN read. The SDK's get() adds the store
+    // token and a cache-busting query to it, which the CDN answers with 400.
+    const response = await fetch(url, {
+      cache: "no-store",
+      ...(options.range ? { headers: { range: options.range } } : {}),
+    });
+    if (response.status === 404) return null;
+    if (!response.ok || !response.body) {
+      throw new Error(
+        `Reading a stored object failed (HTTP ${response.status}).`,
+      );
+    }
+    return {
+      contentLength: response.headers.get("content-length"),
+      contentRange: response.headers.get("content-range"),
+      contentType:
+        response.headers.get("content-type") ?? "application/octet-stream",
+      etag: response.headers.get("etag"),
+      stream: response.body,
+    };
+  }
+  const token = privateBlobToken();
+  if (!token) {
     throw new Error(
       "BLOB_PRIVATE_READ_WRITE_TOKEN is not set, so a private object can't be read.",
     );
   }
   const result = await get(url, {
-    access: isPrivate ? "private" : "public",
-    ...(token ? { token } : {}),
+    access: "private",
+    token,
     ...(options.range ? { headers: { range: options.range } } : {}),
     useCache: false,
   });
