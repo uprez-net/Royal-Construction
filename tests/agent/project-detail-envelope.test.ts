@@ -184,3 +184,18 @@ test("only the most recent lead emails are listed, with the full count", () => {
   assert.equal(lead.emails.at(-1)!.id, "e59");
   assert.equal(lead.emails[0].id, "e10");
 });
+
+test("a blank or overlong project name does not fail the detail", () => {
+  for (const [name, expected] of [
+    ["   ", "Untitled project"],
+    ["z".repeat(230), "z".repeat(200)],
+  ]) {
+    const detail = detailFixture();
+    detail.name = name;
+    detail.location = "L".repeat(400);
+    const envelope = projectDetailEnvelope(detail);
+    assert.equal(envelope.title, expected);
+    assert.equal(envelope.entityRef?.display.label, expected);
+    assert.equal(envelope.entityRef?.display.secondaryText?.length, 300);
+  }
+});

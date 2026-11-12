@@ -141,7 +141,7 @@ export async function getAuthorizedLead(
     version: 1,
     kind: "entity-summary",
     entityRef,
-    title: lead.name,
+    title: entityRef.display.label,
     summary: `${stageMap[lead.stage]} lead in ${lead.location || "an unspecified location"}.`,
     links: [{ label: "Open lead", href: entityRef.display.href }],
     data: {

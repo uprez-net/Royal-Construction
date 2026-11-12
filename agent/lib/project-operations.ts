@@ -13,6 +13,7 @@ import {
 import { runAuditedAgentOperation } from "@/agent/lib/audited-operation";
 import {
   agentResultEnvelopeSchema,
+  displayName,
   type AgentResultEnvelope,
 } from "@/agent/lib/result-contracts";
 import {
@@ -76,8 +77,8 @@ function projectReference(project: {
     type: "project" as const,
     id: project.id,
     display: {
-      label: project.name,
-      secondaryText: project.location,
+      label: displayName(project.name, "Untitled project"),
+      secondaryText: project.location.slice(0, 300),
       href: `/projects/${project.id}`,
     },
   };
@@ -283,7 +284,7 @@ export function projectDetailEnvelope(project: ProjectDetail) {
   return actionEnvelope({
     kind: "entity-summary",
     entityRef: ref,
-    title: project.name,
+    title: ref.display.label,
     summary: `${project.status} project at ${project.location}.`,
     data: {
       project: {

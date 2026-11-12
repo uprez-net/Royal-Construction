@@ -1,6 +1,9 @@
 import type { z } from "zod";
 import type { searchLeadsInputSchema } from "@/agent/lib/lead-contracts";
-import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
+import {
+  agentResultEnvelopeSchema,
+  displayName,
+} from "@/agent/lib/result-contracts";
 import type { SearchLeadsResult } from "@/lib/domain/leads/queries";
 import { stageMap } from "@/types/lead";
 
@@ -17,9 +20,7 @@ export function leadReference(lead: {
     type: "lead" as const,
     id: String(lead.id),
     display: {
-      // The envelope wants 1–200 characters. A listing now reaches every lead,
-      // and one blank or overlong name would fail every page that holds it.
-      label: lead.name.trim().slice(0, 200) || `Lead #${lead.id}`,
+      label: displayName(lead.name, `Lead #${lead.id}`),
       secondaryText: stageMap[lead.stage],
       href: `/leads/${lead.id}`,
     },

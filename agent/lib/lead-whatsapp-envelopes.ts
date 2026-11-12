@@ -3,6 +3,7 @@ import type { ToolContext } from "eve/tools";
 import {
   agentResultEnvelopeSchema,
   type AgentResultEnvelope,
+  displayName,
   type JsonValue,
 } from "@/agent/lib/result-contracts";
 import {
@@ -45,7 +46,10 @@ function leadReference(lead: { id: number; name: string }) {
   return {
     type: "lead" as const,
     id: String(lead.id),
-    display: { label: lead.name, href: LEAD_HREF(lead.id) },
+    display: {
+      label: displayName(lead.name, `Lead #${lead.id}`),
+      href: LEAD_HREF(lead.id),
+    },
   };
 }
 
