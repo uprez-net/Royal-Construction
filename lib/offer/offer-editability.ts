@@ -112,7 +112,7 @@ const STEP_SLICES: Readonly<
   Record<OfferBuildStep, readonly (keyof PersistedOfferWorkspaceState)[]>
 > = {
   "job-setup": ["job"],
-  "cost-schedule": ["costLines", "areaCalculator"],
+  "cost-schedule": ["costLines", "areaCalculator", "extraCosts"],
   pricing: [
     "pricingSettings",
     "legacyPricingSettings",

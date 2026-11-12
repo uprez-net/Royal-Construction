@@ -40,6 +40,7 @@ import {
   STANDARD_INCLUSION_HIGHLIGHTS,
 } from "@/lib/offer/workspace-proposal-content";
 import { DEFAULT_RATE_CONSTANTS } from "@/lib/offer/formula-variables";
+import { withExtraCostLines } from "@/lib/offer/extra-costs";
 
 export type AdminOfferPrefill = {
   // The AdminOfferContent.version these defaults were built from. Stamped into
@@ -389,19 +390,23 @@ export function applyAdminPrefillToSnapshot(
   prefill: AdminOfferPrefill,
 ): OfferWorkspaceSnapshot {
   const existingById = new Map(snapshot.lines.map((line) => [line.id, line]));
+  // The admin set decides which workbook tasks exist; the extras (pump hire,
+  // benching, piles) are the estimator's per-offer configuration, not admin
+  // rows, so they are re-derived rather than dropped with the old set.
+  const workbookLines = prefill.costLines.map((line) => {
+    const existing = existingById.get(line.id);
+    if (!existing || line.costExGst !== 0) {
+      return line;
+    }
+    return {
+      ...line,
+      costExGst: existing.costExGst,
+      includedInContract: existing.includedInContract,
+    };
+  });
   return {
     ...snapshot,
-    lines: prefill.costLines.map((line) => {
-      const existing = existingById.get(line.id);
-      if (!existing || line.costExGst !== 0) {
-        return line;
-      }
-      return {
-        ...line,
-        costExGst: existing.costExGst,
-        includedInContract: existing.includedInContract,
-      };
-    }),
+    lines: withExtraCostLines(workbookLines, snapshot.extraCosts),
     allowances: prefill.allowances,
     exclusions: prefill.exclusions,
     draft: prefill.draft,

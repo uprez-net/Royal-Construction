@@ -33,6 +33,7 @@ import {
   type OfferWorkspaceSnapshot,
   type PersistedOfferWorkspaceState,
 } from "@/lib/offer/workspace-persistence";
+import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
 // saveOfferWorkspace wrote the client's whole snapshot at every editable status.
 // A tab still showing an offer as pending after another tab had sent it could
@@ -67,6 +68,7 @@ const BASE: OfferWorkspaceSnapshot = {
   images: { hero: { url: BLOB_URL, source: "upload" } },
   tenderGate: INITIAL_TENDER_GATE,
   adminContentVersion: 3,
+  extraCosts: INITIAL_EXTRA_COSTS,
   calcVersion: CURRENT_CALC_VERSION,
 };
 

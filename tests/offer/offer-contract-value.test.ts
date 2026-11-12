@@ -19,6 +19,7 @@ import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
 import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
+import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
 // Backs the Versions timeline's price column. Offer.contractValueIncGst used to
 // be written from the OPTIONAL price override, which is 0 whenever the estimator
@@ -67,6 +68,7 @@ function makeSnapshot(
     images: EMPTY_OFFER_IMAGES,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    extraCosts: INITIAL_EXTRA_COSTS,
     calcVersion: LEGACY_CALC_VERSION,
     ...overrides,
   };

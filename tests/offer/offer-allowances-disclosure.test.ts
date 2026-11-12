@@ -35,6 +35,7 @@ import {
   LEGACY_CALC_VERSION,
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
+import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
 // buildOfferPrintTemplateData has always computed `scopeRows` from the
 // allowances the estimator ticks "Show on Offer document" on the Scope step, and
@@ -57,6 +58,7 @@ function snapshotWith(
     draft: INITIAL_OFFER_DRAFT,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    extraCosts: INITIAL_EXTRA_COSTS,
     calcVersion: LEGACY_CALC_VERSION,
     areaCalculator: INITIAL_AREA_CALCULATOR,
     workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,

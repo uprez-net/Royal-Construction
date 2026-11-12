@@ -13,7 +13,11 @@ import {
   requiresOwnerGate,
 } from "@/lib/offer/offer-workflow-transitions";
 import { collectOwnerIssues } from "@/lib/offer/workspace-model";
-import { parseWorkspaceState } from "@/lib/offer/workspace-persistence";
+import {
+  deserializeWorkspace,
+  parseWorkspaceState,
+} from "@/lib/offer/workspace-persistence";
+import { collectExtraCostIssues } from "@/lib/offer/extra-costs";
 
 // The offer lifecycle state machine, and the write that records a move through
 // it. One of the most customer-visible things in the application: the status
@@ -202,12 +206,23 @@ export async function commitOfferStatusTransition(
         `Add and save offer content before ${verb}.`,
       );
     }
-    const ownerIssues = collectOwnerIssues(
-      parseWorkspaceState(offer.workspaceState).job.owners,
+    const snapshot = deserializeWorkspace(
+      parseWorkspaceState(offer.workspaceState),
     );
+    const ownerIssues = collectOwnerIssues(snapshot.job.owners);
     if (ownerIssues.length > 0) {
       throw new DomainValidationError(
         `Complete the owner details before ${verb}: ${ownerIssues.join(" ")}`,
+      );
+    }
+    // A pump hire, benching or pile item switched on but not priceable adds $0,
+    // so locking the offer here would freeze a price that silently leaves it
+    // out — the misleading total the client must never see.
+    const extraCostIssues = collectExtraCostIssues(snapshot.extraCosts);
+    if (extraCostIssues.length > 0) {
+      throw new DomainValidationError(
+        `Finish the additional cost items before ${verb}: ${extraCostIssues.join(" ")}`,
+        "extraCosts",
       );
     }
   }

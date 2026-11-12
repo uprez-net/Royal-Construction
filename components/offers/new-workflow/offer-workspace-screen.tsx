@@ -38,6 +38,12 @@ import {
   type TenderGateState,
 } from "@/lib/offer/workspace-persistence";
 import { formatOfferReference } from "./offer-workspace-format";
+import {
+  isExtraCostLineId,
+  type ExtraCostAdminRates,
+  type OfferExtraCosts,
+} from "@/lib/offer/extra-costs";
+import { CostScheduleExtrasPanel } from "./offer-workspace-extra-costs";
 import { Loader2, Lock } from "lucide-react";
 import {
   AlertDialog,
@@ -56,7 +62,9 @@ import {
   useMemo,
   useRef,
   useState,
+  type Dispatch,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 import { AreaCalculatorPanel } from "./offer-workspace-area";
 import { CostSchedulePanel } from "./offer-workspace-cost-schedule";
@@ -131,6 +139,11 @@ type OfferWorkspaceScreenProps = {
   // A plain number: an offer minted by a newer build carries a version this one
   // cannot price, and the panels screen for that themselves.
   readonly calcVersion: number;
+  // Pump hire / benching / piles, the admin prices they would be stamped with,
+  // and the setter (functional updates, so a quick second click is not lost).
+  readonly extraCosts: OfferExtraCosts;
+  readonly extraCostAdminRates: ExtraCostAdminRates;
+  readonly onExtraCostsChange: Dispatch<SetStateAction<OfferExtraCosts>>;
   // True once the server has reported the offer's real status. Until then
   // `status` is the "pending" seed, and the opening step derived from it is a
   // guess that must be corrected exactly once.
@@ -276,6 +289,9 @@ export function OfferWorkspaceScreen({
   allowances,
   areaCalculator,
   calcVersion,
+  extraCosts,
+  extraCostAdminRates,
+  onExtraCostsChange,
   hydrated,
   loadFailed,
   lifecycleBusy,
@@ -546,16 +562,22 @@ export function OfferWorkspaceScreen({
 
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [mobileCostLineId, setMobileCostLineId] = useState<string | null>(null);
+  // The editable workbook rows. The extras' lines are derived from their own
+  // controls (Additional cost items, the Slab card) and are not free-form rows.
+  const workbookLines = useMemo(
+    () => lines.filter((line) => !isExtraCostLineId(line.id)),
+    [lines],
+  );
   const selectedMobileCostLine =
     mobileCostLineId === "all"
       ? "all"
       : mobileCostLineId === "latest"
-        ? (lines.at(-1)?.id ?? "all")
-        : (lines.find((line) => line.id === mobileCostLineId)?.id
-          ?? lines[0]?.id
+        ? (workbookLines.at(-1)?.id ?? "all")
+        : (workbookLines.find((line) => line.id === mobileCostLineId)?.id
+          ?? workbookLines[0]?.id
           ?? "all");
   const selectedMobileCostTasks =
-    lines.find((line) => line.id === selectedMobileCostLine)
+    workbookLines.find((line) => line.id === selectedMobileCostLine)
       ?.buildingSequenceTasks ?? [];
   const confirmCopy =
     pendingConfirm === null
@@ -818,9 +840,9 @@ export function OfferWorkspaceScreen({
                               {
                                 value: "all",
                                 label: "All cost tasks",
-                                count: lines.length,
+                                count: workbookLines.length,
                               },
-                              ...lines.map((line, index) => ({
+                              ...workbookLines.map((line, index) => ({
                                 value: line.id,
                                 label: `${index + 1}. ${line.itemName || "Unnamed task"}`,
                               })),
@@ -859,15 +881,24 @@ export function OfferWorkspaceScreen({
                         basis={areaBasis}
                         area={areaCalculator}
                         rateConstants={rateConstants}
+                        piles={extraCosts.piles}
+                        extraCostAdminRates={extraCostAdminRates}
                         onAreaChange={onAreaChange}
+                        onExtraCostsChange={onExtraCostsChange}
                         onJobChange={onJobChange}
+                      />
+                      <CostScheduleExtrasPanel
+                        extraCosts={extraCosts}
+                        adminRates={extraCostAdminRates}
+                        locked={costScheduleLocked}
+                        onExtraCostsChange={onExtraCostsChange}
                       />
                       <CostSchedulePanel
                         mobileLineId={selectedMobileCostLine}
                         expandedLineIds={expandedLineIds}
                         onToggleLineExpanded={toggleLineExpanded}
                         importResult={importResult}
-                        lines={lines}
+                        lines={workbookLines}
                         onAddLine={() => {
                           onAddLine();
                           setMobileCostLineId("latest");

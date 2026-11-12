@@ -1,3 +1,4 @@
+import { collectExtraCostIssues } from "@/lib/offer/extra-costs";
 import {
   getAreaBasisTotalSqm,
   offerAreaBasisFromJob,
@@ -111,6 +112,16 @@ export async function sendOfferAcceptanceEnvelope(
     return {
       ok: false,
       error: `Complete the owner details before sending for signature: ${ownerIssues.join(" ")}`,
+    };
+  }
+
+  // Same gate as marking the offer sent: an extra switched on but not priceable
+  // adds $0, so the client would receive a total that silently leaves it out.
+  const extraCostIssues = collectExtraCostIssues(snapshot.extraCosts);
+  if (extraCostIssues.length > 0) {
+    return {
+      ok: false,
+      error: `Finish the additional cost items before sending for signature: ${extraCostIssues.join(" ")}`,
     };
   }
 

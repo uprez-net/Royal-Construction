@@ -26,6 +26,11 @@ import type { OfferImageMap } from "./workspace-images";
 import { RATE_CARD_PRODUCTS, RATE_CARD_TIERS } from "./workspace-rate-card";
 import { STANDARD_INCLUSION_ENTRIES } from "./workspace-proposal-content";
 import { isAllowedOfferImageUrl } from "./offer-image-url";
+import {
+  INITIAL_EXTRA_COSTS,
+  withExtraCostLines,
+  type OfferExtraCosts,
+} from "./extra-costs";
 
 // The bundle of workspace state we persist (everything except transient status
 // and the ephemeral import result). Mirrors the container's useState set.
@@ -56,6 +61,10 @@ export type OfferWorkspaceSnapshot = {
   // an agreed/sent offer keeps its frozen snapshot. 0 means "built before
   // versioning existed", which reads as stale against any real version.
   readonly adminContentVersion: number;
+  // Pump Hire, Benching and the Slab card's Piles, with the admin rates applied
+  // to this offer. The cost lines for them are derived from this, never edited
+  // directly — see lib/offer/extra-costs.ts.
+  readonly extraCosts: OfferExtraCosts;
   // The calculation rules this offer was minted under. See CalcVersion above.
   // A plain number, not CalcVersion: an offer minted by a newer build carries a
   // version this one does not know, and must keep it. isSupportedCalcVersion
@@ -407,6 +416,47 @@ const tenderGateSchema = z
     architecturalPlanDesignChanges: null,
   });
 
+// Pump Hire / Benching / Piles (lib/offer/extra-costs.ts). Rates are money, so
+// cents like every other stored amount; the pile length is metres. Every field
+// defaults, so an offer saved before these existed reads back with all three
+// switched off — exactly what it was priced with — and needs no migration.
+const fixedExtraCostSchema = z.object({
+  included: z.boolean().default(false),
+  rateCents: moneyCents.nonnegative().default(0),
+});
+
+const extraCostsSchema = z
+  .object({
+    pumpHire: fixedExtraCostSchema.default({ included: false, rateCents: 0 }),
+    benching: fixedExtraCostSchema.default({ included: false, rateCents: 0 }),
+    piles: z
+      .object({
+        included: z.boolean().default(false),
+        type: z.enum(["screw", "bored"]).nullable().default(null),
+        quantity: z.number().nonnegative().default(0),
+        lengthPerPileM: z.number().nonnegative().default(0),
+        rateCents: moneyCents.nonnegative().default(0),
+      })
+      .default({
+        included: false,
+        type: null,
+        quantity: 0,
+        lengthPerPileM: 0,
+        rateCents: 0,
+      }),
+  })
+  .default({
+    pumpHire: { included: false, rateCents: 0 },
+    benching: { included: false, rateCents: 0 },
+    piles: {
+      included: false,
+      type: null,
+      quantity: 0,
+      lengthPerPileM: 0,
+      rateCents: 0,
+    },
+  });
+
 const workspaceStateV1Schema = z.object({
   // Derived from the constant, never re-typed: a hard-coded literal here
   // silently rejects every migrated snapshot the moment the version is bumped.
@@ -442,6 +492,7 @@ const workspaceStateV1Schema = z.object({
   // parses; 0 sorts below any live admin version, so such an offer is treated
   // as built from unknown content and refreshed on its next editable open.
   adminContentVersion: z.number().int().nonnegative().default(0),
+  extraCosts: extraCostsSchema,
   // Every row written before the pin existed lacks this key, so the default is
   // what freezes the existing population on the old rules. Deliberately NOT a
   // closed union: parseWorkspaceState is a hard .parse(), so a rollback past a
@@ -750,6 +801,10 @@ export function validatePersistedWorkspace(
 export function serializeWorkspace(
   snapshot: OfferWorkspaceSnapshot,
 ): PersistedOfferWorkspaceState {
+  // The extras' lines are re-derived from their configuration on every write,
+  // so whatever path built this snapshot — the screen, Eve's patch, an admin
+  // re-seed — the saved schedule and the saved configuration agree.
+  const lines = withExtraCostLines(snapshot.lines, snapshot.extraCosts);
   return {
     schemaVersion: CURRENT_WORKSPACE_SCHEMA_VERSION,
     job: {
@@ -762,7 +817,7 @@ export function serializeWorkspace(
         signatories: owner.signatories.map((signatory) => ({ ...signatory })),
       })),
     },
-    costLines: snapshot.lines.map((line) => ({
+    costLines: lines.map((line) => ({
       id: line.id,
       stageCode: line.stageCode,
       itemName: line.itemName,
@@ -818,10 +873,60 @@ export function serializeWorkspace(
     images: { ...snapshot.images },
     tenderGate: { ...snapshot.tenderGate },
     adminContentVersion: snapshot.adminContentVersion,
+    extraCosts: serializeExtraCosts(snapshot.extraCosts),
     // Keep calcVersion LAST here and in deserializeWorkspace below. The autosave
     // dirty check compares JSON.stringify of the two shapes, so a mismatched key
     // order would make every offer look dirty on open and save itself.
     calcVersion: snapshot.calcVersion,
+  };
+}
+
+function serializeExtraCosts(
+  extras: OfferExtraCosts,
+): PersistedOfferWorkspaceState["extraCosts"] {
+  return {
+    pumpHire: {
+      included: extras.pumpHire.included,
+      rateCents: dollarsToCents(extras.pumpHire.rate),
+    },
+    benching: {
+      included: extras.benching.included,
+      rateCents: dollarsToCents(extras.benching.rate),
+    },
+    piles: {
+      included: extras.piles.included,
+      type: extras.piles.type,
+      quantity: extras.piles.quantity,
+      lengthPerPileM: extras.piles.lengthPerPileM,
+      rateCents: dollarsToCents(extras.piles.rate),
+    },
+  };
+}
+
+// `undefined` only for a hand-built persisted object that skipped the parse
+// (a test fixture, an old Eve patch); the parse itself always fills it in.
+function deserializeExtraCosts(
+  persisted: PersistedOfferWorkspaceState["extraCosts"] | undefined,
+): OfferExtraCosts {
+  if (persisted === undefined) {
+    return INITIAL_EXTRA_COSTS;
+  }
+  return {
+    pumpHire: {
+      included: persisted.pumpHire.included,
+      rate: centsToDollars(persisted.pumpHire.rateCents),
+    },
+    benching: {
+      included: persisted.benching.included,
+      rate: centsToDollars(persisted.benching.rateCents),
+    },
+    piles: {
+      included: persisted.piles.included,
+      type: persisted.piles.type,
+      quantity: persisted.piles.quantity,
+      lengthPerPileM: persisted.piles.lengthPerPileM,
+      rate: centsToDollars(persisted.piles.rateCents),
+    },
   };
 }
 
@@ -888,6 +993,7 @@ export function deserializeWorkspace(
     images: persisted.images as OfferImageMap,
     tenderGate: persisted.tenderGate,
     adminContentVersion: persisted.adminContentVersion,
+    extraCosts: deserializeExtraCosts(persisted.extraCosts),
     // Preserved as stored, NOT narrowed: a row written by a future build must
     // keep its own version so the calculation layer can refuse it, rather than
     // be quietly re-read as v1 and repriced under rules it was never quoted on.
