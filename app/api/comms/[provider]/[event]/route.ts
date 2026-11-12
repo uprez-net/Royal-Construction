@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { start } from "workflow/api";
 
 import { commsRuntimeFromEnv } from "@/lib/comms/factory";
@@ -32,5 +33,13 @@ export async function POST(
       await start(storeCallRecordings, [[...recordingIds]]);
     },
     runtime: commsRuntimeFromEnv(),
+    // After the carrier has its answer: load Mili's route while the caller
+    // hears the declaration. Its 426 is the expected reply; nothing is read.
+    warmVoiceAgent: (url) =>
+      waitUntil(
+        fetch(url, { cache: "no-store", signal: AbortSignal.timeout(10_000) })
+          .then((response) => response.body?.cancel())
+          .catch(() => {}),
+      ),
   });
 }

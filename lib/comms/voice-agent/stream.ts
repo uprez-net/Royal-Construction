@@ -23,6 +23,27 @@ export function voiceAgentStreamUrl(
   return url.toString();
 }
 
+/**
+ * https://<app>/api/comms/voice-agent/<provider>, for warming the route up.
+ *
+ * Telnyx gives up on a media stream whose WebSocket is not open in about
+ * two and a half seconds, and a cold function takes longer than that to
+ * upgrade one: the first call after a deploy or a quiet spell lost Mili and
+ * went to the office mobile. A plain GET (answered 426) loads the function
+ * while the caller hears the recording declaration, so the upgrade that
+ * follows lands on a warm instance. Null when Mili is off.
+ */
+export function voiceAgentWarmUrl(
+  config: CommsConfig,
+  provider: CommsProviderName,
+): string | null {
+  const origin = config.webhookOrigin;
+  if (!config.voiceAgent.enabled || !config.voiceAgent.secret || !origin) {
+    return null;
+  }
+  return new URL(`/api/comms/voice-agent/${provider}`, origin).toString();
+}
+
 export function voiceAgentStream(
   config: CommsConfig,
   provider: CommsProviderName,

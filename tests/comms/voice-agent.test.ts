@@ -24,6 +24,7 @@ import {
   type VoiceAgentReportBody,
 } from "@/lib/comms/voice-agent/session";
 import { VOICE_AGENT_MODEL } from "@/lib/comms/voice-agent/settings";
+import { voiceAgentWarmUrl } from "@/lib/comms/voice-agent/stream";
 import {
   handleVoiceAgentStream,
   recordVoiceAgentOutcome,
@@ -755,6 +756,20 @@ test("the stream route is closed unless Mili is on, and only upgrades a WebSocke
   );
 });
 
+test("her route is only warmed when Mili is on", () => {
+  assert.equal(
+    voiceAgentWarmUrl(commsRuntimeFromEnv(ENV).config, "telnyx"),
+    "https://royal.example/api/comms/voice-agent/telnyx",
+  );
+  assert.equal(
+    voiceAgentWarmUrl(
+      commsRuntimeFromEnv({ ...ENV, COMMS_AGENT_ENABLED: "" }).config,
+      "telnyx",
+    ),
+    null,
+  );
+});
+
 test("the route's function outlives the longest conversation", async () => {
   const { readFile } = await import("node:fs/promises");
   const route = await readFile(
@@ -831,6 +846,7 @@ const AGENT_CALL = {
 
 test("Twilio: an inbound call hears the declaration, then streams to Mili", async () => {
   const runtime = commsRuntimeFromEnv(ENV);
+  const warmed: string[] = [];
   const response = await handleCommsWebhook(
     twilioRequest("voice-inbound", {
       CallSid: "CA1",
@@ -847,9 +863,15 @@ test("Twilio: an inbound call hears the declaration, then streams to Mili", asyn
       }).transactionalDb,
       log: quiet,
       runtime,
+      warmVoiceAgent: (url) => warmed.push(url),
     },
   );
   const xml = await response.text();
+  assert.deepEqual(
+    warmed,
+    ["https://royal.example/api/comms/voice-agent/twilio"],
+    "her route is warmed while the declaration plays",
+  );
   assert.ok(xml.includes(PROMPTS.recordingDeclaration.replace(/'/g, "&apos;")));
   assert.doesNotMatch(xml, /<Client/, "no browser rings");
   assert.match(
@@ -905,6 +927,7 @@ test("Twilio: a stream that ends without Mili moving the call on rings the mobil
 
 test("Telnyx: after the declaration, the call is recorded and streamed to Mili", async () => {
   const { fetchImpl, requests } = recordingFetch();
+  const warmed: string[] = [];
   await handleCommsWebhook(
     telnyxRequest("voice", {
       data: {
@@ -932,12 +955,14 @@ test("Telnyx: after the declaration, the call is recorded and streamed to Mili",
       db: recordingDb({ "commsWebhookEvent.findUnique": null }).transactionalDb,
       log: quiet,
       runtime: commsRuntimeFromEnv(ENV, fetchImpl),
+      warmVoiceAgent: (url) => warmed.push(url),
     },
   );
   assert.deepEqual(
     requests.map((request) => request.url.replace(/^.*\/actions\//, "")),
     ["record_start", "streaming_start"],
   );
+  assert.deepEqual(warmed, [], "warmed when decided, not as the stream opens");
   const body = JSON.parse(requests[1].body) as Record<string, string>;
   assert.equal(body.stream_bidirectional_codec, "PCMU");
   const url = new URL(body.stream_url);

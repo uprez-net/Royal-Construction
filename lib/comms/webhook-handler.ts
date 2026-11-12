@@ -15,6 +15,7 @@ import {
 import { signedUrlFor } from "./callbacks";
 import { providerFromPath, type CommsRuntime } from "./factory";
 import type { RespondContext, WebhookRequest } from "./types";
+import { voiceAgentWarmUrl } from "./voice-agent/stream";
 
 // Every carrier callback, as plain functions (file 06 §6).
 //
@@ -57,6 +58,11 @@ export type CommsWebhookDeps = {
   readonly onRecordingRecorded?: (
     recordingIds: readonly string[],
   ) => Promise<void>;
+  /**
+   * Load Mili's stream route in the background (voiceAgentWarmUrl). Must not
+   * delay the carrier's answer, and must never fail the webhook.
+   */
+  readonly warmVoiceAgent?: (url: string) => void;
 };
 
 function text(status: number, body: string) {
@@ -252,6 +258,21 @@ export async function handleCommsWebhook(
         "[comms-webhook] Could not start copying a recording; the daily sweep will.",
         error,
       );
+    }
+  }
+  // Mili is next, after the declaration: warm her route now so the carrier's
+  // stream does not meet a cold start (voiceAgentWarmUrl says why).
+  if (
+    deps.warmVoiceAgent
+    && instructions?.some((step) => step.op === "connectAgent")
+  ) {
+    const url = voiceAgentWarmUrl(config, provider);
+    if (url) {
+      try {
+        deps.warmVoiceAgent(url);
+      } catch {
+        // Only an optimisation: the stream still opens, just maybe slower.
+      }
     }
   }
   if (parsed.recordAfterConnect && adapter.startCallRecording) {
