@@ -597,11 +597,6 @@ export async function setAuthorizedActivityPrice(
           title: outcome.changed
             ? "Activity price updated"
             : "Activity price unchanged",
-          warnings: outcome.changed
-            ? [
-                "The project's Milestones tab may show the previous budget for a few minutes until its cache refreshes.",
-              ]
-            : [],
         });
       } catch (error) {
         // Not an ADMIN, a parent below its children, or a price that moved
@@ -716,11 +711,6 @@ export async function assignAuthorizedSiteManager(
           title: outcome.changed
             ? "Site manager reassigned"
             : "Site manager unchanged",
-          warnings: outcome.changed
-            ? [
-                "The project screens may show the previous site manager for a few minutes until their cache refreshes.",
-              ]
-            : [],
         });
       } catch (error) {
         // Not an ADMIN, or an id that names nobody assignable: both are

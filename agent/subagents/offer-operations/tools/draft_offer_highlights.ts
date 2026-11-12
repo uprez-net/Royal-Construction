@@ -8,7 +8,7 @@ export default defineTool({
     "Draft reviewable selling highlights from one authorized offer schedule. It writes nothing and never claims the copy was accepted.",
   inputSchema: draftOfferHighlightsInputSchema,
   outputSchema: agentResultEnvelopeSchema,
-  label: { start: ({ leadId }) => `Draft offer highlights for lead ${leadId}` },
+  label: { start: () => "Draft offer highlights" },
   execute(input, ctx) {
     return draftAuthorizedOfferHighlights(ctx, input);
   },

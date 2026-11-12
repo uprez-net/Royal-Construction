@@ -9,7 +9,7 @@ export default defineTool({
   inputSchema: listOfferRevisionsInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   label: {
-    start: ({ leadId }) => `List offer revisions for lead ${leadId}`,
+    start: () => "List offer revisions",
   },
   async execute(input, ctx) {
     return await offerOperations.listAuthorizedOfferRevisions(ctx, input);

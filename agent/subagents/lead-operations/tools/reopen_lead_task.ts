@@ -16,7 +16,7 @@ export default defineTool({
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
   label: {
-    start: ({ taskId }) => `Reopen lead task ${taskId}`,
+    start: () => "Reopen lead task",
   },
   async execute({ taskId }, ctx) {
     const { actor, leadId } = await resolveAuthorizedTask(ctx, taskId);
