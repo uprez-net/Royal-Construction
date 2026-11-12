@@ -25,7 +25,7 @@ export const VOICE_AGENT_WRAP_UP_SECONDS = 45;
 
 /** What Mili is told when the conversation is nearly out of time. */
 export const VOICE_AGENT_WRAP_UP_INSTRUCTION =
-  "Time is nearly up. Briefly confirm the caller's name and number, tell them someone from the team will call them back, say goodbye, then call end_call.";
+  "Time is nearly up. Briefly confirm the caller's name and number, tell them someone from the team will call them back, and say goodbye.";
 
 /** The transcript kept on the call, at most. Longer ones keep their start. */
 export const VOICE_AGENT_TRANSCRIPT_MAX_CHARS = 20_000;
@@ -43,6 +43,7 @@ export function voiceAgentInstructions(): string {
   return [
     `You are ${VOICE_AGENT_NAME}, the friendly virtual receptionist who answers the phone for Royal Constructions, a residential home builder in Australia.`,
     "You are speaking on a phone call. The caller has already been told the call is recorded.",
+    `Speak first. Open the call with exactly these words: "${VOICE_AGENT_GREETING}"`,
     "",
     "How you speak:",
     "- Warm, calm and professional, with a natural Australian-English manner. Short sentences: one or two at a time, then let the caller talk.",
@@ -63,23 +64,38 @@ export function voiceAgentInstructions(): string {
     "- If the caller is upset or has an urgent problem on an existing site (safety, damage, a leak), take their details, tell them you are flagging it as urgent, and offer to put them through to the team.",
     "",
     "Ending the call:",
-    "- When the conversation is finished and you have said goodbye, call the end_call tool.",
-    "- If the caller asks to speak to a person, or the matter needs someone straight away, say you will put them through and call the transfer_to_team tool.",
+    "- You cannot hang up or transfer the call yourself; the call desk listening in does that for you.",
+    "- When the conversation is finished, say goodbye. The call desk then ends the call.",
+    "- If the caller asks to speak to a person, or the matter needs someone straight away, tell them you are putting them through now. The call desk then transfers them.",
   ].join("\n");
 }
 
-/** The tools Mili can call, as provider-neutral function definitions. */
+/**
+ * The call desk: a text model that reads the conversation after each thing
+ * Mili says and decides whether the call must now move on. Mili's live voice
+ * model cannot call tools, so this is where ending and transferring the call
+ * are decided — always after she has told the caller, never before.
+ */
+export function voiceAgentDeskInstructions(): string {
+  return [
+    `You are the call desk behind ${VOICE_AGENT_NAME}, the voice receptionist on Royal Constructions' phone line. You never speak to the caller.`,
+    "Read the transcript so far and decide whether the call must now be moved on.",
+    `- Call end_call only when the caller has nothing else AND ${VOICE_AGENT_NAME} has already said goodbye.`,
+    `- Call transfer_to_team only when the caller asked for a person (or the matter needs someone now) AND ${VOICE_AGENT_NAME} has told them she is putting them through.`,
+    '- Otherwise call no tool and reply "continue".',
+  ].join("\n");
+}
+
+/** The tools the call desk can call, as provider-neutral function definitions. */
 export const VOICE_AGENT_TOOLS = [
   {
-    description:
-      "End the phone call. Call this only after you have said goodbye and the caller has nothing else.",
+    description: `End the phone call. Only once ${VOICE_AGENT_NAME} has said goodbye and the caller has nothing else.`,
     name: "end_call",
     parameters: { additionalProperties: false, properties: {}, type: "object" },
     type: "function",
   },
   {
-    description:
-      "Put the caller through to a person on the Royal Constructions team. Call this after telling the caller you are transferring them.",
+    description: `Put the caller through to a person on the Royal Constructions team. Only once ${VOICE_AGENT_NAME} has told the caller she is putting them through.`,
     name: "transfer_to_team",
     parameters: {
       additionalProperties: false,

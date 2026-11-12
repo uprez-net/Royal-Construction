@@ -3,14 +3,13 @@ import type { CommsProviderName } from "@/lib/domain/ports/comms";
 // The carriers' media-stream frames, as the relay sees them.
 //
 // Both carriers send JSON text frames over the WebSocket they open to the
-// relay, with base64 8 kHz μ-law audio, and accept audio and a "clear" (stop
-// playing what is queued) back. The shapes differ in small ways:
+// relay, with base64 8 kHz μ-law audio, and accept audio back. The shapes
+// differ in small ways:
 //
 //                Twilio Media Streams          Telnyx media streaming
 //   start        start.callSid, streamSid,     start.call_control_id,
 //                start.customParameters        stream_id
 //   send audio   { event, streamSid, media }   { event, media }
-//   clear        { event, streamSid }          { event }
 //
 // Field names are from the carriers' docs, not a captured stream: VERIFY
 // against one real session per carrier and add the frames to tests/comms.
@@ -94,17 +93,5 @@ export function carrierMediaFrame(
     dialect === "twilio"
       ? { event: "media", media: { payload }, streamSid: streamId }
       : { event: "media", media: { payload } },
-  );
-}
-
-/** Drop whatever audio the carrier has queued: the caller started talking. */
-export function carrierClearFrame(
-  dialect: CommsProviderName,
-  streamId: string | null,
-): string {
-  return JSON.stringify(
-    dialect === "twilio"
-      ? { event: "clear", streamSid: streamId }
-      : { event: "clear" },
   );
 }

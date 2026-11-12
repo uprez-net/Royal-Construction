@@ -72,11 +72,24 @@ configure.
 ## Mili, the voice agent
 
 Mili answers every inbound call on either carrier, after the recording
-declaration. She runs on `openai/gpt-realtime-2` through AI Gateway with a female
-voice, takes the caller's name, number, suburb and what they need, and never
-quotes a price, a date or a commitment (the rules are in
+declaration. She takes the caller's name, number, suburb and what they need,
+and never quotes a price, a date or a commitment (the rules are in
 `lib/domain/comms/calls/voice-agent.ts`). She can end the call or hand the
 caller to the office mobile.
+
+Two models on AI Gateway, and nothing else:
+
+- **Her voice is `openai/gpt-live-1`** (GPT-Live, $3 per session hour), on the
+  Gateway's native Live socket — not the realtime API, where the Gateway
+  refuses it with `invalid_model`. The app mints a single-use Live client
+  secret with its own Gateway credential (`AI_GATEWAY_API_KEY`, else the
+  deployment's Vercel OIDC token). Phone audio is 8 kHz μ-law and Live speaks
+  it too, so audio passes through untouched. She speaks first.
+- **The call desk is `zai/glm-5.3-flash`.** Live cannot call tools, so after
+  each thing Mili says (and whenever Live delegates) the desk reads the
+  transcript and calls `end_call` or `transfer_to_team` — only after she has
+  said goodbye, or told the caller she is putting them through. Its rules sit
+  with hers in the domain file.
 
 How it works: the carrier streams the call's audio over a WebSocket to
 `wss://{origin}/api/comms/voice-agent/{twilio|telnyx}`, a route on this app
@@ -84,6 +97,9 @@ that Vercel upgrades and keeps alive for the conversation (up to 270 s, inside
 the route's 300 s limit; she is asked to wrap up 45 s before). Each stream must
 present a token the app signed for that call. When she finishes, the
 transcript is saved and the call moves on (hang up, mobile, voicemail).
+
+To try her without a phone, the session tests in
+`tests/comms/voice-agent.test.ts` drive one conversation end to end with fakes.
 
 1. `COMMS_AGENT_ENABLED=true` and `COMMS_AGENT_SECRET` (`openssl rand -hex 32`).
 2. `AI_GATEWAY_API_KEY` set (or Vercel OIDC on the deployment).
@@ -115,10 +131,11 @@ fixture:
   and that a live-call TwiML update does not then request the action; Telnyx
   `streaming_start` field names (`stream_bidirectional_mode`, `…_codec`), and
   both carriers' stream frame shapes (`lib/comms/voice-agent/frames.ts`);
-  tool calls on the AI Gateway realtime session. (Verified 2026-11-12: the
-  `streaming.failed` event name; `openai/gpt-realtime-2` accepting Mili's
-  session config and greeting on `response-create`. `openai/gpt-live-1` is
-  refused with `invalid_model` — not served in realtime mode.)
+  Live delegations firing reliably (they do not: one of two identical calls
+  delegated, which is why the desk also runs after every turn). (Verified
+  2026-11-12: the `streaming.failed` event name; GPT-Live's socket, client
+  secret, `audio/pcmu` at 8 kHz both ways, transcript deltas with `start_ms`,
+  and the delegation event shape, against the live service.)
 - **Telnyx**: field names on `call.*` and `message.*` events; `client_state` on
   the legs a `transfer` creates; hangup causes; the telephony-credential token
   endpoint returning plain text; `GET /calls/{id}` after a call ends;

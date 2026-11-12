@@ -8,7 +8,8 @@ import { CommsError, type CommsProviderName } from "@/lib/domain/ports/comms";
 import type { CommsRuntime } from "../factory";
 import { providerFromPath } from "../factory";
 import { COMMS_WEBHOOK_PRINCIPAL } from "../webhook-handler";
-import { openVoiceAgentModel } from "./model";
+import { decideCallMove } from "./desk";
+import { openLiveSession } from "./live";
 import { VoiceAgentSession, type VoiceAgentReportBody } from "./session";
 import { voiceAgentVoice } from "./settings";
 
@@ -33,7 +34,8 @@ export type VoiceAgentStreamDeps = {
     handler: (ws: WebSocket) => Promise<void>,
   ) => Promise<Response>;
   /** Swapped in tests. */
-  readonly openModel?: typeof openVoiceAgentModel;
+  readonly openModel?: typeof openLiveSession;
+  readonly decide?: typeof decideCallMove;
   readonly log?: Pick<Console, "info" | "warn" | "error">;
   readonly env?: Record<string, string | undefined>;
 };
@@ -103,7 +105,7 @@ export async function handleVoiceAgentStream(
     return text(426, "Upgrade required");
   }
   const urlToken = new URL(request.url).searchParams.get("token");
-  const open = deps.openModel ?? openVoiceAgentModel;
+  const open = deps.openModel ?? openLiveSession;
 
   const run = async (ws: WebSocket) => {
     const session: VoiceAgentSession = new VoiceAgentSession({
@@ -115,6 +117,7 @@ export async function handleVoiceAgentStream(
           if (ws.readyState === ws.OPEN) ws.send(frame);
         },
       },
+      decide: deps.decide ?? decideCallMove,
       dialect: provider,
       log,
       openModel: () =>

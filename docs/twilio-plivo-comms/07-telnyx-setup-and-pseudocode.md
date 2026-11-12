@@ -305,7 +305,7 @@ fetched), stores the audio privately, then `DELETE`s it at Telnyx.
 declaration, `connectAgent` issues `record_start` (dual, marked `rk` in `client_state` so
 a late save is filed as the conversation) and `streaming_start` with
 `stream_url=wss://<origin>/api/comms/voice-agent/telnyx?token=…`, bidirectional RTP,
-PCMU. The route bridges the audio to `openai/gpt-realtime-2` on AI Gateway
+PCMU. The route bridges the audio to `openai/gpt-live-1` (GPT-Live, native Live socket) on AI Gateway
 (`lib/comms/voice-agent`). When she finishes, the domain decides the next step and the
 adapter runs it (`streaming_stop`, then `speak`/`transfer`/`hangup`). A
 `streaming.failed` event sends the caller to the office mobile, then voicemail. Capture

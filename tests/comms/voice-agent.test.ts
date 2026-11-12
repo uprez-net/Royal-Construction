@@ -6,22 +6,24 @@ import { commsRuntimeFromEnv } from "@/lib/comms/factory";
 import { twilioSignature } from "@/lib/comms/providers/twilio/signature";
 import { encodeClientState } from "@/lib/comms/providers/telnyx/client-state";
 import { handleCommsWebhook } from "@/lib/comms/webhook-handler";
+import type { DeskDecision } from "@/lib/comms/voice-agent/desk";
 import {
-  linearToMuLaw,
-  modelToPhone,
-  muLawToLinear,
-  phoneToModel,
-} from "@/lib/comms/voice-agent/audio";
-import {
-  carrierClearFrame,
   carrierMediaFrame,
   parseCarrierFrame,
 } from "@/lib/comms/voice-agent/frames";
 import {
+  mintLiveClientSecret,
+  parseLiveServerEvent,
+  type LiveClientEvent,
+} from "@/lib/comms/voice-agent/live";
+import {
+  isSpeech,
   START_TIMEOUT_MS,
+  TURN_QUIET_MS,
   VoiceAgentSession,
   type VoiceAgentReportBody,
 } from "@/lib/comms/voice-agent/session";
+import { VOICE_AGENT_MODEL } from "@/lib/comms/voice-agent/settings";
 import {
   handleVoiceAgentStream,
   recordVoiceAgentOutcome,
@@ -33,16 +35,19 @@ import {
 import { PROMPTS } from "@/lib/domain/comms/calls/flow";
 import {
   formatVoiceAgentTranscript,
+  VOICE_AGENT_GREETING,
   VOICE_AGENT_MAX_SECONDS,
   VOICE_AGENT_WRAP_UP_INSTRUCTION,
+  type VoiceAgentTurn,
 } from "@/lib/domain/comms/calls/voice-agent";
 
 import { recordingDb } from "../architecture/domain-harness";
 import { REPO_ROOT } from "../support/repo-root";
 
-// Mili, the voice agent: the phone-audio codec, the stream token, both
-// carriers' stream frames, one conversation driven end to end, and the
-// handover back to the call router when she is done.
+// Mili, the voice agent: the stream token, both carriers' stream frames, the
+// GPT-Live socket's events and credential, one conversation driven end to
+// end with the call desk deciding when it ends, and the handover back to the
+// call router when she is done.
 
 const SECRET = "s".repeat(40);
 const NOW = new Date("2026-11-09T00:00:00Z");
@@ -90,27 +95,6 @@ function token(
     SECRET,
   );
 }
-
-// ── Audio ────────────────────────────────────────────────────────────
-
-test("μ-law survives a round trip within its quantisation step", () => {
-  for (const sample of [0, 1, -1, 100, -100, 1_000, -5_000, 20_000, -32_000]) {
-    const back = muLawToLinear(linearToMuLaw(sample));
-    const step = Math.max(8, Math.abs(sample) / 16);
-    assert.ok(Math.abs(back - sample) <= step, `${sample} → ${back}`);
-  }
-});
-
-test("a 20 ms phone frame becomes 20 ms of 24 kHz PCM, and back", () => {
-  const phone = Buffer.alloc(160, linearToMuLaw(4_000));
-  const pcm = phoneToModel(phone);
-  assert.equal(pcm.length, 160 * 3 * 2);
-  const pending = { bytes: Buffer.alloc(0) };
-  const back = modelToPhone(pcm.subarray(0, pcm.length - 2), pending);
-  assert.equal(back.length, 159, "an uneven tail waits for the next chunk");
-  assert.equal(pending.bytes.length, 4);
-  assert.equal(modelToPhone(pcm.subarray(pcm.length - 2), pending).length, 1);
-});
 
 // ── Token ────────────────────────────────────────────────────────────
 
@@ -179,7 +163,7 @@ test("only the caller's audio reaches Mili", () => {
   assert.deepEqual(parseCarrierFrame("twilio", "not json"), { kind: "other" });
 });
 
-test("audio and clear frames go back in each carrier's own shape", () => {
+test("audio goes back in each carrier's own shape", () => {
   assert.deepEqual(JSON.parse(carrierMediaFrame("twilio", "MZ1", "AA")), {
     event: "media",
     media: { payload: "AA" },
@@ -189,18 +173,122 @@ test("audio and clear frames go back in each carrier's own shape", () => {
     event: "media",
     media: { payload: "AA" },
   });
-  assert.deepEqual(JSON.parse(carrierClearFrame("twilio", "MZ1")), {
-    event: "clear",
-    streamSid: "MZ1",
+});
+
+// ── GPT-Live socket ──────────────────────────────────────────────────
+
+test("GPT-Live frames are narrowed to what the relay uses", () => {
+  const parse = (event: unknown) => parseLiveServerEvent(JSON.stringify(event));
+  assert.deepEqual(parse({ session: { id: "s" }, type: "session.started" }), {
+    type: "session.started",
   });
+  assert.deepEqual(
+    parse({ delta: "AAAA", type: "session.output_audio.delta" }),
+    { delta: "AAAA", type: "session.output_audio.delta" },
+  );
+  assert.deepEqual(
+    parse({
+      delta: " Hi",
+      end_ms: 7800,
+      start_ms: 7600,
+      type: "session.input_transcript.delta",
+    }),
+    {
+      delta: " Hi",
+      endMs: 7800,
+      startMs: 7600,
+      type: "session.input_transcript.delta",
+    },
+  );
+  // Captured from the live service: a delegation names itself, not a task.
+  assert.deepEqual(
+    parse({
+      delegation: { id: "item_1", target: "client", type: "delegation" },
+      event_id: "event_1",
+      offset_ms: 11000,
+      type: "session.delegation.created",
+    }),
+    { delegationId: "item_1", type: "session.delegation.created" },
+  );
+  assert.deepEqual(
+    parse({
+      error: { code: "invalid_request_error", message: "Unsupported" },
+      type: "error",
+    }),
+    { code: "invalid_request_error", message: "Unsupported", type: "error" },
+  );
+  assert.deepEqual(parse({ type: "session.usage.updated" }), { type: "other" });
+  assert.deepEqual(parseLiveServerEvent("not json"), { type: "other" });
+});
+
+test("a GPT-Live secret is minted with the server's Gateway key, else its OIDC token", async () => {
+  const seen: {
+    url: string;
+    headers: Record<string, string>;
+    body: unknown;
+  }[] = [];
+  const fetchImpl = (async (url: string, init: RequestInit) => {
+    seen.push({
+      body: JSON.parse(String(init.body)),
+      headers: init.headers as Record<string, string>,
+      url: String(url),
+    });
+    return Response.json({ expiresAt: 1, token: "live-secret" });
+  }) as typeof fetch;
+
+  assert.equal(
+    await mintLiveClientSecret({
+      env: { AI_GATEWAY_API_KEY: "gw-key" },
+      fetch: fetchImpl,
+      oidcToken: async () => assert.fail("the key comes first"),
+    }),
+    "live-secret",
+  );
+  assert.equal(
+    seen[0].url,
+    "https://ai-gateway.vercel.sh/v1/realtime/client-secrets",
+  );
+  assert.deepEqual(seen[0].body, {
+    model: VOICE_AGENT_MODEL,
+    routeKind: "live",
+  });
+  assert.equal(seen[0].headers.Authorization, "Bearer gw-key");
+  assert.equal(seen[0].headers["ai-gateway-auth-method"], "api-key");
+
+  await mintLiveClientSecret({
+    env: {},
+    fetch: fetchImpl,
+    oidcToken: async () => "oidc-token",
+  });
+  assert.equal(seen[1].headers.Authorization, "Bearer oidc-token");
+  assert.equal(seen[1].headers["ai-gateway-auth-method"], "oidc");
+
+  await assert.rejects(
+    mintLiveClientSecret({
+      env: { AI_GATEWAY_API_KEY: "k" },
+      fetch: (async () => new Response("no", { status: 403 })) as typeof fetch,
+    }),
+    /HTTP 403/,
+  );
+});
+
+test("Mili runs on GPT-Live, never a realtime model the Gateway refuses", () => {
+  assert.equal(VOICE_AGENT_MODEL, "openai/gpt-live-1");
 });
 
 // ── Session ──────────────────────────────────────────────────────────
 
-function harness(dialect: "twilio" | "telnyx" = "telnyx", urlToken?: string) {
+type Decide = (turns: readonly VoiceAgentTurn[]) => Promise<DeskDecision>;
+
+function harness(
+  dialect: "twilio" | "telnyx" = "telnyx",
+  urlToken?: string,
+  decide: Decide = async () => null,
+) {
   const carrierOut: string[] = [];
-  const modelOut: { type: string; [key: string]: unknown }[] = [];
+  const modelOut: LiveClientEvent[] = [];
   const reports: VoiceAgentReportBody[] = [];
+  const asked: VoiceAgentTurn[][] = [];
   const timers: { fn: () => void; ms: number; live: boolean }[] = [];
   const state = { carrierClosed: false, modelClosed: false, opened: 0 };
   let clock = NOW.getTime();
@@ -214,6 +302,10 @@ function harness(dialect: "twilio" | "telnyx" = "telnyx", urlToken?: string) {
     clearTimer: (handle) => {
       (handle as { live: boolean }).live = false;
     },
+    decide: async (turns) => {
+      asked.push([...turns]);
+      return decide(turns);
+    },
     dialect,
     log: quiet,
     now: () => clock,
@@ -223,7 +315,7 @@ function harness(dialect: "twilio" | "telnyx" = "telnyx", urlToken?: string) {
         close: () => {
           state.modelClosed = true;
         },
-        send: (event) => modelOut.push(event as never),
+        send: (event) => modelOut.push(event),
       };
     },
     report: async (body) => {
@@ -244,13 +336,22 @@ function harness(dialect: "twilio" | "telnyx" = "telnyx", urlToken?: string) {
       timer.fn();
     }
   };
+  /** Fire the most recently set live timer, whatever its delay. */
+  const fireLast = () => {
+    const timer = timers.filter((t) => t.live).at(-1);
+    if (!timer) return assert.fail("no timer is pending");
+    timer.live = false;
+    timer.fn();
+  };
   const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
   return {
     advance: (ms: number) => {
       clock += ms;
     },
+    asked,
     carrierOut,
     fire,
+    fireLast,
     modelOut,
     reports,
     session,
@@ -266,6 +367,26 @@ const telnyxStart = (callControlId = "v3:abc") =>
     start: { call_control_id: callControlId },
     stream_id: "s-1",
   });
+
+/** μ-law 0x00 is the loudest sample; 0xff and 0x7f are silence. */
+const SPEECH = 0x00;
+
+const callerMedia = JSON.stringify({
+  event: "media",
+  media: {
+    payload: Buffer.alloc(160, 0xff).toString("base64"),
+    track: "inbound",
+  },
+});
+
+/** Start a Telnyx session and let GPT-Live report itself started. */
+async function started(decide?: Decide) {
+  const h = harness("telnyx", token("telnyx", "v3:abc"), decide);
+  h.session.handleCarrierText(telnyxStart());
+  await h.tick();
+  h.session.handleModelEvent({ type: "session.started" });
+  return h;
+}
 
 test("a stream without a valid token never reaches the model", async () => {
   for (const [urlToken, start] of [
@@ -286,75 +407,93 @@ test("a stream without a valid token never reaches the model", async () => {
   assert.equal(silent.state.carrierClosed, true);
 });
 
-test("one conversation: greet, listen, speak, transcribe, then end_call reports and hangs up", async () => {
+test("Live starts as Mili, in phone μ-law, with client delegation", async () => {
   const h = harness("telnyx", token("telnyx", "v3:abc"));
   h.session.handleCarrierText(telnyxStart());
   await h.tick();
   assert.equal(h.state.opened, 1);
-  assert.equal(h.modelOut[0].type, "session-update");
-  const config = h.modelOut[0].config as Record<string, unknown>;
-  assert.equal(config.voice, "marin");
-  assert.deepEqual(config.inputAudioFormat, {
-    rate: 24_000,
-    type: "audio/pcm",
+  const start = h.modelOut[0];
+  assert.equal(start.type, "session.start");
+  if (start.type !== "session.start") return;
+  assert.equal(start.session.model, "openai/gpt-live-1");
+  assert.deepEqual(start.session.audio, {
+    format: { rate: 8000, type: "audio/pcmu" },
+    output: { voice: "marin" },
+  });
+  assert.deepEqual(start.session.delegation, { type: "client" });
+  assert.equal(start.session.store, false);
+  assert.ok(
+    start.session.instructions.includes(VOICE_AGENT_GREETING),
+    "she opens the call herself, in the agreed words",
+  );
+});
+
+test("one conversation: audio passes through, transcripts kept, the desk ends it after her goodbye", async () => {
+  let goodbyeSaid = false;
+  const h = await started(async () => (goodbyeSaid ? { action: "end" } : null));
+
+  // Caller audio goes to Live untouched: both sides speak 8 kHz μ-law.
+  h.session.handleCarrierText(callerMedia);
+  assert.deepEqual(h.modelOut.at(-1), {
+    audio: Buffer.alloc(160, 0xff).toString("base64"),
+    type: "session.input_audio.append",
   });
 
-  // Caller audio before the session is ready is dropped.
-  const media = JSON.stringify({
-    event: "media",
-    media: {
-      payload: Buffer.alloc(160, 0xff).toString("base64"),
-      track: "inbound",
-    },
-  });
-  h.session.handleCarrierText(media);
-  assert.equal(h.modelOut.length, 1);
-
-  h.session.handleModelEvent({ raw: {}, type: "session-updated" });
-  assert.equal(h.modelOut[1].type, "response-create", "Mili speaks first");
-  h.session.handleCarrierText(media);
-  assert.equal(h.modelOut[2].type, "input-audio-append");
-
-  // 40 ms of model audio → two 20 ms phone frames.
+  // 40 ms of her audio → two 20 ms phone frames.
   h.session.handleModelEvent({
-    delta: Buffer.alloc(960 * 2).toString("base64"),
-    itemId: "i1",
-    raw: {},
-    responseId: "r1",
-    type: "audio-delta",
+    delta: Buffer.alloc(320, SPEECH).toString("base64"),
+    type: "session.output_audio.delta",
   });
   const frames = h.carrierOut.map((text) => JSON.parse(text));
   assert.equal(frames.length, 2);
   assert.equal(Buffer.from(frames[0].media.payload, "base64").length, 160);
 
-  h.session.handleModelEvent({ raw: {}, type: "speech-started" });
-  assert.deepEqual(JSON.parse(h.carrierOut.at(-1) ?? ""), { event: "clear" });
+  // Transcript deltas carry session time, as Live sends them.
+  for (const [delta, at] of [
+    [" Hi,", 1000],
+    [" you're speaking with Mili.", 1200],
+  ] as const) {
+    h.session.handleModelEvent({
+      delta,
+      endMs: at + 200,
+      startMs: at,
+      type: "session.output_transcript.delta",
+    });
+  }
+  for (const [delta, at] of [
+    [" I'd like", 4000],
+    [" a knockdown rebuild.", 4200],
+  ] as const) {
+    h.session.handleModelEvent({
+      delta,
+      endMs: at + 200,
+      startMs: at,
+      type: "session.input_transcript.delta",
+    });
+  }
 
+  // Her turn ends (no audio for a moment): the desk is asked, says carry on.
+  h.fire(TURN_QUIET_MS);
+  await h.tick();
+  assert.equal(h.asked.length, 1);
+  assert.deepEqual(h.reports, []);
+
+  // She says goodbye; the desk now ends the call, once her words have played.
+  goodbyeSaid = true;
   h.session.handleModelEvent({
-    itemId: "i1",
-    raw: {},
-    responseId: "r1",
-    transcript: "Hi, you're speaking with Mili.",
-    type: "audio-transcript-done",
+    delta: Buffer.alloc(160, SPEECH).toString("base64"),
+    type: "session.output_audio.delta",
   });
   h.session.handleModelEvent({
-    itemId: "u1",
-    raw: {},
-    transcript: "I'd like a quote for a knockdown rebuild.",
-    type: "input-transcription-completed",
+    delta: " Goodbye.",
+    endMs: 9200,
+    startMs: 9000,
+    type: "session.output_transcript.delta",
   });
-  h.session.handleModelEvent({
-    arguments: "{}",
-    callId: "fc1",
-    itemId: "i2",
-    name: "end_call",
-    raw: {},
-    responseId: "r2",
-    type: "function-call-arguments-done",
-  });
-  assert.equal(h.modelOut.at(-1)?.type, "conversation-item-create");
+  h.fire(TURN_QUIET_MS);
+  await h.tick();
   assert.deepEqual(h.reports, [], "waits for her goodbye to finish playing");
-  h.fire(h.timers.filter((t) => t.live).at(-1)?.ms ?? -1);
+  h.fireLast();
   await h.session.done;
   assert.deepEqual(h.reports, [
     {
@@ -364,62 +503,152 @@ test("one conversation: greet, listen, speak, transcribe, then end_call reports 
       provider: "telnyx",
       turns: [
         { speaker: "agent", text: "Hi, you're speaking with Mili." },
-        {
-          speaker: "caller",
-          text: "I'd like a quote for a knockdown rebuild.",
-        },
+        { speaker: "caller", text: "I'd like a knockdown rebuild." },
+        { speaker: "agent", text: "Goodbye." },
       ],
     },
   ]);
+  assert.deepEqual(h.modelOut.at(-1), { type: "session.close" });
   assert.equal(h.state.modelClosed, true);
   assert.equal(h.state.carrierClosed, true);
 });
 
-test("the model failing to start sends the caller to a person", async () => {
+test("a Live delegation asks the desk at once and tells Mili what it did", async () => {
+  const h = await started(async () => ({
+    action: "transfer",
+    reason: "asked for a person",
+  }));
+  h.session.handleModelEvent({
+    delegationId: "item_1",
+    type: "session.delegation.created",
+  });
+  await h.tick();
+  assert.deepEqual(h.modelOut.at(-1), {
+    content: "The call desk is putting the caller through to the team now.",
+    delegation_id: "item_1",
+    type: "session.thinking.append",
+  });
+  h.fireLast();
+  await h.session.done;
+  assert.equal(h.reports[0]?.outcome, "transfer");
+});
+
+test("audio still arriving after the desk decides is played before the line moves on", async () => {
+  const h = await started(async () => ({ action: "end" }));
+  h.session.handleModelEvent({
+    delegationId: "item_1",
+    type: "session.delegation.created",
+  });
+  await h.tick();
+  // A second more of her goodbye arrives after the decision.
+  h.session.handleModelEvent({
+    delta: Buffer.alloc(8_000, SPEECH).toString("base64"),
+    type: "session.output_audio.delta",
+  });
+  h.fireLast();
+  assert.equal(h.reports.length, 0, "a second of audio is still playing");
+  h.advance(2_000);
+  h.fireLast();
+  await h.session.done;
+  assert.equal(h.reports[0]?.outcome, "completed");
+});
+
+test("a desk that fails never ends the call by itself", async () => {
+  const h = await started(async () => {
+    throw new Error("gateway down");
+  });
+  h.session.handleModelEvent({
+    delta: Buffer.alloc(160).toString("base64"),
+    type: "session.output_audio.delta",
+  });
+  h.fire(TURN_QUIET_MS);
+  await h.tick();
+  assert.deepEqual(h.reports, []);
+  h.session.handleCarrierText(callerMedia);
+  assert.equal(h.modelOut.at(-1)?.type, "session.input_audio.append");
+});
+
+test("her line hiss is not speech; her voice is", () => {
+  assert.equal(isSpeech(Buffer.alloc(160, 0xff)), false, "μ-law silence");
+  assert.equal(isSpeech(Buffer.alloc(160, 0x7f)), false, "the other zero");
+  assert.equal(isSpeech(Buffer.alloc(160, SPEECH)), true);
+  assert.equal(isSpeech(Buffer.alloc(0)), false);
+});
+
+test("GPT-Live's continuous silence never ends her turn or asks the desk", async () => {
+  const h = await started(async () => ({ action: "end" }));
+  // Live streams audio the whole time; silence restarts nothing.
+  for (let i = 0; i < 5; i += 1) {
+    h.session.handleModelEvent({
+      delta: Buffer.alloc(160, 0xff).toString("base64"),
+      type: "session.output_audio.delta",
+    });
+  }
+  assert.equal(
+    h.timers.filter((t) => t.live && t.ms === TURN_QUIET_MS).length,
+    0,
+  );
+  assert.equal(h.asked.length, 0);
+});
+
+test("overlapping speakers join up by time, not by who spoke last", async () => {
+  const h = await started();
+  const say = (speaker: "caller" | "agent", delta: string, startMs: number) =>
+    h.session.handleModelEvent({
+      delta,
+      endMs: startMs + 200,
+      startMs,
+      type:
+        speaker === "caller"
+          ? "session.input_transcript.delta"
+          : "session.output_transcript.delta",
+    });
+  // As captured from a live session: she backchannels while the caller talks.
+  say("agent", " Hi, you're speaking", 1000);
+  say("agent", " with Mili.", 1200);
+  say("caller", " My name", 3000);
+  say("agent", " Okay.", 3100);
+  say("caller", " is Sam,", 3200);
+  say("caller", " building in Oran Park.", 3400);
+  say("agent", " Thanks, Sam.", 6000);
+  assert.deepEqual(h.session.turns, [
+    { speaker: "agent", text: "Hi, you're speaking with Mili." },
+    { speaker: "caller", text: "My name is Sam, building in Oran Park." },
+    { speaker: "agent", text: "Okay." },
+    { speaker: "agent", text: "Thanks, Sam." },
+  ]);
+});
+
+test("GPT-Live failing to start sends the caller to a person", async () => {
   const h = harness("telnyx", token("telnyx", "v3:abc"));
   h.session.handleCarrierText(telnyxStart());
   await h.tick();
-  h.session.handleModelEvent({ message: "nope", raw: {}, type: "error" });
+  // Caller audio before the session is ready is dropped.
+  h.session.handleCarrierText(callerMedia);
+  assert.equal(h.modelOut.length, 1);
+  h.session.handleModelEvent({
+    code: "invalid_model",
+    message: "nope",
+    type: "error",
+  });
   await h.session.done;
   assert.equal(h.reports[0]?.outcome, "failed");
 });
 
-test("the model dropping mid-call, or the caller asking for a person, hands back", async () => {
-  const dropped = harness("telnyx", token("telnyx", "v3:abc"));
-  dropped.session.handleCarrierText(telnyxStart());
-  await dropped.tick();
-  dropped.session.handleModelEvent({ raw: {}, type: "session-updated" });
-  dropped.session.handleModelClosed();
-  await dropped.session.done;
-  assert.equal(dropped.reports[0]?.outcome, "failed");
-
-  const transfer = harness("telnyx", token("telnyx", "v3:abc"));
-  transfer.session.handleCarrierText(telnyxStart());
-  await transfer.tick();
-  transfer.session.handleModelEvent({ raw: {}, type: "session-updated" });
-  transfer.session.handleModelEvent({
-    arguments: '{"reason":"wants Ray"}',
-    callId: "fc1",
-    itemId: "i",
-    name: "transfer_to_team",
-    raw: {},
-    responseId: "r",
-    type: "function-call-arguments-done",
-  });
-  transfer.fire(transfer.timers.filter((t) => t.live).at(-1)?.ms ?? -1);
-  await transfer.session.done;
-  assert.equal(transfer.reports[0]?.outcome, "transfer");
+test("GPT-Live dropping mid-call hands back", async () => {
+  const h = await started();
+  h.session.handleModelClosed();
+  await h.session.done;
+  assert.equal(h.reports[0]?.outcome, "failed");
 });
 
 test("near the time limit Mili is asked to wrap up; at it the call ends", async () => {
-  const h = harness("telnyx", token("telnyx", "v3:abc"));
-  h.session.handleCarrierText(telnyxStart());
-  await h.tick();
-  h.session.handleModelEvent({ raw: {}, type: "session-updated" });
+  const h = await started();
   h.fire((VOICE_AGENT_MAX_SECONDS - 45) * 1000);
   assert.deepEqual(h.modelOut.at(-1), {
-    options: { instructions: VOICE_AGENT_WRAP_UP_INSTRUCTION },
-    type: "response-create",
+    content: VOICE_AGENT_WRAP_UP_INSTRUCTION,
+    delegation_id: null,
+    type: "session.instructions.append",
   });
   h.fire(VOICE_AGENT_MAX_SECONDS * 1000);
   await h.session.done;
@@ -439,7 +668,7 @@ test("the caller hanging up ends the session once, with what was said", async ()
     }),
   );
   await h.tick();
-  h.session.handleModelEvent({ raw: {}, type: "session-updated" });
+  h.session.handleModelEvent({ type: "session.started" });
   h.session.handleCarrierText(JSON.stringify({ event: "stop" }));
   h.session.handleCarrierClosed();
   await h.session.done;
