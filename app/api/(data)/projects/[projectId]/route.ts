@@ -97,7 +97,7 @@ export async function PATCH(
     // carry its own `canEditProject`, its own merge of the incoming
     // requirements with the persisted ones, and a blind `project.update` with
     // no version check at all.
-    await updateProject(
+    const outcome = await updateProject(
       await currentPrincipal(),
       {
         council: body.data.council,
@@ -123,7 +123,16 @@ export async function PATCH(
     revalidateTag("projects", CACHE_PROFILES.MEDIUM);
     revalidateTag(`project-${updatedProject.id}`, CACHE_PROFILES.MEDIUM);
 
-    return successResponse(updatedProject);
+    // `data` stays the project the screens read; what the save did to the
+    // start date rides beside it, so the Overview can say whether the start
+    // followed the HBCF claim date or stayed because work had started.
+    return successResponse(updatedProject, {
+      meta: {
+        rescheduledMilestones: outcome.rescheduledMilestones,
+        startDateFollowedHbcfClaim: outcome.startDateFollowedHbcfClaim,
+        startDateHeldByStartedWork: outcome.startDateHeldByStartedWork,
+      },
+    });
   } catch (error) {
     // The blocker list is worth more to the operator than the status code:
     // the Overview tab binds each entry to the field that caused it. Kept at

@@ -283,10 +283,21 @@ export async function updateAuthorizedBuildSequence(
     input,
     transaction,
   );
+  // A changed duration also reaches every open activity on existing projects
+  // (issue #422). Eve cannot refresh the app's cache from here, so the
+  // operator is told the project screens may lag rather than left to wonder.
+  const durationChanged = input.changes.some(
+    (change) =>
+      change.type === "update" && change.patch.estimatedDays !== undefined,
+  );
   return result(
     "confirmation",
     "Build sequence updated",
-    `Saved ${input.changes.length} build sequence change${input.changes.length === 1 ? "" : "s"}. New projects will use this plan; existing projects retain their milestones.`,
+    `Saved ${input.changes.length} build sequence change${input.changes.length === 1 ? "" : "s"}. New projects will use this plan.${
+      durationChanged
+        ? " Changed durations also apply to activities not yet completed on existing projects, and the activities after them are re-planned; completed activities keep their dates. Project screens may show the previous dates for a few minutes until their cache refreshes."
+        : " Existing projects keep their activities."
+    }`,
     { ...template, appliedChanges: input.changes },
     {
       links: [{ label: "Open build sequence", href: "/admin/build-sequence" }],

@@ -78,11 +78,15 @@ async function main() {
       continue;
     }
     try {
+      // Only the start date is sent. Re-sending the requirements read above
+      // would overwrite any edit made since; updateProject checks this date
+      // against the requirements it reads itself, and refuses it if the claim
+      // date has changed in the meantime.
       const result = await updateProject(
         principal,
         {
           projectId: project.id,
-          requirements: project.requirements as Record<string, unknown>,
+          startDate: plan.startDate.toISOString(),
         },
         prisma,
       );

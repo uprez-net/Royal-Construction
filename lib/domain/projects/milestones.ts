@@ -381,6 +381,7 @@ export async function updateMilestone(
       parentId: true,
       projectId: true,
       status: true,
+      actualDate: true,
       childrenMilestones: { select: { status: true } },
     },
   });
@@ -573,11 +574,17 @@ export async function updateMilestone(
   });
 
   // Closing an activity is what plans the next one: it starts the day this one
-  // was completed, and is due that day plus its own duration. Only on the
-  // close itself -- a later edit to a completed activity's spend is not a new
-  // completion and must not move anything.
+  // was completed, and is due that day plus its own duration. That holds on
+  // the close itself and when a completed activity's completion date is
+  // corrected -- the plan hangs off that date. Any other edit to a completed
+  // activity (its spend, say) re-sends the stored date and moves nothing.
+  const completionMoved =
+    input.status === MilestoneStatus.DONE
+    && actualDate !== undefined
+    && (statusChanged
+      || current.actualDate?.getTime() !== actualDate.getTime());
   const replannedActivities =
-    statusChanged && input.status === MilestoneStatus.DONE && actualDate
+    completionMoved && actualDate
       ? await replanAfterActivity(
           { from: actualDate, milestoneId: updated.id, projectId },
           db,

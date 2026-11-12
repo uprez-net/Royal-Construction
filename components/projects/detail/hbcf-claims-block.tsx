@@ -1,7 +1,7 @@
 "use client";
 
 import { useId } from "react";
-import { format, parse } from "date-fns";
+import { format, isValid, parse } from "date-fns";
 import type { File as DBFile } from "@prisma/client";
 import {
   AlertTriangle,
@@ -39,8 +39,10 @@ const amountFormat = new Intl.NumberFormat("en-AU", {
   style: "currency",
 });
 
+/** "3 Mar 2026", or the stored text as-is when it is not a `yyyy-MM-dd` day. */
 function displayDate(isoDate: string) {
-  return format(parse(isoDate, "yyyy-MM-dd", new Date()), "d MMM yyyy");
+  const parsed = parse(isoDate, "yyyy-MM-dd", new Date());
+  return isValid(parsed) ? format(parsed, "d MMM yyyy") : isoDate;
 }
 
 const EXCLUSION_COPY: Record<HbcfClaimExclusionReason, string> = {

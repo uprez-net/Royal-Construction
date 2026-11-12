@@ -17,6 +17,7 @@ import {
   readMilestoneTemplate,
   listTemplateCostTasks,
   saveMilestoneTemplate,
+  saveMilestoneTemplateWithEffects,
   templateRevision,
   validateTemplate,
 } from "@/lib/domain/projects/templates";
@@ -551,8 +552,9 @@ test("a changed duration reaches open project activities, re-plans what follows,
     "adminOfferContent.findFirst": null,
     "milestone.findMany": (args: unknown) => {
       const where = (args as { where: Record<string, unknown> }).where;
-      // The open activities created from the changed build-sequence row.
-      if (where.templateId === "frame") return [{ id: "job-frame" }];
+      // The open activities created from the changed build-sequence rows.
+      if (where.templateId)
+        return [{ id: "job-frame", projectId: "job", templateId: "frame" }];
       // The changed activities, read back with their new duration.
       if (where.id)
         return [
@@ -594,7 +596,7 @@ test("a changed duration reaches open project activities, re-plans what follows,
     },
   });
 
-  await saveMilestoneTemplate(
+  const { affectedProjectIds } = await saveMilestoneTemplateWithEffects(
     adminPrincipal(),
     {
       revision: templateRevision(rows),
@@ -602,17 +604,20 @@ test("a changed duration reaches open project activities, re-plans what follows,
     },
     recorder.transactionalDb,
   );
+  // Reported so the save route can refresh that project's cached screens.
+  assert.deepEqual(affectedProjectIds, ["job"]);
 
-  const [openRead] = recorder.calls.filter(
+  const openReads = recorder.calls.filter(
     (call) =>
       call.operation === "milestone.findMany"
-      && (call.args as { where: { templateId?: string } }).where.templateId,
+      && (call.args as { where: { templateId?: unknown } }).where.templateId,
   );
-  // Only activities not yet completed take the new duration.
-  assert.deepEqual(
-    (openRead.args as { where: { status: unknown } }).where.status,
-    { in: [MS.PENDING, MS.ACTIVE] },
-  );
+  // One read for every changed row, and only activities not yet completed.
+  assert.equal(openReads.length, 1);
+  assert.deepEqual((openReads[0].args as { where: unknown }).where, {
+    status: { in: [MS.PENDING, MS.ACTIVE] },
+    templateId: { in: ["frame"] },
+  });
 
   const writes = recorder
     .writes()

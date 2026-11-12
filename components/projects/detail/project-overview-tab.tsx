@@ -1479,6 +1479,19 @@ export function ProjectOverviewTab({
   // server does not have. Instead, track whether the form has unsaved edits and
   // label the counts honestly while it does.
   const [dirty, setDirty] = useState(false);
+  // The draft as of the last render. The HBCF upload awaits OCR for several
+  // seconds; it merges its documents into this rather than into the draft it
+  // started from, so edits made while the documents were being read survive.
+  const draftRef = useRef(draft);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+  // Open while a save would move the start date onto a changed HBCF claim
+  // date, which reschedules every milestone: the same deliberate step the
+  // start date field asks for when it is moved by hand.
+  const [claimDateConfirm, setClaimDateConfirm] = useState<{
+    claimDate: string;
+  } | null>(null);
 
   // Every edit path goes through this so `dirty` can never drift from `draft`.
   const editDraft = (
@@ -1607,8 +1620,10 @@ export function ProjectOverviewTab({
    *   State updates are async, so a flow that edits the draft and saves in the
    *   same tick (the HBCF upload) has to hand the new payload in directly or it
    *   would PATCH the pre-edit draft.
+   * @returns Whether the save landed, so a flow that continues after it (the
+   *   HBCF upload) can stop instead of acting on something never saved.
    */
-  const handleSave = async (override?: RequirementsData) => {
+  const handleSave = async (override?: RequirementsData): Promise<boolean> => {
     const payload = override ?? draft;
     setSaving(true);
     try {
@@ -1626,7 +1641,21 @@ export function ProjectOverviewTab({
         },
         "Unable to update project",
       );
-      toast.success("Project sections updated");
+      const meta = response.meta ?? {};
+      if (meta.startDateFollowedHbcfClaim) {
+        const rescheduled = Number(meta.rescheduledMilestones ?? 0);
+        toast.success(
+          rescheduled > 0
+            ? `Project sections updated. The start date moved to the HBCF claim date and ${rescheduled} milestone target dates were rescheduled.`
+            : "Project sections updated. The start date moved to the HBCF claim date.",
+        );
+      } else if (meta.startDateHeldByStartedWork) {
+        toast.info(
+          "Project sections updated. The HBCF claim date was saved, but the start date stays on the day work began because work has started.",
+        );
+      } else {
+        toast.success("Project sections updated");
+      }
       // The header is a sibling reading `projects.activeProject`, not this
       // tab's draft, so a saved HBCF number or PCA inspector kept showing
       // "Not set" until a full reload. The PATCH returns the whole project,
@@ -1637,13 +1666,36 @@ export function ProjectOverviewTab({
         toDateInputValue(response.data.estimatedEndDate),
       );
       setDirty(false);
+      return true;
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Unable to update project",
       );
+      return false;
     } finally {
       setSaving(false);
     }
+  };
+
+  /**
+   * The Save button. A changed HBCF claim date moves the start date and
+   * reschedules every milestone (issue #421) unless work has started, so that
+   * save is confirmed first, the way a hand-moved start date is.
+   */
+  const requestSave = () => {
+    const pendingClaim = hbcfClaimDate(
+      draft.legalAdministration as Parameters<typeof hbcfClaimDate>[0],
+    );
+    if (
+      pendingClaim
+      && pendingClaim !== savedClaimDate
+      && pendingClaim !== toDateInputValue(project.startDate)
+      && !hasWorkStarted(project.milestones)
+    ) {
+      setClaimDateConfirm({ claimDate: pendingClaim });
+      return;
+    }
+    void handleSave();
   };
 
   /**
@@ -1754,7 +1806,10 @@ export function ProjectOverviewTab({
       );
     }
 
-    const legal = (draft.legalAdministration ?? {}) as Record<string, unknown>;
+    // The draft now, not the one this upload started from: OCR took a while,
+    // and anything typed meanwhile must not be thrown away by this save.
+    const latest = draftRef.current;
+    const legal = (latest.legalAdministration ?? {}) as Record<string, unknown>;
     const previous = readHbcfClaimDocuments(
       legal as Parameters<typeof readHbcfClaimDocuments>[0],
     );
@@ -1763,7 +1818,7 @@ export function ProjectOverviewTab({
     const primary = documents[0];
 
     const nextDraft: RequirementsData = {
-      ...draft,
+      ...latest,
       legalAdministration: {
         ...legal,
         // A number already on the project is the one quoted to iCare; an
@@ -1785,7 +1840,10 @@ export function ProjectOverviewTab({
     };
 
     editDraft(() => nextDraft);
-    await handleSave(nextDraft);
+    // Nothing below may act on documents that were not saved: no date prompt
+    // and no compliance filing for a certificate the project does not hold.
+    // The documents stay in the draft, so Save can retry them.
+    if (!(await handleSave(nextDraft))) return;
 
     const readDates = [
       ...new Set(
@@ -1955,7 +2013,7 @@ export function ProjectOverviewTab({
               </Badge>
             ) : null}
             <Button
-              onClick={() => handleSave()}
+              onClick={requestSave}
               disabled={!dirty || saving}
               aria-busy={saving}
             >
@@ -2262,11 +2320,68 @@ export function ProjectOverviewTab({
         </CardContent>
       </Card>
 
+      <AlertDialog
+        open={claimDateConfirm !== null}
+        onOpenChange={(open) => {
+          if (!open && !saving) setClaimDateConfirm(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {claimDateConfirm
+                ? `Move the start date to ${format(parse(claimDateConfirm.claimDate, "yyyy-MM-dd", new Date()), "d MMM yyyy")}?`
+                : "Move the start date?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  The project start date follows the HBCF claim date, so saving
+                  this claim date moves it
+                  {project.milestones.length > 0
+                    ? ` and reschedules all ${project.milestones.length} milestone target dates from it`
+                    : ""}
+                  .
+                </p>
+                <p>
+                  Any target date set by hand is replaced. It cannot be undone
+                  from here.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={saving}
+              aria-busy={saving}
+              onClick={(event) => {
+                // Stay open until the save answers, so a failure is not
+                // mistaken for a dialog that simply closed.
+                event.preventDefault();
+                void handleSave().then(() => setClaimDateConfirm(null));
+              }}
+            >
+              {saving ? (
+                <Loader2
+                  className="size-4 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+              ) : null}
+              {saving ? "Saving…" : "Save and move start date"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {coverDatesPrompt ? (
         <HbcfCoverDatesDialog
           open
           suggestedStartDate={coverDatesPrompt.suggestedStartDate}
           conflictingDates={coverDatesPrompt.conflictingDates}
+          rescheduleCount={
+            hasWorkStarted(project.milestones) ? 0 : project.milestones.length
+          }
           onSkip={() => setCoverDatesPrompt(null)}
           onConfirm={async (dates) => {
             const nextDraft: RequirementsData = {
@@ -2277,7 +2392,10 @@ export function ProjectOverviewTab({
               } as never,
             };
             editDraft(() => nextDraft);
-            await handleSave(nextDraft);
+            // Rejecting keeps the dialog open with its own error line.
+            if (!(await handleSave(nextDraft))) {
+              throw new Error("The cover dates were not saved. Try again.");
+            }
             setCoverDatesPrompt(null);
           }}
         />

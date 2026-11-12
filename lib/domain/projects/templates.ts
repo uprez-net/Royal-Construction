@@ -154,32 +154,59 @@ export async function readMilestoneTemplate(
  * activities take the new duration; a DONE activity keeps the one it was
  * planned with, because its estimated end is part of its history ("finished
  * 2 days late" has to stay true). NOT_REQUIRED takes no time either way.
+ *
+ * Returns the projects whose activities changed, so the adapter can refresh
+ * their screens once the transaction commits.
  */
 async function applyDurationChanges(
   tx: DomainDb,
   rows: readonly TemplateActivity[],
   previousById: ReadonlyMap<string, TemplateActivity>,
-): Promise<void> {
-  const changedIds: string[] = [];
+): Promise<string[]> {
+  const durationById = new Map<string, number>();
   for (const row of rows) {
     const previous = previousById.get(row.id);
-    if (!previous || previous.estimatedDays === row.estimatedDays) continue;
-    const open = await tx.milestone.findMany({
-      select: { id: true },
-      where: {
-        status: { in: [MilestoneStatus.PENDING, MilestoneStatus.ACTIVE] },
-        templateId: row.id,
-      },
-    });
-    if (open.length === 0) continue;
-    await tx.milestone.updateMany({
-      data: { estimatedDays: row.estimatedDays },
-      where: { id: { in: open.map((milestone) => milestone.id) } },
-    });
-    changedIds.push(...open.map((milestone) => milestone.id));
+    if (previous && previous.estimatedDays !== row.estimatedDays) {
+      durationById.set(row.id, row.estimatedDays);
+    }
   }
-  await replanAfterDurationChange({ milestoneIds: changedIds }, tx);
+  if (durationById.size === 0) return [];
+
+  // One read for every changed row, grouped here rather than a read per row.
+  const open = await tx.milestone.findMany({
+    select: { id: true, projectId: true, templateId: true },
+    where: {
+      status: { in: [MilestoneStatus.PENDING, MilestoneStatus.ACTIVE] },
+      templateId: { in: [...durationById.keys()] },
+    },
+  });
+  if (open.length === 0) return [];
+
+  const idsByTemplate = new Map<string, string[]>();
+  for (const milestone of open) {
+    if (!milestone.templateId) continue;
+    const ids = idsByTemplate.get(milestone.templateId) ?? [];
+    ids.push(milestone.id);
+    idsByTemplate.set(milestone.templateId, ids);
+  }
+  for (const [templateId, ids] of idsByTemplate) {
+    await tx.milestone.updateMany({
+      data: { estimatedDays: durationById.get(templateId) },
+      where: { id: { in: ids } },
+    });
+  }
+  await replanAfterDurationChange(
+    { milestoneIds: open.map((milestone) => milestone.id) },
+    tx,
+  );
+  return [...new Set(open.map((milestone) => milestone.projectId))];
 }
+
+export type SavedMilestoneTemplate = {
+  readonly template: MilestoneTemplateSnapshot;
+  /** Projects whose open activities took a changed duration. */
+  readonly affectedProjectIds: readonly string[];
+};
 
 /**
  * Whole-template save: a stale tab cannot overwrite a later edit. Opens a
@@ -191,6 +218,24 @@ export async function saveMilestoneTemplate(
   input: MilestoneTemplateSnapshot,
   db: DomainDb,
 ): Promise<MilestoneTemplateSnapshot> {
+  const { template } = await saveMilestoneTemplateWithEffects(
+    principal,
+    input,
+    db,
+  );
+  return template;
+}
+
+/**
+ * The same save, also reporting which projects it changed. The App's save
+ * route uses it to refresh those projects' cached screens after the commit;
+ * cache work is the adapter's, so it is reported rather than done here.
+ */
+export async function saveMilestoneTemplateWithEffects(
+  principal: DomainPrincipal,
+  input: MilestoneTemplateSnapshot,
+  db: DomainDb,
+): Promise<SavedMilestoneTemplate> {
   requireAdminPrincipal(principal);
   validateTemplate(input.activities);
   const inOrder = [...input.activities].sort((a, b) => a.order - b.order);
@@ -276,8 +321,15 @@ export async function saveMilestoneTemplate(
           update: { ...data, requiredTradeTypes: { set: trades } },
         });
       }
-      await applyDurationChanges(tx, inOrder, currentById);
-      return readMilestoneTemplate(principal, tx);
+      const affectedProjectIds = await applyDurationChanges(
+        tx,
+        inOrder,
+        currentById,
+      );
+      return {
+        affectedProjectIds,
+        template: await readMilestoneTemplate(principal, tx),
+      };
     };
     return "$transaction" in db
       ? await db.$transaction(write, {
