@@ -29,6 +29,7 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
+import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
 function snapshotWithOwners(owners: OfferOwner[]): OfferWorkspaceSnapshot {
   return {
@@ -49,6 +50,7 @@ function snapshotWithOwners(owners: OfferOwner[]): OfferWorkspaceSnapshot {
     images: EMPTY_OFFER_IMAGES,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    extraCosts: INITIAL_EXTRA_COSTS,
     calcVersion: LEGACY_CALC_VERSION,
   };
 }

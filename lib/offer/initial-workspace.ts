@@ -4,6 +4,7 @@ import {
 } from "@/lib/offer/admin-offer-prefill";
 import { CURRENT_CALC_VERSION } from "@/lib/offer/calc-version";
 import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
+import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
@@ -78,6 +79,8 @@ export function buildInitialOfferWorkspaceSnapshot(
     images: EMPTY_OFFER_IMAGES,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: adminPrefill?.adminVersion ?? 0,
+    // Nothing switched on: an extra is a choice the estimator makes per offer.
+    extraCosts: INITIAL_EXTRA_COSTS,
     // LAST, matching serializeWorkspace.
     calcVersion: CURRENT_CALC_VERSION,
   };

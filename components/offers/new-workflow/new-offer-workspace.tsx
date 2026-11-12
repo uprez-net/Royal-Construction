@@ -79,6 +79,12 @@ import {
   type AdminOfferPrefill,
 } from "@/lib/offer/admin-offer-prefill";
 import type { RateConstantKey } from "@/lib/offer/formula-variables";
+import {
+  collectExtraCostIssues,
+  resolveExtraCostAdminRates,
+  withExtraCostLines,
+  type OfferExtraCosts,
+} from "@/lib/offer/extra-costs";
 import type {
   OfferWorkspaceSnapshot,
   TenderGateState,
@@ -157,8 +163,19 @@ export function NewOfferWorkspace({
     buildInitialOfferWorkspaceSnapshot(adminPrefill),
   );
   const [job, setJob] = useState<OfferWorkspaceJob>(initial.job);
-  const [lines, setLines] = useState<readonly OfferWorkspaceCostLine[]>(
+  // The workbook rows as the estimator edits them. The schedule everything
+  // prices from is `lines` below, which adds the extras' lines derived from
+  // `extraCosts` — so a toggle or a pile count moves the total on this render,
+  // and no handler that edits rows can leave an extra out or count it twice.
+  const [workbookLines, setLines] = useState<readonly OfferWorkspaceCostLine[]>(
     initial.lines,
+  );
+  const [extraCosts, setExtraCosts] = useState<OfferExtraCosts>(
+    initial.extraCosts,
+  );
+  const lines = useMemo(
+    () => withExtraCostLines(workbookLines, extraCosts),
+    [workbookLines, extraCosts],
   );
   const [allowances, setAllowances] = useState<
     readonly OfferWorkspaceScopeItem[]
@@ -364,6 +381,16 @@ export function NewOfferWorkspace({
     () => resolveAreaRateConstants(rateConstantsRef.current),
     [],
   );
+  // Today's admin prices for pump hire, benching and piles. Stamped onto the
+  // offer only when the estimator switches an item on or re-applies them.
+  const extraCostAdminRates = useMemo(
+    () => resolveExtraCostAdminRates(rateConstantsRef.current),
+    [],
+  );
+  const extraCostIssues = useMemo(
+    () => collectExtraCostIssues(extraCosts),
+    [extraCosts],
+  );
   const directTotal = useMemo(() => calculateDirectTotal(lines), [lines]);
   // Total Contract Value is the build-up's own contract value inc GST, not a
   // typed figure, so the HBCF premium priced on it moves with the cost lines
@@ -437,10 +464,12 @@ export function NewOfferWorkspace({
         needsOverrideReason: customerPrice.needsOverrideReason,
         expiryState: offerExpiry?.state ?? "none",
         ownerIssues,
+        extraCostIssues,
         adminContentStale,
       }),
     [
       adminContentStale,
+      extraCostIssues,
       leadId,
       totalAreaSqm,
       customerPrice.needsOverrideReason,
@@ -808,6 +837,7 @@ export function NewOfferWorkspace({
       images,
       tenderGate,
       adminContentVersion,
+      extraCosts,
       // LAST, matching serializeWorkspace. The autosave dirty check compares
       // JSON.stringify of this against the loaded snapshot; a different key
       // order would make every offer look dirty on open and save itself.
@@ -816,6 +846,7 @@ export function NewOfferWorkspace({
     [
       adminContentVersion,
       calcVersion,
+      extraCosts,
       job,
       lines,
       allowances,
@@ -1013,6 +1044,7 @@ export function NewOfferWorkspace({
       setImages(s.images);
       setTenderGate(s.tenderGate);
       setAdminContentVersion(s.adminContentVersion);
+      setExtraCosts(s.extraCosts);
       setCalcVersion(s.calcVersion);
     },
     [adminPrefill?.costLines, adminPrefill?.loadingChargePercentage],
@@ -2029,6 +2061,9 @@ export function NewOfferWorkspace({
         allowances={allowances}
         areaCalculator={areaCalculator}
         calcVersion={calcVersion}
+        extraCosts={extraCosts}
+        extraCostAdminRates={extraCostAdminRates}
+        onExtraCostsChange={setExtraCosts}
         hydrated={hydrated}
         loadFailed={loadFailed}
         lifecycleBusy={lifecycleBusy}

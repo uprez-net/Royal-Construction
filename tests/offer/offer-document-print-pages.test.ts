@@ -32,6 +32,7 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
+import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
 // Counting `<div class="page">` in the HTML only proves what the document
 // DECLARES. It cannot see a page whose content overflows its A4 box, which is
@@ -80,6 +81,7 @@ function snapshotWithOwners(
     draft: INITIAL_OFFER_DRAFT,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    extraCosts: INITIAL_EXTRA_COSTS,
     calcVersion: LEGACY_CALC_VERSION,
     areaCalculator: INITIAL_AREA_CALCULATOR,
     workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,

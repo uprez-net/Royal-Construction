@@ -31,6 +31,7 @@ import {
 import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 import { revisionPreparedDate } from "@/lib/offer/revision-prepared-date";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
+import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
 // Backs the read-only revision viewer: a superseded revision is re-rendered
 // from its stored snapshot, so the render must reproduce that revision rather
@@ -54,6 +55,7 @@ const SNAPSHOT: OfferWorkspaceSnapshot = {
   images: EMPTY_OFFER_IMAGES,
   tenderGate: INITIAL_TENDER_GATE,
   adminContentVersion: 0,
+  extraCosts: INITIAL_EXTRA_COSTS,
   calcVersion: LEGACY_CALC_VERSION,
 };
 

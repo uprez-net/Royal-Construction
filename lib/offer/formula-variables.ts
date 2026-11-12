@@ -29,6 +29,13 @@ export const RATE_CONSTANT_KEYS = [
   "PRICE_OF_EACH_SHOWER",
   "PRICE_OF_EACH_WARDROBE",
   "PRICE_OF_EACH_LINEN",
+  // Fixed per-offer charges and pile rates for the Cost Schedule extras and the
+  // Slab card's piles (lib/offer/extra-costs.ts). An offer stamps the rate it
+  // applied, so changing one of these never reprices a saved offer.
+  "PUMP_HIRE",
+  "BENCHING",
+  "SCREW_PILE_RATE",
+  "BORED_PILE_RATE_PER_M",
 ] as const;
 
 // Phase 1 calculated values (from the Area Calculator) that are available as
@@ -87,6 +94,10 @@ export const DEFAULT_RATE_CONSTANTS: Record<RateConstantKey, number> = {
   PRICE_OF_EACH_SHOWER: 500,
   PRICE_OF_EACH_WARDROBE: 500,
   PRICE_OF_EACH_LINEN: 500,
+  PUMP_HIRE: 2500,
+  BENCHING: 2000,
+  SCREW_PILE_RATE: 200,
+  BORED_PILE_RATE_PER_M: 80,
 };
 
 // The rate constants a formula is actually priced with: stored admin overrides

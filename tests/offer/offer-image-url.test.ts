@@ -24,6 +24,7 @@ import {
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
+import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
 // The customer PDF renderers fetch every offer image URL from inside our
 // network, and the URL arrives in a client-supplied snapshot. Any URL used to be
@@ -113,6 +114,7 @@ const SNAPSHOT: OfferWorkspaceSnapshot = {
   images: {},
   tenderGate: INITIAL_TENDER_GATE,
   adminContentVersion: 0,
+  extraCosts: INITIAL_EXTRA_COSTS,
   calcVersion: LEGACY_CALC_VERSION,
 };
 

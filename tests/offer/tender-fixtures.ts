@@ -30,6 +30,7 @@ import {
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
 import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
+import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
 export function snapshotOf(
   owners: OfferOwner[],
@@ -45,6 +46,7 @@ export function snapshotOf(
       : INITIAL_OFFER_DRAFT,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    extraCosts: INITIAL_EXTRA_COSTS,
     areaCalculator: INITIAL_AREA_CALCULATOR,
     workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,
     paymentSchedule: INITIAL_PAYMENT_SCHEDULE,
