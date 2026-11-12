@@ -72,7 +72,7 @@ configure.
 ## Mili, the voice agent
 
 Mili answers every inbound call on either carrier, after the recording
-declaration. She runs on `openai/gpt-live-1` through AI Gateway with a female
+declaration. She runs on `openai/gpt-realtime-2` through AI Gateway with a female
 voice, takes the caller's name, number, suburb and what they need, and never
 quotes a price, a date or a commitment (the rules are in
 `lib/domain/comms/calls/voice-agent.ts`). She can end the call or hand the
@@ -113,10 +113,12 @@ fixture:
 
 - **Mili**: Twilio `<Connect><Stream>` with a `statusCallback` and `action`,
   and that a live-call TwiML update does not then request the action; Telnyx
-  `streaming_start` field names (`stream_bidirectional_mode`, `…_codec`), the
-  `streaming.failed` event name, and both carriers' stream frame shapes
-  (`lib/comms/voice-agent/frames.ts`); the AI Gateway realtime session for
-  `openai/gpt-live-1` accepting 24 kHz PCM, `response-create` and tools.
+  `streaming_start` field names (`stream_bidirectional_mode`, `…_codec`), and
+  both carriers' stream frame shapes (`lib/comms/voice-agent/frames.ts`);
+  tool calls on the AI Gateway realtime session. (Verified 2026-11-12: the
+  `streaming.failed` event name; `openai/gpt-realtime-2` accepting Mili's
+  session config and greeting on `response-create`. `openai/gpt-live-1` is
+  refused with `invalid_model` — not served in realtime mode.)
 - **Telnyx**: field names on `call.*` and `message.*` events; `client_state` on
   the legs a `transfer` creates; hangup causes; the telephony-credential token
   endpoint returning plain text; `GET /calls/{id}` after a call ends;
