@@ -5,6 +5,16 @@ import { withWorkflow } from "workflow/next";
 const nextConfig: NextConfig = {
   reactCompiler: true,
   cacheComponents: true,
+  // Stated explicitly so Next stops warning that it is unset. `false` keeps
+  // the prefetch behaviour this app was built and tested with. `true` makes a
+  // default <Link> prefetch only the route's shared App Shell, so on param
+  // routes (/projects/[id], /leads/[id]) the record's cached content would
+  // stream after navigation instead of being prefetched. No link uses a full
+  // prefetch (`prefetch={true}`), so adopting it is a test pass, not a
+  // migration — see node_modules/next/dist/docs/01-app/02-guides/
+  // adopting-partial-prefetching.md. It becomes the only behaviour in the next
+  // major release.
+  partialPrefetching: false,
   // Hide the bottom-left dev badge ("N Issues") — it overlaps workflow UI in dev.
   devIndicators: false,
   // docusign-esign ships UMD/AMD wrappers Turbopack can't parse (TP1200);

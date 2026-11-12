@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { isRecordIdField } from "@/lib/agent/id-fields";
 import {
   formatDisplayField,
   formatDisplayText,
@@ -192,9 +193,13 @@ export function AgentResult({
   partial: boolean;
   result: AgentResultEnvelope;
 }) {
+  // Record ids are for tools, not people: the card shows names and facts.
   const entries = Object.entries(result.data).filter(
     ([key, value]) =>
-      key !== "outreach" && value !== null && typeof value !== "object",
+      key !== "outreach"
+      && !isRecordIdField(key)
+      && value !== null
+      && typeof value !== "object",
   );
 
   return (

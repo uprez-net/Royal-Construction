@@ -104,3 +104,35 @@ test("a database failure is not mistaken for a refusal", async () => {
     /connection reset/,
   );
 });
+
+test("a lead is named by client and site, and a task by what and when", async () => {
+  // A lead had four open meeting tasks on staging; "Meeting task #67" did not
+  // say which one an approval would close. Names, not database numbers.
+  const labels = await describeApprovalTargets(
+    adminPrincipal(),
+    { leadId: 105, taskId: 67 },
+    recordingDb({
+      "lead.findUnique": {
+        assignedId: null,
+        id: 105,
+        location: "Kellyville NSW",
+        name: "Harpreet & Manpreet Sandhu",
+      },
+      "leadTask.findUnique": {
+        dueDate: new Date("2026-09-23T14:00:00Z"),
+        dueTime: "10:00",
+        lead: { name: "Harpreet & Manpreet Sandhu" },
+        leadId: 105,
+        notes: "Site measure and design brief at Kellyville",
+        type: "MEETING",
+      },
+    }).db,
+  );
+
+  assert.deepEqual(labels, {
+    leadId: "Harpreet & Manpreet Sandhu — Kellyville NSW",
+    taskId:
+      "Meeting task · due Thu 24 Sept 2026 10:00 · Site measure and design brief at Kellyville · Harpreet & Manpreet Sandhu",
+  });
+  assert.doesNotMatch(JSON.stringify(labels), /#\d|105|67/);
+});

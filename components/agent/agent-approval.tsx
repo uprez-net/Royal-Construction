@@ -152,7 +152,9 @@ export function AgentApproval({
           <p className="text-sm font-medium text-foreground">
             {isApproval ? label : request.prompt}
           </p>
-          {isApproval && request.prompt !== label ? (
+          {isApproval
+          && request.prompt !== label
+          && !request.prompt.startsWith("Approve tool call:") ? (
             <p className="mt-0.5 text-xs text-muted-foreground">
               {request.prompt}
             </p>
@@ -184,16 +186,11 @@ export function AgentApproval({
                       : "text-foreground/80",
                   )}
                 >
-                  {targetLabels[field.key] ? (
-                    <>
-                      {targetLabels[field.key]}
-                      <span className="block font-mono text-[10px] font-normal text-muted-foreground">
-                        {field.value}
-                      </span>
-                    </>
-                  ) : (
-                    field.value
-                  )}
+                  {/* A named record shows its name only; the raw id stays
+                      behind it for the tool. */}
+                  {targetLabels[field.key]
+                    ? targetLabels[field.key]
+                    : field.value}
                 </dd>
               </div>
             ))}
