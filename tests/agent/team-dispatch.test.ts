@@ -184,3 +184,51 @@ test("in a team, a failed task is reported and its dependents are skipped", asyn
   assert.match(byTask.offer?.summary ?? "", /Not started because lead/);
   assert.match(result.summary, /1 of 3 tasks finished/);
 });
+
+test("a teammate's plain-text reply reaches the task that waits for it", async () => {
+  const messages: Record<string, string> = {};
+  await runDelegate(
+    { tasks: [lead, offer] },
+    {
+      agent: async (target, input) => {
+        messages[target] = input.message;
+        return target === "lead-operations"
+          ? "Smith is lead 42, stage Quoted."
+          : { kind: "entity-summary", summary: "", title: "Offer", version: 1 };
+      },
+      agents: allAgents,
+    },
+  );
+  assert.match(
+    messages["offer-operations"] ?? "",
+    /Reply: Smith is lead 42, stage Quoted\./,
+  );
+});
+
+test("a teammate that answered with an error envelope stops its dependents", async () => {
+  const called: string[] = [];
+  const result = (await runDelegate(
+    { tasks: [lead, offer] },
+    {
+      agent: async (target) => {
+        called.push(target);
+        return target === "lead-operations"
+          ? {
+              kind: "error",
+              summary: "No lead matches Smith.",
+              title: "Not found",
+              version: 1,
+            }
+          : { kind: "entity-summary", summary: "", title: "Offer", version: 1 };
+      },
+      agents: allAgents,
+    },
+  )) as {
+    results: { task: string; kind: string; summary: string }[];
+    summary: string;
+  };
+  assert.deepEqual(called, ["lead-operations"]);
+  const byTask = Object.fromEntries(result.results.map((r) => [r.task, r]));
+  assert.match(byTask.offer?.summary ?? "", /Not started because lead/);
+  assert.match(result.summary, /0 of 2 tasks finished/);
+});

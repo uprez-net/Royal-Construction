@@ -51,7 +51,9 @@ const inputSchema = z
       .trim()
       .max(2_000)
       .optional()
-      .describe("What the person wants, in a sentence or two. Every task sees it."),
+      .describe(
+        "What the person wants, in a sentence or two. Every task sees it.",
+      ),
     sharedContext: z
       .string()
       .trim()
@@ -62,7 +64,9 @@ const inputSchema = z
       ),
     specialist: specialistSchema
       .optional()
-      .describe("Single-task form: the specialist. Use `tasks` for more than one."),
+      .describe(
+        "Single-task form: the specialist. Use `tasks` for more than one.",
+      ),
     request: z
       .string()
       .trim()
@@ -84,13 +88,17 @@ const inputSchema = z
             .array(z.string())
             .max(MAX_TEAM_TASKS)
             .optional()
-            .describe("Ids of tasks whose findings this one needs. Omit to start immediately."),
+            .describe(
+              "Ids of tasks whose findings this one needs. Omit to start immediately.",
+            ),
         }),
       )
       .min(1)
       .max(MAX_TEAM_TASKS)
       .optional()
-      .describe("Several specialist tasks run as a team: independent ones in parallel."),
+      .describe(
+        "Several specialist tasks run as a team: independent ones in parallel.",
+      ),
   })
   .refine(
     (input) =>
@@ -166,6 +174,9 @@ export default defineWorkflowTool({
           });
           try {
             const output = await ctx.agent(task.specialist, { message });
+            // A specialist that answered with an error envelope did not do
+            // its task: its dependents must not start from it as if it had.
+            if (!single && isErrorEnvelope(output)) failed.add(task.id);
             return [task.id, tagged(task.specialist, output)] as const;
           } catch (error) {
             // One task alone keeps failing the tool call, so the orchestrator
@@ -189,11 +200,22 @@ export default defineWorkflowTool({
 
     if (single) return findings.task;
     return {
-      results: tasks.map((task) => ({ task: task.id, ...asRecord(findings[task.id]) })),
+      results: tasks.map((task) => ({
+        task: task.id,
+        ...asRecord(findings[task.id]),
+      })),
       summary: `${tasks.length - failed.size} of ${tasks.length} tasks finished${failed.size ? `; not finished: ${[...failed].join(", ")}` : ""}.`,
     };
   },
 });
+
+function isErrorEnvelope(value: unknown): boolean {
+  return (
+    value !== null
+    && typeof value === "object"
+    && (value as { kind?: unknown }).kind === "error"
+  );
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)

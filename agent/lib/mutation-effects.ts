@@ -38,17 +38,31 @@ function asId(value: unknown): string | null {
   return null;
 }
 
+/** Deep enough for `data.schedule.projectId`, shallow enough to stay cheap. */
+const MAX_DEPTH = 3;
+
+/**
+ * Id fields at any level of a reported object: a tool that nests the record
+ * it changed (`data: { schedule: { projectId } }`) still expires its screens.
+ */
 function collectFrom(
   record: unknown,
   add: (type: string, id: unknown) => void,
+  depth = 0,
 ) {
-  if (!record || typeof record !== "object" || Array.isArray(record)) return;
+  if (!record || typeof record !== "object" || depth > MAX_DEPTH) return;
+  if (Array.isArray(record)) {
+    for (const item of record) collectFrom(item, add, depth + 1);
+    return;
+  }
   for (const [field, value] of Object.entries(record)) {
     const type = ID_FIELDS[field];
     if (type) add(type, value);
     const listType = ID_LIST_FIELDS[field];
     if (listType && Array.isArray(value)) {
       for (const item of value) add(listType, item);
+    } else if (value && typeof value === "object") {
+      collectFrom(value, add, depth + 1);
     }
   }
 }

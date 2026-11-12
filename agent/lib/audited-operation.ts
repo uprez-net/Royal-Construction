@@ -191,8 +191,7 @@ export async function runAuditedAgentOperation<T>(params: {
       mutationRefs({
         inputSummary: params.inputSummary,
         output,
-        targetId:
-          params.targetIdFromOutput?.(output) ?? params.targetId,
+        targetId: params.targetIdFromOutput?.(output) ?? params.targetId,
         targetType: params.targetType,
       }),
     );

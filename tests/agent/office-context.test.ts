@@ -140,14 +140,26 @@ test("an agent write re-indexes exactly the records it named", () => {
 });
 
 /** A database that serves one lead and records what the refresh writes. */
-function refreshDb(existingHash: string | null, missingVector = false) {
+function refreshDb(
+  existingHash: string | null,
+  missingVector = false,
+  /** Rows a vector write matches: 0 when the text changed underneath it. */
+  vectorRows = 1,
+) {
   const writes: string[] = [];
   const db = {
     $executeRaw: async (strings: TemplateStringsArray) => {
+      const sql = strings.join("?");
+      if (sql.includes("NULL")) {
+        writes.push("clear-vector");
+        return 1;
+      }
       writes.push(
-        strings.join("?").includes("NULL") ? "clear-vector" : "set-vector",
+        sql.includes('"contentHash"')
+          ? "set-vector-if-same-text"
+          : "set-vector",
       );
-      return 1;
+      return vectorRows;
     },
     $queryRaw: async () => (missingVector ? [{ id: "row-1" }] : []),
     agentContextChunk: {
@@ -225,7 +237,11 @@ test("a new record is written and embedded", async () => {
   const result = await refreshAgentContext(cron, { selection }, db, {
     embedding: embedding.port,
   });
-  assert.deepEqual(writes, ["upsert", "clear-vector", "set-vector"]);
+  assert.deepEqual(writes, [
+    "upsert",
+    "clear-vector",
+    "set-vector-if-same-text",
+  ]);
   assert.equal(embedding.calls.length, 1);
   assert.deepEqual(
     {
@@ -356,4 +372,66 @@ test("every agent shares one handbook and one house style", () => {
       `${name} style`,
     );
   }
+});
+
+test("a vector is not written over text that changed while it was made", async () => {
+  const { db } = refreshDb(null, false, 0);
+  const result = await refreshAgentContext(cron, { selection }, db, {
+    embedding: countingEmbedding().port,
+  });
+  assert.equal(result.embedded, 0);
+  assert.equal(result.embeddingFailed, false);
+});
+
+test("a vector of the wrong size is reported as a failure", async () => {
+  const { db, writes } = refreshDb(null);
+  const result = await refreshAgentContext(cron, { selection }, db, {
+    embedding: {
+      dimensions: 1536,
+      embed: async (values) => values.map(() => [1, 0]),
+    },
+  });
+  assert.deepEqual(writes, ["upsert", "clear-vector"]);
+  assert.equal(result.embeddingFailed, true);
+});
+
+test("restricted staff see only what their screens show, by vector and by name", async () => {
+  const tradie = {
+    content: "Tradie: Dave Smith",
+    entityId: "t-1",
+    kind: "tradie",
+    refreshedAt: new Date(),
+    title: "Dave Smith",
+  };
+  const leadRow = {
+    content: "Lead: Jordan Smith",
+    entityId: "42",
+    kind: "lead",
+    refreshedAt: new Date(),
+    title: "Jordan Smith — 12 Rose St",
+  };
+  const db = {
+    $queryRaw: async () => [
+      { ...tradie, score: 0.5 },
+      { ...leadRow, score: 0.4 },
+    ],
+    agentContextChunk: { findMany: async () => [tradie, leadRow] },
+  } as unknown as DomainDb;
+  // A guest is staff, but may not open the tradie directory.
+  const guest = userPrincipal({ id: "g1", role: Role.GUEST });
+
+  for (const embedding of [countingEmbedding().port, undefined]) {
+    const hits = await searchAgentContext(guest, { query: "Smith" }, db, {
+      embedding,
+    });
+    assert.deepEqual(
+      hits.map((hit) => `${hit.kind}:${hit.entityId}`),
+      ["lead:42"],
+      embedding ? "embedding search" : "name-match search",
+    );
+  }
+
+  const admin = userPrincipal({ id: "a1", role: Role.ADMIN });
+  const adminHits = await searchAgentContext(admin, { query: "Smith" }, db, {});
+  assert.deepEqual(adminHits.map((hit) => hit.kind).sort(), ["lead", "tradie"]);
 });

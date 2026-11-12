@@ -58,8 +58,26 @@ test("anything less than clear is not guessed", () => {
     "yes but don't send it yet",
     "ok wait",
     "maybe tomorrow",
+    // "sure" and "okay" are approvals; negated or doubted they must not be.
+    "not sure",
+    "I'm not sure about that",
+    "not okay",
+    "that's not right",
+    "yes?",
+    "I think so",
   ]) {
     assert.equal(classifyVerbalDecision(text), "unclear", text);
+  }
+});
+
+test("a doubtful answer never becomes an approval option", () => {
+  for (const text of ["not sure", "not okay", "maybe"]) {
+    const { responses, unclear } = interpretVerbalResponses(
+      [{ requestId: "appr", text }],
+      pending,
+    );
+    assert.equal(responses[0]?.optionId, undefined, text);
+    assert.equal(unclear.length, 1, text);
   }
 });
 
@@ -187,7 +205,7 @@ function result(id: unknown, structured: unknown, sse = false) {
     : Response.json(message);
 }
 
-function fakeEve(sse = false) {
+function fakeEve(sse = false, getResult: unknown = inputRequired) {
   const calls: Call[] = [];
   const inner = async (request: Request) => {
     const body = (await request.json()) as {
@@ -196,7 +214,7 @@ function fakeEve(sse = false) {
     };
     calls.push({ arguments: body.params.arguments, name: body.params.name });
     if (body.params.name === "agent_get")
-      return result(body.id, inputRequired, sse);
+      return result(body.id, getResult, sse);
     return result(body.id, { invocationId: "inv_1", status: "working" }, sse);
   };
   return { calls, inner };
@@ -287,5 +305,70 @@ for (const sse of [false, true]) {
       /Smith \(lead #42\)/,
       "text content mirrors structuredContent",
     );
+  });
+}
+
+test("a lookup that cannot read the pending input refuses instead of forwarding", async () => {
+  for (const getResult of [
+    { invocationId: "inv_1", status: "working" },
+    { error: { code: "not_found" } },
+  ]) {
+    const eve = fakeEve(false, getResult);
+    const handler = verbalApprovalHandler(eve.inner, deps);
+    const response = await handler(
+      mcpCall("agent_update", {
+        invocationId: "inv_1",
+        responses: [{ requestId: "appr", text: "yes" }],
+      }),
+      {},
+    );
+    assert.deepEqual(
+      eve.calls.map((call) => call.name),
+      ["agent_get"],
+      "the spoken answer is not passed to eve",
+    );
+    const body = (await response.json()) as {
+      result: {
+        isError: boolean;
+        structuredContent: { error: { code: string } };
+      };
+    };
+    assert.equal(body.result.isError, true);
+    assert.equal(body.result.structuredContent.error.code, "conflict");
+  }
+});
+
+for (const [name, describeTargets] of [
+  ["names nothing", async () => ({})],
+  [
+    "fails",
+    async () => {
+      throw new Error("db down");
+    },
+  ],
+] as const) {
+  test(`an approval whose record lookup ${name} says it cannot be named`, async () => {
+    const eve = fakeEve();
+    const handler = verbalApprovalHandler(eve.inner, { describeTargets });
+    const response = await handler(
+      mcpCall("agent_get", { invocationId: "inv_1" }),
+      {},
+    );
+    const parsed = await readJsonRpc(response);
+    const structured = parsed?.message.result?.structuredContent as {
+      inputRequests: Record<string, { prompt: string }>;
+      status: string;
+    };
+    assert.equal(
+      structured.status,
+      "input_required",
+      "the approval stays pending",
+    );
+    const prompt = structured.inputRequests.appr?.prompt ?? "";
+    assert.match(
+      prompt,
+      /could not be named \(leadId\), so do not approve yet/,
+    );
+    assert.doesNotMatch(prompt, /a plain "yes, go ahead"/);
   });
 }

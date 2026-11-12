@@ -109,7 +109,9 @@ export async function refreshAgentContext(
     existing.map((row) => [key(row.kind, row.entityId), row]),
   );
 
-  const toEmbed: { id: string; content: string }[] = [];
+  // Each carries the hash of the text it embeds, so a vector is only written
+  // over the text it was made from (see the UPDATE below).
+  const toEmbed: { id: string; content: string; hash: string }[] = [];
   const confirmedIds: string[] = [];
   let unchanged = 0;
   for (const draft of drafts) {
@@ -119,12 +121,12 @@ export async function refreshAgentContext(
       // Same text, so the same title: only the "checked at" moves.
       confirmedIds.push(row.id);
       if (missingVectors.has(row.id))
-        toEmbed.push({ content: draft.content, id: row.id });
+        toEmbed.push({ content: draft.content, hash, id: row.id });
       else unchanged += 1;
       continue;
     }
     const saved = await upsertChunk(draft, hash, now, db);
-    toEmbed.push({ content: draft.content, id: saved });
+    toEmbed.push({ content: draft.content, hash, id: saved });
   }
   if (confirmedIds.length) {
     await db.agentContextChunk.updateMany({
@@ -160,13 +162,20 @@ export async function refreshAgentContext(
         );
         for (const [index, item] of batch.entries()) {
           const vector = vectors[index];
-          if (!vector || vector.length !== CONTEXT_EMBEDDING_DIMENSIONS)
+          if (!vector || vector.length !== CONTEXT_EMBEDDING_DIMENSIONS) {
+            // The row keeps its text and no vector; say so rather than
+            // reporting a clean run.
+            embeddingFailed = true;
             continue;
-          await db.$executeRaw`
+          }
+          // Only over the text this vector was made from: when two refreshes
+          // overlap, a slower one must not pair its older vector with newer
+          // text (or overwrite the newer text's own vector).
+          const written = await db.$executeRaw`
             UPDATE "AgentContextChunk"
             SET "embedding" = ${vectorLiteral(vector)}::vector
-            WHERE "id" = ${item.id}`;
-          embedded += 1;
+            WHERE "id" = ${item.id} AND "contentHash" = ${item.hash}`;
+          if (written > 0) embedded += 1;
         }
       }
     } catch {
@@ -327,7 +336,12 @@ export async function searchAgentContext(
     try {
       const [vector] = await ports.embedding.embed([input.query]);
       if (vector?.length === CONTEXT_EMBEDDING_DIMENSIONS) queryVector = vector;
-    } catch {
+    } catch (error) {
+      // Name matching still answers; the log says why ranking was weaker.
+      console.error(
+        "[agent-context] query embedding failed; searching by name only",
+        error instanceof Error ? error.message : error,
+      );
       queryVector = null;
     }
   }

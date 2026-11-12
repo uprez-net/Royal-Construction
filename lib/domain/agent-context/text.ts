@@ -359,13 +359,13 @@ export function officeDigestChunk(digest: OfficeDigestSource): ChunkDraft {
     `Active offers by status: ${counts(digest.offersByStatus)}`,
     `Projects by status: ${counts(digest.projectsByStatus)}`,
     digest.awaitingSignature.length
-      ? `Waiting on the client: ${digest.awaitingSignature
+      ? `Out for the client's signature: ${digest.awaitingSignature
           .map(
             (o) =>
               `${o.leadName} (${o.reference}, ${humanizeEnum(o.status)}${o.sentAt ? ` since ${day(o.sentAt)}` : ""})`,
           )
           .join("; ")}`
-      : "Waiting on the client: nothing out for signature",
+      : "Out for the client's signature: nothing",
     digest.overdueTasks.length
       ? `Overdue lead tasks: ${digest.overdueTasks
           .map(
@@ -375,12 +375,12 @@ export function officeDigestChunk(digest: OfficeDigestSource): ChunkDraft {
           .join("; ")}`
       : "Overdue lead tasks: none",
     digest.upcomingMeetings.length
-      ? `Meetings in the next 7 days: ${digest.upcomingMeetings
+      ? `Meetings from today to a week out: ${digest.upcomingMeetings
           .map(
             (m) => `${m.leadName} ${day(m.date)}${m.time ? ` ${m.time}` : ""}`,
           )
           .join("; ")}`
-      : "Meetings in the next 7 days: none booked",
+      : "Meetings from today to a week out: none booked",
     digest.activeProjects.length
       ? `Jobs in progress:\n${digest.activeProjects
           .map(

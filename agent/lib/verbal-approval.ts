@@ -23,6 +23,19 @@ const NOT_A_REFUSAL = [
   /\bno doubt\b/g,
 ];
 
+/**
+ * Doubt, or an approval word negated ("not sure", "not okay", "isn't right").
+ * Checked first: "sure" and "okay" are approvals, and without this "not sure"
+ * read as yes.
+ */
+const UNCERTAIN = [
+  /\b(?:not|never|isn'?t|aren'?t|wasn'?t|ain'?t|hardly)\s+(?:\w+\s+)?(?:sure|ok(?:ay)?|fine|good|right|correct|certain|convinced|happy|approved?|confirmed?|perfect)\b/,
+  /\b(?:unsure|uncertain|maybe|perhaps|possibly|probably|dunno|idk)\b/,
+  /\bi (?:guess|think|suppose)\b/,
+  /\bnot really\b/,
+  /\?/,
+];
+
 const REFUSALS = [
   /\bno+\b/,
   /\bnope\b/,
@@ -85,6 +98,7 @@ export function classifyVerbalDecision(text: string): VerbalDecision {
   if (!normalized) return "unclear";
   for (const phrase of NOT_A_REFUSAL)
     normalized = normalized.replace(phrase, " ");
+  if (UNCERTAIN.some((pattern) => pattern.test(normalized))) return "unclear";
 
   const refuses = REFUSALS.some((pattern) => pattern.test(normalized));
   const approves = APPROVALS.some((pattern) => pattern.test(normalized));
@@ -230,9 +244,22 @@ export function describeApprovalPrompt(
   toolName: string,
   input: Record<string, unknown> | undefined,
   labels: Readonly<Record<string, string>>,
+  /** Record fields that should have been named and were not. */
+  unresolved: readonly string[] = [],
 ): string {
   const targets = Object.values(labels);
   const details = input ? inputDetails(input) : [];
+  if (unresolved.length) {
+    // An approval that cannot say which record it changes must not read like
+    // one that can. The request stays pending; nothing is decided here.
+    return [
+      `Approve "${humanizeToolName(toolName)}"? The record it changes could not be named (${unresolved.join(", ")}), so do not approve yet.`,
+      details.length ? `Details — ${details.join("; ")}.` : null,
+      "Ask the agent which record this is and confirm it with the person first; answer cancel if it cannot be confirmed.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
   return [
     `Approve "${humanizeToolName(toolName)}"${targets.length ? ` for ${targets.join("; ")}` : ""}?`,
     details.length ? `Details — ${details.join("; ")}.` : null,

@@ -1,3 +1,4 @@
+import { APPROVAL_TARGET_FIELDS } from "@/lib/domain/agent/approval-targets";
 import {
   describeApprovalPrompt,
   hasWordsOnlyResponse,
@@ -103,6 +104,9 @@ export function verbalApprovalHandler(
         args.invocationId,
         message.params?._meta,
       );
+      // Without the pending requests the words cannot be read, and eve would
+      // deny an approval answered in words. Refuse instead of forwarding.
+      if (!pending) return lookupFailedResponse(message.id ?? null);
       const { responses: interpreted, unclear } = interpretVerbalResponses(
         responses as InputResponse[],
         pending,
@@ -139,14 +143,17 @@ function withBody(request: Request, body: string): Request {
   return new Request(request.url, { body, headers, method: request.method });
 }
 
-/** Read the invocation's pending requests through eve itself, as the caller. */
+/**
+ * Read the invocation's pending requests through eve itself, as the caller.
+ * Null when the read failed or the invocation is not waiting on input.
+ */
 async function readPendingRequests(
   inner: RouteHandler,
   request: Request,
   ctx: unknown,
   invocationId: string,
   meta: unknown,
-): Promise<Record<string, PendingInputRequest>> {
+): Promise<Record<string, PendingInputRequest> | null> {
   const lookup = {
     id: "verbal-approval-lookup",
     jsonrpc: "2.0",
@@ -157,12 +164,32 @@ async function readPendingRequests(
       ...(meta === undefined ? {} : { _meta: meta }),
     },
   };
-  const response = await inner(withBody(request, JSON.stringify(lookup)), ctx);
-  const parsed = await readJsonRpc(response);
-  const requests = parsed?.message.result?.structuredContent?.inputRequests;
-  return requests && typeof requests === "object"
-    ? (requests as Record<string, PendingInputRequest>)
-    : {};
+  let parsed: ParsedResponse | null;
+  try {
+    const response = await inner(
+      withBody(request, JSON.stringify(lookup)),
+      ctx,
+    );
+    parsed = await readJsonRpc(response);
+  } catch (error) {
+    console.error(
+      "[mcp-verbal-approvals] pending-request lookup failed",
+      error,
+    );
+    return null;
+  }
+  const result = parsed?.message.result;
+  const requests = result?.structuredContent?.inputRequests;
+  if (result?.isError || !requests || typeof requests !== "object") {
+    if (result?.isError || !parsed) {
+      console.error(
+        "[mcp-verbal-approvals] pending-request lookup refused",
+        result?.structuredContent?.error ?? "unreadable response",
+      );
+    }
+    return null;
+  }
+  return requests as Record<string, PendingInputRequest>;
 }
 
 type ParsedResponse = {
@@ -249,16 +276,30 @@ async function enrichApprovalPrompts(
   for (const pending of Object.values(requests)) {
     if (pending.kind !== "tool-approval" || !pending.action?.toolName) continue;
     const input = pending.action.input ?? {};
+    // Every nameable record in the input must come back named. A lookup that
+    // failed, or a record this caller may not see, leaves the prompt saying
+    // so — never a prompt that reads as if it names what it changes.
+    const nameable = APPROVAL_TARGET_FIELDS.filter(
+      (field) => input[field] !== undefined && input[field] !== null,
+    );
     let labels: Readonly<Record<string, string>> = {};
+    let unresolved: string[];
     try {
       labels = await deps.describeTargets(request, input);
-    } catch {
-      labels = {};
+      unresolved = nameable.filter((field) => !labels[field]);
+    } catch (error) {
+      console.error(
+        "[mcp-verbal-approvals] approval target lookup failed",
+        pending.action.toolName,
+        error,
+      );
+      unresolved = [...nameable];
     }
     pending.prompt = describeApprovalPrompt(
       pending.action.toolName,
       input,
       labels,
+      unresolved,
     );
     changed = true;
   }
@@ -269,6 +310,22 @@ async function enrichApprovalPrompts(
     part.type === "text" ? { ...part, text: JSON.stringify(structured) } : part,
   );
   return rebuildResponse(response, parsed);
+}
+
+function lookupFailedResponse(id: string | number | null): Response {
+  const message =
+    "Could not read the pending input on this invocation, so the answer was not passed on and nothing was approved or cancelled. Call agent_get, check the status is input_required, then answer again.";
+  return Response.json({
+    id,
+    jsonrpc: "2.0",
+    result: {
+      content: [{ text: message, type: "text" }],
+      isError: true,
+      structuredContent: {
+        error: { code: "conflict", message, retryable: true },
+      },
+    },
+  });
 }
 
 function unclearAnswerResponse(

@@ -2,11 +2,12 @@ import { defineSkill } from "eve/skills";
 
 // What the operations agent is for, and how the business it works in runs.
 //
-// One copy. The orchestrator and every specialist load the same skill object
-// (agent/skills/office-assistant.ts and agent/subagents/*/skills/
-// office-assistant.ts import this), so the story of the business cannot drift
-// between the agent that routes a request and the one that carries it out —
-// the exact failure lib/domain exists to end for business rules.
+// One copy. The orchestrator carries this text as always-on instructions
+// (agent/instructions/office-handbook.ts) and every specialist loads it as the
+// office-assistant skill (agent/subagents/*/skills/office-assistant.ts), so the
+// story of the business cannot drift between the agent that routes a request
+// and the one that carries it out — the exact failure lib/domain exists to end
+// for business rules.
 
 export const OFFICE_HANDBOOK = `# Royal Constructions office assistant
 
@@ -47,15 +48,32 @@ Once a lead is worth quoting it gets an offer. An offer is the form the office
 plans the client's estimate in: area, pricing, cost lines, allowances,
 exclusions, the payment schedule and the document draft. The client receives
 documents to sign, and the deal is then finalised into a Tender and a
-Contract. Revisions: every change after sending is a new revision (R1, R2 …);
-only one revision is active.
+Contract. Only one revision (R1, R2 …) is active.
 
-Status lifecycle: Pending (draft) → Offer sent (out for the client's
-signature) → Offer signed → Agreed → Tender draft → Tender sent → Tender signed
-→ Contract draft → Contract sent → Contract signed → Project. Offer, Tender and
-Contract can each come back Declined, which is cleared by a new revision.
-Superseded is an old revision. Exclusions can sit on the Offer document, the
-Tender, or both — always ask which.
+What can still change, by status:
+- Pending (draft): everything.
+- Sent (emailed to the client to negotiate): the internal price inputs — job
+  setup, cost schedule, pricing — are frozen, and changing them needs a new
+  revision. The customer-facing Offer document and the Scope (allowances,
+  exclusions) stay editable on the active offer; the client sees the change
+  on the next send.
+- From Offer sent (out for signature) or Agreed onwards: all Offer-build
+  content is frozen. The payment schedule is still edited after Agreed, until
+  the Tender is sent.
+
+Status lifecycle: Pending → Sent (emailed; negotiation) → Agreed → Tender draft
+→ Tender sent → Tender signed → Contract draft → Contract sent → Contract
+signed → Project. Between Sent and Agreed there is an optional DocuSign
+acceptance: Offer sent (out for the client's signature) → Offer signed →
+Agreed. It is optional — a deal negotiated by email goes from Sent straight to
+Agreed with no signature. Superseded is an old revision. Exclusions can sit on
+the Offer document, the Tender, or both — always ask which.
+
+Declines: an Offer or Tender declined before the Tender is signed is cleared
+by a new revision. From Tender signed onwards the job is under contract and
+the offer is locked: no new revision can be made (a Contract declined then
+does not reopen it), and any change goes through a Project Variation or a
+formal contract amendment handled outside the system.
 
 A Contract-signed offer is handed over into a project.
 

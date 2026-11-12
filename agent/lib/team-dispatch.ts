@@ -76,11 +76,20 @@ export function describeFinding(taskId: string, result: unknown): string {
     entityRef?: { type?: string; id?: string; display?: { label?: string } };
     data?: unknown;
     warnings?: unknown;
+    /** A specialist that answered in plain text instead of an envelope. */
+    output?: unknown;
   };
   const ref = envelope.entityRef;
+  const reply =
+    envelope.output === undefined || envelope.output === null
+      ? null
+      : typeof envelope.output === "string"
+        ? envelope.output
+        : JSON.stringify(envelope.output);
   const lines = [
     `- ${taskId} (${envelope.specialist ?? "specialist"}, ${envelope.kind ?? "result"}): ${envelope.title ?? ""}`,
     envelope.summary ? `  ${envelope.summary}` : null,
+    reply ? `  Reply: ${clip(reply, MAX_DATA_CHARS)}` : null,
     ref?.type && ref.id
       ? `  Record: ${ref.display?.label ?? ref.type} (${ref.type}Id=${ref.id})`
       : null,

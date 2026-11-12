@@ -22,7 +22,7 @@ const description = [
   "and admin (approval queue, offer-content defaults, build sequence templates with stages, hierarchy, estimated days, tradie category dependencies and related cost lines, team membership and invitations, Xero connection).",
   "Answers name records in plain English; ids are never shown.",
   "Every write or external side effect pauses as input_required for owner approval; the prompt names the exact records and change.",
-  "Answer it with agent_update: optionId \"approve\" or \"cancel\", or pass the person's own words as text — a clear spoken yes (\"yes, go ahead\") or no (\"no, hold off\") is understood, and an unclear answer is rejected with a request to ask again, so nothing is approved on a guess.",
+  'Answer it with agent_update: optionId "approve" or "cancel", or pass the person\'s own words as text — a clear spoken yes ("yes, go ahead") or no ("no, hold off") is understood, and an unclear answer is rejected with a request to ask again, so nothing is approved on a guess.',
   "Not available through the agent: lead files; project variations.",
   "Put everything needed in `message`; each invocation starts a fresh conversation, and ambiguous targets come back as a question rather than a guess.",
   "Specialist work runs inside the invocation, so keep polling agent_get until it is terminal; a completed result is the finished answer.",

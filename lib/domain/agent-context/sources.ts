@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { sydneyStartOfDay, sydneyToday } from "@/lib/dates/sydney";
 import type { DomainDb } from "../db";
 import {
   leadChunk,
@@ -191,7 +192,8 @@ export async function loadProjectChunks(
           status: true,
           total: true,
         },
-        where: { status: { notIn: ["VOIDED", "DELETED"] } },
+        // A draft is not a claim the client has been sent.
+        where: { status: { notIn: ["DRAFT", "VOIDED", "DELETED"] } },
       },
       leadId: true,
       location: true,
@@ -341,8 +343,9 @@ export async function loadTradieChunks(
   );
 }
 
+// Out for a DocuSign signature. SENT is not here: it is an Offer emailed to
+// negotiate, which nobody has been asked to sign.
 const SIGNATURE_STATUSES = [
-  "SENT",
   "OFFER_SENT",
   "TENDER_SENT",
   "CONTRACT_SENT",
@@ -353,6 +356,10 @@ export async function loadOfficeDigest(
   now: Date,
 ): Promise<ChunkDraft> {
   const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  // From the start of today in Sydney, not from now: a meeting is stored on
+  // its day with the time beside it, and the digest is built early in the
+  // morning, so "now" would drop every meeting booked for today.
+  const startOfToday = sydneyStartOfDay(sydneyToday(now));
   const [
     leadStages,
     offerStatuses,
@@ -392,7 +399,7 @@ export async function loadOfficeDigest(
       where: {
         isArchived: false,
         meetingCompletedAt: null,
-        meetingDate: { gte: now, lte: weekAhead },
+        meetingDate: { gte: startOfToday, lte: weekAhead },
       },
     }),
     db.offer.findMany({

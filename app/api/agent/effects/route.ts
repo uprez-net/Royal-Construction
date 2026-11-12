@@ -37,9 +37,11 @@ export async function POST(request: Request) {
   const tags = cacheTagsFor(affected);
   for (const tag of tags) revalidateTag(tag, { expire: 0 });
 
+  // A build-sequence change re-plans every open project, so all of them are
+  // re-indexed; unchanged text is not re-embedded, which keeps that cheap.
   const selection = {
     leadIds: [...affected.leadIds],
-    projectIds: affected.allProjects ? [] : [...affected.projectIds],
+    projectIds: [...affected.projectIds],
     tradieIds: [...affected.tradieIds],
   };
   const reindexing =
@@ -49,12 +51,18 @@ export async function POST(request: Request) {
   if (reindexing) {
     after(async () => {
       try {
-        await refreshAgentContext(
+        const result = await refreshAgentContext(
           systemPrincipal("agent-effects"),
           { selection },
           prisma,
           { embedding: gatewayEmbedding },
         );
+        if (result.embeddingFailed) {
+          console.error(
+            "[agent-effects] embeddings failed; records saved without vectors",
+            result,
+          );
+        }
       } catch (error) {
         // The nightly run rebuilds everything; a miss here costs freshness
         // for a few hours, not correctness.

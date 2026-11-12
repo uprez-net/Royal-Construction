@@ -23,6 +23,26 @@ import { authorizeTradie, authorizeTradieSchedule } from "../access/tradies";
 /** Tool-input field → the name the approval card shows beside it. */
 export type ApprovalTargetLabels = Readonly<Record<string, string>>;
 
+/**
+ * The tool-input fields this module can name. A caller that shows an approval
+ * uses it to tell "this field had no name to look up" from "the lookup failed
+ * or the caller may not see it" — the second must not read like the first.
+ */
+export const APPROVAL_TARGET_FIELDS = [
+  "alertId",
+  "documentId",
+  "leadId",
+  "milestoneId",
+  "offerId",
+  "parentId",
+  "projectId",
+  "scheduleId",
+  "taskId",
+  "tradieId",
+] as const;
+
+type ApprovalTargetField = (typeof APPROVAL_TARGET_FIELDS)[number];
+
 type Resolver = (
   value: unknown,
   input: Readonly<Record<string, unknown>>,
@@ -33,7 +53,7 @@ export async function describeApprovalTargets(
   input: Readonly<Record<string, unknown>>,
   db: DomainDb,
 ): Promise<ApprovalTargetLabels> {
-  const resolvers: Record<string, Resolver> = {
+  const resolvers: Record<ApprovalTargetField, Resolver> = {
     alertId: (value, fields) =>
       complianceRecordLabel(principal, value, fields, db, "alert"),
     documentId: (value, fields) =>

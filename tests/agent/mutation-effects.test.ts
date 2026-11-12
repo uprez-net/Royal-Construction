@@ -186,3 +186,20 @@ test("publishing posts the refs with the bearer and never throws", async () => {
   );
   assert.equal(failed, false);
 });
+
+test("ids nested inside a result are collected too", () => {
+  const refs = mutationRefs({
+    output: {
+      data: {
+        schedule: { projectId: "proj-9", scheduleId: "s-9" },
+        bookings: [{ tradieId: "t-9" }],
+      },
+      kind: "confirmation",
+    },
+  });
+  assert.deepEqual(refs.map((ref) => `${ref.type}:${ref.id}`).sort(), [
+    "project:proj-9",
+    "tradie:t-9",
+    "tradieSchedule:s-9",
+  ]);
+});
