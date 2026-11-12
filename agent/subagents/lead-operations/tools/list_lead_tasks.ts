@@ -9,7 +9,7 @@ export default defineTool({
   inputSchema: listLeadTasksInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   label: {
-    start: ({ leadId }) => `Load tasks for lead ${leadId}`,
+    start: () => "Load lead tasks",
   },
   execute(input, ctx) {
     return listAuthorizedLeadTasks(ctx, input);

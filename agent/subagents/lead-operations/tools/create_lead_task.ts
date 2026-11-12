@@ -16,8 +16,7 @@ export default defineTool({
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
   label: {
-    start: ({ leadId, type }) =>
-      `Create ${type.toLowerCase()} task for lead ${leadId}`,
+    start: ({ type }) => `Create ${type.toLowerCase()} task`,
   },
   async execute(input, ctx) {
     const actor = await requireCurrentAgentActor(ctx);

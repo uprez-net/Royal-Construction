@@ -49,6 +49,9 @@ const isPublicRoute = createRouteMatcher([
   // an unauthenticated client has to be able to read that to sign in at all.
   "/.well-known(.*)",
   "/api/cron(.*)",
+  // The Eve runtime reports what an agent write touched; no Clerk session
+  // exists on that call. The route checks its own shared bearer.
+  "/api/agent/effects",
   "/book-consultation",
   "/api/upload(.*)",
   "/api/resume-stream(.*)",

@@ -12,7 +12,7 @@ export default defineTool({
   inputSchema: archiveLeadInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
-  label: { start: ({ leadId }) => `Archive lead ${leadId}` },
+  label: { start: () => "Archive lead" },
   async execute(input, ctx) {
     const actor = await requireCurrentAgentActor(ctx);
     return runAuditedAgentOperation({

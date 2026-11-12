@@ -8,7 +8,7 @@ export default defineTool({
     "Check bounded estimated, scheduled, excluded, and offered lists for one authorized lead. This produces review findings and writes nothing.",
   inputSchema: checkOfferListsInputSchema,
   outputSchema: agentResultEnvelopeSchema,
-  label: { start: ({ leadId }) => `Check offer lists for lead ${leadId}` },
+  label: { start: () => "Check offer lists" },
   execute(input, ctx) {
     return checkAuthorizedOfferLists(ctx, input);
   },

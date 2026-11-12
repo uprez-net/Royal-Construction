@@ -833,10 +833,10 @@ async function authorizeLiveOffer(
   }
 }
 
-// Eve has no request to expire Next caches in, so the offer screen and the
-// offers list catch up on their own short cache lifetimes, as they already do
-// for every other Eve offer write. The lead stage cannot wait: it moves with
-// the status, through the same rule the app runs.
+// Eve has no request to expire Next caches in; the audited operation reports
+// the offer once the write commits and app/api/agent/effects expires the offer
+// screen and the offers list. The lead stage cannot wait for that: it moves
+// with the status, through the same rule the app runs.
 const eveOfferSendEffects: OfferSendEffects = {
   offerChanged: () => undefined,
   statusChanged: (offerId) => syncLeadStageForOffer(offerId, agentDb),

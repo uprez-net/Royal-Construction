@@ -9,7 +9,7 @@ export default defineTool({
   inputSchema: getLeadInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   label: {
-    start: ({ leadId }) => `Load lead ${leadId}`,
+    start: () => "Load lead",
   },
   execute(input, ctx) {
     return getAuthorizedLead(ctx, input);

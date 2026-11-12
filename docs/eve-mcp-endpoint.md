@@ -116,6 +116,32 @@ it. Rejected calls carry `structuredContent.error` with a stable `code`
 is re-checked on every operation against the Clerk principal, so holding an
 invocation ID is not enough to read, answer or cancel it.
 
+### Approving and cancelling, in words
+
+An approval arrives as an `input_required` invocation whose request has
+`kind: "tool-approval"`. Its `prompt` names the records and the change in
+plain English — "Approve "Update lead" for Smith (lead #42)? Details —
+changes.stage: WON." — not the raw ids eve would otherwise show, so the person
+can say yes or no to what they actually see.
+
+Answer with `agent_update`, either way:
+
+- `{ requestId, optionId: "approve" }` or `{ requestId, optionId: "cancel" }`,
+  or
+- `{ requestId, text: "<what the person said>" }`. A clear yes ("yes, go
+  ahead", "ok send it", "approved") approves; a clear no ("no", "hold off",
+  "cancel that") cancels. A session-limit prompt reads the same way.
+
+Anything less clear ("yes but not yet", "what is this?") is **not guessed**:
+the call is rejected with `isError: true` and code `invalid_input`, nothing is
+approved or cancelled, and the request stays pending — ask the person again.
+Without this, eve reads a words-only answer to an approval as invalid and
+denies the action, so a spoken yes used to cancel the thing it approved.
+
+Only the person who started the invocation can approve it, exactly as in the
+workspace. The wording is read in `agent/lib/verbal-approval.ts` and applied
+at the HTTP boundary by `agent/lib/mcp-verbal-approvals.ts`.
+
 ### `agent_start` is not idempotent
 
 **If the response to `agent_start` is lost, do not retry it.** You have no

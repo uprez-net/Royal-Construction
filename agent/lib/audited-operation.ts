@@ -7,6 +7,10 @@ import type { ToolContext } from "eve/tools";
 import type { ZodType } from "zod";
 import prisma from "@/lib/prisma";
 import { authorizeAgentSession } from "@/lib/domain/access/agent-sessions";
+import {
+  mutationRefs,
+  publishMutationEffects,
+} from "@/agent/lib/mutation-effects";
 
 export class AgentOperationConflictError extends Error {
   readonly code = "agent_operation_conflict";
@@ -180,6 +184,20 @@ export async function runAuditedAgentOperation<T>(params: {
   const prepared = await prisma.$transaction((tx) => prepare(tx));
   if (!("operationId" in prepared)) return prepared.replay;
 
+  // Once the write has committed, the app's screens for what it touched are
+  // stale. One call for every agent write; see agent/lib/mutation-effects.ts.
+  const committed = async (output: T) => {
+    await publishMutationEffects(
+      mutationRefs({
+        inputSummary: params.inputSummary,
+        output,
+        targetId: params.targetIdFromOutput?.(output) ?? params.targetId,
+        targetType: params.targetType,
+      }),
+    );
+    return output;
+  };
+
   if (params.transactional === false) {
     let output: T;
     try {
@@ -189,11 +207,12 @@ export async function runAuditedAgentOperation<T>(params: {
       throw error;
     }
     await prisma.$transaction((tx) => finalizeSuccess(tx, prepared, output));
-    return output;
+    return committed(output);
   }
 
+  let output: T;
   try {
-    return await prisma.$transaction(
+    output = await prisma.$transaction(
       async (tx) => {
         await params.authorize?.(tx);
         const output = params.outputSchema.parse(await params.execute(tx));
@@ -212,4 +231,5 @@ export async function runAuditedAgentOperation<T>(params: {
     await prisma.$transaction((tx) => finalizeFailure(tx, prepared));
     throw error;
   }
+  return committed(output);
 }

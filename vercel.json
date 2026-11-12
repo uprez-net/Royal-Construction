@@ -40,6 +40,10 @@
     {
       "path": "/api/cron/comms-sweep",
       "schedule": "45 19 * * *"
+    },
+    {
+      "path": "/api/cron/agent-context",
+      "schedule": "30 20 * * *"
     }
   ]
 }
