@@ -8,7 +8,9 @@ import {
   isValidMcpResourceUrl,
   mcpResourceConfig,
 } from "@/agent/lib/mcp-auth-policy";
+import { withVerbalApprovals } from "@/agent/lib/mcp-verbal-approvals";
 import { isAgentFeatureEnabled } from "@/agent/lib/session-identity";
+import { describeApprovalTargets } from "@/lib/domain/agent/approval-targets";
 import { principalForClerkId } from "@/lib/domain/identity/users";
 
 // The one authenticated MCP transport into Eve, replacing the hand-written
@@ -81,10 +83,34 @@ if (!resource) {
   );
 }
 
-export default mcpChannel({
-  // Without an authorization server to advertise, nothing can authenticate
-  // anyway, so the endpoint still answers a bare 401 rather than pointing
-  // clients at a sign-in that does not exist.
-  auth: resource ? oauthResource(auth, resource) : auth,
-  route: MCP_ROUTE,
-});
+/**
+ * Names for the ids in an approval, looked up as the person answering it.
+ *
+ * Re-authenticates the request rather than trusting anything in it: the label
+ * goes through the same access rule as the approval card in the workspace, so
+ * a prompt never confirms a record the caller could not open.
+ */
+async function describeTargets(
+  request: Request,
+  input: Record<string, unknown>,
+): Promise<Readonly<Record<string, string>>> {
+  const clerkUserId = await clerkUserIdFor(request);
+  if (!clerkUserId) return {};
+  const principal = await principalForClerkId(clerkUserId, prisma);
+  return principal ? describeApprovalTargets(principal, input, prisma) : {};
+}
+
+// Spoken answers to approvals ("yes go ahead", "no, hold off") work over MCP,
+// and approval prompts name the records instead of their ids. See
+// agent/lib/mcp-verbal-approvals.ts.
+export default withVerbalApprovals(
+  mcpChannel({
+    // Without an authorization server to advertise, nothing can authenticate
+    // anyway, so the endpoint still answers a bare 401 rather than pointing
+    // clients at a sign-in that does not exist.
+    auth: resource ? oauthResource(auth, resource) : auth,
+    route: MCP_ROUTE,
+  }),
+  MCP_ROUTE,
+  { describeTargets },
+);

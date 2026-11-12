@@ -288,9 +288,9 @@ export async function updateAuthorizedBuildSequence(
     transaction,
   );
   // A changed duration also reaches every open activity on existing projects
-  // (issue #422). Eve cannot refresh the app's cache from here -- authored
-  // agent code cannot load next/cache -- and project detail is cached with the
-  // `max` profile, so the operator is told plainly that the screens lag.
+  // (issue #422). runAuditedAgentOperation reports the template change once
+  // it commits, and the app expires every open project's cached detail
+  // (lib/cache/agent-effects.ts), so the screens show the re-planned dates.
   const durationChanged = input.changes.some(
     (change) =>
       change.type === "update" && change.patch.estimatedDays !== undefined,
@@ -300,7 +300,7 @@ export async function updateAuthorizedBuildSequence(
     "Build sequence updated",
     `Saved ${input.changes.length} build sequence change${input.changes.length === 1 ? "" : "s"}. New projects will use this plan.${
       durationChanged
-        ? " Changed durations also apply to activities not yet completed on existing projects, and the activities after them are re-planned; completed activities keep their dates. Open project screens may keep showing the previous dates until that project is next updated in the app; saving the build sequence from Admin refreshes them."
+        ? " Changed durations also apply to activities not yet completed on existing projects, and the activities after them are re-planned; completed activities keep their dates."
         : " Existing projects keep their activities."
     }`,
     { ...template, appliedChanges: input.changes },

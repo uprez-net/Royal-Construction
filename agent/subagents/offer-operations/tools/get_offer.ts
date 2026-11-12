@@ -9,7 +9,7 @@ export default defineTool({
   inputSchema: getOfferInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   label: {
-    start: ({ offerId }) => `Load offer revision ${offerId}`,
+    start: () => "Load offer revision",
   },
   execute(input, ctx) {
     return getAuthorizedOffer(ctx, input);

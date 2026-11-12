@@ -1477,6 +1477,37 @@ model AgentMemory {
   @@index([expiresAt])
 }
 
+/// What the operations agent knows about the business before it asks.
+///
+/// One row per live lead, project and tradie, plus one office digest: plain
+/// text built deterministically from the CRM by lib/domain/agent-context (no
+/// model writes a word of it), and an embedding of that text so the agent can
+/// find the right record from the way the office actually talks ("the Rose St
+/// job", "Dave the sparky"). Rebuilt nightly by /api/cron/agent-context and
+/// for one record after every agent write.
+///
+/// A snapshot, never the source of truth: the agent still reads the live
+/// record through a specialist before it acts on anything.
+model AgentContextChunk {
+  id          String   @id @default(uuid())
+  /// lead | project | tradie | digest
+  kind        String
+  /// The record's own id as text (Lead ids are integers); "office" for the digest.
+  entityId    String
+  title       String
+  content     String   @db.Text
+  /// sha256 of `content`; an unchanged record is not re-embedded.
+  contentHash String
+  /// Normalised, so the inner product is the cosine similarity.
+  embedding   Unsupported("vector(1536)")?
+  refreshedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([kind, entityId])
+  @@index([kind])
+}
+
 model Lead {
   id Int @id @default(autoincrement())
 

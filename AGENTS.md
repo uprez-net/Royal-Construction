@@ -159,6 +159,15 @@ workspace detaches and later shows the result as a raw-JSON "user" message.
 The specialist list lives once in `agent/lib/specialists.ts`;
 `tests/agent/specialist-delegation.test.ts` holds these invariants.
 
+`delegate` waits, but it does not have to wait one specialist at a time: its
+`tasks` form runs independent specialists in parallel and hands a dependent
+task (`after`) its teammates' findings. The orchestrator also starts every
+session with the office digest and can `recall_crm_context` any live lead,
+project or tradie by the words the office uses. That index is deterministic
+text from the CRM, embedded for dot-product search and rebuilt nightly. Every
+audited agent write expires the app's caches for what it touched through
+`/api/agent/effects`. See [`docs/eve-office-context.md`](./docs/eve-office-context.md).
+
 The orchestrator uses `zai/glm-5.3-flash` ($0.08 per million input tokens,
 $0.25 per million output), low reasoning, a 1,000,000-token context window, and
 per-session limits of 36,000,000 input tokens, 600,000 output tokens, $3

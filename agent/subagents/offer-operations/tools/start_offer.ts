@@ -12,7 +12,7 @@ export default defineTool({
   inputSchema: startOfferInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
-  label: { start: ({ leadId }) => `Start offer for lead ${leadId}` },
+  label: { start: () => "Start offer" },
   async execute(input, ctx) {
     const actor = await requireCurrentAgentActor(ctx);
     return runAuditedAgentOperation({

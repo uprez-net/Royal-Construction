@@ -11,18 +11,20 @@ import { OPERATIONS_SESSION_LIMITS } from "@/lib/agent/session-limits";
  * change, and what to put in `message`.
  */
 const description = [
-  "Royal Constructions operations agent (Australian residential builder, staff-only).",
+  "Royal Constructions operations agent (Australian residential builder, staff-only): the office assistant that keeps the CRM up to date.",
+  "It knows the live business (a nightly snapshot of every lead, project and tradie, refreshed after each change it makes), so short requests like 'where is the Rose St job up to' or 'move Smith to negotiating' work without ids.",
   "It reads and updates live business records through audited, permission-checked tools:",
   "leads (search, detail, create, edit, stage changes, archive, client email, follow-up and meeting tasks: create, complete, reopen);",
   "offers and revisions (start an offer for a lead, search, detail, pricing, cost lines, allowances, exclusions, payment schedule, status transitions, emailing the offer to the client, DocuSign signing for the offer, Tender and Contract, recall, new revisions, change requests, contract particulars, activity, signing status, and handing a signed Contract over into a project);",
-  "projects (search, overview, requirements, milestones, site manager assignment);",
+  "projects (search, overview, requirements, milestones, financials, site manager assignment);",
   "compliance on a project (engagement status, documents, certifier outreach and follow-up);",
   "tradies (directory, incidents, ratings, price-change and removal requests, site schedules);",
   "and admin (approval queue, offer-content defaults, build sequence templates with stages, hierarchy, estimated days, tradie category dependencies and related cost lines, team membership and invitations, Xero connection).",
-  "Reads return typed result envelopes (title, summary, entity references, links).",
-  "Every write or external side effect pauses as input_required for owner approval, naming the exact target and change; answer it with agent_update.",
+  "Answers name records in plain English; ids are never shown.",
+  "Every write or external side effect pauses as input_required for owner approval; the prompt names the exact records and change.",
+  'Answer it with agent_update: optionId "approve" or "cancel", or pass the person\'s own words as text — a clear spoken yes ("yes, go ahead") or no ("no, hold off") is understood, and an unclear answer is rejected with a request to ask again, so nothing is approved on a guess.',
   "Not available through the agent: lead files; project variations.",
-  "Put everything needed in `message` — names, ids, dates, amounts — because each invocation starts a fresh conversation; ambiguous targets come back as a question rather than a guess.",
+  "Put everything needed in `message`; each invocation starts a fresh conversation, and ambiguous targets come back as a question rather than a guess.",
   "Specialist work runs inside the invocation, so keep polling agent_get until it is terminal; a completed result is the finished answer.",
 ].join(" ");
 

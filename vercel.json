@@ -32,6 +32,10 @@
     {
       "path": "/api/cron/sync-sent-mail",
       "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/cron/agent-context",
+      "schedule": "30 20 * * *"
     }
   ]
 }

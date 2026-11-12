@@ -10,7 +10,7 @@ export default defineTool({
     "Read the active authorized offer's bounded send and lifecycle activity timeline for one exact lead.",
   inputSchema,
   outputSchema: agentResultEnvelopeSchema,
-  label: { start: ({ leadId }) => `Load offer activity for lead ${leadId}` },
+  label: { start: () => "Load offer activity" },
   execute(input, ctx) {
     return getAuthorizedOfferActivity(ctx, input);
   },

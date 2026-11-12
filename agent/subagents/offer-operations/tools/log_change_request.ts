@@ -10,7 +10,7 @@ export default defineTool({
   inputSchema: logOfferChangeRequestInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
-  label: { start: ({ leadId }) => `Log change request for lead ${leadId}` },
+  label: { start: () => "Log change request" },
   execute(input, ctx) {
     return logAuthorizedOfferChangeRequest(ctx, input);
   },
