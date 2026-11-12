@@ -125,12 +125,34 @@ export async function storeCallRecording(
   const pathname =
     recording.blobPathname
     ?? `call-recordings/${recording.callId}/${randomBytes(16).toString("hex")}.${extensionFor(download.mimeType)}`;
-  const stored = await ports.put({
-    allowOverwrite: true,
-    body: download.bytes,
-    contentType: download.mimeType,
-    pathname,
-  });
+  let stored;
+  try {
+    stored = await ports.put({
+      allowOverwrite: true,
+      body: download.bytes,
+      contentType: download.mimeType,
+      pathname,
+    });
+  } catch (error) {
+    // Downloaded but not kept: say why on the recording itself, the same as
+    // a failed download, rather than leaving it PENDING with no reason. The
+    // carrier's copy is untouched, so a later retry still has it.
+    const retryable = attempts < MAX_RECORDING_ATTEMPTS;
+    const detail =
+      error instanceof Error && error.message.trim()
+        ? ` ${error.message.trim().slice(0, 200)}`
+        : "";
+    const reason = `The recording downloaded but couldn't be saved to storage.${detail}`;
+    await db.callRecording.update({
+      data: retryable
+        ? { failureReason: reason }
+        : { failureReason: reason, status: CallRecordingStatus.FAILED },
+      where: { id: recording.id },
+    });
+    throw new DomainSideEffectError(reason, "recordings", retryable, {
+      cause: error,
+    });
+  }
   await db.callRecording.update({
     data: {
       blobPathname: pathname,

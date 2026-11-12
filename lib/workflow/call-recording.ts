@@ -28,6 +28,12 @@ async function storeOne(recordingId: string): Promise<string> {
       { put: vercelPrivateBlobPut, recordingsFor: runtime.recordingsFor },
     );
   } catch (error) {
+    // The step's own error is deliberately plain; the cause is what someone
+    // fixing it needs, so it goes to the log.
+    console.error(
+      `[call-recording] storing recording ${recordingId} failed:`,
+      error instanceof Error ? error.message : error,
+    );
     if (error instanceof DomainSideEffectError && error.retryable) {
       const { attempt } = getStepMetadata();
       throw new RetryableError(error.message, {
