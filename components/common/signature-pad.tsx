@@ -4,14 +4,18 @@ import { Eraser, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { MAX_SIGNATURE_LENGTH } from "@/lib/domain/projects/checklist-rules";
 import { cn } from "@/lib/utils";
+
+import { exportSignaturePng } from "./signature-export";
 
 // A drawn signature, or an uploaded image of one, as a PNG data URL.
 //
 // Pointer events cover mouse, pen and finger alike, so the same pad works on
 // a site manager's phone at handover. The canvas is drawn at the device's
-// pixel ratio so a signature does not print blurred, and an upload is redrawn
-// onto the same white canvas so the server only ever receives a PNG.
+// pixel ratio so it does not look blurred on screen; what is exported is
+// scaled down and, for an upload, reduced to ink on white
+// (`exportSignaturePng`), so the server always receives a small PNG.
 
 const HEIGHT = 160;
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -72,9 +76,22 @@ export function SignaturePad({
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
 
-  const commit = () => {
+  const commit = (source?: HTMLImageElement): string | null => {
     const canvas = canvasRef.current;
-    if (canvas) onChange(canvas.toDataURL("image/png"));
+    if (!canvas) return null;
+    const dataUrl = exportSignaturePng(source ?? canvas, {
+      inkOnly: source !== undefined,
+    });
+    if (dataUrl.length > MAX_SIGNATURE_LENGTH) {
+      setUploadError(
+        "That signature is too detailed to store. Clear it and sign again.",
+      );
+      onChange(null);
+      return null;
+    }
+    setUploadError(null);
+    onChange(dataUrl);
+    return dataUrl;
   };
 
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -125,19 +142,29 @@ export function SignaturePad({
     }
     const url = URL.createObjectURL(file);
     const image = new Image();
-    image.onload = () => {
+    // Show what will be stored — the ink, on white — not the photo itself.
+    const show = (picture: HTMLImageElement) => {
       reset();
       const canvas = canvasRef.current;
       const ctx = context();
-      if (canvas && ctx) {
-        const width = canvas.clientWidth;
-        const scale = Math.min(width / image.width, HEIGHT / image.height, 1);
-        const w = image.width * scale;
-        const h = image.height * scale;
-        ctx.drawImage(image, (width - w) / 2, (HEIGHT - h) / 2, w, h);
-        commit();
-      }
+      if (!canvas || !ctx) return;
+      const width = canvas.clientWidth;
+      const scale = Math.min(
+        width / picture.naturalWidth,
+        HEIGHT / picture.naturalHeight,
+        1,
+      );
+      const w = picture.naturalWidth * scale;
+      const h = picture.naturalHeight * scale;
+      ctx.drawImage(picture, (width - w) / 2, (HEIGHT - h) / 2, w, h);
+    };
+    image.onload = () => {
       URL.revokeObjectURL(url);
+      const stored = commit(image);
+      if (!stored) return;
+      const preview = new Image();
+      preview.onload = () => show(preview);
+      preview.src = stored;
     };
     image.onerror = () => {
       setUploadError("That image could not be read.");

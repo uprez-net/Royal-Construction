@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import type { ProjectDetail } from "@/types/project";
 
 import { ChecklistInspection } from "./checklist-inspection";
-import { DownloadChecklistDialog } from "./checklist-dialogs";
+import { DownloadChecklistDialog } from "./checklist-signoff-dialogs";
 import {
   DISPLAY_TONE,
   formatDateTime,

@@ -11,22 +11,26 @@ import {
 } from "@/lib/domain/errors";
 import { userPrincipal, type DomainPrincipal } from "@/lib/domain/principal";
 import {
+  closeChecklist,
+  reopenChecklist,
+} from "@/lib/domain/projects/checklist-closure";
+import { sendChecklistIssueEmail } from "@/lib/domain/projects/checklist-issue-email";
+import {
   assignChecklistIssue,
   changeChecklistIssueStatus,
   commentOnChecklistIssue,
-  raiseChecklistIssue,
-  sendChecklistIssueEmail,
   verifyChecklistIssue,
-} from "@/lib/domain/projects/checklist-issues";
+} from "@/lib/domain/projects/checklist-issue-lifecycle";
+import { raiseChecklistIssue } from "@/lib/domain/projects/checklist-issues";
 import {
   attachChecklistPhotos,
-  closeChecklist,
-  getChecklistDetail,
-  listProjectChecklists,
   removeChecklistPhoto,
-  reopenChecklist,
   setChecklistItemState,
   updateChecklistDetails,
+} from "@/lib/domain/projects/checklist-review";
+import {
+  getChecklistDetail,
+  listProjectChecklists,
   type ChecklistDetail,
   type ChecklistSummary,
 } from "@/lib/domain/projects/checklists";

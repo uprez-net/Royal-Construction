@@ -3,8 +3,12 @@ import { ChecklistSignaturePurpose, ChecklistStatus } from "@prisma/client";
 import { PROJECT_STAGE_LABELS } from "@/types/project";
 
 import { authorizeProject } from "../access/projects";
-import type { DomainDb } from "../db";
-import { DomainSideEffectError, isDomainError } from "../errors";
+import type { DomainDb, TransactionalDomainDb } from "../db";
+import {
+  DomainSideEffectError,
+  DomainStaleVersionError,
+  isDomainError,
+} from "../errors";
 import type {
   ChecklistDocumentData,
   ChecklistDocumentRenderPort,
@@ -16,7 +20,7 @@ import {
   loadChecklist,
   requireReviewerName,
   requireSignature,
-} from "./checklists";
+} from "./checklist-common";
 
 // The downloaded checklist (issue #420): the client's own handover document,
 // filled in, with the reviewer's name and signature.
@@ -126,14 +130,19 @@ export async function checklistDocumentData(
 
 /**
  * Render the checklist for download and record who it names, which revision
- * it printed, and whether it was final. The record is written only once the
- * document rendered, so a failed render leaves no trace of an export that
- * never reached anyone.
+ * it printed, and whether it was final.
+ *
+ * Everything recorded comes from the one snapshot the document was printed
+ * from. If the checklist moved while it rendered — a tick in another tab, or
+ * a close — the export is refused rather than recorded against a revision it
+ * does not show. The records are written only once the document rendered, and
+ * together, so a failure leaves no trace of an export that never reached
+ * anyone.
  */
 export async function exportChecklistDocument(
   principal: DomainPrincipal,
   input: ExportChecklistInput,
-  db: DomainDb,
+  db: TransactionalDomainDb,
   render: ChecklistDocumentRenderPort,
   now: Date = new Date(),
 ): Promise<ExportedChecklist> {
@@ -162,34 +171,50 @@ export async function exportChecklistDocument(
     );
   }
 
-  const signatureRow = await db.checklistSignature.create({
-    data: {
-      checklistId: checklist.id,
-      imageDataUrl: signature,
-      purpose: ChecklistSignaturePurpose.EXPORT,
-      reviewerName,
-      signedAt: now,
-      signedById: actor.id,
-    },
-    select: { id: true },
-  });
-  const exported = await db.checklistExport.create({
-    data: {
-      checklistId: checklist.id,
-      final: document.final,
-      generatedAt: now,
-      generatedById: actor.id,
-      reviewerName,
-      signatureId: signatureRow.id,
-      statusAtExport: checklist.status,
-      version: document.version,
-    },
-    select: { id: true },
+  const exportId = await db.$transaction(async (tx) => {
+    const current = await tx.projectChecklist.findUnique({
+      select: { version: true },
+      where: { id: checklist.id },
+    });
+    if (current?.version !== document.version) {
+      throw new DomainStaleVersionError(
+        "The checklist changed while the document was being generated. Download it again to get the latest version.",
+        document.version,
+        current?.version,
+      );
+    }
+    const signatureRow = await tx.checklistSignature.create({
+      data: {
+        checklistId: checklist.id,
+        imageDataUrl: signature,
+        purpose: ChecklistSignaturePurpose.EXPORT,
+        reviewerName,
+        signedAt: now,
+        signedById: actor.id,
+      },
+      select: { id: true },
+    });
+    const exported = await tx.checklistExport.create({
+      data: {
+        checklistId: checklist.id,
+        final: document.final,
+        generatedAt: now,
+        generatedById: actor.id,
+        reviewerName,
+        signatureId: signatureRow.id,
+        statusAtExport: document.final
+          ? ChecklistStatus.CLOSED
+          : ChecklistStatus.OPEN,
+        version: document.version,
+      },
+      select: { id: true },
+    });
+    return exported.id;
   });
 
   const name = fileSafe(`${document.projectName} ${document.checklistTitle}`);
   return {
-    exportId: exported.id,
+    exportId,
     filename: `${name || "Checklist"}${document.final ? "" : "-DRAFT"}.pdf`,
     final: document.final,
     pdf,

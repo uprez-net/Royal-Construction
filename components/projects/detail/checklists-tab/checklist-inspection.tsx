@@ -1,70 +1,44 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Ban,
-  Camera,
-  CheckCircle2,
-  ChevronDown,
-  CircleAlert,
-  Download,
-  Flag,
-  Loader2,
-  Lock,
-  ShieldCheck,
-  Unlock,
-} from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, ArrowLeft, Download, Lock } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { StatusPill } from "@/components/common/status-pill";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  removeChecklistPhotoAction,
-  setChecklistItemStateAction,
-  attachChecklistPhotosAction,
-  updateChecklistDetailsAction,
-} from "@/lib/data/checklist-actions";
+import { setChecklistItemStateAction } from "@/lib/data/checklist-actions";
 import {
   CHECKLIST_STATUS_LABELS,
   closureBlockers,
-  isBlockingIssue,
 } from "@/lib/domain/projects/checklist-rules";
 import type {
   ChecklistDetail,
-  ChecklistIssueView,
   ChecklistItemView,
-  ChecklistPhoto,
 } from "@/lib/domain/projects/checklists";
 import { cn } from "@/lib/utils";
 import type { ChecklistItemState } from "@prisma/client";
 
 import {
   DISPLAY_TONE,
-  PHOTO_ACCEPT,
   checklistKeys,
   formatDateTime,
   useChecklistDetail,
-  useChecklistPhotoUpload,
   useRefreshChecklists,
 } from "./checklist-client";
+import { ChecklistDetailsForm } from "./checklist-details-form";
+import { IssueRegister } from "./checklist-issue-register";
+import { NoteDialog, ReopenChecklistDialog } from "./checklist-note-dialog";
+import { SaveIndicator, useSaveTracker } from "./checklist-save-state";
+import { ChecklistSectionCard } from "./checklist-section-card";
+import { SignOffPanel } from "./checklist-sign-off-panel";
 import {
   CloseChecklistDialog,
   DownloadChecklistDialog,
-  NoteDialog,
-  ReopenChecklistDialog,
-} from "./checklist-dialogs";
-import { IssueRegister } from "./checklist-issue-register";
-import { PhotoStrip } from "./checklist-photo-strip";
+} from "./checklist-signoff-dialogs";
 import { RaiseIssueDialog } from "./raise-issue-dialog";
 
 // One checklist's inspection screen (issue #420): the project header, the
@@ -132,8 +106,6 @@ export function ChecklistInspection({
   );
 }
 
-type SaveState = { pending: number; savedAt: Date | null; failed: boolean };
-
 function Inspection({
   checklist,
   isAdmin,
@@ -148,34 +120,7 @@ function Inspection({
   const readOnly = checklist.status === "CLOSED";
   const detailKey = checklistKeys.detail(projectId, checklist.number);
 
-  const [save, setSave] = useState<SaveState>({
-    failed: false,
-    pending: 0,
-    savedAt: null,
-  });
-  const track = async <T,>(work: () => Promise<T>): Promise<T> => {
-    setSave((current) => ({
-      ...current,
-      failed: false,
-      pending: current.pending + 1,
-    }));
-    try {
-      const result = await work();
-      setSave((current) => ({
-        ...current,
-        pending: current.pending - 1,
-        savedAt: new Date(),
-      }));
-      return result;
-    } catch (error) {
-      setSave((current) => ({
-        ...current,
-        failed: true,
-        pending: current.pending - 1,
-      }));
-      throw error;
-    }
-  };
+  const { save, track } = useSaveTracker();
 
   const [raisingFor, setRaisingFor] = useState<ChecklistItemView | null>(null);
   const [naFor, setNaFor] = useState<ChecklistItemView | null>(null);
@@ -374,93 +319,29 @@ function Inspection({
               Collapse all
             </Button>
           </div>
-          {checklist.sections.map((section) => {
-            const isOpen = openSections.has(section.section);
-            const reviewed = section.items.filter(
-              (item) => item.state !== "UNCHECKED",
-            ).length;
-            const flagged = section.items.filter((item) =>
-              item.issueIds.some((id) => {
-                const issue = issuesById.get(id);
-                return issue ? isBlockingIssue(issue.status) : false;
-              }),
-            ).length;
-            const bodyId = `checklist-section-${section.items[0]?.id}`;
-            return (
-              <Card
-                key={section.section}
-                className="overflow-hidden rounded-xl border-border/70 p-0 shadow-sm"
-              >
-                <button
-                  type="button"
-                  className="flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
-                  aria-expanded={isOpen}
-                  aria-controls={bodyId}
-                  onClick={() =>
-                    setOpenSections((current) => {
-                      const next = new Set(current);
-                      if (next.has(section.section))
-                        next.delete(section.section);
-                      else next.add(section.section);
-                      return next;
-                    })
-                  }
-                >
-                  <span className="flex-1 font-semibold text-foreground">
-                    {section.section}
-                  </span>
-                  {flagged > 0 ? (
-                    <span className="flex items-center gap-1 text-xs font-semibold text-destructive-ink">
-                      <Flag className="size-3.5" aria-hidden="true" />
-                      {flagged} flagged
-                    </span>
-                  ) : null}
-                  <span
-                    className={cn(
-                      "font-mono text-xs tabular-nums",
-                      reviewed === section.items.length
-                        ? "text-success-ink"
-                        : "text-muted-foreground",
-                    )}
-                  >
-                    {reviewed}/{section.items.length}
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      "size-4 text-muted-foreground transition-transform motion-reduce:transition-none",
-                      isOpen && "rotate-180",
-                    )}
-                    aria-hidden="true"
-                  />
-                </button>
-                {isOpen ? (
-                  <ul
-                    id={bodyId}
-                    className="list-none divide-y divide-border/70 border-t border-border/70"
-                  >
-                    {section.items.map((item) => (
-                      <ChecklistItemRow
-                        key={item.id}
-                        item={item}
-                        issues={item.issueIds
-                          .map((id) => issuesById.get(id))
-                          .filter(
-                            (issue): issue is ChecklistIssueView => !!issue,
-                          )}
-                        readOnly={readOnly}
-                        projectId={projectId}
-                        checklistId={checklist.id}
-                        onState={(state) => setState.mutate({ item, state })}
-                        onNotApplicable={() => setNaFor(item)}
-                        onRaiseIssue={() => setRaisingFor(item)}
-                        track={track}
-                      />
-                    ))}
-                  </ul>
-                ) : null}
-              </Card>
-            );
-          })}
+          {checklist.sections.map((section) => (
+            <ChecklistSectionCard
+              key={section.section}
+              section={section}
+              issuesById={issuesById}
+              isOpen={openSections.has(section.section)}
+              onToggle={() =>
+                setOpenSections((current) => {
+                  const next = new Set(current);
+                  if (next.has(section.section)) next.delete(section.section);
+                  else next.add(section.section);
+                  return next;
+                })
+              }
+              readOnly={readOnly}
+              projectId={projectId}
+              checklistId={checklist.id}
+              onState={(item, state) => setState.mutate({ item, state })}
+              onNotApplicable={setNaFor}
+              onRaiseIssue={setRaisingFor}
+              track={track}
+            />
+          ))}
         </div>
       )}
 
@@ -470,6 +351,7 @@ function Inspection({
         projectId={projectId}
         readOnly={readOnly}
         track={track}
+        onSaved={refresh}
       />
 
       {configured ? (
@@ -559,491 +441,5 @@ function Inspection({
         onReopened={() => refresh()}
       />
     </div>
-  );
-}
-
-function SaveIndicator({
-  save,
-  readOnly,
-}: {
-  save: SaveState;
-  readOnly: boolean;
-}) {
-  if (readOnly) return null;
-  return (
-    <span
-      className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground"
-      role="status"
-      aria-live="polite"
-    >
-      {save.pending > 0 ? (
-        <>
-          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-          Saving…
-        </>
-      ) : save.failed ? (
-        <span className="font-semibold text-destructive-ink">
-          A change did not save
-        </span>
-      ) : save.savedAt ? (
-        <>
-          <CheckCircle2
-            className="size-3.5 text-success-ink"
-            aria-hidden="true"
-          />
-          All changes saved
-        </>
-      ) : (
-        "Changes save automatically"
-      )}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-function ChecklistItemRow({
-  item,
-  issues,
-  readOnly,
-  projectId,
-  checklistId,
-  onState,
-  onNotApplicable,
-  onRaiseIssue,
-  track,
-}: {
-  item: ChecklistItemView;
-  issues: readonly ChecklistIssueView[];
-  readOnly: boolean;
-  projectId: string;
-  checklistId: string;
-  onState: (state: ChecklistItemState) => void;
-  onNotApplicable: () => void;
-  onRaiseIssue: () => void;
-  track: <T>(work: () => Promise<T>) => Promise<T>;
-}) {
-  const refresh = useRefreshChecklists(projectId);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const trail = useMemo(
-    () => ["Checklists", item.section, item.label],
-    [item.label, item.section],
-  );
-  const photos = useChecklistPhotoUpload(projectId, trail);
-  const blocking = issues.filter((issue) => isBlockingIssue(issue.status));
-  const checkboxId = `checklist-item-${item.id}`;
-  const notApplicable = item.state === "NOT_APPLICABLE";
-
-  const addPhotos = async (files: File[]) => {
-    if (files.length === 0) return;
-    const fileIds = await photos.uploadPhotos(files);
-    if (fileIds.length === 0) return;
-    try {
-      await track(async () => {
-        const result = await attachChecklistPhotosAction({
-          checklistId,
-          fileIds,
-          itemId: item.id,
-          projectId,
-        });
-        if (!result.ok) throw new Error(result.error);
-      });
-      toast.success(
-        `${fileIds.length} photo${fileIds.length === 1 ? "" : "s"} added to ${item.label}.`,
-      );
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "The photos were not attached.",
-      );
-    } finally {
-      refresh();
-    }
-  };
-
-  const removePhoto = async (photo: ChecklistPhoto) => {
-    try {
-      await track(async () => {
-        const result = await removeChecklistPhotoAction({
-          attachmentId: photo.id,
-          checklistId,
-          projectId,
-        });
-        if (!result.ok) throw new Error(result.error);
-      });
-      toast.success("Photo removed.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "The photo was not removed.",
-      );
-    } finally {
-      refresh();
-    }
-  };
-
-  return (
-    <li
-      className={cn(
-        "px-4 py-3",
-        blocking.length > 0
-          && "border-l-4 border-l-destructive bg-destructive-light/30",
-      )}
-    >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-        <div className="flex min-w-0 flex-1 items-start gap-3">
-          {notApplicable ? (
-            <span className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center text-muted-foreground">
-              <Ban className="size-4" aria-hidden="true" />
-            </span>
-          ) : (
-            <Checkbox
-              id={checkboxId}
-              className="mt-0.5"
-              checked={item.state === "CHECKED"}
-              disabled={readOnly}
-              onCheckedChange={(checked) =>
-                onState(checked === true ? "CHECKED" : "UNCHECKED")
-              }
-            />
-          )}
-          <div className="min-w-0">
-            <Label
-              htmlFor={notApplicable ? undefined : checkboxId}
-              className={cn(
-                "text-sm leading-snug font-normal text-foreground",
-                notApplicable && "text-muted-foreground line-through",
-              )}
-            >
-              {item.label}
-            </Label>
-            {notApplicable ? (
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Not applicable: {item.naReason}
-                {!readOnly ? (
-                  <Button
-                    variant="link"
-                    size="xs"
-                    className="ml-1 h-auto px-0"
-                    onClick={() => onState("UNCHECKED")}
-                  >
-                    Undo
-                  </Button>
-                ) : null}
-              </p>
-            ) : null}
-            {issues.length > 0 ? (
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {issues.map((issue) => (
-                  <a
-                    key={issue.id}
-                    href={`#checklist-issue-${issue.id}`}
-                    className="focus-visible:outline-2 focus-visible:outline-ring"
-                  >
-                    <StatusPill
-                      tone={
-                        issue.status === "VERIFIED"
-                          ? "success"
-                          : issue.status === "RESOLVED"
-                            ? "warning"
-                            : "danger"
-                      }
-                    >
-                      <Flag className="mr-1 inline size-3" aria-hidden="true" />
-                      Issue #{issue.number} ·{" "}
-                      {issue.status === "VERIFIED"
-                        ? "Verified"
-                        : issue.status === "RESOLVED"
-                          ? "Awaiting verification"
-                          : issue.status === "IN_PROGRESS"
-                            ? "In progress"
-                            : "Open"}
-                    </StatusPill>
-                  </a>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        {!readOnly ? (
-          <div className="flex shrink-0 flex-wrap gap-1 pl-7 sm:pl-0">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={photos.isUploading}
-              onClick={() => fileRef.current?.click()}
-            >
-              {photos.isUploading ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Camera className="size-4" aria-hidden="true" />
-              )}
-              Add images
-              <span className="sr-only"> for {item.label}</span>
-            </Button>
-            <Button size="sm" variant="outline" onClick={onRaiseIssue}>
-              <CircleAlert
-                className="size-4 text-destructive-ink"
-                aria-hidden="true"
-              />
-              Raise issue
-              <span className="sr-only"> on {item.label}</span>
-            </Button>
-            {!notApplicable && blocking.length === 0 ? (
-              <Button size="sm" variant="ghost" onClick={onNotApplicable}>
-                N/A
-                <span className="sr-only"> – {item.label} does not apply</span>
-              </Button>
-            ) : null}
-            <input
-              ref={fileRef}
-              type="file"
-              accept={PHOTO_ACCEPT}
-              multiple
-              className="sr-only"
-              tabIndex={-1}
-              onChange={(event) => {
-                const files = Array.from(event.target.files ?? []);
-                event.target.value = "";
-                void addPhotos(files);
-              }}
-            />
-          </div>
-        ) : null}
-      </div>
-
-      {item.photos.length > 0 || photos.uploads.length > 0 ? (
-        <PhotoStrip
-          photos={item.photos}
-          uploads={photos.uploads}
-          readOnly={readOnly}
-          onRemove={removePhoto}
-          onDismiss={photos.dismiss}
-        />
-      ) : null}
-    </li>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-/** Checked and completed by, and Additional Comments: saved as typed. */
-function ChecklistDetailsForm({
-  checklist,
-  projectId,
-  readOnly,
-  track,
-}: {
-  checklist: ChecklistDetail;
-  projectId: string;
-  readOnly: boolean;
-  track: <T>(work: () => Promise<T>) => Promise<T>;
-}) {
-  const [comments, setComments] = useState(checklist.comments ?? "");
-  const [checkedBy, setCheckedBy] = useState(checklist.checkedBy ?? "");
-  const saved = useRef({
-    checkedBy: checklist.checkedBy ?? "",
-    comments: checklist.comments ?? "",
-  });
-
-  useEffect(() => {
-    if (readOnly) return;
-    if (
-      comments === saved.current.comments
-      && checkedBy === saved.current.checkedBy
-    ) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      void track(async () => {
-        const result = await updateChecklistDetailsAction({
-          checkedBy,
-          checklistId: checklist.id,
-          comments,
-          projectId,
-        });
-        if (!result.ok) throw new Error(result.error);
-        saved.current = { checkedBy, comments };
-      }).catch((error: unknown) =>
-        toast.error(
-          error instanceof Error ? error.message : "The comments did not save.",
-        ),
-      );
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [checkedBy, checklist.id, comments, projectId, readOnly, track]);
-
-  return (
-    <Card className="grid gap-4 rounded-xl border-border/70 p-4 shadow-sm">
-      <div className="space-y-1.5">
-        <Label htmlFor="checklist-checked-by">Checked and completed by</Label>
-        <Input
-          id="checklist-checked-by"
-          value={checkedBy}
-          maxLength={120}
-          disabled={readOnly}
-          onChange={(event) => setCheckedBy(event.target.value)}
-          className="max-w-md"
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="checklist-comments">Additional comments</Label>
-        <Textarea
-          id="checklist-comments"
-          value={comments}
-          rows={4}
-          maxLength={5000}
-          disabled={readOnly}
-          onChange={(event) => setComments(event.target.value)}
-        />
-      </div>
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-function SignOffPanel({
-  checklist,
-  blockers,
-  isAdmin,
-  onClose,
-  onReopen,
-}: {
-  checklist: ChecklistDetail;
-  blockers: ReturnType<
-    typeof closureBlockers<ChecklistItemView, ChecklistIssueView>
-  >;
-  isAdmin: boolean;
-  onClose: () => void;
-  onReopen: () => void;
-}) {
-  if (checklist.status === "CLOSED") {
-    return (
-      <Card className="grid gap-3 rounded-xl border-border/70 p-4 shadow-sm">
-        <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
-          <ShieldCheck className="size-4 text-success-ink" aria-hidden="true" />
-          Reviewer sign-off
-        </h3>
-        {checklist.closure ? (
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div>
-              <p className="text-xs text-muted-foreground">
-                Name of the reviewer
-              </p>
-              <p className="font-medium text-foreground">
-                {checklist.closure.reviewerName}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Signature</p>
-              {/* eslint-disable-next-line @next/next/no-img-element -- a data URL */}
-              <img
-                src={checklist.closure.signatureDataUrl}
-                alt={`Signature of ${checklist.closure.reviewerName}`}
-                className="mt-1 h-16 rounded border border-border/70 bg-white object-contain"
-              />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Date</p>
-              <p className="font-medium text-foreground">
-                {formatDateTime(checklist.closure.signedAt)}
-              </p>
-            </div>
-          </div>
-        ) : null}
-        {isAdmin ? (
-          <div>
-            <Button variant="outline" size="sm" onClick={onReopen}>
-              <Unlock className="size-4" aria-hidden="true" />
-              Reopen checklist
-            </Button>
-          </div>
-        ) : null}
-      </Card>
-    );
-  }
-
-  const unreviewedBySection = new Map<string, number>();
-  for (const item of blockers.unreviewed) {
-    unreviewedBySection.set(
-      item.section,
-      (unreviewedBySection.get(item.section) ?? 0) + 1,
-    );
-  }
-
-  return (
-    <Card className="grid gap-3 rounded-xl border-border/70 p-4 shadow-sm">
-      <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
-        <ShieldCheck
-          className="size-4 text-muted-foreground"
-          aria-hidden="true"
-        />
-        Reviewer sign-off
-      </h3>
-      {blockers.canClose ? (
-        <p className="text-sm text-muted-foreground">
-          Every item is reviewed and every issue is verified. Sign to close the
-          checklist.
-        </p>
-      ) : (
-        <div className="grid gap-2 text-sm">
-          <p className="font-medium text-foreground">
-            The checklist can be closed once:
-          </p>
-          <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-            {blockers.unreviewed.length > 0 ? (
-              <li>
-                {blockers.unreviewed.length} inspection item
-                {blockers.unreviewed.length === 1 ? " is" : "s are"} reviewed (
-                {[...unreviewedBySection.entries()]
-                  .map(([section, count]) => `${section} ${count}`)
-                  .join(", ")}
-                )
-              </li>
-            ) : null}
-            {blockers.unresolved.length > 0 ? (
-              <li>
-                Open or in-progress issues are resolved:{" "}
-                {blockers.unresolved.map((issue, index) => (
-                  <span key={issue.id}>
-                    {index > 0 ? ", " : ""}
-                    <a
-                      className="text-primary underline-offset-2 hover:underline"
-                      href={`#checklist-issue-${issue.id}`}
-                    >
-                      #{issue.number}
-                    </a>
-                  </span>
-                ))}
-              </li>
-            ) : null}
-            {blockers.awaitingVerification.length > 0 ? (
-              <li>
-                Resolved issues are verified by the reviewer:{" "}
-                {blockers.awaitingVerification.map((issue, index) => (
-                  <span key={issue.id}>
-                    {index > 0 ? ", " : ""}
-                    <a
-                      className="text-primary underline-offset-2 hover:underline"
-                      href={`#checklist-issue-${issue.id}`}
-                    >
-                      #{issue.number}
-                    </a>
-                  </span>
-                ))}
-              </li>
-            ) : null}
-          </ul>
-        </div>
-      )}
-      <div>
-        <Button disabled={!blockers.canClose} onClick={onClose}>
-          <ShieldCheck className="size-4" aria-hidden="true" />
-          Close checklist
-        </Button>
-      </div>
-    </Card>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { Camera, Check, Loader2, Mail, Save } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { Loader2, Mail, Save } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -28,15 +28,14 @@ import type {
   ChecklistDetail,
   ChecklistItemView,
 } from "@/lib/domain/projects/checklists";
-import { cn } from "@/lib/utils";
 
 import {
-  PHOTO_ACCEPT,
   newRequestKey,
   useChecklistPhotoUpload,
   useRefreshChecklists,
 } from "./checklist-client";
-import { IssueEmailFields } from "./checklist-dialogs";
+import { IssueEmailFields } from "./checklist-email-dialog";
+import { IssueEvidencePicker } from "./issue-evidence-picker";
 
 // Raise Issue (issue #420): describe the defect, attach the photos, pick the
 // responsible tradie, review the email, then save — with or without sending.
@@ -69,7 +68,6 @@ export function RaiseIssueDialog({
     [item.label, item.section],
   );
   const photos = useChecklistPhotoUpload(projectId, trail);
-  const fileRef = useRef<HTMLInputElement>(null);
   // One key per opening of the dialog: a double-click or a retry after a
   // timeout returns the issue already raised.
   const [requestKey] = useState(newRequestKey);
@@ -78,11 +76,13 @@ export function RaiseIssueDialog({
   const [comments, setComments] = useState("");
   const [tradieId, setTradieId] = useState(UNASSIGNED);
   const [evidence, setEvidence] = useState<Set<string>>(new Set());
-  // The reviewer's edits to the email; until then it follows the form.
-  const [edited, setEdited] = useState<{
-    subject: string;
-    body: string;
-  } | null>(null);
+  // The reviewer's edits to each email field. A field nobody has touched
+  // keeps following the form; editing one never freezes the other.
+  const [subjectEdit, setSubjectEdit] = useState<string | null>(null);
+  const [bodyEdit, setBodyEdit] = useState<string | null>(null);
+  // Photos uploaded here but not yet linked to the row. Save waits for them,
+  // or the issue would be raised without the evidence just added.
+  const [attaching, setAttaching] = useState(false);
   const [confirmingSend, setConfirmingSend] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,8 +122,8 @@ export function RaiseIssueDialog({
       tradie?.name,
     ],
   );
-  const subject = edited?.subject ?? draft.subject;
-  const body = edited?.body ?? draft.body;
+  const subject = subjectEdit ?? draft.subject;
+  const body = bodyEdit ?? draft.body;
 
   const toggleEvidence = (fileId: string) =>
     setEvidence((current) => {
@@ -137,20 +137,25 @@ export function RaiseIssueDialog({
   // inspection photos rather than orphaning them; they are then preselected.
   const addPhotos = async (files: File[]) => {
     if (files.length === 0) return;
-    const fileIds = await photos.uploadPhotos(files);
-    if (fileIds.length === 0) return;
-    const result = await attachChecklistPhotosAction({
-      checklistId: checklist.id,
-      fileIds,
-      itemId: item.id,
-      projectId,
-    }).catch(() => null);
-    if (!result?.ok) {
-      setError(result?.error ?? "The photos were uploaded but not attached.");
-      return;
+    setAttaching(true);
+    try {
+      const fileIds = await photos.uploadPhotos(files);
+      if (fileIds.length === 0) return;
+      const result = await attachChecklistPhotosAction({
+        checklistId: checklist.id,
+        fileIds,
+        itemId: item.id,
+        projectId,
+      }).catch(() => null);
+      if (!result?.ok) {
+        setError(result?.error ?? "The photos were uploaded but not attached.");
+        return;
+      }
+      setEvidence((current) => new Set([...current, ...fileIds]));
+      await refresh();
+    } finally {
+      setAttaching(false);
     }
-    setEvidence((current) => new Set([...current, ...fileIds]));
-    await refresh();
   };
 
   const submit = async (send: boolean) => {
@@ -196,7 +201,7 @@ export function RaiseIssueDialog({
   };
 
   const photoCount = evidence.size;
-  const busy = pending || photos.isUploading;
+  const busy = pending || attaching || photos.isUploading;
 
   return (
     <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
@@ -235,106 +240,16 @@ export function RaiseIssueDialog({
             />
           </div>
 
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-foreground">
-              Evidence{" "}
-              <span className="font-normal text-muted-foreground">
-                · {photoCount} photo{photoCount === 1 ? "" : "s"} attached
-              </span>
-            </legend>
-            {rowPhotos.length > 0 ? (
-              <ul className="flex list-none flex-wrap gap-2">
-                {rowPhotos.map((photo) => {
-                  const selected = evidence.has(photo.fileId);
-                  return (
-                    <li key={photo.id}>
-                      <button
-                        type="button"
-                        aria-pressed={selected}
-                        aria-label={`${selected ? "Remove" : "Attach"} ${photo.filename}`}
-                        disabled={pending}
-                        onClick={() => toggleEvidence(photo.fileId)}
-                        className={cn(
-                          "relative block overflow-hidden rounded-md border-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                          selected
-                            ? "border-primary"
-                            : "border-transparent opacity-70",
-                        )}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element -- Blob thumbnails */}
-                        <img
-                          src={photo.url}
-                          alt=""
-                          className="h-20 w-24 object-cover"
-                        />
-                        {selected ? (
-                          <span className="absolute right-1 top-1 rounded-full bg-primary p-0.5 text-primary-foreground">
-                            <Check className="size-3" aria-hidden="true" />
-                          </span>
-                        ) : null}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : null}
-            {photos.uploads.length > 0 ? (
-              <ul className="list-none space-y-1 text-xs">
-                {photos.uploads.map((upload) => (
-                  <li key={upload.id} className="flex items-center gap-2">
-                    {upload.error ? (
-                      <>
-                        <span className="text-destructive-ink">
-                          {upload.name}: {upload.error}
-                        </span>
-                        <Button
-                          size="xs"
-                          variant="ghost"
-                          onClick={() => photos.dismiss(upload.id)}
-                        >
-                          Dismiss
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Loader2
-                          className="size-3.5 animate-spin"
-                          aria-hidden="true"
-                        />
-                        <span className="truncate">{upload.name}</span>
-                        <span className="font-mono tabular-nums">
-                          {Math.round(upload.progress)}%
-                        </span>
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() => fileRef.current?.click()}
-            >
-              <Camera className="size-4" aria-hidden="true" />
-              Add photos
-            </Button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept={PHOTO_ACCEPT}
-              multiple
-              className="sr-only"
-              tabIndex={-1}
-              onChange={(event) => {
-                const files = Array.from(event.target.files ?? []);
-                event.target.value = "";
-                void addPhotos(files);
-              }}
-            />
-          </fieldset>
+          <IssueEvidencePicker
+            rowPhotos={rowPhotos}
+            evidence={evidence}
+            onToggle={toggleEvidence}
+            uploads={photos.uploads}
+            onDismiss={photos.dismiss}
+            disabled={pending}
+            adding={busy}
+            onFiles={(files) => void addPhotos(files)}
+          />
 
           <div className="space-y-1.5">
             <Label htmlFor="issue-tradie">Assigned tradie</Label>
@@ -409,16 +324,19 @@ export function RaiseIssueDialog({
               subject={subject}
               body={body}
               disabled={pending}
-              onSubject={(value) => setEdited({ body, subject: value })}
-              onBody={(value) => setEdited({ body: value, subject })}
+              onSubject={setSubjectEdit}
+              onBody={setBodyEdit}
             />
-            {edited ? (
+            {subjectEdit !== null || bodyEdit !== null ? (
               <Button
                 type="button"
                 variant="link"
                 size="xs"
                 className="h-auto px-0"
-                onClick={() => setEdited(null)}
+                onClick={() => {
+                  setSubjectEdit(null);
+                  setBodyEdit(null);
+                }}
               >
                 Reset to the suggested email
               </Button>

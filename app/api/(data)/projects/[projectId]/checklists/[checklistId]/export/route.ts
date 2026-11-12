@@ -1,13 +1,12 @@
 import { auth } from "@clerk/nextjs/server";
 import type { NextRequest } from "next/server";
-import { z } from "zod";
-
 import { checklistPorts } from "@/lib/data/checklists";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { userPrincipal } from "@/lib/domain/principal";
 import { exportChecklistDocument } from "@/lib/domain/projects/checklist-export";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
+import { checklistExportSchema } from "@/utils/validators/checklists";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -19,11 +18,6 @@ import {
 // belong in a body rather than a URL. The domain decides whether it prints as
 // final or as a draft; this renders and streams it.
 
-const exportSchema = z.object({
-  reviewerName: z.string().max(120),
-  signatureDataUrl: z.string().max(300_000),
-});
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ projectId: string; checklistId: string }> },
@@ -32,7 +26,7 @@ export async function POST(
   if (!userId) return unauthorizedResponse();
   const user = await getUserByClerkIdCached(userId);
   if (!user) return unauthorizedResponse();
-  const body = await parseBodyWithResponse(request, exportSchema);
+  const body = await parseBodyWithResponse(request, checklistExportSchema);
   if (!body.success) return body.response;
   const { checklistId, projectId } = await params;
 
