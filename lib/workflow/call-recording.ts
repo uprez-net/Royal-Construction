@@ -1,6 +1,6 @@
 import { FatalError, RetryableError, getStepMetadata } from "workflow";
 
-import { vercelPrivateBlobPut } from "@/lib/blob-port";
+import { vercelRecordingBlobPut } from "@/lib/blob-port";
 import { commsRuntimeFromEnv } from "@/lib/comms/factory";
 import { storeCallRecording } from "@/lib/domain/comms/calls/recordings";
 import { DomainSideEffectError, isDomainError } from "@/lib/domain/errors";
@@ -25,7 +25,7 @@ async function storeOne(recordingId: string): Promise<string> {
       systemPrincipal("workflow:call-recording"),
       { recordingId },
       prisma,
-      { put: vercelPrivateBlobPut, recordingsFor: runtime.recordingsFor },
+      { put: vercelRecordingBlobPut, recordingsFor: runtime.recordingsFor },
     );
   } catch (error) {
     // The step's own error is deliberately plain; the cause is what someone

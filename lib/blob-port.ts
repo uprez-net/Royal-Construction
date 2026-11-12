@@ -48,21 +48,19 @@ function privateBlobToken(): string | null {
 }
 
 /**
- * Put for objects nobody should reach without signing in (call recordings).
+ * Put for call recordings.
  *
- * Writes only to the private store, and fails closed when none is configured:
- * a recording must never land in the public store. It stays at the carrier,
- * and the daily comms sweep tries again once the token is set. The stored URL
- * must only be read through `readStoredBlob` in an authenticated route, never
- * handed to a browser.
+ * The private store when one is configured (BLOB_PRIVATE_READ_WRITE_TOKEN).
+ * Without it — staging today, by the business's decision on 2026-11-12 — the
+ * main store, so recordings are kept rather than failing: the pathname the
+ * domain chooses is an unguessable 128-bit name, and the stored URL is only
+ * ever read through `readStoredBlob` in an authenticated route, never handed
+ * to a browser. Adding the private store later moves new recordings there
+ * with no code change.
  */
-export const vercelPrivateBlobPut: BlobPutPort = async (input) => {
+export const vercelRecordingBlobPut: BlobPutPort = async (input) => {
   const token = privateBlobToken();
-  if (!token) {
-    throw new Error(
-      "BLOB_PRIVATE_READ_WRITE_TOKEN is not set, so a private object can't be stored.",
-    );
-  }
+  if (!token) return vercelBlobPut(input);
   const body =
     typeof input.body === "string"
       ? input.body

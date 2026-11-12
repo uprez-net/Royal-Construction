@@ -58,9 +58,7 @@ test("storage refusing the upload is recorded on the recording and retried", asy
   const harness = recordingDb({ "callRecording.findUnique": pending() });
   const port = telnyx();
   const put: BlobPutPort = async () => {
-    throw new Error(
-      "BLOB_PRIVATE_READ_WRITE_TOKEN is not set, so a private object can't be stored.",
-    );
+    throw new Error("store unavailable: blob put refused");
   };
   await assert.rejects(
     storeCallRecording(SYSTEM, { recordingId: "rec-1" }, harness.db, {
@@ -73,7 +71,7 @@ test("storage refusing the upload is recorded on the recording and retried", asy
   const last = updates(harness).at(-1);
   assert.match(
     String(last?.failureReason),
-    /couldn't be saved to storage\. BLOB_PRIVATE_READ_WRITE_TOKEN is not set/,
+    /couldn't be saved to storage\. store unavailable: blob put refused/,
   );
   assert.equal(last?.status, undefined, "still pending: it will be retried");
   assert.deepEqual(
