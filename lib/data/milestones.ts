@@ -255,6 +255,7 @@ export async function updateMilestone(
       projectStatus: outcome.projectStatus,
       projectSpent: outcome.projectSpent,
       projectStartDate: outcome.projectStartDate,
+      replanned: outcome.replannedActivities,
       settledBookings: outcome.settledBookings,
     },
   };

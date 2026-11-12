@@ -319,6 +319,8 @@ test("template saves remove obsolete rows and keep parent links on stable IDs", 
       );
       return row;
     },
+    // No project activity is open against "a", whose duration changes.
+    "milestone.findMany": [],
   });
   const next = [
     activity("a", 1, { estimatedDays: 8 }),
@@ -346,6 +348,8 @@ test("template saves release positions in bulk and restore unchanged rows withou
     "milestoneTemplate.findMany": rows.map(dbRow),
     "tradeType.findMany": [],
     "adminOfferContent.findFirst": null,
+    // No project activity is open against the changed row.
+    "milestone.findMany": [],
   });
   await saveMilestoneTemplate(
     adminPrincipal(),
@@ -536,4 +540,90 @@ test("new cost-line mappings must name an admin cost-schedule task", async () =>
       .writes()
       .some((call) => call.operation === "milestoneTemplate.upsert"),
   );
+});
+
+test("a changed duration reaches open project activities, re-plans what follows, and leaves completed ones alone", async () => {
+  const rows = [activity("frame", 1), activity("roof", 2)];
+  const day = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
+  const recorder = recordingDb({
+    "milestoneTemplate.findMany": rows.map(dbRow),
+    "tradeType.findMany": [],
+    "adminOfferContent.findFirst": null,
+    "milestone.findMany": (args: unknown) => {
+      const where = (args as { where: Record<string, unknown> }).where;
+      // The open activities created from the changed build-sequence row.
+      if (where.templateId === "frame") return [{ id: "job-frame" }];
+      // The changed activities, read back with their new duration.
+      if (where.id)
+        return [
+          {
+            estimatedDays: 3,
+            id: "job-frame",
+            projectId: "job",
+            startDate: null,
+            targetDate: day("2026-11-12"),
+          },
+        ];
+      // The project's whole sequence, for the re-plan.
+      return [
+        {
+          actualDate: day("2026-11-12"),
+          estimatedDays: 2,
+          id: "job-slab",
+          startDate: day("2026-11-10"),
+          status: MS.DONE,
+          targetDate: day("2026-11-10"),
+        },
+        {
+          actualDate: null,
+          estimatedDays: 3,
+          id: "job-frame",
+          startDate: null,
+          status: MS.PENDING,
+          targetDate: day("2026-11-12"),
+        },
+        {
+          actualDate: null,
+          estimatedDays: 2,
+          id: "job-roof",
+          startDate: null,
+          status: MS.PENDING,
+          targetDate: day("2026-11-14"),
+        },
+      ];
+    },
+  });
+
+  await saveMilestoneTemplate(
+    adminPrincipal(),
+    {
+      revision: templateRevision(rows),
+      activities: [{ ...rows[0], estimatedDays: 3 }, rows[1]],
+    },
+    recorder.transactionalDb,
+  );
+
+  const [openRead] = recorder.calls.filter(
+    (call) =>
+      call.operation === "milestone.findMany"
+      && (call.args as { where: { templateId?: string } }).where.templateId,
+  );
+  // Only activities not yet completed take the new duration.
+  assert.deepEqual(
+    (openRead.args as { where: { status: unknown } }).where.status,
+    { in: [MS.PENDING, MS.ACTIVE] },
+  );
+
+  const writes = recorder
+    .writes()
+    .filter((write) => write.operation === "milestone.updateMany")
+    .map((write) => write.args);
+  assert.deepEqual(writes, [
+    { data: { estimatedDays: 3 }, where: { id: { in: ["job-frame"] } } },
+    // Frame now runs three days from 12 Nov, so roof starts on the 15th.
+    {
+      data: { targetDate: day("2026-11-15") },
+      where: { id: "job-roof", status: MS.PENDING },
+    },
+  ]);
 });

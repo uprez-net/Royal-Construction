@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { Prisma, ProjectStage } from "@prisma/client";
+import { MilestoneStatus, Prisma, ProjectStage } from "@prisma/client";
 import type { DomainDb } from "../db";
 import {
   DomainNotFoundError,
@@ -14,6 +14,7 @@ import type {
 } from "@/types/milestone-template";
 import { coerceCostSchedule } from "../admin/offer-content-coerce";
 import { moveTemplateActivity, templateDescendants } from "./template-tree";
+import { replanAfterDurationChange } from "./milestones";
 
 export async function listTemplateCostTasks(
   principal: DomainPrincipal,
@@ -146,6 +147,41 @@ export async function readMilestoneTemplate(
 }
 
 /**
+ * Carry a changed duration onto the project activities still open against it.
+ *
+ * Issue #422: the build sequence is where an activity's duration is managed,
+ * so changing it there re-plans the work not yet finished. PENDING and ACTIVE
+ * activities take the new duration; a DONE activity keeps the one it was
+ * planned with, because its estimated end is part of its history ("finished
+ * 2 days late" has to stay true). NOT_REQUIRED takes no time either way.
+ */
+async function applyDurationChanges(
+  tx: DomainDb,
+  rows: readonly TemplateActivity[],
+  previousById: ReadonlyMap<string, TemplateActivity>,
+): Promise<void> {
+  const changedIds: string[] = [];
+  for (const row of rows) {
+    const previous = previousById.get(row.id);
+    if (!previous || previous.estimatedDays === row.estimatedDays) continue;
+    const open = await tx.milestone.findMany({
+      select: { id: true },
+      where: {
+        status: { in: [MilestoneStatus.PENDING, MilestoneStatus.ACTIVE] },
+        templateId: row.id,
+      },
+    });
+    if (open.length === 0) continue;
+    await tx.milestone.updateMany({
+      data: { estimatedDays: row.estimatedDays },
+      where: { id: { in: open.map((milestone) => milestone.id) } },
+    });
+    changedIds.push(...open.map((milestone) => milestone.id));
+  }
+  await replanAfterDurationChange({ milestoneIds: changedIds }, tx);
+}
+
+/**
  * Whole-template save: a stale tab cannot overwrite a later edit. Opens a
  * serializable transaction, or joins the caller's serializable transaction
  * so Eve can commit the template and its audit result together.
@@ -240,6 +276,7 @@ export async function saveMilestoneTemplate(
           update: { ...data, requiredTradeTypes: { set: trades } },
         });
       }
+      await applyDurationChanges(tx, inOrder, currentById);
       return readMilestoneTemplate(principal, tx);
     };
     return "$transaction" in db

@@ -28,7 +28,9 @@ import { logActionOrThrow } from "../audit/action-log";
 import { attributionUserId } from "../principal";
 
 import {
+  milestoneEndDate,
   milestoneTargetDates,
+  replanFollowingActivities,
   STARTED_MILESTONE_STATUSES,
 } from "./milestone-schedule";
 import { settleMilestoneBookings } from "../tradies/settlement";
@@ -275,6 +277,15 @@ export type UpdateMilestoneOutcome = {
    * Null otherwise.
    */
   readonly projectStartDate: Date | null;
+  /**
+   * Open activities re-planned because this update closed an activity: each
+   * one after it in the sequence now starts the day it closed (issue #422).
+   * Empty when nothing moved.
+   */
+  readonly replannedActivities: readonly {
+    readonly id: string;
+    readonly targetDate: Date;
+  }[];
   /**
    * Bookings this update settled: completed or cancelled because the milestone
    * they were for (or the parent it rolled up) was settled. Empty otherwise.
@@ -561,6 +572,18 @@ export async function updateMilestone(
     select: { siteManagerId: true, spent: true },
   });
 
+  // Closing an activity is what plans the next one: it starts the day this one
+  // was completed, and is due that day plus its own duration. Only on the
+  // close itself -- a later edit to a completed activity's spend is not a new
+  // completion and must not move anything.
+  const replannedActivities =
+    statusChanged && input.status === MilestoneStatus.DONE && actualDate
+      ? await replanAfterActivity(
+          { from: actualDate, milestoneId: updated.id, projectId },
+          db,
+        )
+      : [];
+
   const stageClaim = settled
     ? await resolveDueStageClaim({ milestoneId: updated.id, projectId }, db)
     : null;
@@ -602,6 +625,7 @@ export async function updateMilestone(
     projectSpent: project.spent.toString(),
     projectStartDate,
     projectStatus,
+    replannedActivities,
     rolledUpParentId,
     settledBookings,
     siteManagerId: project.siteManagerId,
@@ -671,6 +695,99 @@ export async function attachMilestonePhotos(
     projectId,
     siteManagerId,
   };
+}
+
+/**
+ * Re-plan the open activities after one activity, from a given day.
+ *
+ * Not a command: `updateMilestone` calls it when an activity closes, and the
+ * build-sequence save calls it when a duration changes, each inside the
+ * transaction that made the change. The rule itself is the pure
+ * `replanFollowingActivities`; this reads the sequence and writes what moved.
+ */
+export async function replanAfterActivity(
+  input: {
+    readonly projectId: string;
+    readonly milestoneId: string;
+    readonly from: Date;
+  },
+  db: DomainDb,
+): Promise<{ id: string; targetDate: Date }[]> {
+  const ordered = await db.milestone.findMany({
+    orderBy: { order: "asc" },
+    select: {
+      actualDate: true,
+      estimatedDays: true,
+      id: true,
+      startDate: true,
+      status: true,
+      targetDate: true,
+    },
+    where: { projectId: input.projectId },
+  });
+  const index = ordered.findIndex((row) => row.id === input.milestoneId);
+  if (index === -1) return [];
+
+  const changes = replanFollowingActivities(ordered, index, input.from);
+  for (const change of changes) {
+    // Conditional on PENDING, so an activity started between the read and
+    // this write -- a second tab -- keeps the plan it was started against.
+    await db.milestone.updateMany({
+      data: { targetDate: change.targetDate },
+      where: { id: change.id, status: MilestoneStatus.PENDING },
+    });
+  }
+  return changes;
+}
+
+/**
+ * Re-plan every open project activity that follows a build-sequence row whose
+ * duration just changed.
+ *
+ * The changed activity's own deadline moves by itself -- it is its start plus
+ * its duration -- but each PENDING activity after it was planned from that
+ * deadline, so the rest of the sequence is re-planned from the activity's new
+ * estimated end. Completed activities are never touched.
+ */
+export async function replanAfterDurationChange(
+  input: { readonly milestoneIds: readonly string[] },
+  db: DomainDb,
+): Promise<number> {
+  if (input.milestoneIds.length === 0) return 0;
+  const changed = await db.milestone.findMany({
+    orderBy: { order: "asc" },
+    select: {
+      estimatedDays: true,
+      id: true,
+      projectId: true,
+      startDate: true,
+      targetDate: true,
+    },
+    where: { id: { in: [...input.milestoneIds] } },
+  });
+
+  // The earliest changed activity on each project: re-planning from it covers
+  // every later one, whose own new duration the walk reads as it passes.
+  const earliestByProject = new Map<string, (typeof changed)[number]>();
+  for (const row of changed) {
+    if (!earliestByProject.has(row.projectId)) {
+      earliestByProject.set(row.projectId, row);
+    }
+  }
+
+  let moved = 0;
+  for (const row of earliestByProject.values()) {
+    const changes = await replanAfterActivity(
+      {
+        from: milestoneEndDate(row),
+        milestoneId: row.id,
+        projectId: row.projectId,
+      },
+      db,
+    );
+    moved += changes.length;
+  }
+  return moved;
 }
 
 /**
@@ -816,6 +933,7 @@ export async function createMilestonesFromTemplate(
       order: record.order,
       targetDate: record.targetDate,
       estimatedDays: record.estimatedDays,
+      templateId: record.templateId,
       parentId:
         record.parentId === null || record.parentId === undefined
           ? null

@@ -277,6 +277,8 @@ export type MilestoneUpdateResult = SafeMilestone & {
     projectStatus: ProjectStatus | null;
     projectSpent: string;
     projectStartDate: Date | null;
+    /** Open activities re-planned from this one's completion (issue #422). */
+    replanned: { id: string; targetDate: Date }[];
     settledBookings: { completed: string[]; cancelled: string[] };
   };
 };

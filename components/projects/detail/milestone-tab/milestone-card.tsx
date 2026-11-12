@@ -22,7 +22,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
-  activeOverdueDays,
+  openOverdueDays,
   daysLate,
   duenessOf,
   isSettled,
@@ -105,6 +105,10 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
       <MetaItem icon={<CheckCircle2 className="size-3.5 text-success-ink" />}>
         Completed{" "}
         <span className="font-mono tabular-nums">{shortDate(actual)}</span>
+        {" · est. "}
+        <span className="font-mono tabular-nums">
+          {shortDate(milestoneEndDate(milestone))}
+        </span>
         {late > 0 ? ` · ${late}d late` : null}
       </MetaItem>
     );
@@ -144,6 +148,26 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
         {dueness.kind === "soon" ? ` · in ${dueness.days}d` : null}
       </span>
     </MetaItem>
+  );
+}
+
+/**
+ * The activity immediately before this one in the build sequence, skipping
+ * anything waived. Its completion is what this activity was planned from
+ * (issue #422), so the row says when that was.
+ */
+function previousActivity(
+  milestone: UIMilestone,
+  all: readonly ProjectDetail["milestones"][number][],
+) {
+  return (
+    all
+      .filter(
+        (row) =>
+          row.order < milestone.order
+          && row.status !== MilestoneStatus.NOT_REQUIRED,
+      )
+      .sort((a, b) => b.order - a.order)[0] ?? null
   );
 }
 
@@ -198,7 +222,12 @@ export function MilestoneCard({
     milestone,
     project.tradieSchedules,
   );
-  const runningOverdueDays = activeOverdueDays(milestone, new Date());
+  const runningOverdueDays = openOverdueDays(milestone, new Date());
+  const previous = previousActivity(milestone, project.milestones);
+  const previousCompleted =
+    previous?.status === MilestoneStatus.DONE && previous.actualDate
+      ? new Date(previous.actualDate)
+      : null;
   // The project's own list, so a booking made on this page shows here at once.
   const bookings = project.tradieSchedules.filter(
     (schedule) => schedule.milestoneId === milestone.id,
@@ -266,6 +295,28 @@ export function MilestoneCard({
 
           <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <DuenessLine milestone={milestone} />
+
+            {isNotRequired ? null : (
+              <span>
+                <span className="font-mono tabular-nums">
+                  {milestone.estimatedDays}
+                </span>
+                -day duration
+              </span>
+            )}
+
+            {previousCompleted && !isNotRequired ? (
+              <span
+                title={
+                  previous ? `Previous activity: ${previous.name}` : undefined
+                }
+              >
+                Previous done{" "}
+                <span className="font-mono tabular-nums">
+                  {shortDate(previousCompleted)}
+                </span>
+              </span>
+            ) : null}
 
             {isAdmin && Number(milestone.budget) > 0 ? (
               <MetaItem icon={<DollarSign className="size-3.5" />}>

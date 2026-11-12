@@ -91,6 +91,9 @@ function fixture(initial = [row("a", 1), row("b", 2)]) {
   const transactions: { options: unknown; operations: string[] }[] = [];
   const recorder = recordingDb({
     "user.findUnique": () => ({ id: "owner", name: "Owner", role }),
+    // No project activity is open against a changed duration here; the
+    // propagation itself is covered in tests/projects/milestone-template.
+    "milestone.findMany": [],
     "agentSession.findUnique": () => ({
       id: "registered-session",
       ownerUserId: owner,

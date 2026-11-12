@@ -3,21 +3,22 @@ import { test } from "vitest";
 import { MilestoneStatus } from "@prisma/client";
 import { milestoneEndDate } from "@/lib/domain/projects/milestone-schedule";
 import {
-  activeOverdueDays,
+  openOverdueDays,
   daysLate,
   duenessOf,
 } from "@/lib/projects/milestone-ledger";
 
-test("planned starts gain the stored calendar duration, including month boundaries and the legacy default", () => {
+test("planned starts gain the stored calendar duration, including month boundaries and the two-day default", () => {
   const targetDate = new Date("2026-01-29T09:00:00");
   const original = targetDate.getTime();
   assert.equal(
     milestoneEndDate({ targetDate, estimatedDays: 5 }).getTime(),
     new Date("2026-02-03T09:00:00").getTime(),
   );
+  // Issue #422: an activity with no duration of its own takes two days.
   assert.equal(
     milestoneEndDate({ targetDate, startDate: null }).getTime(),
-    new Date("2026-02-03T09:00:00").getTime(),
+    new Date("2026-01-31T09:00:00").getTime(),
   );
   assert.equal(
     milestoneEndDate({ targetDate, estimatedDays: 1 }).getTime(),
@@ -78,12 +79,12 @@ test("due text, the active badge and completion lateness share the actual-start 
     days: 2,
   });
   assert.deepEqual(duenessOf(milestone, onEnd), { kind: "today", days: 0 });
-  assert.equal(activeOverdueDays(milestone, onEnd), null);
+  assert.equal(openOverdueDays(milestone, onEnd), null);
   assert.equal(daysLate(milestone, onEnd), 0);
   assert.deepEqual(duenessOf(milestone, afterEnd), {
     kind: "overdue",
     days: -1,
   });
-  assert.equal(activeOverdueDays(milestone, afterEnd), 1);
+  assert.equal(openOverdueDays(milestone, afterEnd), 1);
   assert.equal(daysLate(milestone, afterEnd), 1);
 });
