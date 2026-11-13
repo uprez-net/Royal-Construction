@@ -8,6 +8,7 @@ import {
   projectChunk,
   tradieChunk,
   type ChunkDraft,
+  type OfficeDigestSource,
 } from "./text";
 
 // Reads the CRM and lays it out with ./text. Kept apart from the builders so
@@ -373,9 +374,19 @@ const SIGNATURE_STATUSES = [
   "CONTRACT_SENT",
 ] as const;
 
+/** What the digest reads beyond the records: injected to keep imports one-way. */
+export type OfficeDigestExtras = {
+  /** The documents the index could not read (./files.ts). */
+  readonly unreadDocuments?: (
+    db: DomainDb,
+    now: Date,
+  ) => Promise<NonNullable<OfficeDigestSource["unreadDocuments"]>>;
+};
+
 export async function loadOfficeDigest(
   db: DomainDb,
   now: Date,
+  extras: OfficeDigestExtras = {},
 ): Promise<ChunkDraft> {
   const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   // From the start of today in Sydney, not from now: a meeting is stored on
@@ -392,6 +403,8 @@ export async function loadOfficeDigest(
     activeProjects,
     openComplianceAlerts,
     outstanding,
+    overdueTaskCount,
+    unreadDocuments,
   ] = await Promise.all([
     db.lead.groupBy({
       by: ["stage"],
@@ -464,6 +477,8 @@ export async function loadOfficeDigest(
         status: { notIn: ["DRAFT", "VOIDED", "DELETED"] },
       },
     }),
+    db.leadTask.count({ where: overdueLeadTaskWhere(now) }),
+    extras.unreadDocuments?.(db, now) ?? Promise.resolve([]),
   ]);
 
   return officeDigestChunk({
@@ -489,6 +504,8 @@ export async function loadOfficeDigest(
       offerStatuses.map((row) => [row.offerStatus, row._count._all]),
     ),
     openComplianceAlerts,
+    overdueTaskCount,
+    unreadDocuments,
     outstandingInvoices: {
       amountDue: Number(outstanding._sum.amountDue ?? 0),
       count: outstanding._count._all,
@@ -520,13 +537,14 @@ export async function loadContextChunks(
   db: DomainDb,
   now: Date,
   selection?: ContextSelection,
+  extras: OfficeDigestExtras = {},
 ): Promise<ChunkDraft[]> {
   if (!selection) {
     const [leads, projects, tradies, digest] = await Promise.all([
       loadLeadChunks(db, now),
       loadProjectChunks(db, now),
       loadTradieChunks(db, now),
-      loadOfficeDigest(db, now),
+      loadOfficeDigest(db, now, extras),
     ]);
     return [...leads, ...projects, ...tradies, digest];
   }

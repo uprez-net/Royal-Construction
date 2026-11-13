@@ -34,6 +34,7 @@ import {
   STARTED_MILESTONE_STATUSES,
 } from "./milestone-schedule";
 import { settleMilestoneBookings } from "../tradies/settlement";
+import { sydneyDateOnly, sydneyToday } from "@/lib/dates/sydney";
 
 // Milestones: creation, ordering, the status state machine, the parent
 // roll-up, and what settling one means for the project it belongs to.
@@ -308,6 +309,7 @@ export function assertMilestoneFieldsForStatus(
     UpdateMilestoneInput,
     "status" | "startDate" | "actualDate" | "spend"
   >,
+  now: Date = new Date(),
 ): void {
   if (input.status === MilestoneStatus.ACTIVE && !input.startDate) {
     throw new DomainValidationError(
@@ -342,6 +344,19 @@ export function assertMilestoneFieldsForStatus(
   ) {
     throw new DomainValidationError(
       "Completion date cannot be before start date.",
+      "actualDate",
+    );
+  }
+  // A finished activity finished on a day that has happened. 11 Wheat Street's
+  // "Certifier Inspection" was Done with an actual date of Tue 1 Dec 2026,
+  // weeks ahead (#432), and every report built on it read it as complete.
+  if (
+    input.status === MilestoneStatus.DONE
+    && input.actualDate
+    && sydneyDateOnly(new Date(input.actualDate)) > sydneyToday(now)
+  ) {
+    throw new DomainValidationError(
+      "A completed activity's completion date cannot be in the future.",
       "actualDate",
     );
   }

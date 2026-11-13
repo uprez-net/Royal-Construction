@@ -57,7 +57,11 @@ alone.
 - The office digest is in its instructions from the first message
   (`agent/instructions/office-snapshot.ts`, administrators only). It covers
   leads by stage, offers out for signature, overdue tasks, this week's
-  meetings, jobs in progress, compliance alerts and money owed.
+  meetings, jobs in progress, compliance alerts and money owed. Overdue is
+  `overdueLeadTaskWhere` (`lib/leads/followup-due.ts`), the same rule as the
+  lead specialist's `list_overdue_lead_tasks`; the digest gives the full count
+  and lists the oldest 15. It also names the documents the index failed to
+  read, which used to reach only the server log.
 - `recall_crm_context` finds records from a few words and returns their
   snapshot and ids.
 

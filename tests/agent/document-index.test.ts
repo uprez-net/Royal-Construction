@@ -6,6 +6,7 @@ import {
   MAX_EXTRACTION_ATTEMPTS,
   filedUnderLabels,
   isFiledUnderAnotherRecord,
+  listUnreadDocuments,
   refreshAgentFiles,
   searchAgentFiles,
 } from "@/lib/domain/agent-context/files";
@@ -280,10 +281,16 @@ function memoryDb(files: FileRow[], replies: unknown[] = []) {
         }
         return { count };
       },
-      findMany: async ({ where }: { where: { urlHash: { in: string[] } } }) =>
-        where.urlHash.in.flatMap((key) =>
-          texts.has(key) ? [texts.get(key)!] : [],
-        ),
+      findMany: async ({
+        where,
+      }: {
+        where: { urlHash?: { in: string[] }; status?: string };
+      }) =>
+        where.urlHash
+          ? where.urlHash.in.flatMap((key) =>
+              texts.has(key) ? [texts.get(key)!] : [],
+            )
+          : [...texts.values()].filter((row) => row.status === where.status),
       upsert: async ({
         create,
         update,
@@ -594,6 +601,11 @@ test("an unsupported document is not retried; a failed one is, a bounded number 
     MAX_EXTRACTION_ATTEMPTS,
   );
   assert.equal(texts.get(urlHash(flaky.url))?.status, "FAILED");
+
+  // #432: the failure is named for the office digest, not only logged.
+  assert.deepEqual(await listUnreadDocuments(db, now), [
+    { filename: "plans.pdf", gaveUp: true, record: "12 Rose St" },
+  ]);
 });
 
 test("past the deadline nothing new is read, and the document waits for the next run", async () => {

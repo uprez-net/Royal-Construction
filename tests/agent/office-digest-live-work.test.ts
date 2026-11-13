@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 
 import { loadOfficeDigest } from "@/lib/domain/agent-context/sources";
+import {
+  officeDigestChunk,
+  projectChunk,
+} from "@/lib/domain/agent-context/text";
 import { listOverdueLeadTasks } from "@/lib/domain/leads/queries";
 import { systemPrincipal } from "@/lib/domain/principal";
 import { LIVE_LEAD, overdueLeadTaskWhere } from "@/lib/leads/followup-due";
@@ -18,6 +22,7 @@ function digestDb() {
     "offer.groupBy": [],
     "project.groupBy": [],
     "leadTask.findMany": [],
+    "leadTask.count": 0,
     "lead.findMany": [],
     "offer.findMany": [],
     "project.findMany": [],
@@ -108,4 +113,103 @@ test("the live overdue lookup reports the full count and drops undated rows", as
   assert.equal(result.total, 30, "a capped list still says how many there are");
   assert.equal(result.tasks.length, 1);
   assert.equal(result.tasks[0]!.leadName, "Riva Test");
+});
+
+const emptyDigest = {
+  activeProjects: [],
+  awaitingSignature: [],
+  generatedAt: new Date("2026-11-13T02:00:00Z"),
+  leadsByStage: {},
+  offersByStatus: {},
+  openComplianceAlerts: 0,
+  outstandingInvoices: { amountDue: 0, count: 0 },
+  overdueTasks: [],
+  projectsByStatus: {},
+  upcomingMeetings: [],
+};
+
+// #432: the digest lists the oldest 15 overdue tasks. Without the total, a
+// busy week read as "15 overdue" while the live list said more.
+test("the digest gives every overdue task's count, not just the ones it lists", () => {
+  const { content } = officeDigestChunk({
+    ...emptyDigest,
+    overdueTaskCount: 30,
+    overdueTasks: [
+      {
+        dueDate: new Date("2026-09-18T14:00:00Z"),
+        leadName: "Riva Test",
+        type: "CALL",
+      },
+    ],
+  });
+  assert.match(content, /Overdue lead tasks: 30 on live leads, oldest first:/);
+  assert.match(content, /Call for Riva Test/);
+  assert.match(content, /and 29 more/);
+  assert.match(
+    officeDigestChunk(emptyDigest).content,
+    /Overdue lead tasks: none/,
+  );
+});
+
+test("the digest names the documents the index could not read", () => {
+  const { content } = officeDigestChunk({
+    ...emptyDigest,
+    unreadDocuments: [
+      { filename: "Soil report.pdf", gaveUp: true, record: "11 Wheat Street" },
+    ],
+  });
+  assert.match(
+    content,
+    /Documents the index could not read \(1;.*Soil report\.pdf \(11 Wheat Street\), stopped retrying/,
+  );
+  assert.doesNotMatch(officeDigestChunk(emptyDigest).content, /could not read/);
+});
+
+// #432: the snapshot counted stages (72) where the live list counted every
+// activity (83), and an activity added under a stage left the text unchanged.
+test("a project's snapshot counts every activity, so adding one changes it", () => {
+  const base = {
+    compliance: null,
+    council: "Camden",
+    customerNames: ["Sam"],
+    buildingType: "New build",
+    checklists: [],
+    estimatedEndDate: new Date("2027-06-01T00:00:00Z"),
+    id: "p1",
+    invoices: [],
+    leadId: 1,
+    location: "11 Wheat Street",
+    name: "11 Wheat Street",
+    openVariations: 0,
+    siteManagerName: null,
+    spent: 0,
+    startDate: new Date("2026-08-01T00:00:00Z"),
+    status: "ACTIVE",
+    totalBudget: 500_000,
+    upcomingBookings: [],
+  };
+  const stage = {
+    isTopLevel: true,
+    name: "Slab",
+    projectStage: "SLAB",
+    startDate: null,
+    status: "DONE",
+    targetDate: new Date("2026-09-01T00:00:00Z"),
+  };
+  const child = {
+    ...stage,
+    isTopLevel: false,
+    name: "Pour",
+    status: "PENDING",
+  };
+  const one = projectChunk({ ...base, milestones: [stage, child] } as never);
+  const two = projectChunk({
+    ...base,
+    milestones: [stage, child, { ...child, name: "Cure" }],
+  } as never);
+  assert.match(
+    one.content,
+    /1 of 1 stages complete; 2 activities in all, 1 done/,
+  );
+  assert.notEqual(one.content, two.content);
 });

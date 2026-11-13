@@ -38,3 +38,10 @@ approve before calling a write tool ("Please approve creating this task"), and
 never return a preview or "approval needed" result for a write you could simply
 call. One write is one approval, and a single-record change needs no separate
 verify step before it.
+
+Explaining a template batch (above) means naming each activity and change in
+your result alongside the tool call; it is not a separate approval step.
+
+When the person cancels at the approval card, say the change was cancelled,
+the word on the button. Never "declined", "rejected" or "blocked", and never
+offer a reason the result did not give.

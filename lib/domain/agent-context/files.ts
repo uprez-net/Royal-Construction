@@ -268,6 +268,43 @@ export async function refreshAgentFiles(
 }
 
 /**
+ * The live documents the index has failed to read, newest first, by name and
+ * the record they are filed under, for the office digest.
+ *
+ * A failure was reported only through `console.error`, which nobody here
+ * reads (#432). Cheap when nothing failed, which is the usual night: the live
+ * set is loaded only when there is a failed read to name.
+ */
+export async function listUnreadDocuments(
+  db: DomainDb,
+  now: Date,
+): Promise<{ filename: string; record: string | null; gaveUp: boolean }[]> {
+  const failed = await db.agentFileText.findMany({
+    select: { attempts: true, urlHash: true },
+    where: { status: "FAILED" },
+  });
+  if (!failed.length) return [];
+  const attemptsByHash = new Map(
+    failed.map((row) => [row.urlHash, row.attempts]),
+  );
+  const sources = await loadFileSources(db, now);
+  const seen = new Set<string>();
+  const unread: { filename: string; record: string | null; gaveUp: boolean }[] =
+    [];
+  for (const source of sources) {
+    const attempts = attemptsByHash.get(source.urlHash);
+    if (attempts === undefined || seen.has(source.urlHash)) continue;
+    seen.add(source.urlHash);
+    unread.push({
+      filename: source.filename,
+      gaveUp: attempts >= MAX_EXTRACTION_ATTEMPTS,
+      record: source.projectName ?? source.leadName ?? source.offerReference,
+    });
+  }
+  return unread;
+}
+
+/**
  * Read one document and cache what came of it, success or not — or null when
  * the reader is unavailable, which records nothing against the document.
  */

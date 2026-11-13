@@ -77,6 +77,16 @@ export function AgentTranscript({
     () => new Map(data.turns.map((turn) => [turn.turnId, turn])),
     [data.turns],
   );
+  const waitingTurns = useMemo(
+    () => new Set(data.pendingApprovals.map((pending) => pending.turnId)),
+    [data.pendingApprovals],
+  );
+  // Only the newest reply can still be in progress. An older card left in an
+  // in-between state keeps no spinner while a later turn runs.
+  const lastAssistantId = useMemo(
+    () => data.messages.findLast((message) => message.role === "assistant")?.id,
+    [data.messages],
+  );
   const subagentsByTurn = useMemo(() => {
     const map = new Map<string, AgentSubagentRun[]>();
     for (const run of data.subagents) {
@@ -95,7 +105,9 @@ export function AgentTranscript({
         onScroll={handleMessageScroll}
         ref={viewportRef}
       >
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8">
+        {/* Bottom padding leaves room for the scroll-to-latest button, so the
+            last lines of a reply are never under it. */}
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 pt-6 pb-16 sm:px-6 sm:pt-8">
           {data.messages.length === 0 && agentStatus !== "resuming" ? (
             <Empty className="border-0 p-2 sm:min-h-96 sm:p-6">
               <EmptyHeader>
@@ -142,6 +154,7 @@ export function AgentTranscript({
             return (
               <div className="flex flex-col gap-3" key={message.id}>
                 <AgentMessage
+                  awaitingApproval={Boolean(turnId && waitingTurns.has(turnId))}
                   annotations={
                     // Annotations are persisted per turn. eve >= 0.61 ids a
                     // user message by its delivery event rather than its turn,
@@ -167,6 +180,10 @@ export function AgentTranscript({
                   }
                   timestamp={messageTime(message, turn)}
                   toolTimes={toolTimes(turn)}
+                  working={
+                    message.id === lastAssistantId
+                    && (busy || turn?.status === "running")
+                  }
                 />
                 {message.role === "assistant" ? (
                   <TurnOutcome turn={turn} />
@@ -285,7 +302,9 @@ export function AgentTranscript({
       {showScrollToBottom ? (
         <Button
           aria-label="Scroll to the latest message"
-          className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full border-border/80 bg-white/95 text-foreground shadow-lg backdrop-blur transition hover:-translate-y-0.5 hover:bg-royal-gold-light"
+          // In the right-hand gutter rather than the middle of the column: in
+          // the middle it sat on top of the answer text (#432).
+          className="absolute right-4 bottom-4 z-20 rounded-full border-border/80 bg-white/95 text-foreground shadow-lg backdrop-blur transition hover:-translate-y-0.5 hover:bg-royal-gold-light sm:right-6"
           onClick={scrollToBottom}
           size="icon-sm"
           title="Scroll to latest message"

@@ -619,9 +619,11 @@ export function childProgressLabel(
     case "action.input.appended":
       return `Preparing ${event.data.toolName}`;
     case "action.result":
+      // Not "Action completed": next to "Working" it read as if the whole
+      // task were done (#432).
       return event.data.status === "failed"
-        ? "A specialist action failed"
-        : "Action completed";
+        ? "A step failed"
+        : "Finished a step; continuing";
     case "session.completed":
       return "Specialist session completed";
     case "session.failed":

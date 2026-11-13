@@ -178,6 +178,84 @@ export function formatDisplayField(key: string, value: unknown): string {
   return formatDisplayValue(value);
 }
 
+/**
+ * A result envelope's facts as a person reads them (#432): a status code is a
+ * word ("Type · Call", not "Type · CALL"), a flag is Yes or No rather than
+ * "false", and a task's `dueAt` and `dueTime` are one "Due" fact instead of two
+ * boxes that say the same thing.
+ */
+export function resultFacts(
+  data: Readonly<Record<string, unknown>>,
+): { key: string; label: string; value: string }[] {
+  const entries = Object.entries(data).filter(
+    ([key, value]) =>
+      key !== "outreach"
+      && !isRecordIdField(key)
+      && value !== null
+      && value !== undefined
+      && value !== ""
+      && typeof value !== "object",
+  );
+  const byKey = new Map(entries);
+  const dueTime =
+    typeof byKey.get("dueTime") === "string"
+      ? (byKey.get("dueTime") as string)
+      : null;
+  const facts: { key: string; label: string; value: string }[] = [];
+  for (const [key, value] of entries) {
+    if (key === "dueTime" && byKey.has("dueAt")) continue;
+    if (key === "dueAt" && typeof value === "string") {
+      const date = formatDisplayField(key, value);
+      facts.push({
+        key,
+        label: "Due",
+        // The date carries a time only when it is not midnight; a task's own
+        // time is the commitment, so it is the one shown.
+        value:
+          dueTime && !date.includes(":")
+            ? `${date}, ${formatClock(dueTime)}`
+            : date,
+      });
+      continue;
+    }
+    facts.push({
+      key,
+      label: humanize(key),
+      value:
+        typeof value === "boolean"
+          ? value
+            ? "Yes"
+            : "No"
+          : typeof value === "string" && isCodeValue(key, value.trim())
+            ? humanizeEnum(value.trim())
+            : formatDisplayField(key, value),
+    });
+  }
+  return facts;
+}
+
+/**
+ * A status code, to be read as a word. A one-word code ("CALL") only counts
+ * under a field that holds codes, so an acronym elsewhere ("GST") is left as
+ * written.
+ */
+function isCodeValue(key: string, value: string): boolean {
+  return (
+    ENUM_VALUE.test(value)
+    || (/(type|status|stage|kind|state|role|category)$/i.test(key)
+      && /^[A-Z][A-Z0-9]+$/.test(value))
+  );
+}
+
+/** "14:30" → "2:30 pm"; anything else as given. */
+function formatClock(value: string): string {
+  const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(value.trim());
+  if (!match) return value;
+  const hour = Number(match[1]);
+  const suffix = hour >= 12 ? "pm" : "am";
+  return `${hour % 12 === 0 ? 12 : hour % 12}:${match[2]} ${suffix}`;
+}
+
 function formatUtcInstant(value: string): string | null {
   const text = value.trim();
   if (

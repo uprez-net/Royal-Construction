@@ -134,6 +134,18 @@ export type OfficeDigestSource = {
   offersByStatus: Readonly<Record<string, number>>;
   projectsByStatus: Readonly<Record<string, number>>;
   overdueTasks: readonly { leadName: string; type: string; dueDate: Date }[];
+  /**
+   * Every overdue task, not just the ones listed: the list is the oldest few,
+   * and "anything overdue?" is answered with this number. Optional so an
+   * older caller that only has the list still gets a count.
+   */
+  overdueTaskCount?: number;
+  /** Documents the document index has failed to read, by name and record. */
+  unreadDocuments?: readonly {
+    filename: string;
+    record: string | null;
+    gaveUp: boolean;
+  }[];
   upcomingMeetings: readonly {
     leadName: string;
     date: Date;
@@ -269,8 +281,12 @@ export function projectChunk(project: ProjectContextSource): ChunkDraft {
     line("Site manager", project.siteManagerName),
     `Contract budget ${formatAud(project.totalBudget)}, spent ${formatAud(project.spent)}`,
     `Dates: start ${day(project.startDate)}, estimated finish ${day(project.estimatedEndDate)}`,
+    // Every activity is counted, not just the stages: the live project list
+    // showed 83 activities where this said 72 stages, and an activity added
+    // under a stage did not change this text, so the nightly run never
+    // refreshed it (#432).
     topLevel.length
-      ? `Milestones: ${done} of ${topLevel.length} stages complete`
+      ? `Milestones: ${done} of ${topLevel.length} stages complete; ${project.milestones.length} activities in all, ${project.milestones.filter((m) => m.status === "DONE" || m.status === "NOT_REQUIRED").length} done`
       : "Milestones: none planned yet",
     current.length
       ? `Underway: ${current
@@ -352,6 +368,46 @@ function counts(record: Readonly<Record<string, number>>): string {
 
 export const OFFICE_DIGEST_ENTITY_ID = "office";
 
+/**
+ * "Overdue lead tasks: 11 (live leads only), oldest first: …". The count is
+ * every overdue task by the same rule as the lead specialist's live list, so
+ * the two give one number (#432); the list is only the oldest few.
+ */
+function overdueLine(digest: OfficeDigestSource): string {
+  const total = Math.max(
+    digest.overdueTaskCount ?? digest.overdueTasks.length,
+    digest.overdueTasks.length,
+  );
+  if (total === 0) return "Overdue lead tasks: none";
+  const listed = digest.overdueTasks
+    .map(
+      (t) =>
+        `${humanizeEnum(t.type)} for ${t.leadName} (due ${day(t.dueDate)})`,
+    )
+    .join("; ");
+  const more = total - digest.overdueTasks.length;
+  return `Overdue lead tasks: ${total} on live leads, oldest first: ${listed}${more > 0 ? `; and ${more} more` : ""}`;
+}
+
+/**
+ * Documents the nightly read could not read. They used to be reported only to
+ * the server log, which nobody here watches (#432), so a missing certificate
+ * looked like one the office had never uploaded.
+ */
+function unreadDocumentsLine(
+  documents: NonNullable<OfficeDigestSource["unreadDocuments"]>,
+): string | null {
+  if (!documents.length) return null;
+  const shown = documents
+    .slice(0, 10)
+    .map(
+      (doc) =>
+        `${doc.filename}${doc.record ? ` (${doc.record})` : ""}${doc.gaveUp ? ", stopped retrying" : ", will retry tonight"}`,
+    );
+  const more = documents.length - shown.length;
+  return `Documents the index could not read (${documents.length}; re-upload or check the file): ${shown.join("; ")}${more > 0 ? `; and ${more} more` : ""}`;
+}
+
 export function officeDigestChunk(digest: OfficeDigestSource): ChunkDraft {
   const content = compact([
     `Office snapshot for ${day(digest.generatedAt)}`,
@@ -366,14 +422,7 @@ export function officeDigestChunk(digest: OfficeDigestSource): ChunkDraft {
           )
           .join("; ")}`
       : "Out for the client's signature: nothing",
-    digest.overdueTasks.length
-      ? `Overdue lead tasks: ${digest.overdueTasks
-          .map(
-            (t) =>
-              `${humanizeEnum(t.type)} for ${t.leadName} (due ${day(t.dueDate)})`,
-          )
-          .join("; ")}`
-      : "Overdue lead tasks: none",
+    overdueLine(digest),
     digest.upcomingMeetings.length
       ? `Meetings from today to a week out: ${digest.upcomingMeetings
           .map(
@@ -391,6 +440,7 @@ export function officeDigestChunk(digest: OfficeDigestSource): ChunkDraft {
       : "Jobs in progress: none",
     `Open compliance alerts: ${digest.openComplianceAlerts}`,
     `Progress claims outstanding: ${digest.outstandingInvoices.count} (${formatAud(digest.outstandingInvoices.amountDue)} owed)`,
+    unreadDocumentsLine(digest.unreadDocuments ?? []),
   ]);
   return {
     content,

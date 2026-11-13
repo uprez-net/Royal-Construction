@@ -51,3 +51,7 @@ never return a preview or "approval needed" result for a write you could simply
 call. One write is one approval, and a single-record change needs no separate
 verify step before it. (Client-facing wording you drafted yourself is the
 exception above: propose it as text before sending.)
+
+When the person cancels at the approval card, say the change was cancelled,
+the word on the button. Never "declined", "rejected" or "blocked", and never
+offer a reason the result did not give.

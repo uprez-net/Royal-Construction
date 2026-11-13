@@ -86,7 +86,7 @@ export default defineTool({
           ]
             .filter(Boolean)
             .join(" ")
-        : "No uploaded document matches. It may not be uploaded, may be a kind the index cannot read, or may have been uploaded since last night's read.",
+        : "No uploaded document matches. It may not be uploaded, may be a kind the index cannot read, or may have been uploaded since last night's read. If the office snapshot lists it under documents the index could not read, say it is uploaded but unreadable.",
     };
   },
 });

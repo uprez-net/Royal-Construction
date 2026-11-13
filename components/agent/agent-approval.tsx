@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import type { EveMessageInputRequest } from "eve/react";
-import { CircleAlert, MessageCircleQuestion, ShieldCheck } from "lucide-react";
+import {
+  CircleAlert,
+  LoaderCircle,
+  MessageCircleQuestion,
+  ShieldCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,14 +34,20 @@ export type AgentInputResponse = {
  * the body is the expensive mistake here. The arguments are the approval.
  */
 export function AgentApproval({
+  applying = false,
   canRespond,
+  cancelled = false,
   input,
   label,
   onRespond,
   request,
   responded,
 }: {
+  /** Approved, and the agent has not picked the change back up yet. */
+  applying?: boolean;
   canRespond: boolean;
+  /** The person pressed Cancel (or the call was cancelled). */
+  cancelled?: boolean;
   input: unknown;
   label: string;
   onRespond: (responses: readonly AgentInputResponse[]) => Promise<void>;
@@ -128,11 +139,20 @@ export function AgentApproval({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {/* Once answered, the heading says what happened: a card that
+                still read "Approval required" after Approve looked like it
+                needed another click (#432). */}
             {isApproval
-              ? "Approval required"
+              ? responded
+                ? cancelled
+                  ? "Cancelled"
+                  : "Approved"
+                : "Approval required"
               : isLimit
                 ? "Session limit"
-                : "Question"}
+                : responded
+                  ? "Answered"
+                  : "Question"}
           </p>
           <p className="text-sm font-medium text-foreground">
             {isApproval ? label : request.prompt}
@@ -191,8 +211,17 @@ export function AgentApproval({
       ) : null}
 
       {responded ? (
-        <p className="text-xs text-muted-foreground">
-          Response recorded. Waiting for the agent to continue.
+        <p
+          className="flex items-center gap-2 text-xs text-muted-foreground"
+          role="status"
+        >
+          {applying ? (
+            <LoaderCircle
+              aria-hidden="true"
+              className="size-3.5 animate-spin"
+            />
+          ) : null}
+          {respondedNotice({ applying, cancelled, isApproval })}
         </p>
       ) : (
         <div className="flex flex-col gap-2">
@@ -239,13 +268,16 @@ export function AgentApproval({
                 });
               }}
             >
+              {/* "Cancel", the word on the button that opened this. The agent
+                  never retries a cancelled change, so the note is for its
+                  reply, not for another attempt. */}
               <Textarea
-                aria-label="Why are you declining?"
+                aria-label="Why are you cancelling?"
                 className="min-h-16 text-sm"
                 autoFocus
                 disabled={busy}
                 onChange={(event) => setReason(event.target.value)}
-                placeholder="Why not? The agent reads this before it tries again (optional)."
+                placeholder="Anything the agent should know? (optional)"
                 value={reason}
               />
               <div className="flex gap-2">
@@ -255,7 +287,7 @@ export function AgentApproval({
                   type="submit"
                   variant="destructive"
                 >
-                  Decline
+                  Cancel the change
                 </Button>
                 <Button
                   onClick={() => {
@@ -310,6 +342,25 @@ export function AgentApproval({
 }
 
 const OUTREACH_KEYS = new Set(["body", "contactEmail", "contactName", "party"]);
+
+/**
+ * The line under an answered card. After Approve the agent can take a while
+ * to pick the change back up, so the card says it is being applied instead of
+ * looking finished or stuck (#432).
+ */
+export function respondedNotice({
+  applying,
+  cancelled,
+  isApproval,
+}: {
+  applying: boolean;
+  cancelled: boolean;
+  isApproval: boolean;
+}): string {
+  if (!isApproval) return "Answer sent.";
+  if (cancelled) return "You cancelled this. Nothing was changed.";
+  return applying ? "Approved. Applying your change…" : "Approved.";
+}
 
 /**
  * Reads an outreach preview out of a send tool's arguments.

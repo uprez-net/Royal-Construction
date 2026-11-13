@@ -329,6 +329,58 @@ export function AgentWorkspace({
     return () => window.cancelAnimationFrame(frame);
   }, [agent.data, agent.status]);
 
+  // The title is generated a few seconds after the first message and written
+  // server-side, so the sidebar read "New conversation" until a reload (#432).
+  // Once a turn settles on an untitled conversation, ask for it a few times.
+  const untitledSessionId =
+    activeSessionId
+    && !sessions.find((session) => session.eveSessionId === activeSessionId)
+      ?.title
+    && !initialSessions.find(
+      (session) => session.eveSessionId === activeSessionId,
+    )?.title
+      ? activeSessionId
+      : null;
+  useEffect(() => {
+    if (!untitledSessionId || busy) return;
+    let cancelled = false;
+    let attempt = 0;
+    let timer: number | undefined;
+    const poll = async () => {
+      attempt += 1;
+      try {
+        const response = await fetch(
+          `/api/agent/sessions/${encodeURIComponent(untitledSessionId)}/title`,
+          { cache: "no-store" },
+        );
+        const payload = response.ok
+          ? ((await response.json()) as { title?: string | null })
+          : null;
+        if (cancelled) return;
+        const title = payload?.title?.trim();
+        if (title) {
+          setSessions((current) =>
+            current.map((session) =>
+              session.eveSessionId === untitledSessionId
+                ? { ...session, title }
+                : session,
+            ),
+          );
+          return;
+        }
+      } catch {
+        // A missing title is cosmetic; the next settled turn asks again.
+      }
+      if (!cancelled && attempt < 4)
+        timer = window.setTimeout(() => void poll(), 2_500);
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [busy, untitledSessionId]);
+
   async function sendMessage(message: string) {
     const text = message.trim() || "Please review the attached file(s).";
     if (
