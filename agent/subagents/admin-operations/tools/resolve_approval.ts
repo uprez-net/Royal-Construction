@@ -7,6 +7,7 @@ import {
   createAdminOperations,
   type AdminOperations,
 } from "@/agent/subagents/admin-operations/dependencies";
+import { forModel } from "@/agent/lib/model-output";
 
 export function createResolveApprovalTool(operations: AdminOperations) {
   return defineTool({
@@ -14,6 +15,7 @@ export function createResolveApprovalTool(operations: AdminOperations) {
       "Approve or reject a pending admin approval request after reviewing it; rejection requires a reason and incident approvals require a resolution note.",
     inputSchema: resolveApprovalInputSchema,
     outputSchema: agentResultEnvelopeSchema,
+    toModelOutput: forModel,
     approval: ownerOnlyApproval(),
     async execute(input, ctx) {
       return await runAdminWrite({

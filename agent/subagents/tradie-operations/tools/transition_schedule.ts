@@ -7,12 +7,14 @@ import {
   runTradieWrite,
   transitionAuthorizedTradieSchedule,
 } from "@/agent/lib/tradie-operations";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Move one schedule through the allowed tradie booking state machine, optionally recording a quote, after owner approval.",
   inputSchema: transitionTradieScheduleInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   execute(input, ctx) {
     return runTradieWrite({

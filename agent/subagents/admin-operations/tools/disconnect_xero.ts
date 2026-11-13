@@ -6,12 +6,14 @@ import {
   disconnectAuthorizedXero,
   runAdminWrite,
 } from "@/agent/lib/admin-operations";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Disconnect the active Xero organisation, revoke its token best-effort, and deactivate the local connection.",
   inputSchema: disconnectXeroInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   execute(input, ctx) {
     return runAdminWrite({

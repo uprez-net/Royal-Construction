@@ -6,12 +6,14 @@ import {
   runAdminWrite,
   updateAuthorizedTeamRole,
 } from "@/agent/lib/admin-operations";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Change an existing team member's role while preserving the last-admin and self-demotion safeguards.",
   inputSchema: updateTeamRoleInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   execute(input, ctx) {
     return runAdminWrite({

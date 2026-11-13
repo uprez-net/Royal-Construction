@@ -9,6 +9,7 @@ import {
   MAX_TEAM_TASKS,
   briefFor,
   planWaves,
+  specialistFinding,
   taskNotRun,
   type TeamTask,
 } from "@/agent/lib/team-dispatch";
@@ -178,7 +179,10 @@ export default defineWorkflowTool({
             // A specialist that answered with an error envelope did not do
             // its task: its dependents must not start from it as if it had.
             if (!single && isErrorEnvelope(output)) failed.add(task.id);
-            return [task.id, tagged(task.specialist, output)] as const;
+            return [
+              task.id,
+              specialistFinding(task.specialist, output),
+            ] as const;
           } catch (error) {
             // One task alone keeps failing the tool call, so the orchestrator
             // cannot mistake it for an answer. In a team, the others' results
@@ -222,19 +226,6 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : { output: value };
-}
-
-/**
- * The specialist's own result envelope, with the specialist named on it.
- *
- * Returned at the top level rather than nested so the workspace renders it as
- * the same rich result card any other enveloped tool output gets.
- */
-function tagged(specialist: SpecialistName, output: unknown) {
-  if (output !== null && typeof output === "object" && !Array.isArray(output)) {
-    return { ...(output as Record<string, unknown>), specialist };
-  }
-  return { specialist, output };
 }
 
 function unavailable(specialist: SpecialistName) {

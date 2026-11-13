@@ -7,12 +7,14 @@ import {
   runTradieWrite,
   updateAuthorizedTradie,
 } from "@/agent/lib/tradie-operations";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Update allowlisted tradie contact and directory fields after owner approval.",
   inputSchema: updateTradieInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   execute(input, ctx) {
     return runTradieWrite({

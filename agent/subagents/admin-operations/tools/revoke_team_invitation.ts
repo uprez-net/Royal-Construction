@@ -6,11 +6,13 @@ import {
   revokeAuthorizedTeamInvitation,
   runAdminWrite,
 } from "@/agent/lib/admin-operations";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description: "Revoke a pending Clerk team invitation after confirmation.",
   inputSchema: revokeTeamInvitationInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   execute(input, ctx) {
     return runAdminWrite({

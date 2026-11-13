@@ -7,12 +7,14 @@ import {
   createAuthorizedTradie,
   runTradieWrite,
 } from "@/agent/lib/tradie-operations";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Create a tradie directory record after showing all supplied details and receiving owner approval.",
   inputSchema: createTradieInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   execute(input, ctx) {
     return runTradieWrite({

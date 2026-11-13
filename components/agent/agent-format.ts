@@ -1,5 +1,6 @@
 /** Presentation helpers shared by the operations transcript components. */
 
+import { isRecordIdField } from "@/lib/agent/id-fields";
 import {
   SYDNEY_TZ,
   formatIsoForPeople,
@@ -53,23 +54,75 @@ export type AgentInputField = {
   prose: boolean;
 };
 
-/** Turns a tool's validated input into reviewable, labelled fields. */
-export function toInputFields(input: unknown): AgentInputField[] {
+/**
+ * Turns a tool's validated input into reviewable, labelled fields.
+ *
+ * A record id field is labelled by what it points at — "Lead", not "Lead Id" —
+ * because the approval card shows the record's name in its place; `hideIds`
+ * leaves id fields out altogether, for places that cannot name them. A nested
+ * set of changes reads as "Stage → Qualified" rather than as JSON (#429).
+ */
+export function toInputFields(
+  input: unknown,
+  options: { hideIds?: boolean } = {},
+): AgentInputField[] {
   if (!input || typeof input !== "object" || Array.isArray(input)) return [];
   return Object.entries(input as Record<string, unknown>)
     .filter(
-      ([, value]) => value !== null && value !== undefined && value !== "",
+      ([key, value]) =>
+        value !== null
+        && value !== undefined
+        && value !== ""
+        && !(options.hideIds && isRecordIdField(key)),
     )
     .map(([key, value]) => ({
       clientFacing: CLIENT_FACING_KEY.test(key),
       key,
-      label: humanize(key),
+      label:
+        isRecordIdField(key) && key !== "id"
+          ? humanize(key.replace(/Ids?$/, ""))
+          : humanize(key),
       prose: PROSE_KEY.test(key) && typeof value === "string",
-      value: formatFieldValue(value),
+      value: isChangeSet(value)
+        ? describeChanges(value)
+        : formatFieldValue(value),
     }));
 }
 
+/** A flat object of field → value, the shape every `changes`/`patch` takes. */
+function isChangeSet(value: unknown): value is Record<string, unknown> {
+  return (
+    value !== null
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && Object.values(value as Record<string, unknown>).every(
+      (item) =>
+        item === null || typeof item !== "object" || Array.isArray(item),
+    )
+  );
+}
+
+function describeChanges(changes: Record<string, unknown>): string {
+  return Object.entries(changes)
+    .filter(
+      ([key, item]) =>
+        !isRecordIdField(key)
+        && !key.startsWith("expected")
+        && item !== undefined,
+    )
+    .map(
+      ([key, item]) =>
+        `${humanize(key)} → ${item === null || item === "" ? "(cleared)" : formatFieldValue(item)}`,
+    )
+    .join(" · ");
+}
+
+/** `TENDER_SENT` → "Tender sent": a status code is not a word. */
+const ENUM_VALUE = /^[A-Z0-9]+(?:_[A-Z0-9]+)+$/;
+
 function formatFieldValue(value: unknown): string {
+  if (typeof value === "string" && ENUM_VALUE.test(value.trim()))
+    return humanizeEnum(value.trim());
   if (typeof value === "string") return formatDisplayText(stripHtml(value));
   if (typeof value === "number" || typeof value === "boolean")
     return String(value);

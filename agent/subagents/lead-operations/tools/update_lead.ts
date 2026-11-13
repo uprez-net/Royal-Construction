@@ -5,12 +5,14 @@ import { requireCurrentAgentActor } from "@/agent/lib/actor";
 import { updateLeadInputSchema } from "@/agent/lib/lead-contracts";
 import { updateAuthorizedLead } from "@/agent/lib/lead-operations";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Change one exact authorized lead: contact details, source, project types, deal value and dates, pipeline stage (Lost, Cancelled and Disqualified need lostReason), meeting or follow-up date/time, or assignee. Send only the fields that change; null clears a field. Show the lead and every change for owner approval.",
   inputSchema: updateLeadInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   label: {
     start: ({ leadId, changes }) =>

@@ -6,12 +6,14 @@ import {
   inviteAuthorizedTeamMember,
   runAdminWrite,
 } from "@/agent/lib/admin-operations";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Invite a team member with a selected role; the invitation is an externally visible action and requires owner approval.",
   inputSchema: inviteTeamMemberInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   async execute(input, ctx) {
     return await runAdminWrite({

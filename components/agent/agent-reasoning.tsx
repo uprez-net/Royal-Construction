@@ -12,9 +12,11 @@ import { cn } from "@/lib/utils";
 /**
  * The agent's own reasoning for one step.
  *
- * It opens on its own while the model is thinking so the operator can see the
- * work is live, then collapses once the step is done — the conclusion belongs
- * in the answer, and a wall of retained reasoning buries it.
+ * Closed unless the reader opens it, even while the model is thinking: the
+ * pulsing "Thinking…" header is enough to show the work is live. Streaming it
+ * open put the model's working — record ids included ("User confirms moving
+ * lead 100…") — in front of the office on every step (#429). The conclusion
+ * belongs in the answer.
  */
 export function AgentReasoning({
   state,
@@ -24,24 +26,22 @@ export function AgentReasoning({
   text: string;
 }) {
   const streaming = state === "streaming";
-  // Derived, not synchronised: open while the model is thinking, closed once it
-  // is done, and whatever the reader last chose from then on.
-  const [choice, setChoice] = useState<boolean | null>(null);
-  const open = choice ?? streaming;
+  // Whatever the reader last chose; closed until they choose.
+  const [open, setOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!streaming) return;
+    if (!streaming || !open) return;
     const viewport = scrollRef.current;
     if (viewport) viewport.scrollTop = viewport.scrollHeight;
-  }, [streaming, text]);
+  }, [open, streaming, text]);
 
   if (!text.trim()) return null;
 
   return (
     <Collapsible
       className="rounded-lg border border-border/60 bg-muted/25"
-      onOpenChange={setChoice}
+      onOpenChange={setOpen}
       open={open}
     >
       <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">

@@ -5,12 +5,14 @@ import { requireCurrentAgentActor } from "@/agent/lib/actor";
 import { archiveLeadInputSchema } from "@/agent/lib/lead-contracts";
 import { archiveAuthorizedLead } from "@/agent/lib/lead-operations";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Archive one exact authorized lead so it leaves every lead list. The record is kept. Name the lead for owner approval first.",
   inputSchema: archiveLeadInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   label: { start: () => "Archive lead" },
   async execute(input, ctx) {

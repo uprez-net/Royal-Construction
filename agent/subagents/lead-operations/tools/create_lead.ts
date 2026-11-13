@@ -5,12 +5,14 @@ import { requireCurrentAgentActor } from "@/agent/lib/actor";
 import { createLeadInputSchema } from "@/agent/lib/lead-contracts";
 import { createAuthorizedLead } from "@/agent/lib/lead-operations";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Create a new lead from the client details the user gave, assigned to the caller. An existing lead with the same email or phone is reported instead of duplicated. No welcome email is sent. Show every field for owner approval before writing.",
   inputSchema: createLeadInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   label: { start: ({ name }) => `Create lead for ${name}` },
   async execute(input, ctx) {

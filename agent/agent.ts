@@ -32,7 +32,10 @@ export default defineAgent({
   description,
   model: OPERATIONS_MODEL,
   modelContextWindowTokens: 1_000_000,
-  reasoning: "low",
+  // The orchestrator routes, relays and answers from the snapshot; the
+  // decisions are made by specialists, which keep "low". A reasoning pass
+  // before every routing call was most of each step's time on staging (#429).
+  reasoning: "none",
   defaultTools: false,
   compaction: {
     thresholdPercent: 0.75,

@@ -5,12 +5,14 @@ import { requireCurrentAgentActor } from "@/agent/lib/actor";
 import { startOfferInputSchema } from "@/agent/lib/offer-contracts";
 import { startAuthorizedOffer } from "@/agent/lib/offer-operations";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Start the first offer for one exact authorized lead, from the admin defaults, with Job setup filled from the lead unless prefillFromLead is false. If the lead already has an offer, it is named and nothing changes. Nothing reaches the client. Name the lead for owner approval.",
   inputSchema: startOfferInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   label: { start: () => "Start offer" },
   async execute(input, ctx) {

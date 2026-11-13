@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { sydneyStartOfDay, sydneyToday } from "@/lib/dates/sydney";
+import { LIVE_LEAD } from "@/lib/leads/followup-due";
 import type { DomainDb } from "../db";
 import {
   leadChunk,
@@ -15,7 +16,17 @@ import {
 
 /** Closed deals stay in the index this long after they last changed. */
 export const RECENTLY_CLOSED_DAYS = 60;
-const CLOSED_LEAD_STAGES = [
+/**
+ * Stages whose leads drop out of the search index RECENTLY_CLOSED_DAYS after
+ * they last changed.
+ *
+ * Not the "closed lead" rule for work lists. A won or converted lead stays
+ * searchable because the office still talks about it ("the Sandhu job"), while
+ * a lead that went quiet does not need to be found months later. Whether a
+ * lead's tasks and meetings count as live work is LIVE_LEAD's decision
+ * (lib/leads/followup-due.ts), used by the digest below.
+ */
+const INDEX_EXPIRING_STAGES = [
   "LOST",
   "CANCELLED",
   "DISQUALIFIED",
@@ -51,7 +62,7 @@ export async function loadLeadChunks(
       : {
           isArchived: false,
           OR: [
-            { stage: { notIn: [...CLOSED_LEAD_STAGES] } },
+            { stage: { notIn: [...INDEX_EXPIRING_STAGES] } },
             { updatedAt: { gte: recentCutoff(now) } },
           ],
         },
@@ -386,9 +397,13 @@ export async function loadOfficeDigest(
       orderBy: { dueDate: "asc" },
       select: { dueDate: true, lead: { select: { name: true } }, type: true },
       take: 15,
+      // LIVE_LEAD, as the Follow-ups tab and the reminder crons read it: an
+      // overdue task on a lost or won deal is not work. The digest used to
+      // check only isArchived, and led the weekly overview with a wait on a
+      // Lost lead from February (#429).
       where: {
         dueDate: { lt: now },
-        lead: { isArchived: false },
+        lead: LIVE_LEAD,
         status: { not: "DONE" },
       },
     }),
@@ -397,7 +412,7 @@ export async function loadOfficeDigest(
       select: { meetingDate: true, meetingTime: true, name: true },
       take: 15,
       where: {
-        isArchived: false,
+        ...LIVE_LEAD,
         meetingCompletedAt: null,
         meetingDate: { gte: startOfToday, lte: weekAhead },
       },
