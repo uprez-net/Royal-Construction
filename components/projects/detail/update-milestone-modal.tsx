@@ -40,6 +40,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { sydneyToday } from "@/lib/dates/sydney";
+import { waiverDates } from "@/components/projects/detail/waiver-dates";
 import { hasWorkStarted } from "@/lib/domain/projects/milestone-schedule";
 import { Calendar } from "@/components/ui/calendar";
 import { allowedMilestoneTransitions } from "@/lib/domain/projects/milestone-status";
@@ -205,18 +207,8 @@ export default function UpdateMilestoneModal({
   const handleSubmit = async (data: MilestoneUpdateData) => {
     try {
       setSubmitError(null);
-      // A waiver cannot carry a future date (the domain refuses it), and this
-      // dialog has no date field for one, so a stored future date is pulled
-      // back to today rather than blocking the waiver.
-      const today = format(new Date(), "yyyy-MM-dd");
       const validatedData = milestoneUpdateSchema.safeParse({
-        ...data,
-        actualDate:
-          data.status === "NOT_REQUIRED"
-          && data.actualDate
-          && data.actualDate > today
-            ? today
-            : data.actualDate,
+        ...waiverDates(data, sydneyToday()),
         spend:
           data.spend && data.spend > 0
             ? data.spend
