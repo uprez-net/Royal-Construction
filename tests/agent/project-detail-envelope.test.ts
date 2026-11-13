@@ -138,12 +138,16 @@ test("a project whose lead has emails comes back as a valid envelope", () => {
 
   assert.equal(lead.emailCount, 2);
   assert.equal(lead.latestEmailAt, "2026-09-02T10:00:00.000Z");
-  // No subject, sender or body: inbound text stays with the lead tools.
+  // No subject, sender or body: no Eve tool returns inbound email text.
   assert.equal("emails" in lead, false);
   // The warning describes what the envelope carries: no email content.
   const warnings = envelope.warnings.join(" ");
   assert.doesNotMatch(warnings, /lead emails/);
   assert.match(warnings, /only as a count and latest date/);
+  // No lead tool reads email content, so the warning must not send the
+  // agent to one.
+  assert.doesNotMatch(warnings, /read them with the lead tools/);
+  assert.match(warnings, /no Eve tool reads their content/);
 
   // The nullable and absent fields serialise as null, not as undefined.
   assert.equal(project.lotSize, null);
