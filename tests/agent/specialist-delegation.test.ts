@@ -245,6 +245,13 @@ test("a filtered lead count passes its criteria to search_leads", () => {
     /`countsByStage` counts the query's matches\s+by\s+stage,\s+ignoring\s+`stages`/,
   );
   assert.match(lead, /cannot\s+filter\s+by\s+assignee\s+or\s+date/);
+  // A place total is disclosed as a text match, and two text criteria are
+  // never answered with one query's totalCount.
+  assert.match(lead, /not\s+a\s+strict\s+location\s+filter/);
+  assert.match(
+    lead,
+    /cannot\s+combine\s+two\s+text\s+criteria[\s\S]*?do\s+not\s+quote\s+`totalCount`\s+as\s+the\s+combined\s+count/,
+  );
   assert.doesNotMatch(
     lead,
     /To list or count leads, call `search_leads` with no query/,
