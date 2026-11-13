@@ -1,9 +1,13 @@
 import { defineEval } from "eve/evals";
+import { satisfies } from "eve/evals/expect";
 import { fixtures } from "../data/fixtures";
 import { assertNoMutation } from "../helpers/boundaries";
-import { expectEnvelopeFrom } from "../helpers/envelope";
+import {
+  expectEnvelopeFrom,
+  expectUsableDelegateResult,
+} from "../helpers/envelope";
 import { requireFixture } from "../helpers/fixtures";
-import { observe } from "../helpers/tool-calls";
+import { completedCalls, observe } from "../helpers/tool-calls";
 
 export default defineEval({
   description: "Read one fixture project and return its envelope.",
@@ -24,5 +28,21 @@ export default defineEval({
       kind: "entity-summary",
       mentions: project,
     });
+    expectUsableDelegateResult(t, run, project);
+    // The one automatic retry only applies to a task marked read-only. If the
+    // orchestrator never sets the flag, the retry never happens: catch that.
+    t.check(
+      completedCalls(run, "delegate").at(-1)?.input,
+      satisfies((input) => {
+        const value = input as {
+          readOnly?: unknown;
+          tasks?: { readOnly?: unknown }[];
+        } | null;
+        return (
+          value?.readOnly === true
+          || (value?.tasks ?? []).some((task) => task.readOnly === true)
+        );
+      }, "the project lookup was delegated as readOnly"),
+    ).label("delegate marks the lookup read-only");
   },
 });

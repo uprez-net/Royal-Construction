@@ -17,6 +17,7 @@ import {
   SPECIALISTS,
   type SpecialistName,
 } from "@/agent/lib/specialists";
+import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
 import delegate from "@/agent/tools/delegate";
 import { REPO_ROOT } from "../support/repo-root";
 
@@ -154,7 +155,11 @@ test("delegate waits for the specialist and returns its envelope, named", async 
   assert.deepEqual(calls, [
     { message: "Open the Smith lead.", target: "lead-operations" },
   ]);
-  assert.deepEqual(result, { ...envelope, specialist: "lead-operations" });
+  // Returned as the canonical envelope: version stamped, defaults filled.
+  assert.deepEqual(result, {
+    ...agentResultEnvelopeSchema.parse(envelope),
+    specialist: "lead-operations",
+  });
 });
 
 test("delegate says a disabled specialist is unavailable instead of calling it", async () => {

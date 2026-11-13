@@ -12,6 +12,7 @@ import {
   taskNotRun,
   type TeamTask,
 } from "@/agent/lib/team-dispatch";
+import { judgeSpecialistResult } from "@/agent/lib/specialist-result";
 
 /**
  * The orchestrator's only way to reach a specialist, and it waits.
@@ -40,9 +41,28 @@ import {
  * question that spans a lead, its offer and its project is one round trip, not
  * three. A task with `after` waits for those teammates and starts from what
  * they found.
+ *
+ * A result is only returned once it is usable (agent/lib/specialist-result.ts):
+ * `version` is stamped here, and a placeholder or empty envelope is a failure,
+ * not a success. A specialist once answered "test" / "test" after eve kept
+ * rejecting its real result, and it reached the person as a completed lookup.
+ * A task marked `readOnly` gets exactly one automatic retry; a task that may
+ * change something never does, because the first attempt may already have.
+ * `readOnly` is the orchestrator's word, not an enforced tool policy: eve's
+ * `ctx.agent()` returns only the output, with no record of writes or
+ * approvals. So it is told to the specialist on both attempts, the retry is
+ * skipped if the first answer says it reached an approval, every write still
+ * stops at the owner's approval, and a failure never claims nothing changed.
  */
 
 const specialistSchema = z.enum(DELEGATE_TARGETS);
+
+const readOnlySchema = z
+  .boolean()
+  .optional()
+  .describe(
+    "true only when the task looks things up and changes nothing. An unusable read-only result is retried once automatically.",
+  );
 
 const inputSchema = z
   .object({
@@ -74,6 +94,7 @@ const inputSchema = z
       .max(16_000)
       .optional()
       .describe("Single-task form: the self-contained request."),
+    readOnly: readOnlySchema,
     tasks: z
       .array(
         z.object({
@@ -84,6 +105,7 @@ const inputSchema = z
             .describe("Short handle, e.g. lead or offer."),
           specialist: specialistSchema,
           request: z.string().trim().min(1).max(16_000),
+          readOnly: readOnlySchema,
           after: z
             .array(z.string())
             .max(MAX_TEAM_TASKS)
@@ -115,6 +137,7 @@ export default defineWorkflowTool({
     "For one specialist send `specialist` + `request`. For work that spans areas send `tasks`: tasks without `after` run in parallel, and a task with `after` waits for those tasks and receives their findings (record ids included), so it does not search again.",
     "Parallel tasks are for reads and for independent changes the person has already asked for; a change that depends on another result goes in a later task with `after`.",
     "A change that comes back cancelled or declined at approval is the person's answer: never delegate it again.",
+    "Set `readOnly: true` on every task that only looks things up. A read-only task whose specialist returns an unusable result is retried once for you; never delegate it again yourself.",
     "Specialists:",
     ...DELEGATE_TARGETS.map((name) => `- ${name}: ${SPECIALISTS[name]}`),
   ].join("\n"),
@@ -128,6 +151,7 @@ export default defineWorkflowTool({
             id: "task",
             request: input.request as string,
             specialist: input.specialist as SpecialistName,
+            readOnly: input.readOnly,
           },
         ]
       : (input.tasks as TeamTask[]);
@@ -167,17 +191,46 @@ export default defineWorkflowTool({
               ),
             ] as const;
           }
-          const message = briefFor(task, {
+          const brief = briefFor(task, {
             findings,
             goal: input.goal,
             sharedContext: input.sharedContext,
             teamSize: tasks.length,
           });
+          const message = task.readOnly
+            ? `${brief}\n\nThis is a read-only lookup: change nothing.`
+            : brief;
           try {
-            const output = await ctx.agent(task.specialist, { message });
+            const first = await ctx.agent(task.specialist, { message });
+            let verdict = judgeSpecialistResult(first);
+            // One retry, read-only tasks only. A task that may have changed
+            // something is never re-run: its first attempt may have done it.
+            const retried =
+              !verdict.usable
+              && task.readOnly === true
+              && !reachedApproval(first);
+            if (retried) {
+              verdict = judgeSpecialistResult(
+                await ctx.agent(task.specialist, {
+                  message: `${message}\n\nYour previous attempt at this lookup did not return a usable result. Look it up again. Your final answer must describe what you found.`,
+                }),
+              );
+            }
+            if (!verdict.usable) {
+              const failure = unusableResult(
+                task,
+                verdict.reason,
+                retried,
+              );
+              // Thrown alone, so the call fails and its card shows it.
+              if (single) throw new Error(failure.summary);
+              failed.add(task.id);
+              return [task.id, failure] as const;
+            }
+            const output = verdict.envelope;
             // A specialist that answered with an error envelope did not do
             // its task: its dependents must not start from it as if it had.
-            if (!single && isErrorEnvelope(output)) failed.add(task.id);
+            if (!single && output.kind === "error") failed.add(task.id);
             return [task.id, tagged(task.specialist, output)] as const;
           } catch (error) {
             // One task alone keeps failing the tool call, so the orchestrator
@@ -210,11 +263,31 @@ export default defineWorkflowTool({
   },
 });
 
-function isErrorEnvelope(value: unknown): boolean {
+/**
+ * A specialist answered, but with nothing usable. Unlike `taskNotRun`, this
+ * does not promise nothing changed: a task that is not read-only may have
+ * written something before it failed to report it.
+ */
+function unusableResult(task: TeamTask, reason: string, retried: boolean) {
+  return {
+    kind: "error" as const,
+    specialist: task.specialist,
+    title: "No usable result",
+    summary: [
+      `The ${task.specialist} specialist did not return a usable result (${reason})${retried ? ", even after one automatic retry" : ""}.`,
+      "If the task could change anything, it may have done so before failing: check the record before trying again.",
+      "Do not delegate this again in this turn; tell the person the live lookup failed.",
+    ].join(" "),
+    version: 1 as const,
+  };
+}
+
+/** The specialist's answer says it went through, or is waiting on, an approval. */
+function reachedApproval(output: unknown): boolean {
   return (
-    value !== null
-    && typeof value === "object"
-    && (value as { kind?: unknown }).kind === "error"
+    output !== null
+    && typeof output === "object"
+    && (output as { requiresApproval?: unknown }).requiresApproval === true
   );
 }
 

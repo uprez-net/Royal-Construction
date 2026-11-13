@@ -4,6 +4,7 @@ import {
   agentResultEnvelopeSchema,
   type AgentResultEnvelope,
 } from "@/agent/lib/result-contracts";
+import { judgeSpecialistResult } from "@/agent/lib/specialist-result";
 import {
   completedCalls,
   describeCalls,
@@ -121,4 +122,42 @@ export function envelopesIn(run: Observation): readonly AgentResultEnvelope[] {
     const envelope = parseEnvelope(call.output);
     return envelope ? [envelope] : [];
   });
+}
+
+/**
+ * Grade what the specialist handed back through `delegate`, not only the tool
+ * it called. On 13 Nov 2026 `get_project` returned a good envelope and the
+ * specialist then answered `title: "test"`; grading the inner tool passed that
+ * run. One specialist result — the single form, or one task of a team — must
+ * be usable by the rule `delegate` applies, not an error, and name the
+ * fixture it was asked about.
+ */
+export function expectUsableDelegateResult(
+  t: EveEvalContext,
+  run: Observation,
+  mentions: string,
+): void {
+  const output = completedCalls(run, "delegate").at(-1)?.output;
+  const needle = mentions.toLowerCase();
+  t.check(
+    output,
+    satisfies(
+      (value) =>
+        delegateEnvelopes(value).some((envelope) => {
+          const verdict = judgeSpecialistResult(envelope);
+          return (
+            verdict.usable
+            && verdict.envelope.kind !== "error"
+            && JSON.stringify(verdict.envelope).toLowerCase().includes(needle)
+          );
+        }),
+      `delegate returned a usable, non-error result naming "${mentions}"; observed ${describeCalls(run)}`,
+    ),
+  ).label("delegate result is real and names the fixture");
+}
+
+/** The specialist envelopes in a delegate output: itself, or each team task. */
+export function delegateEnvelopes(output: unknown): readonly unknown[] {
+  const results = (output as { results?: unknown } | null)?.results;
+  return Array.isArray(results) ? results : output == null ? [] : [output];
 }
