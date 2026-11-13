@@ -304,8 +304,8 @@ export async function handOffOfferToProject(
     // by buildExtractionPayload is today's date. The start is therefore always
     // after the signed date, so the date-pair reconciliation inside
     // createProjectWithLead passes for this path. pcaInspector stays null —
-    // the resulting `warn` entry surfaces the project as NEEDS_ATTENTION
-    // rather than creating a silent gap on an Active project.
+    // the resulting readiness warn is one of the project's live Needs
+    // Attention conditions once work starts, rather than a silent gap.
     const start = new Date();
     start.setDate(start.getDate() + 14);
     const end = new Date(start);

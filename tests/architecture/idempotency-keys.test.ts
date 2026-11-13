@@ -136,6 +136,12 @@ const SEND_PATHS: ReadonlyArray<{
     evidence: /"Idempotency-Key": inviteKeys\.current\(`invite:\$\{email\}`\)/,
     route: "app/api/(data)/users/route.ts",
   },
+  {
+    // Required, not derived: the route refuses a send without one (#449).
+    caller: "components/offers/offer-follow-up-alerts.tsx",
+    evidence: /idempotencyHeader\(followUpKey\.current\(\)\)/,
+    route: "app/api/(data)/offers/[offerId]/follow-ups/route.ts",
+  },
 ];
 
 test("every route reading an Idempotency-Key has a caller that sends one", () => {

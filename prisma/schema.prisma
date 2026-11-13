@@ -576,6 +576,10 @@ enum OutboxEventKind {
   /// One attempt at emailing a tradie about a checklist issue. Keyed per
   /// attempt: a retry somebody pressed is a new email, a replay is not.
   CHECKLIST_ISSUE_EMAIL_SEND
+  /// One follow-up email to a client about an offer they have not answered.
+  /// Keyed per attempt (the browser's Idempotency-Key), so a double click or
+  /// a retry is one email and a deliberate follow-up the next day is another.
+  OFFER_FOLLOW_UP_SEND
 }
 
 enum AgentMemoryProvenance {
@@ -1299,6 +1303,7 @@ model User {
   variationsRaised    Variation[]          @relation("VariationRaisedBy")
   tradeSelections     TradeSelection[]     @relation("TradeSelectionSelectedBy")
   createdOffers       Offer[]              @relation("OfferCreatedBy")
+  offerFollowUps      OfferFollowUp[]      @relation("OfferFollowUpSentBy")
   xeroConnections     XeroConnection[]     @relation("XeroConnections")
   agentSessions       AgentSession[]
   agentActionAudits   AgentActionAudit[]
@@ -1793,6 +1798,7 @@ model Offer {
   contract                 Contract?
   acceptanceEnvelopes      Envelope[]                @relation("OfferAcceptanceEnvelopes")
   documentSends            OfferDocumentSend[]
+  followUps                OfferFollowUp[]
   statusEvents             OfferStatusEvent[]
   unconfirmedEnvelopeSends UnconfirmedEnvelopeSend[]
   lead                     Lead                      @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -2017,6 +2023,29 @@ model OfferDocumentReply {
   agentChunks    AgentFileChunk[]
 
   @@index([sendId, receivedAt])
+}
+
+/// One follow-up email the office sent a client about an offer still waiting
+/// on them (issue #449). Written only after the mail provider accepted the
+/// message, so a row here is an email that went out. The latest row is what
+/// restarts the 24-hour follow-up clock on the Offers page.
+model OfferFollowUp {
+  id         String   @id @default(uuid())
+  offerId    String
+  offer      Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  sentAt     DateTime @default(now())
+  sentById   String?
+  sentBy     User?    @relation("OfferFollowUpSentBy", fields: [sentById], references: [id], onDelete: SetNull)
+  /// The address it went to, as sent: one of the lead's own.
+  toAddress  String
+  /// The subject and body as the administrator last edited them.
+  subject    String
+  body       String   @db.Text
+  /// The browser's Idempotency-Key for this send. Unique so a replayed request
+  /// can never record the same email twice.
+  attemptKey String   @unique
+
+  @@index([offerId, sentAt])
 }
 
 // One row per lifecycle transition, for accountability + legal trail.

@@ -51,6 +51,7 @@ export function emptyOfferGroupResult(
 export function emptyOfferKPIs(): OfferKPIs {
   return {
     allOffers: { total: 0, trendDelta: 0 },
+    openOffers: 0,
     approvedOffers: { total: 0, trendDelta: 0 },
     pendingOffers: { total: 0, trendDelta: 0 },
     rejectedOffers: { total: 0, trendDelta: 0 },
@@ -74,20 +75,24 @@ export async function queryOfferGroups(
     status && status !== "all" && Object.hasOwn(OFFER_STATUS_BUCKETS, status)
       ? OFFER_STATUS_BUCKETS[status]
       : null;
-  let leadIdsInBucket: number[] | null = null;
-  if (bucketStatuses) {
-    const rows = await db.$queryRaw<{ leadId: number }[]>`
-      WITH representative AS (
-        SELECT DISTINCT ON (o."leadId") o."leadId", o."offerStatus"
-        FROM "Offer" o
-        ${scopedOfferJoin(scope)}
-        ORDER BY o."leadId", o."isActive" DESC, o."revisionNumber" DESC, o."createdAt" DESC
-      )
-      SELECT "leadId" FROM representative
-      WHERE "offerStatus" IN (${Prisma.join(bucketStatuses)})
-    `;
-    leadIdsInBucket = rows.map((row) => row.leadId);
-  }
+  // "All" is every offer still in play: a rejected one stays on the Rejected
+  // tab and is not mixed into the working list (issue #450). Expressed against
+  // the same representative revision as the buckets, so a lead whose newest
+  // revision was rejected is out and one re-priced after a rejection is in.
+  const bucketFilter = bucketStatuses
+    ? Prisma.sql`"offerStatus" IN (${Prisma.join(bucketStatuses)})`
+    : Prisma.sql`"offerStatus" NOT IN (${Prisma.join(OFFER_STATUS_BUCKETS.rejected)})`;
+  const rows = await db.$queryRaw<{ leadId: number }[]>`
+    WITH representative AS (
+      SELECT DISTINCT ON (o."leadId") o."leadId", o."offerStatus"
+      FROM "Offer" o
+      ${scopedOfferJoin(scope)}
+      ORDER BY o."leadId", o."isActive" DESC, o."revisionNumber" DESC, o."createdAt" DESC
+    )
+    SELECT "leadId" FROM representative
+    WHERE ${bucketFilter}
+  `;
+  const leadIdsInBucket = rows.map((row) => row.leadId);
 
   const leadWhere = offerListLeadWhere(scope, leadIdsInBucket, q);
   const [leads, totalCount, totalOfferCount] = await Promise.all([
@@ -165,6 +170,7 @@ export async function queryOfferGroups(
 type OfferKPIQueryResult = {
   total_versions: bigint;
   all_offers: bigint;
+  open_offers: bigint;
   pending_offers: bigint;
   approved_offers: bigint;
   rejected_offers: bigint;
@@ -209,6 +215,7 @@ export async function queryOfferKPIs(
     SELECT
       (SELECT COUNT(*) FROM "Offer" o ${scopedOfferJoin(scope)}) AS total_versions,
       COUNT(*) AS all_offers,
+      COUNT(*) FILTER (WHERE "offerStatus" NOT IN (${rejected})) AS open_offers,
       COUNT(*) FILTER (WHERE "offerStatus" IN (${pending})) AS pending_offers,
       COUNT(*) FILTER (WHERE "offerStatus" IN (${approved})) AS approved_offers,
       COUNT(*) FILTER (WHERE "offerStatus" IN (${rejected})) AS rejected_offers,
@@ -232,6 +239,7 @@ export async function queryOfferKPIs(
       result.all_current_week,
       result.all_previous_week,
     ),
+    openOffers: Number(result.open_offers),
     approvedOffers: offerKPI(
       result.approved_offers,
       result.approved_current_week,

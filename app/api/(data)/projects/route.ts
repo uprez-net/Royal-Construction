@@ -1,6 +1,7 @@
 import {
-  getCachedProjects,
   getCachedProjectsForLookup,
+  getProjects,
+  getProjectsNeedingAttention,
 } from "@/lib/data/projects";
 import {
   projectListQuerySchema,
@@ -29,11 +30,24 @@ export async function GET(request: NextRequest) {
     return successResponse(result);
   }
 
+  // Every project needing attention, for the Projects page's Alerts card. Its
+  // own read rather than taken from the list's rows, which are one page of
+  // one chip: an overdue job on page three is still overdue.
+  if (mode === "attention") {
+    return successResponse(await getProjectsNeedingAttention());
+  }
+
   // Handle main list mode
   const params = parseSearchParamsWithResponse(url, projectListQuerySchema);
   if (!params.success) return params.response;
 
-  const projects = await getCachedProjects({
+  // Uncached, like the page's first render. Each row now carries its live
+  // Needs Attention conditions (issue #452), and those turn on the clock (an
+  // activity becomes overdue overnight) and on records that never expire the
+  // "projects" tag — a compliance alert the cron raises, a checklist defect, a
+  // variation. A list cached for "max" would keep reporting a job as fine
+  // after it stopped being, which is the silent kind of wrong.
+  const projects = await getProjects({
     status: params.data.status,
     page: params.data.page,
     limit: params.data.limit,

@@ -15,6 +15,39 @@ const COMPLIANCE_STAGE_STATUSES = [
   ProjectStatus.COMPLIANCE_STARTED,
 ] as const;
 
+/** The documents a build may not start without, as the office names them. */
+export type BuildStartDocument =
+  | "construction certificate"
+  | "HBCF certificate";
+
+/**
+ * Which of the documents a build may not start without the file does not hold
+ * yet: a construction certificate (or CDC) and the HBCF home-warranty
+ * certificate, each with a file on it.
+ *
+ * One rule, read in two places: `closeComplianceIfComplete` closes the
+ * compliance stage when this is empty, and the project's Needs Attention
+ * conditions flag a job that has started on site while it is not.
+ */
+export function missingBuildStartDocuments(
+  held: ReadonlySet<ComplianceDocumentType>,
+): BuildStartDocument[] {
+  const missing: BuildStartDocument[] = [];
+  if (!CERTIFICATE_DOCUMENT_TYPES.some((type) => held.has(type))) {
+    missing.push("construction certificate");
+  }
+  if (!held.has(ComplianceDocumentType.HOME_INSURANCE)) {
+    missing.push("HBCF certificate");
+  }
+  return missing;
+}
+
+/** The document types `missingBuildStartDocuments` reads, for a query. */
+export const BUILD_START_DOCUMENT_TYPES: readonly ComplianceDocumentType[] = [
+  ...CERTIFICATE_DOCUMENT_TYPES,
+  ComplianceDocumentType.HOME_INSURANCE,
+];
+
 export async function recordComplianceCertificateIssued(
   principal: DomainPrincipal,
   input: { engagementId: string; projectId: string },
@@ -49,12 +82,7 @@ export async function closeComplianceIfComplete(
     where: {
       engagementId: input.engagementId,
       engagement: { projectId: input.projectId },
-      documentType: {
-        in: [
-          ...CERTIFICATE_DOCUMENT_TYPES,
-          ComplianceDocumentType.HOME_INSURANCE,
-        ],
-      },
+      documentType: { in: [...BUILD_START_DOCUMENT_TYPES] },
     },
     select: { documentType: true, _count: { select: { files: true } } },
   });
@@ -63,11 +91,11 @@ export async function closeComplianceIfComplete(
       .filter((document) => document._count.files > 0)
       .map((document) => document.documentType),
   );
-  const hasCertificate = CERTIFICATE_DOCUMENT_TYPES.some((type) =>
-    held.has(type),
-  );
-  if (!hasCertificate || !held.has(ComplianceDocumentType.HOME_INSURANCE)) {
-    return { completed: false as const, reason: "documents-outstanding" as const };
+  if (missingBuildStartDocuments(held).length > 0) {
+    return {
+      completed: false as const,
+      reason: "documents-outstanding" as const,
+    };
   }
 
   const completed = await db.$transaction(async (tx) => {
@@ -91,6 +119,6 @@ export async function closeComplianceIfComplete(
   });
   return {
     completed,
-    reason: completed ? "completed" as const : "already-complete" as const,
+    reason: completed ? ("completed" as const) : ("already-complete" as const),
   };
 }

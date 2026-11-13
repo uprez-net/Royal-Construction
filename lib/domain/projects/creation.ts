@@ -93,8 +93,8 @@ export type CreateProjectFromLeadInput = {
   readonly sourceDocuments: ProjectSourceDocuments;
   /**
    * The caller has already shown the advisory blockers and the operator
-   * accepted them. Hard blockers still throw — confirmation only suppresses
-   * the NEEDS_ATTENTION flag on advisory warns.
+   * accepted them. Hard blockers still throw either way, and advisory warns no
+   * longer change the status (issue #452), so this is now informational.
    */
   readonly confirmDateBlockers?: boolean;
 };
@@ -449,16 +449,19 @@ export async function createProjectFromLead(
   const { blocks, warns } = partitionBlockers(blockers);
   if (blocks.length > 0) throw new ProjectDateBlockerError(blocks);
 
-  // Advisory warns (missing PCA, missing HBCF, unparseable signed date) create
-  // the project as NEEDS_ATTENTION so the gap is visible rather than silent.
-  //
-  // Otherwise the status is LEFT OFF, so `Project.status @default(DRAFT)`
-  // applies. Setting ACTIVE here would declare a build under way on the day it
-  // was created — which is exactly what DRAFT replaced ACTIVE as the default
-  // to stop. The readiness gate above still asks its question against ACTIVE:
-  // it is checking what stands between this project and going on site, not
+  // The status is LEFT OFF, so `Project.status @default(DRAFT)` applies.
+  // Setting ACTIVE here would declare a build under way on the day it was
+  // created — which is exactly what DRAFT replaced ACTIVE as the default to
+  // stop. The readiness gate above still asks its question against ACTIVE: it
+  // is checking what stands between this project and going on site, not
   // asserting that it has.
-  const flagNeedsAttention = warns.length > 0 && !input.confirmDateBlockers;
+  //
+  // Advisory warns (missing PCA, missing HBCF, unparseable signed date) used
+  // to create the project as NEEDS_ATTENTION. They no longer touch the status
+  // (issue #452): the same readiness check is one of the live attention
+  // conditions in `attention.ts`, so the gap shows while it exists and clears
+  // when somebody fills it in, and the project keeps its lifecycle stage
+  // meanwhile. They are still returned as `warnings` for the wizard to show.
 
   const customers = await resolveCustomersForProject(owners, db);
   // `requireProjectOwners` refuses an empty list, so there is always a first.
@@ -479,7 +482,6 @@ export async function createProjectFromLead(
       siteManagerId: siteManager.id,
       requirements: requirements as unknown as Prisma.InputJsonValue,
       ...(input.parties ? { parties: input.parties } : {}),
-      ...(flagNeedsAttention ? { status: ProjectStatus.NEEDS_ATTENTION } : {}),
       customerId: customer.id,
       customers: {
         create: customers.map((owner, position) => ({

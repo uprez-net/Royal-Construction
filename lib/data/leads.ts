@@ -229,6 +229,7 @@ export async function getLeads(
   pendingMeetings?: boolean,
   upcomingMeetings?: boolean,
   sort?: LeadListSort,
+  excludeLost?: boolean,
 ): Promise<PaginatedLeadsResult> {
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const safeLimit =
@@ -343,7 +344,12 @@ export async function getLeads(
       ...timingFilter,
       ...(statusCleaned && statusCleaned.length > 0
         ? { stage: { in: statusCleaned } }
-        : {}),
+        : excludeLost
+          ? // The table's "All" is the working list (issue #450): a lead
+            // marked Lost is still on its own Lost chip, and nothing about
+            // the row changes.
+            { stage: { not: "LOST" as LeadStage } }
+          : {}),
       isArchived: isArchived ?? false,
       ...(pendingFollowUps !== undefined && {
         followupDate: {

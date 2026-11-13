@@ -1,4 +1,5 @@
 import { OfferFilter } from "@/components/offers/offer-filter";
+import { OfferFollowUpAlerts } from "@/components/offers/offer-follow-up-alerts";
 import { OfferHeader } from "@/components/offers/offer-header";
 import { OfferKPI } from "@/components/offers/offer-kpi";
 import { OfferTable } from "@/components/offers/offer-table";
@@ -9,7 +10,9 @@ import {
   getOfferGroupsCached,
   getOfferKPIsCached,
 } from "@/lib/data/offer-listing";
+import { getOfferFollowUpAlerts } from "@/lib/data/offer-follow-ups";
 import { getUserByClerkId } from "@/lib/data/user";
+import { userPrincipal } from "@/lib/domain/principal";
 import { leadListScope } from "@/lib/offer/access";
 import { auth } from "@clerk/nextjs/server";
 import { connection } from "next/server";
@@ -32,16 +35,28 @@ async function OfferPageClient() {
   const { userId } = await auth();
   const user = userId ? await getUserByClerkId(userId) : null;
   const scope = user ? leadListScope(user) : null;
-  const [offerKPIs, offers] = scope
-    ? await Promise.all([
-        getOfferKPIsCached(scope),
-        getOfferGroupsCached(1, 10, "", "all", scope),
-      ])
-    : [emptyOfferKPIs(), emptyOfferGroupResult(1, 10)];
+  const [offerKPIs, offers, followUps] =
+    user && scope
+      ? await Promise.all([
+          getOfferKPIsCached(scope),
+          getOfferGroupsCached(1, 10, "", "all", scope),
+          // Uncached: an offer falls due because a day passed (issue #449).
+          getOfferFollowUpAlerts(userPrincipal(user)),
+        ])
+      : [
+          emptyOfferKPIs(),
+          emptyOfferGroupResult(1, 10),
+          { alerts: [], failed: false },
+        ];
 
   return (
     <div className="space-y-6">
       <OfferHeader />
+      <OfferFollowUpAlerts
+        alerts={followUps.alerts}
+        failed={followUps.failed}
+        senderName={user?.name?.trim() || null}
+      />
       <OfferKPI
         activeOffers={offerKPIs.allOffers}
         approvedOffers={offerKPIs.approvedOffers}
@@ -52,7 +67,8 @@ async function OfferPageClient() {
       <Card className="border-border/70 bg-white/95 shadow-sm">
         <OfferFilter
           initialTabCounts={{
-            all: offerKPIs.allOffers.total,
+            // Every offer not rejected: what the All tab lists (issue #450).
+            all: offerKPIs.openOffers,
             pending: offerKPIs.pendingOffers.total,
             approved: offerKPIs.approvedOffers.total,
             rejected: offerKPIs.rejectedOffers.total,

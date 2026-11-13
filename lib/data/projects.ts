@@ -18,6 +18,11 @@ import {
   type ProjectListSortBy,
   type ProjectLookupItem,
 } from "@/lib/domain/projects/queries";
+import {
+  needingAttention,
+  readProjectAttention,
+  type ProjectAttention,
+} from "@/lib/domain/projects/attention";
 import type { DomainPrincipal } from "@/lib/domain/principal";
 import { CACHE_PROFILES } from "@/types/cache";
 import type {
@@ -126,6 +131,37 @@ export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
   }
 }
 
+/**
+ * Every project needing attention, most urgent first, for the Projects page's
+ * Alerts card (issues #451, #452).
+ *
+ * Uncached on purpose: whether an activity is overdue turns on today's date,
+ * and the conditions come from tables that never expire the "projects" tag.
+ *
+ * A failed read says so in `failed` rather than answering an empty list: an
+ * empty Alerts card reads as "nothing is overdue", which is the one wrong
+ * answer this card exists to prevent. It still does not throw, because the
+ * card is one panel among several and must not blank the list beneath it.
+ */
+export type ProjectAttentionResult = {
+  projects: ProjectAttention[];
+  failed: boolean;
+};
+
+export async function getProjectsNeedingAttention(): Promise<ProjectAttentionResult> {
+  try {
+    return {
+      projects: needingAttention(
+        await readProjectAttention(await currentPrincipal(), prisma),
+      ),
+      failed: false,
+    };
+  } catch (error) {
+    console.error("Error reading project attention:", error);
+    return { projects: [], failed: true };
+  }
+}
+
 export async function getProjectKPIs(): Promise<ProjectKPIs> {
   try {
     return await readProjectKPIs(await currentPrincipal(), prisma);
@@ -144,33 +180,6 @@ export async function getProjectKPIs(): Promise<ProjectKPIs> {
 // and a cache key that ignored who was asking would hand one caller's scope to
 // the next.
 // ---------------------------------------------------------------------------
-
-async function cachedProjects(
-  principal: DomainPrincipal,
-  query: ProjectListQuery | undefined,
-) {
-  "use cache";
-
-  cacheTag("projects");
-  cacheLife(CACHE_PROFILES.LONG);
-
-  try {
-    return await listProjects(principal, query, prisma);
-  } catch (error) {
-    console.error("Error fetching projects:", error);
-    return {
-      items: [],
-      page: query?.page ?? 1,
-      limit: query?.limit ?? 12,
-      totalCount: 0,
-      totalPages: 1,
-    } satisfies PaginatedProjectsResult;
-  }
-}
-
-export async function getCachedProjects(query?: ProjectListQuery) {
-  return cachedProjects(await currentPrincipal(), query);
-}
 
 async function cachedProjectById(principal: DomainPrincipal, id: string) {
   "use cache";

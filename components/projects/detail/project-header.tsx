@@ -21,6 +21,7 @@ import { HbcfCapacityBadge } from "@/components/projects/detail/hbcf-capacity-ba
 import { SiteManagerSelector } from "@/components/projects/detail/site-manager-selector";
 import { StatusPill } from "@/components/common/status-pill";
 import type { ProjectDetail } from "@/types/project";
+import { readinessWarningsApply } from "@/lib/domain/projects/readiness";
 import { formatDisplayDate, normalizeDateString } from "@/utils/date";
 import { UploadButton } from "@/components/common/upload-button";
 import { appendFileToProject } from "@/lib/store/slices/projectsSlice";
@@ -78,12 +79,9 @@ export function ProjectHeader({
   const pcaMissing = !pcaInspector || pcaInspector.trim() === "";
 
   const statusTone = projectStatusConfig(project.status);
-  const showPcaWarning =
-    pcaMissing
-    && (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
-  const showHbcfWarning =
-    hbcfInsuranceMissing
-    && (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
+  const warnsApply = readinessWarningsApply(project.status);
+  const showPcaWarning = pcaMissing && warnsApply;
+  const showHbcfWarning = hbcfInsuranceMissing && warnsApply;
 
   const legalSectionAnchor = `#${LEGAL_SECTION_ID}`;
   const ownerContacts = (

@@ -71,6 +71,7 @@ export async function fetchLeads(params: {
   upcomingFollowUps?: boolean;
   pendingMeetings?: boolean;
   upcomingMeetings?: boolean;
+  excludeLost?: boolean;
 }): Promise<PaginatedLeadsResult> {
   const query = new URLSearchParams();
   if (params.sort) query.append("sort", params.sort);
@@ -90,6 +91,7 @@ export async function fetchLeads(params: {
     query.append("pendingMeetings", params.pendingMeetings.toString());
   if (params.upcomingMeetings !== undefined)
     query.append("upcomingMeetings", params.upcomingMeetings.toString());
+  if (params.excludeLost) query.append("excludeLost", "true");
   const data = await fetchJson<PaginatedLeadsResult>(
     `/api/leads?${query.toString()}`,
     { method: "GET", cache: "no-store" },
