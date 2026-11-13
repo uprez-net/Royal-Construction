@@ -1,7 +1,8 @@
+import { withCronReporting } from "@/lib/observability/cron";
 import { sendTradieReminders } from "@/lib/jobs/tradie-reminder";
 import { successResponse, errorResponse } from "@/utils/validators";
 
-export async function GET(request: Request) {
+async function handle(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
@@ -30,3 +31,5 @@ export async function GET(request: Request) {
     });
   }
 }
+
+export const GET = withCronReporting("/api/cron/tradie-reminders", handle);

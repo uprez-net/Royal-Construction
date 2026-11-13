@@ -114,6 +114,40 @@ These catch new duplication at the boundaries. **They cannot tell you that two
 rules in two places mean the same thing** — that is the part that needs you to
 search first, which is what section 1 of the guide is for.
 
+## Error reporting
+
+Production failures reach Sentry and, from there, the office inbox. The pieces
+live in `lib/observability/`; read `lib/observability/report-error.ts` before
+adding a call.
+
+- **Production only.** `errorReportingEnabled` is true for the production
+  deployment with a DSN, and nothing else. It reuses `notificationEnvironment`
+  because the staging project reports `VERCEL_ENV=production` for its own
+  domain; `APP_ENV=staging` must win. Preview, staging and local send nothing.
+- **What is reported:** an unexpected exception, a 5xx, a failed outside
+  service, a `DomainSideEffectError` (the email that never went). **What is
+  not:** a refusal — `DomainError` below 500, a validation failure, any 4xx.
+  `reportError` drops those itself, so a catch block never has to classify.
+- **An outside service fails** → `reportExternalError("graph", "sendMail", e)`.
+  It groups by service, operation and status, so one outage is one email. It
+  also reports a 401 or 403, because that is our credential expiring.
+- **A catch block that answers 500** still `console.error`s, and that is
+  enough: the server config captures the `error` level. Reach for `reportError`
+  when you want ids and a source label on the event. Do not call both for the
+  same error; an already-reported error is skipped, but one call is clearer.
+- **Shared code imports `@sentry/core`, never `@sentry/nextjs`.** The Next SDK
+  imports `next/*` and fails `eve build`. Only the four Sentry entry points may
+  import it (`tests/architecture/error-reporting.test.ts`).
+- **A cron route** exports `GET` through `withCronReporting("/api/cron/…", handle)`
+  and the path must be in `vercel.json`; the architecture test fails otherwise.
+- **Never put client data on an event.** `dataCollection` is locked down and
+  `redact.ts` strips emails, phones and tokens from messages, but neither
+  catches a name or street address. Pass ids in `ids`, never record contents.
+
+Not yet covered: the Eve service (`agent/`) has no Sentry client, so
+`reportError` is a no-op there; workflow steps that throw without logging;
+DocuSign and Xero calls beyond what they `console.error`.
+
 ## The suite runs on Vitest
 
 `node:test` is gone (issue #326). A new test imports `test`/`describe`/`it` and

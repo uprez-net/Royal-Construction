@@ -1,3 +1,4 @@
+import { withCronReporting } from "@/lib/observability/cron";
 import prisma from "@/lib/prisma";
 import { errorResponse } from "@/utils/validators";
 import { del, list } from "@vercel/blob";
@@ -5,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const ATTACHMENT_PREFIX = "email-ad-hock-attachment-upload/attachments/";
 
-export async function GET(request: NextRequest) {
+async function handle(request: NextRequest) {
   // 1. Authorization check for Vercel Cron
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
@@ -74,3 +75,5 @@ export async function GET(request: NextRequest) {
     });
   }
 }
+
+export const GET = withCronReporting("/api/cron/blob-storage-cleanup", handle);

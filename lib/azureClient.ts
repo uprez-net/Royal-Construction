@@ -1,3 +1,4 @@
+import { reportExternalError } from "@/lib/observability/external";
 import { createGraphContext, type EmailAttachment } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
 
@@ -50,12 +51,20 @@ export async function sendEmail(email: EmailInput) {
   // Add RC to the CC list if there are multiple recipients in the 'to' field
   ccList.push(ccEmail);
 
-  await graphClient.sendMail({
-    subject: email.subject,
-    body: email.body,
-    to: toList,
-    cc: ccList,
-    bcc: bccList,
-    attachments: email.attachments,
-  });
+  try {
+    await graphClient.sendMail({
+      subject: email.subject,
+      body: email.body,
+      to: toList,
+      cc: ccList,
+      bcc: bccList,
+      attachments: email.attachments,
+    });
+  } catch (error) {
+    // Every client email goes through here, so this is the one place that
+    // knows a send failed for a reason on Microsoft's side or ours. Callers
+    // still decide what the failure means for their flow.
+    reportExternalError("graph", "sendMail", error);
+    throw error;
+  }
 }

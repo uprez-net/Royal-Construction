@@ -1,3 +1,5 @@
+import { reportExternalError } from "@/lib/observability/external";
+
 /**
  * Retry policy for Graph calls made off the response path.
  *
@@ -79,6 +81,11 @@ export async function withGraphRetry<T>(
         console.warn(
           `[${label}] failed on attempt ${attempt}/${attempts}: ${message}`,
         );
+        // Only here, once retries are spent or the failure is not worth one:
+        // a 429 that clears on the second attempt is not an incident. A 404
+        // or other 4xx is filtered out inside, so a caller that expects one
+        // does not page anyone.
+        reportExternalError("graph", label, error);
         throw error;
       }
 

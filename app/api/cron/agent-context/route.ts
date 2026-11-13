@@ -1,3 +1,4 @@
+import { withCronReporting } from "@/lib/observability/cron";
 import {
   refreshAgentContext,
   refreshAgentFiles,
@@ -32,7 +33,7 @@ export const maxDuration = 300;
 /** Leaves time to write and embed what was read before the function is stopped. */
 const DOCUMENT_READ_BUDGET_MS = 200_000;
 
-export async function GET(request: Request) {
+async function handle(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
     return errorResponse("Cron not configured", {
@@ -87,3 +88,5 @@ export async function GET(request: Request) {
     });
   }
 }
+
+export const GET = withCronReporting("/api/cron/agent-context", handle);

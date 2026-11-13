@@ -1,8 +1,9 @@
+import { withCronReporting } from "@/lib/observability/cron";
 import { createGraphContext } from "@/lib/graph/client";
 import { getGraphConfig, type GraphMailbox } from "@/lib/graph/config";
 import { NextResponse } from "next/server";
 
-export async function GET(request: Request) {
+async function handle(request: Request) {
   // Verify it is a Vercel cron request (standard security check on Vercel environment)
   const authHeader = request.headers.get("authorization");
   if (
@@ -67,3 +68,5 @@ export async function GET(request: Request) {
     ),
   });
 }
+
+export const GET = withCronReporting("/api/cron/graph-renew", handle);

@@ -1,3 +1,4 @@
+import { withCronReporting } from "@/lib/observability/cron";
 import prisma from "@/lib/prisma";
 import {
   sydneyDateOnly,
@@ -8,7 +9,7 @@ import { errorResponse, successResponse } from "@/utils/validators";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "@/lib/notification/novu";
 
-export async function GET(request: Request) {
+async function handle(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
@@ -129,3 +130,8 @@ export async function GET(request: Request) {
     });
   }
 }
+
+export const GET = withCronReporting(
+  "/api/cron/meeting-review-reminder",
+  handle,
+);

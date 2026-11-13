@@ -3,9 +3,12 @@
 import { AlertTriangle, Copy, RefreshCw, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { isServerOriginError } from "@/lib/observability/filter";
+import { reportError } from "@/lib/observability/report-error";
 
 export interface RouteErrorProps {
   /** The error passed to the route's error boundary. */
@@ -43,6 +46,15 @@ export function RouteError({
 }: RouteErrorProps) {
   const router = useRouter();
   const reference = error.digest ?? "unavailable";
+
+  useEffect(() => {
+    // A digest means the error began on the server and was reported there with
+    // its real message and stack; this copy is a redacted stub. Only an error
+    // that started in the browser has not been reported yet.
+    if (!isServerOriginError(error)) {
+      reportError(error, { source: `browser:route-error:${fallbackHref}` });
+    }
+  }, [error, fallbackHref]);
 
   const copyReference = async () => {
     try {
