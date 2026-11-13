@@ -360,6 +360,8 @@ export const leadLookupParamSchema = z.object({
   upcomingFollowUps: z.string().optional(),
   pendingMeetings: z.string().optional(),
   upcomingMeetings: z.string().optional(),
+  /** The leads table's "All" view: every stage but Lost (issue #450). */
+  excludeLost: z.string().optional(),
 });
 
 export const leadStatusSchema = z.enum(leadStages);

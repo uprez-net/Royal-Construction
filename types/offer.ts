@@ -145,6 +145,12 @@ export interface OfferKPIs {
   /** Offer revisions across every lead — the KPI totals count leads, not revisions. */
   totalVersions: number;
   allOffers: KPIResult;
+  /**
+   * Leads whose offer is not in the rejected bucket: what the table's "All"
+   * tab lists and counts (issue #450). `allOffers` stays the true total for
+   * the Total Offers card.
+   */
+  openOffers: number;
   pendingOffers: KPIResult;
   approvedOffers: KPIResult;
   rejectedOffers: KPIResult;

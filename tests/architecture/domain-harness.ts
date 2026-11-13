@@ -143,6 +143,14 @@ export function recordingDb(script: Script = {}): RecordingDb {
             return Promise.resolve(1);
           };
         }
+        // A tagged raw query answers from the script under "$.queryRaw", and
+        // like any read it throws when the test did not say what it returns.
+        if (property === "$queryRaw") {
+          return async (...args: unknown[]) => {
+            calls.push({ args, operation: "$.queryRaw" });
+            return answer("$.queryRaw", args);
+          };
+        }
         if (typeof property !== "string" || property.startsWith("$")) {
           return undefined;
         }

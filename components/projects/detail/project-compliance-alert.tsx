@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowRight, ShieldAlert } from "lucide-react";
 
+import { readinessWarningsApply } from "@/lib/domain/projects/readiness";
 import type { ProjectDetail } from "@/types/project";
 
 type LegalRequirements = {
@@ -39,10 +40,10 @@ export function ProjectComplianceAlert({
 
   const pcaMissing = isBlank(legal?.pcaInspector);
   const hbcfMissing = isBlank(legal?.hbcfInsuranceNumber);
-  const isActiveJob =
-    project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION";
-
-  if (!isActiveJob || (!pcaMissing && !hbcfMissing)) {
+  if (
+    !readinessWarningsApply(project.status)
+    || (!pcaMissing && !hbcfMissing)
+  ) {
     return null;
   }
 

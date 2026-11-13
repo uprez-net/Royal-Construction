@@ -131,6 +131,10 @@ test("the KPI roll-up counts only what the caller may list", async () => {
       { _count: { _all: 2 }, status: ProjectStatus.COMPLETED },
       { _count: { _all: 1 }, status: ProjectStatus.DRAFT },
     ],
+    // Drafting: not finished and no activity started (issue #452).
+    "project.count": 1,
+    // Needs Attention is derived from the records, not the status column.
+    "project.findMany": [],
   });
 
   const kpis = await getProjectKPIs(customerWithAccount, recorder.db);
@@ -139,19 +143,27 @@ test("the KPI roll-up counts only what the caller may list", async () => {
     active: 3,
     completed: 2,
     delayed: 0,
+    drafting: 1,
     needsAttention: 0,
     onTrack: 0,
-    preConstruction: 1,
     totalActive: 4,
   });
 
-  // The scope reached the query. The raw `SELECT … FROM "Project"` this
+  // The scope reached every query. The raw `SELECT … FROM "Project"` this
   // replaced could not carry one, so the tiles counted every customer's jobs.
   const [call] = recorder.calls;
   assert.equal(call.operation, "project.groupBy");
   assert.deepEqual((call.args as { where: unknown }).where, {
     customerId: "cus_1",
   });
+  for (const operation of ["project.count", "project.findMany"]) {
+    const scoped = recorder.calls.find((c) => c.operation === operation);
+    assert.equal(
+      (scoped?.args as { where: { customerId?: string } }).where.customerId,
+      "cus_1",
+      operation,
+    );
+  }
 });
 
 /* ------------------------------------------------------------- the milestone */
@@ -684,7 +696,9 @@ test("a converted lead is born DRAFT, not ACTIVE", async () => {
     /status: ProjectStatus\.ACTIVE/,
     "a converted lead must not be created ACTIVE",
   );
-  assert.match(data, /flagNeedsAttention[\s\S]*ProjectStatus\.NEEDS_ATTENTION/);
+  // Nor NEEDS_ATTENTION (issue #452): attention is derived live from the
+  // project's records, and writing it here replaced the lifecycle stage.
+  assert.doesNotMatch(data, /ProjectStatus\.NEEDS_ATTENTION/);
 });
 
 test("the wizard binds a typed refusal to the field that caused it", () => {

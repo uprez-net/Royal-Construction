@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { compactCurrency } from "@/utils/formatters";
 import { calcStageProgress } from "@/lib/projects/stage-progress";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
+import { ProjectAttentionReasons } from "./project-attention-reasons";
 import { formatStatus, projectStatusConfig } from "./project-status";
 import type { Role as UserRoles } from "@prisma/client";
 
@@ -80,6 +81,11 @@ export function EnhancedProjectCard({
             {formatStatus(project.status)}
           </Badge>
         </div>
+
+        <ProjectAttentionReasons
+          attention={project.attention}
+          className="mb-3 rounded-md bg-warning-light px-3 py-2"
+        />
 
         <div className="mb-4 grid grid-cols-2 gap-3 border-b border-border/40 pb-4">
           <div>

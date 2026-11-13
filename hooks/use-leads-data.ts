@@ -46,14 +46,19 @@ export type LeadListParams = {
 
 /** Fetch the requested lead cohort, stepping back if its remembered page no longer exists. */
 async function fetchLeadListPage(params: LeadListParams) {
+  const status = resolveStatusFilter(params.status);
   const request = {
     sort: params.sort,
     limit: params.limit ?? 10,
     q: params.query?.trim() || undefined,
-    status: resolveStatusFilter(params.status),
+    status,
     filterTiming: params.filterTiming,
     isArchived: params.isArchived,
     hasOpenTask: params.hasOpenTask,
+    // "All" — no stage chosen — is the working list and leaves Lost leads out
+    // (issue #450); the Lost chip and the Lost KPI still list them. Not on the
+    // archive, which is a record of everything put away, lost or not.
+    excludeLost: !status?.length && !params.isArchived,
   };
   const page = params.page ?? 1;
   const result = await fetchLeads({ ...request, page });

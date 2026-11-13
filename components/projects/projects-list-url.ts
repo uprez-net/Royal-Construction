@@ -1,5 +1,9 @@
 import { ProjectStatus } from "@prisma/client";
-import { PRE_CONSTRUCTION_FILTER } from "@/types/project";
+import {
+  DRAFTING_FILTER,
+  LEGACY_PRE_CONSTRUCTION_FILTER,
+  OPEN_PROJECTS_FILTER,
+} from "@/types/project";
 import type {
   ProjectListQuery,
   ProjectListSortBy,
@@ -30,10 +34,8 @@ export type ProjectsListParamChanges = Partial<
   Record<ProjectsListParamKey, string | null>
 >;
 
-export type ProjectStatusFilter =
-  | ProjectStatus
-  | typeof PRE_CONSTRUCTION_FILTER
-  | null;
+/** A chip's value. Null is "All": every project that is not completed. */
+export type ProjectStatusFilter = ProjectStatus | typeof DRAFTING_FILTER | null;
 
 export type ProjectsListParams = {
   readonly status: ProjectStatusFilter;
@@ -76,13 +78,14 @@ export const PROJECT_SORT_OPTIONS: readonly {
  * or COMPLIANCE_COMPLETED: those are the jobs somebody is working on right now,
  * and the list would have opened with every one of them hidden.
  *
- * Null — every project — rather than a new "not completed" filter, because the
- * chips already answer that question and the cost of the alternative is
- * backwards: a finished job on the list is a row to scroll past, while a job in
- * compliance that is not on the list is a job nobody can find.
+ * Null — the "All" chip. Since issue #450 "All" means every project that is not
+ * completed: `projectsListQuery` sends it as `OPEN_PROJECTS_FILTER`, and a
+ * finished build is on the Completed chip. Every stage before that — draft,
+ * compliance, on site — is still on the list it opens with, which is the part
+ * of the reasoning above that matters.
  *
  * Anything that resets the filters has to come back here, so it stays a named
- * constant even though the value is now null.
+ * constant even though the value is null.
  */
 export const DEFAULT_PROJECT_STATUS_FILTER: ProjectStatusFilter = null;
 
@@ -90,12 +93,15 @@ const DEFAULT_SORT: ProjectSort = "name";
 
 const STATUS_VALUES: readonly string[] = [
   ...Object.values(ProjectStatus),
-  PRE_CONSTRUCTION_FILTER,
+  DRAFTING_FILTER,
 ];
 
 // An unknown status or sort is dropped rather than sent to the API, which
-// would ignore it anyway while the chip row showed nothing selected.
+// would ignore it anyway while the chip row showed nothing selected. A link
+// saved from the retired Pre-construction chip opens Drafting, which replaced
+// it (issue #452).
 function validStatus(value: string | null): ProjectStatusFilter {
+  if (value === LEGACY_PRE_CONSTRUCTION_FILTER) return DRAFTING_FILTER;
   return value && STATUS_VALUES.includes(value)
     ? (value as Exclude<ProjectStatusFilter, null>)
     : DEFAULT_PROJECT_STATUS_FILTER;
@@ -130,7 +136,8 @@ export function projectsListQuery(
     PROJECT_SORT_OPTIONS.find((option) => option.value === list.sort)
     ?? PROJECT_SORT_OPTIONS[0];
   return {
-    status: list.status,
+    // "All" is every project that is not completed (issue #450).
+    status: list.status ?? OPEN_PROJECTS_FILTER,
     page: list.page,
     limit,
     search: list.query,

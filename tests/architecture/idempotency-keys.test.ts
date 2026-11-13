@@ -188,6 +188,12 @@ const SEND_PATHS: ReadonlyArray<{
       /whatsapp\/calls`,\s*\{[\s\S]*?\.\.\.idempotencyHeader\(idempotencyKey\)/,
     route: "app/api/(data)/leads/[leadId]/whatsapp/calls/route.ts",
   },
+  {
+    // Required, not derived: the route refuses a send without one (#449).
+    caller: "components/offers/offer-follow-up-alerts.tsx",
+    evidence: /idempotencyHeader\(followUpKey\.current\(\)\)/,
+    route: "app/api/(data)/offers/[offerId]/follow-ups/route.ts",
+  },
 ];
 
 test("the WhatsApp conversation holds one key per message and rotates only after success", () => {
