@@ -4,6 +4,8 @@ import "server-only";
 import { auth } from "@clerk/nextjs/server";
 import { Novu } from "@novu/api";
 
+import { instrumentApi } from "@/lib/observability/instrument";
+
 import {
   getAllNotificationRecipients,
   getNotificationRecipients,
@@ -16,7 +18,15 @@ import {
   type NotificationRecipient,
 } from "./environment";
 
-const novu = new Novu({ secretKey: process.env.NOVU_SECRET_KEY });
+// `triggerNotification` catches every failure and returns `{ success: false }`,
+// and its callers (the reminder crons, the lead and offer flows) mostly log and
+// move on, so a Novu outage or a revoked key would otherwise mean notifications
+// that quietly stop arriving. The wrapper reports a failed `trigger` with the
+// vendor and operation; the catch below still turns it into the same result.
+const novu = instrumentApi(
+  "novu",
+  new Novu({ secretKey: process.env.NOVU_SECRET_KEY }),
+);
 
 const WORKFLOW_IDENTIFIER = "royal-consturction";
 

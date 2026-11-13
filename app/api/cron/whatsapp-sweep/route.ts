@@ -1,3 +1,4 @@
+import { cronOutcome, withCronReporting } from "@/lib/observability/cron";
 import { NextResponse } from "next/server";
 import { start } from "workflow/api";
 
@@ -32,7 +33,7 @@ const BATCH = 50;
 
 export const maxDuration = 120;
 
-export async function GET(request: Request) {
+async function handle(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
   if (
@@ -89,9 +90,16 @@ export async function GET(request: Request) {
   console.info(
     `[whatsapp-sweep] media ${media.length}; groups ${JSON.stringify(groupOutcomes)}`,
   );
-  return NextResponse.json({
-    groups: groupOutcomes,
-    media: media.length,
-    mediaRun,
-  });
+  // A group that could not be settled is counted, not thrown, so the run
+  // answers 200. Tell the wrapper, or its monitor check-in closes as a success.
+  return cronOutcome(
+    NextResponse.json({
+      groups: groupOutcomes,
+      media: media.length,
+      mediaRun,
+    }),
+    { failed: groupOutcomes.error ?? 0 },
+  );
 }
+
+export const GET = withCronReporting("/api/cron/whatsapp-sweep", handle);

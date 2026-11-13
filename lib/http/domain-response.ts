@@ -1,5 +1,32 @@
-import { isDomainError, type DomainError } from "@/lib/domain/errors";
+import {
+  DomainSideEffectError,
+  isDomainError,
+  type DomainError,
+} from "@/lib/domain/errors";
+import { reportError } from "@/lib/observability/report-error";
 import { errorResponse } from "@/utils/validators/response";
+
+/**
+ * A refusal (400, 403, 404, 409) is the app saying no and needs no one. A
+ * `DomainSideEffectError` (502) is the command failing to do the outside thing
+ * — the email never sent, the envelope DocuSign refused — and the adapters that
+ * call this answer the screen and return, so nothing else would ever log it.
+ * Reporting it here covers every route and action that surfaces a refusal.
+ */
+function reportSideEffectFailure(error: DomainError): void {
+  if (error.status < 500) return;
+  const port = error instanceof DomainSideEffectError ? error.port : "unknown";
+  reportError(error, {
+    source: `domain:${port}`,
+    tags: { port },
+    // One issue per failing port, however many requests hit it.
+    fingerprint: ["domain-side-effect", port],
+    extra:
+      error instanceof DomainSideEffectError
+        ? { retryable: error.retryable }
+        : undefined,
+  });
+}
 
 // One mapping from a domain refusal to the answer a screen receives.
 //
@@ -34,6 +61,7 @@ import { errorResponse } from "@/utils/validators/response";
  */
 export function domainErrorResponse(error: unknown) {
   if (!isDomainError(error)) return null;
+  reportSideEffectFailure(error);
   return errorResponse(error.message, {
     status: error.status,
     code: domainErrorCode(error),
@@ -73,6 +101,7 @@ export function domainActionFailure(
   error: unknown,
 ): DomainActionFailure | null {
   if (!isDomainError(error)) return null;
+  reportSideEffectFailure(error);
   const field = (error as DomainError & { field?: string }).field;
   return {
     code: domainErrorCode(error),

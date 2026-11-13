@@ -1,3 +1,4 @@
+import { withCronReporting } from "@/lib/observability/cron";
 import { NextResponse } from "next/server";
 import { start } from "workflow/api";
 
@@ -22,7 +23,7 @@ const PRINCIPAL = systemPrincipal("cron:comms-sweep");
 
 export const maxDuration = 120;
 
-export async function GET(request: Request) {
+async function handle(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (
     process.env.NODE_ENV === "production"
@@ -56,3 +57,5 @@ export async function GET(request: Request) {
     recordings: recordings.length,
   });
 }
+
+export const GET = withCronReporting("/api/cron/comms-sweep", handle);

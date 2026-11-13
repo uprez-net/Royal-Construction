@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { put } from "@vercel/blob";
+import { put } from "@/lib/blob";
 
 import prisma from "@/lib/prisma";
 import { saveFile } from "@/lib/data/file";

@@ -114,6 +114,101 @@ These catch new duplication at the boundaries. **They cannot tell you that two
 rules in two places mean the same thing** — that is the part that needs you to
 search first, which is what section 1 of the guide is for.
 
+## Error reporting
+
+Production failures reach Sentry and, from there, the office inbox. The pieces
+live in `lib/observability/`; read `lib/observability/report-error.ts` before
+adding a call.
+
+- **Production only.** `errorReportingEnabled` is true for the production
+  deployment with a DSN, and nothing else. It reuses `notificationEnvironment`
+  because the staging project reports `VERCEL_ENV=production` for its own
+  domain; `APP_ENV=staging` must win. Preview, staging and local send nothing.
+- **What is reported:** an unexpected exception, a 5xx, a failed outside
+  service, a `DomainSideEffectError` (the email that never went). **What is
+  not:** a refusal — `DomainError` below 500, a validation failure, any 4xx.
+  `reportError` drops those itself, so a catch block never has to classify.
+- **An outside service fails** → `reportExternalError("graph", "sendMail", e)`.
+  It groups by service, operation and status, so one outage is one email. It
+  also reports a 401 or 403, because that is our credential expiring.
+- **A catch block that answers 500** still `console.error`s, and that is
+  enough: the server config captures the `error` level. Reach for `reportError`
+  when you want ids and a source label on the event. Do not call both for the
+  same error; an already-reported error is skipped, but one call is clearer.
+- **Shared code imports `@sentry/core`, never `@sentry/nextjs`.** The Next SDK
+  imports `next/*` and fails `eve build`. Only the four Sentry entry points may
+  import it, and only `agent/lib/error-reporting.ts` may import `@sentry/node`
+  (`tests/architecture/error-reporting.test.ts`). The three Sentry packages are
+  pinned to one exact version; bump them together or `reportError` silently
+  becomes a no-op.
+- **Vendor SDKs are hooked once, not per call site.** Xero's `accountingApi` is
+  wrapped in `buildXeroClient` and DocuSign's `callApi` in
+  `createDocusignContext`, so a failed call reports with the vendor and the
+  operation from wherever it was made. A new Xero or DocuSign call needs nothing.
+  An operation that IS the credential (a token grant or refresh) passes
+  `force: true`, because DocuSign answers a revoked consent with a 400.
+  A vendor whose rejection carries more than should leave the process gets a
+  `summarise` stand-in: `xero-node` rejects with a JSON **string** holding the
+  response body (the values submitted) and the request headers (the access
+  token), so `lib/xero/failure.ts` reports only the status and Xero's error
+  type. A new vendor with that habit needs the same; a test pins Xero's.
+- **A workflow function** wraps its body so a run that fails after its steps are
+  out of retries is reported once: `try { return await runX(input) } catch (e) {
+  await reportWorkflowError("x", e); throw e }`. The sandbox cannot load Sentry,
+  so the report is a step (`lib/workflow/report-failure.ts`). A new workflow does
+  the same; `tests/workflow/report-failure.test.ts` fails if it does not. A
+  failure the workflow body catches and continues from should `console.error`;
+  the sandbox shares the host console.
+  What reaches that `catch` is not the error the step threw: the runtime
+  rebuilds `new FatalError(message)` with only the message and stack copied
+  across, so the class, `status` and any object mark are gone. A layer that
+  reports from inside a step therefore appends a marker line to the stack
+  (`lib/observability/workflow-context.ts`) and the workflow layer skips a
+  marked failure: one failed run, one report. Do not rely on a property of the
+  error surviving a step.
+- **The Eve agent** is a separate process. `agent/instrumentation/sentry.ts`
+  starts the Node SDK in its `setup` and reports `turn.failed`, `session.failed`,
+  `model.call.failed`, `action.failed` (outcome `failed` only), channel delivery
+  and memory failures. `runAuditedAgentOperation` reports every failed audited
+  write before the adapters turn a `DomainError` into a result the model reads
+  back, so a `DomainSideEffectError` is not just chat text.
+- **A cron route** exports `GET` through `withCronReporting("/api/cron/…", handle)`
+  and the path must be in `vercel.json`; the architecture test fails otherwise.
+  A 401 to Vercel's own scheduler is reported (`CRON_SECRET` no longer matches);
+  a 401 to anyone else is not, and sends no monitor check-in either, so nobody
+  with the URL can keep a dead job looking healthy. A handler that tolerates
+  per-item failures and still answers 200 returns
+  `cronOutcome(response, { failed })`, so its monitor check-in closes as an
+  error. A 5xx is reported by the wrapper only if nothing was logged or reported
+  during the run, so one failure is one issue. Missed-run detection is opt-in
+  per cron through `SENTRY_CRON_MONITORS` (a list of slugs); the free plan
+  includes one monitor.
+- **Blob, Novu and AI are hooked once, too.** Import Blob from `@/lib/blob`,
+  never `@vercel/blob` (a test fails on it): its errors carry no status, so
+  `lib/blob.ts` classifies by the SDK's own classes. Every model comes from the
+  wrapped `gateway` in `lib/model.ts`, so a failed `generateText` anywhere is
+  reported; do not create a second gateway. The Novu client is wrapped because
+  `triggerNotification` swallows its failures into `{ success: false }`.
+- **A failure inside `after()`** is logged by Next with `console.error` and the
+  original error, which console capture reports. `tests/observability/
+  after-errors.test.ts` pins that against the installed Next. An `after()` task
+  that catches and swallows its own error should `console.error` it, as the Graph
+  webhook does.
+- **Tags:** `service` is the process (`app` or `eve`); `vendor` is the outside
+  service (`graph`, `xero`, `docusign`, `ai`). Do not reuse either key.
+- **Never put client data on an event.** `dataCollection` is locked down and
+  `redact.ts` strips emails, phones and tokens from messages, but neither
+  catches a name or street address. Pass ids in `ids`, never record contents.
+  The raw arguments of a `console` call are dropped from events and breadcrumbs
+  (an object passed to `console.error` is not text the redactor can walk), so
+  put what matters in the message.
+
+Not covered: deliberately silent catches (`catch {}`, `.catch(() => null)`);
+Graph calls that do not go through `withGraphRetry` or `sendEmail` (they
+`console.error`, which is captured, but carry no vendor tag); an uncaught throw
+inside Next's `after()` (unverified); and `step.attempt.failed`, which is a retry, not an
+incident.
+
 ## The suite runs on Vitest
 
 `node:test` is gone (issue #326). A new test imports `test`/`describe`/`it` and

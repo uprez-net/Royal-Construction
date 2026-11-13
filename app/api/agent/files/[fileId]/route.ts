@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { get } from "@vercel/blob";
+import { get } from "@/lib/blob";
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getUserByClerkIdCached } from "@/lib/data/user";

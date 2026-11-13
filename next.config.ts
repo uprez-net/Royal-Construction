@@ -1,8 +1,21 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs/config";
 import { withEve } from "eve/next";
 import { withWorkflow } from "workflow/next";
 
+// Relative, not `@/`: next.config.ts is loaded before the alias exists. Pure
+// module with no imports of its own.
+import { notificationEnvironment } from "./lib/notification/environment";
+
+// "Production" as the app already defines it (APP_ENV=staging wins over
+// VERCEL_ENV=production — see lib/notification/environment.ts).
+const reportingEnvironment = notificationEnvironment(process.env);
+
 const nextConfig: NextConfig = {
+  // The browser cannot read APP_ENV or VERCEL_ENV, so the server's answer is
+  // inlined here for instrumentation-client.ts. Only a production build turns
+  // browser error reporting on.
+  env: { NEXT_PUBLIC_ERROR_REPORTING_ENV: reportingEnvironment },
   reactCompiler: true,
   cacheComponents: true,
   // Stated explicitly so Next stops warning that it is unset. `false` keeps
@@ -74,4 +87,19 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withEve(withWorkflow(nextConfig));
+export default withSentryConfig(withEve(withWorkflow(nextConfig)), {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  // Quiet unless CI asked for the upload log.
+  silent: !process.env.CI,
+  telemetry: false,
+  // Readable stack traces in the alert email: upload source maps for the
+  // production build only. A local `pnpm build` or a staging deploy has the
+  // token in its environment too and must not create releases.
+  widenClientFileUpload: true,
+  sourcemaps: {
+    disable:
+      reportingEnvironment !== "production" || !process.env.SENTRY_AUTH_TOKEN,
+  },
+});

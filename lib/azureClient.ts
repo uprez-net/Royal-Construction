@@ -1,3 +1,4 @@
+import { reportExternalError } from "@/lib/observability/external";
 import { createGraphContext, type EmailAttachment } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
 
@@ -29,7 +30,6 @@ interface EmailInput {
  * upload session and refuses one over the mailbox's send limit.
  */
 export async function sendEmail(email: EmailInput) {
-  const graphClient = await graphClientPromise;
   const toList = (Array.isArray(email.to) ? email.to : [email.to]).filter(
     (addr) => addr?.trim(),
   );
@@ -50,12 +50,31 @@ export async function sendEmail(email: EmailInput) {
   // Add RC to the CC list if there are multiple recipients in the 'to' field
   ccList.push(ccEmail);
 
-  await graphClient.sendMail({
-    subject: email.subject,
-    body: email.body,
-    to: toList,
-    cc: ccList,
-    bcc: bccList,
-    attachments: email.attachments,
-  });
+  // Awaiting the client is inside the try on purpose. It is created once, at
+  // import, by acquiring a Graph token; if that fails the promise is rejected
+  // for the life of the instance and every send fails here. That is our
+  // credential breaking, and it must be reported as such, not be a throw that
+  // happens to precede the reporting.
+  let operation = "createContext";
+  try {
+    const graphClient = await graphClientPromise;
+    operation = "sendMail";
+    await graphClient.sendMail({
+      subject: email.subject,
+      body: email.body,
+      to: toList,
+      cc: ccList,
+      bcc: bccList,
+      attachments: email.attachments,
+    });
+  } catch (error) {
+    // Every client email goes through here, so this is the one place that
+    // knows a send failed for a reason on Microsoft's side or ours. Callers
+    // still decide what the failure means for their flow. Failing to obtain the
+    // client is a failure of the credential whatever status it carries.
+    reportExternalError("graph", operation, error, {
+      force: operation === "createContext",
+    });
+    throw error;
+  }
 }

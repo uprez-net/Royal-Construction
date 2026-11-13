@@ -1,3 +1,4 @@
+import { withCronReporting } from "@/lib/observability/cron";
 import prisma from "@/lib/prisma";
 import { createDocusignContext } from "@/lib/docusign/client";
 import { getDocusignConfig } from "@/lib/docusign/config";
@@ -23,7 +24,7 @@ import { successResponse, errorResponse } from "@/utils/validators";
  * context, and the response.
  */
 
-export async function GET(request: Request) {
+async function handle(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
@@ -99,3 +100,8 @@ export async function GET(request: Request) {
     });
   }
 }
+
+export const GET = withCronReporting(
+  "/api/cron/reconcile-unconfirmed-envelope-sends",
+  handle,
+);

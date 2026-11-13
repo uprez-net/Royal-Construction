@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 
 import { auth } from "@clerk/nextjs/server";
-import { put } from "@vercel/blob";
+import { put } from "@/lib/blob";
 import { getProjectById } from "@/lib/data/projects";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { createProjectUpdate } from "@/lib/data/projectUpdates";

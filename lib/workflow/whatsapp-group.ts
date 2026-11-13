@@ -1,3 +1,4 @@
+import { reportWorkflowError } from "@/lib/workflow/report-failure";
 import { FatalError, sleep } from "workflow";
 
 import { isDomainError } from "@/lib/domain/errors";
@@ -63,6 +64,20 @@ export const createProjectWhatsAppGroup = async (
   groupRowId: string,
 ): Promise<string> => {
   "use workflow";
+  try {
+    return await runCreateProjectWhatsAppGroup(groupRowId);
+  } catch (error) {
+    await reportWorkflowError("createProjectWhatsAppGroup", error);
+    throw error;
+  }
+};
+
+// The body, split out so the workflow function above can report a run that
+// fails once its steps are out of retries. A plain function: it runs in the
+// same sandbox and calls its steps exactly as before.
+const runCreateProjectWhatsAppGroup = async (
+  groupRowId: string,
+): Promise<string> => {
   const submitted = await submit(groupRowId);
   if (submitted === "refused" || submitted === "not_creating") return submitted;
   if (submitted === "created") return "active";

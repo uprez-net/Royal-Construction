@@ -1,4 +1,4 @@
-import { put } from "@vercel/blob";
+import { put } from "@/lib/blob";
 import prisma from "@/lib/prisma";
 import { getDocusignConfig } from "./config";
 import { createDocusignContext } from "./client";

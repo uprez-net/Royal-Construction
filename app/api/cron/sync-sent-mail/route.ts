@@ -1,3 +1,4 @@
+import { withCronReporting } from "@/lib/observability/cron";
 import { start } from "workflow/api";
 import { NextResponse } from "next/server";
 
@@ -19,7 +20,7 @@ const DEFAULT_WINDOW_MS = 48 * 60 * 60 * 1000;
 // How far back `?since=` may reach, for a backfill run by hand.
 const MAX_WINDOW_MS = 31 * 24 * 60 * 60 * 1000;
 
-export async function GET(request: Request) {
+async function handle(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
   // An unset secret refuses everyone, rather than letting "Bearer undefined"
@@ -72,3 +73,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withCronReporting("/api/cron/sync-sent-mail", handle);

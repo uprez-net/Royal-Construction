@@ -1,4 +1,5 @@
-import { put } from "@vercel/blob";
+import { reportWorkflowError } from "@/lib/workflow/report-failure";
+import { put } from "@/lib/blob";
 
 import { readTradieInvoiceBytes } from "@/lib/agent/tradieInvoiceExtractionAgent";
 import { findAdminUserIds } from "@/lib/domain/identity/users";
@@ -166,7 +167,20 @@ export const processTradieInvoiceEmail = async (
   input: TradieInvoiceEmailInput,
 ): Promise<Record<AttachmentOutcome | "failed", number>> => {
   "use workflow";
+  try {
+    return await runProcessTradieInvoiceEmail(input);
+  } catch (error) {
+    await reportWorkflowError("processTradieInvoiceEmail", error);
+    throw error;
+  }
+};
 
+// The body, split out so the workflow function above can report a run that
+// fails once its steps are out of retries. A plain function: it runs in the
+// same sandbox and calls its steps exactly as before.
+const runProcessTradieInvoiceEmail = async (
+  input: TradieInvoiceEmailInput,
+): Promise<Record<AttachmentOutcome | "failed", number>> => {
   const { placement, files } = await planInvoiceEmail(input);
   const counts: Record<AttachmentOutcome | "failed", number> = {
     duplicate: 0,

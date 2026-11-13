@@ -1,7 +1,7 @@
 "use server";
 
 import { generateText } from "ai";
-import { put } from "@vercel/blob";
+import { put } from "@/lib/blob";
 
 import { requireInternalUser } from "@/lib/auth/require-internal-user";
 import { generateOfferImage } from "@/lib/domain/offers/images";

@@ -1,3 +1,4 @@
+import { reportWorkflowError } from "@/lib/workflow/report-failure";
 import { FatalError, RetryableError, getStepMetadata } from "workflow";
 
 import { vercelBlobPut } from "@/lib/blob-port";
@@ -58,6 +59,20 @@ export const storeWhatsAppMediaFiles = async (
   mediaIds: string[],
 ): Promise<string[]> => {
   "use workflow";
+  try {
+    return await runStoreWhatsAppMediaFiles(mediaIds);
+  } catch (error) {
+    await reportWorkflowError("storeWhatsAppMediaFiles", error);
+    throw error;
+  }
+};
+
+// The body, split out so the workflow function above can report a run that
+// fails once its steps are out of retries. A plain function: it runs in the
+// same sandbox and calls its steps exactly as before.
+const runStoreWhatsAppMediaFiles = async (
+  mediaIds: string[],
+): Promise<string[]> => {
   const outcomes: string[] = [];
   for (const mediaId of mediaIds) {
     try {

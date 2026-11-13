@@ -1,4 +1,5 @@
-import { put } from "@vercel/blob";
+import { reportWorkflowError } from "@/lib/workflow/report-failure";
+import { put } from "@/lib/blob";
 
 import {
   planOfferReplyAttachments,
@@ -90,7 +91,20 @@ export const storeOfferReplyAttachments = async (
   input: OfferReplyAttachmentsInput,
 ): Promise<{ planned: number; stored: number }> => {
   "use workflow";
+  try {
+    return await runStoreOfferReplyAttachments(input);
+  } catch (error) {
+    await reportWorkflowError("storeOfferReplyAttachments", error);
+    throw error;
+  }
+};
 
+// The body, split out so the workflow function above can report a run that
+// fails once its steps are out of retries. A plain function: it runs in the
+// same sandbox and calls its steps exactly as before.
+const runStoreOfferReplyAttachments = async (
+  input: OfferReplyAttachmentsInput,
+): Promise<{ planned: number; stored: number }> => {
   const { files, ...plan } = await planAttachments(input);
 
   let stored = 0;

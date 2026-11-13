@@ -1,3 +1,4 @@
+import { reportWorkflowError } from "@/lib/workflow/report-failure";
 import {
   CertifierEngagementStatus,
   ComplianceAlertSource,
@@ -82,8 +83,8 @@ function normalizeChecklistInsuranceAlias(
     .join(" ");
 
   if (
-    item.detail?.mapsToType ||
-    !/\b(?:hwi|hbcf|home\s+building\s+compensation|home\s+warranty\s+insurance)\b/i.test(
+    item.detail?.mapsToType
+    || !/\b(?:hwi|hbcf|home\s+building\s+compensation|home\s+warranty\s+insurance)\b/i.test(
       searchable,
     )
   ) {
@@ -291,8 +292,8 @@ async function saveChecklistItems(
       if (clause) {
         const byClause = existing.find(
           (row) =>
-            unclaimed.has(row.id) &&
-            checklistItemDetail(row.detail)?.clause === clause,
+            unclaimed.has(row.id)
+            && checklistItemDetail(row.detail)?.clause === clause,
         );
         if (byClause) return claim(byClause.id);
       }
@@ -339,9 +340,9 @@ async function saveChecklistItems(
     // evidence of work and outlives the line that asked for it.
     const removable = existing.filter(
       (row) =>
-        unclaimed.has(row.id) &&
-        row.status === ComplianceDocumentStatus.PENDING &&
-        row._count.files === 0,
+        unclaimed.has(row.id)
+        && row.status === ComplianceDocumentStatus.PENDING
+        && row._count.files === 0,
     );
     if (removable.length > 0) {
       await tx.complianceDocument.deleteMany({
@@ -527,7 +528,20 @@ export const extractComplianceChecklist = async (
   input: ChecklistExtractionInput,
 ): Promise<ChecklistExtractionResult> => {
   "use workflow";
+  try {
+    return await runExtractComplianceChecklist(input);
+  } catch (error) {
+    await reportWorkflowError("extractComplianceChecklist", error);
+    throw error;
+  }
+};
 
+// The body, split out so the workflow function above can report a run that
+// fails once its steps are out of retries. A plain function: it runs in the
+// same sandbox and calls its steps exactly as before.
+const runExtractComplianceChecklist = async (
+  input: ChecklistExtractionInput,
+): Promise<ChecklistExtractionResult> => {
   try {
     await emitStage("Reading checklist");
     const document = await readChecklistDocument(input.documentId);

@@ -1,3 +1,4 @@
+import { reportWorkflowError } from "@/lib/workflow/report-failure";
 import { processPDFWithMistral } from "@/lib/ocr";
 import {
   handleTenderExtractionGeneration,
@@ -248,6 +249,20 @@ export const extractTenderAndContractDocuments = async (
   input: TenderExtractionInput,
 ): Promise<TenderExtractionResult> => {
   "use workflow";
+  try {
+    return await runExtractTenderAndContractDocuments(input);
+  } catch (error) {
+    await reportWorkflowError("extractTenderAndContractDocuments", error);
+    throw error;
+  }
+};
+
+// The body, split out so the workflow function above can report a run that
+// fails once its steps are out of retries. A plain function: it runs in the
+// same sandbox and calls its steps exactly as before.
+const runExtractTenderAndContractDocuments = async (
+  input: TenderExtractionInput,
+): Promise<TenderExtractionResult> => {
   try {
     await emitStage("Uploading documents");
 
