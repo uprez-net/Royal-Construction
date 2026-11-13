@@ -36,7 +36,9 @@ import { openModal } from "@/lib/store/slices/uiSlice";
 import type { ProjectKPIs, ProjectWithStats } from "@/types/project";
 import { compareAsc, isBefore } from "date-fns";
 import { EnhancedProjectCard } from "./enhanced-project-card";
+import { ProjectAttentionReasons } from "./project-attention-reasons";
 import { ProjectFilters } from "./project-filters";
+import { ProjectOverdueAlerts } from "./project-overdue-alerts";
 import { ProjectToolbar } from "./project-toolbar";
 import { formatStatus, projectStatusConfig } from "./project-status";
 import {
@@ -52,6 +54,7 @@ import { fetchJson } from "@/utils/fetch";
 import { getAllProjectsForExport } from "@/lib/actions/projects";
 import type { PaginatedProjectsResult } from "@/lib/data/projects";
 import { compactCurrency } from "@/utils/formatters";
+import type { ProjectAttention } from "@/lib/domain/projects/attention";
 import type { Role } from "@prisma/client";
 
 const TABLE_HEADERS = [
@@ -74,6 +77,13 @@ const TABLE_ALIGN = [
   "start",
 ] as const;
 
+/**
+ * The Needs attention chip lists why, in a column of its own (issue #452).
+ * Only on that chip: elsewhere the reasons are one condition among a row of
+ * figures, and the grid's cards carry them anyway.
+ */
+const ATTENTION_HEADER = "Needs attention because";
+
 type ProjectsClientProps = {
   role: Role;
   projects: ProjectWithStats[];
@@ -84,6 +94,8 @@ type ProjectsClientProps = {
     totalPages: number;
   };
   kpis: ProjectKPIs;
+  /** Every project needing attention, for the Alerts card (issue #451). */
+  attention: ProjectAttention[];
   /** `projectsListKey` of the list the server rendered `projects` for. */
   renderedFor: string;
 };
@@ -103,6 +115,7 @@ function ProjectsWorkspace({
   projects,
   pagination,
   kpis,
+  attention,
   renderedFor,
 }: ProjectsClientProps) {
   const dispatch = useAppDispatch();
@@ -133,6 +146,7 @@ function ProjectsWorkspace({
   // "No projects yet" empty state.
   const hasActiveFilters =
     list.status !== DEFAULT_PROJECT_STATUS_FILTER || list.query !== "";
+  const showAttentionColumn = list.status === "NEEDS_ATTENTION";
 
   const visibleProjects = useMemo(() => {
     return projectsInStore.map((project) => {
@@ -357,6 +371,12 @@ function ProjectsWorkspace({
 
   return (
     <div className="grid gap-6">
+      <ProjectOverdueAlerts
+        projects={attention}
+        hrefFor={(projectId) =>
+          projectDetailHref(projectId, searchParams.toString())
+        }
+      />
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MetricCard
           title="Total active"
@@ -500,8 +520,16 @@ function ProjectsWorkspace({
                  "no matches", and it offers Clear filters. */
               <DataTable
                 mobileLayout="cards"
-                headers={TABLE_HEADERS}
-                align={[...TABLE_ALIGN]}
+                headers={
+                  showAttentionColumn
+                    ? [...TABLE_HEADERS, ATTENTION_HEADER]
+                    : TABLE_HEADERS
+                }
+                align={
+                  showAttentionColumn
+                    ? [...TABLE_ALIGN, "start"]
+                    : [...TABLE_ALIGN]
+                }
                 caption="Active projects, with budget, spend, progress and delivery status. Select a row to open its quick view."
                 rowLabel={(rowIndex) =>
                   `Open ${visibleProjects[rowIndex]?.name ?? "project"}`
@@ -574,6 +602,14 @@ function ProjectsWorkspace({
                     >
                       {formatStatus(project.status)}
                     </Badge>,
+                    ...(showAttentionColumn
+                      ? [
+                          <ProjectAttentionReasons
+                            key={`attention-${project.id}`}
+                            attention={project.attention}
+                          />,
+                        ]
+                      : []),
                   ];
                 })}
                 onRowClick={(rowIndex) => {

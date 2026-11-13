@@ -18,6 +18,11 @@ import {
   type ProjectListSortBy,
   type ProjectLookupItem,
 } from "@/lib/domain/projects/queries";
+import {
+  needingAttention,
+  readProjectAttention,
+  type ProjectAttention,
+} from "@/lib/domain/projects/attention";
 import type { DomainPrincipal } from "@/lib/domain/principal";
 import { CACHE_PROFILES } from "@/types/cache";
 import type {
@@ -126,6 +131,28 @@ export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
   }
 }
 
+/**
+ * Every project needing attention, most urgent first, for the Projects page's
+ * Alerts card (issues #451, #452).
+ *
+ * Uncached on purpose: whether an activity is overdue turns on today's date,
+ * and the conditions come from tables that never expire the "projects" tag.
+ * An empty answer on failure, logged, because the card is one panel among
+ * several and must not blank the list beneath it.
+ */
+export async function getProjectsNeedingAttention(): Promise<
+  ProjectAttention[]
+> {
+  try {
+    return needingAttention(
+      await readProjectAttention(await currentPrincipal(), prisma),
+    );
+  } catch (error) {
+    console.error("Error reading project attention:", error);
+    return [];
+  }
+}
+
 export async function getProjectKPIs(): Promise<ProjectKPIs> {
   try {
     return await readProjectKPIs(await currentPrincipal(), prisma);
@@ -144,33 +171,6 @@ export async function getProjectKPIs(): Promise<ProjectKPIs> {
 // and a cache key that ignored who was asking would hand one caller's scope to
 // the next.
 // ---------------------------------------------------------------------------
-
-async function cachedProjects(
-  principal: DomainPrincipal,
-  query: ProjectListQuery | undefined,
-) {
-  "use cache";
-
-  cacheTag("projects");
-  cacheLife(CACHE_PROFILES.LONG);
-
-  try {
-    return await listProjects(principal, query, prisma);
-  } catch (error) {
-    console.error("Error fetching projects:", error);
-    return {
-      items: [],
-      page: query?.page ?? 1,
-      limit: query?.limit ?? 12,
-      totalCount: 0,
-      totalPages: 1,
-    } satisfies PaginatedProjectsResult;
-  }
-}
-
-export async function getCachedProjects(query?: ProjectListQuery) {
-  return cachedProjects(await currentPrincipal(), query);
-}
 
 async function cachedProjectById(principal: DomainPrincipal, id: string) {
   "use cache";

@@ -1,5 +1,9 @@
 import { ProjectsClient } from "@/components/projects/projects-client";
-import { getProjectKPIs, getProjects } from "@/lib/data/projects";
+import {
+  getProjectKPIs,
+  getProjects,
+  getProjectsNeedingAttention,
+} from "@/lib/data/projects";
 import { connection } from "next/server";
 import type { Metadata } from "next";
 import { auth } from "@clerk/nextjs/server";
@@ -41,9 +45,10 @@ export default async function ProjectPage({
       return (Array.isArray(value) ? value[0] : value) ?? null;
     },
   });
-  const [projectsPage, kpis, user] = await Promise.all([
+  const [projectsPage, kpis, attention, user] = await Promise.all([
     getProjects(projectsListQuery(list, projectPageSize)),
     getProjectKPIs(),
+    getProjectsNeedingAttention(),
     auth().then(({ userId }) =>
       userId ? getUserByClerkIdCached(userId) : null,
     ),
@@ -60,6 +65,7 @@ export default async function ProjectPage({
         pagination={projectsPage}
         renderedFor={projectsListKey(list)}
         kpis={kpis}
+        attention={attention}
         role={user!.role}
       />
     </>

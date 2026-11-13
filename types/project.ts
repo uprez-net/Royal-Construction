@@ -1,3 +1,4 @@
+import type { ProjectAttention } from "@/lib/domain/projects/attention";
 import type {
   TradeSelectionStatus,
   TradiePriceUnit,
@@ -315,6 +316,11 @@ export interface ProjectWithStats extends SafeProject {
   approvedVariationSpend: string;
   invoiceTotals: ProjectInvoiceTotals;
   invoices: ProjectListInvoice[];
+  /**
+   * What on this project needs somebody, derived live (issue #452). Null for
+   * a completed project, which is never assessed.
+   */
+  attention: ProjectAttention | null;
 }
 
 export interface ActivityLogWithAuthor extends ActivityLog {
@@ -352,28 +358,33 @@ export interface ProjectDetail extends SafeProject {
 }
 
 /**
- * The pipeline, as one filter value.
+ * "All" on the projects list: every project that is not finished (issue #450).
  *
- * Not a `ProjectStatus`, deliberately. It is a question the list asks — "what
- * has not started on site yet" — and the answer spans three statuses a reader
- * has no reason to distinguish between while scanning a list. Expressing it as
- * a filter value rather than as three chips is what keeps the chip row
- * readable; expressing it here rather than as a fourth status is what keeps the
- * ladder honest, because the three are genuinely different stages and just not
- * different answers to this question.
+ * Not a `ProjectStatus` and not the absence of a filter. The list's "All" chip
+ * used to send no status at all, which listed every completed job alongside
+ * the live ones; a finished build is history, and it has its own Completed
+ * chip. Absent still means every project, so Eve's project search and the CSV
+ * export are unchanged.
  *
  * It lives here rather than beside the query it feeds because that module is
- * `"use server"`, which may export nothing but async functions — and the chip
+ * imported by `"use server"` code and client components alike, and the chip
  * that sends this value is a client component.
  */
-export const PRE_CONSTRUCTION_FILTER = "PRE_CONSTRUCTION";
+export const OPEN_PROJECTS_FILTER = "OPEN";
 
-/** The statuses it covers, in ladder order. */
-export const PRE_CONSTRUCTION_STATUSES: readonly ProjectStatus[] = [
-  ProjectStatus.DRAFT,
-  ProjectStatus.COMPLIANCE_STARTED,
-  ProjectStatus.COMPLIANCE_COMPLETED,
-];
+/**
+ * Drafting: not finished, and no activity on it has started (issue #452).
+ *
+ * It replaced the "Pre-construction" chip, which asked the same question of
+ * the status column -- DRAFT, COMPLIANCE_STARTED or COMPLIANCE_COMPLETED --
+ * and so lost every project whose status had been overwritten with
+ * NEEDS_ATTENTION or DELAYED before a spade went in. The milestones are the
+ * fact; see `draftingProjectWhere`.
+ */
+export const DRAFTING_FILTER = "DRAFTING";
+
+/** The retired chip's value, still read from old links as Drafting. */
+export const LEGACY_PRE_CONSTRUCTION_FILTER = "PRE_CONSTRUCTION";
 
 export type ProjectKPIs = {
   totalActive: number;
@@ -383,15 +394,11 @@ export type ProjectKPIs = {
   delayed: number;
   completed: number;
   /**
-   * Projects that have not started on site yet — draft, in compliance, or
-   * through compliance and waiting on a start date.
-   *
-   * One count across the three rather than one each, because they are one
-   * answer to the question the chip asks: what is in the pipeline. Somebody
-   * looking at the list wants to know how many jobs have not begun, not how
-   * many are between the certifier's checklist and their certificate.
+   * Projects that are not finished and have no activity started -- the
+   * Drafting chip (issue #452). A drafting project can also need attention;
+   * the two counts overlap on purpose.
    */
-  preConstruction: number;
+  drafting: number;
 };
 
 export type TradieKPIs = {

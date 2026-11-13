@@ -4,7 +4,7 @@ import type { ProjectListSortBy } from "@/lib/data/projects";
 import type { OfferWorkspaceCostLine } from "@/lib/offer/workspace-model";
 import type { ProjectExtractionData } from "@/types/project-extraction";
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
-import { PRE_CONSTRUCTION_FILTER } from "@/types/project";
+import { DRAFTING_FILTER, OPEN_PROJECTS_FILTER } from "@/types/project";
 import {
   emailSchema,
   nonNegativeSchema,
@@ -264,7 +264,11 @@ export const projectListQuerySchema = z
     mode: z.string().optional(),
 
     status: z
-      .union([z.enum(ProjectStatus), z.literal(PRE_CONSTRUCTION_FILTER)])
+      .union([
+        z.enum(ProjectStatus),
+        z.literal(OPEN_PROJECTS_FILTER),
+        z.literal(DRAFTING_FILTER),
+      ])
       .optional()
       .catch(undefined),
 

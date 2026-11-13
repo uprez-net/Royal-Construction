@@ -30,8 +30,22 @@ test("the list reads its place from the URL", () => {
     sort: "name",
   });
   assert.equal(
+    readProjectsListParams(params("status=DRAFTING")).status,
+    "DRAFTING",
+  );
+  // A link saved from the retired Pre-construction chip opens Drafting, which
+  // replaced it (issue #452).
+  assert.equal(
     readProjectsListParams(params("status=PRE_CONSTRUCTION")).status,
-    "PRE_CONSTRUCTION",
+    "DRAFTING",
+  );
+});
+
+test('"All" asks for every project that is not completed', () => {
+  // Issue #450: a finished build is on the Completed chip, not the working list.
+  assert.equal(
+    projectsListQuery(readProjectsListParams(params("")), 12).status,
+    "OPEN",
   );
 });
 

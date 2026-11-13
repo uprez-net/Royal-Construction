@@ -2,8 +2,8 @@ import { Prisma, ProjectStatus } from "@prisma/client";
 
 import { certifierEngagementInclude } from "@/types/compliance";
 import {
-  PRE_CONSTRUCTION_FILTER,
-  PRE_CONSTRUCTION_STATUSES,
+  DRAFTING_FILTER,
+  OPEN_PROJECTS_FILTER,
   type ProjectDetail,
   type ProjectKPIs,
   type ProjectWithStats,
@@ -17,6 +17,11 @@ import { DomainNotFoundError } from "../errors";
 import { serializeInvoice, serializeListInvoice } from "../invoices/serialize";
 import type { DomainPrincipal } from "../principal";
 import { bookingBilling } from "../tradies/billing-rules";
+import {
+  draftingProjectWhere,
+  needingAttention,
+  readProjectAttention,
+} from "./attention";
 import { readProjectDetailRow } from "./detail-read";
 import { canSeeMilestoneNotes } from "./milestone-note-rules";
 import { readProjectDocuments } from "./documents";
@@ -50,11 +55,22 @@ export type ProjectListSortBy =
 
 export type ProjectListQuery = {
   /**
-   * One status, or `PRE_CONSTRUCTION_FILTER` for the three that precede a
-   * build. Widened from `ProjectStatus` for that one value rather than for
-   * arbitrary strings, so a typo is still a compile error at every call site.
+   * One status, or one of the derived filters:
+   *
+   *   - `OPEN_PROJECTS_FILTER` — everything but COMPLETED, the list's "All"
+   *   - `DRAFTING_FILTER`      — not finished and no activity started
+   *   - `NEEDS_ATTENTION`      — has at least one live attention condition.
+   *     The enum value is no longer written to a project (issue #452), so as a
+   *     filter it means the derived set, not the stored column; old links to
+   *     `?status=NEEDS_ATTENTION` keep working and now show the right jobs.
+   *
+   * Absent means every project, completed included.
    */
-  status?: ProjectStatus | typeof PRE_CONSTRUCTION_FILTER | null;
+  status?:
+    | ProjectStatus
+    | typeof OPEN_PROJECTS_FILTER
+    | typeof DRAFTING_FILTER
+    | null;
   page?: number;
   limit?: number;
   search?: string;
@@ -332,12 +348,17 @@ function buildProjectWhere(
   principal: DomainPrincipal,
   query: ProjectListQuery | undefined,
   scope: ProjectListScope,
+  attentionIds: readonly string[] | null,
 ): Prisma.ProjectWhereInput {
   const search = normalizeSearch(query?.search);
   const filters: Prisma.ProjectWhereInput[] = [];
 
-  if (query?.status === PRE_CONSTRUCTION_FILTER) {
-    filters.push({ status: { in: [...PRE_CONSTRUCTION_STATUSES] } });
+  if (query?.status === OPEN_PROJECTS_FILTER) {
+    filters.push({ status: { not: ProjectStatus.COMPLETED } });
+  } else if (query?.status === DRAFTING_FILTER) {
+    filters.push(draftingProjectWhere);
+  } else if (query?.status === ProjectStatus.NEEDS_ATTENTION) {
+    filters.push({ id: { in: [...(attentionIds ?? [])] } });
   } else if (query?.status) {
     filters.push({ status: query.status });
   }
@@ -391,11 +412,10 @@ function buildProjectOrderBy(
 type ListRow = Prisma.ProjectGetPayload<{ include: typeof projectInclude }>;
 
 /** Progress, milestone counts and approved variation spend for a list row. */
-function withProjectStats({
-  variations,
-  invoices,
-  ...project
-}: ListRow): ProjectWithStats {
+function withProjectStats(
+  { variations, invoices, ...project }: ListRow,
+  attention: ProjectWithStats["attention"] = null,
+): ProjectWithStats {
   const milestoneCount = project.milestones.length;
   const completedMilestoneCount = project.milestones.filter((milestone) =>
     ["DONE", "NOT_REQUIRED"].includes(milestone.status),
@@ -427,6 +447,7 @@ function withProjectStats({
     approvedVariationSpend: approvedVariationSpend.toString(),
     invoiceTotals: summarizeInvoices(invoices),
     invoices: invoices.map(serializeListInvoice),
+    attention,
   };
 }
 
@@ -447,7 +468,21 @@ export async function listProjects(
 ): Promise<PaginatedProjectsResult> {
   const page = safePage(query?.page);
   const limit = safeLimit(query?.limit, defaultPageSize, 100);
-  const where = buildProjectWhere(principal, query, options.scope ?? "read");
+  // Needs Attention is derived from live records, so the filter first finds
+  // which projects have a condition, and the listing then pages, searches,
+  // sorts and counts within them like any other filter.
+  const attentionIds =
+    query?.status === ProjectStatus.NEEDS_ATTENTION
+      ? needingAttention(await readProjectAttention(principal, db)).map(
+          (project) => project.projectId,
+        )
+      : null;
+  const where = buildProjectWhere(
+    principal,
+    query,
+    options.scope ?? "read",
+    attentionIds,
+  );
   const orderBy = buildProjectOrderBy(query?.sortBy, query?.sortOrder);
 
   const [projects, totalCount] = await Promise.all([
@@ -461,8 +496,19 @@ export async function listProjects(
     db.project.count({ where }),
   ]);
 
+  // The page's own conditions, so each row can say why it needs attention.
+  const attention = new Map(
+    (
+      await readProjectAttention(principal, db, {
+        projectIds: projects.map((project) => project.id),
+      })
+    ).map((entry) => [entry.projectId, entry]),
+  );
+
   return {
-    items: projects.map(withProjectStats),
+    items: projects.map((project) =>
+      withProjectStats(project, attention.get(project.id) ?? null),
+    ),
     page,
     limit,
     totalCount,
@@ -479,7 +525,7 @@ export async function listAllProjectsForExport(
     where: projectReadScope(principal),
     include: projectInclude,
   });
-  return projects.map(withProjectStats);
+  return projects.map((project) => withProjectStats(project));
 }
 
 /** Id, name and location only — for autocompletes and lookup dialogs. */
@@ -649,7 +695,7 @@ const EMPTY_KPIS: ProjectKPIs = {
   needsAttention: 0,
   delayed: 0,
   completed: 0,
-  preConstruction: 0,
+  drafting: 0,
 };
 
 /**
@@ -665,11 +711,17 @@ export async function getProjectKPIs(
   principal: DomainPrincipal,
   db: DomainDb,
 ): Promise<ProjectKPIs> {
-  const rows = await db.project.groupBy({
-    by: ["status"],
-    where: projectReadScope(principal),
-    _count: { _all: true },
-  });
+  const [rows, drafting, attention] = await Promise.all([
+    db.project.groupBy({
+      by: ["status"],
+      where: projectReadScope(principal),
+      _count: { _all: true },
+    }),
+    db.project.count({
+      where: { ...projectReadScope(principal), ...draftingProjectWhere },
+    }),
+    readProjectAttention(principal, db),
+  ]);
 
   const countOf = (...statuses: ProjectStatus[]) =>
     rows
@@ -682,17 +734,12 @@ export async function getProjectKPIs(
     totalActive: total - countOf(ProjectStatus.COMPLETED),
     active: countOf(ProjectStatus.ACTIVE),
     onTrack: countOf(ProjectStatus.ON_TRACK),
-    needsAttention: countOf(ProjectStatus.NEEDS_ATTENTION),
+    // Derived, like the filter it counts for: the stored status is no longer
+    // written (issue #452).
+    needsAttention: needingAttention(attention).length,
     delayed: countOf(ProjectStatus.DELAYED),
     completed: countOf(ProjectStatus.COMPLETED),
-    // The pipeline: created, in compliance, or through compliance and waiting
-    // to start. Counted together because that is the question the chip asks —
-    // how many jobs have not begun.
-    preConstruction: countOf(
-      ProjectStatus.DRAFT,
-      ProjectStatus.COMPLIANCE_STARTED,
-      ProjectStatus.COMPLIANCE_COMPLETED,
-    ),
+    drafting,
   };
 }
 
