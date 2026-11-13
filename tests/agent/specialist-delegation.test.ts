@@ -17,6 +17,7 @@ import {
   SPECIALISTS,
   type SpecialistName,
 } from "@/agent/lib/specialists";
+import { searchLeadsInputSchema } from "@/agent/lib/lead-contracts";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
 import delegate from "@/agent/tools/delegate";
 import { REPO_ROOT } from "../support/repo-root";
@@ -287,4 +288,50 @@ test("the orchestrator passes a job's ids to the document search and names other
   );
   assert.match(source, /always pass its ids/);
   assert.match(source, /otherJob/);
+});
+
+// #434 review: "how many leads in Sydney?" was counted with no query, so
+// `totalCount` covered the whole pipeline. Only a request with no text
+// criteria leaves `query` empty.
+test("a filtered lead count passes its criteria to search_leads", () => {
+  const lead = readFileSync(
+    path.join(SUBAGENTS_DIR, "lead-operations", "instructions.md"),
+    "utf8",
+  );
+  // Text criteria go in `query`; a stage goes in `stages`, never in `query`.
+  assert.match(lead, /`query: "Sydney"`/);
+  assert.match(lead, /`stages: \["Converted"\]`/);
+  // Every `stages` example must be a call the tool's schema accepts.
+  for (const [, list] of lead.matchAll(/`stages: (\[[^\]]*\])`/g)) {
+    searchLeadsInputSchema.parse({ stages: JSON.parse(list) });
+  }
+  // The two counts have different scopes, and unsupported filters are named.
+  assert.match(
+    lead,
+    /`countsByStage` counts the query's matches\s+by\s+stage,\s+ignoring\s+`stages`/,
+  );
+  assert.match(lead, /cannot\s+filter\s+by\s+assignee\s+or\s+date/);
+  // A place total is disclosed as a text match, and two text criteria are
+  // never answered with one query's totalCount.
+  assert.match(lead, /never\s+a\s+strict\s+filter\s+on\s+one\s+field/);
+  assert.match(
+    lead,
+    /Say\s+that\s+whenever\s+you\s+give\s+a\s+count\s+for\s+a\s+name,\s+email,\s+phone\s+or\s+place,\s+and\s+do\s+not\s+present\s+it\s+as\s+an\s+exact\s+count\s+for\s+that\s+field/,
+  );
+  // Counts are scoped to what the caller can see.
+  assert.match(lead, /only\s+the\s+leads\s+this\s+user\s+can\s+see/);
+  // Won + Converted only for won-deal questions; an explicit Won stage stays Won.
+  assert.match(
+    lead,
+    /for\s+"won\s+deals"[^.]*count\s+or\s+filter\s+both,\s+never\s+Won\s+alone/,
+  );
+  assert.match(lead, /`stages: \["Won"\]`\s+only/);
+  assert.match(
+    lead,
+    /cannot\s+combine\s+two\s+text\s+criteria[\s\S]*?do\s+not\s+quote\s+`totalCount`\s+as\s+the\s+combined\s+count/,
+  );
+  assert.doesNotMatch(
+    lead,
+    /To list or count leads, call `search_leads` with no query/,
+  );
 });
