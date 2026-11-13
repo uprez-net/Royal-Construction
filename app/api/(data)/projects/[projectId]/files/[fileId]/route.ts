@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { del } from "@vercel/blob";
+import { del } from "@/lib/blob";
 import { revalidateTag } from "next/cache";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { deleteProjectFile } from "@/lib/domain/projects/files";

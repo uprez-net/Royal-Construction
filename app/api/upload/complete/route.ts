@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { head } from "@vercel/blob";
+import { head } from "@/lib/blob";
 import { revalidateTag } from "next/cache";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
