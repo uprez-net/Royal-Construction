@@ -21,6 +21,7 @@ import { searchLeadsInputSchema } from "@/agent/lib/lead-contracts";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
 import delegate from "@/agent/tools/delegate";
 import { REPO_ROOT } from "../support/repo-root";
+import { DISABLED_DEFAULT_TOOL_FILES } from "../support/eve-default-tools";
 
 /**
  * The orchestrator reaches its specialists only through the blocking
@@ -42,7 +43,10 @@ function declaredSpecialists(): string[] {
 function hasTools(name: string): boolean {
   const dir = path.join(SUBAGENTS_DIR, name, "tools");
   return (
-    existsSync(dir) && readdirSync(dir).some((file) => file.endsWith(".ts"))
+    existsSync(dir)
+    && readdirSync(dir).some(
+      (file) => file.endsWith(".ts") && !DISABLED_DEFAULT_TOOL_FILES.has(file),
+    )
   );
 }
 

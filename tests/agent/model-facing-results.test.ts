@@ -16,6 +16,7 @@ import {
 } from "@/agent/lib/result-contracts";
 import { CANCELLED_TITLE, specialistFinding } from "@/agent/lib/team-dispatch";
 import { REPO_ROOT } from "../support/repo-root";
+import { DISABLED_DEFAULT_TOOL_FILES } from "../support/eve-default-tools";
 
 type Finding = AgentResultEnvelope & { specialist: string };
 
@@ -106,8 +107,8 @@ test("every specialist tool shows the model Sydney dates", () => {
   for (const specialist of readdirSync(root)) {
     const tools = path.join(root, specialist, "tools");
     if (!existsSync(tools)) continue;
-    for (const file of readdirSync(tools).filter((name) =>
-      name.endsWith(".ts"),
+    for (const file of readdirSync(tools).filter(
+      (name) => name.endsWith(".ts") && !DISABLED_DEFAULT_TOOL_FILES.has(name),
     )) {
       const name = `${specialist}/tools/${file}`;
       if (RAW_FOR_ROUND_TRIP.has(name)) continue;

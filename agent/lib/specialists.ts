@@ -30,11 +30,12 @@ export type SpecialistName = keyof typeof SPECIALISTS;
 /**
  * The specialists the orchestrator may delegate to.
  *
- * compliance-operations is declared but has no tools directory: every
+ * compliance-operations is declared but owns no tools of its own: every
  * compliance tool lives under project-operations (see evals/README.md). A
  * specialist with nothing to call can only answer from its own imagination, so
  * it is not offered as a target until it owns tools; compliance requests route
- * to project-operations, whose description covers them.
+ * to project-operations, whose description covers them. Its eve defaults are
+ * disabled like every declared specialist's (tests/agent/specialist-default-tools.test.ts).
  */
 export const DELEGATE_TARGETS = (
   Object.keys(SPECIALISTS) as SpecialistName[]
