@@ -261,3 +261,14 @@ test("the advertised scopes are ones Clerk actually issues", () => {
     assert.ok(CLERK_SUPPORTED.has(scope), `Clerk does not issue ${scope}`);
   }
 });
+
+test("openid is advertised, so a client that requests it can register for it", () => {
+  // Clerk refuses an authorize request for a scope the client did not register,
+  // with "invalid_scope ... not allowed to request scope 'openid'". Clients
+  // register what the protected-resource metadata advertises.
+  assert.ok(MCP_SCOPES.includes("openid"));
+  assert.deepEqual(
+    [...(mcpResourceConfig({ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: KEY })?.scopes ?? [])],
+    ["openid", "profile", "email"],
+  );
+});

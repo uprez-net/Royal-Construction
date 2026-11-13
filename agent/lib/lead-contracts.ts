@@ -26,6 +26,10 @@ export const listLeadTasksInputSchema = z.object({
   limit: z.number().int().min(1).max(50).default(20),
 });
 
+export const listOverdueLeadTasksInputSchema = z.object({
+  limit: z.number().int().min(1).max(50).default(25),
+});
+
 export const createLeadTaskInputSchema = z.object({
   leadId: leadIdSchema,
   type: z.enum(["CALL", "EMAIL", "MEETING", "WAITING", "WHATSAPP"]),

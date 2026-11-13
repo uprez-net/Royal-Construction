@@ -36,6 +36,7 @@ import type {
   AgentSessionListItem,
   AgentWorkspaceData,
 } from "@/lib/data/agent-sessions";
+import { FetchError, fetchJson } from "@/utils/fetch";
 
 export type AgentUploadedFile = {
   agentUrl: string | null;
@@ -328,6 +329,59 @@ export function AgentWorkspace({
     );
     return () => window.cancelAnimationFrame(frame);
   }, [agent.data, agent.status]);
+
+  // The title is generated a few seconds after the first message and written
+  // server-side, so the sidebar read "New conversation" until a reload (#432).
+  // Once a turn settles on an untitled conversation, ask for it a few times.
+  const untitledSessionId =
+    activeSessionId
+    && !sessions.find((session) => session.eveSessionId === activeSessionId)
+      ?.title
+    && !initialSessions.find(
+      (session) => session.eveSessionId === activeSessionId,
+    )?.title
+      ? activeSessionId
+      : null;
+  useEffect(() => {
+    if (!untitledSessionId || busy) return;
+    let cancelled = false;
+    let attempt = 0;
+    let timer: number | undefined;
+    const poll = async () => {
+      attempt += 1;
+      try {
+        const { data } = await fetchJson<{ title: string | null }>(
+          `/api/agent/sessions/${encodeURIComponent(untitledSessionId)}/title`,
+          { cache: "no-store" },
+          "Could not read the conversation title.",
+        );
+        if (cancelled) return;
+        const title = data?.title?.trim();
+        if (title) {
+          setSessions((current) =>
+            current.map((session) =>
+              session.eveSessionId === untitledSessionId
+                ? { ...session, title }
+                : session,
+            ),
+          );
+          return;
+        }
+      } catch (error) {
+        // A missing title is cosmetic; the next settled turn asks again. A
+        // not-yet-recorded session is expected, anything else is worth a trace.
+        if (!(error instanceof FetchError && error.status === 404))
+          console.warn("Conversation title poll failed", error);
+      }
+      if (!cancelled && attempt < 4)
+        timer = window.setTimeout(() => void poll(), 2_500);
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [busy, untitledSessionId]);
 
   async function sendMessage(message: string) {
     const text = message.trim() || "Please review the attached file(s).";

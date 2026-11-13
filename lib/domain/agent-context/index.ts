@@ -10,6 +10,7 @@ import { leadListScope } from "../access/leads";
 import { canReadTradieDirectory } from "../access/tradies";
 import type { EmbeddingPort } from "../ports/embedding";
 import { loadContextChunks, type ContextSelection } from "./sources";
+import { listUnreadDocuments } from "./files";
 import {
   OFFICE_DIGEST_ENTITY_ID,
   type AgentContextKind,
@@ -38,9 +39,13 @@ export {
 } from "./vectors";
 export { lexicalBoost, queryTerms } from "./ranking";
 export {
+  listUnreadDocuments,
+  filedUnderLabels,
+  isFiledUnderAnotherRecord,
   refreshAgentFiles,
   searchAgentFiles,
   type AgentFileHit,
+  type FiledUnder,
   type RefreshAgentFilesResult,
 } from "./files";
 
@@ -95,7 +100,9 @@ export async function refreshAgentContext(
 ): Promise<RefreshAgentContextResult> {
   requireAdminPrincipal(principal);
   const now = input.now ?? new Date();
-  const drafts = await loadContextChunks(db, now, input.selection);
+  const drafts = await loadContextChunks(db, now, input.selection, {
+    unreadDocuments: listUnreadDocuments,
+  });
 
   const existing = await db.agentContextChunk.findMany({
     select: { contentHash: true, entityId: true, id: true, kind: true },

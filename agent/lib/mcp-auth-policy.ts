@@ -40,11 +40,18 @@ export const MCP_METADATA_PATH = `${MCP_ROUTE}/.well-known/oauth-protected-resou
 /**
  * Scopes advertised to clients. Clerk's authorization server supports
  * `openid`, `profile`, `email`, `public_metadata`, `private_metadata` and
- * `offline_access`; the deprecated route advertised `profile` and `email`, and
- * nothing here reads a narrower claim, so the replacement advertises the same
- * two rather than inventing a scope Clerk would reject.
+ * `offline_access`.
+ *
+ * `openid` has to be in the list. A client registers itself with Clerk through
+ * dynamic client registration, and Clerk records the scopes it registered; a
+ * client that then asks to authorize with `openid` — several hosted clients
+ * add it to every OAuth flow because they treat Clerk as an OIDC provider —
+ * is refused with `invalid_scope: The OAuth 2.0 Client is not allowed to
+ * request scope 'openid'`. Advertising it makes those clients register for it.
+ * It only adds an ID token; the access token this endpoint verifies is
+ * unchanged, and nothing here reads a claim beyond the Clerk subject.
  */
-export const MCP_SCOPES = ["profile", "email"] as const;
+export const MCP_SCOPES = ["openid", "profile", "email"] as const;
 
 const PUBLISHABLE_KEY_PREFIX = /^pk_(test|live)_/;
 const FRONTEND_API_HOST =

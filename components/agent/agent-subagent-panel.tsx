@@ -34,8 +34,20 @@ import { cn } from "@/lib/utils";
  * or the specialist is still running — one extra stream per visible specialist,
  * not one per delegation ever made.
  */
-export function AgentSubagentPanel({ run }: { run: AgentSubagentRun }) {
-  const live = isLive(run.status);
+export function AgentSubagentPanel({
+  awaitingApproval = false,
+  run,
+}: {
+  /**
+   * An approval this turn raised is waiting on the person. The specialist is
+   * paused on it, not working: the card read "Working · Action completed"
+   * through the whole wait (#432).
+   */
+  awaitingApproval?: boolean;
+  run: AgentSubagentRun;
+}) {
+  const waiting = awaitingApproval && isLive(run.status);
+  const live = isLive(run.status) && !waiting;
   const [open, setOpen] = useState(false);
   const followable = run.childSessionId !== null && !run.remote;
   const duration = formatDuration(run.startedAt, run.endedAt);
@@ -43,6 +55,7 @@ export function AgentSubagentPanel({ run }: { run: AgentSubagentRun }) {
   const summary =
     run.error
     ?? run.output
+    ?? (waiting ? "Waiting for your answer on the card above." : null)
     ?? run.progress
     ?? (run.status === "requested"
       ? "Queued"
@@ -88,7 +101,10 @@ export function AgentSubagentPanel({ run }: { run: AgentSubagentRun }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
             <p className="text-sm font-medium text-foreground">{name}</p>
-            <StatusChip duration={duration} status={run.status} />
+            <StatusChip
+              duration={duration}
+              status={waiting ? "waiting" : run.status}
+            />
           </div>
           {live && followable && !open ? (
             <AgentSubagentLiveSummary
@@ -249,14 +265,16 @@ function AgentSubagentTimeline({
   );
 }
 
+type PanelStatus = AgentSubagentRun["status"] | "waiting";
+
 function StatusChip({
   duration,
   status,
 }: {
   duration: string | null;
-  status: AgentSubagentRun["status"];
+  status: PanelStatus;
 }) {
-  const live = isLive(status);
+  const live = status === "waiting" || isLive(status);
   const Icon =
     status === "failed"
       ? CircleX
@@ -264,7 +282,7 @@ function StatusChip({
         ? CheckCircle2
         : status === "interrupted"
           ? CircleMinus
-          : status === "requested"
+          : status === "requested" || status === "waiting"
             ? CircleDashed
             : LoaderCircle;
   return (
@@ -290,13 +308,14 @@ function StatusChip({
   );
 }
 
-function statusLabel(status: AgentSubagentRun["status"]) {
-  const labels: Record<AgentSubagentRun["status"], string> = {
+function statusLabel(status: PanelStatus) {
+  const labels: Record<PanelStatus, string> = {
     completed: "Complete",
     delegating: "Starting",
     failed: "Needs attention",
     interrupted: "Did not report",
     requested: "Queued",
+    waiting: "Waiting for you",
     working: "Working",
   };
   return labels[status];

@@ -4,6 +4,9 @@ import { test } from "vitest";
 
 import {
   MAX_EXTRACTION_ATTEMPTS,
+  filedUnderLabels,
+  isFiledUnderAnotherRecord,
+  listUnreadDocuments,
   refreshAgentFiles,
   searchAgentFiles,
 } from "@/lib/domain/agent-context/files";
@@ -26,6 +29,7 @@ import { systemPrincipal, userPrincipal } from "@/lib/domain/principal";
 const LEAD_ID = 42;
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const OFFER_ID = "22222222-2222-4222-8222-222222222222";
+const OTHER_PROJECT_ID = "33333333-3333-4333-8333-333333333333";
 const cron = systemPrincipal("test");
 const now = new Date("2026-11-13T00:00:00Z");
 
@@ -277,10 +281,16 @@ function memoryDb(files: FileRow[], replies: unknown[] = []) {
         }
         return { count };
       },
-      findMany: async ({ where }: { where: { urlHash: { in: string[] } } }) =>
-        where.urlHash.in.flatMap((key) =>
-          texts.has(key) ? [texts.get(key)!] : [],
-        ),
+      findMany: async ({
+        where,
+      }: {
+        where: { urlHash?: { in: string[] }; status?: string };
+      }) =>
+        where.urlHash
+          ? where.urlHash.in.flatMap((key) =>
+              texts.has(key) ? [texts.get(key)!] : [],
+            )
+          : [...texts.values()].filter((row) => row.status === where.status),
       upsert: async ({
         create,
         update,
@@ -301,28 +311,49 @@ function memoryDb(files: FileRow[], replies: unknown[] = []) {
     contract: { findMany: async () => [] },
     file: { findMany: async () => files },
     lead: {
-      findMany: async () => [
-        {
-          id: LEAD_ID,
-          name: "Jordan Smith",
-          offers: [{ baseReference: "OF-42", id: OFFER_ID }],
-          project: { id: PROJECT_ID, name: "12 Rose St" },
-        },
-      ],
+      findMany: async ({
+        where,
+      }: { where?: { id?: { in: number[] } } } = {}) =>
+        where?.id?.in
+          ? where.id.in.includes(LEAD_ID)
+            ? [{ id: LEAD_ID, name: "Jordan Smith" }]
+            : []
+          : [
+              {
+                id: LEAD_ID,
+                name: "Jordan Smith",
+                offers: [{ baseReference: "OF-42", id: OFFER_ID }],
+                project: { id: PROJECT_ID, name: "12 Rose St" },
+              },
+            ],
+    },
+    offer: {
+      findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
+        where.id.in.includes(OFFER_ID)
+          ? [{ baseReference: "OF-42", id: OFFER_ID, leadId: LEAD_ID }]
+          : [],
     },
     offerDocumentReply: { findMany: async () => replies },
     project: {
-      findMany: async () => [
-        {
-          id: PROJECT_ID,
-          Lead: {
-            id: LEAD_ID,
-            name: "Jordan Smith",
-            offers: [{ baseReference: "OF-42", id: OFFER_ID }],
-          },
-          name: "12 Rose St",
-        },
-      ],
+      findMany: async ({
+        where,
+      }: { where?: { id?: { in: string[] } } } = {}) =>
+        where?.id?.in
+          ? [
+              { id: PROJECT_ID, name: "12 Rose St" },
+              { id: OTHER_PROJECT_ID, name: "Lot 9 Somerville Drive" },
+            ].filter((row) => where.id!.in.includes(row.id))
+          : [
+              {
+                id: PROJECT_ID,
+                Lead: {
+                  id: LEAD_ID,
+                  name: "Jordan Smith",
+                  offers: [{ baseReference: "OF-42", id: OFFER_ID }],
+                },
+                name: "12 Rose St",
+              },
+            ],
     },
     tender: {
       findMany: async () => [
@@ -570,6 +601,11 @@ test("an unsupported document is not retried; a failed one is, a bounded number 
     MAX_EXTRACTION_ATTEMPTS,
   );
   assert.equal(texts.get(urlHash(flaky.url))?.status, "FAILED");
+
+  // #432: the failure is named for the office digest, not only logged.
+  assert.deepEqual(await listUnreadDocuments(db, now), [
+    { filename: "plans.pdf", gaveUp: true, record: "12 Rose St" },
+  ]);
 });
 
 test("past the deadline nothing new is read, and the document waits for the next run", async () => {
@@ -709,6 +745,62 @@ test("search can be narrowed to one job's documents", async () => {
   );
   assert.ok(job.length > 0, "a passage filed under any of the ids matches");
   assert.ok(job.every((hit) => hit.projectId === PROJECT_ID));
+});
+
+test("each hit names the records its document is filed under", async () => {
+  const { db } = await indexedDb();
+  const admin = userPrincipal({ id: "a1", role: Role.ADMIN });
+  const hits = await searchAgentFiles(admin, { query: "bushfire" }, db, {
+    embedding: keywordEmbedding().port,
+  });
+  assert.ok(hits.length > 0);
+  const survey = hits[0]!;
+  assert.deepEqual(filedUnderLabels(survey.filedUnder), [
+    "Lead: Jordan Smith",
+    "Project: 12 Rose St",
+  ]);
+});
+
+test("a hit filed under a different project is labelled with its own record", async () => {
+  const memory = await indexedDb();
+  const admin = userPrincipal({ id: "a1", role: Role.ADMIN });
+  // The same lead's passage in this job, and another project's contract that
+  // also mentions the word: a search for the lead and the right project only
+  // ever asks about 12 Rose St.
+  memory.chunks.set("elsewhere-chunk", {
+    chunkIndex: 0,
+    content: "Contract for Lot 9: bushfire attack level BAL-12.5.",
+    contentHash: "x",
+    embedding: [1, 0, 0],
+    fileId: null,
+    id: "elsewhere-chunk",
+    leadId: LEAD_ID,
+    offerId: null,
+    offerReplyId: null,
+    pageFrom: 1,
+    pageTo: 1,
+    projectId: OTHER_PROJECT_ID,
+    refreshedAt: now,
+    sourceKey: "file:contract",
+    title: "Contract.pdf · Lot 9 Somerville Drive",
+    updatedAt: now,
+  });
+  const request = { leadId: LEAD_ID, projectId: PROJECT_ID, query: "bushfire" };
+  const hits = await searchAgentFiles(admin, request, memory.db, {
+    embedding: keywordEmbedding().port,
+  });
+  const contract = hits.find((hit) => hit.sourceKey === "file:contract");
+  assert.ok(contract, "it matches the lead id, so the search returns it");
+  assert.deepEqual(filedUnderLabels(contract.filedUnder), [
+    "Lead: Jordan Smith",
+    "Project: Lot 9 Somerville Drive",
+  ]);
+  assert.equal(isFiledUnderAnotherRecord(contract, request), true);
+  const own = hits.find((hit) => hit.projectId === PROJECT_ID);
+  assert.ok(own);
+  assert.equal(isFiledUnderAnotherRecord(own, request), false);
+  // With nothing asked about, nothing is "another" job's.
+  assert.equal(isFiledUnderAnotherRecord(contract, {}), false);
 });
 
 test("documents are for staff only", async () => {

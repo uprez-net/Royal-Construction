@@ -2,11 +2,9 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { isRecordIdField } from "@/lib/agent/id-fields";
 import {
-  formatDisplayField,
   formatDisplayText,
-  humanize,
+  resultFacts,
 } from "@/components/agent/agent-format";
 import {
   AgentOutreach,
@@ -194,13 +192,17 @@ export function AgentResult({
   result: AgentResultEnvelope;
 }) {
   // Record ids are for tools, not people: the card shows names and facts.
-  const entries = Object.entries(result.data).filter(
-    ([key, value]) =>
-      key !== "outreach"
-      && !isRecordIdField(key)
-      && value !== null
-      && typeof value !== "object",
-  );
+  const facts = resultFacts(result.data);
+  // The chip says something only when it changes how the card is read. A kind
+  // ("tradie summary") is a schema word, and "Approval required" on a result is
+  // never true: the only approval is the tool's own card, so a specialist that
+  // set the flag on a question or a preview made a finished card look like it
+  // still needed a click (#432).
+  const chip = partial
+    ? "Updating…"
+    : result.kind === "error"
+      ? "Could not complete"
+      : null;
 
   return (
     <div className="flex flex-col gap-2">
@@ -213,13 +215,9 @@ export function AgentResult({
             {formatDisplayText(result.summary)}
           </p>
         </div>
-        <Badge variant={result.requiresApproval ? "default" : "outline"}>
-          {partial
-            ? "Updating…"
-            : result.requiresApproval
-              ? "Approval required"
-              : result.kind.replaceAll("-", " ")}
-        </Badge>
+        {chip ? (
+          <Badge variant={partial ? "outline" : "destructive"}>{chip}</Badge>
+        ) : null}
       </div>
 
       {result.entityRef ? (
@@ -240,15 +238,13 @@ export function AgentResult({
         </div>
       ) : null}
 
-      {entries.length > 0 ? (
+      {facts.length > 0 ? (
         <dl className="grid grid-cols-2 gap-2 rounded-md border border-border/60 bg-background/70 p-2 text-xs sm:grid-cols-3">
-          {entries.slice(0, 9).map(([key, value]) => (
-            <div className="min-w-0" key={key}>
-              <dt className="truncate text-muted-foreground">
-                {humanize(key)}
-              </dt>
+          {facts.slice(0, 9).map((fact) => (
+            <div className="min-w-0" key={fact.key}>
+              <dt className="truncate text-muted-foreground">{fact.label}</dt>
               <dd className="truncate font-medium text-foreground">
-                {formatDisplayField(key, value)}
+                {fact.value}
               </dd>
             </div>
           ))}
