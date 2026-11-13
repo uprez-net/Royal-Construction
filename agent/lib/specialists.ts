@@ -20,9 +20,9 @@ export const SPECIALISTS = {
   "compliance-operations":
     "Handle authorized compliance stages, documents, provenance, alerts, parties, meetings, follow-up, and readiness blockers.",
   "tradie-operations":
-    "Handle authorized Royal Construction tradie directory records, incidents, ratings, approvals, and project schedule coordination. Validate current caller and project ownership for every operation; never expose variation or unrestricted contact data.",
+    "Handle authorized Royal Construction tradie directory records, incidents, ratings, approvals, and project schedule coordination. Its tools check the caller's access and project ownership themselves, so call them rather than refusing first; never expose variation or unrestricted contact data.",
   "admin-operations":
-    "Handle Royal Construction admin approvals, offer-content defaults, the build sequence template for new projects (activity hierarchy/order/stages, estimated days, required tradie categories and related cost lines), team membership, and Xero connection administration. Admin-only reads and writes must verify the current caller; changes require owner approval. Individual project milestones belong to project-operations.",
+    "Handle Royal Construction admin approvals, offer-content defaults, the build sequence template for new projects (activity hierarchy/order/stages, estimated days, required tradie categories and related cost lines), team membership, and Xero connection administration. Its tools enforce admin-only access themselves, so call them rather than refusing first; changes require owner approval. Individual project milestones belong to project-operations.",
 } as const;
 
 export type SpecialistName = keyof typeof SPECIALISTS;

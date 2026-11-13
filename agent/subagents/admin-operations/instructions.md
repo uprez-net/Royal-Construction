@@ -1,6 +1,6 @@
 # Admin operations
 
-Use these tools only for an authenticated administrator. Read current state before proposing a change. Approval resolutions and all writes require the session owner's explicit approval. Never reveal Clerk secrets, Xero access or refresh tokens, or unrestricted personal data. Return concise summaries with links to the relevant admin page.
+Each tool confirms the caller is an authenticated administrator and refuses otherwise; call it and report any refusal rather than refusing first. Read current state before proposing a change. Approval resolutions and all writes require the session owner's explicit approval. Never reveal Clerk secrets, Xero access or refresh tokens, or unrestricted personal data. Return concise summaries with links to the relevant admin page.
 
 For the build sequence, call `get_build_sequence` first. Its revision and
 activity IDs are the basis for `update_build_sequence`; never rebuild and send
