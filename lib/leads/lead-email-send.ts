@@ -98,6 +98,29 @@ function buildLeadEmailHtml(body: string, name: string) {
 }
 
 /**
+ * A plain-text message the office wrote in full — greeting and sign-off
+ * included — as the branded email a client receives: the same header, footer
+ * and paragraph handling as the lead composer, without the greeting and
+ * signature that one adds. The offer follow-up sends through this (#449).
+ */
+export function renderClientEmailHtml(body: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;">
+  <div style="background-color:#f7f6f2;margin:0;padding:0">
+    ${EMAIL_HEADER_HTML}
+    ${markdownToHtml(body)}
+    ${EMAIL_FOOTER_HTML}
+  </div>
+</body>
+</html>`;
+}
+
+/**
  * Escapes HTML-sensitive characters to prevent HTML injection when embedding
  * user-provided values inside email templates.
  *

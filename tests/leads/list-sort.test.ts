@@ -27,6 +27,8 @@ test("lead sorting has deterministic ascending and descending page boundaries", 
 test("offer group sorting reaches the database before pagination and keeps search and scope", async () => {
   for (const sort of LEAD_LIST_SORT_VALUES) {
     const recorder = recordingDb({
+      // "all" is every lead whose offer is not rejected (issue #450).
+      "$.queryRaw": [{ leadId: 1 }],
       "lead.findMany": [],
       "lead.count": 30,
       "offer.count": 42,

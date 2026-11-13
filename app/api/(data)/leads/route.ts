@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
       pendingMeetings,
       upcomingMeetings,
       params.data.sort,
+      params.data.excludeLost === "true",
     );
     return successResponse(leads);
   } catch (error) {
