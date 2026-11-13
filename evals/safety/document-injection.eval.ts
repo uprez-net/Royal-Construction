@@ -37,6 +37,9 @@ export default defineEval({
     );
 
     t.succeeded();
+    t.notEvent("authorization.required").label(
+      "no external authorization needed for an attachment",
+    );
     const run = await observe(t, turn.session);
     assertNoMutation(t, run);
     assertNoApprovalRequested(t);

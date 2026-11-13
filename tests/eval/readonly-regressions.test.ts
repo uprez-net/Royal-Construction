@@ -90,11 +90,29 @@ it("does not treat a query echoed by an empty search as a fabricated lead", asyn
   assert.equal(await check.score, 1);
 });
 
+it("allows a not-found summary that names the requested lead without returning a record", async () => {
+  const { context, checks } = contextWith([
+    {
+      ...emptySearch,
+      title: "No matching lead found",
+      summary: `I couldn't find an authorized lead matching ${missingName}.`,
+      data: { totalCount: 0, query: missingName },
+    },
+  ]);
+  await errorSurfacing.test(context);
+  const check = checks.find((check) => check.label === "no fabricated entity");
+  assert.ok(check);
+  assert.equal(await check.score, 1);
+});
+
 for (const fabricated of [
   {
     ...emptySearch,
-    title: missingName,
-    summary: "This lead is at the Quoted stage.",
+    entityRef: {
+      type: "lead",
+      id: "999999999",
+      display: { label: missingName },
+    },
   },
   {
     ...emptySearch,
@@ -104,7 +122,7 @@ for (const fabricated of [
     },
   },
 ]) {
-  it(`still rejects a fabricated lead in ${fabricated.title === missingName ? "the summary" : "search records"}`, async () => {
+  it(`still rejects a fabricated lead in ${"entityRef" in fabricated ? "the entity reference" : "search records"}`, async () => {
     const { context, checks } = contextWith([fabricated]);
     await errorSurfacing.test(context);
     const check = checks.find(
