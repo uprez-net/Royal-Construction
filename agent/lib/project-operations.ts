@@ -113,6 +113,29 @@ async function assertMilestoneAccess(actor: ProjectActor, milestoneId: string) {
   }
 }
 
+/** A project's lead as the project specialist reads it: no email content. */
+export function projectLeadSummary(lead: {
+  id: number;
+  email: string | null;
+  type: string;
+  location: string | null;
+  emails: readonly { sentAt: Date }[];
+}) {
+  const latest = lead.emails.reduce<Date | null>(
+    (newest, email) =>
+      newest === null || email.sentAt > newest ? email.sentAt : newest,
+    null,
+  );
+  return {
+    id: lead.id,
+    email: lead.email,
+    type: lead.type,
+    location: lead.location,
+    emailCount: lead.emails.length,
+    latestEmailAt: latest?.toISOString() ?? null,
+  };
+}
+
 function actionEnvelope(input: {
   actions?: {
     destructive?: boolean;
@@ -295,7 +318,12 @@ export async function getAuthorizedProject(
               phone: project.siteManager.phone,
             }
           : null,
-        lead: project.lead,
+        // The lead's mail trail as a count and a date, never the messages.
+        // This passed every LeadEmails row through, subject, sender and body
+        // included: text anyone can put in an inbound email, handed to the
+        // model unbounded (#426, #432). Reading a client email is a lead
+        // question, answered by the lead specialist's bounded tools.
+        lead: projectLeadSummary(project.lead),
       },
       milestones: project.milestones.map((milestone) => ({
         id: milestone.id,

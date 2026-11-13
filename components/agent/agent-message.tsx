@@ -42,6 +42,7 @@ export type { AgentInputResponse };
 
 export function AgentMessage({
   annotations,
+  awaitingApproval = false,
   canRespond,
   isStreaming,
   labels,
@@ -52,8 +53,11 @@ export function AgentMessage({
   subagents,
   timestamp,
   toolTimes,
+  working = false,
 }: {
   annotations?: readonly Pick<AgentAnnotation, "id" | "label" | "type">[];
+  /** An approval from this message's turn is waiting on the person. */
+  awaitingApproval?: boolean;
   canRespond: boolean;
   isStreaming: boolean;
   labels: Readonly<Record<string, string>>;
@@ -66,6 +70,8 @@ export function AgentMessage({
   toolTimes: Readonly<
     Record<number, { startedAt: string | null; endedAt: string | null }>
   >;
+  /** The agent is still working on this message's turn. */
+  working?: boolean;
 }) {
   const lastTextIndex = message.parts.reduce(
     (last, part, index) => (part.type === "text" ? index : last),
@@ -126,6 +132,7 @@ export function AgentMessage({
                 ? (toolTimes[part.stepIndex ?? 0] ?? emptyTimes)
                 : emptyTimes
             }
+            working={working}
           />
         ))}
         {subagents.length > 0 ? (
@@ -134,7 +141,11 @@ export function AgentMessage({
             className="flex flex-col gap-2"
           >
             {subagents.map((run) => (
-              <AgentSubagentPanel key={run.callId} run={run} />
+              <AgentSubagentPanel
+                awaitingApproval={awaitingApproval}
+                key={run.callId}
+                run={run}
+              />
             ))}
           </section>
         ) : null}
@@ -196,6 +207,7 @@ function AgentMessagePart({
   role,
   showCaret,
   times,
+  working,
 }: {
   canRespond: boolean;
   labels: Readonly<Record<string, string>>;
@@ -205,6 +217,7 @@ function AgentMessagePart({
   role: EveMessage["role"];
   showCaret: boolean;
   times: { startedAt: string | null; endedAt: string | null };
+  working: boolean;
 }) {
   switch (part.type) {
     case "step-start":
@@ -252,6 +265,7 @@ function AgentMessagePart({
           onRespond={onInputResponses}
           part={part}
           startedAt={times.startedAt}
+          working={working}
         />
       );
   }

@@ -54,7 +54,7 @@ export function urlHash(url: string): string {
   return createHash("sha256").update(url).digest("hex");
 }
 
-function offerReference(baseReference: string, leadId: number): string {
+export function offerReference(baseReference: string, leadId: number): string {
   return baseReference.trim() || `OF-${leadId}`;
 }
 
