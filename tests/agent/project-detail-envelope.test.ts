@@ -147,6 +147,10 @@ test("a project whose lead has emails comes back as a valid envelope", () => {
   const warnings = envelope.warnings.join(" ");
   assert.doesNotMatch(warnings, /lead emails/);
   assert.match(warnings, /only as a count and latest date/);
+  // No lead tool reads email content, so the warning must not send the
+  // agent to one.
+  assert.doesNotMatch(warnings, /read them with the lead tools/);
+  assert.match(warnings, /no Eve tool reads their content/);
 
   // The nullable and absent fields serialise as null, not as undefined.
   assert.equal(project.lotSize, null);
