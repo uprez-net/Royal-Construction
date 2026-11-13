@@ -75,7 +75,7 @@ export function TemplateMultiSelect({
           aria-label={searchLabel}
           className="w-(--radix-popover-trigger-width) p-0"
         >
-          <Command>
+          <Command label={searchLabel}>
             <CommandInput
               placeholder={`${searchLabel}…`}
               aria-label={searchLabel}
@@ -99,8 +99,7 @@ export function TemplateMultiSelect({
                           option.description ?? "",
                           group ?? "",
                         ]}
-                        data-checked={value.includes(option.id)}
-                        aria-selected={value.includes(option.id)}
+                        checked={value.includes(option.id)}
                         onSelect={() => toggle(option.id)}
                       >
                         {option.icon}
@@ -111,11 +110,6 @@ export function TemplateMultiSelect({
                               {option.description}
                             </span>
                           ) : null}
-                        </span>
-                        <span className="sr-only">
-                          {value.includes(option.id)
-                            ? "Selected"
-                            : "Not selected"}
                         </span>
                       </CommandItem>
                     ))}

@@ -111,8 +111,8 @@ export function SearchableSelect({
   // which says what is chosen but never what it chooses. A hidden generic label
   // keeps the "<name> <value>" shape rather than leaving the control unnamed.
   const nameSource =
-    labelledById ??
-    (hasOwnLabel ? ownLabelId : hasAriaLabel ? undefined : fallbackLabelId);
+    labelledById
+    ?? (hasOwnLabel ? ownLabelId : hasAriaLabel ? undefined : fallbackLabelId);
   const usesFallbackLabel = nameSource === fallbackLabelId;
   const triggerLabelledBy = nameSource ? `${nameSource} ${valueId}` : undefined;
   const canClear = Boolean(selectedItem && onClear);
@@ -206,13 +206,27 @@ export function SearchableSelect({
         <PopoverContent
           className="w-(--radix-popover-trigger-width) p-0"
           align="start"
+          aria-label={searchNoun ? `Select ${searchNoun}` : "Select an option"}
         >
-          <Command shouldFilter={false}>
+          <Command
+            shouldFilter={false}
+            label={searchNoun ? `Search ${searchNoun}` : "Search"}
+          >
             <CommandInput
               placeholder={searchNoun ? `Search ${searchNoun}...` : "Search..."}
               value={searchValue}
               onValueChange={onQueryChange}
             />
+
+            {/* cmdk's empty state is role="presentation" and nothing else is
+                live, so results that arrive asynchronously were silent. */}
+            <p role="status" className="sr-only">
+              {loading
+                ? "Loading"
+                : items.length === 0
+                  ? "No results found"
+                  : `${items.length} result${items.length === 1 ? "" : "s"}${hasMore ? ", more available" : ""}`}
+            </p>
 
             <CommandList>
               {loading && items.length === 0 ? (
@@ -228,8 +242,8 @@ export function SearchableSelect({
                   const title = isLookupOption(item) ? item.name : item.label;
 
                   const subtitleParts = isLookupOption(item)
-                    ? (item.description ??
-                      [
+                    ? (item.description
+                      ?? [
                         item.email ? `Email: ${item.email}\n` : null,
                         item.phone ? `Phone: ${item.phone}\n` : null,
                         item.role
@@ -253,6 +267,7 @@ export function SearchableSelect({
                     <CommandItem
                       key={item.id}
                       value={title}
+                      checked={selectedItem?.id === item.id}
                       onSelect={() => {
                         onSelect(item);
                         setOpen(false);
@@ -264,8 +279,8 @@ export function SearchableSelect({
                         </span>
 
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                          {Array.isArray(subtitleParts) &&
-                          subtitleParts.length > 0 ? (
+                          {Array.isArray(subtitleParts)
+                          && subtitleParts.length > 0 ? (
                             subtitleParts.map((part, index) => (
                               <Fragment key={part}>
                                 {index > 0 && (

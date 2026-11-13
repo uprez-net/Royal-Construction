@@ -14,12 +14,19 @@ import {
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
 import { SearchIcon, CheckIcon } from "lucide-react";
 
+// `label` names the search input: cmdk renders it as a visually hidden <label>
+// and points the input's aria-labelledby at it. Left out, that label is empty,
+// which overrides the placeholder and leaves the input with no accessible name
+// (axe does not flag it). Pass what the list searches, e.g. "Search tradies";
+// the default is only a floor so no lookup is ever nameless.
 function Command({
   className,
+  label = "Search",
   ...props
 }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
     <CommandPrimitive
+      label={label}
       data-slot="command"
       className={cn(
         "flex size-full flex-col overflow-hidden rounded-xl! bg-popover p-1 text-popover-foreground",
@@ -143,14 +150,23 @@ function CommandSeparator({
   );
 }
 
+// `checked` marks the option that is the current choice. cmdk's own
+// aria-selected only means "highlighted", so the choice is conveyed separately:
+// `data-checked` drives the check icon below and a hidden "Current choice" is
+// what a screen reader hears. Not "Selected": that word is cmdk's, and it reads
+// out for the highlighted row.
 function CommandItem({
   className,
   children,
+  checked,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Item>) {
+}: React.ComponentProps<typeof CommandPrimitive.Item> & {
+  checked?: boolean;
+}) {
   return (
     <CommandPrimitive.Item
       data-slot="command-item"
+      data-checked={checked ? "true" : undefined}
       className={cn(
         "group/command-item relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none in-data-[slot=dialog-content]:rounded-lg! data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-muted data-selected:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-selected:*:[svg]:text-foreground",
         className,
@@ -158,7 +174,11 @@ function CommandItem({
       {...props}
     >
       {children}
-      <CheckIcon className="ml-auto opacity-0 group-has-data-[slot=command-shortcut]/command-item:hidden group-data-[checked=true]/command-item:opacity-100" />
+      {checked ? <span className="sr-only">Current choice</span> : null}
+      <CheckIcon
+        aria-hidden="true"
+        className="ml-auto opacity-0 group-has-data-[slot=command-shortcut]/command-item:hidden group-data-[checked=true]/command-item:opacity-100"
+      />
     </CommandPrimitive.Item>
   );
 }

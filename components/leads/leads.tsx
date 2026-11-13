@@ -38,6 +38,7 @@ import { reloadLeadList, updateAndRefreshLeadList } from "./leads-list-refresh";
 import {
   readLeadsListParams,
   LEAD_SORT_OPTIONS,
+  MIN_SEARCH_CHARS,
   withLeadsListParams,
   type LeadsListParamChanges,
 } from "./leads-list-url";
@@ -156,6 +157,13 @@ function LeadsWorkspace() {
   const [showEmailCampaign, setShowEmailCampaign] = useState(false);
 
   const debouncedSearch = useDebounce(searchTerm, 500);
+  const typedSearch = searchTerm.trim();
+  // A query already applied from the URL is kept as it is (see the effect
+  // below), so it is not "too short" however short it is.
+  const searchTooShort =
+    typedSearch.length > 0
+    && typedSearch.length < MIN_SEARCH_CHARS
+    && typedSearch !== urlQuery;
 
   /* ── Derived ── */
   const conversionRate =
@@ -192,10 +200,11 @@ function LeadsWorkspace() {
   /* ── Search box → ?query= ── */
   useEffect(() => {
     const typed = debouncedSearch.trim();
-    // A query applies at five characters. Clearing the box, or cutting an
-    // applied "smithx" back to "smi", removes it and returns to page 1; a short
-    // query that was never applied changes nothing.
-    const next = typed.length > 4 || typed === urlQuery ? typed : "";
+    // A query applies at MIN_SEARCH_CHARS. Clearing the box, or cutting an
+    // applied "smithx" back to "s", removes it and returns to page 1; a short
+    // query that was never applied changes nothing (the box says so).
+    const next =
+      typed.length >= MIN_SEARCH_CHARS || typed === urlQuery ? typed : "";
     if (next !== urlQuery) updateListParams({ query: next, page: null });
     // Only the person's typing drives this; the URL changing under it (a
     // metric card, paging) must not write the box back over it.
@@ -535,7 +544,23 @@ function LeadsWorkspace() {
                     placeholder="Search leads..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    aria-describedby={
+                      searchTooShort ? "leads-search-hint" : undefined
+                    }
                   />
+                  {/* Always mounted so the live region is registered before
+                      its text changes. Drawn inside the input's right edge, so
+                      it moves nothing and cannot cover the row below on a
+                      phone. */}
+                  <p
+                    id="leads-search-hint"
+                    role="status"
+                    className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted-foreground"
+                  >
+                    {searchTooShort
+                      ? `Type ${MIN_SEARCH_CHARS}+ characters`
+                      : ""}
+                  </p>
                 </div>
                 <button className="btn-export" onClick={handleExport}>
                   <Download size={14} />

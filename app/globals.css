@@ -249,15 +249,22 @@
     @apply h-full font-sans;
   }
 
+  /* Compact scale for 1024–1279px windows. This is root font-size, NOT CSS
+     `zoom`: Radix/Floating UI position every popper (Select, Popover,
+     DropdownMenu, so every filter and lookup menu) from the trigger's pixel
+     position, and under `zoom` that offset is scaled a second time, so menus
+     landed up to ~50px off (#437). rem-based spacing and type compact the same
+     way; px literals (text-[13px]) stay put. Do not reintroduce `zoom` on
+     html or body. */
   @media (min-width: 1024px) {
     html {
-      zoom: 0.9;
+      font-size: 90%;
     }
   }
 
   @media (min-width: 1280px) {
     html {
-      zoom: 1;
+      font-size: 100%;
     }
   }
 

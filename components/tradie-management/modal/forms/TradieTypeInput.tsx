@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronsUpDown, HardHat, Loader2, Star, X } from "lucide-react";
+import { ChevronsUpDown, HardHat, Loader2, Star, X } from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -109,7 +109,7 @@ export function TradeTypeMultiCombobox({
           aria-label="Search trade types"
           className="w-(--radix-popover-trigger-width) p-0"
         >
-          <Command>
+          <Command label="Search trade types">
             <CommandInput
               placeholder="Search trade type..."
               aria-label="Search trade types"
@@ -154,8 +154,7 @@ export function TradeTypeMultiCombobox({
                     <CommandItem
                       key={tradeType.id}
                       value={tradeType.label}
-                      data-checked={checked}
-                      aria-selected={checked}
+                      checked={checked}
                       // Stays open: picking several is the point.
                       onSelect={() => toggle(tradeType.label)}
                     >
@@ -164,16 +163,6 @@ export function TradeTypeMultiCombobox({
                         className="mr-2 h-4 w-4"
                       />
                       {tradeType.label}
-                      <Check
-                        className={cn(
-                          "ml-auto h-4 w-4",
-                          checked ? "opacity-100" : "opacity-0",
-                        )}
-                        aria-hidden="true"
-                      />
-                      <span className="sr-only">
-                        {checked ? "Selected" : "Not selected"}
-                      </span>
                     </CommandItem>
                   );
                 })}

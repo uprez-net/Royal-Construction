@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  Check,
-  FileText,
-  FolderOpen,
-  Loader2,
-  Paperclip,
-  X,
-} from "lucide-react";
+import { FileText, FolderOpen, Loader2, Paperclip, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -27,7 +20,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
-import { cn } from "@/lib/utils";
 import type { VaultAttachmentOption } from "@/types/compliance";
 
 /**
@@ -266,8 +258,12 @@ export function ExtraAttachmentsField({
               {/* Wider than the trigger, unlike the pickers elsewhere on this
                   tab: every row here is a document name and a filename, and at
                   trigger width both truncate to the point of uselessness. */}
-              <PopoverContent className="w-96 p-0" align="end">
-                <Command>
+              <PopoverContent
+                className="w-96 p-0"
+                align="end"
+                aria-label="Select documents from the job file"
+              >
+                <Command label="Search documents on this job">
                   <CommandInput placeholder="Search documents on this job…" />
                   <CommandList>
                     <CommandEmpty>Nothing on the file matches.</CommandEmpty>
@@ -278,17 +274,9 @@ export function ExtraAttachmentsField({
                           // Both, so searching by what a document is or by what
                           // the scanner called it both find the row.
                           value={`${option.documentLabel} ${option.filename}`}
+                          checked={picked.has(option.fileId)}
                           onSelect={() => toggleVaultFile(option)}
                         >
-                          <Check
-                            className={cn(
-                              "size-4 shrink-0",
-                              picked.has(option.fileId)
-                                ? "opacity-100"
-                                : "opacity-0",
-                            )}
-                            aria-hidden="true"
-                          />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate">
                               {option.documentLabel}

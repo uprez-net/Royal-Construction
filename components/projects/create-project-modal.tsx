@@ -994,11 +994,15 @@ export function CreateProjectModal({
                       field="siteLocation"
                       error={fieldErrorMap.siteLocation}
                     >
-                      <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                      <Label
+                        id="create-project-site-location-label"
+                        className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground"
+                      >
                         Site location
                       </Label>
                       <SearchableSelect
                         label=""
+                        labelledById="create-project-site-location-label"
                         placeholder="Select address..."
                         searchValue={siteAddress}
                         selectedItem={selectedLocation}

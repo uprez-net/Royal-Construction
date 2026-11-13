@@ -70,7 +70,8 @@ export function OfferStepRail({
     // Reveal feedback inside the rail without scrolling the page or the pane.
     const bounds = list.getBoundingClientRect();
     const rowBounds = row.getBoundingClientRect();
-    // Rects include the app's CSS zoom; scrollTop uses unscaled layout pixels.
+    // Rects include any ancestor transform or zoom; scrollTop uses unscaled
+    // layout pixels, so the scale is measured rather than assumed.
     const scale = bounds.height / list.offsetHeight || 1;
     if (rowBounds.top < bounds.top)
       list.scrollTop += (rowBounds.top - bounds.top) / scale;

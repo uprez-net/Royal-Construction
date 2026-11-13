@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { Check, ChevronsUpDown, Layers } from "lucide-react";
+import { ChevronsUpDown, Layers } from "lucide-react";
 
 import { TradeIcon } from "@/components/tradie-management/trade-icon";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
 
 const ALL_TRADES = "All trades";
 
@@ -71,9 +70,10 @@ export function TradeSelector({
       </PopoverTrigger>
       <PopoverContent
         align="start"
+        aria-label="Select trade category"
         className="w-(--radix-popover-trigger-width) min-w-64 p-0"
       >
-        <Command>
+        <Command label="Search trades">
           <CommandInput
             placeholder="Search trades…"
             aria-label="Search trades"
@@ -85,6 +85,7 @@ export function TradeSelector({
                 <CommandItem
                   key={option ?? "all"}
                   value={option ?? ALL_TRADES}
+                  checked={option === value}
                   onSelect={() => choose(option)}
                 >
                   {option ? (
@@ -93,13 +94,6 @@ export function TradeSelector({
                     <Layers className="size-4" aria-hidden="true" />
                   )}
                   <span className="truncate">{option ?? ALL_TRADES}</span>
-                  <Check
-                    className={cn(
-                      "ml-auto size-4",
-                      option === value ? "opacity-100" : "opacity-0",
-                    )}
-                    aria-hidden="true"
-                  />
                 </CommandItem>
               ))}
             </CommandGroup>
