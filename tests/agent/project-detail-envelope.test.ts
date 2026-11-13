@@ -134,23 +134,12 @@ test("a project whose lead has emails comes back as a valid envelope", () => {
   // Parsed by the envelope schema inside; this threw before the fix.
   const envelope = projectDetailEnvelope(detailFixture());
   const project = envelope.data.project as Record<string, unknown>;
-  const lead = project.lead as {
-    emailCount: number;
-    emails: Record<string, unknown>[];
-  };
+  const lead = project.lead as Record<string, unknown>;
 
   assert.equal(lead.emailCount, 2);
-  assert.deepEqual(lead.emails[0], {
-    id: "e1",
-    subject: "Quote please",
-    from: "client@example.com",
-    to: "info@example.com",
-    sentAt: "2026-09-01T10:00:00.123Z",
-    untrusted: true,
-  });
-  // The bodies stay with the lead tools; inbound text is bounded.
-  assert.equal("body" in lead.emails[1], false);
-  assert.equal((lead.emails[1].subject as string).length, 501);
+  assert.equal(lead.latestEmailAt, "2026-09-02T10:00:00.000Z");
+  // No subject, sender or body: inbound text stays with the lead tools.
+  assert.equal("emails" in lead, false);
   assert.match(envelope.warnings.join(" "), /lead emails/);
 
   // The nullable and absent fields serialise as null, not as undefined.
@@ -164,7 +153,7 @@ test("a project whose lead has emails comes back as a valid envelope", () => {
   assert.deepEqual(JSON.parse(JSON.stringify(envelope.data)), envelope.data);
 });
 
-test("only the most recent lead emails are listed, with the full count", () => {
+test("the count and latest date cover every email, however many", () => {
   const detail = detailFixture();
   const many = Array.from({ length: 60 }, (_, index) => ({
     ...leadEmails[0],
@@ -175,14 +164,11 @@ test("only the most recent lead emails are listed, with the full count", () => {
 
   const lead = (
     projectDetailEnvelope(detail).data.project as {
-      lead: { emailCount: number; emails: { id: string }[] };
+      lead: { emailCount: number; latestEmailAt: string };
     }
   ).lead;
   assert.equal(lead.emailCount, 60);
-  assert.equal(lead.emails.length, 50);
-  // Oldest first, as the read orders them, ending on the newest.
-  assert.equal(lead.emails.at(-1)!.id, "e59");
-  assert.equal(lead.emails[0].id, "e10");
+  assert.equal(lead.latestEmailAt, "2026-03-01T00:00:00.000Z");
 });
 
 test("a blank or overlong project name does not fail the detail", () => {

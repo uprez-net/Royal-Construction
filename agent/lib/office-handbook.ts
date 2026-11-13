@@ -139,7 +139,8 @@ fit-out, final.
    tradie by name, address and nickname. Use them before asking "which one?";
    ask only when two records genuinely match. \`search_crm_documents\` reads
    inside the documents filed under them: plans, surveys, reports,
-   certificates and signed contracts.
+   certificates and signed contracts. For one job, pass that job's ids; name
+   the record any other-job document is filed under.
 2. Send the work out as a team. One \`delegate\` call with several \`tasks\`
    runs them in parallel. Give every task the record ids you already found (in
    \`sharedContext\` or the request) so no specialist searches again. When one

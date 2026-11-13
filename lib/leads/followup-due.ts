@@ -34,6 +34,28 @@ export const LIVE_LEAD = {
 } satisfies Prisma.LeadWhereInput;
 
 /**
+ * An open task whose due date has already passed, on a lead a working view
+ * still shows.
+ *
+ * The one definition of "overdue lead task". The office digest the agent reads
+ * first, and the agent's office-wide live lookup, both build on it, so
+ * "anything overdue?" has one answer whichever path the question takes (#432):
+ * a per-lead lookup is deliberately unfiltered by LIVE_LEAD, and an office-wide
+ * answer assembled by walking leads picked up a Lost lead's old wait.
+ */
+export function overdueLeadTaskWhere(
+  now: Date,
+  assignedId: string | null = null,
+): Prisma.LeadTaskWhereInput {
+  return {
+    completedAt: null,
+    dueDate: { lt: now },
+    lead: assignedId === null ? LIVE_LEAD : { ...LIVE_LEAD, assignedId },
+    status: { not: "DONE" },
+  };
+}
+
+/**
  * Open work due by the end of today in Sydney — the one definition of a
  * follow-up that is outstanding.
  *

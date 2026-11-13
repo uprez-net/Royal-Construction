@@ -34,6 +34,7 @@ export const READ_TOOLS = {
     "get_lead",
     "get_lead_whatsapp",
     "list_lead_tasks",
+    "list_overdue_lead_tasks",
     "prepare_lead_whatsapp_message",
     "search_leads",
   ],

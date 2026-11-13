@@ -138,6 +138,8 @@ export default defineWorkflowTool({
     "Specialists do not see this conversation: put every name, id, date and constraint they need in the request, goal or sharedContext.",
     "For one specialist send `specialist` + `request`. For work that spans areas send `tasks`: tasks without `after` run in parallel, and a task with `after` waits for those tasks and receives their findings (record ids included), so it does not search again.",
     "Parallel tasks are for reads and for independent changes the person has already asked for; a change that depends on another result goes in a later task with `after`.",
+    "A single-record change is one delegate call: the specialist calls the write tool and its own approval card asks. Never delegate a separate verify or preview step first, and never ask for approval in prose.",
+    "An office-wide overdue list is answered from the office snapshot; for a live one send lead-operations (list_overdue_lead_tasks), never a walk through leads.",
     "A change that comes back cancelled or declined at approval is the person's answer: never delegate it again.",
     "Set `readOnly: true` on every task that only looks things up. A read-only task whose specialist returns an unusable result is retried once for you; never delegate it again yourself.",
     "Specialists:",

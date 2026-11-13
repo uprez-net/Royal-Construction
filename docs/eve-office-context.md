@@ -57,7 +57,11 @@ alone.
 - The office digest is in its instructions from the first message
   (`agent/instructions/office-snapshot.ts`, administrators only). It covers
   leads by stage, offers out for signature, overdue tasks, this week's
-  meetings, jobs in progress, compliance alerts and money owed.
+  meetings, jobs in progress, compliance alerts and money owed. Overdue is
+  `overdueLeadTaskWhere` (`lib/leads/followup-due.ts`), the same rule as the
+  lead specialist's `list_overdue_lead_tasks`; the digest gives the full count
+  and lists the oldest 15. It also names the documents the index failed to
+  read, which used to reach only the server log.
 - `recall_crm_context` finds records from a few words and returns their
   snapshot and ids.
 
@@ -120,7 +124,10 @@ cached text on the next run.
 **Search:** the orchestrator's `search_crm_documents` tool ranks passages the
 same way as record search (inner product plus a word match). It can be
 narrowed to one job by lead, project or offer id, returns at most three
-passages per document, and is staff-only. Document text is the uploader's
+passages per document, and is staff-only. Each hit names the records it is
+filed under (looked up live, so a renamed project reads as it is now) beside
+the ids, and a hit filed under a different record than the one asked about is
+marked `otherJob` so the agent names it instead of folding it into the job. Document text is the uploader's
 words. The tool tells the agent to quote it and never follow it.
 
 ## 3. Working as a team: parallel delegation

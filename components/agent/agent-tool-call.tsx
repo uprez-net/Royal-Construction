@@ -3,15 +3,14 @@
 import { useState } from "react";
 import type { EveDynamicToolPart } from "eve/react";
 import {
+  Ban,
   CheckCircle2,
   ChevronDown,
   CircleDashed,
   LoaderCircle,
   ShieldCheck,
-  Wrench,
   XCircle,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import {
   Collapsible,
   CollapsibleContent,
@@ -40,6 +39,53 @@ const INTERNAL_ARGUMENT_TOOLS: ReadonlySet<string> = new Set([
   "recall_crm_context",
 ]);
 
+/** Framework tools with no authored label, named for the office. */
+const TOOL_TITLES: Readonly<Record<string, string>> = {
+  ask_question: "Question for you",
+};
+
+const SPECIALIST_NAMES: Readonly<Record<string, string>> = {
+  "admin-operations": "admin",
+  "compliance-operations": "compliance",
+  "lead-operations": "lead",
+  "offer-operations": "offer",
+  "project-operations": "project",
+  "tradie-operations": "tradie",
+};
+
+/**
+ * "Asking the lead and project specialists": what a `delegate` card is doing,
+ * read from its own arguments. "Delegate" told the office nothing (#432).
+ */
+export function delegateTitle(input: unknown): string | null {
+  if (!input || typeof input !== "object") return null;
+  const value = input as { specialist?: unknown; tasks?: unknown };
+  const names = (
+    Array.isArray(value.tasks)
+      ? value.tasks.map((task) =>
+          task && typeof task === "object"
+            ? (task as { specialist?: unknown }).specialist
+            : undefined,
+        )
+      : [value.specialist]
+  )
+    .filter((name): name is string => typeof name === "string")
+    .map((name) => SPECIALIST_NAMES[name] ?? humanize(name).toLowerCase());
+  const unique = [...new Set(names)];
+  if (unique.length === 0) return null;
+  const list =
+    unique.length === 1
+      ? unique[0]
+      : `${unique.slice(0, -1).join(", ")} and ${unique.at(-1)}`;
+  return `Asking the ${list} specialist${unique.length === 1 ? "" : "s"}`;
+}
+
+/**
+ * eve's own wording for a call that never ran because the person said no, or
+ * the turn was stopped. Shown as what happened, in the word on the button.
+ */
+const SYSTEM_CANCEL_TEXT = /^tool execution was (cancelled|canceled|denied)/i;
+
 /**
  * One operation the agent ran, from the first streamed argument to the result.
  *
@@ -56,6 +102,7 @@ export function AgentToolCall({
   part,
   startedAt,
   endedAt,
+  working,
 }: {
   canRespond: boolean;
   label: string | undefined;
@@ -64,9 +111,24 @@ export function AgentToolCall({
   part: EveDynamicToolPart;
   startedAt: string | null;
   endedAt: string | null;
+  /** The agent is still working on this message's turn. */
+  working: boolean;
 }) {
   const request = part.toolMetadata?.eve?.inputRequest;
-  const responded = part.toolMetadata?.eve?.inputResponse !== undefined;
+  const response = part.toolMetadata?.eve?.inputResponse;
+  const responded = response !== undefined;
+  // The button the person pressed was the danger option: Cancel.
+  const cancelledByPerson =
+    part.state === "output-denied"
+    || (responded
+      && request?.options?.find((option) => option.id === response.optionId)
+        ?.style === "danger");
+  const cancelledText =
+    part.state === "output-error" && SYSTEM_CANCEL_TEXT.test(part.errorText);
+  const cancelled = cancelledByPerson || cancelledText;
+  // Approved, then stopped while it ran: something may already be written.
+  const interrupted =
+    part.state === "output-error" && part.approval?.approved === true;
   const awaitingApproval = part.state === "approval-requested" && !responded;
   const complete = part.state === "output-available";
   const partial = part.state === "output-available" && part.partial === true;
@@ -76,15 +138,32 @@ export function AgentToolCall({
       ? toolOutcome(part.output)
       : { failed: false, note: null };
   const errored = outcome.failed;
-  const failed =
-    errored || part.state === "output-error" || part.state === "output-denied";
+  // A cancelled change is the person's answer, not a failure: it is not red.
+  const failed = !cancelled && (errored || part.state === "output-error");
+  // Approved and waiting for the agent to pick it back up. Once the turn has
+  // finished the card stops spinning, whatever state the part was left in: a
+  // card that still read "running" after the reply was shown said the work was
+  // not done when it was (#432).
+  const applying =
+    working
+    && !cancelled
+    && (part.state === "approval-responded"
+      || (part.state === "approval-requested" && responded));
   const running =
-    part.state === "input-streaming"
-    || part.state === "input-available"
-    || partial;
+    working
+    && (part.state === "input-streaming"
+      || part.state === "input-available"
+      || partial
+      || applying);
   const [open, setOpen] = useState(false);
 
-  const title = label ?? humanize(part.toolName);
+  const title =
+    label
+    ?? (part.toolName === "delegate"
+      ? delegateTitle("input" in part ? part.input : undefined)
+      : null)
+    ?? TOOL_TITLES[part.toolName]
+    ?? humanize(part.toolName);
   // Ids mean nothing to the office, and the routing tools' arguments are
   // written by the model for other models — leadId=105, offer UUIDs — so they
   // stay out of the card; the specialist's own panel shows the work (#429).
@@ -93,17 +172,27 @@ export function AgentToolCall({
     : toInputFields("input" in part ? part.input : undefined, {
         hideIds: true,
       });
-  const result = complete ? resultEnvelope(part.output) : null;
+  // A delegate's answer is shown once: in the specialist's own panel, collapsed,
+  // with the orchestrator's reply as the answer. Repeating it here showed the
+  // same sentence three times (#432).
+  const result =
+    complete && part.toolName !== "delegate"
+      ? resultEnvelope(part.output)
+      : null;
   const duration = formatDuration(startedAt, endedAt);
-  const Icon = failed
-    ? XCircle
-    : complete && !partial
-      ? CheckCircle2
-      : awaitingApproval
-        ? ShieldCheck
-        : running
-          ? LoaderCircle
-          : CircleDashed;
+  const Icon = cancelled
+    ? Ban
+    : failed
+      ? XCircle
+      : complete && !partial
+        ? CheckCircle2
+        : awaitingApproval
+          ? ShieldCheck
+          : running
+            ? LoaderCircle
+            : responded
+              ? ShieldCheck
+              : CircleDashed;
 
   return (
     <article
@@ -140,19 +229,20 @@ export function AgentToolCall({
             {title}
           </p>
           <p className="truncate text-xs text-muted-foreground">
-            {outcome.note
-              ?? (errored
-                ? "Could not complete"
-                : toolStateLabel(part.state, partial, responded))}
+            {cancelled
+              ? "Cancelled"
+              : (outcome.note
+                ?? (errored
+                  ? "Could not complete"
+                  : toolStateLabel(part.state, {
+                      applying,
+                      partial,
+                      responded,
+                      working,
+                    })))}
             {duration ? ` · ${duration}` : ""}
           </p>
         </div>
-        <Badge
-          variant={failed ? "destructive" : complete ? "secondary" : "outline"}
-        >
-          <Wrench data-icon="inline-start" />
-          Operation
-        </Badge>
       </header>
 
       {fields.length > 0 && !awaitingApproval ? (
@@ -199,7 +289,9 @@ export function AgentToolCall({
       {request ? (
         <div className="border-t border-border/60 p-2.5">
           <AgentApproval
+            applying={applying}
             canRespond={canRespond}
+            cancelled={cancelled && !interrupted}
             input={"input" in part ? part.input : undefined}
             label={title}
             onRespond={onRespond}
@@ -221,40 +313,66 @@ export function AgentToolCall({
         </div>
       ) : null}
 
-      {part.state === "output-error" ? (
+      {part.state === "output-error" && !cancelled ? (
         <p className="border-t border-border/60 px-3 py-2.5 text-sm text-destructive">
           {part.errorText}
         </p>
       ) : null}
 
-      {part.state === "output-denied" ? (
+      {cancelled && (!request || interrupted) ? (
         <p className="border-t border-border/60 px-3 py-2.5 text-sm text-muted-foreground">
-          {part.approval.reason
-            ?? "You declined this operation. Nothing was changed."}
+          {cancelNotice(part)}
         </p>
       ) : null}
     </article>
   );
 }
 
-function toolStateLabel(
+/**
+ * What a cancelled card says. "Cancelled", because Cancel is the button the
+ * person pressed: the specialist said "declined", the orchestrator
+ * "cancelled", and the card "Tool execution was cancelled." (#432). Their own
+ * note, if they wrote one, is shown as theirs.
+ */
+export function cancelNotice(part: EveDynamicToolPart): string {
+  if (part.state === "output-error" && part.approval?.approved === true)
+    return "Cancelled while it was running. Check the record before trying again.";
+  const note =
+    part.state === "output-denied" ? part.approval.reason?.trim() : undefined;
+  const own = note && !SYSTEM_CANCEL_TEXT.test(note) ? note : null;
+  return own
+    ? `You cancelled this. Nothing was changed. Your note: ${own}`
+    : "You cancelled this. Nothing was changed.";
+}
+
+export function toolStateLabel(
   state: EveDynamicToolPart["state"],
-  partial: boolean,
-  responded: boolean,
+  {
+    applying,
+    partial,
+    responded,
+    working,
+  }: {
+    applying: boolean;
+    partial: boolean;
+    responded: boolean;
+    working: boolean;
+  },
 ) {
-  if (partial) return "Streaming a result";
+  if (partial) return working ? "Streaming a result" : "Completed";
+  if (applying) return "Applying your change…";
   switch (state) {
     case "approval-requested":
-      return responded ? "Approval recorded" : "Waiting for your approval";
+      return responded ? "Approved" : "Waiting for your approval";
     case "approval-responded":
-      return "Approval recorded · running";
+      return "Approved";
     case "input-available":
     case "input-streaming":
-      return "Preparing the operation";
+      return working ? "Preparing the operation" : "Did not run";
     case "output-available":
       return "Completed";
     case "output-denied":
-      return "Declined";
+      return "Cancelled";
     case "output-error":
       return "Could not complete";
   }
