@@ -36,8 +36,8 @@ export default defineEval({
     t.check(
       info,
       satisfies(
-        () => info.kind === "eve-agent-info" && info.version === 4,
-        "the target speaks the eve-agent-info v4 contract",
+        () => info.kind === "eve-agent-info" && info.version === 5,
+        "the target speaks the eve-agent-info v5 contract",
       ),
     ).label("info contract");
 

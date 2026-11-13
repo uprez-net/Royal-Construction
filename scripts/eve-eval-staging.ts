@@ -138,8 +138,12 @@ async function mintToken(
     headers: { [EVAL_AUTH_HEADER]: secret },
     method: "POST",
   });
-  const body = await responseJson(response);
+  return responseJson(response);
+}
 
+function validateBootstrap(
+  body: BootstrapResponse,
+): asserts body is BootstrapResponse & { token: string } {
   if (
     typeof body.token !== "string"
     || body.environment !== "preview"
@@ -179,7 +183,6 @@ async function mintToken(
       `The staging target has fixture version "${String(body.fixtureVersion)}", expected "${expectedFixtureVersion}".`,
     );
   }
-  return body;
 }
 
 async function verifyTarget(target: URL, token: string): Promise<void> {
@@ -198,8 +201,8 @@ async function verifyTarget(target: URL, token: string): Promise<void> {
   } catch {
     throw new Error("The staging Eve info check returned invalid JSON.");
   }
-  if (body.kind !== "eve-agent-info" || body.version !== 4) {
-    throw new Error("The target is not the expected Eve v4 deployment.");
+  if (body.kind !== "eve-agent-info" || body.version !== 5) {
+    throw new Error("The target is not the expected Eve v5 deployment.");
   }
 }
 
@@ -210,7 +213,7 @@ async function revokeToken(
 ): Promise<void> {
   const sessionId = sessionIdFromJwt(token);
   if (!sessionId) return;
-  await fetch(new URL("/api/eval/auth/revoke", target), {
+  const response = await fetch(new URL("/api/eval/auth/revoke", target), {
     cache: "no-store",
     headers: {
       [EVAL_AUTH_HEADER]: secret,
@@ -218,6 +221,9 @@ async function revokeToken(
     },
     method: "POST",
   });
+  if (!response.ok) {
+    throw new Error("Staging evaluator session revocation failed.");
+  }
 }
 
 export async function runStagingEval(args: readonly string[]): Promise<number> {
@@ -229,31 +235,41 @@ export async function runStagingEval(args: readonly string[]): Promise<number> {
     );
   }
 
-  const bootstrap = await mintToken(target, secret);
-  const token = bootstrap.token as string;
-  await verifyTarget(target, token);
+  let token: string | undefined;
+  try {
+    const bootstrap = await mintToken(target, secret);
+    if (typeof bootstrap.token === "string") token = bootstrap.token;
+    validateBootstrap(bootstrap);
+    await verifyTarget(target, bootstrap.token);
 
-  console.error(
-    `Running against ${target.origin} (deployment ${String(bootstrap.deployment)}, database ${String(bootstrap.databaseLabel)}, fixtures ${String(bootstrap.fixtureVersion)}).`,
-  );
+    console.error(
+      `Running against ${target.origin} (deployment ${String(bootstrap.deployment)}, database ${String(bootstrap.databaseLabel)}, fixtures ${String(bootstrap.fixtureVersion)}).`,
+    );
 
-  const childArgs = ["exec", "eve", "eval", ...forwardedArgs(args, target)];
-  const childEnv = { ...process.env, EVE_EVAL_AUTH_TOKEN: token };
-  const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+    const childArgs = ["exec", "eve", "eval", ...forwardedArgs(args, target)];
+    const childEnv = { ...process.env, EVE_EVAL_AUTH_TOKEN: token };
+    const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
-  return await new Promise<number>((resolve, reject) => {
-    const child = spawn(command, childArgs, {
-      env: childEnv,
-      shell: false,
-      stdio: "inherit",
+    return await new Promise<number>((resolve, reject) => {
+      const child = spawn(command, childArgs, {
+        env: childEnv,
+        shell: false,
+        stdio: "inherit",
+      });
+      child.once("error", reject);
+      child.once("exit", (code, signal) => {
+        resolve(code ?? (signal ? 1 : 0));
+      });
     });
-    child.once("error", reject);
-    child.once("exit", (code, signal) => {
-      resolve(code ?? (signal ? 1 : 0));
-    });
-  }).finally(async () => {
-    await revokeToken(target, secret, token).catch(() => undefined);
-  });
+  } finally {
+    if (token) {
+      await revokeToken(target, secret, token).catch(() => {
+        console.error(
+          "Could not revoke the evaluator session; its token will expire automatically.",
+        );
+      });
+    }
+  }
 }
 
 async function main(): Promise<void> {
