@@ -1,9 +1,15 @@
-import type { LeadStage, LeadTaskStatus, LeadTaskType } from "@prisma/client";
+import type {
+  LeadStage,
+  LeadTaskStatus,
+  LeadTaskType,
+  Prisma,
+} from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import { DomainNotFoundError } from "../errors";
 import type { DomainPrincipal } from "../principal";
 import { authorizeLead, leadListScope } from "../access/leads";
+import { leadListOrderBy } from "./list-sort";
 import { overdueLeadTaskWhere } from "@/lib/leads/followup-due";
 
 // Lead reads, scoped by the one lead rule.
@@ -25,48 +31,94 @@ export type LeadSummary = {
 };
 
 export type SearchLeadsInput = {
+  /** Free text over name, email, phone and location; empty lists every lead. */
   readonly query: string;
+  /** Rows per page. */
   readonly limit: number;
+  /** 1-based. */
+  readonly page: number;
   readonly includeArchived: boolean;
+  /** Only these stages; empty or absent means every stage. */
+  readonly stages?: readonly LeadStage[];
+};
+
+export type SearchLeadsResult = {
+  readonly items: LeadSummary[];
+  /** Every lead the filters match, across all pages. */
+  readonly totalCount: number;
+  /**
+   * How many leads match the scope, archive filter and query in each stage —
+   * deliberately ignoring `stages`, so one call answers "what does the
+   * pipeline look like" even while a stage filter narrows the rows.
+   */
+  readonly countsByStage: Partial<Record<LeadStage, number>>;
 };
 
 /**
- * Leads matching a free-text query, within the caller's scope.
+ * Leads matching a free-text query, within the caller's scope, a page at a
+ * time, with the total the filters match.
  *
  * The scope is `leadListScope`, the same rule `authorizeLead` applies per
- * record — so a row that appears here always opens.
+ * record — so a row that appears here always opens. The page, the total and
+ * the stage counts are three reads of one `where`, so they cannot disagree
+ * about which leads are in it.
+ *
+ * Ordered by creation, newest first, with the id tie-breaker the app's lead
+ * list uses: a lead edited while someone pages through does not move, so no
+ * row is skipped between pages.
  */
 export async function searchLeads(
   principal: DomainPrincipal,
   input: SearchLeadsInput,
   db: DomainDb,
-): Promise<LeadSummary[]> {
+): Promise<SearchLeadsResult> {
   const scope = leadListScope(principal);
   const query = input.query.trim();
+  const base: Prisma.LeadWhereInput = {
+    ...(scope.assignedId === null ? {} : { assignedId: scope.assignedId }),
+    ...(input.includeArchived ? {} : { isArchived: false }),
+    ...(query
+      ? {
+          OR: [
+            { name: { contains: query, mode: "insensitive" } },
+            { email: { contains: query, mode: "insensitive" } },
+            { phone: { contains: query, mode: "insensitive" } },
+            { location: { contains: query, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+  const where: Prisma.LeadWhereInput = input.stages?.length
+    ? { ...base, stage: { in: [...input.stages] } }
+    : base;
 
-  return db.lead.findMany({
-    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-    select: {
-      id: true,
-      isArchived: true,
-      location: true,
-      name: true,
-      stage: true,
-      type: true,
-      updatedAt: true,
-    },
-    take: input.limit,
-    where: {
-      ...(scope.assignedId === null ? {} : { assignedId: scope.assignedId }),
-      ...(input.includeArchived ? {} : { isArchived: false }),
-      OR: [
-        { name: { contains: query, mode: "insensitive" } },
-        { email: { contains: query, mode: "insensitive" } },
-        { phone: { contains: query, mode: "insensitive" } },
-        { location: { contains: query, mode: "insensitive" } },
-      ],
-    },
-  });
+  const [items, totalCount, stageGroups] = await Promise.all([
+    db.lead.findMany({
+      orderBy: leadListOrderBy(),
+      select: {
+        id: true,
+        isArchived: true,
+        location: true,
+        name: true,
+        stage: true,
+        type: true,
+        updatedAt: true,
+      },
+      skip: (input.page - 1) * input.limit,
+      take: input.limit,
+      where,
+    }),
+    db.lead.count({ where }),
+    db.lead.groupBy({ by: ["stage"], _count: { _all: true }, where: base }),
+  ]);
+
+  return {
+    items,
+    totalCount,
+    countsByStage: Object.fromEntries(
+      stageGroups.map((group) => [group.stage, group._count._all]),
+    ),
+  };
 }
 
 export type LeadHistoryEntry = {

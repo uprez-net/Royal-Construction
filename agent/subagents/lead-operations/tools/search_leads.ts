@@ -6,12 +6,12 @@ import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
-    "Search only the current caller's authorized leads by name, email, phone, or location. Use this before asking the user to choose when a lead reference is ambiguous.",
+    "Find or list the current caller's authorized leads. With a query, matches name, email, phone, or location; use it before asking the user to choose when a lead reference is ambiguous. Leave the query empty to list the whole pipeline, newest first. Filter with stages and includeArchived. Results come a page at a time (limit up to 50): totalCount is every match across all pages, countsByStage breaks the query's matches down by stage (before the stages filter), and while hasMore is true ask for nextPage to see the rest.",
   inputSchema: searchLeadsInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   toModelOutput: forModel,
   label: {
-    start: ({ query }) => `Search leads for ${query}`,
+    start: ({ query }) => (query ? `Search leads for ${query}` : "List leads"),
   },
   execute(input, ctx) {
     return searchAuthorizedLeads(ctx, input);
