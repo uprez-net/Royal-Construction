@@ -350,13 +350,17 @@ export function assertMilestoneFieldsForStatus(
   // A finished activity finished on a day that has happened. 11 Wheat Street's
   // "Certifier Inspection" was Done with an actual date of Tue 1 Dec 2026,
   // weeks ahead (#432), and every report built on it read it as complete.
-  if (
+  // A waived activity counts too: waiving the last open child completes the
+  // parent with the child's date. Parsed through `toDate` so a malformed date
+  // is a field error, not a RangeError from the formatter.
+  const settledOn =
     input.status === MilestoneStatus.DONE
-    && input.actualDate
-    && sydneyDateOnly(new Date(input.actualDate)) > sydneyToday(now)
-  ) {
+    || input.status === MilestoneStatus.NOT_REQUIRED
+      ? toDate(input.actualDate || undefined, "actualDate")
+      : undefined;
+  if (settledOn && sydneyDateOnly(settledOn) > sydneyToday(now)) {
     throw new DomainValidationError(
-      "A completed activity's completion date cannot be in the future.",
+      "A completed or waived activity's completion date cannot be in the future.",
       "actualDate",
     );
   }

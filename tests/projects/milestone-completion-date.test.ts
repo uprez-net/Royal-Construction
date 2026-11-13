@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { MilestoneStatus } from "@prisma/client";
 import { test } from "vitest";
 
+import { DomainValidationError } from "@/lib/domain/errors";
 import { assertMilestoneFieldsForStatus } from "@/lib/domain/projects/milestones";
 
 // #432: 11 Wheat Street's "Certifier Inspection" was Done with an actual date
@@ -43,5 +44,33 @@ test("a planned activity may carry a future date", () => {
       status: MilestoneStatus.PENDING,
     },
     now,
+  );
+});
+
+test("a waived activity cannot carry a future date either", () => {
+  // Waiving the last open child completes its parent with this date.
+  assert.throws(
+    () =>
+      assertMilestoneFieldsForStatus(
+        { actualDate: "2026-12-01", status: MilestoneStatus.NOT_REQUIRED },
+        now,
+      ),
+    /cannot be in the future/,
+  );
+  assertMilestoneFieldsForStatus(
+    { actualDate: "2026-11-13", status: MilestoneStatus.NOT_REQUIRED },
+    now,
+  );
+});
+
+test("a malformed completion date is a field error, not a crash", () => {
+  assert.throws(
+    () =>
+      assertMilestoneFieldsForStatus(
+        { ...done, actualDate: "not-a-date" },
+        now,
+      ),
+    (error: unknown) =>
+      error instanceof DomainValidationError && error.field === "actualDate",
   );
 });
