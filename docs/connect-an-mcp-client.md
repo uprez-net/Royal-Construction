@@ -27,7 +27,7 @@ claude mcp add --transport http royal-construction https://<host>/eve/v1/mcp
 ```
 
 Then run `/mcp` inside Claude Code and authenticate. A browser opens on Clerk's
-sign-in page; approve the `profile` and `email` scopes and the status turns to
+sign-in page; approve the `openid`, `profile` and `email` scopes and the status turns to
 connected.
 
 ## Claude Desktop, ChatGPT, Grok and other hosted clients
@@ -49,7 +49,7 @@ the flow. If you are doing it by hand:
 3. `GET` `<issuer>/.well-known/oauth-authorization-server` for Clerk's
    endpoints, including `registration_endpoint`.
 4. Register through [RFC 7591](https://www.rfc-editor.org/rfc/rfc7591), run the
-   authorization-code flow with PKCE (`S256`), and ask for `profile email`.
+   authorization-code flow with PKCE (`S256`), and ask for `openid profile email`.
 5. Send the access token as `Authorization: Bearer <token>` on every request.
 
 Follow the `resource_metadata` URL from the challenge rather than building the

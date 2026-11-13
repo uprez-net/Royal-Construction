@@ -40,7 +40,7 @@ API key and no shared secret.
    ([RFC 7591](https://www.rfc-editor.org/rfc/rfc7591)). Clerk supports it, so
    a hosted client such as Claude, ChatGPT or Grok does this by itself the
    first time somebody connects.
-4. The person signs in to Clerk, consents to the `profile` and `email` scopes,
+4. The person signs in to Clerk, consents to the `openid`, `profile` and `email` scopes,
    and the client gets a token.
 
 The person signing in must already have a Royal Construction account. A valid
