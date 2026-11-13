@@ -16,7 +16,9 @@ const COMPLIANCE_STAGE_STATUSES = [
 ] as const;
 
 /** The documents a build may not start without, as the office names them. */
-export type BuildStartDocument = "construction certificate" | "HBCF certificate";
+export type BuildStartDocument =
+  | "construction certificate"
+  | "HBCF certificate";
 
 /**
  * Which of the documents a build may not start without the file does not hold
@@ -90,7 +92,10 @@ export async function closeComplianceIfComplete(
       .map((document) => document.documentType),
   );
   if (missingBuildStartDocuments(held).length > 0) {
-    return { completed: false as const, reason: "documents-outstanding" as const };
+    return {
+      completed: false as const,
+      reason: "documents-outstanding" as const,
+    };
   }
 
   const completed = await db.$transaction(async (tx) => {
@@ -114,6 +119,6 @@ export async function closeComplianceIfComplete(
   });
   return {
     completed,
-    reason: completed ? "completed" as const : "already-complete" as const,
+    reason: completed ? ("completed" as const) : ("already-complete" as const),
   };
 }
