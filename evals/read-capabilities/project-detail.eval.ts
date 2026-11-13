@@ -1,7 +1,10 @@
 import { defineEval } from "eve/evals";
 import { fixtures } from "../data/fixtures";
 import { assertNoMutation } from "../helpers/boundaries";
-import { expectEnvelopeFrom } from "../helpers/envelope";
+import {
+  expectEnvelopeFrom,
+  expectUsableDelegateResult,
+} from "../helpers/envelope";
 import { requireFixture } from "../helpers/fixtures";
 import { observe } from "../helpers/tool-calls";
 
@@ -24,5 +27,6 @@ export default defineEval({
       kind: "entity-summary",
       mentions: project,
     });
+    expectUsableDelegateResult(t, run, project);
   },
 });

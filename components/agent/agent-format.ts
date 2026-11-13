@@ -201,3 +201,17 @@ export function formatTime(value: string | null) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : clockTime.format(date);
 }
+
+/**
+ * A tool that completed but answered with an error envelope did not do its
+ * job. The card must read as failed, not as a green "Completed" — a delegate
+ * whose specialist returned nothing usable used to look like a success.
+ */
+export function isErrorOutput(output: unknown): boolean {
+  return (
+    output !== null
+    && typeof output === "object"
+    && !Array.isArray(output)
+    && (output as { kind?: unknown }).kind === "error"
+  );
+}

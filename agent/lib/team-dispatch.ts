@@ -17,6 +17,8 @@ export type TeamTask = {
   readonly specialist: SpecialistName;
   readonly request: string;
   readonly after?: readonly string[];
+  /** Only looks things up; an unusable result may be retried once. */
+  readonly readOnly?: boolean;
 };
 
 export const MAX_TEAM_TASKS = 6;
