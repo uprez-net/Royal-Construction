@@ -4,6 +4,7 @@ import { isRecordIdField } from "@/lib/agent/id-fields";
 import {
   SYDNEY_TZ,
   formatIsoForPeople,
+  formatSydneyDate,
   humanizeIsoDatesInText,
   isValidIsoCalendarDate,
 } from "@/lib/dates/sydney";
@@ -205,16 +206,16 @@ export function resultFacts(
   for (const [key, value] of entries) {
     if (key === "dueTime" && byKey.has("dueAt")) continue;
     if (key === "dueAt" && typeof value === "string") {
-      const date = formatDisplayField(key, value);
+      // A task's own time is the commitment, so when it has one the card
+      // shows the Sydney day of `dueAt` with that time, never `dueAt`'s clock.
+      const instant = new Date(value);
       facts.push({
         key,
         label: "Due",
-        // The date carries a time only when it is not midnight; a task's own
-        // time is the commitment, so it is the one shown.
         value:
-          dueTime && !date.includes(":")
-            ? `${date}, ${formatClock(dueTime)}`
-            : date,
+          dueTime && !Number.isNaN(instant.getTime())
+            ? `${formatSydneyDate(instant)}, ${formatClock(dueTime)}`
+            : formatDisplayField(key, value),
       });
       continue;
     }

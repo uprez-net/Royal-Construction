@@ -1,7 +1,12 @@
 import { auth } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getUserByClerkIdCached } from "@/lib/data/user";
+import {
+  forbiddenResponse,
+  notFoundResponse,
+  successResponse,
+  unauthorizedResponse,
+} from "@/utils/validators/response";
 
 /**
  * The generated title of one of the caller's own conversations.
@@ -17,11 +22,11 @@ export async function GET(
 ) {
   const { userId } = await auth();
   if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return unauthorizedResponse();
   }
   const actor = await getUserByClerkIdCached(userId);
   if (!actor) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return forbiddenResponse();
   }
 
   const { sessionId } = await params;
@@ -34,13 +39,9 @@ export async function GET(
     },
   });
   if (!session) {
-    return NextResponse.json(
-      { error: "Agent session not found" },
-      { status: 404 },
-    );
+    return notFoundResponse("Agent session");
   }
-  return NextResponse.json(
-    { title: session.title },
-    { headers: { "cache-control": "no-store" } },
-  );
+  const response = successResponse({ title: session.title });
+  response.headers.set("cache-control", "no-store");
+  return response;
 }

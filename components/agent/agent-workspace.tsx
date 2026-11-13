@@ -36,6 +36,7 @@ import type {
   AgentSessionListItem,
   AgentWorkspaceData,
 } from "@/lib/data/agent-sessions";
+import { FetchError, fetchJson } from "@/utils/fetch";
 
 export type AgentUploadedFile = {
   agentUrl: string | null;
@@ -349,15 +350,13 @@ export function AgentWorkspace({
     const poll = async () => {
       attempt += 1;
       try {
-        const response = await fetch(
+        const { data } = await fetchJson<{ title: string | null }>(
           `/api/agent/sessions/${encodeURIComponent(untitledSessionId)}/title`,
           { cache: "no-store" },
+          "Could not read the conversation title.",
         );
-        const payload = response.ok
-          ? ((await response.json()) as { title?: string | null })
-          : null;
         if (cancelled) return;
-        const title = payload?.title?.trim();
+        const title = data?.title?.trim();
         if (title) {
           setSessions((current) =>
             current.map((session) =>
@@ -368,8 +367,11 @@ export function AgentWorkspace({
           );
           return;
         }
-      } catch {
-        // A missing title is cosmetic; the next settled turn asks again.
+      } catch (error) {
+        // A missing title is cosmetic; the next settled turn asks again. A
+        // not-yet-recorded session is expected, anything else is worth a trace.
+        if (!(error instanceof FetchError && error.status === 404))
+          console.warn("Conversation title poll failed", error);
       }
       if (!cancelled && attempt < 4)
         timer = window.setTimeout(() => void poll(), 2_500);

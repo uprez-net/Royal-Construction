@@ -182,7 +182,11 @@ export function AgentTranscript({
                   toolTimes={toolTimes(turn)}
                   working={
                     message.id === lastAssistantId
-                    && (busy || turn?.status === "running")
+                    && (turn?.status === "running"
+                      // An answered approval sends no message, so the reply
+                      // stays last and keeps its spinner; a new question adds
+                      // one, and the settled reply above it stays settled.
+                      || (busy && message.id === data.messages.at(-1)?.id))
                   }
                 />
                 {message.role === "assistant" ? (

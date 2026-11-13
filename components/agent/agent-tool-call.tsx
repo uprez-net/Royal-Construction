@@ -126,6 +126,9 @@ export function AgentToolCall({
   const cancelledText =
     part.state === "output-error" && SYSTEM_CANCEL_TEXT.test(part.errorText);
   const cancelled = cancelledByPerson || cancelledText;
+  // Approved, then stopped while it ran: something may already be written.
+  const interrupted =
+    part.state === "output-error" && part.approval?.approved === true;
   const awaitingApproval = part.state === "approval-requested" && !responded;
   const complete = part.state === "output-available";
   const partial = part.state === "output-available" && part.partial === true;
@@ -288,7 +291,7 @@ export function AgentToolCall({
           <AgentApproval
             applying={applying}
             canRespond={canRespond}
-            cancelled={cancelled}
+            cancelled={cancelled && !interrupted}
             input={"input" in part ? part.input : undefined}
             label={title}
             onRespond={onRespond}
@@ -315,7 +318,7 @@ export function AgentToolCall({
         </p>
       ) : null}
 
-      {cancelled && !request ? (
+      {cancelled && (!request || interrupted) ? (
         <p className="border-t border-border/60 px-3 py-2.5 text-sm text-muted-foreground">
           {cancelNotice(part)}
         </p>

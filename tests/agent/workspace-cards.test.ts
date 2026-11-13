@@ -120,6 +120,22 @@ test("result facts read as words: no CALL, no false, one Due", () => {
   );
 });
 
+test("a task's own time wins over the clock inside dueAt", () => {
+  const [due] = resultFacts({
+    dueAt: "2026-09-25T11:00:00+10:00",
+    dueTime: "10:00",
+  });
+  assert.deepEqual(
+    [due.label, due.value],
+    ["Due", "Fri 25 Sept 2026, 10:00 am"],
+  );
+  // Without a task time, dueAt's own clock is what there is.
+  assert.equal(
+    resultFacts({ dueAt: "2026-09-25T11:00:00+10:00" })[0].value,
+    "Fri 25 Sept 2026, 11:00 am AEST",
+  );
+});
+
 test("a repeated conversation title is told apart by its day", () => {
   const startedAt = new Date("2026-11-13T04:07:00Z");
   assert.equal(
@@ -141,4 +157,10 @@ test("a repeated conversation title is told apart by its day", () => {
     twice,
     /^Weekly Task and Deadline Review · Fri 13 Nov 2026, 3:07/,
   );
+  const thrice = distinctConversationTitle(
+    "Weekly Task and Deadline Review",
+    ["Weekly Task and Deadline Review", once, twice],
+    startedAt,
+  );
+  assert.equal(thrice, `${twice} (2)`);
 });
