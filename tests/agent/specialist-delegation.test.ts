@@ -335,3 +335,18 @@ test("a filtered lead count passes its criteria to search_leads", () => {
     /To list or count leads, call `search_leads` with no query/,
   );
 });
+
+test("no specialist description asks the model to validate the caller itself", () => {
+  // `delegate` lists these descriptions to the orchestrator verbatim. Staging
+  // eval run 43498857510: "Validate current caller..." was echoed into the
+  // hand-off, and tradie-operations refused a plain directory search because it
+  // had no tool to "validate" with. The tools resolve and authorize the caller
+  // themselves; a description must never make that the model's job.
+  for (const [name, description] of Object.entries(SPECIALISTS)) {
+    assert.doesNotMatch(
+      description,
+      /\b(validate|verify)\b[^.;]*\bcaller\b/i,
+      `${name} tells the model to check the caller itself`,
+    );
+  }
+});
