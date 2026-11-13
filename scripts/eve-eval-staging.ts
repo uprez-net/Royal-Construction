@@ -1,11 +1,11 @@
 import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import {
-  EVAL_AUTH_HEADER,
-  EVAL_SESSION_HEADER,
-  EVAL_TOKEN_TTL_SECONDS,
-  sessionIdFromJwt,
-} from "@/lib/eval/staging-auth";
+  assertShortLivedToken,
+  type BootstrapResponse,
+  mintEvaluatorToken,
+  revokeEvaluatorToken,
+} from "@/lib/eval/evaluator-token";
 
 /**
  * Run the Eve eval suite against a staging deployment.
@@ -20,6 +20,9 @@ import {
  *   4. runs `eve eval` with the token in the child's environment only;
  *   5. revokes the Clerk session on the way out, whatever happened.
  *
+ * A suite that outlives the five-minute token gets a fresh one from the eval
+ * config's setup hook; see lib/eval/evaluator-token.ts.
+ *
  * The token is never written to disk, never printed, and never passed as an
  * argv value — argv is world-readable in a process listing on most systems,
  * which is why it goes through the environment instead.
@@ -28,17 +31,6 @@ import {
  * not need `CLERK_SECRET_KEY`: only the deployment can mint a session, which
  * is the point of putting the bootstrap there.
  */
-
-type BootstrapResponse = {
-  readonly token?: unknown;
-  readonly expiresInSeconds?: unknown;
-  readonly environment?: unknown;
-  readonly deployment?: unknown;
-  readonly databaseLabel?: unknown;
-  readonly fixtureVersion?: unknown;
-  readonly operationsAgentEnabled?: unknown;
-  readonly specialistsEnabled?: unknown;
-};
 
 function valueAfter(args: readonly string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
@@ -110,50 +102,10 @@ export function forwardedArgs(args: readonly string[], target: URL): string[] {
   return result;
 }
 
-async function responseJson(response: Response): Promise<BootstrapResponse> {
-  if (!response.ok) {
-    const hint =
-      response.status === 404
-        ? " The bootstrap route is disabled on this deployment (EVE_EVAL_AUTH_ENABLED, VERCEL_ENV=preview, EVE_EVAL_USER_ID)."
-        : response.status === 401
-          ? " EVE_EVAL_AUTH_SECRET does not match the deployment's."
-          : "";
-    throw new Error(
-      `Staging evaluator authentication returned HTTP ${response.status}.${hint}`,
-    );
-  }
-  try {
-    return (await response.json()) as BootstrapResponse;
-  } catch {
-    throw new Error("Staging evaluator authentication returned invalid JSON.");
-  }
-}
-
-async function mintToken(
-  target: URL,
-  secret: string,
-): Promise<BootstrapResponse> {
-  const response = await fetch(new URL("/api/eval/auth", target), {
-    cache: "no-store",
-    headers: { [EVAL_AUTH_HEADER]: secret },
-    method: "POST",
-  });
-  return responseJson(response);
-}
-
 function validateBootstrap(
   body: BootstrapResponse,
 ): asserts body is BootstrapResponse & { token: string } {
-  if (
-    typeof body.token !== "string"
-    || body.environment !== "preview"
-    || typeof body.expiresInSeconds !== "number"
-    || body.expiresInSeconds > EVAL_TOKEN_TTL_SECONDS
-  ) {
-    throw new Error(
-      "The staging target did not return a short-lived evaluator token.",
-    );
-  }
+  assertShortLivedToken(body);
 
   // Fail closed on a deployment where the agent is switched off, rather than
   // letting every case fail separately on `agent_disabled`.
@@ -206,26 +158,6 @@ async function verifyTarget(target: URL, token: string): Promise<void> {
   }
 }
 
-async function revokeToken(
-  target: URL,
-  secret: string,
-  token: string,
-): Promise<void> {
-  const sessionId = sessionIdFromJwt(token);
-  if (!sessionId) return;
-  const response = await fetch(new URL("/api/eval/auth/revoke", target), {
-    cache: "no-store",
-    headers: {
-      [EVAL_AUTH_HEADER]: secret,
-      [EVAL_SESSION_HEADER]: sessionId,
-    },
-    method: "POST",
-  });
-  if (!response.ok) {
-    throw new Error("Staging evaluator session revocation failed.");
-  }
-}
-
 export async function runStagingEval(args: readonly string[]): Promise<number> {
   const target = targetUrlFrom(args);
   const secret = process.env.EVE_EVAL_AUTH_SECRET?.trim();
@@ -237,7 +169,7 @@ export async function runStagingEval(args: readonly string[]): Promise<number> {
 
   let token: string | undefined;
   try {
-    const bootstrap = await mintToken(target, secret);
+    const bootstrap = await mintEvaluatorToken(target, secret);
     if (typeof bootstrap.token === "string") token = bootstrap.token;
     validateBootstrap(bootstrap);
     await verifyTarget(target, bootstrap.token);
@@ -247,7 +179,13 @@ export async function runStagingEval(args: readonly string[]): Promise<number> {
     );
 
     const childArgs = ["exec", "eve", "eval", ...forwardedArgs(args, target)];
-    const childEnv = { ...process.env, EVE_EVAL_AUTH_TOKEN: token };
+    // The origin lets evals/evals.config.ts refresh the token for a suite that
+    // outlives it (lib/eval/evaluator-token.ts); the secret is already here.
+    const childEnv = {
+      ...process.env,
+      EVE_EVAL_AUTH_TOKEN: token,
+      EVE_EVAL_TARGET_ORIGIN: target.origin,
+    };
     const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
     return await new Promise<number>((resolve, reject) => {
@@ -263,7 +201,7 @@ export async function runStagingEval(args: readonly string[]): Promise<number> {
     });
   } finally {
     if (token) {
-      await revokeToken(target, secret, token).catch(() => {
+      await revokeEvaluatorToken(target, secret, token).catch(() => {
         console.error(
           "Could not revoke the evaluator session; its token will expire automatically.",
         );

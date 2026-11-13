@@ -88,6 +88,11 @@ describe("runStagingEval", () => {
       vi.mocked(spawn).mock.calls[0][2]?.env?.EVE_EVAL_AUTH_TOKEN,
       token,
     );
+    // The eval config's setup needs the origin to keep the token fresh.
+    assert.equal(
+      vi.mocked(spawn).mock.calls[0][2]?.env?.EVE_EVAL_TARGET_ORIGIN,
+      target,
+    );
     assertRevoked();
   });
 
