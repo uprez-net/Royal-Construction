@@ -143,6 +143,10 @@ test("a project whose lead has emails comes back as a valid envelope", () => {
     emailCount: 2,
     latestEmailAt: "2026-09-02T10:00:00.000Z",
   });
+  // The warning describes what the envelope carries: no email content.
+  const warnings = envelope.warnings.join(" ");
+  assert.doesNotMatch(warnings, /lead emails/);
+  assert.match(warnings, /only as a count and latest date/);
 
   // The nullable and absent fields serialise as null, not as undefined.
   assert.equal(project.lotSize, null);
