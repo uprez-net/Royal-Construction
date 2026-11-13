@@ -5,6 +5,7 @@ import { test } from "vitest";
 import { waiverDates } from "@/components/projects/detail/waiver-dates";
 import { assertMilestoneFieldsForStatus } from "@/lib/domain/projects/milestones";
 import { sydneyToday } from "@/lib/dates/sydney";
+import { milestoneUpdateSchema } from "@/utils/validators";
 
 // The activity dialog hides its date fields for "Not required" but keeps the
 // stored dates, so a waiver must submit dates the domain accepts.
@@ -58,4 +59,19 @@ test("past dates, a start-only waiver and other statuses are left alone", () => 
     status: MilestoneStatus.DONE,
   };
   assert.equal(waiverDates(done, today), done);
+});
+
+test("a date cleared in the picker does not block a waiver on a hidden field", () => {
+  const dates = waiverDates(
+    {
+      actualDate: "",
+      startDate: "",
+      status: MilestoneStatus.NOT_REQUIRED,
+      targetDate: "2026-11-20",
+    },
+    today,
+  );
+  assert.equal(milestoneUpdateSchema.safeParse(dates).success, true);
+  assert.equal(dates.actualDate, undefined);
+  assert.equal(dates.startDate, undefined);
 });

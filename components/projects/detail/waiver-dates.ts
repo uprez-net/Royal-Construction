@@ -6,20 +6,22 @@
  * date is after today in Sydney or before its start date. A stored future
  * completion date is pulled back to Sydney today, and a start date after that
  * completion date is pulled back to it, so the person is never stuck on a
- * date they cannot see. Dates are `yyyy-MM-dd`, so they compare as strings.
+ * date they cannot see. A date cleared in the picker (`""`) is sent as unset
+ * rather than failing validation on a hidden field. Dates are `yyyy-MM-dd`, so
+ * they compare as strings.
  */
 export function waiverDates<
   T extends { status?: string; startDate?: string; actualDate?: string },
 >(data: T, sydneyToday: string): T {
   if (data.status !== "NOT_REQUIRED") return data;
+  const storedActual = data.actualDate || undefined;
+  const storedStart = data.startDate || undefined;
   const actualDate =
-    data.actualDate && data.actualDate > sydneyToday
-      ? sydneyToday
-      : data.actualDate;
+    storedActual && storedActual > sydneyToday ? sydneyToday : storedActual;
   const startDate =
-    actualDate && data.startDate && data.startDate > actualDate
+    actualDate && storedStart && storedStart > actualDate
       ? actualDate
-      : data.startDate;
+      : storedStart;
   return actualDate === data.actualDate && startDate === data.startDate
     ? data
     : { ...data, actualDate, startDate };
