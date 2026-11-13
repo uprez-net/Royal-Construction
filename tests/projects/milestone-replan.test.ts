@@ -193,10 +193,11 @@ const replanWrites = (recorder: ReturnType<typeof recordingDb>) =>
 
 test("correcting a completed activity's completion date re-plans what follows", async () => {
   const recorder = doneDb(day("2026-11-12"));
+  // A correction to an earlier day: a completion date cannot be in the future.
   const outcome = await updateMilestone(
     adminPrincipal(),
     {
-      actualDate: "2026-11-15",
+      actualDate: "2026-11-11",
       milestoneId: "A",
       spend: 500,
       startDate: "2026-11-10",
@@ -206,12 +207,12 @@ test("correcting a completed activity's completion date re-plans what follows", 
   );
   assert.deepEqual(
     outcome.replannedActivities.map((c) => [c.id, iso(c.targetDate)]),
-    [["B", "2026-11-15"]],
+    [["B", "2026-11-11"]],
   );
   assert.equal(replanWrites(recorder).length, 1);
   assert.deepEqual(replanWrites(recorder), [
     {
-      data: { targetDate: day("2026-11-15") },
+      data: { targetDate: day("2026-11-11") },
       where: { id: "B", status: PENDING },
     },
   ]);

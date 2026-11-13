@@ -221,3 +221,69 @@ test("the orchestrator and every specialist share the current-time instruction o
     );
   }
 });
+
+// #432: one write needed two approvals — a model-written "Please approve
+// creating this task" card, then the tool's real one — and a stage move ran a
+// second specialist just to "verify". The tool's approval card is the only
+// approval, and every specialist that writes is told so.
+test("every specialist that writes is told the tool's card is the only approval", () => {
+  for (const name of Object.keys(SPECIALISTS)) {
+    if (!hasTools(name)) continue;
+    const source = readFileSync(
+      path.join(SUBAGENTS_DIR, name, "instructions.md"),
+      "utf8",
+    );
+    assert.match(source, /## Writing/, `${name} has the write rule`);
+    assert.match(source, /Never ask them in prose to\s+approve/, name);
+  }
+});
+
+test("the orchestrator is told one approval per change and no verify delegation", () => {
+  const source = readFileSync(
+    path.join(REPO_ROOT, "agent", "instructions.md"),
+    "utf8",
+  );
+  assert.match(source, /One approval per change/);
+  assert.match(source, /never\s+send a second delegate call just to "verify"/);
+  assert.match(
+    (delegate as { description?: string }).description ?? "",
+    /Never delegate a separate verify or preview step/,
+  );
+});
+
+// #432: the same "anything overdue?" gave 11 from the snapshot and a Lost
+// lead's wait from a walk through leads.
+test("an office-wide overdue question goes to the snapshot or the one overdue tool", () => {
+  const source = readFileSync(
+    path.join(REPO_ROOT, "agent", "instructions.md"),
+    "utf8",
+  );
+  assert.match(source, /overview questions/);
+  assert.match(source, /list_overdue_lead_tasks/);
+  assert.ok(
+    existsSync(
+      path.join(
+        SUBAGENTS_DIR,
+        "lead-operations",
+        "tools",
+        "list_overdue_lead_tasks.ts",
+      ),
+    ),
+  );
+  const lead = readFileSync(
+    path.join(SUBAGENTS_DIR, "lead-operations", "instructions.md"),
+    "utf8",
+  );
+  assert.match(lead, /never `search_leads` followed by `list_lead_tasks`/);
+});
+
+// #432: documents filed under another project were folded into "the files for
+// 11 Wheat Street" because the search carried no ids and the hits named no job.
+test("the orchestrator passes a job's ids to the document search and names other-job hits", () => {
+  const source = readFileSync(
+    path.join(REPO_ROOT, "agent", "instructions.md"),
+    "utf8",
+  );
+  assert.match(source, /always pass its ids/);
+  assert.match(source, /otherJob/);
+});

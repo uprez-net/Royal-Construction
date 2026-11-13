@@ -34,6 +34,7 @@ import {
   STARTED_MILESTONE_STATUSES,
 } from "./milestone-schedule";
 import { settleMilestoneBookings } from "../tradies/settlement";
+import { sydneyDateOnly, sydneyToday } from "@/lib/dates/sydney";
 
 // Milestones: creation, ordering, the status state machine, the parent
 // roll-up, and what settling one means for the project it belongs to.
@@ -308,6 +309,7 @@ export function assertMilestoneFieldsForStatus(
     UpdateMilestoneInput,
     "status" | "startDate" | "actualDate" | "spend"
   >,
+  now: Date = new Date(),
 ): void {
   if (input.status === MilestoneStatus.ACTIVE && !input.startDate) {
     throw new DomainValidationError(
@@ -342,6 +344,23 @@ export function assertMilestoneFieldsForStatus(
   ) {
     throw new DomainValidationError(
       "Completion date cannot be before start date.",
+      "actualDate",
+    );
+  }
+  // A finished activity finished on a day that has happened. 11 Wheat Street's
+  // "Certifier Inspection" was Done with an actual date of Tue 1 Dec 2026,
+  // weeks ahead (#432), and every report built on it read it as complete.
+  // A waived activity counts too: waiving the last open child completes the
+  // parent with the child's date. Parsed through `toDate` so a malformed date
+  // is a field error, not a RangeError from the formatter.
+  const settledOn =
+    input.status === MilestoneStatus.DONE
+    || input.status === MilestoneStatus.NOT_REQUIRED
+      ? toDate(input.actualDate || undefined, "actualDate")
+      : undefined;
+  if (settledOn && sydneyDateOnly(settledOn) > sydneyToday(now)) {
+    throw new DomainValidationError(
+      "A completed or waived activity's completion date cannot be in the future.",
       "actualDate",
     );
   }
@@ -409,6 +428,14 @@ export async function updateMilestone(
   const targetDate = toDate(input.targetDate, "targetDate");
   const startDate = toDate(input.startDate, "startDate");
   const actualDate = toDate(input.actualDate, "actualDate");
+  // A waiver that sends no completion date does not keep a future one: the
+  // date guard above only sees a date that was sent, and a waived activity
+  // dated weeks ahead reads as finished in every report (#432).
+  const clearsFutureCompletion =
+    input.status === MilestoneStatus.NOT_REQUIRED
+    && actualDate === undefined
+    && current.actualDate != null
+    && sydneyDateOnly(current.actualDate) > sydneyToday();
 
   // The first activity to start sets the project's start date to the day work
   // began, and the schedule is re-dated from it — the last time it can be: the
@@ -428,7 +455,7 @@ export async function updateMilestone(
       status: input.status,
       targetDate,
       startDate,
-      actualDate,
+      actualDate: clearsFutureCompletion ? null : actualDate,
       spend:
         input.spend === undefined ? undefined : new Prisma.Decimal(input.spend),
     },
