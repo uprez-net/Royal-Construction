@@ -38,9 +38,12 @@ export {
 } from "./vectors";
 export { lexicalBoost, queryTerms } from "./ranking";
 export {
+  filedUnderLabels,
+  isFiledUnderAnotherRecord,
   refreshAgentFiles,
   searchAgentFiles,
   type AgentFileHit,
+  type FiledUnder,
   type RefreshAgentFilesResult,
 } from "./files";
 

@@ -63,3 +63,12 @@ embellish a description, a variation rule, or "owner-supplied"-style wording.
 Leave a field empty when the user did not supply it, or ask for it. If you
 think wording is needed, propose it in your reply and wait for the user to
 confirm it before the write.
+
+## Writing
+
+Call the write tool directly: its own approval card is the one approval the
+person sees, naming the exact record and change. Never ask them in prose to
+approve before calling a write tool ("Please approve creating this task"), and
+never return a preview or "approval needed" result for a write you could simply
+call. One write is one approval, and a single-record change needs no separate
+verify step before it.

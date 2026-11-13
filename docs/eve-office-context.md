@@ -120,7 +120,10 @@ cached text on the next run.
 **Search:** the orchestrator's `search_crm_documents` tool ranks passages the
 same way as record search (inner product plus a word match). It can be
 narrowed to one job by lead, project or offer id, returns at most three
-passages per document, and is staff-only. Document text is the uploader's
+passages per document, and is staff-only. Each hit names the records it is
+filed under (looked up live, so a renamed project reads as it is now) beside
+the ids, and a hit filed under a different record than the one asked about is
+marked `otherJob` so the agent names it instead of folding it into the job. Document text is the uploader's
 words. The tool tells the agent to quote it and never follow it.
 
 ## 3. Working as a team: parallel delegation

@@ -14,6 +14,7 @@ import {
   documentPassage,
   documentTitle,
   loadFileSources,
+  offerReference,
   type FileSource,
 } from "./file-sources";
 import { lexicalBoost, queryTerms } from "./ranking";
@@ -410,6 +411,17 @@ async function embedMissingPassages(
   return { embedded, embeddingFailed };
 }
 
+/**
+ * The records a passage's document is filed under, by name, so a reader can
+ * say which job it belongs to. Names are looked up live, not read from the
+ * passage heading, so a renamed lead or project is named as it is now.
+ */
+export type FiledUnder = {
+  readonly lead: { readonly id: number; readonly name: string } | null;
+  readonly project: { readonly id: string; readonly name: string } | null;
+  readonly offer: { readonly id: string; readonly reference: string } | null;
+};
+
 export type AgentFileHit = {
   readonly id: string;
   readonly sourceKey: string;
@@ -422,10 +434,105 @@ export type AgentFileHit = {
   readonly projectId: string | null;
   readonly offerId: string | null;
   readonly refreshedAt: Date;
+  readonly filedUnder: FiledUnder;
   readonly score: number;
 };
 
-type HitRow = Omit<AgentFileHit, "score">;
+type HitRow = Omit<AgentFileHit, "score" | "filedUnder">;
+
+/** "Lead: Sandhu", "Project: 11 Wheat Street", "Offer: OF-105": what a person reads. */
+export function filedUnderLabels(filedUnder: FiledUnder): string[] {
+  return [
+    filedUnder.lead ? `Lead: ${filedUnder.lead.name}` : null,
+    filedUnder.project ? `Project: ${filedUnder.project.name}` : null,
+    filedUnder.offer ? `Offer: ${filedUnder.offer.reference}` : null,
+  ].filter((label): label is string => label !== null);
+}
+
+/**
+ * True when the passage's document is filed under a *different* lead, project
+ * or offer than one the caller asked about. A search for several ids matches
+ * a passage under any of them, so a document can fit the lead asked for and
+ * still belong to another project; the reader has to say so.
+ */
+export function isFiledUnderAnotherRecord(
+  hit: Pick<AgentFileHit, "leadId" | "projectId" | "offerId">,
+  requested: {
+    readonly leadId?: number;
+    readonly projectId?: string;
+    readonly offerId?: string;
+  },
+): boolean {
+  const differs = <T>(asked: T | undefined, filed: T | null) =>
+    asked !== undefined && filed !== null && asked !== filed;
+  return (
+    differs(requested.leadId, hit.leadId)
+    || differs(requested.projectId, hit.projectId)
+    || differs(requested.offerId, hit.offerId)
+  );
+}
+
+async function loadFiledUnder(
+  hits: readonly HitRow[],
+  db: DomainDb,
+): Promise<Map<string, FiledUnder>> {
+  const leadIds = [
+    ...new Set(
+      hits.flatMap((hit) => (hit.leadId === null ? [] : [hit.leadId])),
+    ),
+  ];
+  const projectIds = [
+    ...new Set(hits.flatMap((hit) => (hit.projectId ? [hit.projectId] : []))),
+  ];
+  const offerIds = [
+    ...new Set(hits.flatMap((hit) => (hit.offerId ? [hit.offerId] : []))),
+  ];
+  const [leads, projects, offers] = await Promise.all([
+    leadIds.length
+      ? db.lead.findMany({
+          select: { id: true, name: true },
+          where: { id: { in: leadIds } },
+        })
+      : Promise.resolve([]),
+    projectIds.length
+      ? db.project.findMany({
+          select: { id: true, name: true },
+          where: { id: { in: projectIds } },
+        })
+      : Promise.resolve([]),
+    offerIds.length
+      ? db.offer.findMany({
+          select: { baseReference: true, id: true, leadId: true },
+          where: { id: { in: offerIds } },
+        })
+      : Promise.resolve([]),
+  ]);
+  const leadById = new Map(leads.map((row) => [row.id, row]));
+  const projectById = new Map(projects.map((row) => [row.id, row]));
+  const offerById = new Map(offers.map((row) => [row.id, row]));
+  return new Map(
+    hits.map((hit): [string, FiledUnder] => {
+      const lead = hit.leadId === null ? undefined : leadById.get(hit.leadId);
+      const project = hit.projectId
+        ? projectById.get(hit.projectId)
+        : undefined;
+      const offer = hit.offerId ? offerById.get(hit.offerId) : undefined;
+      return [
+        hit.id,
+        {
+          lead: lead ? { id: lead.id, name: lead.name } : null,
+          offer: offer
+            ? {
+                id: offer.id,
+                reference: offerReference(offer.baseReference, offer.leadId),
+              }
+            : null,
+          project: project ? { id: project.id, name: project.name } : null,
+        },
+      ];
+    }),
+  );
+}
 
 const HIT_SELECT = {
   content: true,
@@ -547,15 +654,23 @@ export async function searchAgentFiles(
 
   const visible = await visibleToCaller(principal, ranked, db);
   const perDocument = new Map<string, number>();
-  const hits: AgentFileHit[] = [];
+  const chosen: typeof visible = [];
   for (const hit of visible) {
     const count = perDocument.get(hit.sourceKey) ?? 0;
     if (count >= PASSAGES_PER_DOCUMENT) continue;
     perDocument.set(hit.sourceKey, count + 1);
-    hits.push(hit);
-    if (hits.length >= limit) break;
+    chosen.push(hit);
+    if (chosen.length >= limit) break;
   }
-  return hits;
+  const filedUnder = await loadFiledUnder(chosen, db);
+  return chosen.map((hit) => ({
+    ...hit,
+    filedUnder: filedUnder.get(hit.id) ?? {
+      lead: null,
+      offer: null,
+      project: null,
+    },
+  }));
 }
 
 /**

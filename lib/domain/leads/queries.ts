@@ -4,6 +4,7 @@ import type { DomainDb } from "../db";
 import { DomainNotFoundError } from "../errors";
 import type { DomainPrincipal } from "../principal";
 import { authorizeLead, leadListScope } from "../access/leads";
+import { overdueLeadTaskWhere } from "@/lib/leads/followup-due";
 
 // Lead reads, scoped by the one lead rule.
 //
@@ -185,6 +186,75 @@ export async function getLeadDetail(
     stage: lead.stage,
     type: lead.type,
     updatedAt: lead.updatedAt,
+  };
+}
+
+export type OverdueLeadTask = {
+  readonly id: number;
+  readonly leadId: number;
+  readonly leadName: string;
+  readonly leadStage: LeadStage;
+  readonly type: LeadTaskType;
+  readonly dueDate: Date;
+  readonly dueTime: string | null;
+  /** Operator-authored. Untrusted, like lead history. */
+  readonly notes: string | null;
+};
+
+/**
+ * Open lead tasks past their due date across the office, oldest first.
+ *
+ * Built on `overdueLeadTaskWhere`, which the office digest and the lead-tools
+ * rule share: closed and archived leads are not work. `listLeadTasks` below
+ * does NOT apply it, because asking about one named lead is a different
+ * question — so an office-wide "anything overdue?" must come from here, never
+ * from walking leads and listing each one's tasks (#432).
+ *
+ * `total` counts every overdue task, so a capped list can say how many more
+ * there are rather than reading as complete.
+ */
+export async function listOverdueLeadTasks(
+  principal: DomainPrincipal,
+  input: { limit: number },
+  db: DomainDb,
+  now: Date = new Date(),
+): Promise<{ total: number; tasks: OverdueLeadTask[] }> {
+  const scope = leadListScope(principal);
+  const where = overdueLeadTaskWhere(now, scope.assignedId);
+  const [total, rows] = await Promise.all([
+    db.leadTask.count({ where }),
+    db.leadTask.findMany({
+      orderBy: [{ dueDate: "asc" }, { id: "asc" }],
+      select: {
+        dueDate: true,
+        dueTime: true,
+        id: true,
+        lead: { select: { id: true, name: true, stage: true } },
+        notes: true,
+        type: true,
+      },
+      take: input.limit,
+      where,
+    }),
+  ]);
+  return {
+    tasks: rows.flatMap((row) =>
+      row.dueDate
+        ? [
+            {
+              dueDate: row.dueDate,
+              dueTime: row.dueTime,
+              id: row.id,
+              leadId: row.lead.id,
+              leadName: row.lead.name,
+              leadStage: row.lead.stage,
+              notes: row.notes,
+              type: row.type,
+            },
+          ]
+        : [],
+    ),
+    total,
   };
 }
 

@@ -30,7 +30,12 @@ export const READ_TOOLS = {
     "list_approvals",
     "list_team",
   ],
-  "lead-operations": ["get_lead", "list_lead_tasks", "search_leads"],
+  "lead-operations": [
+    "get_lead",
+    "list_lead_tasks",
+    "list_overdue_lead_tasks",
+    "search_leads",
+  ],
   "offer-operations": [
     "check_offer_lists",
     "draft_offer_highlights",

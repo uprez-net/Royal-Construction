@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { sydneyStartOfDay, sydneyToday } from "@/lib/dates/sydney";
-import { LIVE_LEAD } from "@/lib/leads/followup-due";
+import { LIVE_LEAD, overdueLeadTaskWhere } from "@/lib/leads/followup-due";
 import type { DomainDb } from "../db";
 import {
   leadChunk,
@@ -412,11 +412,7 @@ export async function loadOfficeDigest(
       // overdue task on a lost or won deal is not work. The digest used to
       // check only isArchived, and led the weekly overview with a wait on a
       // Lost lead from February (#429).
-      where: {
-        dueDate: { lt: now },
-        lead: LIVE_LEAD,
-        status: { not: "DONE" },
-      },
+      where: overdueLeadTaskWhere(now),
     }),
     db.lead.findMany({
       orderBy: { meetingDate: "asc" },
