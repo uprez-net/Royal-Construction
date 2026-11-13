@@ -67,5 +67,17 @@ export default defineEval({
     t.notEvent("input.requested").label(
       "no approval requested for in-chat recall",
     );
+    // Run 43503177526 passed while the second session was parked on a Plaud
+    // sign-in prompt with no reply; a recall question needs no connection.
+    t.notEvent("authorization.required").label(
+      "no external authorization requested for in-chat recall",
+    );
+    t.check(
+      elsewhere.message ?? "",
+      satisfies(
+        (value) => typeof value === "string" && value.trim().length > 0,
+        "the second session answered",
+      ),
+    ).label("second session replied");
   },
 });
