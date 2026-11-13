@@ -1,4 +1,8 @@
-import { getCachedProjectsForLookup, getProjects } from "@/lib/data/projects";
+import {
+  getCachedProjectsForLookup,
+  getProjects,
+  getProjectsNeedingAttention,
+} from "@/lib/data/projects";
 import {
   projectListQuerySchema,
   projectLookupQuerySchema,
@@ -24,6 +28,13 @@ export async function GET(request: NextRequest) {
     );
 
     return successResponse(result);
+  }
+
+  // Every project needing attention, for the Projects page's Alerts card. Its
+  // own read rather than taken from the list's rows, which are one page of
+  // one chip: an overdue job on page three is still overdue.
+  if (mode === "attention") {
+    return successResponse(await getProjectsNeedingAttention());
   }
 
   // Handle main list mode

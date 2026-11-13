@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Clock, Loader2, Mail, Send } from "lucide-react";
+import { AlertTriangle, Bell, Clock, Loader2, Mail, Send } from "lucide-react";
 import { toast } from "sonner";
 
 import { StatusPill } from "@/components/common/status-pill";
@@ -131,7 +131,9 @@ function FollowUpDialog({
         <DialogHeader>
           <DialogTitle>Follow up with {alert.clientName}</DialogTitle>
           <DialogDescription>
-            Review and edit the email. Nothing is sent until you press Send.
+            Review and edit the email. Nothing is sent until you press Send. The
+            offer&apos;s reference tag is added to the subject so the
+            client&apos;s reply is filed against this offer.
           </DialogDescription>
         </DialogHeader>
 
@@ -283,13 +285,45 @@ function FollowUpRow({
 
 export function OfferFollowUpAlerts({
   alerts,
+  failed,
   senderName,
 }: {
   alerts: OfferFollowUpAlert[];
+  /**
+   * The read failed. Said out loud, because an empty card would tell the
+   * office nobody is due a follow-up when nobody knows.
+   */
+  failed: boolean;
   /** Signs the draft; the office's own name when known. */
   senderName: string | null;
 }) {
+  const router = useRouter();
   const [openFor, setOpenFor] = useState<OfferFollowUpAlert | null>(null);
+  if (failed) {
+    return (
+      <div
+        role="alert"
+        className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-destructive-light/40 px-4 py-3"
+      >
+        <AlertTriangle
+          className="size-4 shrink-0 text-destructive-ink"
+          aria-hidden="true"
+        />
+        <p className="flex-1 text-sm text-foreground">
+          Could not load follow-up alerts. Offers waiting on a client may not be
+          shown.
+        </p>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => router.refresh()}
+        >
+          Retry
+        </Button>
+      </div>
+    );
+  }
   if (alerts.length === 0) return null;
 
   const dueCount = alerts.filter((alert) => alert.state === "DUE").length;

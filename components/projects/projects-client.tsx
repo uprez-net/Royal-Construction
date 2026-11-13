@@ -52,9 +52,11 @@ import {
 } from "./projects-list-url";
 import { fetchJson } from "@/utils/fetch";
 import { getAllProjectsForExport } from "@/lib/actions/projects";
-import type { PaginatedProjectsResult } from "@/lib/data/projects";
+import type {
+  PaginatedProjectsResult,
+  ProjectAttentionResult,
+} from "@/lib/data/projects";
 import { compactCurrency } from "@/utils/formatters";
-import type { ProjectAttention } from "@/lib/domain/projects/attention";
 import type { Role } from "@prisma/client";
 
 const TABLE_HEADERS = [
@@ -95,7 +97,7 @@ type ProjectsClientProps = {
   };
   kpis: ProjectKPIs;
   /** Every project needing attention, for the Alerts card (issue #451). */
-  attention: ProjectAttention[];
+  attention: ProjectAttentionResult;
   /** `projectsListKey` of the list the server rendered `projects` for. */
   renderedFor: string;
 };
@@ -140,6 +142,11 @@ function ProjectsWorkspace({
   const exportInFlightRef = useRef(false);
   // Bumped by the toast's Retry action to re-run the fetch effect.
   const [reloadNonce, setReloadNonce] = useState(0);
+  // The Alerts card's own copy of the attention read, refreshed with the list
+  // below. Never derived from the list's rows: they are one page of one chip,
+  // and an overdue job on another page is still overdue.
+  const [attentionState, setAttentionState] = useState(attention);
+  const [attentionNonce, setAttentionNonce] = useState(0);
 
   // Measured against the default, not against "no filter at all", so an
   // untouched page never offers "Clear filters" and still shows the
@@ -280,6 +287,28 @@ function ProjectsWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listKey, pageInfo.limit, reloadNonce, dispatch, updateListParams]);
 
+  /* ── Refresh the Alerts card with the list ── */
+  // The server's read is from when the page was rendered. This re-runs with
+  // every list load — and when the page is shown again after a project, where
+  // a milestone may just have been finished — so a resolved alert leaves and a
+  // new one arrives without a reload.
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchJson<ProjectAttentionResult>(
+      "/api/projects?mode=attention",
+      { method: "GET" },
+      "Unable to load project alerts",
+      controller.signal,
+    )
+      .then((response) => setAttentionState(response.data))
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === "AbortError") return;
+        console.error("Error refreshing project alerts:", error);
+        setAttentionState({ projects: [], failed: true });
+      });
+    return () => controller.abort();
+  }, [listKey, reloadNonce, attentionNonce]);
+
   const goToPage = (page: number) => {
     updateListParams({ page: page > 1 ? String(page) : null });
   };
@@ -372,7 +401,9 @@ function ProjectsWorkspace({
   return (
     <div className="grid gap-6">
       <ProjectOverdueAlerts
-        projects={attention}
+        projects={attentionState.projects}
+        failed={attentionState.failed}
+        onRetry={() => setAttentionNonce((nonce) => nonce + 1)}
         hrefFor={(projectId) =>
           projectDetailHref(projectId, searchParams.toString())
         }

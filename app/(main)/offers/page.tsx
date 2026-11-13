@@ -43,13 +43,18 @@ async function OfferPageClient() {
           // Uncached: an offer falls due because a day passed (issue #449).
           getOfferFollowUpAlerts(userPrincipal(user)),
         ])
-      : [emptyOfferKPIs(), emptyOfferGroupResult(1, 10), []];
+      : [
+          emptyOfferKPIs(),
+          emptyOfferGroupResult(1, 10),
+          { alerts: [], failed: false },
+        ];
 
   return (
     <div className="space-y-6">
       <OfferHeader />
       <OfferFollowUpAlerts
-        alerts={followUps}
+        alerts={followUps.alerts}
+        failed={followUps.failed}
         senderName={user?.name?.trim() || null}
       />
       <OfferKPI

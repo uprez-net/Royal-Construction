@@ -115,6 +115,24 @@ export function collectProjectDateBlockers({
 }
 
 /**
+ * Whether the advisory warns (missing PCA, missing HBCF number) are shown on a
+ * project in this status: every project that is not completed.
+ *
+ * They ask what stands between a job and going on site, which is a question
+ * from the day it is created — creation has always asked it as ACTIVE. The
+ * header and the compliance alert used to show them only for ACTIVE and the
+ * stored NEEDS_ATTENTION, so once NEEDS_ATTENTION was retired (issue #452) and
+ * those projects went back to DRAFT or a compliance stage, their warnings
+ * would have vanished. One gate, read by the header, the compliance alert and
+ * the Needs Attention conditions, so the three always agree.
+ */
+export function readinessWarningsApply(
+  status: ProjectStatus | string,
+): boolean {
+  return status !== "COMPLETED";
+}
+
+/**
  * Typed error thrown by `createProjectWithLead` when a hard blocker is
  * present and the caller did not pass an explicit confirm flag. Carries the
  * blocker list so the UI / API can render each issue.

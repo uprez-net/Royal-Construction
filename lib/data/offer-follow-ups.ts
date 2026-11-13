@@ -19,18 +19,29 @@ import prisma from "@/lib/prisma";
  * The Offers page's follow-up alerts, read fresh on every render.
  *
  * Uncached on purpose: an offer becomes due because a day passed, not because
- * anything was written, so no cache tag would ever expire it. An empty list on
- * failure, logged, because the alerts are one panel above the offers table and
+ * anything was written, so no cache tag would ever expire it.
+ *
+ * A failed read says so in `failed` rather than answering an empty list, which
+ * would read as "no follow-ups due" — the client nobody chased is the cost.
+ * It still does not throw: the alerts are one panel above the offers table and
  * must not take the table down with them.
  */
+export type OfferFollowUpAlertsResult = {
+  alerts: OfferFollowUpAlert[];
+  failed: boolean;
+};
+
 export async function getOfferFollowUpAlerts(
   principal: DomainPrincipal,
-): Promise<OfferFollowUpAlert[]> {
+): Promise<OfferFollowUpAlertsResult> {
   try {
-    return await listOfferFollowUpAlerts(principal, prisma);
+    return {
+      alerts: await listOfferFollowUpAlerts(principal, prisma),
+      failed: false,
+    };
   } catch (error) {
     console.error("Error reading offer follow-up alerts:", error);
-    return [];
+    return { alerts: [], failed: true };
   }
 }
 

@@ -48,8 +48,9 @@ import { missingMilestoneTrades } from "./tradie-dependencies";
 //   - open compliance alert  `ComplianceAlert.status = OPEN` — the project page's Alerts card
 //   - unresolved issue       a checklist defect still OPEN or IN_PROGRESS
 //   - variation pending      `Variation.status = PENDING` — awaiting the client
-//   - missing documents      `missingBuildStartDocuments` + the readiness warns,
-//                            once work has started on site
+//   - missing documents      the readiness warns (PCA, HBCF number) from day
+//                            one, and `missingBuildStartDocuments` once work
+//                            has started on site
 //   - dependency breach      `missingMilestoneTrades` — the project page's
 //                            "No confirmed … booking" alert; it only looks at
 //                            activities under way, so a booking not yet due is
@@ -281,9 +282,11 @@ export function assessProjectAttention(
     startDate: null,
     pcaInspector: legal?.pcaInspector ?? null,
     hbcfInsuranceNumber: legal?.hbcfInsuranceNumber ?? null,
-    // The readiness gate asks what stands between a project and going on
-    // site, so it is asked as ACTIVE once the project is there.
-    status: started ? ProjectStatus.ACTIVE : project.status,
+    // Asked as ACTIVE whatever the stage, as creation always asked it: the
+    // gate is what stands between this job and going on site, and a missing
+    // PCA or HBCF number on a drafting job is exactly that. A completed
+    // project is never read here (`readinessWarningsApply`).
+    status: ProjectStatus.ACTIVE,
   }).filter((blocker) => blocker.severity === "warn");
   for (const warn of warns) {
     const label = READINESS_GAP_LABEL[warn.id];

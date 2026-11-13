@@ -226,6 +226,20 @@ describe("Needs Attention", () => {
     );
   });
 
+  test("a missing PCA or HBCF number is flagged before work starts, as creation always flagged it", () => {
+    const drafting = project({
+      status: "DRAFT",
+      requirements: { legalAdministration: { signedDate: "2026-10-01" } },
+    });
+    const attention = assessProjectAttention(drafting, NOW);
+    assert.equal(attention.drafting, true);
+    // The certificate files are still the compliance file's job before start.
+    assert.equal(
+      attention.conditions.find((c) => c.kind === "MISSING_DOCUMENT")?.label,
+      "Missing PCA inspector, HBCF insurance number",
+    );
+  });
+
   test("a required trade with no confirmed booking breaches the dependency only once the activity is under way", () => {
     const needsPlumber = { label: "Plumber" };
     const notYetDue = project({

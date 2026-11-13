@@ -88,9 +88,37 @@ export type OfferFollowUpSource = {
   /** When it entered the status it is waiting in; at least `sentAt`. */
   readonly awaitingSince: Date;
   readonly followUpTimes: readonly Date[];
+  /** The latest proposal email to the client, re-sends included. */
+  readonly lastSentAt: Date | null;
   /** The latest reply from the client to any send of this offer. */
   readonly lastReplyAt: Date | null;
 };
+
+function latest(times: readonly (Date | null)[]): Date | null {
+  const known = times.filter((at): at is Date => at !== null);
+  return known.length > 0
+    ? new Date(Math.max(...known.map((at) => at.getTime())))
+    : null;
+}
+
+/** The last time we wrote to the client: the send, a re-send or a follow-up. */
+function lastContactOf(offer: OfferFollowUpSource): Date {
+  return (
+    latest([offer.awaitingSince, offer.lastSentAt, ...offer.followUpTimes])
+    ?? offer.awaitingSince
+  );
+}
+
+/**
+ * The client has answered since we last wrote to them. That is a response,
+ * whatever the offer's status says: the alert stops, and a follow-up already
+ * open in a draft is refused rather than sent to someone who has replied.
+ */
+export function clientHasResponded(offer: OfferFollowUpSource): boolean {
+  return (
+    offer.lastReplyAt !== null && offer.lastReplyAt >= lastContactOf(offer)
+  );
+}
 
 /**
  * Whether one offer needs following up, and how its alert reads; null when it
@@ -108,23 +136,17 @@ export function assessOfferFollowUp(
   if (!OFFER_AWAITING_RESPONSE_STATUSES.includes(offer.offerStatus)) {
     return null;
   }
-  const lastFollowUp =
-    offer.followUpTimes.length > 0
-      ? new Date(Math.max(...offer.followUpTimes.map((at) => at.getTime())))
-      : null;
-  const lastContact = new Date(
-    Math.max(offer.awaitingSince.getTime(), lastFollowUp?.getTime() ?? 0),
-  );
+  const lastFollowUp = latest(offer.followUpTimes);
+  const lastContact = lastContactOf(offer);
 
-  // The client answered after we last wrote: that is a response, whatever
-  // the offer's status says, and chasing them would be chasing someone who
-  // already replied. A later follow-up of ours restarts the clock.
-  if (offer.lastReplyAt && offer.lastReplyAt >= lastContact) return null;
+  // A later send or follow-up of ours restarts the clock.
+  if (clientHasResponded(offer)) return null;
 
-  // Not a day since the offer went out: nothing to say yet.
+  // Not a day since the offer last went out, and never chased: nothing to
+  // say yet.
   if (
     lastFollowUp === null
-    && now.getTime() - offer.awaitingSince.getTime() < FOLLOW_UP_AFTER_MS
+    && now.getTime() - lastContact.getTime() < FOLLOW_UP_AFTER_MS
   ) {
     return null;
   }
@@ -168,13 +190,72 @@ const followUpOfferSelect = {
     select: { at: true },
   },
   followUps: { select: { sentAt: true } },
+  // Every send, not just the answered ones: a re-sent proposal is contact and
+  // restarts the clock, and its token is what a follow-up's reply matches on.
   documentSends: {
-    where: { lastReplyAt: { not: null } },
-    orderBy: { lastReplyAt: "desc" },
-    take: 1,
-    select: { lastReplyAt: true },
+    orderBy: { sentAt: "desc" },
+    select: {
+      sentAt: true,
+      lastReplyAt: true,
+      recipientEmail: true,
+      trackedLinkToken: true,
+    },
   },
 } satisfies Prisma.OfferSelect;
+
+type FollowUpOfferRow = Prisma.OfferGetPayload<{
+  select: typeof followUpOfferSelect;
+}>;
+
+/**
+ * One offer's row as the follow-up rule reads it. The alert list and the send
+ * command both come through here, so they cannot disagree about when the
+ * client was last contacted or whether they have answered.
+ */
+function followUpSource(offer: FollowUpOfferRow): OfferFollowUpSource {
+  // `sentAt` is set when the proposal is first emailed. An offer sent for
+  // signature without that email has only its status event to go on.
+  const awaitingSince =
+    offer.statusEvents[0]?.at ?? offer.sentAt ?? offer.updatedAt;
+  const sentAt = offer.sentAt ?? awaitingSince;
+  return {
+    offerStatus: offer.offerStatus,
+    sentAt,
+    awaitingSince: awaitingSince < sentAt ? sentAt : awaitingSince,
+    followUpTimes: offer.followUps.map((followUp) => followUp.sentAt),
+    lastSentAt: latest(offer.documentSends.map((send) => send.sentAt)),
+    lastReplyAt: latest(offer.documentSends.map((send) => send.lastReplyAt)),
+  };
+}
+
+/**
+ * The addresses a follow-up may go to, the ones the offer was actually emailed
+ * to first: a follow-up there carries that send's reply token, so the client's
+ * answer is recorded against the offer.
+ */
+function followUpRecipients(offer: FollowUpOfferRow): string[] {
+  const sentTo = new Set(
+    offer.documentSends.map((send) => send.recipientEmail.trim().toLowerCase()),
+  );
+  const allowed = allowedLeadRecipients(offer.lead);
+  return [
+    ...allowed.filter((email) => sentTo.has(email)),
+    ...allowed.filter((email) => !sentTo.has(email)),
+  ];
+}
+
+const REPLY_TOKEN = /\s*\[RCOFR-[0-9A-Fa-f]{12}\]/g;
+
+/**
+ * The subject with the reply token of the send it follows up, so the client's
+ * "Re:" is matched to that send by `recordOfferReply`, like a reply to the
+ * offer itself. Kept however the administrator edited the subject: a token
+ * they removed is put back, and one belonging to another send is replaced.
+ */
+export function withReplyToken(subject: string, token: string | null): string {
+  if (!token || subject.includes(`[${token}]`)) return subject;
+  return `${subject.replace(REPLY_TOKEN, "").trim()} [${token}]`;
+}
 
 /**
  * Every offer the caller may see that is waiting on the client and due, or
@@ -201,21 +282,8 @@ export async function listOfferFollowUpAlerts(
 
   return offers
     .flatMap((offer): OfferFollowUpAlert[] => {
-      // `sentAt` is set when the proposal is first emailed. An offer sent for
-      // signature without that email has only its status event to go on.
-      const awaitingSince =
-        offer.statusEvents[0]?.at ?? offer.sentAt ?? offer.updatedAt;
-      const sentAt = offer.sentAt ?? awaitingSince;
-      const assessed = assessOfferFollowUp(
-        {
-          offerStatus: offer.offerStatus,
-          sentAt,
-          awaitingSince: awaitingSince < sentAt ? sentAt : awaitingSince,
-          followUpTimes: offer.followUps.map((followUp) => followUp.sentAt),
-          lastReplyAt: offer.documentSends[0]?.lastReplyAt ?? null,
-        },
-        now,
-      );
+      const source = followUpSource(offer);
+      const assessed = assessOfferFollowUp(source, now);
       if (!assessed) return [];
       return [
         {
@@ -226,9 +294,9 @@ export async function listOfferFollowUpAlerts(
             ? `${offer.baseReference}${offer.revisionNumber > 1 ? ` · Rev ${offer.revisionNumber}` : ""}`
             : `OF-${offer.leadId}`,
           clientName: offer.lead.name,
-          clientEmails: allowedLeadRecipients(offer.lead),
+          clientEmails: followUpRecipients(offer),
           projectAddress: offer.lead.location,
-          sentAt: sentAt.toISOString(),
+          sentAt: source.sentAt.toISOString(),
         },
       ];
     })
@@ -313,15 +381,19 @@ export async function sendOfferFollowUp(
   await authorizeOffer(principal, input.offerId, db);
   const offer = await db.offer.findUnique({
     where: { id: input.offerId },
-    select: {
-      offerStatus: true,
-      lead: { select: { email: true, secondaryEmail: true } },
-    },
+    select: followUpOfferSelect,
   });
   if (!offer) throw new DomainNotFoundError("Offer not found");
   if (!OFFER_AWAITING_RESPONSE_STATUSES.includes(offer.offerStatus)) {
     throw new DomainTransitionError(
       "This offer is no longer waiting on the client, so there is nothing to follow up.",
+    );
+  }
+  // The same rule that takes the alert off the list: a reply that arrived
+  // while the draft was open means there is nobody to chase.
+  if (clientHasResponded(followUpSource(offer))) {
+    throw new DomainTransitionError(
+      "The client has replied since they were last contacted. Read their reply before following up.",
     );
   }
 
@@ -331,6 +403,17 @@ export async function sendOfferFollowUp(
       "That address is not on this lead. Update the lead's contact details first.",
     );
   }
+  // The newest send to this address; its token goes on the subject so the
+  // reply is recorded. None when the offer was never emailed there (an
+  // acceptance sent only through DocuSign), and a reply is then read in the
+  // mailbox, as it always was.
+  const priorSend = offer.documentSends.find(
+    (send) => send.recipientEmail.trim().toLowerCase() === to,
+  );
+  const sentSubject = withReplyToken(
+    subject,
+    priorSend?.trackedLinkToken ?? null,
+  );
 
   const key = `offer-follow-up:${input.offerId}:${attemptKey}`;
   const { replayed, result } = await runOutboxEffectWithOutcome(
@@ -342,7 +425,7 @@ export async function sendOfferFollowUp(
     },
     async () => {
       try {
-        await ports.sendMail({ to, subject, body: input.html });
+        await ports.sendMail({ to, subject: sentSubject, body: input.html });
       } catch (error) {
         // Not retried under the same key: the provider may have accepted a
         // message whose answer never arrived, and a client chased twice is
@@ -358,7 +441,7 @@ export async function sendOfferFollowUp(
         data: {
           offerId: input.offerId,
           toAddress: to,
-          subject,
+          subject: sentSubject,
           body: input.body,
           attemptKey: key,
           sentById: attributionUserId(principal),

@@ -4,6 +4,7 @@ import { describe, test } from "vitest";
 import {
   assessOfferFollowUp,
   sendOfferFollowUp,
+  withReplyToken,
   type OfferFollowUpSource,
 } from "@/lib/domain/offers/follow-ups";
 import { offerFollowUpDraft } from "@/lib/offer/follow-up-template";
@@ -28,6 +29,7 @@ function source(
     sentAt: SENT,
     awaitingSince: SENT,
     followUpTimes: [],
+    lastSentAt: null,
     lastReplyAt: null,
     ...overrides,
   };
@@ -121,6 +123,27 @@ describe("when an offer is due a follow-up", () => {
     );
   });
 
+  test("a re-sent proposal is contact too, and restarts the clock", () => {
+    const resent = new Date(SENT.getTime() + 40 * HOUR);
+    const soon = new Date(resent.getTime() + 2 * HOUR);
+    assert.equal(
+      assessOfferFollowUp(source({ lastSentAt: resent }), soon),
+      null,
+    );
+    // A reply to the first send, before the re-send, is not an answer to it.
+    const later = new Date(resent.getTime() + 25 * HOUR);
+    assert.equal(
+      assessOfferFollowUp(
+        source({
+          lastSentAt: resent,
+          lastReplyAt: new Date(SENT.getTime() + HOUR),
+        }),
+        later,
+      )?.state,
+      "DUE",
+    );
+  });
+
   test("days pending is counted from the original send", () => {
     const now = new Date(SENT.getTime() + 5 * 24 * HOUR);
     assert.equal(assessOfferFollowUp(source(), now)?.daysPending, 5);
@@ -145,6 +168,33 @@ describe("the follow-up draft", () => {
   });
 });
 
+describe("the reply token on a follow-up's subject", () => {
+  const token = "RCOFR-0123456789AB";
+
+  test("is added so the client's reply is matched to the offer's send", () => {
+    assert.equal(
+      withReplyToken("Following up", token),
+      "Following up [RCOFR-0123456789AB]",
+    );
+  });
+
+  test("is left alone when the administrator kept it", () => {
+    const subject = `Re: your offer [${token}] — any questions?`;
+    assert.equal(withReplyToken(subject, token), subject);
+  });
+
+  test("replaces another send's token rather than carrying two", () => {
+    assert.equal(
+      withReplyToken("Following up [RCOFR-FFFFFFFFFFFF]", token),
+      "Following up [RCOFR-0123456789AB]",
+    );
+  });
+
+  test("leaves the subject as written when there is no send to match", () => {
+    assert.equal(withReplyToken("Following up", null), "Following up");
+  });
+});
+
 describe("sending a follow-up", () => {
   const input = {
     offerId: "offer-1",
@@ -155,14 +205,40 @@ describe("sending a follow-up", () => {
     attemptKey: "attempt-1",
   };
 
-  function scripted(offerStatus = "SENT") {
-    return recordingDb({
-      "offer.findUnique": {
-        isActive: true,
-        leadId: 7,
-        offerStatus,
-        lead: { email: "Sam@Example.com", secondaryEmail: null },
+  const proposalSend = {
+    sentAt: SENT,
+    lastReplyAt: null as Date | null,
+    recipientEmail: "Sam@Example.com",
+    trackedLinkToken: "RCOFR-0123456789AB",
+  };
+
+  /** The offer row the command reads: authorizeOffer's fields and the rule's. */
+  function offerRow(overrides: Record<string, unknown> = {}) {
+    return {
+      isActive: true,
+      leadId: 7,
+      id: "offer-1",
+      baseReference: "RC-Q-2026-014",
+      revisionNumber: 1,
+      offerStatus: "SENT",
+      sentAt: SENT,
+      updatedAt: SENT,
+      lead: {
+        name: "Sam Smith",
+        email: "Sam@Example.com",
+        secondaryEmail: null,
+        location: "1 Example St",
       },
+      statusEvents: [],
+      followUps: [],
+      documentSends: [proposalSend],
+      ...overrides,
+    };
+  }
+
+  function scripted(overrides: Record<string, unknown> = {}) {
+    return recordingDb({
+      "offer.findUnique": offerRow(overrides),
       "lead.findUnique": { id: 7, assignedId: null },
       "outboxEvent.upsert": {
         id: "evt-1",
@@ -185,7 +261,7 @@ describe("sending a follow-up", () => {
     });
   }
 
-  test("sends once and records it against the offer", async () => {
+  test("sends once, with the send's reply token, and records it against the offer", async () => {
     const recorder = scripted();
     const sent: unknown[] = [];
     const result = await sendOfferFollowUp(
@@ -198,8 +274,14 @@ describe("sending a follow-up", () => {
         },
       },
     );
+    // The address the proposal went to, and its token, so recordOfferReply
+    // matches the client's reply to this follow-up like a reply to the offer.
     assert.deepEqual(sent, [
-      { to: "sam@example.com", subject: "Following up", body: "<p>Hi Sam</p>" },
+      {
+        to: "sam@example.com",
+        subject: "Following up [RCOFR-0123456789AB]",
+        body: "<p>Hi Sam</p>",
+      },
     ]);
     assert.equal(result.replayed, false);
     assert.equal(result.followUpId, "fu-1");
@@ -207,14 +289,38 @@ describe("sending a follow-up", () => {
       .writes()
       .find((call) => call.operation === "offerFollowUp.create");
     assert.ok(record, "the follow-up is recorded");
-    assert.equal(
-      (record.args as { data: { attemptKey: string } }).data.attemptKey,
-      "offer-follow-up:offer-1:attempt-1",
+    const data = (
+      record.args as { data: { attemptKey: string; subject: string } }
+    ).data;
+    assert.equal(data.attemptKey, "offer-follow-up:offer-1:attempt-1");
+    assert.equal(data.subject, "Following up [RCOFR-0123456789AB]");
+  });
+
+  test("an address the offer was never emailed to gets no token", async () => {
+    const recorder = scripted({
+      lead: {
+        name: "Sam Smith",
+        email: "Sam@Example.com",
+        secondaryEmail: "partner@example.com",
+        location: "1 Example St",
+      },
+    });
+    const sent: { subject: string }[] = [];
+    await sendOfferFollowUp(
+      adminPrincipal(),
+      { ...input, to: "partner@example.com" },
+      recorder.db,
+      {
+        sendMail: async (message) => {
+          sent.push(message);
+        },
+      },
     );
+    assert.equal(sent[0]?.subject, "Following up");
   });
 
   test("refuses a closed offer before anything is sent or written", async () => {
-    const recorder = scripted("OFFER_SIGNED");
+    const recorder = scripted({ offerStatus: "OFFER_SIGNED" });
     let sent = 0;
     await assert.rejects(
       sendOfferFollowUp(adminPrincipal(), input, recorder.db, {
@@ -223,6 +329,25 @@ describe("sending a follow-up", () => {
         },
       }),
       /no longer waiting on the client/,
+    );
+    assert.equal(sent, 0);
+    assert.deepEqual(recorder.writes(), []);
+  });
+
+  test("refuses when the client replied while the draft was open", async () => {
+    const recorder = scripted({
+      documentSends: [
+        { ...proposalSend, lastReplyAt: new Date(SENT.getTime() + 30 * HOUR) },
+      ],
+    });
+    let sent = 0;
+    await assert.rejects(
+      sendOfferFollowUp(adminPrincipal(), input, recorder.db, {
+        sendMail: async () => {
+          sent += 1;
+        },
+      }),
+      /client has replied/,
     );
     assert.equal(sent, 0);
     assert.deepEqual(recorder.writes(), []);
@@ -264,12 +389,7 @@ describe("sending a follow-up", () => {
 
   test("a replayed attempt says so and sends nothing", async () => {
     const recorder = recordingDb({
-      "offer.findUnique": {
-        isActive: true,
-        leadId: 7,
-        offerStatus: "SENT",
-        lead: { email: "sam@example.com", secondaryEmail: null },
-      },
+      "offer.findUnique": offerRow(),
       "lead.findUnique": { id: 7, assignedId: null },
       "outboxEvent.upsert": {
         id: "evt-1",

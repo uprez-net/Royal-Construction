@@ -137,19 +137,28 @@ export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
  *
  * Uncached on purpose: whether an activity is overdue turns on today's date,
  * and the conditions come from tables that never expire the "projects" tag.
- * An empty answer on failure, logged, because the card is one panel among
- * several and must not blank the list beneath it.
+ *
+ * A failed read says so in `failed` rather than answering an empty list: an
+ * empty Alerts card reads as "nothing is overdue", which is the one wrong
+ * answer this card exists to prevent. It still does not throw, because the
+ * card is one panel among several and must not blank the list beneath it.
  */
-export async function getProjectsNeedingAttention(): Promise<
-  ProjectAttention[]
-> {
+export type ProjectAttentionResult = {
+  projects: ProjectAttention[];
+  failed: boolean;
+};
+
+export async function getProjectsNeedingAttention(): Promise<ProjectAttentionResult> {
   try {
-    return needingAttention(
-      await readProjectAttention(await currentPrincipal(), prisma),
-    );
+    return {
+      projects: needingAttention(
+        await readProjectAttention(await currentPrincipal(), prisma),
+      ),
+      failed: false,
+    };
   } catch (error) {
     console.error("Error reading project attention:", error);
-    return [];
+    return { projects: [], failed: true };
   }
 }
 

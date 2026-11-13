@@ -117,13 +117,40 @@ function OverdueProjectRow({
 
 export function ProjectOverdueAlerts({
   projects,
+  failed,
+  onRetry,
   hrefFor,
 }: {
   /** Every project needing attention; only the overdue ones are listed. */
   projects: readonly ProjectAttention[];
+  /**
+   * The read failed. Said out loud, because an empty card would tell the
+   * office nothing is overdue when nobody knows.
+   */
+  failed: boolean;
+  onRetry: () => void;
   hrefFor: (projectId: string) => string;
 }) {
   const [showAll, setShowAll] = useState(false);
+  if (failed) {
+    return (
+      <div
+        role="alert"
+        className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-destructive-light/40 px-4 py-3"
+      >
+        <AlertTriangle
+          className="size-4 shrink-0 text-destructive-ink"
+          aria-hidden="true"
+        />
+        <p className="flex-1 text-sm text-foreground">
+          Could not load project alerts. Overdue projects may not be shown.
+        </p>
+        <Button type="button" size="sm" variant="outline" onClick={onRetry}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
   const overdue = projects
     .filter((project) => project.overdue.length > 0)
     .sort(
