@@ -73,8 +73,6 @@ jobs:
 
       - name: Setup project
         uses: ./.github/actions/setup
-        with:
-          prisma: "false"
 
       - name: Run read-only suite
         if: inputs.suite == 'read-only'
