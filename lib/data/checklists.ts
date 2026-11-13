@@ -1,6 +1,6 @@
 import "server-only";
 
-import { del } from "@vercel/blob";
+import { del } from "@/lib/blob";
 import { revalidateTag } from "next/cache";
 
 import type { BlobDeletePort } from "@/lib/domain/ports/blob";

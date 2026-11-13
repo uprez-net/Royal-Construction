@@ -1,6 +1,7 @@
 import { embedMany } from "ai";
 
 import type { EmbeddingPort } from "@/lib/domain/ports/embedding";
+import { reportExternalError } from "@/lib/observability/external";
 
 /** Through the AI Gateway, like every other model call in this app. */
 export const CONTEXT_EMBEDDING_MODEL = "openai/text-embedding-3-small";
@@ -17,12 +18,20 @@ export const gatewayEmbedding: EmbeddingPort = {
   dimensions: 1536,
   async embed(values) {
     if (!values.length) return [];
-    const { embeddings } = await embedMany({
-      abortSignal: AbortSignal.timeout(20_000),
-      maxParallelCalls: 2,
-      model: CONTEXT_EMBEDDING_MODEL,
-      values: [...values],
-    });
-    return embeddings;
+    try {
+      const { embeddings } = await embedMany({
+        abortSignal: AbortSignal.timeout(20_000),
+        maxParallelCalls: 2,
+        model: CONTEXT_EMBEDDING_MODEL,
+        values: [...values],
+      });
+      return embeddings;
+    } catch (error) {
+      // Embedding is passed a model id, not a wrapped gateway model, so it does
+      // not go through lib/model.ts. Its callers decide what a failure means;
+      // this only makes sure someone hears about it.
+      reportExternalError("ai", "embedMany", error);
+      throw error;
+    }
   },
 };

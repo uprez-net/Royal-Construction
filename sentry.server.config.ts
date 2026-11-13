@@ -12,9 +12,24 @@ import {
   errorReportingEnabled,
   reportingEnvironment,
 } from "@/lib/observability/environment";
+import {
+  flushAfterResponse,
+  observeCaptures,
+} from "@/lib/observability/report-error";
+import {
+  noteCaptured,
+  trackConsoleErrors,
+} from "@/lib/observability/run-context";
 
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 const environment = reportingEnvironment(process.env);
+
+// A cron run needs to know, synchronously, that an error was already logged or
+// reported during it, so it does not add a second report for the same failure.
+// The SDK delivers an event later, after the handler has returned, so this is
+// noted at the call and not in `beforeSend`.
+trackConsoleErrors();
+observeCaptures(noteCaptured);
 
 Sentry.init({
   dsn,
@@ -33,5 +48,13 @@ Sentry.init({
     // `warn` stays out: it is where handled refusals are logged.
     Sentry.captureConsoleIntegration({ levels: ["error"] }),
   ],
-  beforeSend: createBeforeSend(),
+  beforeSend: createBeforeSend({
+    onSent: () => {
+      // Vercel freezes a function once its response is sent, and an event
+      // captured by `console.error` or `onRequestError` has no one waiting on
+      // it. Hand the flush to the platform's `waitUntil` so every path that
+      // reaches Sentry, including a failure inside `after()`, is delivered.
+      flushAfterResponse();
+    },
+  }),
 });

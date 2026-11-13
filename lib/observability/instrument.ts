@@ -1,10 +1,10 @@
-// Reports failures from every method of a vendor SDK object, without editing
-// each call site.
+// Reports failures from a vendor SDK, without editing each call site.
 //
-// DocuSign and Xero are reached from about twenty places, each of which catches
-// the failure and answers the screen or logs it. Hooking the object once means a
-// failed `createInvoices` or `getEnvelope` is reported with the vendor and the
-// operation, grouped so an outage is one issue, from wherever it was called.
+// DocuSign, Xero, Blob and Novu are reached from many places, each of which
+// catches the failure and answers the screen or logs it. Hooking the object or
+// function once means a failed `createInvoices` or `put` is reported with the
+// vendor and the operation, grouped so an outage is one issue, from wherever it
+// was called.
 //
 // The caller still gets exactly what it got before: the same promise, rejecting
 // with the same error. Reporting is a side channel and never changes the flow.
@@ -26,6 +26,85 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
   );
 }
 
+export interface InstrumentOptions {
+  /**
+   * Narrows what counts as a failure of the vendor. Used where the SDK has its
+   * own error classes and no HTTP status, so the generic status rules cannot
+   * tell a missing file (expected) from a suspended store (an outage).
+   * When set, an error that passes is reported with any status.
+   */
+  shouldReport?: (error: unknown) => boolean;
+}
+
+function report(
+  service: ExternalService,
+  operation: string,
+  error: unknown,
+  options: InstrumentOptions,
+): void {
+  if (options.shouldReport) {
+    let wanted = false;
+    try {
+      wanted = options.shouldReport(error);
+    } catch {
+      // A predicate that throws must not hide the failure it was asked about.
+      wanted = true;
+    }
+    if (!wanted) return;
+    reportExternalError(service, operation, error, { force: true });
+    return;
+  }
+  reportExternalError(service, operation, error);
+}
+
+/**
+ * Run `call`, reporting a synchronous throw or a rejection, and hand the caller
+ * the very same result or error.
+ */
+function observe<T>(
+  service: ExternalService,
+  operation: string,
+  options: InstrumentOptions,
+  call: () => T,
+): T {
+  let result: T;
+  try {
+    result = call();
+  } catch (error) {
+    report(service, operation, error, options);
+    throw error;
+  }
+  if (isThenable(result)) {
+    // A derived promise that swallows the rejection for the reporter only; the
+    // caller still holds, and handles, the original.
+    result.then(undefined, (error: unknown) =>
+      report(service, operation, error, options),
+    );
+  }
+  return result;
+}
+
+/**
+ * Wrap one function so a failing call is reported.
+ *
+ * ```ts
+ * export const put = instrumentFunction("blob", "put", () => blob.put);
+ * ```
+ *
+ * `resolve` is called on every use rather than once, so a module that is only
+ * partly present (a test double that provides `put` and nothing else) fails at
+ * the call that needs the missing part, not at import.
+ */
+export function instrumentFunction<Args extends unknown[], Result>(
+  service: ExternalService,
+  operation: string,
+  resolve: () => (...args: Args) => Result,
+  options: InstrumentOptions = {},
+): (...args: Args) => Result {
+  return (...args: Args): Result =>
+    observe(service, operation, options, () => resolve()(...args));
+}
+
 /**
  * Wrap an SDK API object so a failing async method is reported.
  *
@@ -39,6 +118,7 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
 export function instrumentApi<T extends object>(
   service: ExternalService,
   api: T,
+  options: InstrumentOptions = {},
 ): T {
   const proxy = new Proxy(api, {
     get(target, property) {
@@ -49,23 +129,10 @@ export function instrumentApi<T extends object>(
         return value;
       }
       if (property === "constructor") return value;
-      return (...args: unknown[]) => {
-        let result: unknown;
-        try {
-          result = Reflect.apply(value, target, args);
-        } catch (error) {
-          reportExternalError(service, property, error);
-          throw error;
-        }
-        if (isThenable(result)) {
-          // A derived promise that swallows the rejection for the reporter
-          // only; the caller still holds, and handles, the original.
-          result.then(undefined, (error: unknown) =>
-            reportExternalError(service, property, error),
-          );
-        }
-        return result;
-      };
+      return (...args: unknown[]) =>
+        observe(service, property, options, () =>
+          Reflect.apply(value, target, args),
+        );
     },
   });
   INSTRUMENTED.add(proxy);

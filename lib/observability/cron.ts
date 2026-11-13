@@ -10,6 +10,7 @@ import { captureCheckIn } from "@sentry/core";
 import vercelConfig from "@/vercel.json";
 
 import { reportError } from "./report-error";
+import { trackCaptures } from "./run-context";
 
 type CronEntry = { path: string; schedule: string };
 
@@ -72,39 +73,63 @@ function isVercelCron(request: unknown): boolean {
   return (headers?.get?.("user-agent") ?? "").startsWith("vercel-cron");
 }
 
-function checkIn(
+// A handler that finishes with some items failed still answers 200: one bad
+// engagement must not stop the rest, so the failure is counted, not thrown. The
+// response is what the wrapper sees, so the count rides on it out of band,
+// leaving the body, status and headers the caller gets exactly as they were.
+const OUTCOMES = new WeakMap<Response, { failed: number }>();
+
+/**
+ * Tell the wrapper how a run went, from inside a handler that tolerates
+ * per-item failures:
+ *
+ * ```ts
+ * return cronOutcome(successResponse({ processed, failed }), { failed });
+ * ```
+ *
+ * A run with `failed > 0` closes its monitor check-in as an error even though
+ * the response is a 200. The individual failures are logged where they happen.
+ * Returns the response it was given, untouched.
+ */
+export function cronOutcome<R extends Response>(
+  response: R,
+  outcome: { failed: number },
+): R {
+  OUTCOMES.set(response, outcome);
+  return response;
+}
+
+/**
+ * One check-in at the end of the run, and only for a run that was authenticated.
+ *
+ * Not an `in_progress` check-in followed by a closing one, because the first
+ * would have to be sent before the handler has checked `CRON_SECRET`. A request
+ * from anyone with the URL would then open a check-in, and a rejected 401 would
+ * close it as a success — a stranger could keep a dead job looking healthy. A
+ * rejected request sends nothing, so a job that stops being authenticated
+ * simply stops checking in, and the monitor reports it missed.
+ */
+function heartbeat(
   slug: string,
   schedule: string | undefined,
-  status: "in_progress" | "ok" | "error",
-  checkInId?: string,
-): string | undefined {
-  if (!monitorsEnabled(slug) || !schedule) return undefined;
+  status: "ok" | "error",
+): void {
+  if (!monitorsEnabled(slug) || !schedule) return;
   try {
-    // The SDK types an in-progress check-in (no id yet) separately from a
-    // finished one (which must name the run it closes).
-    let checkin: Parameters<typeof captureCheckIn>[0];
-    if (status === "in_progress") {
-      checkin = { monitorSlug: slug, status };
-    } else if (checkInId) {
-      checkin = { monitorSlug: slug, status, checkInId };
-    } else {
-      return undefined;
-    }
-    return captureCheckIn(
-      checkin,
+    captureCheckIn(
+      { monitorSlug: slug, status },
       // Vercel evaluates cron expressions in UTC.
       {
         schedule: { type: "crontab", value: schedule },
         timezone: "UTC",
         // A run that has not reported in this long counts as missed.
         checkinMargin: 10,
-        maxRuntime: 15,
         failureIssueThreshold: 1,
         recoveryThreshold: 1,
       },
     );
   } catch {
-    return undefined;
+    // A monitor that cannot be reached must not fail the job it watches.
   }
 }
 
@@ -114,11 +139,16 @@ function checkIn(
  * export const GET = withCronReporting("/api/cron/tradie-reminders", handle);
  * ```
  *
- * A thrown error is reported and rethrown, so the route still answers 500. A
- * 5xx response is reported too: some handlers catch their own failure and
- * answer 500 without logging it. A 401 to Vercel's own scheduler is reported as
- * a secret mismatch; a 401 to anyone else, and other 4xx, are not failures of
- * the job.
+ * - A thrown error is reported and rethrown, so the route still answers 500.
+ * - A 5xx the handler answered itself is reported only if nothing was reported
+ *   during the run. A handler that logs its failure has already produced an
+ *   event with the real stack; a second "cron answered 500" would be a second
+ *   issue and a second email for one failure. One that answers 500 in silence
+ *   still gets the fallback.
+ * - A 401 to Vercel's own scheduler is reported as a secret mismatch; a 401 to
+ *   anyone else, and other 4xx, are not failures of the job.
+ * - A run that reports failed items through `cronOutcome` closes its monitor
+ *   check-in as an error even though it answered 200.
  */
 export function withCronReporting<A extends unknown[], R extends Response>(
   path: string,
@@ -128,38 +158,45 @@ export function withCronReporting<A extends unknown[], R extends Response>(
   const schedule = cronSchedule(path);
   const source = `cron:${slug}`;
 
-  return async (...args: A): Promise<R> => {
-    const checkInId = checkIn(slug, schedule, "in_progress");
-    try {
-      const response = await handler(...args);
-      if (response.status >= 500) {
-        reportError(new Error(`Cron ${path} answered ${response.status}`), {
-          source,
-          // One issue per job however many times it fails, not one per message.
-          fingerprint: ["cron-5xx", slug],
-          extra: { status: response.status },
-        });
-        checkIn(slug, schedule, "error", checkInId);
-      } else if (response.status === 401 && isVercelCron(args[0])) {
-        reportError(
-          new Error(
-            `Cron ${path} rejected Vercel's own request with a 401: CRON_SECRET does not match what the project sends.`,
-          ),
-          {
-            source,
-            // One issue for the whole fleet, not nine: they all fail together.
-            fingerprint: ["cron-unauthorised"],
-          },
-        );
-        checkIn(slug, schedule, "error", checkInId);
-      } else {
-        checkIn(slug, schedule, "ok", checkInId);
+  return (...args: A): Promise<R> =>
+    trackCaptures(async (run) => {
+      try {
+        const response = await handler(...args);
+        if (response.status >= 500) {
+          if (run.captured === 0) {
+            reportError(new Error(`Cron ${path} answered ${response.status}`), {
+              source,
+              // One issue per job however many times it fails, not one per message.
+              fingerprint: ["cron-5xx", slug],
+              extra: { status: response.status },
+            });
+          }
+          heartbeat(slug, schedule, "error");
+        } else if (response.status === 401) {
+          // No check-in: this request was not authenticated, so it says nothing
+          // about whether the job ran.
+          if (isVercelCron(args[0])) {
+            reportError(
+              new Error(
+                `Cron ${path} rejected Vercel's own request with a 401: CRON_SECRET does not match what the project sends.`,
+              ),
+              {
+                source,
+                // One issue for the whole fleet, not nine: they all fail together.
+                fingerprint: ["cron-unauthorised"],
+              },
+            );
+          }
+        } else if ((OUTCOMES.get(response)?.failed ?? 0) > 0) {
+          heartbeat(slug, schedule, "error");
+        } else if (response.status < 400) {
+          heartbeat(slug, schedule, "ok");
+        }
+        return response;
+      } catch (error) {
+        reportError(error, { source });
+        heartbeat(slug, schedule, "error");
+        throw error;
       }
-      return response;
-    } catch (error) {
-      reportError(error, { source });
-      checkIn(slug, schedule, "error", checkInId);
-      throw error;
-    }
-  };
+    });
 }

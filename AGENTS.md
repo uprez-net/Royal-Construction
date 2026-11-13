@@ -163,13 +163,33 @@ adding a call.
 - **A cron route** exports `GET` through `withCronReporting("/api/cron/…", handle)`
   and the path must be in `vercel.json`; the architecture test fails otherwise.
   A 401 to Vercel's own scheduler is reported (`CRON_SECRET` no longer matches);
-  a 401 to anyone else is not. Missed-run detection is opt-in per cron through
-  `SENTRY_CRON_MONITORS` (a list of slugs); the free plan includes one monitor.
+  a 401 to anyone else is not, and sends no monitor check-in either, so nobody
+  with the URL can keep a dead job looking healthy. A handler that tolerates
+  per-item failures and still answers 200 returns
+  `cronOutcome(response, { failed })`, so its monitor check-in closes as an
+  error. A 5xx is reported by the wrapper only if nothing was logged or reported
+  during the run, so one failure is one issue. Missed-run detection is opt-in
+  per cron through `SENTRY_CRON_MONITORS` (a list of slugs); the free plan
+  includes one monitor.
+- **Blob, Novu and AI are hooked once, too.** Import Blob from `@/lib/blob`,
+  never `@vercel/blob` (a test fails on it): its errors carry no status, so
+  `lib/blob.ts` classifies by the SDK's own classes. Every model comes from the
+  wrapped `gateway` in `lib/model.ts`, so a failed `generateText` anywhere is
+  reported; do not create a second gateway. The Novu client is wrapped because
+  `triggerNotification` swallows its failures into `{ success: false }`.
+- **A failure inside `after()`** is logged by Next with `console.error` and the
+  original error, which console capture reports. `tests/observability/
+  after-errors.test.ts` pins that against the installed Next. An `after()` task
+  that catches and swallows its own error should `console.error` it, as the Graph
+  webhook does.
 - **Tags:** `service` is the process (`app` or `eve`); `vendor` is the outside
   service (`graph`, `xero`, `docusign`, `ai`). Do not reuse either key.
 - **Never put client data on an event.** `dataCollection` is locked down and
   `redact.ts` strips emails, phones and tokens from messages, but neither
   catches a name or street address. Pass ids in `ids`, never record contents.
+  The raw arguments of a `console` call are dropped from events and breadcrumbs
+  (an object passed to `console.error` is not text the redactor can walk), so
+  put what matters in the message.
 
 Not covered: deliberately silent catches (`catch {}`, `.catch(() => null)`);
 Graph calls that do not go through `withGraphRetry` or `sendEmail` (they

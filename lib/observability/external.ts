@@ -19,6 +19,7 @@ export type ExternalService =
   | "novu"
   | "blob"
   | "ai"
+  | "mistral"
   | "clerk";
 
 export interface ExternalFailureContext {

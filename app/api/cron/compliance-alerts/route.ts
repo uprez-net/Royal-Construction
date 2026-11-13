@@ -1,4 +1,4 @@
-import { withCronReporting } from "@/lib/observability/cron";
+import { cronOutcome, withCronReporting } from "@/lib/observability/cron";
 import { CertifierEngagementStatus } from "@prisma/client";
 
 import { assessOverdueConditions } from "@/lib/domain/compliance/overdue";
@@ -106,13 +106,16 @@ async function handle(request: Request) {
       }
     }
 
-    return successResponse({
-      message: "Compliance overdue sweep processed.",
-      engagements: engagements.length,
-      raised,
-      resolved,
-      failed,
-    });
+    return cronOutcome(
+      successResponse({
+        message: "Compliance overdue sweep processed.",
+        engagements: engagements.length,
+        raised,
+        resolved,
+        failed,
+      }),
+      { failed },
+    );
   } catch (error) {
     console.error(
       "[CRON_ERROR] Failed during compliance-alerts cron execution:",

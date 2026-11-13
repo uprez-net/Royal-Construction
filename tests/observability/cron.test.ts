@@ -18,11 +18,13 @@ const sdk = vi.hoisted(() => ({
 vi.mock("@sentry/core", () => sdk);
 
 import {
+  cronOutcome,
   cronSchedule,
   cronSlug,
   monitoredCrons,
   withCronReporting,
 } from "@/lib/observability/cron";
+import { noteCaptured } from "@/lib/observability/run-context";
 
 const PATH = "/api/cron/sync-sent-mail";
 
@@ -141,54 +143,173 @@ describe("monitoredCrons — one free monitor, so it is a list, not a switch", (
 });
 
 describe("cron monitors — opt-in per job, off until someone has checked the plan", () => {
-  test("only the named cron checks in; the others do not", async () => {
-    process.env.SENTRY_CRON_MONITORS = "graph-renew";
-    await withCronReporting(
-      "/api/cron/graph-renew",
-      async () => new Response("ok"),
-    )();
-    const named = sdk.captureCheckIn.mock.calls.length;
-    await withCronReporting(
-      "/api/cron/sync-sent-mail",
-      async () => new Response("ok"),
-    )();
-    assert.equal(named, 2, "in_progress and ok for the named job");
-    assert.equal(
-      sdk.captureCheckIn.mock.calls.length,
-      2,
-      "nothing more for the other job",
+  const statuses = () =>
+    (sdk.captureCheckIn.mock.calls as unknown as CheckInCall[]).map(
+      ([checkIn]) => checkIn.status,
     );
-  });
 
   test("no check-ins by default", async () => {
     await withCronReporting(PATH, async () => new Response("ok"))();
     assert.equal(sdk.captureCheckIn.mock.calls.length, 0);
   });
 
-  test("with SENTRY_CRON_MONITORS=1 a run opens and closes a check-in on vercel.json's schedule", async () => {
+  test("only the named cron checks in; the others do not", async () => {
+    process.env.SENTRY_CRON_MONITORS = "graph-renew";
+    await withCronReporting(
+      "/api/cron/graph-renew",
+      async () => new Response("ok"),
+    )();
+    assert.deepEqual(statuses(), ["ok"]);
+    await withCronReporting(
+      "/api/cron/sync-sent-mail",
+      async () => new Response("ok"),
+    )();
+    assert.deepEqual(statuses(), ["ok"], "nothing more for the other job");
+  });
+
+  test("with SENTRY_CRON_MONITORS=1 a finished run checks in once, on vercel.json's schedule", async () => {
     process.env.SENTRY_CRON_MONITORS = "1";
     await withCronReporting(PATH, async () => new Response("ok"))();
     const calls = sdk.captureCheckIn.mock.calls as unknown as CheckInCall[];
-    assert.deepEqual(
-      calls.map(([checkIn]) => checkIn.status),
-      ["in_progress", "ok"],
-    );
+    assert.deepEqual(statuses(), ["ok"]);
     assert.equal(calls[0][0].monitorSlug, "sync-sent-mail");
     assert.equal(calls[0][1].schedule.value, cronSchedule(PATH));
   });
 
-  test("a failed run closes the check-in as an error", async () => {
+  test("a thrown run checks in as an error", async () => {
     process.env.SENTRY_CRON_MONITORS = "1";
     await assert.rejects(() =>
       withCronReporting(PATH, async () => {
         throw new Error("x");
       })(),
     );
+    assert.deepEqual(statuses(), ["error"]);
+  });
+
+  test("a 5xx the handler answered checks in as an error", async () => {
+    process.env.SENTRY_CRON_MONITORS = "1";
+    await withCronReporting(
+      PATH,
+      async () => new Response("no", { status: 500 }),
+    )();
+    assert.deepEqual(statuses(), ["error"]);
+  });
+
+  // A stranger who knows the URL must not be able to keep a dead job looking
+  // healthy. The wrapper used to open a check-in before the handler had checked
+  // the secret and close it as a success on a 401.
+  test("an unauthenticated request sends no check-in at all, success or failure", async () => {
+    process.env.SENTRY_CRON_MONITORS = "1";
+    const unauthorised: (request?: Request) => Promise<Response> = async () =>
+      new Response("Unauthorized", { status: 401 });
+
+    for (const agent of ["curl/8.0", "vercel-cron/1.0", ""]) {
+      await withCronReporting(
+        PATH,
+        unauthorised,
+      )(
+        new Request("https://x.test/c", {
+          headers: agent ? { "user-agent": agent } : {},
+        }),
+      );
+    }
+    assert.deepEqual(
+      statuses(),
+      [],
+      "the monitor will report the missed run, which is the point",
+    );
+  });
+
+  test("a rejected 4xx (a bad manual call) is not a successful run", async () => {
+    process.env.SENTRY_CRON_MONITORS = "1";
+    await withCronReporting(
+      PATH,
+      async () => new Response("bad since", { status: 400 }),
+    )();
+    assert.deepEqual(statuses(), []);
+  });
+});
+
+describe("cronOutcome — a run that answers 200 with some items failed", () => {
+  test("closes the monitor check-in as an error, and leaves the response as it was", async () => {
+    process.env.SENTRY_CRON_MONITORS = "1";
+    const response = new Response(JSON.stringify({ failed: 3 }), {
+      status: 200,
+      headers: { "x-custom": "kept" },
+    });
+    const returned = await withCronReporting(PATH, async () =>
+      cronOutcome(response, { failed: 3 }),
+    )();
+
+    assert.equal(returned, response, "the same response object");
+    assert.equal(returned.status, 200);
+    assert.equal(returned.headers.get("x-custom"), "kept");
+    assert.deepEqual(await returned.json(), { failed: 3 });
     const calls = sdk.captureCheckIn.mock.calls as unknown as CheckInCall[];
     assert.deepEqual(
       calls.map(([checkIn]) => checkIn.status),
-      ["in_progress", "error"],
+      ["error"],
     );
+  });
+
+  test("a run with nothing failed is still a success", async () => {
+    process.env.SENTRY_CRON_MONITORS = "1";
+    await withCronReporting(PATH, async () =>
+      cronOutcome(new Response("ok"), { failed: 0 }),
+    )();
+    const calls = sdk.captureCheckIn.mock.calls as unknown as CheckInCall[];
+    assert.deepEqual(
+      calls.map(([checkIn]) => checkIn.status),
+      ["ok"],
+    );
+  });
+
+  test("the per-item failures are not reported twice: they log where they happen", async () => {
+    await withCronReporting(PATH, async () =>
+      cronOutcome(new Response("ok"), { failed: 2 }),
+    )();
+    assert.equal(sdk.captureException.mock.calls.length, 0);
+  });
+});
+
+describe("a 5xx fallback is only for a handler that said nothing", () => {
+  const answers500: (request?: Request) => Promise<Response> = async () =>
+    new Response("no", { status: 500 });
+
+  test("a handler that answers 500 in silence is still reported", async () => {
+    await withCronReporting(PATH, answers500)();
+    assert.equal(sdk.captureException.mock.calls.length, 1);
+  });
+
+  test("a handler whose failure was already captured is not reported a second time", async () => {
+    // What the server config does for an event that goes out while a run is in
+    // progress: the handler's own console.error, say. One failure, one issue.
+    await withCronReporting(PATH, async () => {
+      noteCaptured();
+      return new Response("no", { status: 500 });
+    })();
+    assert.equal(sdk.captureException.mock.calls.length, 0);
+  });
+
+  test("a capture in one run does not suppress the fallback in another", async () => {
+    const quiet = withCronReporting(
+      PATH,
+      async () => new Response("no", { status: 500 }),
+    );
+    const noisy = withCronReporting(PATH, async () => {
+      noteCaptured();
+      return new Response("no", { status: 500 });
+    });
+    await Promise.all([noisy(), quiet()]);
+    assert.equal(
+      sdk.captureException.mock.calls.length,
+      1,
+      "only the silent run is reported",
+    );
+  });
+
+  test("a capture outside any run is harmless", () => {
+    assert.doesNotThrow(() => noteCaptured());
   });
 });
 

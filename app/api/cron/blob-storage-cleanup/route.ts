@@ -1,7 +1,7 @@
 import { withCronReporting } from "@/lib/observability/cron";
 import prisma from "@/lib/prisma";
 import { errorResponse } from "@/utils/validators";
-import { del, list } from "@vercel/blob";
+import { del, list } from "@/lib/blob";
 import { NextRequest, NextResponse } from "next/server";
 
 const ATTACHMENT_PREFIX = "email-ad-hock-attachment-upload/attachments/";

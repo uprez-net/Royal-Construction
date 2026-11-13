@@ -235,5 +235,9 @@ test("the adapters hand over the shared Blob capability rather than importing de
   }
 
   // One implementation of the capability, so swapping providers is one edit.
-  assert.match(read("lib/blob-port.ts"), /from "@vercel\/blob"/);
+  // The SDK is reached only through lib/blob.ts, which also reports a failed
+  // call; the port goes through it rather than around it.
+  assert.match(read("lib/blob.ts"), /from "@vercel\/blob"/);
+  assert.match(read("lib/blob-port.ts"), /from "@\/lib\/blob"/);
+  assert.doesNotMatch(read("lib/blob-port.ts"), /from "@vercel\/blob"/);
 });

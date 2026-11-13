@@ -85,6 +85,61 @@ describe("the Next SDK stays out of code Eve bundles", () => {
   });
 });
 
+describe("the outside services stay hooked", () => {
+  // Each of these is one hook that covers many call sites. They only keep
+  // working while nobody goes round them.
+
+  test("Blob is imported through lib/blob, never straight from the SDK", () => {
+    // Types can still come from the SDK; a value import cannot, because it would
+    // be a call whose failure is never reported.
+    const offenders: string[] = [];
+    for (const file of walk(REPO_ROOT)) {
+      const rel = relative(REPO_ROOT, file).replace(/\\/g, "/");
+      if (rel.startsWith("tests/") || rel === "lib/blob.ts") continue;
+      const source = readFileSync(file, "utf8");
+      if (
+        /(?<!type )import\s*\{[^}]*\}\s*from\s*["']@vercel\/blob["']/.test(
+          source,
+        )
+      ) {
+        offenders.push(rel);
+      }
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      'import { put, del, … } from "@/lib/blob" instead: it reports a failed call as the blob vendor',
+    );
+  });
+
+  test("every model the app asks for comes from the wrapped gateway in lib/model.ts", () => {
+    const source = read("lib/model.ts");
+    assert.match(source, /wrapLanguageModel\(/);
+    assert.match(source, /failureReportingMiddleware/);
+    // A second gateway would be a way round the wrap.
+    const creators: string[] = [];
+    for (const file of walk(REPO_ROOT)) {
+      const rel = relative(REPO_ROOT, file).replace(/\\/g, "/");
+      if (rel.startsWith("tests/")) continue;
+      if (/\bcreateGateway\(/.test(readFileSync(file, "utf8")))
+        creators.push(rel);
+    }
+    assert.deepEqual(creators, ["lib/model.ts"]);
+  });
+
+  test("the Novu client is hooked, since triggerNotification swallows its failures", () => {
+    assert.match(read("lib/notification/novu.ts"), /instrumentApi\(\s*"novu"/);
+  });
+
+  test("Xero and DocuSign are hooked where their clients are built", () => {
+    assert.match(read("lib/xero/client.ts"), /instrumentApi\("xero"/);
+    assert.match(
+      read("lib/docusign/client.ts"),
+      /instrumentDocusignApiClient\(/,
+    );
+  });
+});
+
 describe("the Node SDK is for the Eve service only", () => {
   // The agent runs as its own service and cannot use @sentry/nextjs. Everything
   // else reports through @sentry/core, which resolves to the same copy.

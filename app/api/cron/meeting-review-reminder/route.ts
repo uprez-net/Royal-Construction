@@ -1,4 +1,4 @@
-import { withCronReporting } from "@/lib/observability/cron";
+import { cronOutcome, withCronReporting } from "@/lib/observability/cron";
 import prisma from "@/lib/prisma";
 import {
   sydneyDateOnly,
@@ -113,12 +113,15 @@ async function handle(request: Request) {
       sent += 1;
     }
 
-    return successResponse({
-      message: "Meeting review reminders processed.",
-      processed: pastMeetings.length,
-      sent,
-      failed,
-    });
+    return cronOutcome(
+      successResponse({
+        message: "Meeting review reminders processed.",
+        processed: pastMeetings.length,
+        sent,
+        failed,
+      }),
+      { failed },
+    );
   } catch (error) {
     console.error(
       "[CRON_ERROR] Failed during meeting-review-reminder cron execution:",

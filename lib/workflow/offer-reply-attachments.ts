@@ -1,5 +1,5 @@
 import { reportWorkflowError } from "@/lib/workflow/report-failure";
-import { put } from "@vercel/blob";
+import { put } from "@/lib/blob";
 
 import {
   planOfferReplyAttachments,
@@ -105,7 +105,6 @@ export const storeOfferReplyAttachments = async (
 const runStoreOfferReplyAttachments = async (
   input: OfferReplyAttachmentsInput,
 ): Promise<{ planned: number; stored: number }> => {
-
   const { files, ...plan } = await planAttachments(input);
 
   let stored = 0;

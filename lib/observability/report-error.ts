@@ -44,7 +44,7 @@ export interface ErrorContext {
  * (the same request-context hook `@vercel/functions` reads) so it finishes
  * after the response, and fall back to a plain fire-and-forget locally.
  */
-function flushAfterResponse(): void {
+export function flushAfterResponse(): void {
   const flushing = flush(2000).catch(() => false);
   try {
     const context = (globalThis as Record<symbol, unknown>)[
@@ -58,6 +58,18 @@ function flushAfterResponse(): void {
   }
 }
 
+let captureObserver: (() => void) | undefined;
+
+/**
+ * Registers a function called synchronously, as an explicit report is made.
+ * The server uses it to tell a running cron that an error was reported; it is a
+ * hook rather than an import because this module also ships to the browser and
+ * the server's bookkeeping needs Node.
+ */
+export function observeCaptures(observer: () => void): void {
+  captureObserver = observer;
+}
+
 /** Sends the event. Callers have already decided it is worth sending. */
 export function captureWithContext(
   error: unknown,
@@ -65,6 +77,11 @@ export function captureWithContext(
 ): void {
   try {
     markReported(error);
+    try {
+      captureObserver?.();
+    } catch {
+      // Bookkeeping for the caller must never stop the report it observes.
+    }
     withScope((scope) => {
       scope.setTag(EXPLICIT_TAG, "1");
       scope.setTag("source", context.source);

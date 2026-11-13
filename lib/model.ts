@@ -1,4 +1,6 @@
-import { createGateway } from "ai";
+import { createGateway, wrapLanguageModel } from "ai";
+
+import { failureReportingMiddleware } from "@/lib/observability/ai";
 
 if (!process.env.AI_GATEWAY_API_KEY) {
   throw new Error(
@@ -8,8 +10,34 @@ if (!process.env.AI_GATEWAY_API_KEY) {
 
 const apiKey = process.env.AI_GATEWAY_API_KEY;
 
-export const gateway = createGateway({
+const baseGateway = createGateway({
   apiKey,
+});
+
+type GatewayModel = ReturnType<typeof baseGateway>;
+
+// Every model the app asks for is wrapped, so a failed call is reported with
+// the vendor and operation from whichever of the ~25 call sites made it.
+// `gateway(id)` and `gateway.languageModel(id)` / `.chat(id)` are the ways a
+// language model is asked for; everything else on the provider is untouched.
+const watched = (model: GatewayModel): GatewayModel =>
+  wrapLanguageModel({ model, middleware: failureReportingMiddleware });
+
+export const gateway: typeof baseGateway = new Proxy(baseGateway, {
+  apply(target, thisArg, args) {
+    return watched(Reflect.apply(target, thisArg, args) as GatewayModel);
+  },
+  get(target, property) {
+    const value = Reflect.get(target, property, target);
+    if (
+      (property === "languageModel" || property === "chat")
+      && typeof value === "function"
+    ) {
+      return (modelId: string) =>
+        watched((value as (id: string) => GatewayModel).call(target, modelId));
+    }
+    return value;
+  },
 });
 
 /**

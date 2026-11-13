@@ -7,8 +7,8 @@ async function handle(request: Request) {
   // Verify it is a Vercel cron request (standard security check on Vercel environment)
   const authHeader = request.headers.get("authorization");
   if (
-    process.env.NODE_ENV === "production" &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
+    process.env.NODE_ENV === "production"
+    && authHeader !== `Bearer ${process.env.CRON_SECRET}`
   ) {
     return new Response("Unauthorized", { status: 401 });
   }

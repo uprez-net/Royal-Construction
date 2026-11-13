@@ -1,4 +1,4 @@
-import { withCronReporting } from "@/lib/observability/cron";
+import { cronOutcome, withCronReporting } from "@/lib/observability/cron";
 import prisma from "@/lib/prisma";
 import {
   sydneyDateOnly,
@@ -103,8 +103,8 @@ async function handle(request: Request) {
     const config = getGraphConfig();
     const graphClient = await createGraphContext(config);
     const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      "https://royal-construction-chi.vercel.app";
+      process.env.NEXT_PUBLIC_APP_URL
+      || "https://royal-construction-chi.vercel.app";
 
     const results = [];
 
@@ -201,11 +201,14 @@ async function handle(request: Request) {
       }
     }
 
-    return successResponse({
-      message: "Lead follow-up reminders processed.",
-      processed: matching.length,
-      results,
-    });
+    return cronOutcome(
+      successResponse({
+        message: "Lead follow-up reminders processed.",
+        processed: matching.length,
+        results,
+      }),
+      { failed: results.filter((result) => result.status === "failed").length },
+    );
   } catch (error) {
     console.error(
       "[CRON_ERROR] Failed during followup-lead-reminder cron execution:",
@@ -218,4 +221,7 @@ async function handle(request: Request) {
   }
 }
 
-export const GET = withCronReporting("/api/cron/followup-lead-reminder", handle);
+export const GET = withCronReporting(
+  "/api/cron/followup-lead-reminder",
+  handle,
+);

@@ -12,12 +12,16 @@ export const EXPLICIT_TAG = "explicit";
 const DEFAULT_LIMIT = { max: 5, windowMs: 10 * 60 * 1000 };
 
 function throttleKey(event: ErrorEvent): string {
-  const first = event.exception?.values?.[0];
+  // A fingerprint is the caller saying what makes this event the same one: an
+  // outage grouped by vendor, operation and status. Its message often carries an
+  // id or a timestamp that varies per call, and keying on that as well would let
+  // one outage slip past the brake as a stream of "different" errors.
   const fingerprint = event.fingerprint?.join("|");
-  const head = first
+  if (fingerprint) return fingerprint;
+  const first = event.exception?.values?.[0];
+  return first
     ? `${first.type ?? "Error"}:${(first.value ?? "").slice(0, 120)}`
     : (event.message ?? "").slice(0, 120);
-  return fingerprint ? `${fingerprint}::${head}` : head;
 }
 
 function redactEvent(event: ErrorEvent): void {
@@ -31,8 +35,28 @@ function redactEvent(event: ErrorEvent): void {
     if (typeof crumb.message === "string") {
       crumb.message = redactText(crumb.message);
     }
+    // A console breadcrumb carries the raw arguments of the call: whatever
+    // object was passed to console.log, a lead record included. They are not
+    // text this redactor can walk, and nothing here needs them.
+    if (crumb.data && "arguments" in crumb.data) delete crumb.data.arguments;
   }
-  if (event.extra) event.extra = redactRecord(event.extra);
+  if (event.extra) {
+    // Console capture puts every argument after the message here, unredacted
+    // and not necessarily a string. The message and the error itself already
+    // describe the failure; the rest is whatever was in scope at the call.
+    const { arguments: _rawArguments, ...rest } = event.extra;
+    void _rawArguments;
+    event.extra = redactRecord(rest);
+  }
+  // `reportError({ extra })` lands in the `details` context, not in `extra`.
+  // Its strings are redacted the same way; other contexts are left alone.
+  const details = event.contexts?.details;
+  if (event.contexts && details && typeof details === "object") {
+    event.contexts = {
+      ...event.contexts,
+      details: redactRecord(details as Record<string, unknown>),
+    };
+  }
   // Names and emails ride in on `user` and `request` by default when PII is on;
   // collection is off (see data-collection.ts), but an explicit user must never
   // carry more than the Clerk id.
@@ -48,8 +72,17 @@ function redactEvent(event: ErrorEvent): void {
  * still redacted and still throttled.
  */
 export function createBeforeSend(
-  throttle: Throttle = createThrottle(DEFAULT_LIMIT),
+  options: {
+    throttle?: Throttle;
+    /**
+     * Called once for each event that is about to be sent. The server config
+     * uses it to flush after the response, and the cron wrapper to know that
+     * something was captured during a run.
+     */
+    onSent?: () => void;
+  } = {},
 ) {
+  const throttle = options.throttle ?? createThrottle(DEFAULT_LIMIT);
   return function beforeSend(
     event: ErrorEvent,
     hint: EventHint,
@@ -62,6 +95,11 @@ export function createBeforeSend(
     redactEvent(event);
     if (!throttle.allow(throttleKey(event))) return null;
     markReported(original);
+    try {
+      options.onSent?.();
+    } catch {
+      // A hook must never lose the event it was told about.
+    }
     return event;
   };
 }

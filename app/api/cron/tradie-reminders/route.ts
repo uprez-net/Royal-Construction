@@ -1,4 +1,4 @@
-import { withCronReporting } from "@/lib/observability/cron";
+import { cronOutcome, withCronReporting } from "@/lib/observability/cron";
 import { sendTradieReminders } from "@/lib/jobs/tradie-reminder";
 import { successResponse, errorResponse } from "@/utils/validators";
 
@@ -22,7 +22,9 @@ async function handle(request: Request) {
 
   try {
     const result = await sendTradieReminders();
-    return successResponse(result);
+    // The run answers 200 even when some reminders failed, so the monitor has to
+    // be told: a non-zero `failed` is a run that did not do its job.
+    return cronOutcome(successResponse(result), { failed: result.failed });
   } catch (error) {
     console.error("/api/cron/tradie-reminders GET error", error);
     return errorResponse("Failed to send tradie reminders", {

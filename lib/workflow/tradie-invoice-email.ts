@@ -1,5 +1,5 @@
 import { reportWorkflowError } from "@/lib/workflow/report-failure";
-import { put } from "@vercel/blob";
+import { put } from "@/lib/blob";
 
 import { readTradieInvoiceBytes } from "@/lib/agent/tradieInvoiceExtractionAgent";
 import { findAdminUserIds } from "@/lib/domain/identity/users";
@@ -181,7 +181,6 @@ export const processTradieInvoiceEmail = async (
 const runProcessTradieInvoiceEmail = async (
   input: TradieInvoiceEmailInput,
 ): Promise<Record<AttachmentOutcome | "failed", number>> => {
-
   const { placement, files } = await planInvoiceEmail(input);
   const counts: Record<AttachmentOutcome | "failed", number> = {
     duplicate: 0,

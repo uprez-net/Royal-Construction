@@ -1,6 +1,8 @@
 import { Mistral } from "@mistralai/mistralai";
 import type { OCRPageObject } from "@mistralai/mistralai/models/components";
 
+import { reportExternalError } from "@/lib/observability/external";
+
 // Checked at call time rather than on import. The Graph webhook now reaches
 // this module, and a module-scope throw would take the whole route down at
 // import — turning a missing OCR key into dropped leads instead of leads
@@ -41,6 +43,10 @@ export async function processPDFWithMistral(
     return response.pages;
   } catch (error) {
     console.error("Mistral OCR failed:", error);
+    // A 401 (bad key) must be heard: console capture drops it as a 4xx, and
+    // every document after it goes unread. Anything refused for the document
+    // itself (400, 422) stays quiet.
+    reportExternalError("mistral", "ocr.process", error);
     throw error;
   }
 }

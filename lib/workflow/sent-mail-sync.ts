@@ -2,7 +2,7 @@ import { reportWorkflowError } from "@/lib/workflow/report-failure";
 import { createHash } from "node:crypto";
 
 import { GraphMailbox } from "@prisma/client";
-import { put } from "@vercel/blob";
+import { put } from "@/lib/blob";
 
 import { isSignatureNoise } from "@/lib/domain/email/attachment-noise";
 import { systemPrincipal } from "@/lib/domain/principal";
@@ -273,7 +273,6 @@ export const syncSentMail = async (
 const runSyncSentMail = async (
   input: SentMailSyncInput,
 ): Promise<MailboxSummary[]> => {
-
   console.log(`${LOG} starting: Sent Items since ${input.since}`);
   const summaries: MailboxSummary[] = [];
 

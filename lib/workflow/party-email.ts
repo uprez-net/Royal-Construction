@@ -11,7 +11,7 @@ import {
   GraphMailbox,
 } from "@prisma/client";
 import type { CompliancePartyType, Prisma } from "@prisma/client";
-import { put } from "@vercel/blob";
+import { put } from "@/lib/blob";
 import { FatalError } from "workflow";
 
 import { detectComplianceAlerts } from "@/lib/agent/complianceAlertAgent";
@@ -969,7 +969,6 @@ export const processInboundPartyEmail = async (
 const runProcessInboundPartyEmail = async (
   message: InboundPartyMessage,
 ): Promise<InboundPartyOutcome> => {
-
   if (!message.messageId) {
     // Nothing downstream can be made idempotent without it.
     throw new FatalError("processInboundPartyEmail requires a messageId.");

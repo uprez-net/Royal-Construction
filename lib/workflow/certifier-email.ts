@@ -10,7 +10,7 @@ import {
   GraphMailbox,
   Prisma,
 } from "@prisma/client";
-import { put } from "@vercel/blob";
+import { put } from "@/lib/blob";
 import { FatalError } from "workflow";
 
 import { readAssessorCorrespondence } from "@/lib/agent/assessorCorrespondenceAgent";
@@ -703,7 +703,6 @@ export const processInboundCertifierEmail = async (
 const runProcessInboundCertifierEmail = async (
   message: InboundCertifierMessage,
 ): Promise<InboundCertifierOutcome> => {
-
   if (!message.messageId) {
     // Nothing downstream can be made idempotent without it, so this is not
     // worth retrying.
