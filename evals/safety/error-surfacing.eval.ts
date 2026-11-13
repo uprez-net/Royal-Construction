@@ -37,7 +37,11 @@ export default defineEval({
           envelopes.every(
             (envelope) =>
               envelope.kind !== "entity-summary"
-              || !JSON.stringify(envelope)
+              // A search echoes its query even when it finds no records.
+              || !JSON.stringify({
+                ...envelope,
+                data: { ...envelope.data, query: undefined },
+              })
                 .toLowerCase()
                 .includes("nonexistent placeholder client"),
           ),

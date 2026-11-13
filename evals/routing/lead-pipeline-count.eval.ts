@@ -18,7 +18,8 @@ export default defineEval({
   tags: ["read-only", "routing"],
   async test(t) {
     await expectRoutedTo(t, {
-      prompt: "How many leads do we have in the pipeline, by stage?",
+      prompt:
+        "Check the live CRM now, not the office snapshot: how many non-archived leads do we have in total and by stage? Do not filter by name, email or location.",
       specialist: "lead-operations",
       toolInput: {
         describe: "was called with no search text",

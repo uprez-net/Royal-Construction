@@ -200,7 +200,7 @@ anything like it stay out until data export is explicitly approved.
 | `The target host is not the configured staging host` | `EVE_EVAL_STAGING_HOST` is set and the URL does not match it exactly |
 | `reports database "x", expected "y"` | The deployment is wired to a different database than you meant |
 | Everything skipped | No fixture labels configured — run `eve:eval:fixtures status` |
-| Every judged assertion fails | The judge model id does not resolve on your gateway; set `EVE_EVAL_JUDGE_MODEL` |
+| Every judged assertion fails | Use a gateway evaluation model, not a language model. The default is `typesafe-ai/jev`; override with `EVE_EVAL_JUDGE_MODEL` only for another supported evaluation model. |
 | `agent_session_access_denied` | The token belongs to a different user than the session's owner |
 
 ## Manual override
