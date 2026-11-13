@@ -1,8 +1,11 @@
 import { XeroClient } from "xero-node";
 
+import { reportExternalError } from "@/lib/observability/external";
+import { instrumentApi } from "@/lib/observability/instrument";
 import prisma from "@/lib/prisma";
 
 import { getXeroConfig, XERO_SCOPES, type XeroConfig } from "./config";
+import { summariseXeroFailure } from "./failure";
 import { isInvalidGrant } from "./token-errors";
 
 /**
@@ -65,7 +68,7 @@ export function buildXeroClient(
   config: XeroConfig,
   options?: { readonly state?: string },
 ): XeroClient {
-  return new XeroClient({
+  const client = new XeroClient({
     clientId: config.clientId,
     clientSecret: config.clientSecret,
     redirectUris: [config.redirectUri],
@@ -78,6 +81,24 @@ export function buildXeroClient(
     // constant: the callback leg reads it back out of the state cookie.
     ...(options?.state ? { state: options.state } : {}),
   });
+
+  // Every call this app makes to Xero goes through `accountingApi`, from ten
+  // places. Hooking it here reports a failed `createInvoices` or `getInvoice`
+  // with the operation name, once, wherever it was called from. Callers see the
+  // same promise and the same rejection as before.
+  //
+  // What is REPORTED is a stand-in: the SDK rejects with a JSON string holding
+  // the response body (the values submitted) and the request headers (the
+  // access token), and only the status and Xero's error type should leave.
+  Object.defineProperty(client, "accountingApi", {
+    value: instrumentApi("xero", client.accountingApi, {
+      summarise: summariseXeroFailure,
+    }),
+    configurable: true,
+    enumerable: true,
+    writable: true,
+  });
+  return client;
 }
 
 /**
@@ -87,6 +108,22 @@ export function buildXeroClient(
  * @throws {XeroNotConnectedError} If no active connection exists, or refreshing fails.
  */
 export async function getXeroContext(): Promise<XeroContext> {
+  try {
+    return await resolveXeroContext();
+  } catch (error) {
+    // "Not connected" and "connection revoked" are our credential failing: every
+    // invoice, variation and tradie bill stops until a person reconnects, and
+    // the first sign is otherwise a client waiting on an invoice. Any status
+    // counts here. A database error is not Xero's fault and is left to the
+    // paths that already see it.
+    if (error instanceof XeroNotConnectedError) {
+      reportExternalError("xero", "getContext", error, { force: true });
+    }
+    throw error;
+  }
+}
+
+async function resolveXeroContext(): Promise<XeroContext> {
   const config = getXeroConfig();
 
   const connection = await prisma.xeroConnection.findFirst({
@@ -137,6 +174,8 @@ export async function getXeroContext(): Promise<XeroContext> {
     // rather than arriving here.
     if (!isInvalidGrant(error)) {
       console.error("[xero] Token refresh failed transiently:", error);
+      // Filtered inside: a 429 is quiet, a 5xx or a dropped connection is not.
+      reportExternalError("xero", "refreshToken", error);
       throw error;
     }
 

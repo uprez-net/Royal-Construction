@@ -128,11 +128,48 @@ jobs:
         run: pnpm add -g vercel
       - name: Pull Vercel Environment Information
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      # The production build is made HERE, not on Vercel, so the Sentry values
+      # have to be in this job. Without NEXT_PUBLIC_SENTRY_DSN the browser SDK is
+      # built with no DSN (it is inlined at build time) and errors in the browser
+      # are never reported; without the token, org and project the source maps
+      # are not uploaded and the stack traces in the alert email are minified.
+      # Neither fails the build, which is why this warns: the first sign would
+      # otherwise be an alert nobody can read, or none at all.
+      - name: Check error reporting is configured
+        env:
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          missing=""
+          for name in NEXT_PUBLIC_SENTRY_DSN SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning::Production is being built WITHOUT:$missing. It will deploy, but error reporting will be partly or fully off. Set them as secrets in the Preview environment."
+            echo "### Error reporting is not fully configured" >> "$GITHUB_STEP_SUMMARY"
+            echo "Missing secrets:$missing" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Build Vercel Project
         # Retries only an eve sandbox-template race with a concurrent staging
         # deploy; see scripts/ci/vercel-build.sh.
+        #
+        # The Sentry values are passed to this step alone, not the job, so the
+        # Prisma migration and the installs before it never see the auth token.
+        # They are NOT passed to the staging build: it is not production as the
+        # app defines it (APP_ENV=staging), so next.config.ts uploads nothing and
+        # the browser SDK is switched off there whatever it is given.
+        #
+        # An unset secret reaches the build as an EMPTY string, which wins over
+        # anything `vercel pull` wrote. Removing one of these turns the matching
+        # part of error reporting off; the step above says so.
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         run: bash scripts/ci/vercel-build.sh --prod
       - name: Deploy to Vercel
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}

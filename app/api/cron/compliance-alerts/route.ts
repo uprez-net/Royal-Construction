@@ -1,3 +1,4 @@
+import { cronOutcome, withCronReporting } from "@/lib/observability/cron";
 import { CertifierEngagementStatus } from "@prisma/client";
 
 import { assessOverdueConditions } from "@/lib/domain/compliance/overdue";
@@ -30,7 +31,7 @@ import { errorResponse, successResponse } from "@/utils/validators";
  * The decision itself is `assessOverdueConditions`, which is pure and tested.
  * This handler is the loop, the auth and the write.
  */
-export async function GET(request: Request) {
+async function handle(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
@@ -105,13 +106,16 @@ export async function GET(request: Request) {
       }
     }
 
-    return successResponse({
-      message: "Compliance overdue sweep processed.",
-      engagements: engagements.length,
-      raised,
-      resolved,
-      failed,
-    });
+    return cronOutcome(
+      successResponse({
+        message: "Compliance overdue sweep processed.",
+        engagements: engagements.length,
+        raised,
+        resolved,
+        failed,
+      }),
+      { failed },
+    );
   } catch (error) {
     console.error(
       "[CRON_ERROR] Failed during compliance-alerts cron execution:",
@@ -123,3 +127,5 @@ export async function GET(request: Request) {
     });
   }
 }
+
+export const GET = withCronReporting("/api/cron/compliance-alerts", handle);

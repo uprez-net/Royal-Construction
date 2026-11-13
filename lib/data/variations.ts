@@ -4,7 +4,7 @@ import { after } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { render } from "@react-email/components";
-import { put } from "@vercel/blob";
+import { put } from "@/lib/blob";
 import { format } from "date-fns";
 import { createElement } from "react";
 import { Invoice, type Invoices, LineAmountTypes } from "xero-node";

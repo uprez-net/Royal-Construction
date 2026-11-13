@@ -1,6 +1,6 @@
 "use server";
 
-import { head, put } from "@vercel/blob";
+import { head, put } from "@/lib/blob";
 
 import { requireInternalUser } from "@/lib/auth/require-internal-user";
 import { isDomainError } from "@/lib/domain/errors";

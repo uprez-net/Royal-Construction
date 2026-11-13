@@ -1,4 +1,4 @@
-import { del } from "@vercel/blob";
+import { del } from "@/lib/blob";
 
 import type { BlobDeletePort } from "@/lib/domain/ports/blob";
 

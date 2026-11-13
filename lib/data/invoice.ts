@@ -5,7 +5,7 @@ import {
   type Invoice as InvoiceRow,
   type ProjectStage,
 } from "@prisma/client";
-import { put } from "@vercel/blob";
+import { put } from "@/lib/blob";
 import { format } from "date-fns";
 import { Invoice, type Invoices, LineAmountTypes } from "xero-node";
 

@@ -1,3 +1,4 @@
+import { cronOutcome, withCronReporting } from "@/lib/observability/cron";
 import prisma from "@/lib/prisma";
 import {
   sydneyDateOnly,
@@ -8,7 +9,7 @@ import { errorResponse, successResponse } from "@/utils/validators";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "@/lib/notification/novu";
 
-export async function GET(request: Request) {
+async function handle(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
@@ -112,12 +113,15 @@ export async function GET(request: Request) {
       sent += 1;
     }
 
-    return successResponse({
-      message: "Meeting review reminders processed.",
-      processed: pastMeetings.length,
-      sent,
-      failed,
-    });
+    return cronOutcome(
+      successResponse({
+        message: "Meeting review reminders processed.",
+        processed: pastMeetings.length,
+        sent,
+        failed,
+      }),
+      { failed },
+    );
   } catch (error) {
     console.error(
       "[CRON_ERROR] Failed during meeting-review-reminder cron execution:",
@@ -129,3 +133,8 @@ export async function GET(request: Request) {
     });
   }
 }
+
+export const GET = withCronReporting(
+  "/api/cron/meeting-review-reminder",
+  handle,
+);

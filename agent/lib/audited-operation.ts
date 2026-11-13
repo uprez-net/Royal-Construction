@@ -6,6 +6,7 @@ import {
 import type { ToolContext } from "eve/tools";
 import type { ZodType } from "zod";
 import prisma from "@/lib/prisma";
+import { reportError } from "@/lib/observability/report-error";
 import { authorizeAgentSession } from "@/lib/domain/access/agent-sessions";
 import {
   mutationRefs,
@@ -184,6 +185,27 @@ export async function runAuditedAgentOperation<T>(params: {
   const prepared = await prisma.$transaction((tx) => prepare(tx));
   if (!("operationId" in prepared)) return prepared.replay;
 
+  // Every agent write that fails passes through here, and the adapters above
+  // turn a `DomainError` into a result the model reads back to the operator —
+  // so a `DomainSideEffectError` (the email that never went) ends as chat text
+  // and nothing else. Reported before that happens. A refusal (a `DomainError`
+  // below 500) is dropped by `reportError`, so this only ever raises a fault.
+  //
+  // Always called BEFORE the transaction that records the failure. That
+  // transaction needs the database, and a database outage is one of the likely
+  // reasons for the failure: reported after it, a rejected finalisation would
+  // throw first and the original failure would never be reported.
+  const reportFailedOperation = (error: unknown) =>
+    reportError(error, {
+      source: `eve:operation:${params.action}`,
+      ids: {
+        sessionId: params.ctx.session.id,
+        turnId: params.ctx.session.turn.id,
+      },
+      tags: { tool: params.ctx.toolName },
+      fingerprint: ["eve-operation", params.action],
+    });
+
   // Once the write has committed, the app's screens for what it touched are
   // stale. One call for every agent write; see agent/lib/mutation-effects.ts.
   const committed = async (output: T) => {
@@ -203,6 +225,7 @@ export async function runAuditedAgentOperation<T>(params: {
     try {
       output = params.outputSchema.parse(await params.execute());
     } catch (error) {
+      reportFailedOperation(error);
       await prisma.$transaction((tx) => finalizeFailure(tx, prepared));
       throw error;
     }
@@ -228,6 +251,7 @@ export async function runAuditedAgentOperation<T>(params: {
       },
     );
   } catch (error) {
+    reportFailedOperation(error);
     await prisma.$transaction((tx) => finalizeFailure(tx, prepared));
     throw error;
   }

@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { del, issueSignedToken, presignUrl, put } from "@vercel/blob";
+import { del, issueSignedToken, presignUrl, put } from "@/lib/blob";
 import { NextResponse } from "next/server";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { saveFile } from "@/lib/data/file";
