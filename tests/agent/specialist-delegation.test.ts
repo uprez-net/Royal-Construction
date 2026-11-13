@@ -247,7 +247,19 @@ test("a filtered lead count passes its criteria to search_leads", () => {
   assert.match(lead, /cannot\s+filter\s+by\s+assignee\s+or\s+date/);
   // A place total is disclosed as a text match, and two text criteria are
   // never answered with one query's totalCount.
-  assert.match(lead, /not\s+a\s+strict\s+location\s+filter/);
+  assert.match(lead, /never\s+a\s+strict\s+filter\s+on\s+one\s+field/);
+  assert.match(
+    lead,
+    /Say\s+that\s+whenever\s+you\s+give\s+a\s+count\s+for\s+a\s+name,\s+email,\s+phone\s+or\s+place,\s+and\s+do\s+not\s+present\s+it\s+as\s+an\s+exact\s+count\s+for\s+that\s+field/,
+  );
+  // Counts are scoped to what the caller can see.
+  assert.match(lead, /only\s+the\s+leads\s+this\s+user\s+can\s+see/);
+  // Won + Converted only for won-deal questions; an explicit Won stage stays Won.
+  assert.match(
+    lead,
+    /for\s+"won\s+deals"[^.]*count\s+or\s+filter\s+both,\s+never\s+Won\s+alone/,
+  );
+  assert.match(lead, /`stages: \["Won"\]`\s+only/);
   assert.match(
     lead,
     /cannot\s+combine\s+two\s+text\s+criteria[\s\S]*?do\s+not\s+quote\s+`totalCount`\s+as\s+the\s+combined\s+count/,
