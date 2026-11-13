@@ -199,6 +199,13 @@ describe("installEvaluatorTokenRefresh", () => {
       await installed.revokeRefreshed();
 
       assert.equal(globalThis.fetch, base);
+      assert.ok(
+        vi
+          .mocked(console.error)
+          .mock.calls.some(
+            ([line]) => line === "Revoked 1 refreshed evaluator session(s).",
+          ),
+      );
       const revokes = base.mock.calls.filter(([u]) =>
         String(u).endsWith("/api/eval/auth/revoke"),
       );

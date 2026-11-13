@@ -235,14 +235,21 @@ export function installEvaluatorTokenRefresh(
       globalThis.fetch = baseFetch;
       // One at a time: the revoke route shares the bootstrap's small rate
       // limit. A refusal is not fatal, the token expires on its own.
+      let revoked = 0;
       for (const token of refreshing.refreshedTokens()) {
-        await revokeEvaluatorToken(target, secret, token, baseFetch).catch(
+        await revokeEvaluatorToken(target, secret, token, baseFetch).then(
+          () => {
+            revoked += 1;
+          },
           () => {
             console.error(
               "Could not revoke a refreshed evaluator session; its token will expire automatically.",
             );
           },
         );
+      }
+      if (revoked > 0) {
+        console.error(`Revoked ${revoked} refreshed evaluator session(s).`);
       }
     },
   };
