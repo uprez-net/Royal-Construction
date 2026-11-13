@@ -65,6 +65,7 @@ async function runTradieDomain<T>(run: () => Promise<T>): Promise<T> {
 }
 import { isDomainError } from "@/lib/domain/errors";
 import { userPrincipal } from "@/lib/domain/principal";
+import { sydneyDateOnly } from "@/lib/dates/sydney";
 
 type TradieInput = {
   name: string;
@@ -554,7 +555,7 @@ export async function createAuthorizedTradieSchedule(
   return envelope(
     "confirmation",
     "Tradie scheduled",
-    `${tradie.name} is scheduled for ${project.name} starting ${scheduledDate.toISOString().slice(0, 10)}.`,
+    `${tradie.name} is scheduled for ${project.name} starting ${sydneyDateOnly(scheduledDate)}.`,
     {
       schedule: {
         id: schedule.id,
@@ -646,7 +647,7 @@ export async function rescheduleAuthorizedTradie(
   return envelope(
     "confirmation",
     "Tradie booking rescheduled",
-    `${changed.tradieName}'s booking for ${changed.projectName} now starts ${changed.scheduledDate.toISOString().slice(0, 10)}.${owed}`,
+    `${changed.tradieName}'s booking for ${changed.projectName} now starts ${sydneyDateOnly(changed.scheduledDate)}.${owed}`,
     {
       scheduleId: changed.scheduleId,
       scheduledDate: changed.scheduledDate.toISOString(),

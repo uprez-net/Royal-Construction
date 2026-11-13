@@ -7,12 +7,14 @@ import {
   requestAuthorizedTradiePriceChange,
   runTradieWrite,
 } from "@/agent/lib/tradie-operations";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Submit one tradie price change for the existing admin approval workflow.",
   inputSchema: requestTradiePriceChangeInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   execute(input, ctx) {
     return runTradieWrite({

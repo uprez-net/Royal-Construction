@@ -7,12 +7,14 @@ import {
   reportAuthorizedTradieIncident,
   runTradieWrite,
 } from "@/agent/lib/tradie-operations";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Record a tradie incident and queue its resolution for review after owner approval.",
   inputSchema: reportTradieIncidentInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   async execute(input, ctx) {
     return await runTradieWrite({

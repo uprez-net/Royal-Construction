@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError } from "../errors";
@@ -16,17 +15,34 @@ import {
   type AgentContextKind,
   type ChunkDraft,
 } from "./text";
+import { lexicalBoost, queryTerms } from "./ranking";
+import {
+  CONTEXT_EMBEDDING_DIMENSIONS,
+  EMBED_BATCH,
+  contentHash as contentHashOf,
+  vectorLiteral,
+} from "./vectors";
 
 // The operations agent's context index: refresh it, search it, read the
 // office digest. See AgentContextChunk in prisma/schema.prisma for what the
-// rows are, and ./text.ts for how their words are chosen.
+// rows are, and ./text.ts for how their words are chosen. Uploaded documents
+// have their own index beside it (./files.ts), refreshed by the same run.
 
 export type { ContextSelection } from "./sources";
 export type { AgentContextKind } from "./text";
 
-/** text-embedding-3-small; the column is vector(1536). */
-export const CONTEXT_EMBEDDING_DIMENSIONS = 1536;
-const EMBED_BATCH = 64;
+export {
+  CONTEXT_EMBEDDING_DIMENSIONS,
+  contentHash,
+  normalizeVector,
+} from "./vectors";
+export { lexicalBoost, queryTerms } from "./ranking";
+export {
+  refreshAgentFiles,
+  searchAgentFiles,
+  type AgentFileHit,
+  type RefreshAgentFilesResult,
+} from "./files";
 
 export type RefreshAgentContextResult = {
   readonly scanned: number;
@@ -36,20 +52,6 @@ export type RefreshAgentContextResult = {
   /** The provider failed; changed rows were saved without a vector and stay findable by name. */
   readonly embeddingFailed: boolean;
 };
-
-export function contentHash(content: string): string {
-  return createHash("sha256").update(content).digest("hex");
-}
-
-/** Unit length, so ranking by inner product is ranking by cosine. */
-export function normalizeVector(vector: readonly number[]): number[] {
-  const norm = Math.sqrt(vector.reduce((sum, x) => sum + x * x, 0));
-  return norm > 0 ? vector.map((x) => x / norm) : [...vector];
-}
-
-function vectorLiteral(vector: readonly number[]): string {
-  return `[${normalizeVector(vector).join(",")}]`;
-}
 
 function key(kind: string, entityId: string) {
   return `${kind}:${entityId}`;
@@ -115,7 +117,7 @@ export async function refreshAgentContext(
   const confirmedIds: string[] = [];
   let unchanged = 0;
   for (const draft of drafts) {
-    const hash = contentHash(draft.content);
+    const hash = contentHashOf(draft.content);
     const row = byKey.get(key(draft.kind, draft.entityId));
     if (row && row.contentHash === hash) {
       // Same text, so the same title: only the "checked at" moves.
@@ -240,71 +242,6 @@ const SEARCHABLE_KINDS: readonly AgentContextKind[] = [
   "project",
   "tradie",
 ];
-const STOP_WORDS = new Set([
-  "the",
-  "and",
-  "for",
-  "with",
-  "from",
-  "this",
-  "that",
-  "what",
-  "whats",
-  "where",
-  "when",
-  "who",
-  "how",
-  "job",
-  "lead",
-  "project",
-  "offer",
-  "about",
-  "please",
-  "can",
-  "you",
-  "our",
-  "have",
-  "has",
-  "are",
-  "was",
-  "any",
-  "all",
-  "show",
-  "tell",
-  "give",
-  "find",
-  "get",
-  "status",
-  "update",
-  "today",
-]);
-
-/** The words in a request worth matching against a record's name. */
-export function queryTerms(query: string): string[] {
-  return [
-    ...new Set(
-      query
-        .toLowerCase()
-        .split(/[^\p{L}\p{N}]+/u)
-        .filter((word) => word.length >= 3 && !STOP_WORDS.has(word)),
-    ),
-  ].slice(0, 8);
-}
-
-/** Exact-name evidence: embeddings are weak on surnames and street names. */
-export function lexicalBoost(
-  terms: readonly string[],
-  title: string,
-  content: string,
-) {
-  if (!terms.length) return 0;
-  const t = title.toLowerCase();
-  const c = content.toLowerCase();
-  const inTitle = terms.filter((term) => t.includes(term)).length;
-  const inContent = terms.filter((term) => c.includes(term)).length;
-  return Math.min(0.45, inTitle * 0.2 + (inContent - inTitle) * 0.04);
-}
-
 /**
  * The records most like `query`, best first, that this caller may see.
  *

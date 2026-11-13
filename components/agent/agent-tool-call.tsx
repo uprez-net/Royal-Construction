@@ -24,6 +24,7 @@ import {
 import {
   formatDuration,
   humanize,
+  toolOutcome,
   toInputFields,
 } from "@/components/agent/agent-format";
 import {
@@ -32,6 +33,12 @@ import {
   type AgentResultAction,
 } from "@/components/agent/agent-result";
 import { cn } from "@/lib/utils";
+
+/** Tools whose arguments are routing for the agent, not a change to review. */
+const INTERNAL_ARGUMENT_TOOLS: ReadonlySet<string> = new Set([
+  "delegate",
+  "recall_crm_context",
+]);
 
 /**
  * One operation the agent ran, from the first streamed argument to the result.
@@ -61,10 +68,16 @@ export function AgentToolCall({
   const request = part.toolMetadata?.eve?.inputRequest;
   const responded = part.toolMetadata?.eve?.inputResponse !== undefined;
   const awaitingApproval = part.state === "approval-requested" && !responded;
-  const failed =
-    part.state === "output-error" || part.state === "output-denied";
   const complete = part.state === "output-available";
   const partial = part.state === "output-available" && part.partial === true;
+  // Completed on the wire, but the result itself says it failed.
+  const outcome =
+    complete && !partial
+      ? toolOutcome(part.output)
+      : { failed: false, note: null };
+  const errored = outcome.failed;
+  const failed =
+    errored || part.state === "output-error" || part.state === "output-denied";
   const running =
     part.state === "input-streaming"
     || part.state === "input-available"
@@ -72,7 +85,14 @@ export function AgentToolCall({
   const [open, setOpen] = useState(false);
 
   const title = label ?? humanize(part.toolName);
-  const fields = toInputFields("input" in part ? part.input : undefined);
+  // Ids mean nothing to the office, and the routing tools' arguments are
+  // written by the model for other models — leadId=105, offer UUIDs — so they
+  // stay out of the card; the specialist's own panel shows the work (#429).
+  const fields = INTERNAL_ARGUMENT_TOOLS.has(part.toolName)
+    ? []
+    : toInputFields("input" in part ? part.input : undefined, {
+        hideIds: true,
+      });
   const result = complete ? resultEnvelope(part.output) : null;
   const duration = formatDuration(startedAt, endedAt);
   const Icon = failed
@@ -120,7 +140,10 @@ export function AgentToolCall({
             {title}
           </p>
           <p className="truncate text-xs text-muted-foreground">
-            {toolStateLabel(part.state, partial, responded)}
+            {outcome.note
+              ?? (errored
+                ? "Could not complete"
+                : toolStateLabel(part.state, partial, responded))}
             {duration ? ` · ${duration}` : ""}
           </p>
         </div>
@@ -131,12 +154,6 @@ export function AgentToolCall({
           Operation
         </Badge>
       </header>
-
-      {part.state === "input-streaming" && part.inputText ? (
-        <p className="truncate border-t border-border/60 px-3 py-2 font-mono text-[11px] text-muted-foreground">
-          {part.inputText.slice(-160)}
-        </p>
-      ) : null}
 
       {fields.length > 0 && !awaitingApproval ? (
         <Collapsible onOpenChange={setOpen} open={open}>

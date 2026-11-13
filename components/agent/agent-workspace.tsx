@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEveAgent } from "eve/react";
 import type { MessageStreamEvent } from "eve/client";
 import type { AgentInputResponse } from "@/components/agent/agent-approval";
@@ -56,6 +56,7 @@ export function AgentWorkspace({
   selectedSessionId: string | null;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   // A message left unsent by a reconnect reload or a "continue in a new
   // conversation" — both are full page loads, so this initialiser runs fresh.
   const [composer, setComposer] = useState(() => readDraft(selectedSessionId));
@@ -148,6 +149,21 @@ export function AgentWorkspace({
     },
     [],
   );
+
+  // The first message's session only moves the address bar (`replaceState`
+  // above), so the router keeps this /agent page mounted, Eve store and all.
+  // A link back to /agent — "New conversation", the nav, a fork — then
+  // reshowed the old transcript and posted the next message into the old
+  // session. Back on /agent while holding a session this page created means
+  // a new conversation was asked for: start one with a full load, the same
+  // way `continueInNewConversation` does. After the load the ref is empty, so
+  // this cannot repeat.
+  useEffect(() => {
+    if (pathname !== "/agent" || selectedSessionId) return;
+    if (!activeSessionIdRef.current) return;
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- A fresh conversation must discard the mounted Eve store.
+    window.location.assign("/agent");
+  }, [pathname, selectedSessionId]);
 
   const agent = useEveAgent<AgentTranscriptData>({
     // Hydrated events are a prefix of this session's stream, and the cursor is

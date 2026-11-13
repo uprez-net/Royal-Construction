@@ -16,7 +16,11 @@ import {
 } from "../principal";
 import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
 import { tradieInTradeWhere } from "./request-rules";
-import { canonicalTradeLabel, tradeLabelsMatching } from "./trade-types";
+import {
+  tradeFilterLabels,
+  tradeLabelsMatching,
+  tradeSearchTerms,
+} from "./trade-types";
 
 /** Read fresh at request/review time, including overdue unfinished bookings. */
 export async function getTradieRemovalImpact(
@@ -58,21 +62,33 @@ export async function searchTradies(
 ) {
   assertCanReadTradieDirectory(principal);
   const query = input.query.trim();
-  // Eve types trades freely; the list's spelling is what `trades` matches.
-  const trade = input.trade ? await canonicalTradeLabel(input.trade, db) : null;
+  // Eve types trades freely, in the office's words; the list's spelling is
+  // what `trades` matches.
+  const tradeFilter = input.trade?.trim()
+    ? await tradeFilterLabels(input.trade, db)
+    : null;
   const tradeLabels = query ? await tradeLabelsMatching(query, db) : [];
+  const tradeTerms = tradeSearchTerms(query);
   return db.tradie.findMany({
     where: {
       archivedAt: null,
       isFavourite: input.favouriteOnly ? true : undefined,
       AND: [
         // Any of their categories: a plumber who also does gas is a gasfitter.
-        trade ? tradieInTradeWhere(trade) : {},
+        tradeFilter === null
+          ? {}
+          : tradeFilter.length === 0
+            ? tradieInTradeWhere(input.trade as string)
+            : tradeFilter.length === 1
+              ? tradieInTradeWhere(tradeFilter[0]!)
+              : { OR: tradeFilter.map(tradieInTradeWhere) },
         query
           ? {
               OR: [
                 { name: { contains: query, mode: "insensitive" as const } },
-                { trade: { contains: query, mode: "insensitive" as const } },
+                ...tradeTerms.map((term) => ({
+                  trade: { contains: term, mode: "insensitive" as const },
+                })),
                 ...(tradeLabels.length > 0
                   ? [{ trades: { hasSome: tradeLabels } }]
                   : []),

@@ -5,6 +5,7 @@ import { requireCurrentAgentActor } from "@/agent/lib/actor";
 import { sendOfferForSignatureInputSchema } from "@/agent/lib/offer-contracts";
 import { sendAuthorizedOfferForSignature } from "@/agent/lib/offer-operations";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
+import { forModel } from "@/agent/lib/model-output";
 
 const DOCUMENT_LABEL = {
   contract: "Contract",
@@ -17,6 +18,7 @@ export default defineTool({
     "Send one document of one exact authorized live offer to the client for DocuSign signature: 'offer' (acceptance, from Sent), 'tender' (from Agreed or Tender draft), or 'contract' (from Contract draft). The client receives a signing link. Never resend after an 'outcome unknown' or 'do not resend' result. Show the document, the offer reference and the price for owner approval.",
   inputSchema: sendOfferForSignatureInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   label: {
     start: ({ document }) => `Send ${DOCUMENT_LABEL[document]} for signature`,

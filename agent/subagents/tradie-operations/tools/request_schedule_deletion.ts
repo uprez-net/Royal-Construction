@@ -7,12 +7,14 @@ import {
   requestAuthorizedScheduleDeletion,
   runTradieWrite,
 } from "@/agent/lib/tradie-operations";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Request removal of a tradie booking through the admin approval queue; do not delete immediately.",
   inputSchema: requestScheduleDeletionInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   execute(input, ctx) {
     return runTradieWrite({

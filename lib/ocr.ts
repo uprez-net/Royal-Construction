@@ -53,15 +53,47 @@ export async function processPDFWithMistral(
  * of a plan set most worth reading.
  */
 export function ocrPagesToText(pages: OCRPageObject[]): string {
-  return pages
-    .map((page) => {
-      const tables =
-        page.tables?.map((table) => table.content.trim()).join("\n\n") ?? "";
-      return [page.markdown.trim(), tables].filter(Boolean).join("\n\n");
-    })
-    .filter(Boolean)
-    .join("\n\n")
-    .trim();
+  return pages.map(ocrPageText).filter(Boolean).join("\n\n").trim();
+}
+
+/** One OCR page as markdown, its tables included (see ocrPagesToText). */
+export function ocrPageText(page: OCRPageObject): string {
+  const tables =
+    page.tables?.map((table) => table.content.trim()).join("\n\n") ?? "";
+  return [page.markdown.trim(), tables].filter(Boolean).join("\n\n");
+}
+
+/**
+ * Runs OCR over a document Mistral can fetch itself, page by page.
+ *
+ * For a public blob: the bytes never pass through us, which matters for a
+ * 40 MB plan set. `name` carries the extension Mistral picks a parser by, as
+ * in ocrFile. Empty pages are kept so page numbers stay true.
+ */
+export async function ocrDocumentAtUrl({
+  url,
+  name,
+  isImage,
+  timeoutMs,
+}: {
+  url: string;
+  name: string;
+  isImage: boolean;
+  timeoutMs?: number;
+}): Promise<string[]> {
+  const client = new Mistral({ apiKey: requireApiKey() });
+  const response = await client.ocr.process(
+    {
+      model: "mistral-ocr-latest",
+      document: isImage
+        ? { type: "image_url", imageUrl: url }
+        : { type: "document_url", documentUrl: url, documentName: name },
+      includeImageBase64: false,
+      tableFormat: "markdown",
+    },
+    timeoutMs ? { timeoutMs } : undefined,
+  );
+  return [...response.pages].sort((a, b) => a.index - b.index).map(ocrPageText);
 }
 
 export interface OcrInput {

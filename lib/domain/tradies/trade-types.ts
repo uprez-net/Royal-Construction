@@ -327,22 +327,135 @@ export async function canonicalTradeLabel(
 }
 
 /**
- * Every listed trade whose name contains this text, archived ones included —
- * a tradie keeps a trade after it is archived. How a search reaches secondary
- * trades: a scalar list has no `contains`, so the text becomes the labels it
- * matches and those go to `hasSome`.
+ * How the office says a trade, as a fragment of the trade's listed name.
+ *
+ * Search matched only the text as typed, so "electrician" missed a trade
+ * listed as "Electrical" and "sparky", "chippy" and "brickie" — the words the
+ * office uses, and the handbook teaches the agent — matched nothing (#429).
+ * The values are fragments rather than labels because the list is the
+ * office's to edit (staging lists "Electrician", another database may say
+ * "Electrical"); a fragment finds either.
+ */
+const TRADE_WORD_FRAGMENTS: Readonly<Record<string, readonly string[]>> = {
+  sparky: ["electric"],
+  sparkie: ["electric"],
+  sparkies: ["electric"],
+  sparkys: ["electric"],
+  electrician: ["electric"],
+  electricians: ["electric"],
+  electrical: ["electric"],
+  electrics: ["electric"],
+  chippy: ["carpent"],
+  chippie: ["carpent"],
+  chippies: ["carpent"],
+  carpenter: ["carpent"],
+  carpenters: ["carpent"],
+  brickie: ["brick"],
+  brickies: ["brick"],
+  bricky: ["brick"],
+  bricklayer: ["brick"],
+  bricklayers: ["brick"],
+  plumber: ["plumb"],
+  plumbers: ["plumb"],
+  plumbo: ["plumb"],
+  tiler: ["tiling"],
+  tilers: ["tiling"],
+  painter: ["paint"],
+  painters: ["paint"],
+  roofer: ["roof"],
+  roofers: ["roof"],
+  plasterer: ["plaster", "gyprock"],
+  plasterers: ["plaster", "gyprock"],
+  gyprocker: ["gyprock", "plaster"],
+  gyprockers: ["gyprock", "plaster"],
+  concreter: ["concrete"],
+  concreters: ["concrete"],
+  concretor: ["concrete"],
+  glazier: ["glaz", "window"],
+  glaziers: ["glaz", "window"],
+  landscaper: ["landscap"],
+  landscapers: ["landscap"],
+  scaffolder: ["scaffold"],
+  scaffolders: ["scaffold"],
+  scaffy: ["scaffold"],
+  surveyor: ["survey"],
+  surveyors: ["survey"],
+  engineer: ["engineer"],
+  engineers: ["engineer"],
+  waterproofer: ["waterproof"],
+  waterproofers: ["waterproof"],
+  architect: ["architect"],
+  architects: ["architect"],
+  joiner: ["joinery"],
+  joiners: ["joinery"],
+  cabinetmaker: ["joinery", "kitchen"],
+  aircon: ["hvac", "air con"],
+  floorer: ["floor"],
+  floorers: ["floor"],
+};
+
+/**
+ * The text to look a trade up by: what was typed, plus the listed-name
+ * fragment for each office word in it ("best sparky" → "electric").
+ */
+export function tradeSearchTerms(text: string): string[] {
+  const query = text.trim();
+  if (!query) return [];
+  const terms = new Set([query]);
+  for (const word of query.toLowerCase().match(/[a-z]+/g) ?? []) {
+    // Own entries only: "constructor" is on every object's prototype.
+    const fragments = Object.hasOwn(TRADE_WORD_FRAGMENTS, word)
+      ? TRADE_WORD_FRAGMENTS[word]!
+      : [];
+    for (const fragment of fragments) {
+      terms.add(fragment);
+    }
+  }
+  return [...terms];
+}
+
+/**
+ * Every listed trade whose name contains this text, or the trade an office
+ * word in it means, archived ones included — a tradie keeps a trade after it
+ * is archived. How a search reaches secondary trades: a scalar list has no
+ * `contains`, so the text becomes the labels it matches and those go to
+ * `hasSome`.
  */
 export async function tradeLabelsMatching(
   text: string,
   db: DomainDb,
 ): Promise<string[]> {
-  const query = text.trim();
-  if (!query) return [];
+  const terms = tradeSearchTerms(text);
+  if (terms.length === 0) return [];
   const rows = await db.tradeType.findMany({
     select: { label: true },
-    where: { label: { contains: query, mode: "insensitive" } },
+    where: {
+      OR: terms.map((term) => ({
+        label: { contains: term, mode: "insensitive" as const },
+      })),
+    },
   });
   return rows.map((row) => row.label);
+}
+
+/**
+ * The listed trades a trade filter means: the exact label when the list has
+ * it ("plumbing" → "Plumbing"), otherwise every label the text or its office
+ * word matches ("sparky" → "Electrician"). Empty when nothing matches, and
+ * the caller filters by the text as typed.
+ */
+export async function tradeFilterLabels(
+  trade: string,
+  db: DomainDb,
+): Promise<string[]> {
+  const requested = trade.trim();
+  if (!requested) return [];
+  const exact = await db.tradeType.findFirst({
+    select: { label: true },
+    where: { label: { equals: requested, mode: "insensitive" } },
+  });
+  if (exact) return [exact.label];
+  return tradeLabelsMatching(requested, db);
 }
 
 /**

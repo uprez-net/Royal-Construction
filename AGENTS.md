@@ -168,18 +168,24 @@ text from the CRM, embedded for dot-product search and rebuilt nightly. Every
 audited agent write expires the app's caches for what it touched through
 `/api/agent/effects`. See [`docs/eve-office-context.md`](./docs/eve-office-context.md).
 
-The orchestrator uses `zai/glm-5.3-flash` ($0.08 per million input tokens,
-$0.25 per million output), low reasoning, a 1,000,000-token context window, and
-per-session limits of 36,000,000 input tokens, 600,000 output tokens, $3
-maximum token cost, and a seven-day timeout. Dynamic specialists use the same
-model and context window with separate limits of 12,000,000 input tokens,
-200,000 output tokens, $1 maximum token cost, and a 24-hour timeout. The model
-and its price live once in `lib/agent/model.ts`, the ceilings in
-`lib/agent/session-limits.ts`. The token ceilings are sized to cost just over
+The orchestrator uses `openai/gpt-6-luna-fast` ($0.20 per million input
+tokens, $0.02 cached, $1.00 per million output) with reasoning off, a
+1,000,000-token context window, and per-session limits of 36,000,000 input
+tokens, 600,000 output tokens, $3 maximum token cost, and a seven-day timeout.
+Dynamic specialists use the same model and context window with low reasoning
+and separate limits of 12,000,000 input tokens, 200,000 output tokens, $1
+maximum token cost, and a 24-hour timeout. The model and its price live once in
+`lib/agent/model.ts` (which also says why it replaced GLM-5.3-flash), the
+ceilings in `lib/agent/session-limits.ts`. The token ceilings cost more than
 the dollar ceiling at list price, so the dollar ceiling is what binds
 (`tests/agent/session-limits.test.ts`). A specialist or MCP invocation that
 reaches a ceiling fails outright rather than pausing, so keep specialist
 ceilings above a full multi-tool request.
+
+Instruction files compose in filename order, and a provider's prompt cache
+only reuses an unchanged prefix. Keep what changes every turn last: the clock
+lives in `instructions/sydney-clock.ts` so it sorts after the handbook and the
+office snapshot, rather than invalidating them on every call.
 
 Use the agent through the feature-flagged `/agent` workspace and its
 authenticated API routes. The hand-written `(mcp)` route group that used to
