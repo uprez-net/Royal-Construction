@@ -62,11 +62,16 @@ export function AgentApproval({
   const isLimit = request.kind === "session-limit";
   const whatsapp = isApproval ? approvalWhatsApp(toolName, input) : null;
   const outreach = isApproval && !whatsapp ? approvalOutreach(input) : null;
+  const { labels: targetLabels, changeLabels } = useApprovalTargetLabels(
+    isApproval ? input : undefined,
+  );
   // The email or WhatsApp body is the approval when there is one, so it is
   // rendered rather than repeated as a raw argument below the preview. The
   // lead id stays: the preview names the lead only by number, and this row is
   // where the looked-up lead name appears.
-  const fields = (isApproval ? toInputFields(input) : []).filter(
+  const fields = (
+    isApproval ? toInputFields(input, { changeLabels }) : []
+  ).filter(
     (field) =>
       !(outreach && OUTREACH_KEYS.has(field.key))
       && !(
@@ -75,7 +80,6 @@ export function AgentApproval({
         && WHATSAPP_APPROVAL_KEYS.has(field.key)
       ),
   );
-  const targetLabels = useApprovalTargetLabels(isApproval ? input : undefined);
   const hasOptions = (request.options?.length ?? 0) > 0;
   const acceptsText = request.allowFreeform === true || !hasOptions;
   const Icon = isApproval
@@ -367,54 +371,96 @@ function approvalOutreach(input: unknown): AgentOutreachDetails | null {
 
 /**
  * Names for the ids an approval carries — "Cut & Fill - Concretor · Lot 9028
- * Sommerville Dr" rather than a bare milestone UUID.
+ * Sommerville Dr" rather than a bare milestone UUID — both at the top level
+ * and inside a set of changes, where a reassignment names its new target.
  *
  * Looked up from the database by the signed-in operator's own access, never
  * taken from the model: a name the model supplied could disagree with the id
  * the tool will actually act on. An id the operator may not see, or a failed
  * lookup, leaves the raw id showing as before.
  */
-function useApprovalTargetLabels(
-  input: unknown,
-): Readonly<Record<string, string>> {
+function useApprovalTargetLabels(input: unknown): ApprovalTargetNames {
   // Kept with the ids they describe: a lookup for new ids that is refused or
   // fails must not leave the previous ids' names beside them.
   const [resolved, setResolved] = useState<{
     key: string;
-    labels: Readonly<Record<string, string>>;
+    names: ApprovalTargetNames;
   } | null>(null);
-  const ids =
+  const record =
     input && typeof input === "object" && !Array.isArray(input)
-      ? Object.fromEntries(
-          Object.entries(input as Record<string, unknown>).filter(
-            ([key, value]) =>
-              /Id$/.test(key)
-              && (typeof value === "string" || typeof value === "number"),
-          ),
-        )
+      ? (input as Record<string, unknown>)
       : {};
-  const idKey = JSON.stringify(ids);
+  // Top-level ids and ids inside a change set are looked up separately: the
+  // same field name can point at a different record in each.
+  const idKey = JSON.stringify({
+    changes: Object.assign(
+      {},
+      ...Object.values(record)
+        .filter(
+          (value): value is Record<string, unknown> =>
+            value !== null
+            && typeof value === "object"
+            && !Array.isArray(value),
+        )
+        .map(scalarIds),
+    ),
+    top: scalarIds(record),
+  });
 
   useEffect(() => {
-    const targets = JSON.parse(idKey) as Record<string, unknown>;
-    if (Object.keys(targets).length === 0) return;
+    const targets = JSON.parse(idKey) as {
+      changes: Record<string, unknown>;
+      top: Record<string, unknown>;
+    };
+    if (
+      Object.keys(targets.top).length === 0
+      && Object.keys(targets.changes).length === 0
+    )
+      return;
     const controller = new AbortController();
-    void fetch("/api/agent/approval-targets", {
-      body: JSON.stringify({ input: targets }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-      signal: controller.signal,
-    })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload: { labels?: Record<string, string> } | null) => {
-        if (payload?.labels)
-          setResolved({ key: idKey, labels: payload.labels });
-      })
+    const lookup = (ids: Record<string, unknown>) =>
+      Object.keys(ids).length === 0
+        ? Promise.resolve(NO_LABELS)
+        : fetch("/api/agent/approval-targets", {
+            body: JSON.stringify({ input: ids }),
+            headers: { "content-type": "application/json" },
+            method: "POST",
+            signal: controller.signal,
+          })
+            .then((response) => (response.ok ? response.json() : null))
+            .then(
+              (payload: { labels?: Record<string, string> } | null) =>
+                payload?.labels ?? NO_LABELS,
+            );
+    void Promise.all([lookup(targets.top), lookup(targets.changes)])
+      .then(([labels, changeLabels]) =>
+        setResolved({ key: idKey, names: { changeLabels, labels } }),
+      )
       .catch(() => undefined);
     return () => controller.abort();
   }, [idKey]);
 
-  return resolved?.key === idKey ? resolved.labels : NO_LABELS;
+  return resolved?.key === idKey ? resolved.names : NO_NAMES;
+}
+
+type ApprovalTargetNames = {
+  readonly labels: Readonly<Record<string, string>>;
+  readonly changeLabels: Readonly<Record<string, string>>;
+};
+
+/** The `…Id` fields of an object whose value is one id. */
+function scalarIds(value: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      ([key, item]) =>
+        /Id$/.test(key)
+        && (typeof item === "string" || typeof item === "number"),
+    ),
+  );
 }
 
 const NO_LABELS: Readonly<Record<string, string>> = {};
+const NO_NAMES: ApprovalTargetNames = {
+  changeLabels: NO_LABELS,
+  labels: NO_LABELS,
+};

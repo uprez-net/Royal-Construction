@@ -147,7 +147,12 @@ test("a dependent task receives what its teammate found", async () => {
               title: "Smith",
               version: 1,
             }
-          : { kind: "entity-summary", summary: "Found.", title: "Offer", version: 1 };
+          : {
+              kind: "entity-summary",
+              summary: "Found.",
+              title: "Offer",
+              version: 1,
+            };
       },
       agents: allAgents,
     },
@@ -196,7 +201,12 @@ test("a teammate's plain-text reply is not a result: its dependents do not start
         called.push(target);
         return target === "lead-operations"
           ? "Smith is lead 42, stage Quoted."
-          : { kind: "entity-summary", summary: "Found.", title: "Offer", version: 1 };
+          : {
+              kind: "entity-summary",
+              summary: "Found.",
+              title: "Offer",
+              version: 1,
+            };
       },
       agents: allAgents,
     },
@@ -219,7 +229,12 @@ test("a teammate that answered with an error envelope stops its dependents", asy
               title: "Not found",
               version: 1,
             }
-          : { kind: "entity-summary", summary: "Found.", title: "Offer", version: 1 };
+          : {
+              kind: "entity-summary",
+              summary: "Found.",
+              title: "Offer",
+              version: 1,
+            };
       },
       agents: allAgents,
     },
@@ -231,4 +246,39 @@ test("a teammate that answered with an error envelope stops its dependents", asy
   const byTask = Object.fromEntries(result.results.map((r) => [r.task, r]));
   assert.match(byTask.offer?.summary ?? "", /Not started because lead/);
   assert.match(result.summary, /0 of 2 tasks finished/);
+});
+
+test("a teammate whose change the person cancelled stops its dependents", async () => {
+  const called: string[] = [];
+  const result = (await runDelegate(
+    { tasks: [lead, offer] },
+    {
+      agent: async (target) => {
+        called.push(target);
+        return target === "lead-operations"
+          ? {
+              data: { cancelled: true, change: "Move Smith to Qualified" },
+              kind: "confirmation",
+              summary: "They cancelled it.",
+              title: "Cancelled",
+              version: 1,
+            }
+          : {
+              kind: "entity-summary",
+              summary: "Found.",
+              title: "Offer",
+              version: 1,
+            };
+      },
+      agents: allAgents,
+    },
+  )) as {
+    results: { task: string; kind: string; summary: string }[];
+    summary: string;
+  };
+  assert.deepEqual(called, ["lead-operations"]);
+  const byTask = Object.fromEntries(result.results.map((r) => [r.task, r]));
+  assert.equal(byTask.lead?.kind, "confirmation");
+  assert.match(byTask.offer?.summary ?? "", /Not started because lead/);
+  assert.match(result.summary, /0 of 2 tasks finished; not finished: lead/);
 });

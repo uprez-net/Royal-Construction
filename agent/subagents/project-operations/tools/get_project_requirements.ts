@@ -8,6 +8,8 @@ export default defineTool({
     "Read the complete versioned project requirements payload, including legal administration, commercials and claims, substructure, inclusions/exclusions, utilities, wet-area compliance, safety logistics, source documents, validations, conflicts, and automation triggers.",
   inputSchema: getProjectRequirementsInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  // No `forModel`: requirements are edited and written back as read, and a
+  // humanised date in their text would be stored as the new value.
   execute(input, ctx) {
     return getAuthorizedProjectRequirements(ctx, input);
   },

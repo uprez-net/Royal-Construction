@@ -1,6 +1,6 @@
-import { z } from "zod";
 import {
-  agentResultEnvelopeSchema,
+  normalizeSpecialistResult,
+  specialistResultSchema,
   type AgentResultEnvelope,
 } from "@/agent/lib/result-contracts";
 
@@ -10,18 +10,14 @@ import {
  * The canonical envelope requires `version: 1`, and on a large result the model
  * kept dropping it or writing `"1"`: eve rejected the final answer 1–3 times in
  * 6 of 7 staging runs, a ~50k-token step each, and once the model escaped by
- * submitting a `"test"` envelope that parsed. The specialist no longer has to
- * get it right. `version` stays accepted (eve lowers this schema with
- * `additionalProperties: false`, so dropping the key outright would reject a
- * model that still writes it) and `delegate` stamps `version: 1` before
- * validating against the canonical schema. Tool outputs stay strict.
+ * submitting a `"test"` envelope that parsed. The length caps and closed key
+ * sets did the same to long project answers (#429). So the specialist answers
+ * against the loose `specialistResultSchema` — `version` optional, no caps,
+ * extra keys allowed, `kind` free text — and `delegate` normalises the answer
+ * into the canonical envelope (stamping `version: 1`) before judging it here.
+ * Tool outputs stay strict.
  */
-export const specialistOutputSchema = agentResultEnvelopeSchema.extend({
-  version: z
-    .unknown()
-    .optional()
-    .describe("Optional. The server sets it; you may leave it out."),
-});
+export const specialistOutputSchema = specialistResultSchema;
 
 /**
  * Titles and summaries that say nothing. A specialist that cannot produce its
@@ -56,27 +52,31 @@ export type SpecialistResultVerdict =
   | { readonly usable: false; readonly reason: string };
 
 /**
- * Stamp the version and decide whether a specialist's answer can be shown.
+ * Normalise a specialist's answer and decide whether it can be shown.
  *
- * Unusable: not an envelope, missing fields, an empty or placeholder
+ * Unusable: not an envelope, no title or summary, an empty or placeholder
  * summary, or a placeholder title with no record behind it. A title alone is
  * not enough to reject: a lead can really be called "Test" or "X", and its
  * envelope then carries a record reference. A real "nothing matched" answer,
  * with empty data and no record reference, is usable: it says what was
  * searched.
  */
-export function judgeSpecialistResult(output: unknown): SpecialistResultVerdict {
+export function judgeSpecialistResult(
+  output: unknown,
+): SpecialistResultVerdict {
   if (output === null || typeof output !== "object" || Array.isArray(output)) {
     return { usable: false, reason: "it returned no result envelope" };
   }
-  const parsed = agentResultEnvelopeSchema.safeParse({
-    ...(output as Record<string, unknown>),
-    version: 1,
-  });
-  if (!parsed.success) {
+  const answer = output as Record<string, unknown>;
+  if (typeof answer.title !== "string" || typeof answer.summary !== "string") {
     return { usable: false, reason: "its result was missing required fields" };
   }
-  const envelope = parsed.data;
+  // Long fields are shortened and stray keys folded into `data`, rather than
+  // the whole answer being refused for them (result-contracts.ts).
+  const envelope = normalizeSpecialistResult(answer);
+  // A change the person cancelled is a real answer whatever its wording;
+  // team-dispatch gives it fixed text.
+  if (envelope.data.cancelled === true) return { usable: true, envelope };
   if (!envelope.summary) {
     return { usable: false, reason: "its result had an empty summary" };
   }

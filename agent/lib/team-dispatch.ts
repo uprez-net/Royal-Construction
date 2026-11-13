@@ -1,4 +1,6 @@
 import type { SpecialistName } from "@/agent/lib/specialists";
+import { forPeopleDates } from "@/agent/lib/model-output";
+import { normalizeSpecialistResult } from "@/agent/lib/result-contracts";
 
 // How one `delegate` call runs several specialists as a team.
 //
@@ -163,5 +165,77 @@ export function taskNotRun(
     summary,
     title,
     version: 1,
+  };
+}
+
+/**
+ * The specialist's own result envelope, with the specialist named on it.
+ *
+ * Returned at the top level rather than nested so the workspace renders it as
+ * the same rich result card any other enveloped tool output gets.
+ *
+ * Three things happen on the way out, so the orchestrator relays what the
+ * specialist found rather than how it phrased it:
+ * - the loose answer the specialist wrote is folded into the strict envelope;
+ * - an ISO date anywhere in it is rewritten as a Sydney date
+ *   (agent/lib/model-output.ts),
+ *   because the orchestrator repeats these to the office verbatim — a
+ *   `2026-09-24T14:00:00.000Z` read off the string is Thursday when the
+ *   meeting is Friday (#429);
+ * - a change the person cancelled at approval gets fixed wording.
+ *
+ * The dates are rewritten before the envelope is normalised, so its length
+ * limits hold for the longer, readable form.
+ */
+export function specialistFinding(specialist: SpecialistName, output: unknown) {
+  const readable = normalizeSpecialistResult(forPeopleDates(output));
+  return { ...(cancelledChangeResult(readable) ?? readable), specialist };
+}
+
+/** Whether a specialist finding is a change the person cancelled. */
+export function isCancelledFinding(finding: unknown): boolean {
+  if (finding === null || typeof finding !== "object") return false;
+  const data = (finding as { data?: unknown }).data;
+  return (
+    data !== null
+    && typeof data === "object"
+    && (data as { cancelled?: unknown }).cancelled === true
+  );
+}
+
+/**
+ * Says only that the cancelled change was not applied: the same task may have
+ * made another, approved change before it, so "nothing changed" can be false.
+ */
+export const CANCELLED_TITLE = "Cancelled — change not applied";
+
+/**
+ * A specialist result marked cancelled, with the words people read fixed.
+ *
+ * Returns null for any other result. The change description is the one piece
+ * of model text kept, and it is shown as what was cancelled, never as why.
+ * The model's warnings are dropped with its title and summary: on staging they
+ * carried the business rule it invented to explain the cancellation (#429).
+ * Each earlier write in the task had its own approval card, so the person
+ * already knows about it.
+ */
+export function cancelledChangeResult<
+  T extends {
+    kind: string;
+    title: string;
+    summary: string;
+    warnings: string[];
+    data: Record<string, unknown>;
+  },
+>(result: T): T | null {
+  if (result.data.cancelled !== true) return null;
+  const change =
+    typeof result.data.change === "string" ? result.data.change.trim() : "";
+  return {
+    ...result,
+    kind: "confirmation",
+    title: CANCELLED_TITLE,
+    summary: `You cancelled this change${change ? ` (${change.slice(0, 200)})` : ""}, so it was not applied.`,
+    warnings: [],
   };
 }

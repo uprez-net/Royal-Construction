@@ -8,12 +8,14 @@ import {
   resolveAuthorizedTask,
 } from "@/agent/lib/lead-operations";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Reopen an exact completed task on an authorized lead. Always require owner approval before writing.",
   inputSchema: changeLeadTaskStateInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   label: {
     start: () => "Reopen lead task",

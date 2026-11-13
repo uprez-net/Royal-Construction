@@ -1,5 +1,5 @@
 import { defineAgent, defineDynamic } from "eve";
-import { specialistOutputSchema } from "@/agent/lib/specialist-result";
+import { specialistResultSchema } from "@/agent/lib/result-contracts";
 import { SPECIALISTS, type SpecialistName } from "@/agent/lib/specialists";
 import { OPERATIONS_MODEL } from "@/lib/agent/model";
 import { SPECIALIST_SESSION_LIMITS } from "@/lib/agent/session-limits";
@@ -21,9 +21,10 @@ export function defineRCSpecialist(name: SpecialistName) {
           model: OPERATIONS_MODEL,
           modelContextWindowTokens: 1_000_000,
           reasoning: "low",
-          // Not the canonical envelope: `version` is optional here and stamped by
-          // `delegate`. See agent/lib/specialist-result.ts.
-          outputSchema: specialistOutputSchema,
+          // Loose on purpose: a strict schema made eve re-ask for the whole
+          // answer on any slip. delegate normalises it into the strict
+          // envelope (agent/lib/result-contracts.ts).
+          outputSchema: specialistResultSchema,
           limits: SPECIALIST_SESSION_LIMITS,
           // Reached only through the root `delegate` workflow tool, never as
           // its own model tool. eve derives every declared subagent's tool as

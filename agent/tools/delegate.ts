@@ -8,7 +8,9 @@ import {
 import {
   MAX_TEAM_TASKS,
   briefFor,
+  isCancelledFinding,
   planWaves,
+  specialistFinding,
   taskNotRun,
   type TeamTask,
 } from "@/agent/lib/team-dispatch";
@@ -217,21 +219,23 @@ export default defineWorkflowTool({
               );
             }
             if (!verdict.usable) {
-              const failure = unusableResult(
-                task,
-                verdict.reason,
-                retried,
-              );
+              const failure = unusableResult(task, verdict.reason, retried);
               // Thrown alone, so the call fails and its card shows it.
               if (single) throw new Error(failure.summary);
               failed.add(task.id);
               return [task.id, failure] as const;
             }
             const output = verdict.envelope;
+            const finding = specialistFinding(task.specialist, output);
             // A specialist that answered with an error envelope did not do
-            // its task: its dependents must not start from it as if it had.
-            if (!single && output.kind === "error") failed.add(task.id);
-            return [task.id, tagged(task.specialist, output)] as const;
+            // its task, and neither did one whose change the person
+            // cancelled: its dependents must not start from it as if it had.
+            if (
+              !single
+              && (output.kind === "error" || isCancelledFinding(finding))
+            )
+              failed.add(task.id);
+            return [task.id, finding] as const;
           } catch (error) {
             // One task alone keeps failing the tool call, so the orchestrator
             // cannot mistake it for an answer. In a team, the others' results
@@ -295,19 +299,6 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : { output: value };
-}
-
-/**
- * The specialist's own result envelope, with the specialist named on it.
- *
- * Returned at the top level rather than nested so the workspace renders it as
- * the same rich result card any other enveloped tool output gets.
- */
-function tagged(specialist: SpecialistName, output: unknown) {
-  if (output !== null && typeof output === "object" && !Array.isArray(output)) {
-    return { ...(output as Record<string, unknown>), specialist };
-  }
-  return { specialist, output };
 }
 
 function unavailable(specialist: SpecialistName) {

@@ -34,6 +34,12 @@ import {
 } from "@/components/agent/agent-result";
 import { cn } from "@/lib/utils";
 
+/** Tools whose arguments are routing for the agent, not a change to review. */
+const INTERNAL_ARGUMENT_TOOLS: ReadonlySet<string> = new Set([
+  "delegate",
+  "recall_crm_context",
+]);
+
 /**
  * One operation the agent ran, from the first streamed argument to the result.
  *
@@ -79,7 +85,14 @@ export function AgentToolCall({
   const [open, setOpen] = useState(false);
 
   const title = label ?? humanize(part.toolName);
-  const fields = toInputFields("input" in part ? part.input : undefined);
+  // Ids mean nothing to the office, and the routing tools' arguments are
+  // written by the model for other models — leadId=105, offer UUIDs — so they
+  // stay out of the card; the specialist's own panel shows the work (#429).
+  const fields = INTERNAL_ARGUMENT_TOOLS.has(part.toolName)
+    ? []
+    : toInputFields("input" in part ? part.input : undefined, {
+        hideIds: true,
+      });
   const result = complete ? resultEnvelope(part.output) : null;
   const duration = formatDuration(startedAt, endedAt);
   const Icon = failed
@@ -141,12 +154,6 @@ export function AgentToolCall({
           Operation
         </Badge>
       </header>
-
-      {part.state === "input-streaming" && part.inputText ? (
-        <p className="truncate border-t border-border/60 px-3 py-2 font-mono text-[11px] text-muted-foreground">
-          {part.inputText.slice(-160)}
-        </p>
-      ) : null}
 
       {fields.length > 0 && !awaitingApproval ? (
         <Collapsible onOpenChange={setOpen} open={open}>

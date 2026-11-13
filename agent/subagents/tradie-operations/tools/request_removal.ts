@@ -7,12 +7,14 @@ import {
   requestAuthorizedTradieRemoval,
   runTradieWrite,
 } from "@/agent/lib/tradie-operations";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Submit a tradie removal request for admin approval; never delete the record directly.",
   inputSchema: requestTradieRemovalInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   execute(input, ctx) {
     return runTradieWrite({

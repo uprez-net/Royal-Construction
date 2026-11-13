@@ -1,5 +1,9 @@
-import { refreshAgentContext } from "@/lib/domain/agent-context";
+import {
+  refreshAgentContext,
+  refreshAgentFiles,
+} from "@/lib/domain/agent-context";
 import { systemPrincipal } from "@/lib/domain/principal";
+import { documentTextReader } from "@/lib/document-text-port";
 import { gatewayEmbedding } from "@/lib/embedding-port";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
@@ -14,10 +18,19 @@ import { errorResponse, successResponse } from "@/utils/validators";
  * record during the day through /api/agent/effects; this run is what catches
  * everything changed on screen, by a webhook, or by another cron.
  *
+ * Then the uploaded documents filed under those records are read (OCR), cut
+ * into passages tagged with their lead, project and offer, and embedded
+ * (lib/domain/agent-context/files.ts). Reading is slow, so it stops starting
+ * new documents with time to spare; what is left is read on the next run, and
+ * running this again by hand drains a backlog sooner.
+ *
  * An embedding outage is reported, not fatal: the text is still saved and the
  * agent can still find records by name until the next run embeds them.
  */
 export const maxDuration = 300;
+
+/** Leaves time to write and embed what was read before the function is stopped. */
+const DOCUMENT_READ_BUDGET_MS = 200_000;
 
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -31,20 +44,39 @@ export async function GET(request: Request) {
     return errorResponse("Unauthorized", { status: 401, code: "UNAUTHORIZED" });
   }
 
+  const startedAt = Date.now();
   try {
-    const result = await refreshAgentContext(
-      systemPrincipal("cron:agent-context"),
-      {},
-      prisma,
-      { embedding: gatewayEmbedding },
-    );
+    const principal = systemPrincipal("cron:agent-context");
+    const result = await refreshAgentContext(principal, {}, prisma, {
+      embedding: gatewayEmbedding,
+    });
     if (result.embeddingFailed) {
       console.error(
         "[CRON] agent-context: embeddings failed; records saved without vectors",
         result,
       );
     }
-    return successResponse({ message: "Agent context refreshed.", ...result });
+    const documents = await refreshAgentFiles(
+      principal,
+      { deadline: new Date(startedAt + DOCUMENT_READ_BUDGET_MS) },
+      prisma,
+      { documentText: documentTextReader, embedding: gatewayEmbedding },
+    );
+    if (
+      documents.embeddingFailed
+      || documents.failed > 0
+      || documents.readerUnavailable
+    ) {
+      console.error(
+        "[CRON] agent-context: some documents were not read or embedded; the next run retries them",
+        documents,
+      );
+    }
+    return successResponse({
+      message: "Agent context refreshed.",
+      ...result,
+      documents,
+    });
   } catch (error) {
     const refused = domainErrorResponse(error);
     if (refused) return refused;

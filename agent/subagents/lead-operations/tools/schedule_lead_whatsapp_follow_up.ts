@@ -7,6 +7,7 @@ import {
   authorizeLeadTaskMutation,
   createAuthorizedLeadTask,
 } from "@/agent/lib/lead-operations";
+import { forModel } from "@/agent/lib/model-output";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
 
 export default defineTool({
@@ -14,6 +15,7 @@ export default defineTool({
     "Schedule a WhatsApp follow-up task on one exact authorized lead. It only books the work; it sends nothing. Show the due date/time and notes for owner approval before writing.",
   inputSchema: scheduleLeadWhatsAppFollowUpInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   label: {
     start: () => "Schedule WhatsApp follow-up",

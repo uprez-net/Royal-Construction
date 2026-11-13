@@ -8,12 +8,12 @@ import {
   SPECIALIST_SESSION_LIMITS,
 } from "@/lib/agent/session-limits";
 
-test("GLM-5.3-flash is priced at $0.08/M input and $0.25/M output", () => {
+test("GPT-6-Luna-fast is priced at $0.20/M input and $1.00/M output", () => {
   assert.deepEqual(OPERATIONS_MODEL_PRICING, {
-    inputUsdPerMillionTokens: 0.08,
-    outputUsdPerMillionTokens: 0.25,
+    inputUsdPerMillionTokens: 0.2,
+    outputUsdPerMillionTokens: 1,
   });
-  assert.equal(estimateCostUsd(2_000_000, 400_000), 0.26);
+  assert.equal(estimateCostUsd(2_000_000, 400_000), 0.8);
 });
 
 test("the dollar ceiling, not a token ceiling, is what stops a session", () => {

@@ -5,13 +5,13 @@ import { afterEach, beforeEach, test } from "vitest";
 
 import rootAgent from "@/agent/agent";
 import currentTimeInstructions from "@/agent/lib/current-time-instructions";
-import orchestratorCurrentTime from "@/agent/instructions/current-time";
-import adminCurrentTime from "@/agent/subagents/admin-operations/instructions/current-time";
-import complianceCurrentTime from "@/agent/subagents/compliance-operations/instructions/current-time";
-import leadCurrentTime from "@/agent/subagents/lead-operations/instructions/current-time";
-import offerCurrentTime from "@/agent/subagents/offer-operations/instructions/current-time";
-import projectCurrentTime from "@/agent/subagents/project-operations/instructions/current-time";
-import tradieCurrentTime from "@/agent/subagents/tradie-operations/instructions/current-time";
+import orchestratorCurrentTime from "@/agent/instructions/sydney-clock";
+import adminCurrentTime from "@/agent/subagents/admin-operations/instructions/sydney-clock";
+import complianceCurrentTime from "@/agent/subagents/compliance-operations/instructions/sydney-clock";
+import leadCurrentTime from "@/agent/subagents/lead-operations/instructions/sydney-clock";
+import offerCurrentTime from "@/agent/subagents/offer-operations/instructions/sydney-clock";
+import projectCurrentTime from "@/agent/subagents/project-operations/instructions/sydney-clock";
+import tradieCurrentTime from "@/agent/subagents/tradie-operations/instructions/sydney-clock";
 import {
   DELEGATE_TARGETS,
   SPECIALISTS,

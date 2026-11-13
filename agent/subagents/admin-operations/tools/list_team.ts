@@ -5,6 +5,7 @@ import {
   createAdminOperations,
   type AdminOperations,
 } from "@/agent/subagents/admin-operations/dependencies";
+import { forModel } from "@/agent/lib/model-output";
 
 export function createListTeamTool(operations: AdminOperations) {
   return defineTool({
@@ -12,6 +13,7 @@ export function createListTeamTool(operations: AdminOperations) {
       "List Royal Construction team members and roles without exposing private account metadata.",
     inputSchema: listTeamInputSchema,
     outputSchema: agentResultEnvelopeSchema,
+    toModelOutput: forModel,
     async execute(input, ctx) {
       return await operations.listAuthorizedTeam(ctx, input);
     },

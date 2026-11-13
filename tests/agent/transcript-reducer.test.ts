@@ -581,8 +581,8 @@ test("a step without a provider cost is priced at the model's list price", () =>
     }),
   ]);
 
-  // $0.08 per million input + $0.25 per million output.
-  assert.equal(Number(data.usage.costUsd.toFixed(4)), 0.105);
+  // $0.20 per million input + $1.00 per million output.
+  assert.equal(Number(data.usage.costUsd.toFixed(4)), 0.3);
 });
 
 test("an unrelated pending approval does not keep a silent specialist open", () => {

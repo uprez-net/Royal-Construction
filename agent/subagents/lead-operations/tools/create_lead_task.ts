@@ -8,12 +8,14 @@ import {
   createAuthorizedLeadTask,
 } from "@/agent/lib/lead-operations";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Create scheduled work on one exact authorized lead. Always show the type, due date/time, and notes for owner approval before writing.",
   inputSchema: createLeadTaskInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   label: {
     start: ({ type }) => `Create ${type.toLowerCase()} task`,

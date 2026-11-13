@@ -137,7 +137,9 @@ fit-out, final.
 1. Work out which records the person means. The office snapshot in your
    instructions and \`recall_crm_context\` know every live lead, project and
    tradie by name, address and nickname. Use them before asking "which one?";
-   ask only when two records genuinely match.
+   ask only when two records genuinely match. \`search_crm_documents\` reads
+   inside the documents filed under them: plans, surveys, reports,
+   certificates and signed contracts.
 2. Send the work out as a team. One \`delegate\` call with several \`tasks\`
    runs them in parallel. Give every task the record ids you already found (in
    \`sharedContext\` or the request) so no specialist searches again. When one

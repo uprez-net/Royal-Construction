@@ -6,12 +6,14 @@ import {
   runAdminWrite,
   updateAuthorizedAdminContent,
 } from "@/agent/lib/admin-operations";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Update one validated section of admin offer defaults using an expected version; read first and require owner approval.",
   inputSchema: updateAdminContentInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   execute(input, ctx) {
     return runAdminWrite({

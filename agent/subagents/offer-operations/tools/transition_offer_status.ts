@@ -3,12 +3,14 @@ import { ownerOnlyApproval } from "@/agent/lib/agent-approval";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
 import { transitionOfferStatusInputSchema } from "@/agent/lib/offer-contracts";
 import { transitionAuthorizedOfferStatus } from "@/agent/lib/offer-operations";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Move one exact authorized offer through an allowed lifecycle transition. Show the target status and note, then require owner approval.",
   inputSchema: transitionOfferStatusInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   label: { start: ({ toStatus }) => `Move offer to ${toStatus}` },
   execute(input, ctx) {

@@ -949,6 +949,7 @@ model File {
   complianceDocument  ComplianceDocument?  @relation("ComplianceDocumentFiles", fields: [complianceDocumentId], references: [id], onDelete: Cascade)
   User                User                 @relation("UserFiles", fields: [uploadedBy], references: [id])
   checklistAttachment ChecklistAttachment?
+  agentChunks         AgentFileChunk[]
 
   @@index([projectId])
   @@index([milestoneId])
@@ -1528,23 +1529,83 @@ model AgentMemory {
 /// A snapshot, never the source of truth: the agent still reads the live
 /// record through a specialist before it acts on anything.
 model AgentContextChunk {
-  id          String   @id @default(uuid())
+  id          String                       @id @default(uuid())
   /// lead | project | tradie | digest
   kind        String
   /// The record's own id as text (Lead ids are integers); "office" for the digest.
   entityId    String
   title       String
-  content     String   @db.Text
+  content     String                       @db.Text
   /// sha256 of `content`; an unchanged record is not re-embedded.
   contentHash String
   /// Normalised, so the inner product is the cosine similarity.
   embedding   Unsupported("vector(1536)")?
-  refreshedAt DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  refreshedAt DateTime                     @default(now())
+  createdAt   DateTime                     @default(now())
+  updatedAt   DateTime                     @updatedAt
 
   @@unique([kind, entityId])
   @@index([kind])
+}
+
+/// The text read out of one uploaded document for the operations agent, so
+/// OCR runs once per document rather than every night. Keyed by the blob URL,
+/// because a compliance checklist line copies a File row onto the same blob:
+/// one document, read once. Pruned nightly once no live record holds it. See
+/// lib/domain/agent-context/files.ts.
+model AgentFileText {
+  id          String   @id @default(uuid())
+  /// sha256 of the blob URL.
+  urlHash     String   @unique
+  /// EXTRACTED | UNSUPPORTED | FAILED
+  status      String
+  /// Why it was not read, for UNSUPPORTED and FAILED. Shown to nobody but logs.
+  reason      String?
+  /// One string per page (per worksheet for a spreadsheet).
+  pages       Json     @default("[]")
+  /// Failed reads so far; a document is retried until MAX_EXTRACTION_ATTEMPTS.
+  attempts    Int      @default(0)
+  extractedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// One searchable passage of an uploaded document, tagged with the lead,
+/// project and offer it belongs to. The text is deterministic: a header naming
+/// the document and its records, the passage, and a Refs line of ids. Deleting
+/// the File (or the offer reply) removes its passages at once.
+model AgentFileChunk {
+  id           String                       @id @default(uuid())
+  /// "file:<File.id>" or "offer-reply:<OfferDocumentReply.id>:<attachment index>".
+  sourceKey    String
+  chunkIndex   Int
+  fileId       String?
+  offerReplyId String?
+  leadId       Int?
+  projectId    String?
+  offerId      String?
+  title        String
+  content      String                       @db.Text
+  /// sha256 of `content`; an unchanged passage is not re-embedded.
+  contentHash  String
+  pageFrom     Int
+  pageTo       Int
+  /// Normalised, so the inner product is the cosine similarity.
+  embedding    Unsupported("vector(1536)")?
+  refreshedAt  DateTime                     @default(now())
+  createdAt    DateTime                     @default(now())
+  updatedAt    DateTime                     @updatedAt
+
+  file       File?               @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  offerReply OfferDocumentReply? @relation(fields: [offerReplyId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceKey, chunkIndex])
+  @@index([sourceKey])
+  @@index([leadId])
+  @@index([projectId])
+  @@index([offerId])
+  @@index([fileId])
+  @@index([offerReplyId])
 }
 
 model Lead {
@@ -2022,6 +2083,7 @@ model OfferDocumentReply {
   attachments    Json              @default("[]")
   receivedAt     DateTime
   createdAt      DateTime          @default(now())
+  agentChunks    AgentFileChunk[]
 
   @@index([sendId, receivedAt])
 }

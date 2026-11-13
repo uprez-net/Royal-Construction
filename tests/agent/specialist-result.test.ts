@@ -52,8 +52,11 @@ describe("judgeSpecialistResult", () => {
   it("rejects punctuation-only text", () => {
     for (const text of ["...", "-", "—", "?!"]) {
       assert.equal(
-        judgeSpecialistResult({ kind: "entity-summary", summary: text, title: text })
-          .usable,
+        judgeSpecialistResult({
+          kind: "entity-summary",
+          summary: text,
+          title: text,
+        }).usable,
         false,
         text,
       );
@@ -70,8 +73,11 @@ describe("judgeSpecialistResult", () => {
     assert.ok(verdict.usable);
     // Without a record behind it, the same title is a placeholder.
     assert.equal(
-      judgeSpecialistResult({ kind: "entity-summary", summary: "Found it.", title: "Test" })
-        .usable,
+      judgeSpecialistResult({
+        kind: "entity-summary",
+        summary: "Found it.",
+        title: "Test",
+      }).usable,
       false,
     );
   });
@@ -118,15 +124,29 @@ describe("the specialist output schema as eve lowers it", () => {
       | { issues: readonly { message: string }[] };
 
   it("still validates the rest of the envelope", async () => {
-    // Guards against eve degrading the extended schema to "accept anything",
-    // which would end the model's in-loop correction on a malformed answer.
+    // Guards against eve degrading the schema to "accept anything", which
+    // would end the model's in-loop correction on an answer with no answer in
+    // it.
     for (const bad of [
       { ...projectResult, title: undefined },
-      { ...projectResult, kind: "nonsense" },
+      { ...projectResult, summary: undefined },
     ]) {
       const result = await validate(bad);
       assert.ok(result.issues?.length, JSON.stringify(bad));
     }
+  });
+
+  it("does not make the model rewrite an answer over its kind label", async () => {
+    // An unknown kind costs a full rewrite if refused (~13s on a project read,
+    // #429); delegate maps it to entity-summary instead.
+    const result = await validate({ ...projectResult, kind: "nonsense" });
+    assert.equal(result.issues, undefined);
+    const verdict = judgeSpecialistResult({
+      ...projectResult,
+      kind: "nonsense",
+    });
+    assert.ok(verdict.usable);
+    assert.equal(verdict.usable && verdict.envelope.kind, "entity-summary");
   });
 
   it("accepts a result with version missing, 1 or '1'", async () => {
@@ -169,7 +189,10 @@ describe("delegate with an unusable specialist result", () => {
 
   it("fails the call instead of returning the placeholder", async () => {
     const { ctx, messages } = scripted(probe);
-    await assert.rejects(runDelegate(single, ctx), /did not return a usable result/);
+    await assert.rejects(
+      runDelegate(single, ctx),
+      /did not return a usable result/,
+    );
     // Not marked read-only: never re-run, it may have changed something.
     assert.equal(messages.length, 1);
   });
@@ -187,11 +210,15 @@ describe("delegate with an unusable specialist result", () => {
   it("tells the specialist a read-only task changes nothing, on both attempts", async () => {
     const { ctx, messages } = scripted(probe, projectResult);
     await runDelegate({ ...single, readOnly: true }, ctx);
-    for (const message of messages) assert.match(message, /read-only lookup: change nothing/);
+    for (const message of messages)
+      assert.match(message, /read-only lookup: change nothing/);
   });
 
   it("does not retry an answer that says it reached an approval", async () => {
-    const { ctx, messages } = scripted({ ...probe, requiresApproval: true }, projectResult);
+    const { ctx, messages } = scripted(
+      { ...probe, requiresApproval: true },
+      projectResult,
+    );
     await assert.rejects(runDelegate({ ...single, readOnly: true }, ctx));
     assert.equal(messages.length, 1);
   });
@@ -210,7 +237,11 @@ describe("delegate with an unusable specialist result", () => {
     const result = (await runDelegate(
       {
         tasks: [
-          { id: "project", request: "Find Massey St.", specialist: "project-operations" },
+          {
+            id: "project",
+            request: "Find Massey St.",
+            specialist: "project-operations",
+          },
           {
             after: ["project"],
             id: "detail",
@@ -220,10 +251,16 @@ describe("delegate with an unusable specialist result", () => {
         ],
       },
       ctx,
-    )) as { results: { task: string; kind: string; summary: string }[]; summary: string };
+    )) as {
+      results: { task: string; kind: string; summary: string }[];
+      summary: string;
+    };
     assert.equal(messages.length, 1);
     assert.equal(result.results[0]?.kind, "error");
-    assert.match(result.results[0]?.summary ?? "", /may have done so before failing/);
+    assert.match(
+      result.results[0]?.summary ?? "",
+      /may have done so before failing/,
+    );
     assert.match(result.summary, /0 of 2 tasks finished/);
   });
 });
@@ -255,7 +292,10 @@ describe("the tool card outcome", () => {
   it("is a plain success otherwise", () => {
     assert.deepEqual(toolOutcome(projectResult), { failed: false, note: null });
     assert.deepEqual(
-      toolOutcome({ results: [{ kind: "entity-summary" }], summary: "1 of 1 tasks finished." }),
+      toolOutcome({
+        results: [{ kind: "entity-summary" }],
+        summary: "1 of 1 tasks finished.",
+      }),
       { failed: false, note: null },
     );
   });

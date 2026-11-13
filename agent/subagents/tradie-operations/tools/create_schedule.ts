@@ -7,12 +7,14 @@ import {
   createAuthorizedTradieSchedule,
   runTradieWrite,
 } from "@/agent/lib/tradie-operations";
+import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
     "Schedule one authorized tradie on a project milestone, after owner approval. The tradie may already be booked on the same days for other work; booking the same tradie onto the same project milestone twice is rejected.",
   inputSchema: createTradieScheduleInputSchema,
   outputSchema: agentResultEnvelopeSchema,
+  toModelOutput: forModel,
   approval: ownerOnlyApproval(),
   async execute(input, ctx) {
     return await runTradieWrite({
