@@ -137,16 +137,45 @@ adding a call.
   same error; an already-reported error is skipped, but one call is clearer.
 - **Shared code imports `@sentry/core`, never `@sentry/nextjs`.** The Next SDK
   imports `next/*` and fails `eve build`. Only the four Sentry entry points may
-  import it (`tests/architecture/error-reporting.test.ts`).
+  import it, and only `agent/lib/error-reporting.ts` may import `@sentry/node`
+  (`tests/architecture/error-reporting.test.ts`). The three Sentry packages are
+  pinned to one exact version; bump them together or `reportError` silently
+  becomes a no-op.
+- **Vendor SDKs are hooked once, not per call site.** Xero's `accountingApi` is
+  wrapped in `buildXeroClient` and DocuSign's `callApi` in
+  `createDocusignContext`, so a failed call reports with the vendor and the
+  operation from wherever it was made. A new Xero or DocuSign call needs nothing.
+  An operation that IS the credential (a token grant or refresh) passes
+  `force: true`, because DocuSign answers a revoked consent with a 400.
+- **A workflow function** wraps its body so a run that fails after its steps are
+  out of retries is reported once: `try { return await runX(input) } catch (e) {
+  await reportWorkflowError("x", e); throw e }`. The sandbox cannot load Sentry,
+  so the report is a step (`lib/workflow/report-failure.ts`). A new workflow does
+  the same; `tests/workflow/report-failure.test.ts` fails if it does not. A
+  failure the workflow body catches and continues from should `console.error`;
+  the sandbox shares the host console.
+- **The Eve agent** is a separate process. `agent/instrumentation/sentry.ts`
+  starts the Node SDK in its `setup` and reports `turn.failed`, `session.failed`,
+  `model.call.failed`, `action.failed` (outcome `failed` only), channel delivery
+  and memory failures. `runAuditedAgentOperation` reports every failed audited
+  write before the adapters turn a `DomainError` into a result the model reads
+  back, so a `DomainSideEffectError` is not just chat text.
 - **A cron route** exports `GET` through `withCronReporting("/api/cron/…", handle)`
   and the path must be in `vercel.json`; the architecture test fails otherwise.
+  A 401 to Vercel's own scheduler is reported (`CRON_SECRET` no longer matches);
+  a 401 to anyone else is not. Missed-run detection is opt-in per cron through
+  `SENTRY_CRON_MONITORS` (a list of slugs); the free plan includes one monitor.
+- **Tags:** `service` is the process (`app` or `eve`); `vendor` is the outside
+  service (`graph`, `xero`, `docusign`, `ai`). Do not reuse either key.
 - **Never put client data on an event.** `dataCollection` is locked down and
   `redact.ts` strips emails, phones and tokens from messages, but neither
   catches a name or street address. Pass ids in `ids`, never record contents.
 
-Not yet covered: the Eve service (`agent/`) has no Sentry client, so
-`reportError` is a no-op there; workflow steps that throw without logging;
-DocuSign and Xero calls beyond what they `console.error`.
+Not covered: deliberately silent catches (`catch {}`, `.catch(() => null)`);
+Graph calls that do not go through `withGraphRetry` or `sendEmail` (they
+`console.error`, which is captured, but carry no vendor tag); an uncaught throw
+inside Next's `after()` (unverified); and `step.attempt.failed`, which is a retry, not an
+incident.
 
 ## The suite runs on Vitest
 

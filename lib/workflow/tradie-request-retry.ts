@@ -1,3 +1,4 @@
+import { reportWorkflowError } from "@/lib/workflow/report-failure";
 import { TradieRequestDeliveryStatus } from "@prisma/client";
 import { sleep } from "workflow";
 
@@ -61,6 +62,20 @@ export const retryTradieRequestEmail = async (
   recipientId: string,
 ): Promise<string> => {
   "use workflow";
+  try {
+    return await runRetryTradieRequestEmail(recipientId);
+  } catch (error) {
+    await reportWorkflowError("retryTradieRequestEmail", error);
+    throw error;
+  }
+};
+
+// The body, split out so the workflow function above can report a run that
+// fails once its steps are out of retries. A plain function: it runs in the
+// same sandbox and calls its steps exactly as before.
+const runRetryTradieRequestEmail = async (
+  recipientId: string,
+): Promise<string> => {
   const rounds = await automaticRetries();
   for (let round = 0; round < rounds; round += 1) {
     const wait = await untilNextAttempt(recipientId);

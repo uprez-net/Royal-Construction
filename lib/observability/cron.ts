@@ -25,11 +25,51 @@ export function cronSlug(path: string): string {
   return path.replace(/^\/api\/cron\//, "").replace(/\//g, "-");
 }
 
-// Sentry cron monitors are a separate quota from errors, and a monitor is
-// created from the first check-in. Off until someone has looked at what the
-// plan allows; set SENTRY_CRON_MONITORS=1 to turn on missed-run detection.
-function monitorsEnabled(): boolean {
-  return process.env.SENTRY_CRON_MONITORS === "1";
+/**
+ * Which crons check in to Sentry, from `SENTRY_CRON_MONITORS`: empty (the
+ * default) for none, `all`, or a comma-separated list of slugs.
+ *
+ * Cron monitors are billed apart from errors — the free plan includes ONE, and
+ * each further one is an add-on — and a monitor is created by its first
+ * check-in. So this is a list, not a switch: name the job whose silence would
+ * hurt most. `graph-renew` is the candidate: if the Graph subscription lapses,
+ * inbound lead capture stops after a few days and nothing says so.
+ */
+export function monitoredCrons(
+  value: string | undefined = process.env.SENTRY_CRON_MONITORS,
+): { all: boolean; slugs: ReadonlySet<string> } {
+  const trimmed = (value ?? "").trim();
+  if (trimmed === "all" || trimmed === "1") {
+    return { all: true, slugs: new Set() };
+  }
+  return {
+    all: false,
+    slugs: new Set(
+      trimmed
+        .split(",")
+        .map((slug) => slug.trim())
+        .filter(Boolean),
+    ),
+  };
+}
+
+function monitorsEnabled(slug: string): boolean {
+  const { all, slugs } = monitoredCrons();
+  return all || slugs.has(slug);
+}
+
+/**
+ * Vercel's own scheduler sends `user-agent: vercel-cron/1.0`. A 401 to THAT
+ * caller means `CRON_SECRET` no longer matches, and every cron is then dead
+ * every night with nothing logged. A 401 to anyone else is a stranger hitting a
+ * public URL and is not worth an email. (A user-agent can be forged, so the
+ * worst a forger gets is one throttled event.)
+ */
+function isVercelCron(request: unknown): boolean {
+  const headers = (
+    request as { headers?: { get?: (name: string) => string | null } }
+  )?.headers;
+  return (headers?.get?.("user-agent") ?? "").startsWith("vercel-cron");
 }
 
 function checkIn(
@@ -38,7 +78,7 @@ function checkIn(
   status: "in_progress" | "ok" | "error",
   checkInId?: string,
 ): string | undefined {
-  if (!monitorsEnabled() || !schedule) return undefined;
+  if (!monitorsEnabled(slug) || !schedule) return undefined;
   try {
     // The SDK types an in-progress check-in (no id yet) separately from a
     // finished one (which must name the run it closes).
@@ -76,8 +116,9 @@ function checkIn(
  *
  * A thrown error is reported and rethrown, so the route still answers 500. A
  * 5xx response is reported too: some handlers catch their own failure and
- * answer 500 without logging it. A 401 (a request without the secret) and
- * other 4xx are not failures of the job.
+ * answer 500 without logging it. A 401 to Vercel's own scheduler is reported as
+ * a secret mismatch; a 401 to anyone else, and other 4xx, are not failures of
+ * the job.
  */
 export function withCronReporting<A extends unknown[], R extends Response>(
   path: string,
@@ -98,6 +139,18 @@ export function withCronReporting<A extends unknown[], R extends Response>(
           fingerprint: ["cron-5xx", slug],
           extra: { status: response.status },
         });
+        checkIn(slug, schedule, "error", checkInId);
+      } else if (response.status === 401 && isVercelCron(args[0])) {
+        reportError(
+          new Error(
+            `Cron ${path} rejected Vercel's own request with a 401: CRON_SECRET does not match what the project sends.`,
+          ),
+          {
+            source,
+            // One issue for the whole fleet, not nine: they all fail together.
+            fingerprint: ["cron-unauthorised"],
+          },
+        );
         checkIn(slug, schedule, "error", checkInId);
       } else {
         checkIn(slug, schedule, "ok", checkInId);

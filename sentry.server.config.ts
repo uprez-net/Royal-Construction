@@ -8,6 +8,7 @@ import * as Sentry from "@sentry/nextjs";
 import { createBeforeSend } from "@/lib/observability/before-send";
 import { DATA_COLLECTION } from "@/lib/observability/data-collection";
 import {
+  deploymentTags,
   errorReportingEnabled,
   reportingEnvironment,
 } from "@/lib/observability/environment";
@@ -15,23 +16,12 @@ import {
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 const environment = reportingEnvironment(process.env);
 
-// Tags set once here ride on every event, so no call site has to remember them:
-// which deployment, which region, which commit.
-const tags: Record<string, string> = {};
-for (const [tag, value] of [
-  ["deployment_id", process.env.VERCEL_DEPLOYMENT_ID],
-  ["region", process.env.VERCEL_REGION],
-  ["git_sha", process.env.VERCEL_GIT_COMMIT_SHA],
-] as const) {
-  if (value) tags[tag] = value;
-}
-
 Sentry.init({
   dsn,
   enabled: errorReportingEnabled(environment, dsn),
   environment,
   release: process.env.VERCEL_GIT_COMMIT_SHA,
-  initialScope: { tags },
+  initialScope: { tags: deploymentTags(process.env, "app") },
   // Errors only: tracing and replay each spend their own quota and nobody is
   // reading performance data. Turn them on deliberately if that changes.
   // What an event may carry is locked down in data-collection.ts.

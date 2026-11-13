@@ -1,3 +1,4 @@
+import { reportWorkflowError } from "@/lib/workflow/report-failure";
 import { FatalError } from "workflow";
 import { signBookConsultationToken } from "@/lib/leads/book-consultation-token";
 
@@ -260,6 +261,20 @@ export const processInboundLead = async (
   message: InboundLeadMessage,
 ): Promise<InboundLeadOutcome> => {
   "use workflow";
+  try {
+    return await runProcessInboundLead(message);
+  } catch (error) {
+    await reportWorkflowError("processInboundLead", error);
+    throw error;
+  }
+};
+
+// The body, split out so the workflow function above can report a run that
+// fails once its steps are out of retries. A plain function: it runs in the
+// same sandbox and calls its steps exactly as before.
+const runProcessInboundLead = async (
+  message: InboundLeadMessage,
+): Promise<InboundLeadOutcome> => {
 
   if (!message.messageId) {
     // Nothing downstream can be made idempotent without it, so this is not

@@ -1,3 +1,4 @@
+import { reportWorkflowError } from "@/lib/workflow/report-failure";
 import { createHash } from "node:crypto";
 
 import {
@@ -954,6 +955,20 @@ export const processInboundPartyEmail = async (
   message: InboundPartyMessage,
 ): Promise<InboundPartyOutcome> => {
   "use workflow";
+  try {
+    return await runProcessInboundPartyEmail(message);
+  } catch (error) {
+    await reportWorkflowError("processInboundPartyEmail", error);
+    throw error;
+  }
+};
+
+// The body, split out so the workflow function above can report a run that
+// fails once its steps are out of retries. A plain function: it runs in the
+// same sandbox and calls its steps exactly as before.
+const runProcessInboundPartyEmail = async (
+  message: InboundPartyMessage,
+): Promise<InboundPartyOutcome> => {
 
   if (!message.messageId) {
     // Nothing downstream can be made idempotent without it.

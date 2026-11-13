@@ -20,6 +20,7 @@ vi.mock("@sentry/core", () => sdk);
 import {
   cronSchedule,
   cronSlug,
+  monitoredCrons,
   withCronReporting,
 } from "@/lib/observability/cron";
 
@@ -82,7 +83,83 @@ describe("withCronReporting", () => {
   });
 });
 
-describe("cron monitors — off until someone has checked the plan", () => {
+describe("a 401 to Vercel's own scheduler means CRON_SECRET no longer matches", () => {
+  // Typed as a real cron handler is, so the wrapper's signature is inferred as
+  // (request?: Request).
+  const unauthorised: (request?: Request) => Promise<Response> = async () =>
+    new Response("Unauthorized", { status: 401 });
+
+  test("reported when the caller is vercel-cron, with one fingerprint for the fleet", async () => {
+    const request = new Request("https://x.test/api/cron/graph-renew", {
+      headers: { "user-agent": "vercel-cron/1.0" },
+    });
+    const response = await withCronReporting(
+      "/api/cron/graph-renew",
+      unauthorised,
+    )(request);
+    assert.equal(response.status, 401, "the 401 itself is untouched");
+    assert.equal(sdk.captureException.mock.calls.length, 1);
+    const [error] = sdk.captureException.mock.calls[0] as unknown as [Error];
+    assert.match(error.message, /CRON_SECRET/);
+  });
+
+  test("not reported for a stranger or a browser hitting the public URL", async () => {
+    for (const agent of ["curl/8.0", "Mozilla/5.0", ""]) {
+      const request = new Request("https://x.test/api/cron/graph-renew", {
+        headers: agent ? { "user-agent": agent } : {},
+      });
+      await withCronReporting("/api/cron/graph-renew", unauthorised)(request);
+    }
+    assert.equal(sdk.captureException.mock.calls.length, 0);
+  });
+
+  test("a handler called with no request at all does not throw", async () => {
+    await withCronReporting("/api/cron/graph-renew", unauthorised)();
+    assert.equal(sdk.captureException.mock.calls.length, 0);
+  });
+});
+
+describe("monitoredCrons — one free monitor, so it is a list, not a switch", () => {
+  test("empty by default: nothing checks in", () => {
+    assert.deepEqual(monitoredCrons(undefined), {
+      all: false,
+      slugs: new Set(),
+    });
+    assert.deepEqual(monitoredCrons(""), { all: false, slugs: new Set() });
+  });
+
+  test("a comma-separated list names the jobs", () => {
+    const { all, slugs } = monitoredCrons(" graph-renew , sync-sent-mail ,");
+    assert.equal(all, false);
+    assert.deepEqual([...slugs], ["graph-renew", "sync-sent-mail"]);
+  });
+
+  test("`all` and the older `1` mean every cron", () => {
+    assert.equal(monitoredCrons("all").all, true);
+    assert.equal(monitoredCrons("1").all, true);
+  });
+});
+
+describe("cron monitors — opt-in per job, off until someone has checked the plan", () => {
+  test("only the named cron checks in; the others do not", async () => {
+    process.env.SENTRY_CRON_MONITORS = "graph-renew";
+    await withCronReporting(
+      "/api/cron/graph-renew",
+      async () => new Response("ok"),
+    )();
+    const named = sdk.captureCheckIn.mock.calls.length;
+    await withCronReporting(
+      "/api/cron/sync-sent-mail",
+      async () => new Response("ok"),
+    )();
+    assert.equal(named, 2, "in_progress and ok for the named job");
+    assert.equal(
+      sdk.captureCheckIn.mock.calls.length,
+      2,
+      "nothing more for the other job",
+    );
+  });
+
   test("no check-ins by default", async () => {
     await withCronReporting(PATH, async () => new Response("ok"))();
     assert.equal(sdk.captureCheckIn.mock.calls.length, 0);

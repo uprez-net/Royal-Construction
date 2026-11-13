@@ -85,23 +85,54 @@ describe("the Next SDK stays out of code Eve bundles", () => {
   });
 });
 
+describe("the Node SDK is for the Eve service only", () => {
+  // The agent runs as its own service and cannot use @sentry/nextjs. Everything
+  // else reports through @sentry/core, which resolves to the same copy.
+  test("only agent/lib/error-reporting.ts imports @sentry/node", () => {
+    const offenders: string[] = [];
+    for (const file of walk(REPO_ROOT)) {
+      const rel = relative(REPO_ROOT, file).replace(/\\/g, "/");
+      if (rel.startsWith("tests/")) continue;
+      if (/from\s+["']@sentry\/node/.test(readFileSync(file, "utf8"))) {
+        offenders.push(rel);
+      }
+    }
+    assert.deepEqual(offenders, ["agent/lib/error-reporting.ts"]);
+  });
+
+  test("the agent loads it as an instrumentation provider with setup and flush", () => {
+    const source = read("agent/instrumentation/sentry.ts");
+    assert.match(source, /defineInstrumentation\(/);
+    assert.match(source, /setup:\s*initEveErrorReporting/);
+    assert.match(source, /flush:\s*flushEveErrorReporting/);
+    assert.match(source, /events:\s*eveFailureHandlers/);
+  });
+});
+
 describe("one Sentry core", () => {
   // reportError imports @sentry/core directly and reports through whichever
   // client @sentry/nextjs set up. That only works while both resolve to the
   // same copy; a bump of one without the other would make every reportError a
   // silent no-op, and nothing would say so.
-  test("@sentry/core and @sentry/nextjs are pinned to the same exact version", () => {
+  test("@sentry/core, @sentry/nextjs and @sentry/node are pinned to the same exact version", () => {
     const { dependencies } = JSON.parse(read("package.json")) as {
       dependencies: Record<string, string>;
     };
-    const core = dependencies["@sentry/core"];
-    const next = dependencies["@sentry/nextjs"];
-    assert.match(
-      core,
-      /^\d+\.\d+\.\d+$/,
-      "pin @sentry/core exactly, no ^ or ~",
+    const versions = ["@sentry/core", "@sentry/nextjs", "@sentry/node"].map(
+      (name) => dependencies[name],
     );
-    assert.equal(core, next, "bump @sentry/core and @sentry/nextjs together");
+    for (const version of versions) {
+      assert.match(
+        version,
+        /^\d+\.\d+\.\d+$/,
+        "pin Sentry packages exactly, no ^ or ~",
+      );
+    }
+    assert.equal(
+      new Set(versions).size,
+      1,
+      "bump @sentry/core, @sentry/nextjs and @sentry/node together",
+    );
   });
 });
 

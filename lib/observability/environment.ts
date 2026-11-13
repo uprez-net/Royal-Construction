@@ -25,6 +25,26 @@ export function reportingEnvironment(
 }
 
 /**
+ * Tags that ride on every event from a server, so no call site has to remember
+ * them: which service raised it, on which deployment, in which region, at which
+ * commit. `service` tells an app error from an agent error in the one project.
+ */
+export function deploymentTags(
+  env: Readonly<Record<string, string | undefined>>,
+  service: "app" | "eve",
+): Record<string, string> {
+  const tags: Record<string, string> = { service };
+  for (const [tag, value] of [
+    ["deployment_id", env.VERCEL_DEPLOYMENT_ID],
+    ["region", env.VERCEL_REGION],
+    ["git_sha", env.VERCEL_GIT_COMMIT_SHA],
+  ] as const) {
+    if (value) tags[tag] = value;
+  }
+  return tags;
+}
+
+/**
  * True only for the production deployment with a DSN configured.
  *
  * The browser cannot read `APP_ENV`/`VERCEL_ENV` (neither is `NEXT_PUBLIC_`),

@@ -1,3 +1,4 @@
+import { reportWorkflowError } from "@/lib/workflow/report-failure";
 import {
   CertifierEngagementStatus,
   ComplianceAlertSource,
@@ -527,6 +528,20 @@ export const extractComplianceChecklist = async (
   input: ChecklistExtractionInput,
 ): Promise<ChecklistExtractionResult> => {
   "use workflow";
+  try {
+    return await runExtractComplianceChecklist(input);
+  } catch (error) {
+    await reportWorkflowError("extractComplianceChecklist", error);
+    throw error;
+  }
+};
+
+// The body, split out so the workflow function above can report a run that
+// fails once its steps are out of retries. A plain function: it runs in the
+// same sandbox and calls its steps exactly as before.
+const runExtractComplianceChecklist = async (
+  input: ChecklistExtractionInput,
+): Promise<ChecklistExtractionResult> => {
 
   try {
     await emitStage("Reading checklist");

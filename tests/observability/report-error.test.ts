@@ -114,7 +114,7 @@ describe("reportExternalError — one outage, one issue", () => {
   test("a 503 from Graph is tagged and grouped by service, operation and status", () => {
     reportExternalError("graph", "sendMail", failure(503));
     const { scope } = sdk.captured[0];
-    assert.equal(scope.tags.service, "graph");
+    assert.equal(scope.tags.vendor, "graph");
     assert.equal(scope.tags.operation, "sendMail");
     assert.equal(scope.tags.upstream_status, "503");
     assert.deepEqual(scope.fingerprint, [
@@ -152,6 +152,34 @@ describe("reportExternalError — one outage, one issue", () => {
     for (const status of [400, 404, 422]) {
       reportExternalError("graph", "getMessage", failure(status));
     }
+    assert.equal(sdk.captured.length, 0);
+  });
+
+  test("the vendor tag is `vendor`, so it cannot overwrite the process's `service` tag", () => {
+    // Every event already carries `service` (app or eve) from the SDK's initial
+    // scope. Reusing the key for the vendor replaced it on exactly these events.
+    reportExternalError("xero", "getInvoice", failure(503));
+    const { scope } = sdk.captured[0];
+    assert.equal(scope.tags.vendor, "xero");
+    assert.equal(scope.tags.service, undefined);
+  });
+
+  test("`force` reports a 400 from an operation that IS the credential", () => {
+    // DocuSign answers a revoked consent to the JWT grant with a 400. Without
+    // `force` that is a "provider rejected one request" and stays quiet.
+    reportExternalError("docusign", "requestJWTUserToken", failure(400));
+    assert.equal(sdk.captured.length, 0);
+
+    reportExternalError("docusign", "requestJWTUserToken", failure(400), {
+      force: true,
+    });
+    assert.equal(sdk.captured.length, 1);
+  });
+
+  test("`force` still never reports a domain refusal", () => {
+    reportExternalError("xero", "getContext", new DomainValidationError("no"), {
+      force: true,
+    });
     assert.equal(sdk.captured.length, 0);
   });
 

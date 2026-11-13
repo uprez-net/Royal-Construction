@@ -22,6 +22,11 @@ export type ExternalService =
   | "clerk";
 
 export interface ExternalFailureContext {
+  /**
+   * The operation IS the credential (a token grant or refresh), so any failure
+   * counts, including a 400 — DocuSign answers a revoked consent that way.
+   */
+  force?: boolean;
   userId?: string;
   ids?: ErrorContext["ids"];
   extra?: ErrorContext["extra"];
@@ -42,12 +47,21 @@ export function reportExternalError(
   context: ExternalFailureContext = {},
 ): void {
   try {
-    if (wasReported(error) || !isReportableExternalFailure(error)) return;
+    const { force, ...rest } = context;
+    if (
+      wasReported(error)
+      || !isReportableExternalFailure(error, { anyStatus: force })
+    ) {
+      return;
+    }
     const status = errorStatus(error);
     captureWithContext(error, {
       source: `external:${service}.${operation}`,
       tags: {
-        service,
+        // `vendor`, not `service`: every event already carries `service` as the
+        // process that raised it (`app` or `eve`), and a second meaning under
+        // the same key would overwrite it on exactly these events.
+        vendor: service,
         operation,
         upstream_status: status ?? "no-response",
       },
@@ -59,7 +73,7 @@ export function reportExternalError(
         operation,
         String(status ?? "no-response"),
       ],
-      ...context,
+      ...rest,
     });
   } catch {
     // Reporting never throws into the caller.

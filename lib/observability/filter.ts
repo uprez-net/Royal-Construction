@@ -102,7 +102,10 @@ export function isExpectedError(error: unknown): boolean {
  * request and stay quiet. No status at all means the call never got an answer
  * (reset, DNS, timeout), which is exactly what an outage looks like.
  */
-export function isReportableExternalFailure(error: unknown): boolean {
+export function isReportableExternalFailure(
+  error: unknown,
+  options: { anyStatus?: boolean } = {},
+): boolean {
   if (isRefusal(error)) return false;
   if (isNextControlFlow(error)) return false;
   if (
@@ -112,6 +115,10 @@ export function isReportableExternalFailure(error: unknown): boolean {
   ) {
     return false;
   }
+  // An operation that IS the credential (DocuSign's JWT grant, Xero's token
+  // refresh) fails with a 400 when consent is revoked or a key is rotated, and
+  // that is our configuration breaking, not a client's bad request.
+  if (options.anyStatus) return true;
   const status = errorStatus(error);
   if (status === undefined) return true;
   return status >= 500 || status === 401 || status === 403;

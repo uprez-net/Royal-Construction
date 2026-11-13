@@ -1,3 +1,4 @@
+import { reportWorkflowError } from "@/lib/workflow/report-failure";
 import { createHash } from "node:crypto";
 
 import { GraphMailbox } from "@prisma/client";
@@ -258,6 +259,20 @@ export const syncSentMail = async (
   input: SentMailSyncInput,
 ): Promise<MailboxSummary[]> => {
   "use workflow";
+  try {
+    return await runSyncSentMail(input);
+  } catch (error) {
+    await reportWorkflowError("syncSentMail", error);
+    throw error;
+  }
+};
+
+// The body, split out so the workflow function above can report a run that
+// fails once its steps are out of retries. A plain function: it runs in the
+// same sandbox and calls its steps exactly as before.
+const runSyncSentMail = async (
+  input: SentMailSyncInput,
+): Promise<MailboxSummary[]> => {
 
   console.log(`${LOG} starting: Sent Items since ${input.since}`);
   const summaries: MailboxSummary[] = [];
