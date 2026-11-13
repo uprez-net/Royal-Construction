@@ -267,7 +267,11 @@ export function toolOutcome(output: unknown): {
 } {
   if (output === null || typeof output !== "object" || Array.isArray(output))
     return { failed: false, note: null };
-  const value = output as { kind?: unknown; results?: unknown; summary?: unknown };
+  const value = output as {
+    kind?: unknown;
+    results?: unknown;
+    summary?: unknown;
+  };
   if (value.kind === "error") return { failed: true, note: null };
   if (!Array.isArray(value.results) || value.results.length === 0)
     return { failed: false, note: null };

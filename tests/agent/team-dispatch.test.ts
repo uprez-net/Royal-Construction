@@ -147,7 +147,12 @@ test("a dependent task receives what its teammate found", async () => {
               title: "Smith",
               version: 1,
             }
-          : { kind: "entity-summary", summary: "Found.", title: "Offer", version: 1 };
+          : {
+              kind: "entity-summary",
+              summary: "Found.",
+              title: "Offer",
+              version: 1,
+            };
       },
       agents: allAgents,
     },
@@ -196,7 +201,12 @@ test("a teammate's plain-text reply is not a result: its dependents do not start
         called.push(target);
         return target === "lead-operations"
           ? "Smith is lead 42, stage Quoted."
-          : { kind: "entity-summary", summary: "Found.", title: "Offer", version: 1 };
+          : {
+              kind: "entity-summary",
+              summary: "Found.",
+              title: "Offer",
+              version: 1,
+            };
       },
       agents: allAgents,
     },
@@ -219,7 +229,12 @@ test("a teammate that answered with an error envelope stops its dependents", asy
               title: "Not found",
               version: 1,
             }
-          : { kind: "entity-summary", summary: "Found.", title: "Offer", version: 1 };
+          : {
+              kind: "entity-summary",
+              summary: "Found.",
+              title: "Offer",
+              version: 1,
+            };
       },
       agents: allAgents,
     },

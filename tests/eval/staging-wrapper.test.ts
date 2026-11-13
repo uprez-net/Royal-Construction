@@ -120,7 +120,10 @@ describe("forwardedArgs", () => {
     const args = forwardedArgs(["--", "smoke"], target);
     assert.ok(!args.includes("--"));
     assert.equal(args[0], "smoke");
-    assert.deepEqual(args.slice(-2), ["--url", "https://guri-abc123.vercel.app"]);
+    assert.deepEqual(args.slice(-2), [
+      "--url",
+      "https://guri-abc123.vercel.app",
+    ]);
   });
 
   it("refuses to run mutation cases in parallel", () => {

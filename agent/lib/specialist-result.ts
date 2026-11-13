@@ -61,7 +61,9 @@ export type SpecialistResultVerdict =
  * with empty data and no record reference, is usable: it says what was
  * searched.
  */
-export function judgeSpecialistResult(output: unknown): SpecialistResultVerdict {
+export function judgeSpecialistResult(
+  output: unknown,
+): SpecialistResultVerdict {
   if (output === null || typeof output !== "object" || Array.isArray(output)) {
     return { usable: false, reason: "it returned no result envelope" };
   }

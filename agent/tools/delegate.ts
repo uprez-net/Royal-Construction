@@ -218,11 +218,7 @@ export default defineWorkflowTool({
               );
             }
             if (!verdict.usable) {
-              const failure = unusableResult(
-                task,
-                verdict.reason,
-                retried,
-              );
+              const failure = unusableResult(task, verdict.reason, retried);
               // Thrown alone, so the call fails and its card shows it.
               if (single) throw new Error(failure.summary);
               failed.add(task.id);
