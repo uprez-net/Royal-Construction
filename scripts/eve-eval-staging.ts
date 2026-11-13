@@ -81,7 +81,11 @@ export function targetUrlFrom(args: readonly string[]): URL {
 /** Exported for tests: the serial-writes rule must not be overridable. */
 export function forwardedArgs(args: readonly string[], target: URL): string[] {
   const result: string[] = [];
-  for (let index = 0; index < args.length; index += 1) {
+  // `pnpm eve:eval:staging -- smoke` hands us the literal `--`. Passed on, it
+  // would make eve read every flag after it, the `--url` below included, as a
+  // positional filter.
+  const start = args[0] === "--" ? 1 : 0;
+  for (let index = start; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--url") {
       index += 1;

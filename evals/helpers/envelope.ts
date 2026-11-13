@@ -4,6 +4,7 @@ import {
   agentResultEnvelopeSchema,
   type AgentResultEnvelope,
 } from "@/agent/lib/result-contracts";
+import { judgeSpecialistResult } from "@/agent/lib/specialist-result";
 import {
   completedCalls,
   describeCalls,
@@ -121,4 +122,36 @@ export function envelopesIn(run: Observation): readonly AgentResultEnvelope[] {
     const envelope = parseEnvelope(call.output);
     return envelope ? [envelope] : [];
   });
+}
+
+/**
+ * Grade what the specialist handed back through `delegate`, not only the tool
+ * it called. On 13 Nov 2026 `get_project` returned a good envelope and the
+ * specialist then answered `title: "test"`; grading the inner tool passed that
+ * run. The result must be usable by the same rule `delegate` applies, and name
+ * the fixture it was asked about.
+ */
+export function expectUsableDelegateResult(
+  t: EveEvalContext,
+  run: Observation,
+  mentions: string,
+): void {
+  const output = completedCalls(run, "delegate").at(-1)?.output;
+  t.check(
+    output,
+    satisfies(
+      (value) => judgeSpecialistResult(value).usable,
+      `delegate returned a usable specialist result; observed ${describeCalls(run)}`,
+    ),
+  ).label("delegate result is not a placeholder");
+  t.check(
+    output,
+    satisfies(
+      (value) =>
+        JSON.stringify(value ?? null)
+          .toLowerCase()
+          .includes(mentions.toLowerCase()),
+      `delegate result mentions "${mentions}"`,
+    ),
+  ).label("delegate result names the fixture");
 }

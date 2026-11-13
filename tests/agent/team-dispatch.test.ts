@@ -109,7 +109,7 @@ test("tasks in one wave run at the same time", async () => {
         await gate;
         return {
           kind: "entity-summary",
-          summary: "",
+          summary: "Found.",
           title: target,
           version: 1,
         };
@@ -147,7 +147,7 @@ test("a dependent task receives what its teammate found", async () => {
               title: "Smith",
               version: 1,
             }
-          : { kind: "entity-summary", summary: "", title: "Offer", version: 1 };
+          : { kind: "entity-summary", summary: "Found.", title: "Offer", version: 1 };
       },
       agents: allAgents,
     },
@@ -165,7 +165,7 @@ test("in a team, a failed task is reported and its dependents are skipped", asyn
           throw new Error("SESSION_TOKEN_LIMIT_REACHED");
         return {
           kind: "entity-summary",
-          summary: "",
+          summary: "Found.",
           title: target,
           version: 1,
         };
@@ -185,24 +185,24 @@ test("in a team, a failed task is reported and its dependents are skipped", asyn
   assert.match(result.summary, /1 of 3 tasks finished/);
 });
 
-test("a teammate's plain-text reply reaches the task that waits for it", async () => {
-  const messages: Record<string, string> = {};
-  await runDelegate(
+test("a teammate's plain-text reply is not a result: its dependents do not start", async () => {
+  // Every specialist has an output schema, so eve never hands back plain text.
+  // If something ever did, it is not an answer to build on.
+  const called: string[] = [];
+  const result = (await runDelegate(
     { tasks: [lead, offer] },
     {
-      agent: async (target, input) => {
-        messages[target] = input.message;
+      agent: async (target) => {
+        called.push(target);
         return target === "lead-operations"
           ? "Smith is lead 42, stage Quoted."
-          : { kind: "entity-summary", summary: "", title: "Offer", version: 1 };
+          : { kind: "entity-summary", summary: "Found.", title: "Offer", version: 1 };
       },
       agents: allAgents,
     },
-  );
-  assert.match(
-    messages["offer-operations"] ?? "",
-    /Reply: Smith is lead 42, stage Quoted\./,
-  );
+  )) as { results: { task: string; kind: string }[]; summary: string };
+  assert.deepEqual(called, ["lead-operations"]);
+  assert.match(result.summary, /0 of 2 tasks finished/);
 });
 
 test("a teammate that answered with an error envelope stops its dependents", async () => {
@@ -219,7 +219,7 @@ test("a teammate that answered with an error envelope stops its dependents", asy
               title: "Not found",
               version: 1,
             }
-          : { kind: "entity-summary", summary: "", title: "Offer", version: 1 };
+          : { kind: "entity-summary", summary: "Found.", title: "Offer", version: 1 };
       },
       agents: allAgents,
     },

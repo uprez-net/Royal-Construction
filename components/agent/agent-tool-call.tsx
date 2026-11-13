@@ -24,6 +24,7 @@ import {
 import {
   formatDuration,
   humanize,
+  isErrorOutput,
   toInputFields,
 } from "@/components/agent/agent-format";
 import {
@@ -67,10 +68,12 @@ export function AgentToolCall({
   const request = part.toolMetadata?.eve?.inputRequest;
   const responded = part.toolMetadata?.eve?.inputResponse !== undefined;
   const awaitingApproval = part.state === "approval-requested" && !responded;
-  const failed =
-    part.state === "output-error" || part.state === "output-denied";
   const complete = part.state === "output-available";
   const partial = part.state === "output-available" && part.partial === true;
+  // Completed on the wire, but the result itself is an error envelope.
+  const errored = complete && !partial && isErrorOutput(part.output);
+  const failed =
+    errored || part.state === "output-error" || part.state === "output-denied";
   const running =
     part.state === "input-streaming"
     || part.state === "input-available"
@@ -133,7 +136,9 @@ export function AgentToolCall({
             {title}
           </p>
           <p className="truncate text-xs text-muted-foreground">
-            {toolStateLabel(part.state, partial, responded)}
+            {errored
+              ? "Could not complete"
+              : toolStateLabel(part.state, partial, responded)}
             {duration ? ` · ${duration}` : ""}
           </p>
         </div>

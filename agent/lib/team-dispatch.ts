@@ -1,6 +1,5 @@
 import type { SpecialistName } from "@/agent/lib/specialists";
 import { forPeopleDates } from "@/agent/lib/model-output";
-import { humanizeIsoDatesInText } from "@/lib/dates/sydney";
 import {
   normalizeSpecialistResult,
   type AgentResultEnvelope,
@@ -23,6 +22,8 @@ export type TeamTask = {
   readonly specialist: SpecialistName;
   readonly request: string;
   readonly after?: readonly string[];
+  /** Only looks things up; an unusable result may be retried once. */
+  readonly readOnly?: boolean;
 };
 
 export const MAX_TEAM_TASKS = 6;
@@ -187,15 +188,6 @@ export function taskNotRun(
  * - a change the person cancelled at approval gets fixed wording.
  */
 export function specialistFinding(specialist: SpecialistName, output: unknown) {
-  // A plain-text reply (a specialist run without an output schema) is passed
-  // on as text; describeFinding quotes it to the tasks that wait on it.
-  if (output === null || typeof output !== "object" || Array.isArray(output)) {
-    return {
-      specialist,
-      output:
-        typeof output === "string" ? humanizeIsoDatesInText(output) : output,
-    };
-  }
   const readable = forPeopleDates(
     normalizeSpecialistResult(output),
   ) as AgentResultEnvelope;

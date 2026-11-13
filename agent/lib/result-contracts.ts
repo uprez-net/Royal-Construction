@@ -118,7 +118,11 @@ export type AgentResultEnvelope = z.infer<typeof agentResultEnvelopeSchema>;
  */
 export const specialistResultSchema = z
   .object({
-    version: z.literal(1).optional(),
+    // The model drops it or writes "1"; normalizeSpecialistResult stamps 1.
+    version: z
+      .unknown()
+      .optional()
+      .describe("Optional. The server sets it; you may leave it out."),
     kind: z
       .string()
       .describe(`One of: ${agentResultKindSchema.options.join(", ")}.`),
