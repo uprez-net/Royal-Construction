@@ -428,6 +428,14 @@ export async function updateMilestone(
   const targetDate = toDate(input.targetDate, "targetDate");
   const startDate = toDate(input.startDate, "startDate");
   const actualDate = toDate(input.actualDate, "actualDate");
+  // A waiver that sends no completion date does not keep a future one: the
+  // date guard above only sees a date that was sent, and a waived activity
+  // dated weeks ahead reads as finished in every report (#432).
+  const clearsFutureCompletion =
+    input.status === MilestoneStatus.NOT_REQUIRED
+    && actualDate === undefined
+    && current.actualDate != null
+    && sydneyDateOnly(current.actualDate) > sydneyToday();
 
   // The first activity to start sets the project's start date to the day work
   // began, and the schedule is re-dated from it — the last time it can be: the
@@ -447,7 +455,7 @@ export async function updateMilestone(
       status: input.status,
       targetDate,
       startDate,
-      actualDate,
+      actualDate: clearsFutureCompletion ? null : actualDate,
       spend:
         input.spend === undefined ? undefined : new Prisma.Decimal(input.spend),
     },
