@@ -205,8 +205,18 @@ export default function UpdateMilestoneModal({
   const handleSubmit = async (data: MilestoneUpdateData) => {
     try {
       setSubmitError(null);
+      // A waiver cannot carry a future date (the domain refuses it), and this
+      // dialog has no date field for one, so a stored future date is pulled
+      // back to today rather than blocking the waiver.
+      const today = format(new Date(), "yyyy-MM-dd");
       const validatedData = milestoneUpdateSchema.safeParse({
         ...data,
+        actualDate:
+          data.status === "NOT_REQUIRED"
+          && data.actualDate
+          && data.actualDate > today
+            ? today
+            : data.actualDate,
         spend:
           data.spend && data.spend > 0
             ? data.spend
