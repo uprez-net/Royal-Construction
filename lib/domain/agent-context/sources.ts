@@ -51,6 +51,30 @@ function recentCutoff(now: Date) {
   return new Date(now.getTime() - RECENTLY_CLOSED_DAYS * 24 * 60 * 60 * 1000);
 }
 
+/**
+ * The leads the index holds. One rule for the record snapshots and for the
+ * documents filed under them (./file-sources.ts).
+ */
+export function liveLeadWhere(now: Date): Prisma.LeadWhereInput {
+  return {
+    isArchived: false,
+    OR: [
+      { stage: { notIn: [...INDEX_EXPIRING_STAGES] } },
+      { updatedAt: { gte: recentCutoff(now) } },
+    ],
+  };
+}
+
+/** The projects the index holds; see liveLeadWhere. */
+export function liveProjectWhere(now: Date): Prisma.ProjectWhereInput {
+  return {
+    OR: [
+      { status: { not: "COMPLETED" } },
+      { updatedAt: { gte: recentCutoff(now) } },
+    ],
+  };
+}
+
 export async function loadLeadChunks(
   db: DomainDb,
   now: Date,
@@ -59,13 +83,7 @@ export async function loadLeadChunks(
   const leads = await db.lead.findMany({
     where: leadIds
       ? { id: { in: [...leadIds] }, isArchived: false }
-      : {
-          isArchived: false,
-          OR: [
-            { stage: { notIn: [...INDEX_EXPIRING_STAGES] } },
-            { updatedAt: { gte: recentCutoff(now) } },
-          ],
-        },
+      : liveLeadWhere(now),
     orderBy: { id: "asc" },
     select: {
       assignedUser: { select: { name: true } },
@@ -165,14 +183,7 @@ export async function loadProjectChunks(
   projectIds?: readonly string[],
 ): Promise<ChunkDraft[]> {
   const projects = await db.project.findMany({
-    where: projectIds
-      ? { id: { in: [...projectIds] } }
-      : {
-          OR: [
-            { status: { not: "COMPLETED" } },
-            { updatedAt: { gte: recentCutoff(now) } },
-          ],
-        },
+    where: projectIds ? { id: { in: [...projectIds] } } : liveProjectWhere(now),
     orderBy: { id: "asc" },
     select: {
       buildingType: true,
