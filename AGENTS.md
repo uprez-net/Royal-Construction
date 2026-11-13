@@ -147,6 +147,11 @@ adding a call.
   operation from wherever it was made. A new Xero or DocuSign call needs nothing.
   An operation that IS the credential (a token grant or refresh) passes
   `force: true`, because DocuSign answers a revoked consent with a 400.
+  A vendor whose rejection carries more than should leave the process gets a
+  `summarise` stand-in: `xero-node` rejects with a JSON **string** holding the
+  response body (the values submitted) and the request headers (the access
+  token), so `lib/xero/failure.ts` reports only the status and Xero's error
+  type. A new vendor with that habit needs the same; a test pins Xero's.
 - **A workflow function** wraps its body so a run that fails after its steps are
   out of retries is reported once: `try { return await runX(input) } catch (e) {
   await reportWorkflowError("x", e); throw e }`. The sandbox cannot load Sentry,
@@ -154,6 +159,13 @@ adding a call.
   the same; `tests/workflow/report-failure.test.ts` fails if it does not. A
   failure the workflow body catches and continues from should `console.error`;
   the sandbox shares the host console.
+  What reaches that `catch` is not the error the step threw: the runtime
+  rebuilds `new FatalError(message)` with only the message and stack copied
+  across, so the class, `status` and any object mark are gone. A layer that
+  reports from inside a step therefore appends a marker line to the stack
+  (`lib/observability/workflow-context.ts`) and the workflow layer skips a
+  marked failure: one failed run, one report. Do not rely on a property of the
+  error surviving a step.
 - **The Eve agent** is a separate process. `agent/instrumentation/sentry.ts`
   starts the Node SDK in its `setup` and reports `turn.failed`, `session.failed`,
   `model.call.failed`, `action.failed` (outcome `failed` only), channel delivery

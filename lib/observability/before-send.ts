@@ -1,6 +1,11 @@
 import type { ErrorEvent, EventHint } from "@sentry/core";
 
-import { isExpectedError, markReported, wasReported } from "./filter";
+import {
+  embeddedVendorStatus,
+  isExpectedError,
+  markReported,
+  wasReported,
+} from "./filter";
 import { redactRecord, redactText } from "./redact";
 import { createThrottle, type Throttle } from "./throttle";
 
@@ -22,6 +27,28 @@ function throttleKey(event: ErrorEvent): string {
   return first
     ? `${first.type ?? "Error"}:${(first.value ?? "").slice(0, 120)}`
     : (event.message ?? "").slice(0, 120);
+}
+
+/**
+ * A vendor error that reached us as text rather than as an `Error`.
+ *
+ * `xero-node` rejects with a JSON string, and a caller's
+ * `console.error("[xero] Failed …", rejection)` joins every argument into the
+ * event message, so there is no error object to mark as reported and none to
+ * read a status from. But every Xero call goes through the one hooked client
+ * (`lib/xero/client.ts`), which has already decided what to do with this failure
+ * and reported a stand-in for it if it was worth reporting: a 5xx, a 401 or a 403
+ * yes, any other 4xx no. So an event whose text embeds that error is never the
+ * first report of it, and sending it too would be a second issue, and a second
+ * email, for one failure, carrying the response body the stand-in exists to keep
+ * out. Dropped whatever its status.
+ */
+function isVendorErrorText(event: ErrorEvent): boolean {
+  const texts = [
+    event.message,
+    ...(event.exception?.values ?? []).map((value) => value.value),
+  ];
+  return texts.some((text) => embeddedVendorStatus(text) !== undefined);
 }
 
 function redactEvent(event: ErrorEvent): void {
@@ -57,6 +84,10 @@ function redactEvent(event: ErrorEvent): void {
       details: redactRecord(details as Record<string, unknown>),
     };
   }
+  // A fingerprint is stored with the issue and shown in the UI, and a caller
+  // that builds one from a message (the workflow reporter does) can put a
+  // recipient's address in it.
+  if (event.fingerprint) event.fingerprint = event.fingerprint.map(redactText);
   // Names and emails ride in on `user` and `request` by default when PII is on;
   // collection is off (see data-collection.ts), but an explicit user must never
   // carry more than the Clerk id.
@@ -91,6 +122,7 @@ export function createBeforeSend(
     if (event.tags?.[EXPLICIT_TAG] !== "1") {
       if (wasReported(original)) return null;
       if (isExpectedError(original)) return null;
+      if (isVendorErrorText(event)) return null;
     }
     redactEvent(event);
     if (!throttle.allow(throttleKey(event))) return null;

@@ -190,6 +190,11 @@ export async function runAuditedAgentOperation<T>(params: {
   // so a `DomainSideEffectError` (the email that never went) ends as chat text
   // and nothing else. Reported before that happens. A refusal (a `DomainError`
   // below 500) is dropped by `reportError`, so this only ever raises a fault.
+  //
+  // Always called BEFORE the transaction that records the failure. That
+  // transaction needs the database, and a database outage is one of the likely
+  // reasons for the failure: reported after it, a rejected finalisation would
+  // throw first and the original failure would never be reported.
   const reportFailedOperation = (error: unknown) =>
     reportError(error, {
       source: `eve:operation:${params.action}`,
@@ -220,8 +225,8 @@ export async function runAuditedAgentOperation<T>(params: {
     try {
       output = params.outputSchema.parse(await params.execute());
     } catch (error) {
-      await prisma.$transaction((tx) => finalizeFailure(tx, prepared));
       reportFailedOperation(error);
+      await prisma.$transaction((tx) => finalizeFailure(tx, prepared));
       throw error;
     }
     await prisma.$transaction((tx) => finalizeSuccess(tx, prepared, output));
@@ -246,8 +251,8 @@ export async function runAuditedAgentOperation<T>(params: {
       },
     );
   } catch (error) {
-    await prisma.$transaction((tx) => finalizeFailure(tx, prepared));
     reportFailedOperation(error);
+    await prisma.$transaction((tx) => finalizeFailure(tx, prepared));
     throw error;
   }
   return committed(output);

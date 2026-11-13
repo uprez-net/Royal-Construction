@@ -133,6 +133,13 @@ describe("the outside services stay hooked", () => {
 
   test("Xero and DocuSign are hooked where their clients are built", () => {
     assert.match(read("lib/xero/client.ts"), /instrumentApi\("xero"/);
+    // What xero-node rejects with is a JSON string holding the submitted values
+    // and the request headers (the access token). Reporting it as it is would
+    // send both, so the Xero hook must report the stand-in.
+    assert.match(
+      read("lib/xero/client.ts"),
+      /instrumentApi\("xero",[\s\S]*?summarise:\s*summariseXeroFailure/,
+    );
     assert.match(
       read("lib/docusign/client.ts"),
       /instrumentDocusignApiClient\(/,

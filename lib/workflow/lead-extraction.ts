@@ -67,9 +67,9 @@ async function readAttachments(
 
   if (report.names.length > 0) {
     console.log(
-      `Attachments on ${messageId}: ${report.files.length} read, ` +
-        `${report.skipped.length} skipped` +
-        (report.skipped.length > 0
+      `Attachments on ${messageId}: ${report.files.length} read, `
+        + `${report.skipped.length} skipped`
+        + (report.skipped.length > 0
           ? ` — ${report.skipped.map((item) => `${item.name}: ${item.reason}`).join("; ")}`
           : ""),
     );
@@ -275,7 +275,6 @@ export const processInboundLead = async (
 const runProcessInboundLead = async (
   message: InboundLeadMessage,
 ): Promise<InboundLeadOutcome> => {
-
   if (!message.messageId) {
     // Nothing downstream can be made idempotent without it, so this is not
     // worth retrying.

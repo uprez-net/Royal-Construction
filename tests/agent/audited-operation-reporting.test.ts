@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, test, vi } from "vitest";
 import { z } from "zod";
 
+const db = vi.hoisted(() => ({ failTheFailureWrite: false }));
+
 const sdk = vi.hoisted(() => {
   const captured: unknown[] = [];
   const scope = {
@@ -26,7 +28,13 @@ const tx = {
   agentOperation: {
     findUnique: async () => null,
     create: async () => ({ id: "op_1" }),
-    update: async () => ({}),
+    update: async (args: { data?: { failureReason?: string } }) => {
+      // The write that records a failed operation, when the database is down.
+      if (db.failTheFailureWrite && args.data?.failureReason) {
+        throw new Error("database is unreachable");
+      }
+      return {};
+    },
   },
   agentActionAudit: {
     create: async () => ({ id: "audit_1" }),
@@ -70,6 +78,7 @@ function run(execute: () => Promise<unknown>, transactional?: boolean) {
 
 beforeEach(() => {
   sdk.captured.length = 0;
+  db.failTheFailureWrite = false;
 });
 
 // The adapters above this turn a DomainError into a result the model reads
@@ -113,6 +122,30 @@ describe("a failed audited agent write is reported before the adapter swallows i
         refusal,
       );
       assert.equal(sdk.captured.length, 0);
+    });
+  }
+
+  // A database outage is one of the likely reasons a write failed, and recording
+  // the failure needs the database. Reported after that write, a rejected
+  // finalisation threw first and the original failure was never reported.
+  for (const transactional of [true, false]) {
+    const mode = transactional ? "transactional" : "external side effect";
+
+    test(`${mode}: the original failure is reported even if recording it fails`, async () => {
+      db.failTheFailureWrite = true;
+      const original = new DomainSideEffectError(
+        "Email was not sent.",
+        "email",
+      );
+
+      const thrown = await run(async () => {
+        throw original;
+      }, transactional).catch((e: unknown) => e);
+
+      // Existing behaviour is kept: the finalisation failure is what propagates.
+      assert.match((thrown as Error).message, /database is unreachable/);
+      // But the failure that started it all was not lost.
+      assert.deepEqual(sdk.captured, [original]);
     });
   }
 

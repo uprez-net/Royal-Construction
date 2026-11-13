@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { beforeEach, describe, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, test, vi } from "vitest";
 
 const reports = vi.hoisted(() => ({
   errors: [] as Array<{ error: Error; context: Record<string, unknown> }>,
@@ -26,6 +26,7 @@ vi.mock("@/lib/observability/external", () => ({
   },
 }));
 
+import { resetInstrumentationHandlers } from "@sentry/core";
 import * as Sentry from "@sentry/node";
 
 import {
@@ -133,7 +134,25 @@ describe("failure handlers", () => {
   });
 });
 
+// The SDK keeps its client on three scopes and its console hooks in a module
+// level registry, so a client made by one test is still there for the next. Each
+// case below starts from none and leaves none, and makes the client it needs.
+async function resetSdk(): Promise<void> {
+  await Sentry.getClient()?.close(0);
+  Sentry.getGlobalScope().setClient(undefined);
+  Sentry.getCurrentScope().setClient(undefined);
+  Sentry.getIsolationScope().setClient(undefined);
+  resetInstrumentationHandlers();
+}
+
 describe("initEveErrorReporting", () => {
+  beforeEach(resetSdk);
+  afterEach(resetSdk);
+
+  test("starts from no client, so the cases below are not order dependent", () => {
+    assert.equal(Sentry.isInitialized(), false);
+  });
+
   test("outside production it starts disabled, so the agent sends nothing", () => {
     initEveErrorReporting();
     assert.equal(Sentry.isInitialized(), true);
@@ -141,15 +160,33 @@ describe("initEveErrorReporting", () => {
   });
 
   test("calling it again leaves the first client alone", () => {
+    initEveErrorReporting();
     const first = Sentry.getClient();
+    assert.ok(first, "the first call made a client");
     initEveErrorReporting();
     assert.equal(Sentry.getClient(), first);
   });
 
-  test("it carries the agent's service tag and the locked-down data policy", () => {
+  test("a client someone else already made is left alone", () => {
+    Sentry.init({ dsn: undefined, enabled: false });
+    const theirs = Sentry.getClient();
+    initEveErrorReporting();
+    assert.equal(Sentry.getClient(), theirs);
+  });
+
+  test("it carries the locked-down data policy", () => {
+    initEveErrorReporting();
     const options = Sentry.getClient()?.getOptions();
     assert.equal(options?.dataCollection?.httpBodies?.length, 0);
     assert.equal(options?.dataCollection?.cookies, false);
     assert.equal(options?.dataCollection?.stackFrameVariables, false);
+  });
+
+  test("it tags every event as coming from the agent, not the app", () => {
+    initEveErrorReporting();
+    const scope = Sentry.getClient()?.getOptions().initialScope as
+      | { tags?: Record<string, string> }
+      | undefined;
+    assert.equal(scope?.tags?.service, "eve");
   });
 });

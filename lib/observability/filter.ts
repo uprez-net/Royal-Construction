@@ -138,6 +138,20 @@ export function isServerOriginError(error: unknown): boolean {
   );
 }
 
+/**
+ * The HTTP status of a vendor error that reached us as text rather than as an
+ * `Error`. `xero-node` rejects with a JSON string, and a caller's
+ * `console.error("…", rejection)` joins every argument into one message, so by
+ * the time it is an event the status can only be read out of the string.
+ */
+export function embeddedVendorStatus(
+  text: string | undefined,
+): number | undefined {
+  if (typeof text !== "string") return undefined;
+  const match = /\{"response":\{"statusCode":(\d{3})/.exec(text);
+  return match ? Number(match[1]) : undefined;
+}
+
 /** True once a reporting path has taken this error. */
 export function wasReported(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;

@@ -83,6 +83,22 @@ describe("beforeSend — the last gate before an event leaves", () => {
     assert.equal(out.message, "Bearer [token]");
   });
 
+  test("a fingerprint is redacted, since it is stored with the issue", () => {
+    const evt = event({
+      fingerprint: [
+        "workflow",
+        "syncSentMail",
+        "graph 503 for jane@example.com",
+      ],
+    });
+    const out = send(evt, new Error("x"));
+    assert.deepEqual(out?.fingerprint, [
+      "workflow",
+      "syncSentMail",
+      "graph 503 for [email]",
+    ]);
+  });
+
   test("the user is cut down to the Clerk id", () => {
     const evt = event({
       user: { id: "user_123", email: "jane@example.com", username: "jane" },

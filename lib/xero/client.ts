@@ -5,6 +5,7 @@ import { instrumentApi } from "@/lib/observability/instrument";
 import prisma from "@/lib/prisma";
 
 import { getXeroConfig, XERO_SCOPES, type XeroConfig } from "./config";
+import { summariseXeroFailure } from "./failure";
 import { isInvalidGrant } from "./token-errors";
 
 /**
@@ -81,12 +82,18 @@ export function buildXeroClient(
     ...(options?.state ? { state: options.state } : {}),
   });
 
-  // Every call this app makes to Xero goes through `accountingApi`, from about
-  // a dozen places. Hooking it here reports a failed `createInvoices` or
-  // `getInvoice` with the operation name, once, wherever it was called from.
-  // Callers see the same promise and the same rejection as before.
+  // Every call this app makes to Xero goes through `accountingApi`, from ten
+  // places. Hooking it here reports a failed `createInvoices` or `getInvoice`
+  // with the operation name, once, wherever it was called from. Callers see the
+  // same promise and the same rejection as before.
+  //
+  // What is REPORTED is a stand-in: the SDK rejects with a JSON string holding
+  // the response body (the values submitted) and the request headers (the
+  // access token), and only the status and Xero's error type should leave.
   Object.defineProperty(client, "accountingApi", {
-    value: instrumentApi("xero", client.accountingApi),
+    value: instrumentApi("xero", client.accountingApi, {
+      summarise: summariseXeroFailure,
+    }),
     configurable: true,
     enumerable: true,
     writable: true,

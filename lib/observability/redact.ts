@@ -14,8 +14,16 @@ const AU_PHONE = /(?:\+61|\b0)[\s-]?[2-478](?:[\s-]?\d){8}\b/g;
 const BEARER = /\bBearer\s+[A-Za-z0-9._~+/-]+=*/g;
 const DATABASE_URL = /\bpostgres(?:ql)?:\/\/[^\s"'<>]+/gi;
 
+// A vendor error serialised into text: `{"response":{"statusCode":400,"body":…`.
+// It holds the response body, which echoes the values that were submitted, and
+// the request, whose headers carry the access token. None of it is needed to act
+// on the failure, and redacting emails and phones out of it would leave names,
+// amounts and addresses, so the whole thing is replaced by its status.
+const VENDOR_ERROR_JSON = /\{"response":\{"statusCode":(\d{3})[\s\S]*$/;
+
 export function redactText(text: string): string {
   return text
+    .replace(VENDOR_ERROR_JSON, "[vendor error: HTTP $1]")
     .replace(DATABASE_URL, "[connection-string]")
     .replace(BEARER, "Bearer [token]")
     .replace(EMAIL, "[email]")

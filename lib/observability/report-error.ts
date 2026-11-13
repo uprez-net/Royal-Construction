@@ -15,6 +15,7 @@ import { captureException, flush, withScope } from "@sentry/core";
 
 import { EXPLICIT_TAG } from "./before-send";
 import { isExpectedError, markReported, wasReported } from "./filter";
+import { carryReportAcrossSteps } from "./workflow-context";
 
 export type ErrorLevel = "warning" | "error" | "fatal";
 
@@ -102,6 +103,9 @@ export function captureWithContext(
       if (context.fingerprint) scope.setFingerprint(context.fingerprint);
       captureException(error);
     });
+    // After the capture, so the marker is not part of what was sent. Only does
+    // anything inside a workflow step; see workflow-context.ts.
+    carryReportAcrossSteps(error);
     flushAfterResponse();
   } catch {
     // Never let reporting fail the request that is already failing.

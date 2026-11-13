@@ -40,20 +40,23 @@ export interface ExternalFailureContext {
  *
  * Reported: a 5xx, a 401/403 (our credential), and a call that got no answer.
  * Not reported: any other 4xx, which is the provider refusing one request.
+ *
+ * Returns whether anything was reported, so a caller that reported a stand-in
+ * for the error (see `summarise` in instrument.ts) can mark the original.
  */
 export function reportExternalError(
   service: ExternalService,
   operation: string,
   error: unknown,
   context: ExternalFailureContext = {},
-): void {
+): boolean {
   try {
     const { force, ...rest } = context;
     if (
       wasReported(error)
       || !isReportableExternalFailure(error, { anyStatus: force })
     ) {
-      return;
+      return false;
     }
     const status = errorStatus(error);
     captureWithContext(error, {
@@ -76,7 +79,9 @@ export function reportExternalError(
       ],
       ...rest,
     });
+    return true;
   } catch {
     // Reporting never throws into the caller.
+    return false;
   }
 }

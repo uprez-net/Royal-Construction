@@ -10,6 +10,8 @@
 // with the same error. Reporting is a side channel and never changes the flow.
 
 import { reportExternalError, type ExternalService } from "./external";
+import { markReported } from "./filter";
+import { carryReportAcrossSteps } from "./workflow-context";
 
 const INSTRUMENTED = new WeakSet<object>();
 
@@ -34,6 +36,16 @@ export interface InstrumentOptions {
    * When set, an error that passes is reported with any status.
    */
   shouldReport?: (error: unknown) => boolean;
+  /**
+   * A stand-in to report instead of the error itself, for a vendor whose
+   * rejection carries more than should leave the process: Xero rejects with a
+   * JSON string holding the whole response body (the values that were
+   * submitted) and the request headers, bearer token included. The stand-in
+   * keeps only what is needed to act on it, and carries the HTTP status so the
+   * usual 4xx rule still applies. The caller still gets the original rejection,
+   * unchanged.
+   */
+  summarise?: (error: unknown, operation: string) => unknown;
 }
 
 function report(
@@ -42,19 +54,38 @@ function report(
   error: unknown,
   options: InstrumentOptions,
 ): void {
+  let subject = error;
+  if (options.summarise) {
+    try {
+      subject = options.summarise(error, operation);
+    } catch {
+      // Never fall back to the raw error: it is the thing being kept out.
+      subject = new Error(`${service} ${operation} failed`);
+    }
+  }
+
+  let sent: boolean;
   if (options.shouldReport) {
     let wanted = false;
     try {
-      wanted = options.shouldReport(error);
+      wanted = options.shouldReport(subject);
     } catch {
       // A predicate that throws must not hide the failure it was asked about.
       wanted = true;
     }
     if (!wanted) return;
-    reportExternalError(service, operation, error, { force: true });
-    return;
+    sent = reportExternalError(service, operation, subject, { force: true });
+  } else {
+    sent = reportExternalError(service, operation, subject);
   }
-  reportExternalError(service, operation, error);
+
+  // Something other than the original was reported. Mark the original, so no
+  // other path (a caller's console.error, the workflow layer) reports the same
+  // failure again with the content that was kept out of the stand-in.
+  if (sent && subject !== error) {
+    markReported(error);
+    carryReportAcrossSteps(error);
+  }
 }
 
 /**
