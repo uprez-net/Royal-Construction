@@ -12,7 +12,7 @@ import {
 } from "@/agent/lib/specialist-result";
 import delegate from "@/agent/tools/delegate";
 import { toolOutcome } from "@/components/agent/agent-format";
-import { delegateEnvelopes } from "../../evals/helpers/envelope";
+import { delegateEnvelopes } from "@/evals/helpers/envelope";
 
 // The staging failure (13 Nov 2026): the project specialist read the project,
 // had its real answer rejected by eve three times on `version`, then submitted
@@ -116,6 +116,18 @@ describe("the specialist output schema as eve lowers it", () => {
     lowered["~standard"].validate(value) as
       | { issues?: undefined; value: unknown }
       | { issues: readonly { message: string }[] };
+
+  it("still validates the rest of the envelope", async () => {
+    // Guards against eve degrading the extended schema to "accept anything",
+    // which would end the model's in-loop correction on a malformed answer.
+    for (const bad of [
+      { ...projectResult, title: undefined },
+      { ...projectResult, kind: "nonsense" },
+    ]) {
+      const result = await validate(bad);
+      assert.ok(result.issues?.length, JSON.stringify(bad));
+    }
+  });
 
   it("accepts a result with version missing, 1 or '1'", async () => {
     for (const version of [undefined, 1, "1"]) {
