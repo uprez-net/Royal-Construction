@@ -7,7 +7,7 @@ export default defineEval({
   async test(t) {
     await expectRoutedTo(t, {
       prompt:
-        "Search our projects and tell me which ones are currently active.",
+        "Use the live project search to list active projects. Do not use recalled project IDs or fetch known projects individually.",
       specialist: "project-operations",
       usingTool: "search_projects",
     });
