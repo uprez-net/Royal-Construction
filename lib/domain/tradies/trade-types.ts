@@ -403,7 +403,11 @@ export function tradeSearchTerms(text: string): string[] {
   if (!query) return [];
   const terms = new Set([query]);
   for (const word of query.toLowerCase().match(/[a-z]+/g) ?? []) {
-    for (const fragment of TRADE_WORD_FRAGMENTS[word] ?? []) {
+    // Own entries only: "constructor" is on every object's prototype.
+    const fragments = Object.hasOwn(TRADE_WORD_FRAGMENTS, word)
+      ? TRADE_WORD_FRAGMENTS[word]!
+      : [];
+    for (const fragment of fragments) {
       terms.add(fragment);
     }
   }

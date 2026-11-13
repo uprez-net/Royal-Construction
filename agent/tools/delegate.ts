@@ -8,6 +8,7 @@ import {
 import {
   MAX_TEAM_TASKS,
   briefFor,
+  isCancelledFinding,
   planWaves,
   specialistFinding,
   taskNotRun,
@@ -225,13 +226,16 @@ export default defineWorkflowTool({
               return [task.id, failure] as const;
             }
             const output = verdict.envelope;
+            const finding = specialistFinding(task.specialist, output);
             // A specialist that answered with an error envelope did not do
-            // its task: its dependents must not start from it as if it had.
-            if (!single && output.kind === "error") failed.add(task.id);
-            return [
-              task.id,
-              specialistFinding(task.specialist, output),
-            ] as const;
+            // its task, and neither did one whose change the person
+            // cancelled: its dependents must not start from it as if it had.
+            if (
+              !single
+              && (output.kind === "error" || isCancelledFinding(finding))
+            )
+              failed.add(task.id);
+            return [task.id, finding] as const;
           } catch (error) {
             // One task alone keeps failing the tool call, so the orchestrator
             // cannot mistake it for an answer. In a team, the others' results

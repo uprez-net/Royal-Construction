@@ -1,9 +1,6 @@
 import type { SpecialistName } from "@/agent/lib/specialists";
 import { forPeopleDates } from "@/agent/lib/model-output";
-import {
-  normalizeSpecialistResult,
-  type AgentResultEnvelope,
-} from "@/agent/lib/result-contracts";
+import { normalizeSpecialistResult } from "@/agent/lib/result-contracts";
 
 // How one `delegate` call runs several specialists as a team.
 //
@@ -186,21 +183,41 @@ export function taskNotRun(
  *   `2026-09-24T14:00:00.000Z` read off the string is Thursday when the
  *   meeting is Friday (#429);
  * - a change the person cancelled at approval gets fixed wording.
+ *
+ * The dates are rewritten before the envelope is normalised, so its length
+ * limits hold for the longer, readable form.
  */
 export function specialistFinding(specialist: SpecialistName, output: unknown) {
-  const readable = forPeopleDates(
-    normalizeSpecialistResult(output),
-  ) as AgentResultEnvelope;
+  const readable = normalizeSpecialistResult(forPeopleDates(output));
   return { ...(cancelledChangeResult(readable) ?? readable), specialist };
 }
 
-export const CANCELLED_TITLE = "Cancelled — nothing changed";
+/** Whether a specialist finding is a change the person cancelled. */
+export function isCancelledFinding(finding: unknown): boolean {
+  if (finding === null || typeof finding !== "object") return false;
+  const data = (finding as { data?: unknown }).data;
+  return (
+    data !== null
+    && typeof data === "object"
+    && (data as { cancelled?: unknown }).cancelled === true
+  );
+}
+
+/**
+ * Says only that the cancelled change was not applied: the same task may have
+ * made another, approved change before it, so "nothing changed" can be false.
+ */
+export const CANCELLED_TITLE = "Cancelled — change not applied";
 
 /**
  * A specialist result marked cancelled, with the words people read fixed.
  *
  * Returns null for any other result. The change description is the one piece
  * of model text kept, and it is shown as what was cancelled, never as why.
+ * The model's warnings are dropped with its title and summary: on staging they
+ * carried the business rule it invented to explain the cancellation (#429).
+ * Each earlier write in the task had its own approval card, so the person
+ * already knows about it.
  */
 export function cancelledChangeResult<
   T extends {
@@ -218,7 +235,7 @@ export function cancelledChangeResult<
     ...result,
     kind: "confirmation",
     title: CANCELLED_TITLE,
-    summary: `You cancelled this change${change ? ` (${change.slice(0, 200)})` : ""}, so nothing was changed.`,
+    summary: `You cancelled this change${change ? ` (${change.slice(0, 200)})` : ""}, so it was not applied.`,
     warnings: [],
   };
 }

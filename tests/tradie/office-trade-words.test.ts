@@ -26,6 +26,14 @@ test("office words carry the fragment of the trade they mean", () => {
   assert.deepEqual(tradeSearchTerms("  "), []);
 });
 
+test("a word that names an object property is not an office word", () => {
+  assert.deepEqual(tradeSearchTerms("constructor"), ["constructor"]);
+  assert.deepEqual(tradeSearchTerms("Constructor sparky"), [
+    "Constructor sparky",
+    "electric",
+  ]);
+});
+
 test("a search for an office word reaches the trade it means", async () => {
   const recorder = recordingDb({
     "tradeType.findMany": [{ label: "Electrician" }],

@@ -4,7 +4,11 @@ import path from "node:path";
 import { test } from "vitest";
 
 import { findCancelledApproval } from "@/agent/lib/cancelled-approval";
-import { forModel, forPeopleDates } from "@/agent/lib/model-output";
+import {
+  forModel,
+  forModelKeeping,
+  forPeopleDates,
+} from "@/agent/lib/model-output";
 import {
   agentResultEnvelopeSchema,
   normalizeSpecialistResult,
@@ -52,6 +56,50 @@ test("dates inside prose are rewritten; ids, links and concurrency tokens are no
   assert.equal(value.file, "quote-2026-09-25.pdf");
 });
 
+test("file names and email addresses are kept exact", () => {
+  const value = forPeopleDates({
+    file: "2026-09-24.pdf",
+    fileName: "2026-09-24.pdf",
+    email: "site-2026-09-24@example.com",
+    contactEmail: "2026-09-24@example.com",
+  }) as Record<string, string>;
+  assert.equal(value.file, "2026-09-24.pdf");
+  assert.equal(value.fileName, "2026-09-24.pdf");
+  assert.equal(value.email, "site-2026-09-24@example.com");
+  assert.equal(value.contactEmail, "2026-09-24@example.com");
+});
+
+test("offer draft text the model may write back stays as stored", () => {
+  const output = forModelKeeping("draft")({
+    data: {
+      offer: { sentAt: "2026-09-24T14:00:00.000Z" },
+      workspace: {
+        draft: {
+          introText: "Prices held until 2026-09-24.",
+          exclusionBullets: ["Rock removal after 2026-09-24"],
+        },
+      },
+    },
+  }) as {
+    value: {
+      data: { offer: { sentAt: string }; workspace: { draft: unknown } };
+    };
+  };
+  assert.equal(output.value.data.offer.sentAt, "Fri 25 Sept 2026");
+  assert.deepEqual(output.value.data.workspace.draft, {
+    introText: "Prices held until 2026-09-24.",
+    exclusionBullets: ["Rock removal after 2026-09-24"],
+  });
+});
+
+/**
+ * Tools whose output the model edits and writes back whole, so a humanised
+ * date would be stored as the new value.
+ */
+const RAW_FOR_ROUND_TRIP = new Set([
+  "project-operations/tools/get_project_requirements.ts",
+]);
+
 test("every specialist tool shows the model Sydney dates", () => {
   const root = path.join(REPO_ROOT, "agent/subagents");
   const missing: string[] = [];
@@ -61,9 +109,11 @@ test("every specialist tool shows the model Sydney dates", () => {
     for (const file of readdirSync(tools).filter((name) =>
       name.endsWith(".ts"),
     )) {
+      const name = `${specialist}/tools/${file}`;
+      if (RAW_FOR_ROUND_TRIP.has(name)) continue;
       const source = readFileSync(path.join(tools, file), "utf8");
-      if (!/toModelOutput: forModel,/.test(source)) {
-        missing.push(`${specialist}/tools/${file}`);
+      if (!/toModelOutput: forModel(?:Keeping\([^)]*\))?,/.test(source)) {
+        missing.push(name);
       }
     }
   }
@@ -186,7 +236,68 @@ test("a cancelled change reads as the person's decision, in fixed words", () => 
   assert.equal(finding.title, CANCELLED_TITLE);
   assert.equal(
     finding.summary,
-    "You cancelled this change (Move the Wilton Uppal lead to Qualified), so nothing was changed.",
+    "You cancelled this change (Move the Wilton Uppal lead to Qualified), so it was not applied.",
   );
+  // The invented rule rode in the warnings on staging.
   assert.deepEqual(finding.warnings, []);
+});
+
+test("a denial is read from the result's structure, as eve writes it", () => {
+  const request = {
+    role: "user",
+    content: [{ type: "text", text: "Move to Qualified" }],
+  };
+  // How eve records a denial in the transcript the hook reads.
+  assert.equal(
+    findCancelledApproval([
+      request,
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolName: "update_lead",
+            output: {
+              type: "execution-denied",
+              reason: "Tool execution was denied.",
+            },
+          },
+        ],
+      },
+    ]),
+    "update_lead",
+  );
+  // A successful lookup whose data merely mentions the code is not one.
+  assert.equal(
+    findCancelledApproval([
+      request,
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolName: "get_lead",
+            output: {
+              type: "json",
+              value: { note: "Audit: TOOL_EXECUTION_DENIED on 12 Nov" },
+            },
+          },
+        ],
+      },
+    ]),
+    null,
+  );
+});
+
+test("a date-heavy title still fits the envelope once it is readable", () => {
+  // 200 characters as written; longer once each date is spelled out.
+  const title = Array.from({ length: 18 }, () => "2026-09-24").join(" ");
+  const finding = specialistFinding("lead-operations", {
+    kind: "task-list",
+    title,
+    summary: "Meetings.",
+  });
+  assert.ok(agentResultEnvelopeSchema.safeParse(finding).success);
+  assert.ok(finding.title.length <= 200);
+  assert.ok(finding.title.startsWith("Thu 24 Sept 2026"));
 });

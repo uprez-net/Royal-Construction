@@ -1,4 +1,5 @@
 import { defineDynamic, defineInstructions } from "eve/instructions";
+import { CANCELLED_TITLE } from "@/agent/lib/team-dispatch";
 
 /**
  * What a specialist does after the person presses Cancel on its approval.
@@ -27,18 +28,33 @@ function partsOf(message: MessageLike): unknown[] {
   return Array.isArray(message.content) ? message.content : [];
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * Whether a tool result's output is eve's denial, read from its structure.
+ *
+ * Never from the serialised result: a successful lookup whose data happens to
+ * contain the code — a note, an audit line — is not a cancelled approval.
+ * eve writes a denial into history as `{ type: "execution-denied" }`, and its
+ * runtime result as an error payload carrying `code: TOOL_EXECUTION_DENIED`.
+ */
+function isDeniedOutput(output: unknown): boolean {
+  if (!isRecord(output)) return false;
+  if (output.type === "execution-denied") return true;
+  if (output.code === APPROVAL_DENIED_CODE) return true;
+  return (
+    (output.type === "error-json" || output.type === "error-text")
+    && isRecord(output.value)
+    && output.value.code === APPROVAL_DENIED_CODE
+  );
+}
+
 function deniedToolName(part: unknown): string | null {
-  if (part === null || typeof part !== "object") return null;
-  const candidate = part as { type?: unknown; toolName?: unknown };
-  if (candidate.type !== "tool-result") return null;
-  let serialized: string;
-  try {
-    serialized = JSON.stringify(part);
-  } catch {
-    return null;
-  }
-  if (!serialized.includes(APPROVAL_DENIED_CODE)) return null;
-  return typeof candidate.toolName === "string" ? candidate.toolName : "change";
+  if (!isRecord(part) || part.type !== "tool-result") return null;
+  if (!isDeniedOutput(part.output)) return null;
+  return typeof part.toolName === "string" ? part.toolName : "change";
 }
 
 /**
@@ -64,9 +80,9 @@ export function findCancelledApproval(
 export function cancelledApprovalInstructions(toolName: string): string {
   return [
     "## The person cancelled this change",
-    `The person pressed Cancel on the approval for ${toolName}. That was their decision — the system did not reject anything, and no rule stopped it. Nothing was changed.`,
+    `The person pressed Cancel on the approval for ${toolName}. That was their decision — the system did not reject anything, and no rule stopped it. That change was not applied.`,
     "- Do not call any tool, and do not try the change another way.",
-    '- Finish now with kind "confirmation", title "Cancelled — nothing changed", data { "cancelled": true, "change": "<the change, in a few plain words>" }, and a one-sentence summary saying they cancelled it and nothing was changed.',
+    `- Finish now with kind "confirmation", title "${CANCELLED_TITLE}", data { "cancelled": true, "change": "<the change, in a few plain words>" }, and a one-sentence summary saying they cancelled it and it was not applied.`,
     "- Give no reason for the cancellation and state no business rule.",
   ].join("\n");
 }

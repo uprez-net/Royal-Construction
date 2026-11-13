@@ -19,7 +19,27 @@ test("a set of changes reads as field → value", () => {
     changes: { stage: "Qualified", followupDate: null, assignedUserId: "u1" },
   });
   const changes = fields.find((field) => field.key === "changes");
-  assert.equal(changes?.value, "Stage → Qualified · Followup Date → (cleared)");
+  // A reassignment's target is part of what is being approved.
+  assert.equal(
+    changes?.value,
+    "Stage → Qualified · Followup Date → (cleared) · Assigned User → u1",
+  );
+});
+
+test("an id inside a set of changes reads as its record's name when known", () => {
+  const fields = toInputFields(
+    { changes: { stage: "Qualified", tradieId: "t1" } },
+    { changeLabels: { tradieId: "AR Electrical" } },
+  );
+  assert.equal(fields[0]?.value, "Stage → Qualified · Tradie → AR Electrical");
+});
+
+test("hideIds leaves ids out of a set of changes too", () => {
+  const [changes] = toInputFields(
+    { changes: { stage: "Qualified", assignedUserId: "u1" } },
+    { hideIds: true },
+  );
+  assert.equal(changes?.value, "Stage → Qualified");
 });
 
 test("a status code reads as words", () => {

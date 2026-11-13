@@ -60,11 +60,13 @@ export type AgentInputField = {
  * A record id field is labelled by what it points at — "Lead", not "Lead Id" —
  * because the approval card shows the record's name in its place; `hideIds`
  * leaves id fields out altogether, for places that cannot name them. A nested
- * set of changes reads as "Stage → Qualified" rather than as JSON (#429).
+ * set of changes reads as "Stage → Qualified" rather than as JSON (#429), and
+ * an id inside it — a reassignment's target — reads as the record's name when
+ * `changeLabels` has one, or as the raw id otherwise.
  */
 export function toInputFields(
   input: unknown,
-  options: { hideIds?: boolean } = {},
+  options: InputFieldOptions = {},
 ): AgentInputField[] {
   if (!input || typeof input !== "object" || Array.isArray(input)) return [];
   return Object.entries(input as Record<string, unknown>)
@@ -84,7 +86,7 @@ export function toInputFields(
           : humanize(key),
       prose: PROSE_KEY.test(key) && typeof value === "string",
       value: isChangeSet(value)
-        ? describeChanges(value)
+        ? describeChanges(value, options)
         : formatFieldValue(value),
     }));
 }
@@ -102,18 +104,33 @@ function isChangeSet(value: unknown): value is Record<string, unknown> {
   );
 }
 
-function describeChanges(changes: Record<string, unknown>): string {
+export type InputFieldOptions = {
+  readonly hideIds?: boolean;
+  /** Names for record ids inside a set of changes, keyed by field name. */
+  readonly changeLabels?: Readonly<Record<string, string>>;
+};
+
+function describeChanges(
+  changes: Record<string, unknown>,
+  options: InputFieldOptions,
+): string {
   return Object.entries(changes)
     .filter(
       ([key, item]) =>
-        !isRecordIdField(key)
+        !(options.hideIds && isRecordIdField(key))
         && !key.startsWith("expected")
         && item !== undefined,
     )
-    .map(
-      ([key, item]) =>
-        `${humanize(key)} → ${item === null || item === "" ? "(cleared)" : formatFieldValue(item)}`,
-    )
+    .map(([key, item]) => {
+      const isId = isRecordIdField(key) && key !== "id";
+      const label = humanize(isId ? key.replace(/Ids?$/, "") : key);
+      const value =
+        item === null || item === ""
+          ? "(cleared)"
+          : ((isId ? options.changeLabels?.[key] : undefined)
+            ?? formatFieldValue(item));
+      return `${label} → ${value}`;
+    })
     .join(" · ");
 }
 

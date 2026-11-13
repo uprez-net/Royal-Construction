@@ -148,3 +148,45 @@ test("a session that is not a signed-in user's is not persisted", async () => {
   await persist(event("session.started"), serviceCtx);
   assert.equal(batches.length, 0);
 });
+
+test("a boundary waits for a background write in flight, then writes what queued behind it", async () => {
+  const calls: string[][] = [];
+  let releaseFirst: () => void = () => undefined;
+  const store = {
+    writeBatch(_identity: unknown, batch: { eventType: string }[]) {
+      calls.push(batch.map((event) => event.eventType));
+      if (calls.length > 1) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+    },
+  };
+  const persist = createAgentEventPersister(noTitle, store);
+
+  await persist(event("message.appended", { messageDelta: "a" }), ctx);
+  await vi.advanceTimersByTimeAsync(1_000);
+  assert.deepEqual(
+    calls,
+    [["message.appended"]],
+    "the first write is in flight",
+  );
+
+  await persist(event("reasoning.appended", { reasoningDelta: "b" }), ctx);
+  let boundaryDone = false;
+  const boundary = persist(
+    event("message.completed", { message: "a" }),
+    ctx,
+  ).then(() => {
+    boundaryDone = true;
+  });
+  await vi.advanceTimersByTimeAsync(1_000);
+  assert.equal(boundaryDone, false, "the boundary waits for the first write");
+  assert.equal(calls.length, 1, "nothing overtakes the write in flight");
+
+  releaseFirst();
+  await boundary;
+  assert.deepEqual(calls, [
+    ["message.appended"],
+    ["reasoning.appended", "message.completed"],
+  ]);
+});
