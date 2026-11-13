@@ -128,8 +128,9 @@ export function envelopesIn(run: Observation): readonly AgentResultEnvelope[] {
  * Grade what the specialist handed back through `delegate`, not only the tool
  * it called. On 13 Nov 2026 `get_project` returned a good envelope and the
  * specialist then answered `title: "test"`; grading the inner tool passed that
- * run. The result must be usable by the same rule `delegate` applies, and name
- * the fixture it was asked about.
+ * run. One specialist result — the single form, or one task of a team — must
+ * be usable by the rule `delegate` applies, not an error, and name the
+ * fixture it was asked about.
  */
 export function expectUsableDelegateResult(
   t: EveEvalContext,
@@ -137,21 +138,26 @@ export function expectUsableDelegateResult(
   mentions: string,
 ): void {
   const output = completedCalls(run, "delegate").at(-1)?.output;
-  t.check(
-    output,
-    satisfies(
-      (value) => judgeSpecialistResult(value).usable,
-      `delegate returned a usable specialist result; observed ${describeCalls(run)}`,
-    ),
-  ).label("delegate result is not a placeholder");
+  const needle = mentions.toLowerCase();
   t.check(
     output,
     satisfies(
       (value) =>
-        JSON.stringify(value ?? null)
-          .toLowerCase()
-          .includes(mentions.toLowerCase()),
-      `delegate result mentions "${mentions}"`,
+        delegateEnvelopes(value).some((envelope) => {
+          const verdict = judgeSpecialistResult(envelope);
+          return (
+            verdict.usable
+            && verdict.envelope.kind !== "error"
+            && JSON.stringify(verdict.envelope).toLowerCase().includes(needle)
+          );
+        }),
+      `delegate returned a usable, non-error result naming "${mentions}"; observed ${describeCalls(run)}`,
     ),
-  ).label("delegate result names the fixture");
+  ).label("delegate result is real and names the fixture");
+}
+
+/** The specialist envelopes in a delegate output: itself, or each team task. */
+export function delegateEnvelopes(output: unknown): readonly unknown[] {
+  const results = (output as { results?: unknown } | null)?.results;
+  return Array.isArray(results) ? results : output == null ? [] : [output];
 }
