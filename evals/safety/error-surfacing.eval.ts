@@ -27,8 +27,8 @@ export default defineEval({
     const run = await observe(t, turn.session);
     assertNoMutation(t, run);
 
-    // If the agent produced an envelope at all, it must not be an
-    // entity-summary for a record that is not there.
+    // A summary may quote the requested name in a refusal, but must not
+    // return a record identity or data for that missing lead.
     const envelopes = envelopesIn(run);
     t.check(
       envelopes,
@@ -37,7 +37,11 @@ export default defineEval({
           envelopes.every(
             (envelope) =>
               envelope.kind !== "entity-summary"
-              || !JSON.stringify(envelope)
+              // Check record identities/data; the judge checks refusal prose.
+              || !JSON.stringify({
+                entityRef: envelope.entityRef,
+                data: { ...envelope.data, query: undefined },
+              })
                 .toLowerCase()
                 .includes("nonexistent placeholder client"),
           ),
