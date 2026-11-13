@@ -95,6 +95,26 @@ describe("createRefreshingFetch", () => {
     assert.deepEqual(h.refreshing.refreshedTokens(), [fresh]);
   });
 
+  it("gives up on a mint that never answers instead of hanging every request", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const h = harness(
+      () =>
+        new Promise<Response>((_, reject) =>
+          // What fetch does when the mint's timeout signal fires.
+          queueMicrotask(() =>
+            reject(new DOMException("timed out", "TimeoutError")),
+          ),
+        ),
+    );
+    h.advance(5 * 60_000 - REFRESH_MARGIN_MS + 1);
+    await h.refreshing.fetch(`${target.origin}/eve/v1/info`, asEve);
+    const mintInit = h.baseFetch.mock.calls.find(([u]) =>
+      String(u).endsWith("/api/eval/auth"),
+    )?.[1];
+    assert.ok(mintInit?.signal instanceof AbortSignal);
+    assert.equal(h.sent[0].authorization, `Bearer ${initial}`);
+  });
+
   it("leaves every other request alone, however late in the run", async () => {
     const h = harness(() => bootstrap(fresh));
     h.advance(10 * 60_000);

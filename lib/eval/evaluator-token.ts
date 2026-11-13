@@ -31,6 +31,9 @@ export const REFRESH_MARGIN_MS = 2 * 60 * 1000;
 /** After a failed refresh, wait this long before asking again, so a broken
  * bootstrap is not hammered into its rate limit on every request. */
 export const REFRESH_RETRY_MS = 30 * 1000;
+/** A mint that has not answered by now is a failed refresh, not a hang:
+ * every request waiting on the shared refresh waits on this call. */
+export const MINT_TIMEOUT_MS = 15 * 1000;
 
 async function responseJson(response: Response): Promise<BootstrapResponse> {
   if (!response.ok) {
@@ -60,6 +63,7 @@ export async function mintEvaluatorToken(
     cache: "no-store",
     headers: { [EVAL_AUTH_HEADER]: secret },
     method: "POST",
+    signal: AbortSignal.timeout(MINT_TIMEOUT_MS),
   });
   return responseJson(response);
 }
