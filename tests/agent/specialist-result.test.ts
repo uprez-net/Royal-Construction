@@ -11,6 +11,8 @@ import {
   specialistOutputSchema,
 } from "@/agent/lib/specialist-result";
 import delegate from "@/agent/tools/delegate";
+import { toolOutcome } from "@/components/agent/agent-format";
+import { delegateEnvelopes } from "../../evals/helpers/envelope";
 
 // The staging failure (13 Nov 2026): the project specialist read the project,
 // had its real answer rejected by eve three times on `version`, then submitted
@@ -42,6 +44,33 @@ describe("judgeSpecialistResult", () => {
     assert.equal(verdict.usable, false);
     assert.equal(
       judgeSpecialistResult({ ...probe, kind: "confirmation", title: "Test." })
+        .usable,
+      false,
+    );
+  });
+
+  it("rejects punctuation-only text", () => {
+    for (const text of ["...", "-", "—", "?!"]) {
+      assert.equal(
+        judgeSpecialistResult({ kind: "entity-summary", summary: text, title: text })
+          .usable,
+        false,
+        text,
+      );
+    }
+  });
+
+  it("keeps a real record that happens to be called Test", () => {
+    const verdict = judgeSpecialistResult({
+      ...projectResult,
+      entityRef: { display: { label: "Test" }, id: "l9", type: "lead" },
+      summary: "Stage Quoted; follow-up due Friday.",
+      title: "Test",
+    });
+    assert.ok(verdict.usable);
+    // Without a record behind it, the same title is a placeholder.
+    assert.equal(
+      judgeSpecialistResult({ kind: "entity-summary", summary: "Found it.", title: "Test" })
         .usable,
       false,
     );
@@ -143,6 +172,18 @@ describe("delegate with an unusable specialist result", () => {
     assert.equal(result.specialist, "project-operations");
   });
 
+  it("tells the specialist a read-only task changes nothing, on both attempts", async () => {
+    const { ctx, messages } = scripted(probe, projectResult);
+    await runDelegate({ ...single, readOnly: true }, ctx);
+    for (const message of messages) assert.match(message, /read-only lookup: change nothing/);
+  });
+
+  it("does not retry an answer that says it reached an approval", async () => {
+    const { ctx, messages } = scripted({ ...probe, requiresApproval: true }, projectResult);
+    await assert.rejects(runDelegate({ ...single, readOnly: true }, ctx));
+    assert.equal(messages.length, 1);
+  });
+
   it("retries only once, then fails loudly", async () => {
     const { ctx, messages } = scripted(probe, probe, projectResult);
     await assert.rejects(
@@ -170,7 +211,51 @@ describe("delegate with an unusable specialist result", () => {
     )) as { results: { task: string; kind: string; summary: string }[]; summary: string };
     assert.equal(messages.length, 1);
     assert.equal(result.results[0]?.kind, "error");
-    assert.match(result.results[0]?.summary ?? "", /may have changed something/);
+    assert.match(result.results[0]?.summary ?? "", /may have done so before failing/);
     assert.match(result.summary, /0 of 2 tasks finished/);
+  });
+});
+
+describe("the tool card outcome", () => {
+  it("is failed for an error envelope and for a team where every task failed", () => {
+    assert.deepEqual(toolOutcome({ kind: "error", summary: "x", title: "x" }), {
+      failed: true,
+      note: null,
+    });
+    const allFailed = toolOutcome({
+      results: [{ kind: "error" }, { kind: "error" }],
+      summary: "0 of 2 tasks finished; not finished: a, b.",
+    });
+    assert.equal(allFailed.failed, true);
+  });
+
+  it("names a partial team failure without calling the whole call failed", () => {
+    const outcome = toolOutcome({
+      results: [{ kind: "entity-summary" }, { kind: "error" }],
+      summary: "1 of 2 tasks finished; not finished: b.",
+    });
+    assert.deepEqual(outcome, {
+      failed: false,
+      note: "1 of 2 tasks finished; not finished: b.",
+    });
+  });
+
+  it("is a plain success otherwise", () => {
+    assert.deepEqual(toolOutcome(projectResult), { failed: false, note: null });
+    assert.deepEqual(
+      toolOutcome({ results: [{ kind: "entity-summary" }], summary: "1 of 1 tasks finished." }),
+      { failed: false, note: null },
+    );
+  });
+});
+
+describe("the eval's view of a delegate result", () => {
+  it("reads the single form and each task of a team", () => {
+    assert.deepEqual(delegateEnvelopes(projectResult), [projectResult]);
+    assert.deepEqual(
+      delegateEnvelopes({ results: [projectResult, probe], summary: "" }),
+      [projectResult, probe],
+    );
+    assert.deepEqual(delegateEnvelopes(undefined), []);
   });
 });

@@ -49,6 +49,11 @@ import { judgeSpecialistResult } from "@/agent/lib/specialist-result";
  * rejecting its real result, and it reached the person as a completed lookup.
  * A task marked `readOnly` gets exactly one automatic retry; a task that may
  * change something never does, because the first attempt may already have.
+ * `readOnly` is the orchestrator's word, not an enforced tool policy: eve's
+ * `ctx.agent()` returns only the output, with no record of writes or
+ * approvals. So it is told to the specialist on both attempts, the retry is
+ * skipped if the first answer says it reached an approval, every write still
+ * stops at the owner's approval, and a failure never claims nothing changed.
  */
 
 const specialistSchema = z.enum(DELEGATE_TARGETS);
@@ -187,23 +192,28 @@ export default defineWorkflowTool({
               ),
             ] as const;
           }
-          const message = briefFor(task, {
+          const brief = briefFor(task, {
             findings,
             goal: input.goal,
             sharedContext: input.sharedContext,
             teamSize: tasks.length,
           });
+          const message = task.readOnly
+            ? `${brief}\n\nThis is a read-only lookup: change nothing.`
+            : brief;
           try {
-            let verdict = judgeSpecialistResult(
-              await ctx.agent(task.specialist, { message }),
-            );
+            const first = await ctx.agent(task.specialist, { message });
+            let verdict = judgeSpecialistResult(first);
             // One retry, read-only tasks only. A task that may have changed
             // something is never re-run: its first attempt may have done it.
-            const retried = !verdict.usable && task.readOnly === true;
+            const retried =
+              !verdict.usable
+              && task.readOnly === true
+              && !reachedApproval(first);
             if (retried) {
               verdict = judgeSpecialistResult(
                 await ctx.agent(task.specialist, {
-                  message: `${message}\n\nYour previous attempt at this read-only lookup did not return a usable result. Look it up again and change nothing. Your final answer must describe what you found.`,
+                  message: `${message}\n\nYour previous attempt at this lookup did not return a usable result. Look it up again. Your final answer must describe what you found.`,
                 }),
               );
             }
@@ -269,13 +279,20 @@ function unusableResult(task: TeamTask, reason: string, retried: boolean) {
     title: "No usable result",
     summary: [
       `The ${task.specialist} specialist did not return a usable result (${reason})${retried ? ", even after one automatic retry" : ""}.`,
-      task.readOnly
-        ? "Nothing was changed."
-        : "It may have changed something before failing: check the record before trying again.",
+      "If the task could change anything, it may have done so before failing: check the record before trying again.",
       "Do not delegate this again in this turn; tell the person the live lookup failed.",
     ].join(" "),
     version: 1 as const,
   };
+}
+
+/** The specialist's answer says it went through, or is waiting on, an approval. */
+function reachedApproval(output: unknown): boolean {
+  return (
+    output !== null
+    && typeof output === "object"
+    && (output as { requiresApproval?: unknown }).requiresApproval === true
+  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

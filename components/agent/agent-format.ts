@@ -256,15 +256,32 @@ export function formatTime(value: string | null) {
 }
 
 /**
- * A tool that completed but answered with an error envelope did not do its
- * job. The card must read as failed, not as a green "Completed" — a delegate
- * whose specialist returned nothing usable used to look like a success.
+ * Whether a completed tool actually did its job. A tool that answered with an
+ * error envelope failed, and so did a `delegate` team whose every task failed;
+ * a team where only some failed says which in `note`. A delegate whose
+ * specialist returned nothing usable used to show as a green "Completed".
  */
-export function isErrorOutput(output: unknown): boolean {
-  return (
-    output !== null
-    && typeof output === "object"
-    && !Array.isArray(output)
-    && (output as { kind?: unknown }).kind === "error"
-  );
+export function toolOutcome(output: unknown): {
+  failed: boolean;
+  note: string | null;
+} {
+  if (output === null || typeof output !== "object" || Array.isArray(output))
+    return { failed: false, note: null };
+  const value = output as { kind?: unknown; results?: unknown; summary?: unknown };
+  if (value.kind === "error") return { failed: true, note: null };
+  if (!Array.isArray(value.results) || value.results.length === 0)
+    return { failed: false, note: null };
+  const failedTasks = value.results.filter(
+    (result) =>
+      result !== null
+      && typeof result === "object"
+      && (result as { kind?: unknown }).kind === "error",
+  ).length;
+  return {
+    failed: failedTasks === value.results.length,
+    note:
+      failedTasks > 0 && typeof value.summary === "string"
+        ? value.summary
+        : null,
+  };
 }

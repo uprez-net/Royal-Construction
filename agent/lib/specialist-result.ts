@@ -35,18 +35,16 @@ const PLACEHOLDERS = new Set([
   "undefined",
   "ok",
   "x",
-  "...",
-  "-",
   "lorem ipsum",
 ]);
 
+/** Trailing punctuation dropped; text that is only punctuation ("...", "-") is a placeholder too. */
 function isPlaceholder(text: string): boolean {
-  return PLACEHOLDERS.has(
-    text
-      .trim()
-      .toLowerCase()
-      .replace(/[.!\s]+$/, ""),
-  );
+  const normalised = text
+    .trim()
+    .toLowerCase()
+    .replace(/[\s\p{P}]+$/u, "");
+  return !/[\p{L}\p{N}]/u.test(normalised) || PLACEHOLDERS.has(normalised);
 }
 
 export type SpecialistResultVerdict =
@@ -56,9 +54,12 @@ export type SpecialistResultVerdict =
 /**
  * Normalise a specialist's answer and decide whether it can be shown.
  *
- * Unusable: not an envelope, no title or summary, an empty summary, or a
- * placeholder title or summary. A real "nothing matched" answer, with empty
- * data and no record reference, is usable: it says what was searched.
+ * Unusable: not an envelope, no title or summary, an empty or placeholder
+ * summary, or a placeholder title with no record behind it. A title alone is
+ * not enough to reject: a lead can really be called "Test" or "X", and its
+ * envelope then carries a record reference. A real "nothing matched" answer,
+ * with empty data and no record reference, is usable: it says what was
+ * searched.
  */
 export function judgeSpecialistResult(output: unknown): SpecialistResultVerdict {
   if (output === null || typeof output !== "object" || Array.isArray(output)) {
@@ -77,7 +78,10 @@ export function judgeSpecialistResult(output: unknown): SpecialistResultVerdict 
   if (!envelope.summary) {
     return { usable: false, reason: "its result had an empty summary" };
   }
-  if (isPlaceholder(envelope.title) || isPlaceholder(envelope.summary)) {
+  if (
+    isPlaceholder(envelope.summary)
+    || (isPlaceholder(envelope.title) && !envelope.entityRef)
+  ) {
     return { usable: false, reason: "its result was a placeholder" };
   }
   return { usable: true, envelope };
