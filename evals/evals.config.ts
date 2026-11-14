@@ -1,4 +1,5 @@
 import { defineEvalConfig } from "eve/evals";
+import { installEvaluatorTokenRefresh } from "@/lib/eval/evaluator-token";
 
 // Judge model for the handful of assertions that cannot be checked
 // deterministically — "did it ask a focused question" rather than "did it call
@@ -18,4 +19,14 @@ export default defineEvalConfig({
   // A staging turn goes out to a real model through a real deployment, and an
   // approval case sends three turns. The default is far too tight for that.
   timeoutMs: 180_000,
+  // Against staging, `eve eval` sends one five-minute token for the whole
+  // run, and a suite takes about that long. Setup runs in this process before
+  // eve creates its client, so it can keep that bearer fresh; teardown
+  // revokes the sessions it minted. A local run has no token and is untouched.
+  setup() {
+    return { tokenRefresh: installEvaluatorTokenRefresh() };
+  },
+  async teardown(context) {
+    await context?.tokenRefresh?.revokeRefreshed();
+  },
 });
