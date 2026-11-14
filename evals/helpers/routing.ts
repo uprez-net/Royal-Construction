@@ -44,6 +44,11 @@ export async function expectRoutedTo(
 
   t.succeeded();
   t.calledSubagent(routing.specialist).label(`routed to ${routing.specialist}`);
+  // A CRM question needs no outside sign-in. connection_search used to raise
+  // Plaud's, which parks the turn with no reply (run 43505272370).
+  t.notEvent("authorization.required").label(
+    "no external authorization prompt",
+  );
 
   const excluded =
     routing.excluding
