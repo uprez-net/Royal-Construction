@@ -17,12 +17,12 @@ export const LEAD_SORT_OPTIONS: readonly {
  * The shortest search that is applied. The table reads /api/leads, whose
  * `getLeads` (lib/data/leads.ts) runs a case-insensitive `contains` over name,
  * email, phone and address columns with no minimum length of its own, which is
- * cheap at this table's size, so the threshold only exists to skip one-letter
- * queries that match nearly everything. It used to be 5 with no hint, which
- * made "Tom", "Lee" and "Tran" do nothing (#438); the box now says when a query
- * is too short.
+ * cheap at this table's size, so the threshold only exists to skip one- and
+ * two-letter queries that match a large share of the table. It used to be 5
+ * with no hint, which made "Tom", "Lee" and "Tran" do nothing (#438); 3 lets
+ * those through and the box now says when a query is too short.
  */
-export const MIN_SEARCH_CHARS = 2;
+export const MIN_SEARCH_CHARS = 3;
 
 /**
  * The Leads table's place — page and filters — lives in the /leads URL
