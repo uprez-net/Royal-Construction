@@ -146,6 +146,12 @@ export function CreateProjectModal({
   const [locationSuggestions, setLocationSuggestions] = useState<
     AddressSuggestion[]
   >([]);
+  // The query whose lookup has finished, success or failure. Loading is "typed
+  // past the 3-character floor and that query has not settled", derived rather
+  // than set inside the effect.
+  const [settledAddress, setSettledAddress] = useState("");
+  const addressLoading =
+    siteAddress.length >= 3 && settledAddress !== siteAddress;
   const [selectedLocation, setSelectedLocation] =
     useState<AddressSuggestion | null>(null);
   const [managerSearch, setManagerSearch] = useState("");
@@ -369,6 +375,8 @@ export function CreateProjectModal({
         if (error instanceof Error && error.name !== "AbortError") {
           console.error("Failed to fetch location suggestions", error);
         }
+      } finally {
+        if (!controller.signal.aborted) setSettledAddress(siteAddress);
       }
     }, 300);
 
@@ -1007,6 +1015,7 @@ export function CreateProjectModal({
                         searchValue={siteAddress}
                         selectedItem={selectedLocation}
                         items={locationSuggestions}
+                        loading={addressLoading}
                         onQueryChange={(query) => setSiteAddress(query)}
                         onSelect={(item) => {
                           const suggestion = item as AddressSuggestion;

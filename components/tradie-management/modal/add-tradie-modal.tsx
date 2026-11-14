@@ -111,6 +111,12 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
   const [locationSuggestions, setLocationSuggestions] = useState<
     AddressSuggestion[]
   >([]);
+  // The query whose lookup has finished, success or failure. Loading is "typed
+  // past the 3-character floor and that query has not settled", derived rather
+  // than set inside the effect.
+  const [settledAddress, setSettledAddress] = useState("");
+  const addressLoading =
+    siteAddress.length >= 3 && settledAddress !== siteAddress;
 
   const validation = useMemo(
     () => tradieSchema.safeParse(formData),
@@ -147,6 +153,8 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
         if (error instanceof Error && error.name !== "AbortError") {
           console.error(error);
         }
+      } finally {
+        if (!controller.signal.aborted) setSettledAddress(siteAddress);
       }
     }, 300);
     return () => {
@@ -507,6 +515,7 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   searchValue={siteAddress}
                   selectedItem={selectedLocation}
                   items={locationSuggestions}
+                  loading={addressLoading}
                   onQueryChange={setSiteAddress}
                   onSelect={(item) => {
                     const location = item as AddressSuggestion;

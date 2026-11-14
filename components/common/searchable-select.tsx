@@ -219,13 +219,21 @@ export function SearchableSelect({
             />
 
             {/* cmdk's empty state is role="presentation" and nothing else is
-                live, so results that arrive asynchronously were silent. */}
+                live, so results that arrive asynchronously were silent. Always
+                mounted so a change is announced, but empty until there is
+                something true to say: an open picker with nothing typed and
+                nothing listed has not searched, so "No results found" would
+                report a search nobody made. Callers that fetch as the person
+                types must pass `loading`, or "No results found" is spoken
+                while the request is still in flight. */}
             <p role="status" className="sr-only">
               {loading
                 ? "Loading"
-                : items.length === 0
-                  ? "No results found"
-                  : `${items.length} result${items.length === 1 ? "" : "s"}${hasMore ? ", more available" : ""}`}
+                : items.length > 0
+                  ? `${items.length} result${items.length === 1 ? "" : "s"}${hasMore ? ", more available" : ""}`
+                  : searchValue.trim()
+                    ? "No results found"
+                    : ""}
             </p>
 
             <CommandList>
