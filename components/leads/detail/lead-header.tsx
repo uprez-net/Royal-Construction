@@ -12,6 +12,7 @@ import {
   FileSearch,
   Mail,
   MapPin,
+  MessageCircle,
   MessageSquare,
   Phone,
   UserRound,
@@ -31,6 +32,10 @@ import {
   type LeadActionState,
 } from "@/lib/leads/lead-actions";
 import { bookConsultationUrlForLead } from "@/lib/actions/leads";
+import {
+  formatE164ForDisplay,
+  normaliseLeadPhone,
+} from "@/lib/domain/leads/whatsapp/phone";
 import type { Lead, LeadStage } from "@/lib/leads/types";
 import { compactCurrency, dateFormat } from "@/utils/formatters";
 import { StageBadgeSelect } from "./select-stage-badge";
@@ -179,6 +184,36 @@ function LeadDealValuePanel({
   );
 }
 
+/**
+ * Where a WhatsApp from this page would go, or why it cannot go anywhere —
+ * beside the action, so "why is the button disabled?" never needs a tooltip.
+ */
+function WhatsAppDestination({
+  lead,
+  reason,
+}: {
+  lead: Lead;
+  reason: string | null;
+}) {
+  const phone = normaliseLeadPhone(lead.phone);
+  return (
+    <p className="text-xs text-muted-foreground lg:text-right">
+      {reason ? (
+        <span>{reason}</span>
+      ) : phone.usable ? (
+        <>
+          WhatsApp to{" "}
+          <span className="font-mono tabular-nums text-foreground">
+            {formatE164ForDisplay(phone.e164)}
+          </span>
+        </>
+      ) : (
+        <span>{phone.reason}</span>
+      )}
+    </p>
+  );
+}
+
 function formatCreated(value: string | null | undefined): string | null {
   if (!value) return null;
   const parsed = new Date(value);
@@ -189,11 +224,21 @@ export function LeadHeader({
   lead,
   onArchiveClick,
   onSendTextClick,
+  onWhatsAppClick,
+  onPhoneClick,
   onLeadUpdate,
 }: {
   lead: Lead;
   onArchiveClick: () => void;
+  /** Opens the email thread (LeadCommModal). */
   onSendTextClick: () => void;
+  /** Opens the shared WhatsApp conversation (LeadWhatsAppModal). */
+  onWhatsAppClick: () => void;
+  /**
+   * Opens calls and texts (LeadCommsModal). Absent when this deployment has
+   * no phone provider set up; the plain tel: link stays either way.
+   */
+  onPhoneClick?: () => void;
   onLeadUpdate: (lead: Lead) => void;
 }) {
   const router = useRouter();
@@ -355,6 +400,19 @@ export function LeadHeader({
                 </a>
               </Button>
             ) : null}
+            {onPhoneClick && actions.call.visible ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onPhoneClick}
+                disabled={actions.call.disabled}
+                title={actions.call.disabledReason ?? undefined}
+                className="h-9 rounded-lg px-3.5 text-sm font-medium"
+              >
+                <Phone className="mr-1.5 size-4" aria-hidden="true" />
+                Phone &amp; SMS
+              </Button>
+            ) : null}
             {actions.sendText.visible ? (
               <Button
                 type="button"
@@ -365,7 +423,24 @@ export function LeadHeader({
                 className="h-9 rounded-lg px-3.5 text-sm font-medium"
               >
                 <MessageSquare className="mr-1.5 size-4" aria-hidden="true" />
-                Send Text
+                Email thread
+              </Button>
+            ) : null}
+
+            {actions.whatsapp.visible ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onWhatsAppClick}
+                disabled={actions.whatsapp.disabled}
+                title={actions.whatsapp.disabledReason ?? undefined}
+                className="h-9 rounded-lg px-3.5 text-sm font-medium"
+              >
+                <MessageCircle
+                  className="mr-1.5 size-4 text-emerald-600"
+                  aria-hidden="true"
+                />
+                WhatsApp
               </Button>
             ) : null}
 
@@ -402,6 +477,10 @@ export function LeadHeader({
               </Button>
             ) : null}
           </div>
+          <WhatsAppDestination
+            lead={lead}
+            reason={actions.whatsapp.disabledReason}
+          />
         </div>
       </div>
       <div className="mt-6 ">

@@ -4,6 +4,7 @@ import { AppShell } from "@/components/common/app-shell";
 import { auth } from "@clerk/nextjs/server";
 import { AppShellLoader } from "@/components/common/app-shell-loader";
 import { getUserByClerkIdCached } from "@/lib/data/user";
+import { isInternalRole } from "@/lib/domain/principal";
 
 async function LayoutContent({ children }: { children: React.ReactNode }) {
   const user = await auth().then(async ({ userId }) =>
@@ -15,6 +16,7 @@ async function LayoutContent({ children }: { children: React.ReactNode }) {
       isAdmin={user?.role === "ADMIN"}
       description="Royal Constructions - One place for all your construction project management needs."
       isSignedIn={!!user}
+      phoneEnabled={user ? isInternalRole(user.role) : false}
       operationsAgentEnabled={isAgentFeatureEnabled()}
     >
       {children}

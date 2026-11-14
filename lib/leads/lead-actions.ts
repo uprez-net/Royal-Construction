@@ -10,6 +10,11 @@ import { isQuotingStage, isTerminalStage } from "./lead-helpers";
  * not, so an emailless lead offered a messaging surface that cannot address
  * anyone. The desktop rule is the correct one (LeadCommModal is an email
  * thread) and is what this module encodes for every caller.
+ *
+ * That control used to be labelled "Send Text", which read as SMS or
+ * WhatsApp and was neither. It is the email thread, and says so; WhatsApp is
+ * its own action (`whatsapp`), which opens the conversation even when the
+ * phone cannot be sent to.
  */
 export interface LeadActionState {
   /** Whether the control renders at all. */
@@ -28,8 +33,16 @@ export interface LeadActions {
   call: LeadActionState;
   /** Open the templated follow-up email composer. */
   email: LeadActionState;
-  /** Open the message thread — labelled "Send Text" on the detail page. */
+  /** Open the lead's email thread (LeadCommModal). Email, not text/SMS. */
   sendText: LeadActionState;
+  /**
+   * Open the WhatsApp conversation (issue #333). Always rendered; blocked
+   * only when the lead is archived. An unusable phone does not block it —
+   * a message attached from the review queue can still be read there — and
+   * the composer shows why nothing can be sent. The domain re-checks the
+   * phone, consent and the window on every send.
+   */
+  whatsapp: LeadActionState;
   /** Archive the lead — labelled "Delete Lead" on the detail page. */
   archive: LeadActionState;
   /** Jump to the consultation booking flow. */
@@ -76,10 +89,21 @@ export function leadActions(lead: Lead): LeadActions {
     call: gate(!isTerminalStage(lead.stage)),
     email: gate(Boolean(lead.email)),
     sendText: gate(Boolean(lead.email)),
+    whatsapp: whatsappAction(lead),
     archive,
     bookMeeting: gate(true),
     checkOffer: gate(isQuotingStage(lead.stage)),
   };
+}
+
+/**
+ * The WhatsApp gate: one rule for the desktop row, the mobile card and the
+ * lead page. Only archiving closes the conversation. Whether a message can be
+ * sent is the composer's eligibility, which the server computes with the same
+ * phone rule it sends with.
+ */
+function whatsappAction(lead: Pick<Lead, "isArchived">): LeadActionState {
+  return lead.isArchived ? blocked(ARCHIVED) : available;
 }
 
 /**

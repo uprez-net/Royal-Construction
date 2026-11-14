@@ -120,6 +120,9 @@ enum LeadTaskType {
   EMAIL
   MEETING
   WAITING
+  /// A WhatsApp follow-up (issue #333). Its own type rather than EMAIL so the
+  /// follow-up view and reporting can tell the two channels apart.
+  WHATSAPP
 }
 
 /// Board columns. NEW and DONE cover today's behaviour; IN_PROGRESS exists so
@@ -148,6 +151,11 @@ enum HistoryType {
   CALL
   EMAIL
   REFERRAL
+  /// A WhatsApp message sent or received. The body stays on
+  /// LeadWhatsAppMessage; the history row only says that it happened.
+  WHATSAPP
+  /// An SMS sent or received. The body stays on SmsMessage.
+  SMS
 }
 
 enum AnnotationStatus {
@@ -564,6 +572,7 @@ enum OutboxEventKind {
   OFFER_DOCUMENT_SEND
   OFFER_IMAGE_GENERATE
   COMPLIANCE_EMAIL_SEND
+  LEAD_WHATSAPP_SEND
   /// One attempt at one tradie request email. Keyed per attempt, so a retry
   /// someone pressed is a new effect and a replayed attempt is not resent.
   TRADIE_REQUEST_SEND
@@ -573,6 +582,23 @@ enum OutboxEventKind {
   /// One attempt at emailing a variation to the client. Keyed per attempt,
   /// like TRADIE_REQUEST_SEND, so a resend is something somebody pressed.
   VARIATION_EMAIL_SEND
+  /// Asking Meta to create a project's WhatsApp group. Keyed per request, so
+  /// a crashed create is never repeated into a second group.
+  PROJECT_WHATSAPP_GROUP_CREATE
+  /// One message sent into a project's WhatsApp group.
+  PROJECT_WHATSAPP_SEND
+  /// The email inviting a project's owners to join its WhatsApp group.
+  PROJECT_WHATSAPP_INVITE_SEND
+  /// One SMS to a lead, through whichever provider COMMUNICATIONS_PROVIDER
+  /// names. Keyed per composed message, like LEAD_WHATSAPP_SEND.
+  LEAD_SMS_SEND
+  /// Asking the phone provider to ring a lead. Keyed per click: a second
+  /// call somebody pressed is a new intent, a replayed request is not.
+  LEAD_CALL_PLACE
+  /// The WhatsApp message asking a customer for permission to call them.
+  WHATSAPP_CALL_PERMISSION_REQUEST
+  /// Asking Meta to ring a customer on WhatsApp.
+  WHATSAPP_CALL_CONNECT
   /// One attempt at emailing a tradie about a checklist issue. Keyed per
   /// attempt: a retry somebody pressed is a new email, a replay is not.
   CHECKLIST_ISSUE_EMAIL_SEND
@@ -634,26 +660,27 @@ model Project {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
-  customer            Customer             @relation("CustomerProjects", fields: [customerId], references: [id])
+  customer            Customer              @relation("CustomerProjects", fields: [customerId], references: [id])
   customers           ProjectCustomer[]
-  siteManager         User?                @relation("SiteManagerProjects", fields: [siteManagerId], references: [id])
-  Lead                Lead                 @relation("LeadProject", fields: [leadId], references: [id], onDelete: Cascade)
+  siteManager         User?                 @relation("SiteManagerProjects", fields: [siteManagerId], references: [id])
+  Lead                Lead                  @relation("LeadProject", fields: [leadId], references: [id], onDelete: Cascade)
   milestones          Milestone[]
   siteUpdates         SiteUpdate[]
   variations          Variation[]
   tradieSchedules     TradieSchedule[]
-  files               File[]               @relation("ProjectFiles")
+  files               File[]                @relation("ProjectFiles")
   activityLogs        ActivityLog[]
   tradieActivityLogs  TradieActivityLog[]
   materials           Material[]
-  tradies             Tradie[]             @relation("ProjectTradies")
-  certifierEngagement CertifierEngagement? @relation("ProjectCertifierEngagement")
+  tradies             Tradie[]              @relation("ProjectTradies")
+  certifierEngagement CertifierEngagement?  @relation("ProjectCertifierEngagement")
   invoices            Invoice[]
   tradieRequests      TradieRequest[]
   tradieQuotes        TradieQuote[]
   tradeSelections     TradeSelection[]
   tradieInvoices      TradieInvoice[]
   emailedInvoices     TradieInvoiceInbox[]
+  whatsappGroup       ProjectWhatsAppGroup?
   checklists          ProjectChecklist[]
 
   @@index([name])
@@ -1274,41 +1301,53 @@ model Customer {
 }
 
 model User {
-  id         String  @id @default(uuid())
-  name       String
-  email      String  @unique
-  phone      String  @unique
-  role       Role    @default(CUSTOMER)
-  customerId String?
-  clerkId    String  @unique
+  id                 String    @id @default(uuid())
+  name               String
+  email              String    @unique
+  phone              String    @unique
+  role               Role      @default(CUSTOMER)
+  customerId         String?
+  clerkId            String    @unique
+  /// Last time this user's browser asked for a calling credential. Inbound
+  /// calls ring the browsers of staff seen recently (lib/domain/comms).
+  commsBrowserSeenAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  files               File[]               @relation("UserFiles")
-  siteManagerProjects Project[]            @relation("SiteManagerProjects")
-  siteUpdates         SiteUpdate[]
-  milestoneNotes      MilestoneNote[]      @relation("MilestoneNoteAuthor")
-  activityLogs        ActivityLog[]
-  tradieActivityLogs  TradieActivityLog[]
-  assignedLeads       Lead[]               @relation("LeadAssignee")
-  leadHistories       LeadHistory[]        @relation("LeadHistoryAuthor")
-  leadTasks           LeadTask[]           @relation("LeadTaskAssignee")
-  reviews             TradieRating[]
-  approvalRequests    TradieApproval[]
-  tradieRequests      TradieRequest[]      @relation("TradieRequestCreatedBy")
-  tradieQuotes        TradieQuote[]        @relation("TradieQuoteEnteredBy")
-  tradieInvoices      TradieInvoice[]      @relation("TradieInvoiceEnteredBy")
-  inboxDecisions      TradieInvoiceInbox[] @relation("TradieInvoiceInboxDecidedBy")
-  variationsRaised    Variation[]          @relation("VariationRaisedBy")
-  tradeSelections     TradeSelection[]     @relation("TradeSelectionSelectedBy")
-  createdOffers       Offer[]              @relation("OfferCreatedBy")
-  offerFollowUps      OfferFollowUp[]      @relation("OfferFollowUpSentBy")
-  xeroConnections     XeroConnection[]     @relation("XeroConnections")
-  agentSessions       AgentSession[]
-  agentActionAudits   AgentActionAudit[]
-  agentOperations     AgentOperation[]
-  agentMemories       AgentMemory[]
+  files                     File[]                     @relation("UserFiles")
+  siteManagerProjects       Project[]                  @relation("SiteManagerProjects")
+  siteUpdates               SiteUpdate[]
+  milestoneNotes            MilestoneNote[]            @relation("MilestoneNoteAuthor")
+  activityLogs              ActivityLog[]
+  tradieActivityLogs        TradieActivityLog[]
+  assignedLeads             Lead[]                     @relation("LeadAssignee")
+  leadHistories             LeadHistory[]              @relation("LeadHistoryAuthor")
+  leadTasks                 LeadTask[]                 @relation("LeadTaskAssignee")
+  whatsappMessages          LeadWhatsAppMessage[]      @relation("LeadWhatsAppMessageAuthor")
+  whatsappConsentsRecorded  Lead[]                     @relation("LeadWhatsAppConsentRecorder")
+  whatsappUnmatchedResolved WhatsAppUnmatchedMessage[] @relation("WhatsAppUnmatchedResolver")
+  projectWhatsAppGroups     ProjectWhatsAppGroup[]     @relation("ProjectWhatsAppGroupCreator")
+  projectWhatsAppMessages   ProjectWhatsAppMessage[]   @relation("ProjectWhatsAppMessageAuthor")
+  smsMessages               SmsMessage[]               @relation("SmsMessageAuthor")
+  smsResolved               SmsMessage[]               @relation("SmsMessageResolver")
+  callsPlaced               Call[]                     @relation("CallStaffUser")
+  whatsappCallsAnswered     WhatsAppCall[]             @relation("WhatsAppCallStaffUser")
+  reviews                   TradieRating[]
+  approvalRequests          TradieApproval[]
+  tradieRequests            TradieRequest[]            @relation("TradieRequestCreatedBy")
+  tradieQuotes              TradieQuote[]              @relation("TradieQuoteEnteredBy")
+  tradieInvoices            TradieInvoice[]            @relation("TradieInvoiceEnteredBy")
+  inboxDecisions            TradieInvoiceInbox[]       @relation("TradieInvoiceInboxDecidedBy")
+  variationsRaised          Variation[]                @relation("VariationRaisedBy")
+  tradeSelections           TradeSelection[]           @relation("TradeSelectionSelectedBy")
+  createdOffers             Offer[]                    @relation("OfferCreatedBy")
+  offerFollowUps            OfferFollowUp[]            @relation("OfferFollowUpSentBy")
+  xeroConnections           XeroConnection[]           @relation("XeroConnections")
+  agentSessions             AgentSession[]
+  agentActionAudits         AgentActionAudit[]
+  agentOperations           AgentOperation[]
+  agentMemories             AgentMemory[]
 
   resolvedComplianceAlerts   ComplianceAlert[]    @relation("UserResolvedComplianceAlerts")
   decidedComplianceApprovals ComplianceOutreach[] @relation("UserDecidedComplianceApprovals")
@@ -1626,6 +1665,28 @@ model Lead {
 
   urgent Boolean @default(false)
 
+  // ── WhatsApp (issue #333) ─────────────────────────────────────────
+  /// `phone` normalised to E.164 by lib/domain/leads/whatsapp/phone.ts, or
+  /// null when it does not normalise. Written by every lead write path and
+  /// by `pnpm whatsapp:backfill-phones`; inbound messages are matched on it
+  /// exactly. `phone` stays the displayable raw value.
+  phoneE164                   String?
+  /// When the lead agreed to be contacted on WhatsApp, and how. A valid
+  /// number is not consent: proactive (template) outreach is refused without
+  /// this unless the customer has opened a service window themselves.
+  whatsappConsentAt           DateTime?
+  whatsappConsentSource       WhatsAppConsentSource?
+  whatsappConsentNote         String?
+  whatsappConsentRecordedById String?
+  /// Set when the lead asked not to be contacted on WhatsApp. Blocks every
+  /// send, including replies inside an open window.
+  whatsappOptedOutAt          DateTime?
+
+  // ── SMS and calls ─────────────────────────────────────────────────
+  /// Set when the lead texted STOP (or an operator recorded the request).
+  /// Blocks every SMS until cleared; calls are unaffected.
+  smsOptedOutAt DateTime?
+
   // ── Deal economics ────────────────────────────────────────────────
   /// Numeric deal value. Auto-filled from the active offer's contract price
   /// unless estimatedValueSource is MANUAL. `budget` above remains a
@@ -1649,15 +1710,22 @@ model Lead {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  offers          Offer[]
-  chatSessions    ChatSession[]
-  history         LeadHistory[]
-  tasks           LeadTask[]
-  noteAnnotations LeadNoteAnnotation[]
-  files           File[]               @relation("LeadFiles")
-  emails          LeadEmails[]         @relation("LeadEmails")
-  assignedUser    User?                @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
-  project         Project?             @relation("LeadProject")
+  offers                    Offer[]
+  chatSessions              ChatSession[]
+  history                   LeadHistory[]
+  tasks                     LeadTask[]
+  noteAnnotations           LeadNoteAnnotation[]
+  files                     File[]                     @relation("LeadFiles")
+  emails                    LeadEmails[]               @relation("LeadEmails")
+  whatsappConversations     LeadWhatsAppConversation[]
+  whatsappMessages          LeadWhatsAppMessage[]
+  whatsappConsentRecordedBy User?                      @relation("LeadWhatsAppConsentRecorder", fields: [whatsappConsentRecordedById], references: [id])
+  smsMessages               SmsMessage[]
+  calls                     Call[]
+  whatsappCalls             WhatsAppCall[]
+  whatsappCallPermissions   WhatsAppCallPermission[]
+  assignedUser              User?                      @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
+  project                   Project?                   @relation("LeadProject")
 
   @@index([stage])
   @@index([assignedId])
@@ -1666,6 +1734,7 @@ model Lead {
   @@index([estimatedStartDate])
   @@index([wonAt])
   @@index([lostAt])
+  @@index([phoneE164])
 }
 
 model LeadNoteAnnotation {
@@ -2125,6 +2194,714 @@ model LeadEmails {
   @@index([emailFrom])
   @@index([leadId, sentAt(sort: Desc)])
   @@index([sentAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// WhatsApp Business outreach (issue #333)
+//
+// Rules live in lib/domain/leads/whatsapp; the Meta Cloud API sits behind
+// lib/domain/ports/whatsapp.ts. Secrets and the business-number catalogue are
+// deployment configuration (lib/whatsapp/config.ts), never rows here — these
+// tables only snapshot which number a message used, so history survives a
+// number being retired.
+// ─────────────────────────────────────────────────────────────────────
+
+/// How a lead's WhatsApp consent was obtained. CUSTOMER_INITIATED is recorded
+/// by an operator who confirms the customer started the conversation; an
+/// inbound message alone opens a service window but is not stored as consent.
+enum WhatsAppConsentSource {
+  VERBAL
+  WRITTEN
+  WEB_FORM
+  CUSTOMER_INITIATED
+}
+
+enum WhatsAppMessageDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum WhatsAppMessageKind {
+  TEXT
+  TEMPLATE
+  /// Reactions, locations, contacts… retained with a placeholder body so the
+  /// office knows something arrived and can look in WhatsApp itself.
+  UNSUPPORTED
+  /// A photo, video, voice note, document or sticker. The file itself is
+  /// copied into Blob storage by a workflow (WhatsAppMedia); the body is the
+  /// caption, or a short label when there is none.
+  MEDIA
+}
+
+/// QUEUED → SENT → DELIVERED → READ, or → FAILED. RECEIVED is inbound only.
+/// Transitions only move forward (lib/domain/leads/whatsapp/status.ts).
+enum WhatsAppMessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  RECEIVED
+}
+
+enum WhatsAppUnmatchedReason {
+  /// No lead has this number.
+  NO_MATCH
+  /// More than one lead has this number; attaching to either is a guess.
+  AMBIGUOUS
+  /// The message reached a business number this deployment is not configured
+  /// for. Retained rather than dropped so a misconfiguration is visible.
+  UNKNOWN_BUSINESS_NUMBER
+  /// Posted in a WhatsApp group no project is linked to. Filed onto the
+  /// project automatically when someone links that group.
+  UNLINKED_GROUP
+}
+
+enum WhatsAppUnmatchedStatus {
+  PENDING
+  ATTACHED
+  DISMISSED
+}
+
+/// One lead talking to one Royal business number from one customer number.
+/// The unique triple is the correlation key inbound messages resolve to.
+model LeadWhatsAppConversation {
+  id                    String    @id @default(uuid())
+  leadId                Int
+  /// Meta's phone_number_id for the Royal number, and its display form as
+  /// configured when the conversation started.
+  businessPhoneNumberId String
+  businessDisplayNumber String
+  customerPhoneE164     String
+  lastInboundAt         DateTime?
+  lastOutboundAt        DateTime?
+  lastMessageAt         DateTime?
+  /// When free-form replies stop being permitted: the last inbound message
+  /// plus the platform's customer-service window. Null until the customer
+  /// has written in.
+  windowExpiresAt       DateTime?
+  unreadCount           Int       @default(0)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  lead     Lead                  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  messages LeadWhatsAppMessage[]
+
+  @@unique([leadId, businessPhoneNumberId, customerPhoneE164])
+  @@index([customerPhoneE164])
+  @@index([leadId, lastMessageAt])
+}
+
+model LeadWhatsAppMessage {
+  id                  String                   @id @default(uuid())
+  conversationId      String
+  /// Denormalised from the conversation so a lead's thread is one index scan.
+  leadId              Int
+  direction           WhatsAppMessageDirection
+  kind                WhatsAppMessageKind
+  /// The text as the customer sees or sent it. For a template, the rendered
+  /// body. Never copied into LeadHistory.
+  body                String                   @db.Text
+  templateName        String?
+  templateLanguage    String?
+  templateParameters  Json?
+  /// Meta's wamid. Unique so a replayed webhook cannot insert a second row.
+  providerMessageId   String?                  @unique
+  status              WhatsAppMessageStatus
+  statusAt            DateTime
+  providerErrorCode   String?
+  providerErrorTitle  String?
+  /// The provider may have accepted this send but the answer never arrived.
+  /// Nothing is retried until an operator reconciles it.
+  needsReconciliation Boolean                  @default(false)
+  /// The outbox key of an outbound send. Unique: a replayed request finds the
+  /// row it already made.
+  idempotencyKey      String?                  @unique
+  authorId            String?
+  /// When it was sent (outbound) or sent by the customer (inbound, provider
+  /// timestamp). The thread is ordered on this.
+  occurredAt          DateTime
+  deliveredAt         DateTime?
+  readAt              DateTime?
+  failedAt            DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  conversation LeadWhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  lead         Lead                     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  author       User?                    @relation("LeadWhatsAppMessageAuthor", fields: [authorId], references: [id])
+  media        WhatsAppMedia?
+
+  @@index([conversationId, occurredAt])
+  @@index([leadId, occurredAt])
+  @@index([status])
+}
+
+/// Every delivery-status callback, deduplicated. Kept even when no message
+/// matches yet: Meta's "sent" callback can arrive before the send that caused
+/// it has stored the wamid, and the send applies anything waiting here.
+model WhatsAppStatusEvent {
+  id                String                @id @default(uuid())
+  providerMessageId String
+  status            WhatsAppMessageStatus
+  occurredAt        DateTime
+  errorCode         String?
+  errorTitle        String?
+  appliedAt         DateTime?
+  createdAt         DateTime              @default(now())
+
+  @@unique([providerMessageId, status])
+  @@index([appliedAt])
+}
+
+/// An inbound message that could not be attached to exactly one lead. Waits
+/// here for a person; never attached by guess and never discarded.
+model WhatsAppUnmatchedMessage {
+  id                    String                  @id @default(uuid())
+  providerMessageId     String                  @unique
+  businessPhoneNumberId String
+  fromPhoneE164         String
+  profileName           String?
+  kind                  WhatsAppMessageKind
+  body                  String                  @db.Text
+  reason                WhatsAppUnmatchedReason
+  candidateLeadIds      Int[]
+  status                WhatsAppUnmatchedStatus @default(PENDING)
+  resolvedLeadId        Int?
+  resolvedById          String?
+  resolvedAt            DateTime?
+  receivedAt            DateTime
+  /// Meta's group id when the message was posted in a group.
+  providerGroupId       String?
+  createdAt             DateTime                @default(now())
+
+  resolvedBy User?          @relation("WhatsAppUnmatchedResolver", fields: [resolvedById], references: [id])
+  media      WhatsAppMedia?
+
+  @@index([status, receivedAt])
+  @@index([fromPhoneE164])
+  @@index([providerGroupId, status])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// WhatsApp media and project groups
+//
+// Media: the webhook records what arrived (Meta's media id, type, caption) in
+// the same transaction as the message, and a workflow copies the file into
+// Blob storage afterwards — Meta's download URL lasts five minutes and the
+// media id thirty days, so the copy is what the office can still open later.
+//
+// Groups: one WhatsApp group per project, created through Meta's Groups API
+// (Official Business Accounts only, so behind WHATSAPP_GROUPS_ENABLED). Rules
+// live in lib/domain/projects/whatsapp.
+// ─────────────────────────────────────────────────────────────────────
+
+enum WhatsAppMediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  STICKER
+}
+
+/// PENDING → STORED, or → FAILED once retrying cannot help (the media expired
+/// at Meta, or it is larger than the app keeps). FAILED can be retried by hand.
+enum WhatsAppMediaStatus {
+  PENDING
+  STORED
+  FAILED
+}
+
+/// One file attached to one WhatsApp message. Exactly one of the three
+/// message references is set; attaching an unmatched message to a lead moves
+/// its media row across rather than copying it.
+model WhatsAppMedia {
+  id                 String              @id @default(uuid())
+  /// Meta's media id, from the webhook. Used to fetch the file.
+  providerMediaId    String
+  type               WhatsAppMediaType
+  mimeType           String?
+  /// Meta's SHA-256 of the file, checked against what was downloaded.
+  sha256             String?
+  fileName           String?
+  caption            String?             @db.Text
+  /// A voice note recorded in WhatsApp rather than an audio file sent.
+  voice              Boolean             @default(false)
+  byteSize           Int?
+  status             WhatsAppMediaStatus @default(PENDING)
+  blobUrl            String?
+  blobPathname       String?
+  attempts           Int                 @default(0)
+  failureReason      String?
+  storedAt           DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  leadMessageId      String?             @unique
+  projectMessageId   String?             @unique
+  unmatchedMessageId String?             @unique
+
+  leadMessage      LeadWhatsAppMessage?      @relation(fields: [leadMessageId], references: [id], onDelete: Cascade)
+  projectMessage   ProjectWhatsAppMessage?   @relation(fields: [projectMessageId], references: [id], onDelete: Cascade)
+  unmatchedMessage WhatsAppUnmatchedMessage? @relation(fields: [unmatchedMessageId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+enum ProjectWhatsAppGroupStatus {
+  /// Asked Meta to create it; waiting for the group id and invite link.
+  CREATING
+  ACTIVE
+  /// Meta refused, or never confirmed. `failureReason` says which.
+  FAILED
+  /// WhatsApp suspended the group. Messages cannot be sent until it clears.
+  SUSPENDED
+  /// Deleted in WhatsApp. Kept so the history stays readable.
+  DELETED
+}
+
+enum ProjectWhatsAppGroupOrigin {
+  /// Created by the app for this project.
+  CREATED
+  /// An existing API-created group someone linked to this project.
+  LINKED
+}
+
+/// A project's WhatsApp group. One per project.
+model ProjectWhatsAppGroup {
+  id                    String                     @id @default(uuid())
+  projectId             String                     @unique
+  /// The Royal number that owns the group, as configured when it was made.
+  businessPhoneNumberId String
+  businessDisplayNumber String
+  /// Meta's group id. Null while CREATING.
+  providerGroupId       String?                    @unique
+  /// Meta's request id for the create call; the lifecycle webhook names it.
+  createRequestId       String?                    @unique
+  subject               String
+  inviteLink            String?
+  inviteLinkAt          DateTime?
+  status                ProjectWhatsAppGroupStatus
+  origin                ProjectWhatsAppGroupOrigin
+  failureReason         String?
+  /// When the current create request went to Meta.
+  requestedAt           DateTime?
+  /// Bumped by every create request, so each attempt is its own outbox
+  /// intent and a replayed step never asks Meta for a second group.
+  createAttempt         Int                        @default(0)
+  lastMessageAt         DateTime?
+  unreadCount           Int                        @default(0)
+  createdById           String?
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+
+  project      Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy    User?                        @relation("ProjectWhatsAppGroupCreator", fields: [createdById], references: [id])
+  messages     ProjectWhatsAppMessage[]
+  participants ProjectWhatsAppParticipant[]
+
+  @@index([status, requestedAt])
+}
+
+/// Who is in a project's group, as the participants webhook reported it.
+model ProjectWhatsAppParticipant {
+  id        String    @id @default(uuid())
+  groupId   String
+  /// The participant's WhatsApp id (digits with the country code).
+  waId      String
+  phoneE164 String?
+  joinedAt  DateTime?
+  leftAt    DateTime?
+  updatedAt DateTime  @updatedAt
+
+  group ProjectWhatsAppGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, waId])
+}
+
+model ProjectWhatsAppMessage {
+  id                  String                   @id @default(uuid())
+  groupId             String
+  /// Denormalised so a project's thread is one index scan.
+  projectId           String
+  direction           WhatsAppMessageDirection
+  kind                WhatsAppMessageKind
+  /// As the participant sent it, or as Royal sent it. Never HTML.
+  body                String                   @db.Text
+  /// Inbound: who in the group wrote it.
+  senderWaId          String?
+  senderPhoneE164     String?
+  senderName          String?
+  /// Meta's wamid. Unique so a replayed webhook cannot insert a second row.
+  providerMessageId   String?                  @unique
+  status              WhatsAppMessageStatus
+  statusAt            DateTime
+  providerErrorCode   String?
+  providerErrorTitle  String?
+  needsReconciliation Boolean                  @default(false)
+  /// The outbox key of an outbound send.
+  idempotencyKey      String?                  @unique
+  authorId            String?
+  occurredAt          DateTime
+  deliveredAt         DateTime?
+  readAt              DateTime?
+  failedAt            DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  group  ProjectWhatsAppGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author User?                @relation("ProjectWhatsAppMessageAuthor", fields: [authorId], references: [id])
+  media  WhatsAppMedia?
+
+  @@index([groupId, occurredAt])
+  @@index([projectId, occurredAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// SMS and phone calls (Twilio or Telnyx)
+//
+// Provider-neutral. COMMUNICATIONS_PROVIDER picks who carries NEW outbound
+// work; every row records the provider that carried it, so a callback, a
+// hang-up or a recording download always goes back to the provider that owns
+// it even after the setting changes. Provider specifics stay in lib/comms.
+// Rules live in lib/domain/comms; docs/twilio-plivo-comms is the design.
+// ─────────────────────────────────────────────────────────────────────
+
+enum CommsProvider {
+  TWILIO
+  TELNYX
+}
+
+enum CommsDirection {
+  OUTBOUND
+  INBOUND
+}
+
+/// QUEUED → SENT → DELIVERED, or → FAILED. RECEIVED is inbound only.
+/// Transitions only move forward (lib/domain/comms/sms/status.ts).
+enum SmsStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  RECEIVED
+}
+
+enum SmsUnmatchedReason {
+  /// No lead has this number.
+  NO_MATCH
+  /// More than one lead has this number; attaching to either is a guess.
+  AMBIGUOUS
+  /// Sent to a number this deployment does not list in COMMS_PHONE_NUMBERS.
+  UNKNOWN_BUSINESS_NUMBER
+}
+
+enum SmsReviewStatus {
+  PENDING
+  ATTACHED
+  DISMISSED
+}
+
+/// One SMS, either way. An inbound message that matches no single lead is
+/// kept with `leadId` null and `reviewStatus` PENDING until a person files it.
+model SmsMessage {
+  id                  String              @id @default(uuid())
+  leadId              Int?
+  direction           CommsDirection
+  provider            CommsProvider
+  /// The Royal number, E.164.
+  businessNumber      String
+  /// The customer's number, E.164.
+  customerNumber      String
+  body                String              @db.Text
+  /// MMS attachments are not copied; the office is told they arrived.
+  mediaCount          Int                 @default(0)
+  /// Twilio MessageSid / Telnyx message id. Unique per provider so a
+  /// replayed webhook cannot insert a second row.
+  providerMessageId   String?
+  status              SmsStatus
+  statusAt            DateTime
+  providerErrorCode   String?
+  providerErrorTitle  String?
+  /// The provider may have accepted this send but the answer never arrived.
+  /// Nothing is retried until an operator reconciles it.
+  needsReconciliation Boolean             @default(false)
+  /// The outbox key of an outbound send.
+  idempotencyKey      String?             @unique
+  authorId            String?
+  occurredAt          DateTime
+  deliveredAt         DateTime?
+  failedAt            DateTime?
+  /// Inbound only: when someone opened the thread after it arrived.
+  readAt              DateTime?
+  unmatchedReason     SmsUnmatchedReason?
+  reviewStatus        SmsReviewStatus?
+  candidateLeadIds    Int[]
+  resolvedById        String?
+  resolvedAt          DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  lead       Lead? @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  author     User? @relation("SmsMessageAuthor", fields: [authorId], references: [id])
+  resolvedBy User? @relation("SmsMessageResolver", fields: [resolvedById], references: [id])
+
+  @@unique([provider, providerMessageId])
+  @@index([leadId, occurredAt])
+  @@index([reviewStatus, occurredAt])
+  @@index([customerNumber])
+}
+
+/// Every SMS delivery callback, deduplicated. Kept even when no message
+/// matches yet: a status can arrive before the send stored the provider id.
+model SmsStatusEvent {
+  id                String        @id @default(uuid())
+  provider          CommsProvider
+  providerMessageId String
+  status            SmsStatus
+  occurredAt        DateTime
+  errorCode         String?
+  appliedAt         DateTime?
+  createdAt         DateTime      @default(now())
+
+  @@unique([provider, providerMessageId, status])
+  @@index([appliedAt])
+}
+
+/// The persisted call vocabulary every adapter maps into. Ranked
+/// QUEUED < INITIATED < RINGING < IN_PROGRESS < terminal; a call only moves
+/// forward and a terminal call never reopens (lib/domain/comms/calls/state.ts).
+enum CallStatus {
+  QUEUED
+  INITIATED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  BUSY
+  NO_ANSWER
+  FAILED
+  CANCELED
+}
+
+/// Where a call is in Royal's own flow, as opposed to the provider's status.
+enum CallFlowStep {
+  /// Outbound: the customer's phone is ringing.
+  DIALING_CUSTOMER
+  /// Asking the customer whether the call may be recorded.
+  RECORDING_CONSENT
+  RINGING_BROWSER
+  RINGING_MOBILE
+  CONNECTED
+  VOICEMAIL
+  ENDED
+  /// Inbound: Mili, the voice agent, is talking with the caller.
+  AGENT
+}
+
+enum CallStaffTarget {
+  BROWSER
+  MOBILE
+}
+
+enum CallAnsweredBy {
+  BROWSER
+  MOBILE
+  VOICEMAIL
+  /// Mili, the voice agent.
+  AGENT
+}
+
+enum RecordingConsent {
+  NOT_ASKED
+  GRANTED
+  DECLINED
+  /// Told the call is recorded (inbound), rather than asked.
+  DECLARED
+}
+
+/// One phone call with a customer. `providerCallId` is the customer's leg.
+model Call {
+  id                  String           @id @default(uuid())
+  provider            CommsProvider
+  direction           CommsDirection
+  leadId              Int?
+  /// Inbound calls whose number matched more than one lead.
+  candidateLeadIds    Int[]
+  businessNumber      String
+  customerNumber      String
+  /// Twilio CallSid / Telnyx call_control_id. Opaque: never parsed.
+  providerCallId      String?
+  status              CallStatus
+  flowStep            CallFlowStep
+  staffTarget         CallStaffTarget?
+  /// Who placed an outbound call.
+  staffUserId         String?
+  answeredBy          CallAnsweredBy?
+  recordingConsent    RecordingConsent @default(NOT_ASKED)
+  startedAt           DateTime
+  answeredAt          DateTime?
+  connectedAt         DateTime?
+  endedAt             DateTime?
+  durationSeconds     Int?
+  hangupCause         String?
+  providerErrorCode   String?
+  providerErrorTitle  String?
+  /// The provider may have placed this call but never said so.
+  needsReconciliation Boolean          @default(false)
+  /// What the caller and Mili said, one "Speaker: text" line per turn.
+  agentTranscript     String?
+  idempotencyKey      String?          @unique
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  lead       Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  staffUser  User?           @relation("CallStaffUser", fields: [staffUserId], references: [id])
+  recordings CallRecording[]
+
+  @@unique([provider, providerCallId])
+  @@index([leadId, startedAt])
+  @@index([status, startedAt])
+}
+
+enum CallRecordingKind {
+  CALL
+  VOICEMAIL
+}
+
+/// PENDING → STORED, or → FAILED once retrying cannot help.
+enum CallRecordingStatus {
+  PENDING
+  STORED
+  FAILED
+}
+
+/// A recording copied off the provider into Blob storage. The provider copy
+/// is deleted once ours is stored (Privacy Act: keep one copy, ours).
+model CallRecording {
+  id                  String              @id @default(uuid())
+  callId              String
+  provider            CommsProvider
+  kind                CallRecordingKind
+  providerRecordingId String
+  status              CallRecordingStatus @default(PENDING)
+  durationSeconds     Int?
+  mimeType            String?
+  byteSize            Int?
+  blobUrl             String?
+  blobPathname        String?
+  attempts            Int                 @default(0)
+  failureReason       String?
+  storedAt            DateTime?
+  providerDeletedAt   DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerRecordingId])
+  @@index([status, createdAt])
+}
+
+/// Event-style provider callbacks already processed, so a retried delivery
+/// is a no-op. Markup callbacks (TwiML) are not recorded: answering them
+/// twice with the same instructions is the right behaviour.
+model CommsWebhookEvent {
+  id          String        @id @default(uuid())
+  provider    CommsProvider
+  dedupeKey   String
+  kind        String
+  receivedAt  DateTime      @default(now())
+  processedAt DateTime?
+
+  @@unique([provider, dedupeKey])
+  @@index([receivedAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// WhatsApp calling (Meta Cloud API, answered in a staff browser)
+//
+// Meta's calling API: a customer's call arrives on the WhatsApp webhook with
+// an SDP offer, and a staff browser answers it over WebRTC. WhatsApp calls
+// cannot be forwarded to a phone. Calling a customer needs their permission,
+// asked for with a WhatsApp message (lib/domain/whatsapp/calls).
+// ─────────────────────────────────────────────────────────────────────
+
+/// RINGING → ACCEPTED → COMPLETED, or RINGING → REJECTED | MISSED | FAILED.
+enum WhatsAppCallStatus {
+  RINGING
+  ACCEPTED
+  COMPLETED
+  REJECTED
+  MISSED
+  FAILED
+}
+
+model WhatsAppCall {
+  id                    String             @id @default(uuid())
+  /// Meta's call id. Null for an outbound call until Meta accepts it.
+  providerCallId        String?            @unique
+  direction             CommsDirection
+  leadId                Int?
+  businessPhoneNumberId String
+  businessDisplayNumber String
+  customerPhoneE164     String
+  status                WhatsAppCallStatus
+  /// Meta's SDP: the offer of an inbound call, the answer of an outbound one.
+  remoteSdp             String?            @db.Text
+  /// Who answered (inbound) or placed (outbound) it.
+  staffUserId           String?
+  idempotencyKey        String?            @unique
+  needsReconciliation   Boolean            @default(false)
+  failureReason         String?
+  startedAt             DateTime
+  answeredAt            DateTime?
+  endedAt               DateTime?
+  durationSeconds       Int?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  lead      Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  staffUser User? @relation("WhatsAppCallStaffUser", fields: [staffUserId], references: [id])
+
+  @@index([status, startedAt])
+  @@index([leadId, startedAt])
+}
+
+enum WhatsAppCallPermissionStatus {
+  REQUESTED
+  GRANTED
+  REJECTED
+}
+
+/// Whether a customer has let Royal call them on WhatsApp, per business
+/// number. Meta enforces the same rules; this is what the screen explains.
+model WhatsAppCallPermission {
+  id                    String                       @id @default(uuid())
+  leadId                Int?
+  businessPhoneNumberId String
+  customerPhoneE164     String
+  status                WhatsAppCallPermissionStatus
+  permanent             Boolean                      @default(false)
+  /// When a temporary grant lapses (Meta: seven days).
+  expiresAt             DateTime?
+  /// Every request sent, newest last: Meta allows one a day, two a week.
+  requestedAt           DateTime[]
+  respondedAt           DateTime?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@unique([businessPhoneNumberId, customerPhoneE164])
+  @@index([leadId])
+}
+
+/// Each call-permission reply (Meta's message id) applied once: Meta retries
+/// deliveries, and a retry must not write a second transition or history row.
+model WhatsAppCallPermissionReplyEvent {
+  providerMessageId String   @id
+  receivedAt        DateTime @default(now())
+
+  @@index([receivedAt])
 }
 
 model AdminOfferContent {

@@ -5,7 +5,8 @@ export const leadIdSchema = z.number().int().positive();
 export const leadTaskIdSchema = z.number().int().positive();
 
 // One tool for finding a lead and for listing the pipeline: an empty query
-// lists every lead, `page` walks the rest, and the result carries the total.
+// lists every non-archived lead (`includeArchived` adds the archived ones),
+// `page` walks the rest, and the result carries the total.
 export const searchLeadsInputSchema = z.object({
   query: z.string().trim().max(120).default(""),
   stages: z.array(z.enum(leadStages)).max(leadStages.length).default([]),
@@ -31,7 +32,7 @@ export const listOverdueLeadTasksInputSchema = z.object({
 
 export const createLeadTaskInputSchema = z.object({
   leadId: leadIdSchema,
-  type: z.enum(["CALL", "EMAIL", "MEETING", "WAITING"]),
+  type: z.enum(["CALL", "EMAIL", "MEETING", "WAITING", "WHATSAPP"]),
   dueAt: z.string().datetime({ offset: true }),
   dueTime: z
     .string()

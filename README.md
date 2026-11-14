@@ -99,7 +99,9 @@ Several module routes (financials, quotations, milestones, catalogue, architect,
    | `EVE_OPERATIONS_AGENT_ENABLED` | Enables the authenticated Eve channel; defaults to disabled |
    | `EVE_OPERATIONS_SPECIALISTS_ENABLED` | Exposes the declared specialist shells; keep disabled until their authorized tools pass evals |
    | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Optional disposable cache/coordination layer for agent memory; Postgres remains authoritative |
-   | `TWILIO_*` | Outbound IVR (see `docs/twillo-outbound-ivr.md`) |
+   | `WHATSAPP_*` | WhatsApp Business outreach for leads (see [`docs/whatsapp-runbook.md`](docs/whatsapp-runbook.md)); off unless `WHATSAPP_ENABLED="true"` |
+
+   `.env.example` is the full, commented reference for every variable.
 
 3. **Set up the database**
 
@@ -213,6 +215,7 @@ Internal docs live in `docs/`:
 - [`docs/architecture.md`](docs/architecture.md) — system design, data flow, and caching
 - [`docs/implementation.md`](docs/implementation.md) — live vs mock modules, API patterns, workflows
 - [`docs/folder-structure.md`](docs/folder-structure.md) — where to put new code
+- [`docs/whatsapp-runbook.md`](docs/whatsapp-runbook.md) — WhatsApp Business setup, templates, review queue, reconciliation and secret rotation
 
 ## Deployment
 

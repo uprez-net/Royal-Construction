@@ -26,12 +26,12 @@ export default defineEval({
     const marker = `marigold-${Date.now().toString(36)}`;
 
     const first = await t.send(
-      `Remember this reference code for the rest of our conversation: ${marker}. Just acknowledge it.`,
+      `This is an in-chat recall check only, not a request to save profile memory. The reference code for this conversation is ${marker}. Acknowledge it in text without using tools or saving anything.`,
     );
     // Every `t.send` opens a new session, so continuity is exercised on the
     // first turn's own session handle.
     const second = await first.session.send(
-      "What was the reference code I gave you a moment ago?",
+      "Without using tools, repeat the reference code from my previous message in this conversation.",
     );
 
     // Continuity: the second turn ran in the session the first one created.
@@ -61,5 +61,23 @@ export default defineEval({
     ).label("no cross-session leak");
 
     t.succeeded();
+    t.calledTool("profile__save", { count: 0 }).label(
+      "no persistent profile write",
+    );
+    t.notEvent("input.requested").label(
+      "no approval requested for in-chat recall",
+    );
+    // Run 43503177526 passed while the second session was parked on a Plaud
+    // sign-in prompt with no reply; a recall question needs no connection.
+    t.notEvent("authorization.required").label(
+      "no external authorization requested for in-chat recall",
+    );
+    t.check(
+      elsewhere.message ?? "",
+      satisfies(
+        (value) => typeof value === "string" && value.trim().length > 0,
+        "the second session answered",
+      ),
+    ).label("second session replied");
   },
 });

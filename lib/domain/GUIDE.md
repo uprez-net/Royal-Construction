@@ -61,6 +61,8 @@ lib/domain/
   identity/       users, team, customers, site managers
   admin/          admin-owned content (offer boilerplate)
   agent/          Eve's own owner-scoped session reads
+  comms/          SMS and phone calls: sends, inbound, statuses, the call
+                  router, recordings — carriers arrive through ports/comms
   compliance/     certifier engagement, documents, file reclamation
   email/          ad-hoc and campaign email rules
   insurance/      HBCF reads
@@ -70,6 +72,7 @@ lib/domain/
   offers/         the quote: workspace, status, revisions, signing, sending
   projects/       projects, milestones, variations, materials, readiness
   tradies/        directory, schedules, incidents, approvals, reminders
+  whatsapp/       what leads and project groups share: inbound media
 ```
 
 Rules of thumb:

@@ -97,7 +97,12 @@ test("a preset advances by whole days across a month boundary", () => {
 });
 
 test("every type has a label and a verb", () => {
-  assert.equal(LEAD_TASK_TYPES.length, 4);
+  // Every LeadTaskType, including WHATSAPP (issue #333), which the follow-up
+  // view must be able to label apart from EMAIL.
+  assert.deepEqual(
+    LEAD_TASK_TYPES.map((t) => t.value),
+    ["CALL", "EMAIL", "MEETING", "WAITING", "WHATSAPP"],
+  );
   for (const t of LEAD_TASK_TYPES) {
     assert.ok(t.label.length > 0, t.value);
     assert.ok(t.verb.length > 0, t.value);

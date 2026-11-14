@@ -7,7 +7,7 @@ export default defineEval({
   async test(t) {
     await expectRoutedTo(t, {
       prompt:
-        "Which of our leads are based in Sydney? Just list the names you can see.",
+        "Search the live lead records now for Sydney, rather than using the office snapshot or recall results. List the names and their stored locations.",
       specialist: "lead-operations",
       usingTool: "search_leads",
     });

@@ -152,6 +152,8 @@ jobs:
             echo "Missing secrets:$missing" >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Build Vercel Project
+        # `next build` type-checks here (SKIP_BUILD_TYPECHECK is unset), and a
+        # cold check of this repo needs ~3 GB — past Node's default heap.
         # Retries only an eve sandbox-template race with a concurrent staging
         # deploy; see scripts/ci/vercel-build.sh.
         #
@@ -165,6 +167,7 @@ jobs:
         # anything `vercel pull` wrote. Removing one of these turns the matching
         # part of error reporting off; the step above says so.
         env:
+          NODE_OPTIONS: "--max-old-space-size=6144"
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -226,9 +229,12 @@ jobs:
       - name: Pull Preview Environment
         run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
       - name: Build Vercel Project for Staging
-        # Retries only an eve sandbox-template race with a concurrent production
-        # deploy; see scripts/ci/vercel-build.sh.
+        # `next build` type-checks here (SKIP_BUILD_TYPECHECK is unset), and a
+        # cold check of this repo needs ~3 GB — past Node's default heap.
+        # Retries only an eve sandbox-template race with a concurrent
+        # production deploy; see scripts/ci/vercel-build.sh.
         env:
+          NODE_OPTIONS: "--max-old-space-size=6144"
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: bash scripts/ci/vercel-build.sh
       - name: Deploy to Vercel for Staging

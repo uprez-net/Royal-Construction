@@ -26,6 +26,9 @@ export const LEAD_TASK_TYPES: {
   { value: "EMAIL", label: "Email or text", verb: "Send an email or text" },
   { value: "MEETING", label: "Meeting", verb: "Organise a meeting" },
   { value: "WAITING", label: "Waiting on them", verb: "Wait for information" },
+  // Issue #333. Separate from EMAIL so the Follow-ups view and reporting can
+  // tell a WhatsApp chase from an email one.
+  { value: "WHATSAPP", label: "WhatsApp", verb: "Send a WhatsApp message" },
 ];
 
 /**

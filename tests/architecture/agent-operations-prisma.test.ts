@@ -116,6 +116,8 @@ function businessModelAccesses(
 const BUDGET: Record<string, number> = {
   "agent/lib/admin-operations.ts": 0,
   "agent/lib/lead-operations.ts": 0,
+  // Issue #333. Born migrated: every WhatsApp rule is lib/domain/leads/whatsapp.
+  "agent/lib/lead-whatsapp-operations.ts": 0,
   "agent/lib/offer-operations.ts": 0,
   "agent/lib/project-operations.ts": 0,
   "agent/lib/tradie-operations.ts": 0,

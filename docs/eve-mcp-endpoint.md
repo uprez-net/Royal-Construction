@@ -207,7 +207,7 @@ side of the line a capability is on before building against it.
 | `get_projects`, `get_project_lookup`, `get_project` | Covered by `search_projects` and `get_project` |
 | `get_milestones` | Covered: `get_project` returns milestones |
 | `create_milestone`, `update_milestone` | Covered |
-| `get_leads` | Covered by `search_leads` and `get_lead`. With no query, `search_leads` lists every lead a page at a time (up to 50 per page), with the total and a per-stage count |
+| `get_leads` | Covered by `search_leads` and `get_lead`. With no query, `search_leads` lists the caller's authorised, non-archived leads a page at a time (up to 50 per page), with the total and a per-stage count; `includeArchived: true` widens the list and the counts to archived leads as well |
 | `get_tradies`, `get_all_tradies` | Covered by `search_tradies` and `get_tradie` |
 | `get_tradie_coordination_dashboard` | Covered by `list_schedules` |
 | `create_tradie_schedule` | Covered by `create_schedule`, which has the duplicate-booking and milestone-ownership checks the old one lacked |

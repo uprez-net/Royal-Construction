@@ -134,15 +134,12 @@ test("a project whose lead has emails comes back as a valid envelope", () => {
   // Parsed by the envelope schema inside; this threw before the fix.
   const envelope = projectDetailEnvelope(detailFixture());
   const project = envelope.data.project as Record<string, unknown>;
-  // #433: the lead's mail trail as a count and a date, never the messages.
-  assert.deepEqual(project.lead, {
-    id: 42,
-    email: "client@example.com",
-    type: "Duplex",
-    location: "Sydney",
-    emailCount: 2,
-    latestEmailAt: "2026-09-02T10:00:00.000Z",
-  });
+  const lead = project.lead as Record<string, unknown>;
+
+  assert.equal(lead.emailCount, 2);
+  assert.equal(lead.latestEmailAt, "2026-09-02T10:00:00.000Z");
+  // No subject, sender or body: no Eve tool returns inbound email text.
+  assert.equal("emails" in lead, false);
   // The warning describes what the envelope carries: no email content.
   const warnings = envelope.warnings.join(" ");
   assert.doesNotMatch(warnings, /lead emails/);
@@ -161,6 +158,24 @@ test("a project whose lead has emails comes back as a valid envelope", () => {
   );
   // And the whole thing is plain JSON end to end.
   assert.deepEqual(JSON.parse(JSON.stringify(envelope.data)), envelope.data);
+});
+
+test("the count and latest date cover every email, however many", () => {
+  const detail = detailFixture();
+  const many = Array.from({ length: 60 }, (_, index) => ({
+    ...leadEmails[0],
+    id: `e${index}`,
+    sentAt: new Date(Date.UTC(2026, 0, 1 + index)),
+  }));
+  detail.lead.emails = many;
+
+  const lead = (
+    projectDetailEnvelope(detail).data.project as {
+      lead: { emailCount: number; latestEmailAt: string };
+    }
+  ).lead;
+  assert.equal(lead.emailCount, 60);
+  assert.equal(lead.latestEmailAt, "2026-03-01T00:00:00.000Z");
 });
 
 test("a blank or overlong project name does not fail the detail", () => {

@@ -26,6 +26,14 @@ export type RoutingCase = {
   readonly excluding?: readonly Specialist[];
   /** A tool that must have run, when the case pins the capability too. */
   readonly usingTool?: string;
+  /**
+   * What `usingTool` must have been called with, when the case pins how the
+   * capability was used too: at least one completed call must match.
+   */
+  readonly toolInput?: {
+    readonly describe: string;
+    readonly matches: (input: unknown) => boolean;
+  };
 };
 
 export async function expectRoutedTo(
@@ -36,6 +44,11 @@ export async function expectRoutedTo(
 
   t.succeeded();
   t.calledSubagent(routing.specialist).label(`routed to ${routing.specialist}`);
+  // A CRM question needs no outside sign-in. connection_search used to raise
+  // Plaud's, which parks the turn with no reply (run 43505272370).
+  t.notEvent("authorization.required").label(
+    "no external authorization prompt",
+  );
 
   const excluded =
     routing.excluding
@@ -54,6 +67,23 @@ export async function expectRoutedTo(
       ran,
       satisfies(() => ran, `"${tool}" ran; observed ${describeCalls(run)}`),
     ).label(`used ${tool}`);
+
+    if (routing.toolInput !== undefined) {
+      const { describe, matches } = routing.toolInput;
+      const matched = run.calls.some(
+        (call) =>
+          call.name === tool
+          && call.status === "completed"
+          && matches(call.input),
+      );
+      t.check(
+        matched,
+        satisfies(
+          () => matched,
+          `"${tool}" ${describe}; observed ${describeCalls(run)}`,
+        ),
+      ).label(`${tool} ${describe}`);
+    }
   }
 
   return turn;

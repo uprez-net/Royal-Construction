@@ -297,6 +297,7 @@ export function AgentToolCall({
             onRespond={onRespond}
             request={request}
             responded={responded || part.state !== "approval-requested"}
+            toolName={part.toolName}
           />
         </div>
       ) : null}

@@ -27,6 +27,7 @@ import { UploadButton } from "@/components/common/upload-button";
 import { appendFileToProject } from "@/lib/store/slices/projectsSlice";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { projectsListHref } from "@/components/projects/projects-list-url";
+import { ProjectWhatsAppHeaderButton } from "@/components/projects/detail/whatsapp/project-whatsapp-header-button";
 
 type ProjectRequirementsHeader = {
   legalAdministration?: {
@@ -306,6 +307,7 @@ export function ProjectHeader({
           )}
         </div>
         <div className="flex flex-wrap gap-2 pt-1">
+          <ProjectWhatsAppHeaderButton projectId={project.id} />
           <UploadButton
             projectId={project.id}
             maxFiles={5}

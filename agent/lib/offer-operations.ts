@@ -79,6 +79,11 @@ import {
   type ContractParticularKey,
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
+import {
+  projectWhatsAppGroupAvailability,
+  requestProjectWhatsAppGroup,
+} from "@/lib/domain/projects/whatsapp/groups";
+import { whatsappChannelFromEnv } from "@/lib/whatsapp/config";
 
 type OfferDb = Prisma.TransactionClient | typeof agentDb;
 
@@ -1118,6 +1123,11 @@ export async function createAuthorizedProjectFromOffer(
   }
   if (!result.ok) return failedAction("Project was not created", result.error);
 
+  // The new project's WhatsApp group, when groups are on. Eve only records the
+  // request: the workflow that calls Meta is the App's, and the App starts it
+  // the first time anyone opens the project (or the daily sweep does).
+  await recordWhatsAppGroupRequest(principal, result.projectId);
+
   return actionEnvelope({
     data: {
       milestoneCount: result.milestoneCount,
@@ -1140,4 +1150,22 @@ export async function createAuthorizedProjectFromOffer(
       "The project's Xero contact was not created now; it is created with the first progress claim.",
     ],
   });
+}
+
+async function recordWhatsAppGroupRequest(
+  principal: ReturnType<typeof userPrincipal>,
+  projectId: string,
+): Promise<void> {
+  const channel = whatsappChannelFromEnv();
+  if (!projectWhatsAppGroupAvailability(channel).available) return;
+  try {
+    await requestProjectWhatsAppGroup(principal, { projectId }, agentDb, {
+      channel,
+    });
+  } catch (error) {
+    console.error(
+      `[agent] Could not record a WhatsApp group request for project ${projectId}.`,
+      error,
+    );
+  }
 }

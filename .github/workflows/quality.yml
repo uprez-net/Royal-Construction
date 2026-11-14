@@ -164,12 +164,11 @@ jobs:
     environment: Preview
     env:
       NODE_ENV: "test"
-      # A cold `tsc` over this project holds ~2.5 GB, and Node's default heap on
-      # the runner is ~2 GB. It has passed only because the build-info cache below
-      # makes the run incremental, and that cache is keyed on pnpm-lock.yaml, so
-      # any dependency change misses it and runs cold. Measured on origin/main:
-      # 2.5 GB cold, so this is not specific to any one change.
-      NODE_OPTIONS: "--max-old-space-size=4096"
+      # A cold `tsc --noEmit` over this repo — the generated Prisma client is
+      # most of it — needs about 3 GB, past Node's ~2 GB default heap. It only
+      # passed while a restored tsbuildinfo let tsc skip most files; a cache
+      # miss (any lockfile change) ran out of memory. The runner has 7 GB.
+      NODE_OPTIONS: "--max-old-space-size=6144"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5

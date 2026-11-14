@@ -32,8 +32,10 @@ export const READ_TOOLS = {
   ],
   "lead-operations": [
     "get_lead",
+    "get_lead_whatsapp",
     "list_lead_tasks",
     "list_overdue_lead_tasks",
+    "prepare_lead_whatsapp_message",
     "search_leads",
   ],
   "offer-operations": [
@@ -74,7 +76,9 @@ export const WRITE_TOOLS = {
     "create_lead",
     "create_lead_task",
     "reopen_lead_task",
+    "schedule_lead_whatsapp_follow_up",
     "send_lead_email",
+    "send_lead_whatsapp_message",
     "update_lead",
   ],
   "offer-operations": [

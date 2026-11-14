@@ -14,7 +14,7 @@ const description = [
   "Royal Constructions operations agent (Australian residential builder, staff-only): the office assistant that keeps the CRM up to date.",
   "It knows the live business (a nightly snapshot of every lead, project and tradie, refreshed after each change it makes), so short requests like 'where is the Rose St job up to' or 'move Smith to negotiating' work without ids.",
   "It reads and updates live business records through audited, permission-checked tools:",
-  "leads (search, detail, create, edit, stage changes, archive, client email, follow-up and meeting tasks: create, complete, reopen);",
+  "leads (search, detail, create, edit, stage changes, archive, client email, follow-up and meeting tasks: create, complete, reopen; WhatsApp conversation reads, message previews, owner-approved sends and follow-up scheduling);",
   "offers and revisions (start an offer for a lead, search, detail, pricing, cost lines, allowances, exclusions, payment schedule, status transitions, emailing the offer to the client, DocuSign signing for the offer, Tender and Contract, recall, new revisions, change requests, contract particulars, activity, signing status, and handing a signed Contract over into a project);",
   "projects (search, overview, requirements, milestones, financials, site manager assignment);",
   "compliance on a project (engagement status, documents, certifier outreach and follow-up);",

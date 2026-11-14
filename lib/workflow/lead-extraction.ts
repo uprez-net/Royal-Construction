@@ -18,6 +18,7 @@ import { checkLeadPresentWithEmailPhone } from "@/lib/leads/existing-lead";
 import { renderEmailHtml } from "@/lib/leads/render-email-html";
 import { isOwnMailbox, resolveLeadEmail } from "@/lib/graph/mailbox";
 import prisma from "@/lib/prisma";
+import { leadPhoneE164 } from "@/lib/domain/leads/whatsapp/phone";
 
 /**
  * The message, flattened to what the extraction actually needs.
@@ -153,6 +154,9 @@ async function saveLead(
       name: extracted.Name || "Unknown Lead",
       email: leadEmail,
       phone: phoneVal,
+      // Same normaliser the lead commands use, so an inbound WhatsApp from this
+      // enquirer matches the lead (issue #333).
+      phoneE164: leadPhoneE164(phoneVal),
       location: extracted.Address || "",
       sourceDetail: "Website",
       stage: "CONTACTED",

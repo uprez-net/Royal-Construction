@@ -89,6 +89,7 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   EMAIL: "Email or text",
   MEETING: "Meeting",
   WAITING: "Waiting on them",
+  WHATSAPP: "WhatsApp",
 };
 
 const ROW_SELECT = {

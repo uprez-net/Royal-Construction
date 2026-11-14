@@ -21,6 +21,7 @@ import { searchLeadsInputSchema } from "@/agent/lib/lead-contracts";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
 import delegate from "@/agent/tools/delegate";
 import { REPO_ROOT } from "../support/repo-root";
+import { DISABLED_DEFAULT_TOOL_FILES } from "../support/eve-default-tools";
 
 /**
  * The orchestrator reaches its specialists only through the blocking
@@ -42,7 +43,10 @@ function declaredSpecialists(): string[] {
 function hasTools(name: string): boolean {
   const dir = path.join(SUBAGENTS_DIR, name, "tools");
   return (
-    existsSync(dir) && readdirSync(dir).some((file) => file.endsWith(".ts"))
+    existsSync(dir)
+    && readdirSync(dir).some(
+      (file) => file.endsWith(".ts") && !DISABLED_DEFAULT_TOOL_FILES.has(file),
+    )
   );
 }
 
@@ -202,6 +206,7 @@ test("the MCP-visible agent description names what the agent can and cannot do",
   assert.ok(description && description.length > 200);
   assert.match(description, /input_required/);
   assert.match(description, /agent_update/);
+  assert.match(description, /WhatsApp conversation reads/);
   assert.match(description, /Not available/);
 });
 
@@ -312,7 +317,19 @@ test("a filtered lead count passes its criteria to search_leads", () => {
   assert.match(lead, /cannot\s+filter\s+by\s+assignee\s+or\s+date/);
   // A place total is disclosed as a text match, and two text criteria are
   // never answered with one query's totalCount.
-  assert.match(lead, /not\s+a\s+strict\s+location\s+filter/);
+  assert.match(lead, /never\s+a\s+strict\s+filter\s+on\s+one\s+field/);
+  assert.match(
+    lead,
+    /Say\s+that\s+whenever\s+you\s+give\s+a\s+count\s+for\s+a\s+name,\s+email,\s+phone\s+or\s+place,\s+and\s+do\s+not\s+present\s+it\s+as\s+an\s+exact\s+count\s+for\s+that\s+field/,
+  );
+  // Counts are scoped to what the caller can see.
+  assert.match(lead, /only\s+the\s+leads\s+this\s+user\s+can\s+see/);
+  // Won + Converted only for won-deal questions; an explicit Won stage stays Won.
+  assert.match(
+    lead,
+    /for\s+"won\s+deals"[^.]*count\s+or\s+filter\s+both,\s+never\s+Won\s+alone/,
+  );
+  assert.match(lead, /`stages: \["Won"\]`\s+only/);
   assert.match(
     lead,
     /cannot\s+combine\s+two\s+text\s+criteria[\s\S]*?do\s+not\s+quote\s+`totalCount`\s+as\s+the\s+combined\s+count/,
@@ -321,4 +338,19 @@ test("a filtered lead count passes its criteria to search_leads", () => {
     lead,
     /To list or count leads, call `search_leads` with no query/,
   );
+});
+
+test("no specialist description asks the model to validate the caller itself", () => {
+  // `delegate` lists these descriptions to the orchestrator verbatim. Staging
+  // eval run 43498857510: "Validate current caller..." was echoed into the
+  // hand-off, and tradie-operations refused a plain directory search because it
+  // had no tool to "validate" with. The tools resolve and authorize the caller
+  // themselves; a description must never make that the model's job.
+  for (const [name, description] of Object.entries(SPECIALISTS)) {
+    assert.doesNotMatch(
+      description,
+      /\b(validate|verify)\b[^.;]*\bcaller\b/i,
+      `${name} tells the model to check the caller itself`,
+    );
+  }
 });

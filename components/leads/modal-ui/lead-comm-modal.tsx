@@ -1,3 +1,5 @@
+import { Mail } from "lucide-react";
+
 import { ModalShell } from "@/components/common/modal-shell";
 import { Lead } from "@/lib/leads/types";
 import { LeadEmailSection } from "./email-section";
@@ -22,15 +24,20 @@ export default function LeadCommModal({
     <ModalShell
       open={isOpen}
       onClose={onClose}
-      title={`${lead.name} - Messages`}
-      maxWidthClass="max-w-[720px]"
+      title={
+        <span className="inline-flex items-center gap-2">
+          <Mail className="size-4 text-royal-gold-ink" aria-hidden="true" />
+          Email · {lead.name}
+        </span>
+      }
+      maxWidthClass="max-w-[760px]"
+      bodyClassName="min-h-0 overflow-y-auto p-3 sm:p-4"
       isFullScreenable
       isFullScreen={isFullScreen}
       onToggleFullScreen={(minimize) =>
         setIsFullScreen(minimize ? false : true)
       }
     >
-      {/* Emails */}
       <LeadEmailSection
         key={lead.emails.length}
         emails={lead.emails}

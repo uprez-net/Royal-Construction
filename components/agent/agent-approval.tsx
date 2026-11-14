@@ -16,6 +16,11 @@ import {
   AgentOutreach,
   type AgentOutreachDetails,
 } from "@/components/agent/agent-outreach";
+import { AgentWhatsAppDraftView } from "@/components/agent/agent-whatsapp";
+import {
+  approvalWhatsApp,
+  WHATSAPP_APPROVAL_KEYS,
+} from "@/components/agent/agent-whatsapp-format";
 import { cn } from "@/lib/utils";
 
 export type AgentInputResponse = {
@@ -42,6 +47,7 @@ export function AgentApproval({
   onRespond,
   request,
   responded,
+  toolName,
 }: {
   /** Approved, and the agent has not picked the change back up yet. */
   applying?: boolean;
@@ -50,6 +56,8 @@ export function AgentApproval({
   cancelled?: boolean;
   input: unknown;
   label: string;
+  /** The tool being approved, when the request is a tool approval. */
+  toolName?: string | null;
   onRespond: (responses: readonly AgentInputResponse[]) => Promise<void>;
   request: EveMessageInputRequest;
   responded: boolean;
@@ -63,15 +71,26 @@ export function AgentApproval({
   const [respondError, setRespondError] = useState<string | null>(null);
   const isApproval = request.kind === "tool-approval";
   const isLimit = request.kind === "session-limit";
-  const outreach = isApproval ? approvalOutreach(input) : null;
-  // The email body is the approval when there is one, so it is rendered rather
-  // than repeated as a raw argument below the preview.
+  const whatsapp = isApproval ? approvalWhatsApp(toolName, input) : null;
+  const outreach = isApproval && !whatsapp ? approvalOutreach(input) : null;
   const { labels: targetLabels, changeLabels } = useApprovalTargetLabels(
     isApproval ? input : undefined,
   );
+  // The email or WhatsApp body is the approval when there is one, so it is
+  // rendered rather than repeated as a raw argument below the preview. The
+  // lead id stays: the preview names the lead only by number, and this row is
+  // where the looked-up lead name appears.
   const fields = (
     isApproval ? toInputFields(input, { changeLabels }) : []
-  ).filter((field) => !(outreach && OUTREACH_KEYS.has(field.key)));
+  ).filter(
+    (field) =>
+      !(outreach && OUTREACH_KEYS.has(field.key))
+      && !(
+        whatsapp
+        && field.key !== "leadId"
+        && WHATSAPP_APPROVAL_KEYS.has(field.key)
+      ),
+  );
   const hasOptions = (request.options?.length ?? 0) > 0;
   const acceptsText = request.allowFreeform === true || !hasOptions;
   const Icon = isApproval
@@ -168,6 +187,8 @@ export function AgentApproval({
       </div>
 
       {outreach ? <AgentOutreach outreach={outreach} /> : null}
+
+      {whatsapp ? <AgentWhatsAppDraftView draft={whatsapp} /> : null}
 
       {fields.length > 0 ? (
         <dl className="flex flex-col gap-2 rounded-lg border border-border/60 bg-background/80 p-2.5">

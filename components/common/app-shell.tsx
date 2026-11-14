@@ -24,6 +24,8 @@ import {
 } from "@/utils/shell-nav";
 import Image from "next/image";
 import { Notifications } from "./notifications";
+import { PhoneDock } from "@/components/comms/phone-dock";
+import { PhoneProvider } from "@/components/comms/phone-provider";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SYDNEY_TZ, sydneyTimeZoneAbbreviation } from "@/lib/dates/sydney";
@@ -38,6 +40,7 @@ type AgentSessionTitleDetail = {
 export function AppShell({
   isAdmin,
   isSignedIn,
+  phoneEnabled = false,
   operationsAgentEnabled,
   // description,
   breadcrumbs,
@@ -46,6 +49,11 @@ export function AppShell({
 }: {
   isAdmin: boolean;
   isSignedIn: boolean;
+  /**
+   * Staff only: mounts the browser phone (calls and WhatsApp calls). A portal
+   * account never asks for a calling credential or polls for calls.
+   */
+  phoneEnabled?: boolean;
   // EVE_OPERATIONS_AGENT_ENABLED. Off, the agent channel refuses every
   // request, so a nav entry would only lead to a workspace that cannot answer.
   operationsAgentEnabled: boolean;
@@ -405,7 +413,14 @@ export function AppShell({
               "[&::-webkit-scrollbar]:hidden",
             )}
           >
-            {children}
+            {phoneEnabled ? (
+              <PhoneProvider>
+                {children}
+                <PhoneDock />
+              </PhoneProvider>
+            ) : (
+              children
+            )}
           </main>
         </div>
       </div>
