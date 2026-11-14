@@ -259,8 +259,8 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   onChange={(e) => updateField("name", e.target.value)}
                   onBlur={() => markTouched("name")}
                   className={cn(
-                    fieldError("name") &&
-                      "border-destructive focus-visible:ring-destructive",
+                    fieldError("name")
+                      && "border-destructive focus-visible:ring-destructive",
                   )}
                 />
                 {fieldError("name") && (
@@ -296,8 +296,8 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   aria-describedby="tradie-abn-hint"
                   className={cn(
                     "font-mono tabular-nums",
-                    fieldError("abn") &&
-                      "border-destructive focus-visible:ring-destructive",
+                    fieldError("abn")
+                      && "border-destructive focus-visible:ring-destructive",
                   )}
                   onChange={(e) => {
                     // Only allow digits and spaces as the user types
@@ -338,8 +338,8 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                     required
                     className={cn(
                       "pl-8 font-mono tabular-nums",
-                      fieldError("lastQuotedPrice") &&
-                        "border-destructive focus-visible:ring-destructive",
+                      fieldError("lastQuotedPrice")
+                        && "border-destructive focus-visible:ring-destructive",
                     )}
                     type="number"
                     min={0}
@@ -428,8 +428,8 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   onBlur={() => markTouched("phone")}
                   className={cn(
                     "font-mono tabular-nums",
-                    fieldError("phone") &&
-                      "border-destructive focus-visible:ring-destructive",
+                    fieldError("phone")
+                      && "border-destructive focus-visible:ring-destructive",
                   )}
                 />
                 {fieldError("phone") ? (
@@ -470,8 +470,8 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   onChange={(e) => updateField("email", e.target.value)}
                   onBlur={() => markTouched("email")}
                   className={cn(
-                    fieldError("email") &&
-                      "border-destructive focus-visible:ring-destructive",
+                    fieldError("email")
+                      && "border-destructive focus-visible:ring-destructive",
                   )}
                 />
                 {fieldError("email") && (
