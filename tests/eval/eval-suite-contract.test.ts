@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "vitest";
+import { DISABLED_DEFAULT_TOOL_FILES } from "../support/eve-default-tools";
 import { REPO_ROOT } from "../support/repo-root";
 import { NEVER_APPROVE_ON_STAGING } from "@/evals/data/fixtures";
 import { ALL_WRITE_TOOLS, READ_TOOLS, WRITE_TOOLS } from "@/evals/data/tools";
@@ -27,7 +28,10 @@ function toolNamesFor(specialist: string): readonly string[] {
     return [];
   }
   return readdirSync(dir)
-    .filter((entry) => entry.endsWith(".ts"))
+    .filter(
+      (entry) =>
+        entry.endsWith(".ts") && !DISABLED_DEFAULT_TOOL_FILES.has(entry),
+    )
     .map((entry) => entry.replace(/\.ts$/, ""))
     .sort();
 }
