@@ -27,13 +27,12 @@ export function ProjectToolbar({
   const dispatch = useAppDispatch();
   const view = useAppSelector((state) => state.ui.projectFilters.view);
 
-  // 44px targets at the 0.9 zoom this app applies above 1024px; `size-11`
-  // would render at ~40px, so the toggle keeps generous padding instead of an
-  // icon-sized box.
+  // 44px targets: `size-11` is rem-based, so at the 90% root font size this app
+  // applies from 1024px it would render at ~40px. Keep the box a fixed 44px.
   /** Style the active layout toggle while keeping visible keyboard focus in either state. */
   const viewToggleClass = (isActive: boolean) =>
     cn(
-      "inline-flex size-11 items-center justify-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+      "inline-flex size-[44px] items-center justify-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
       isActive
         ? "bg-primary text-primary-foreground"
         : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",

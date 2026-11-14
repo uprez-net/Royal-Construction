@@ -61,8 +61,9 @@ export function TemplateCostLinePicker({
         <PopoverContent
           className="w-[var(--radix-popover-trigger-width)] p-0"
           align="start"
+          aria-label="Select cost lines"
         >
-          <Command>
+          <Command label="Search cost schedule tasks">
             <CommandInput
               placeholder="Search cost schedule tasks…"
               aria-label="Search cost schedule tasks"
@@ -78,14 +79,10 @@ export function TemplateCostLinePicker({
                   <CommandItem
                     key={task}
                     value={task}
-                    data-checked={selected.includes(task)}
-                    aria-selected={selected.includes(task)}
+                    checked={selected.includes(task)}
                     onSelect={() => toggle(task)}
                   >
                     <span>{task}</span>
-                    <span className="sr-only">
-                      {selected.includes(task) ? "Selected" : "Not selected"}
-                    </span>
                   </CommandItem>
                 ))}
               </CommandGroup>

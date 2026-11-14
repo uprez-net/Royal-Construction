@@ -121,6 +121,7 @@ export function IdentifyDocumentPicker({
           variant="outline"
           size="sm"
           role="combobox"
+          aria-label="What is this document?"
           aria-expanded={open}
           disabled={disabled}
           className="w-full justify-between font-normal text-muted-foreground sm:max-w-xs"
@@ -132,8 +133,9 @@ export function IdentifyDocumentPicker({
       <PopoverContent
         align="start"
         className="w-(--radix-popover-trigger-width) min-w-72 p-0 sm:w-96"
+        aria-label="Select document type"
       >
-        <Command>
+        <Command label="Search document types">
           <CommandInput placeholder="Search document types…" />
           <CommandList className="max-h-80">
             <CommandEmpty>No document type matches.</CommandEmpty>

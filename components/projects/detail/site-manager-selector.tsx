@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { Check, ChevronDown, HardHat, Loader2 } from "lucide-react";
+import { ChevronDown, HardHat, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -133,8 +133,12 @@ export function SiteManagerSelector({
               )}
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-72 p-0" align="start">
-            <Command shouldFilter={false}>
+          <PopoverContent
+            className="w-72 p-0"
+            align="start"
+            aria-label="Select site manager"
+          >
+            <Command shouldFilter={false} label="Search site managers">
               <CommandInput
                 placeholder="Search site managers..."
                 value={search}
@@ -159,6 +163,7 @@ export function SiteManagerSelector({
                       <CommandItem
                         key={manager.id}
                         value={manager.id}
+                        checked={manager.id === current?.id}
                         onSelect={() => void assign(manager)}
                       >
                         <div className="flex min-w-0 flex-1 flex-col">
@@ -174,12 +179,6 @@ export function SiteManagerSelector({
                               .join(" · ")}
                           </span>
                         </div>
-                        {manager.id === current?.id ? (
-                          <Check
-                            className="ml-2 size-4 shrink-0"
-                            aria-label="Current site manager"
-                          />
-                        ) : null}
                       </CommandItem>
                     );
                   })}

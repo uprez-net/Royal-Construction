@@ -146,6 +146,12 @@ export function CreateProjectModal({
   const [locationSuggestions, setLocationSuggestions] = useState<
     AddressSuggestion[]
   >([]);
+  // The query whose lookup has finished, success or failure. Loading is "typed
+  // past the 3-character floor and that query has not settled", derived rather
+  // than set inside the effect.
+  const [settledAddress, setSettledAddress] = useState("");
+  const addressLoading =
+    siteAddress.length >= 3 && settledAddress !== siteAddress;
   const [selectedLocation, setSelectedLocation] =
     useState<AddressSuggestion | null>(null);
   const [managerSearch, setManagerSearch] = useState("");
@@ -369,6 +375,8 @@ export function CreateProjectModal({
         if (error instanceof Error && error.name !== "AbortError") {
           console.error("Failed to fetch location suggestions", error);
         }
+      } finally {
+        if (!controller.signal.aborted) setSettledAddress(siteAddress);
       }
     }, 300);
 
@@ -994,15 +1002,20 @@ export function CreateProjectModal({
                       field="siteLocation"
                       error={fieldErrorMap.siteLocation}
                     >
-                      <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                      <Label
+                        id="create-project-site-location-label"
+                        className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground"
+                      >
                         Site location
                       </Label>
                       <SearchableSelect
                         label=""
+                        labelledById="create-project-site-location-label"
                         placeholder="Select address..."
                         searchValue={siteAddress}
                         selectedItem={selectedLocation}
                         items={locationSuggestions}
+                        loading={addressLoading}
                         onQueryChange={(query) => setSiteAddress(query)}
                         onSelect={(item) => {
                           const suggestion = item as AddressSuggestion;

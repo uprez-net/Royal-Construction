@@ -157,7 +157,7 @@ export function OfferStatusBadge({
       </PopoverTrigger>
 
       <PopoverContent align="start" className="w-56 p-1">
-        <Command>
+        <Command label="Change status">
           <CommandGroup heading="Change status">
             {availableTransitions.map((nextStatus) => {
               const NextIcon = StatusIcon[nextStatus];

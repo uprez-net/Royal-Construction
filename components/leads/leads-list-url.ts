@@ -14,12 +14,23 @@ export const LEAD_SORT_OPTIONS: readonly {
 ];
 
 /**
+ * The shortest search that is applied. The table reads /api/leads, whose
+ * `getLeads` (lib/data/leads.ts) runs a case-insensitive `contains` over name,
+ * email, phone and address columns with no minimum length of its own, which is
+ * cheap at this table's size, so the threshold only exists to skip one- and
+ * two-letter queries that match a large share of the table. It used to be 5
+ * with no hint, which made "Tom", "Lee" and "Tran" do nothing (#438); 3 lets
+ * those through and the box now says when a query is too short.
+ */
+export const MIN_SEARCH_CHARS = 3;
+
+/**
  * The Leads table's place — page and filters — lives in the /leads URL
  * (issue #350), so coming back from a lead lands where the list was, a reload
  * keeps it, and opening Leads fresh from anywhere else starts over:
  *
  *   ?page=4        the table page (absent means 1)
- *   ?query=smith   the applied search (five characters or more)
+ *   ?query=smith   the applied search (MIN_SEARCH_CHARS or more)
  *   ?status=lost   the metric card or stage chips (comma list of stages)
  *   ?timing=today  the timing filter (absent means "all")
  *   ?sort=name-desc  the sort option (absent means created, newest first)

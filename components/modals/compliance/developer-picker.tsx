@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronsUpDown, Landmark } from "lucide-react";
+import { ChevronsUpDown, Landmark } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { developersForArea } from "@/constants/complianceDevelopers";
-import { cn } from "@/lib/utils";
 
 /**
  * The estate developer this approval is being sought from.
@@ -92,6 +91,11 @@ export function DeveloperPicker({
             type="button"
             variant="outline"
             role="combobox"
+            aria-label={
+              value
+                ? `Estate or developer: ${value.estate}, ${value.name}`
+                : "Estate or developer: pick the estate this lot is in"
+            }
             aria-expanded={open}
             disabled={disabled}
             className="w-full justify-between font-normal"
@@ -115,8 +119,9 @@ export function DeveloperPicker({
         <PopoverContent
           className="w-(--radix-popover-trigger-width) p-0"
           align="start"
+          aria-label="Select estate or developer"
         >
-          <Command>
+          <Command label="Search estates and developers">
             <CommandInput placeholder="Search estates and developers…" />
             <CommandList>
               <CommandEmpty>No estate by that name.</CommandEmpty>
@@ -128,6 +133,7 @@ export function DeveloperPicker({
                     // the row. Somebody who knows this job says "Willowdale";
                     // somebody who administers approvals says "Stockland".
                     value={`${developer.estate} ${developer.name}`}
+                    checked={value?.key === developer.key}
                     onSelect={() => {
                       onChange({
                         key: developer.key,
@@ -139,15 +145,6 @@ export function DeveloperPicker({
                       setOpen(false);
                     }}
                   >
-                    <Check
-                      className={cn(
-                        "size-4",
-                        value?.key === developer.key
-                          ? "opacity-100"
-                          : "opacity-0",
-                      )}
-                      aria-hidden="true"
-                    />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{developer.estate}</span>
                       <span className="block truncate text-xs text-muted-foreground">
