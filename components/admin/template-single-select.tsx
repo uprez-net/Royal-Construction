@@ -72,7 +72,7 @@ export function TemplateSingleSelect({
         aria-label={searchLabel}
         className="w-(--radix-popover-trigger-width) p-0"
       >
-        <Command>
+        <Command label={searchLabel}>
           <CommandInput
             placeholder={`${searchLabel}…`}
             aria-label={searchLabel}
@@ -92,7 +92,7 @@ export function TemplateSingleSelect({
                         option.description ?? "",
                         group ?? "",
                       ]}
-                      data-checked={value === option.id}
+                      checked={value === option.id}
                       onSelect={() => {
                         onChange(option.id);
                         setOpen(false);
@@ -107,9 +107,6 @@ export function TemplateSingleSelect({
                           </span>
                         ) : null}
                       </span>
-                      {value === option.id ? (
-                        <span className="sr-only">Current selection</span>
-                      ) : null}
                     </CommandItem>
                   ))}
               </CommandGroup>

@@ -111,6 +111,12 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
   const [locationSuggestions, setLocationSuggestions] = useState<
     AddressSuggestion[]
   >([]);
+  // The query whose lookup has finished, success or failure. Loading is "typed
+  // past the 3-character floor and that query has not settled", derived rather
+  // than set inside the effect.
+  const [settledAddress, setSettledAddress] = useState("");
+  const addressLoading =
+    siteAddress.length >= 3 && settledAddress !== siteAddress;
 
   const validation = useMemo(
     () => tradieSchema.safeParse(formData),
@@ -147,6 +153,8 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
         if (error instanceof Error && error.name !== "AbortError") {
           console.error(error);
         }
+      } finally {
+        if (!controller.signal.aborted) setSettledAddress(siteAddress);
       }
     }, 300);
     return () => {
@@ -251,8 +259,8 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   onChange={(e) => updateField("name", e.target.value)}
                   onBlur={() => markTouched("name")}
                   className={cn(
-                    fieldError("name") &&
-                      "border-destructive focus-visible:ring-destructive",
+                    fieldError("name")
+                      && "border-destructive focus-visible:ring-destructive",
                   )}
                 />
                 {fieldError("name") && (
@@ -288,8 +296,8 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   aria-describedby="tradie-abn-hint"
                   className={cn(
                     "font-mono tabular-nums",
-                    fieldError("abn") &&
-                      "border-destructive focus-visible:ring-destructive",
+                    fieldError("abn")
+                      && "border-destructive focus-visible:ring-destructive",
                   )}
                   onChange={(e) => {
                     // Only allow digits and spaces as the user types
@@ -330,8 +338,8 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                     required
                     className={cn(
                       "pl-8 font-mono tabular-nums",
-                      fieldError("lastQuotedPrice") &&
-                        "border-destructive focus-visible:ring-destructive",
+                      fieldError("lastQuotedPrice")
+                        && "border-destructive focus-visible:ring-destructive",
                     )}
                     type="number"
                     min={0}
@@ -420,8 +428,8 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   onBlur={() => markTouched("phone")}
                   className={cn(
                     "font-mono tabular-nums",
-                    fieldError("phone") &&
-                      "border-destructive focus-visible:ring-destructive",
+                    fieldError("phone")
+                      && "border-destructive focus-visible:ring-destructive",
                   )}
                 />
                 {fieldError("phone") ? (
@@ -462,8 +470,8 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   onChange={(e) => updateField("email", e.target.value)}
                   onBlur={() => markTouched("email")}
                   className={cn(
-                    fieldError("email") &&
-                      "border-destructive focus-visible:ring-destructive",
+                    fieldError("email")
+                      && "border-destructive focus-visible:ring-destructive",
                   )}
                 />
                 {fieldError("email") && (
@@ -507,6 +515,7 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   searchValue={siteAddress}
                   selectedItem={selectedLocation}
                   items={locationSuggestions}
+                  loading={addressLoading}
                   onQueryChange={setSiteAddress}
                   onSelect={(item) => {
                     const location = item as AddressSuggestion;

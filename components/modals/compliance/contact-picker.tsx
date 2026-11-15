@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronsUpDown, Loader2, UserRound } from "lucide-react";
+import { ChevronsUpDown, Loader2, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -147,6 +147,11 @@ export function ContactPicker({
             type="button"
             variant="outline"
             role="combobox"
+            aria-label={
+              value
+                ? `${label}: ${value.name}`
+                : `Select ${label.toLowerCase()}`
+            }
             aria-expanded={open}
             disabled={disabled || isLoading}
             className={cn(
@@ -180,8 +185,9 @@ export function ContactPicker({
         <PopoverContent
           align="start"
           className="w-(--radix-popover-trigger-width) p-0"
+          aria-label={`Select ${label.toLowerCase()}`}
         >
-          <Command>
+          <Command label={`Search ${label.toLowerCase()}s`}>
             <CommandInput placeholder={`Search ${label.toLowerCase()}s…`} />
             <CommandList>
               <CommandEmpty>
@@ -197,6 +203,10 @@ export function ContactPicker({
                   <CommandItem
                     key={`${option.tradieId}:${option.email}`}
                     value={`${option.name} ${option.email}`}
+                    checked={
+                      value?.email === option.email
+                      && value?.tradieId === option.tradieId
+                    }
                     onSelect={() => {
                       onChange(option);
                       setOpen(false);
@@ -209,16 +219,6 @@ export function ContactPicker({
                         {option.isAlternate ? " · alternate" : ""}
                       </span>
                     </span>
-                    <Check
-                      className={cn(
-                        "ml-2 size-4 shrink-0",
-                        value?.email === option.email &&
-                          value?.tradieId === option.tradieId
-                          ? "opacity-100"
-                          : "opacity-0",
-                      )}
-                      aria-hidden="true"
-                    />
                   </CommandItem>
                 ))}
               </CommandGroup>

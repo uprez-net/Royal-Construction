@@ -1300,7 +1300,7 @@ const STEP_SCROLL_OFFSET_PX = 12;
 // Scroll the pane, and only the pane, so a step's section starts at its top.
 // scrollIntoView would also scroll every scrollable ancestor, the window
 // included. Measured with offsetTop (the pane is the sections' offsetParent)
-// rather than client rects: rects carry the app's CSS zoom, and converting them
+// rather than client rects: rects are in transformed pixels, and converting them
 // back drifted by a dozen pixels over a long pane. Returns the section, or null
 // when it is not rendered.
 function scrollPaneToStep(

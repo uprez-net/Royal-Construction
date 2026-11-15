@@ -14,12 +14,81 @@ export const LEAD_SORT_OPTIONS: readonly {
 ];
 
 /**
+ * The shortest search that is applied. The table reads /api/leads, whose
+ * `getLeads` (lib/data/leads.ts) runs a case-insensitive `contains` over name,
+ * email, phone and address columns with no minimum length of its own, which is
+ * cheap at this table's size, so the threshold only exists to skip one- and
+ * two-letter queries that match a large share of the table. It used to be 5
+ * with no hint, which made "Tom", "Lee" and "Tran" do nothing (#438); 3 lets
+ * those through and the box now says when a query is too short.
+ */
+export const MIN_SEARCH_CHARS = 3;
+
+/**
+ * Where the URL's ?query= is going: the query the last search request asked
+ * for while that router.replace is still in flight, otherwise the query the URL
+ * shows. router.replace takes a round trip and the URL only catches up when it
+ * lands, so the shown query alone is stale in between (#465).
+ *
+ * The request only counts while it is still the latest navigation: a metric
+ * card, page or sort change made meanwhile preempts it (Next drops the older
+ * one), and judging a clear against a query that was dropped would send a
+ * replace built from stale params that wipes the card's filter. The caller
+ * counts every navigation it makes; `requestedNavigation` is that count when
+ * the search request was made (-1 before any), `latestNavigation` the count now.
+ */
+export function searchHeading({
+  navigating,
+  requestedNavigation,
+  latestNavigation,
+  requested,
+  shown,
+}: {
+  navigating: boolean;
+  requestedNavigation: number;
+  latestNavigation: number;
+  requested: string | null;
+  shown: string;
+}): string {
+  if (
+    navigating
+    && requested !== null
+    && requestedNavigation === latestNavigation
+  ) {
+    return requested;
+  }
+  return shown;
+}
+
+/**
+ * The query the Search box should ask the URL for, or null when the URL already
+ * shows it or is on its way there. `typed` is the trimmed box value and
+ * `heading` comes from searchHeading.
+ *
+ * Comparing with the shown query alone made "tes" followed by a quick clear
+ * read as "nothing to do" (the URL had not caught up yet), and ?query=tes was
+ * left applied under an empty box (#465).
+ *
+ * A query applies at MIN_SEARCH_CHARS. Clearing the box, or cutting an applied
+ * "smithx" back to "s", removes it; a short query that was never applied
+ * changes nothing (the box says so), and one already in the URL is kept.
+ */
+export function searchQueryToRequest(
+  typed: string,
+  heading: string,
+): string | null {
+  const next =
+    typed.length >= MIN_SEARCH_CHARS || typed === heading ? typed : "";
+  return next === heading ? null : next;
+}
+
+/**
  * The Leads table's place — page and filters — lives in the /leads URL
  * (issue #350), so coming back from a lead lands where the list was, a reload
  * keeps it, and opening Leads fresh from anywhere else starts over:
  *
  *   ?page=4        the table page (absent means 1)
- *   ?query=smith   the applied search (five characters or more)
+ *   ?query=smith   the applied search (MIN_SEARCH_CHARS or more)
  *   ?status=lost   the metric card or stage chips (comma list of stages)
  *   ?timing=today  the timing filter (absent means "all")
  *   ?sort=name-desc  the sort option (absent means created, newest first)
