@@ -21,6 +21,7 @@ import { cache } from "react";
 import {
   computeForecast,
   computePipelineMetrics,
+  countLeadsWithoutValue,
   type ForecastResult,
   type LeadForMetrics,
   type PipelineMetrics,
@@ -848,7 +849,12 @@ export async function getLeadsStats(
     quoted,
     pipelineValue: pipeline.totalValue.toString(),
     weightedValue: pipeline.weightedValue.toString(),
-    unvaluedCount: pipeline.openCount - pipeline.valuedCount,
+    // Among the same leads the Open leads card counts, so "34 of 53 have no
+    // value" is about one set of leads.
+    unvaluedCount: countLeadsWithoutValue(
+      forMetrics,
+      new Set<LeadStage>(OPEN_LEAD_DB_STAGES),
+    ),
   };
 }
 

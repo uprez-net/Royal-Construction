@@ -8,6 +8,7 @@ import {
   createdRangeFor,
 } from "@/lib/leads/created-range";
 import { emptyLeadsMessage } from "@/lib/leads/empty-state";
+import { countLeadsWithoutValue } from "@/lib/leads/pipeline-math";
 import { CLOSED_LEAD_STAGES } from "@/lib/leads/followup-due";
 import { isKpiCohortMetric } from "@/lib/leads/lead-helpers";
 import {
@@ -116,5 +117,34 @@ test("an empty list names what is narrowing it", () => {
   assert.equal(
     emptyLeadsMessage({ hasSearch: false, hasFilters: false }),
     "There are no leads yet.",
+  );
+});
+
+test("open leads without a value: empty, unusable and zero all count; closed leads and valued ones do not", () => {
+  const lead = (stage: string, estimatedValue: string | null) =>
+    ({
+      id: 1,
+      stage,
+      estimatedValue,
+      probabilityOverride: null,
+      expectedCloseDate: null,
+      wonAt: null,
+      lostAt: null,
+    }) as unknown as Parameters<typeof countLeadsWithoutValue>[0][number];
+  const open = new Set(OPEN_LEAD_DB_STAGES);
+  assert.equal(
+    countLeadsWithoutValue(
+      [
+        lead("NEW", null), // nothing entered
+        lead("QUOTED", ""), // blank
+        lead("NO_RESPONSE", "abc"), // unusable
+        lead("CONTACTED", "0"), // a $0 estimate adds nothing
+        lead("QUALIFIED", "250000"), // has a value
+        lead("LOST", null), // closed: not an open lead
+        lead("CONVERTED", null), // closed
+      ],
+      open,
+    ),
+    4,
   );
 });

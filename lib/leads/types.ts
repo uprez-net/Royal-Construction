@@ -178,7 +178,7 @@ export interface LeadsStats {
   /** Value and probability-weighted value of the pipeline (Decimal strings). */
   pipelineValue: string;
   weightedValue: string;
-  /** Open leads with no estimated value, so the total says what it leaves out. */
+  /** Open leads with no estimated value (empty, unusable or zero). */
   unvaluedCount: number;
 }
 

@@ -645,11 +645,12 @@ function LeadsWorkspace() {
               value={currency.format(Number(stats.pipelineValue))}
               note={`${currency.format(Number(stats.weightedValue))} weighted${
                 stats.unvaluedCount > 0
-                  ? ` · ${stats.unvaluedCount} with no value`
+                  ? ` · ${stats.unvaluedCount} of ${stats.open} open leads have no value`
                   : ""
               }`}
               tone="warning"
               icon={BarChart3}
+              noteWraps
             />
             <LeadMetricCard
               label="Win rate (90 days)"

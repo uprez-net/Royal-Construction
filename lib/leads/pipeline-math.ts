@@ -64,6 +64,23 @@ export function coerceMoney(
 }
 
 /**
+ * How many of the given leads, among those in `openStages`, carry no usable
+ * estimated value: nothing entered, something unparseable, or zero. A $0
+ * estimate adds nothing to the pipeline, so for "which leads still need a
+ * number" it counts as missing (`computePipelineMetrics` counts it as valued).
+ */
+export function countLeadsWithoutValue(
+  leads: readonly LeadForMetrics[],
+  openStages: ReadonlySet<LeadStage>,
+): number {
+  return leads.filter((lead) => {
+    if (!openStages.has(lead.stage)) return false;
+    const value = coerceMoney(lead.estimatedValue);
+    return value === null || value.isZero();
+  }).length;
+}
+
+/**
  * Effective likelihood for a lead: its override when set and usable,
  * otherwise the stage default.
  *
