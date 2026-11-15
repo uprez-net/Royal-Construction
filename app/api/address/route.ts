@@ -261,6 +261,11 @@ export async function GET(request: Request) {
     // The rest of the function continues with the 'query' variable from above
 
     if (!googleApiKey || !geoscapeApiKey) {
+      // Without this the 500 below is silent on the server: nothing logged,
+      // nothing reported, and every picker reads it as "no results".
+      console.error(
+        "Address lookup is not configured: GOOGLE_MAPS_API_KEY or GEOSCAPE_API_KEY is missing.",
+      );
       return NextResponse.json(
         {
           message: "Missing API keys.",
@@ -321,6 +326,19 @@ export async function GET(request: Request) {
     const validPlaces = detailResults.filter(Boolean) as Awaited<
       ReturnType<typeof fetchPlaceDetails>
     >[];
+
+    // Google suggested addresses but none of their details could be read (a
+    // key without Place Details access, a quota). Answering 200 with an empty
+    // list would be indistinguishable from "no such address".
+    if (predictions.length > 0 && validPlaces.length === 0) {
+      console.error(
+        `Address lookup: Place Details failed for all ${predictions.length} suggestions.`,
+      );
+      return errorResponse("Address details unavailable.", {
+        status: 502,
+        code: "UPSTREAM_ERROR",
+      });
+    }
 
     /**
      * Geoscape smart clustering

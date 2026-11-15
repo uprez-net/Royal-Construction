@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useAppDispatch } from "@/lib/store/hooks";
@@ -28,7 +28,7 @@ import { addTradie } from "@/lib/store/slices/tradieManagementSlice";
 import { CreateTradieInput } from "@/types/tradie";
 import { AddressSuggestion } from "@/types/data";
 import { SearchableSelect } from "@/components/common/searchable-select";
-import { fetchJson } from "@/utils/fetch";
+import { useAddressSuggestions } from "@/hooks/use-address-suggestions";
 import { cn } from "@/lib/utils";
 import { EmailListInput } from "./forms/EmailLIstInput";
 import { TradeTypesField } from "./forms/TradieTypeInput";
@@ -108,15 +108,7 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
   const [siteAddress, setSiteAddress] = useState("");
   const [selectedLocation, setSelectedLocation] =
     useState<AddressSuggestion | null>(null);
-  const [locationSuggestions, setLocationSuggestions] = useState<
-    AddressSuggestion[]
-  >([]);
-  // The query whose lookup has finished, success or failure. Loading is "typed
-  // past the 3-character floor and that query has not settled", derived rather
-  // than set inside the effect.
-  const [settledAddress, setSettledAddress] = useState("");
-  const addressLoading =
-    siteAddress.length >= 3 && settledAddress !== siteAddress;
+  const address = useAddressSuggestions(siteAddress, open);
 
   const validation = useMemo(
     () => tradieSchema.safeParse(formData),
@@ -134,34 +126,6 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
     }
     return fieldErrors;
   }, [validation]);
-
-  useEffect(() => {
-    if (!open || siteAddress.length < 3) return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      try {
-        const response = await fetchJson<{ suggestions: AddressSuggestion[] }>(
-          `/api/address?query=${siteAddress}`,
-          {
-            method: "GET",
-          },
-          "Unable to fetch addresses",
-          controller.signal,
-        );
-        setLocationSuggestions(response.data.suggestions);
-      } catch (error) {
-        if (error instanceof Error && error.name !== "AbortError") {
-          console.error(error);
-        }
-      } finally {
-        if (!controller.signal.aborted) setSettledAddress(siteAddress);
-      }
-    }, 300);
-    return () => {
-      controller.abort();
-      clearTimeout(timer);
-    };
-  }, [siteAddress, open]);
 
   const updateField = <K extends keyof CreateTradieInput>(
     key: K,
@@ -514,8 +478,10 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   placeholder="Search service location..."
                   searchValue={siteAddress}
                   selectedItem={selectedLocation}
-                  items={locationSuggestions}
-                  loading={addressLoading}
+                  items={address.suggestions}
+                  loading={address.loading}
+                  error={address.error}
+                  onRetry={address.retry}
                   onQueryChange={setSiteAddress}
                   onSelect={(item) => {
                     const location = item as AddressSuggestion;

@@ -64,6 +64,8 @@ export function SearchableSelect({
   selectedItem,
   items,
   loading,
+  error,
+  onRetry,
   hasMore,
   onQueryChange,
   onSelect,
@@ -84,6 +86,10 @@ export function SearchableSelect({
   selectedItem: SearchableItem | null;
   items: SearchableItem[];
   loading?: boolean;
+  /** The lookup itself failed (not "nothing matched"). Replaces the empty
+   *  message, is announced, and offers `onRetry` when given. */
+  error?: string;
+  onRetry?: () => void;
   hasMore?: boolean;
   onQueryChange: (query: string) => void;
   onSelect: (item: SearchableItem) => void;
@@ -229,11 +235,13 @@ export function SearchableSelect({
             <p role="status" className="sr-only">
               {loading
                 ? "Loading"
-                : items.length > 0
-                  ? `${items.length} result${items.length === 1 ? "" : "s"}${hasMore ? ", more available" : ""}`
-                  : searchValue.trim()
-                    ? "No results found"
-                    : ""}
+                : error && items.length === 0
+                  ? error
+                  : items.length > 0
+                    ? `${items.length} result${items.length === 1 ? "" : "s"}${hasMore ? ", more available" : ""}`
+                    : searchValue.trim()
+                      ? "No results found"
+                      : ""}
             </p>
 
             <CommandList>
@@ -311,7 +319,25 @@ export function SearchableSelect({
               <CommandEmpty>Loading...</CommandEmpty>
             ) : null}
 
-            {!loading && items.length === 0 ? (
+            {!loading && error && items.length === 0 ? (
+              // Not CommandEmpty: that says "No results found", which is a
+              // different statement from "the search did not run".
+              <div className="flex flex-col items-center gap-2 px-3 py-4 text-center text-sm text-destructive">
+                <p>{error}</p>
+                {onRetry ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onRetry}
+                  >
+                    Try again
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {!loading && !error && items.length === 0 ? (
               <CommandEmpty>No results found.</CommandEmpty>
             ) : null}
 
