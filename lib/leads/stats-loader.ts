@@ -21,13 +21,22 @@ export function createStatsLoader<T>(
   return {
     /**
      * Resolves to the overview, or null when a newer load started while this
-     * one was in flight. Rejects when the request fails.
+     * one was in flight, whether this one succeeded or failed. Rejects only
+     * when the newest load fails.
      */
     async load(filterTiming?: string): Promise<T | null> {
       if (filterTiming !== undefined) timing = filterTiming;
       const mine = ++latest;
-      const overview = await fetchOverview(timing);
-      return mine === latest ? overview : null;
+      try {
+        const overview = await fetchOverview(timing);
+        return mine === latest ? overview : null;
+      } catch (err) {
+        // A failure of a load that a newer one replaced is not news: the
+        // newer answer is what the page shows, and flagging the cards as stale
+        // (or replacing the page with an error) because of it would be wrong.
+        if (mine !== latest) return null;
+        throw err;
+      }
     },
   };
 }

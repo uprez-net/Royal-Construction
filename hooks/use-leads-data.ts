@@ -234,25 +234,36 @@ export function useLeadsData() {
         // Settled separately: a newer table request supersedes only this
         // one's rows, so the cards must neither wait on nor be swallowed by
         // the table's fate.
-        const [leadsResult, overviewResult] = await Promise.allSettled([
+        // The cards are committed the moment their own answer arrives, not
+        // after the table's: waiting for both first let an older overview land
+        // after a newer timeframe's refresh had already finished.
+        const overviewDone = statsLoader.load(params.filterTiming).then(
+          (overview) => {
+            // A null answer was superseded by a newer load of the cards.
+            if (overview) {
+              setStats(overview.stats);
+              setAnalyticsData(overview.analytics);
+              setStatsStale(false);
+            }
+            return null;
+          },
+          (reason: unknown) => {
+            setStatsStale(true);
+            return { reason };
+          },
+        );
+        const [leadsResult, cardFailure] = await Promise.all([
           // "pendingFollowup" is not a stage — resolveStatusFilter maps it to
           // an empty array — so without hasOpenTask the initial load for a
           // bookmarked ?status=pendingFollowup fetched every lead and raced
           // the filtered request the metric effect fires straight after.
-          fetchLeadListPage(params),
-          // The cards and the analytics in one Server Action: two were
-          // dispatched one after the other.
-          statsLoader.load(params.filterTiming),
+          fetchLeadListPage(params).then(
+            (value) => ({ status: "fulfilled" as const, value }),
+            (reason: unknown) => ({ status: "rejected" as const, reason }),
+          ),
+          overviewDone,
         ]);
-        // A null answer was superseded by a newer load of the cards.
-        if (overviewResult.status === "fulfilled" && overviewResult.value) {
-          setStats(overviewResult.value.stats);
-          setAnalyticsData(overviewResult.value.analytics);
-          setStatsStale(false);
-        }
-        if (overviewResult.status === "rejected") setStatsStale(true);
-        const cardFailures =
-          overviewResult.status === "rejected" ? [overviewResult.reason] : [];
+        const cardFailures = cardFailure ? [cardFailure.reason] : [];
         if (cardFailures.length > 0) {
           console.error(...cardFailures);
           setError("Failed to load leads data");

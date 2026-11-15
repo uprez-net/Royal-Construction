@@ -376,23 +376,24 @@ function LeadsWorkspace() {
   // still shows the old query, so that second replace was built from stale
   // params and wiped the card's own filter. Marking this one as the request in
   // flight is what tells the effect there is nothing left to do (#465).
-  const handleCardClick = (metric: string) => {
+  // Clear filters does the same thing with nothing left selected.
+  const dropSearchAndNavigate = (
+    changes: Parameters<typeof updateListParams>[0],
+  ) => {
     setSearchTerm("");
     setActiveTab("table");
     startSearchNavigation(() => {
       requestedQueryRef.current = "";
-      updateListParams({ status: metric, query: null, page: null });
+      updateListParams({ ...changes, query: null, page: null });
       requestedNavigationRef.current = navigationCountRef.current;
     });
   };
+  const handleCardClick = (metric: string) =>
+    dropSearchAndNavigate({ status: metric });
 
   const hasFilters = activeMetric !== null || activeFilterTiming !== "all";
-  const clearFilters = () => {
-    // The box does not follow the URL (typing drives it), so empty it too, or
-    // its pending debounce would put the query straight back.
-    setSearchTerm("");
-    updateListParams({ query: null, status: null, timing: null, page: null });
-  };
+  const clearFilters = () =>
+    dropSearchAndNavigate({ status: null, timing: null });
 
   const handleFilterTimingChange = (filterTiming: string) => {
     updateListParams({
@@ -422,6 +423,10 @@ function LeadsWorkspace() {
       const result = await fetchLeadListPage(
         tableListParams(filters, pageNumber, 50),
       );
+      // fetchLeadListPage steps back to the last page when the one asked for
+      // has gone (a lead removed mid-export); appending that would repeat 50
+      // rows, and everything up to there is already collected.
+      if (result.page !== pageNumber) break;
       rows.push(...result.items);
       if (pageNumber >= result.totalPages || result.items.length === 0) break;
     }
