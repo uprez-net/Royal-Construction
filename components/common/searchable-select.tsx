@@ -237,14 +237,6 @@ export function SearchableSelect({
             </p>
 
             <CommandList>
-              {loading && items.length === 0 ? (
-                <CommandEmpty>Loading...</CommandEmpty>
-              ) : null}
-
-              {!loading && items.length === 0 ? (
-                <CommandEmpty>No results found.</CommandEmpty>
-              ) : null}
-
               <CommandGroup>
                 {items.map((item) => {
                   const title = isLookupOption(item) ? item.name : item.label;
@@ -315,6 +307,13 @@ export function SearchableSelect({
                 })}
               </CommandGroup>
             </CommandList>
+            {loading && items.length === 0 ? (
+              <CommandEmpty>Loading...</CommandEmpty>
+            ) : null}
+
+            {!loading && items.length === 0 ? (
+              <CommandEmpty>No results found.</CommandEmpty>
+            ) : null}
 
             {hasMore ? (
               <div className="border-t border-border p-2">

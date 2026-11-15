@@ -266,7 +266,6 @@ export function ExtraAttachmentsField({
                 <Command label="Search documents on this job">
                   <CommandInput placeholder="Search documents on this job…" />
                   <CommandList>
-                    <CommandEmpty>Nothing on the file matches.</CommandEmpty>
                     <CommandGroup>
                       {vaultOptions.map((option) => (
                         <CommandItem
@@ -289,6 +288,7 @@ export function ExtraAttachmentsField({
                       ))}
                     </CommandGroup>
                   </CommandList>
+                  <CommandEmpty>Nothing on the file matches.</CommandEmpty>
                 </Command>
               </PopoverContent>
             </Popover>

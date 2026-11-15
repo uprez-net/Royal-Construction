@@ -109,6 +109,7 @@ export function StartCertifierEngagementModal({
             <div className="space-y-2">
               <Label htmlFor="certifier-contact">Certifier</Label>
               <ContactPicker
+                id="certifier-contact"
                 trade={CERTIFIER_TRADE_LABEL}
                 label="Certifier"
                 value={certifier}

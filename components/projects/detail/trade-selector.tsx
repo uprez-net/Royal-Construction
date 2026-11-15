@@ -79,7 +79,6 @@ export function TradeSelector({
             aria-label="Search trades"
           />
           <CommandList id={listId} aria-label="Trades">
-            <CommandEmpty>No trades found.</CommandEmpty>
             <CommandGroup>
               {[null, ...trades].map((option) => (
                 <CommandItem
@@ -98,6 +97,7 @@ export function TradeSelector({
               ))}
             </CommandGroup>
           </CommandList>
+          <CommandEmpty>No trades found.</CommandEmpty>
         </Command>
       </PopoverContent>
     </Popover>

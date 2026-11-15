@@ -551,7 +551,10 @@ function LeadsWorkspace() {
                   value={activeFilterTiming}
                   onValueChange={handleFilterTimingChange}
                 >
-                  <SelectTrigger className="h-9 flex-1 rounded-full sm:flex-none border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
+                  <SelectTrigger
+                    aria-label="Filter by timeframe"
+                    className="h-9 flex-1 rounded-full sm:flex-none border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold"
+                  >
                     <SelectValue placeholder="Select timeframe" />
                   </SelectTrigger>
                   <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">
