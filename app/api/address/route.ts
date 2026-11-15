@@ -1,5 +1,6 @@
 import { connection, NextResponse } from "next/server";
 import { AddressSuggestion } from "@/types/data";
+import { reportExternalError } from "@/lib/observability/external";
 import { successResponse, errorResponse } from "@/utils/validators";
 
 /**
@@ -81,6 +82,11 @@ type CacheValue = {
  * In-memory council cache
  */
 const councilCache = new Map<string, CacheValue>();
+
+/** An outside call that answered with a failure, in a shape `reportExternalError` reads. */
+function upstreamFailure(what: string, status: number) {
+  return Object.assign(new Error(`${what} failed with ${status}`), { status });
+}
 
 function getComponent(
   components: GooglePlaceDetailsResponse["addressComponents"] = [],
@@ -173,6 +179,14 @@ async function fetchCouncilFromGeoscape(
     });
 
     if (!response.ok) {
+      // Every suggestion would otherwise read "Unknown council", and that value
+      // is saved on the project.
+      console.error("Geoscape council lookup failed:", response.status);
+      reportExternalError(
+        "geoscape",
+        "findByPoint",
+        upstreamFailure("Geoscape council lookup", response.status),
+      );
       return null;
     }
 
@@ -190,7 +204,9 @@ async function fetchCouncilFromGeoscape(
     setCachedCouncil(result);
 
     return result;
-  } catch {
+  } catch (error) {
+    console.error("Geoscape council lookup threw:", error);
+    reportExternalError("geoscape", "findByPoint", error);
     return null;
   }
 }
@@ -205,6 +221,12 @@ async function fetchPlaceDetails(placeId: string, apiKey: string) {
   });
 
   if (!response.ok) {
+    console.error("Google place details error:", response.status);
+    reportExternalError(
+      "google",
+      "places.details",
+      upstreamFailure("Google place details", response.status),
+    );
     return null;
   }
 
@@ -235,7 +257,7 @@ export async function GET(request: Request) {
 
     // Validate query param
     if (query.length < 2) {
-      return NextResponse.json({
+      return successResponse({
         suggestions: [] as AddressSuggestion[],
         count: 0,
       });
@@ -261,6 +283,11 @@ export async function GET(request: Request) {
     // The rest of the function continues with the 'query' variable from above
 
     if (!googleApiKey || !geoscapeApiKey) {
+      // Without this the 500 below is silent on the server: nothing logged,
+      // nothing reported, and every picker reads it as "no results".
+      console.error(
+        "Address lookup is not configured: GOOGLE_MAPS_API_KEY or GEOSCAPE_API_KEY is missing.",
+      );
       return NextResponse.json(
         {
           message: "Missing API keys.",
@@ -290,7 +317,16 @@ export async function GET(request: Request) {
     });
 
     if (!autoResponse.ok) {
-      console.error("Google autocomplete error:", await autoResponse.text());
+      console.error(
+        "Google autocomplete error:",
+        autoResponse.status,
+        await autoResponse.text(),
+      );
+      reportExternalError(
+        "google",
+        "places.autocomplete",
+        upstreamFailure("Google autocomplete", autoResponse.status),
+      );
       return NextResponse.json(
         {
           message: "Autocomplete failed.",
@@ -321,6 +357,21 @@ export async function GET(request: Request) {
     const validPlaces = detailResults.filter(Boolean) as Awaited<
       ReturnType<typeof fetchPlaceDetails>
     >[];
+
+    // Google suggested addresses but none of their details could be read (a
+    // key without Place Details access, a quota). Answering 200 with an empty
+    // list would be indistinguishable from "no such address".
+    if (predictions.length > 0 && validPlaces.length === 0) {
+      // Each failed call was logged and reported above; this line is the
+      // summary, not a second report.
+      console.warn(
+        `Address lookup: Place Details failed for all ${predictions.length} suggestions.`,
+      );
+      return errorResponse("Address details unavailable.", {
+        status: 502,
+        code: "UPSTREAM_ERROR",
+      });
+    }
 
     /**
      * Geoscape smart clustering

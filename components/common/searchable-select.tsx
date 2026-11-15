@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useId, useState } from "react";
+import { Fragment, useId, useRef, useState } from "react";
 import { ChevronDown, Loader2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,8 @@ export function SearchableSelect({
   selectedItem,
   items,
   loading,
+  error,
+  onRetry,
   hasMore,
   onQueryChange,
   onSelect,
@@ -84,6 +86,10 @@ export function SearchableSelect({
   selectedItem: SearchableItem | null;
   items: SearchableItem[];
   loading?: boolean;
+  /** The lookup itself failed (not "nothing matched"). Replaces the empty
+   *  message, is announced, and offers `onRetry` when given. */
+  error?: string;
+  onRetry?: () => void;
   hasMore?: boolean;
   onQueryChange: (query: string) => void;
   onSelect: (item: SearchableItem) => void;
@@ -92,6 +98,7 @@ export function SearchableSelect({
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const reactId = useId();
   const triggerId = id ?? `${reactId}-trigger`;
   const ownLabelId = `${reactId}-label`;
@@ -214,6 +221,7 @@ export function SearchableSelect({
           >
             <CommandInput
               placeholder={searchNoun ? `Search ${searchNoun}...` : "Search..."}
+              ref={searchRef}
               value={searchValue}
               onValueChange={onQueryChange}
             />
@@ -229,11 +237,13 @@ export function SearchableSelect({
             <p role="status" className="sr-only">
               {loading
                 ? "Loading"
-                : items.length > 0
-                  ? `${items.length} result${items.length === 1 ? "" : "s"}${hasMore ? ", more available" : ""}`
-                  : searchValue.trim()
-                    ? "No results found"
-                    : ""}
+                : error && items.length === 0
+                  ? error
+                  : items.length > 0
+                    ? `${items.length} result${items.length === 1 ? "" : "s"}${hasMore ? ", more available" : ""}`
+                    : searchValue.trim()
+                      ? "No results found"
+                      : ""}
             </p>
 
             <CommandList>
@@ -311,7 +321,34 @@ export function SearchableSelect({
               <CommandEmpty>Loading...</CommandEmpty>
             ) : null}
 
-            {!loading && items.length === 0 ? (
+            {!loading && error && items.length === 0 ? (
+              // Not CommandEmpty: that says "No results found", which is a
+              // different statement from "the search did not run".
+              <div className="flex flex-col items-center gap-2 px-3 py-4 text-center text-sm text-destructive">
+                <p>{error}</p>
+                {onRetry ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    // cmdk turns Enter anywhere inside it into "choose the
+                    // highlighted item" and cancels the key, so without this
+                    // the button works for a mouse and not for the keyboard.
+                    onKeyDown={(event) => event.stopPropagation()}
+                    onClick={() => {
+                      onRetry();
+                      // The button unmounts while the retry loads; without
+                      // this, focus falls to the page behind the popover.
+                      searchRef.current?.focus();
+                    }}
+                  >
+                    Try again
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {!loading && !error && items.length === 0 ? (
               <CommandEmpty>No results found.</CommandEmpty>
             ) : null}
 
@@ -321,6 +358,8 @@ export function SearchableSelect({
                   type="button"
                   variant="ghost"
                   className="w-full justify-center text-sm"
+                  // Same cmdk key capture as the retry button above.
+                  onKeyDown={(event) => event.stopPropagation()}
                   onClick={onLoadMore}
                 >
                   Load more
