@@ -1434,6 +1434,18 @@
   padding-inline: 0.5rem;
 }
 
+/* The Actions column is a share of the table, and below 1024px that share
+   fell under the width its icons need (about 118px for six at a 16px root),
+   so the Archive and Meeting icons were clipped and still focusable (#483).
+   Below 1024px the table keeps a minimum width, so the column's 12% clears
+   that need and .table-wrapper scrolls the rest into view. From 1024px the
+   table fits the window as before. */
+@media (max-width: 1023px) {
+  .leads-table {
+    min-width: 64rem;
+  }
+}
+
 .leads-table thead th {
   font-size: 0.6875rem;
   text-transform: uppercase;

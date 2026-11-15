@@ -190,3 +190,71 @@ test("the search box applies from three characters and keeps a query already in 
   // changing one applied query for another
   assert.equal(searchQueryToRequest("tez", "tes"), "tez");
 });
+
+// Issue #484: browser Back during a search. A history navigation is not one
+// this component made, so it is not a request in flight: where Back is taking
+// the URL (`history`) wins over the stale shown query until the URL lands.
+test.each([
+  {
+    name: "typed, Back to a query while the URL still shows another",
+    input: {
+      navigating: false,
+      requestedNavigation: -1,
+      latestNavigation: 0,
+      requested: null,
+      shown: "smithx",
+      history: "",
+    },
+    heading: "",
+  },
+  {
+    name: "back-pressed: Back to a query while the URL still shows another one",
+    input: {
+      navigating: false,
+      requestedNavigation: -1,
+      latestNavigation: 0,
+      requested: null,
+      shown: "smithx",
+      history: "jones",
+    },
+    heading: "jones",
+  },
+  {
+    name: "back-pressed over an own search in flight: the caller dropped that request, so Back wins",
+    input: {
+      navigating: true,
+      requestedNavigation: 1,
+      latestNavigation: 1,
+      requested: null,
+      shown: "",
+      history: "",
+    },
+    heading: "",
+  },
+  {
+    name: "landed: no history pending, the shown query is the truth",
+    input: {
+      navigating: false,
+      requestedNavigation: -1,
+      latestNavigation: 0,
+      requested: null,
+      shown: "",
+      history: null,
+    },
+    heading: "",
+  },
+  {
+    name: "own navigation: the search request is still the latest and no history is pending",
+    input: {
+      navigating: true,
+      requestedNavigation: 2,
+      latestNavigation: 2,
+      requested: "tes",
+      shown: "",
+      history: null,
+    },
+    heading: "tes",
+  },
+])("searchHeading: $name", ({ input, heading }) => {
+  assert.equal(searchHeading(input), heading);
+});

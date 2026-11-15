@@ -229,6 +229,29 @@ function LeadsWorkspace() {
   const [searchNavigating, startSearchNavigation] = useTransition();
   const requestedQueryRef = useRef<string | null>(null);
   const requestedNavigationRef = useRef(-1);
+  // Browser Back or Forward (#484) is not counted above, and it takes the URL
+  // to a query the box must follow. The box is set to that query when Back
+  // arrives (the pending debounce is cancelled with it), and the query is the
+  // heading until the URL lands, so the search does not re-apply the one Back
+  // just left.
+  const historyQueryRef = useRef<string | null>(null);
+  useEffect(() => {
+    historyQueryRef.current = null;
+  }, [urlQuery]);
+  useEffect(() => {
+    const onHistoryNavigation = () => {
+      const target = readLeadsListParams(
+        new URLSearchParams(window.location.search),
+      ).query;
+      // Back supersedes a search request still in flight.
+      requestedQueryRef.current = null;
+      if (target === urlQuery) return;
+      historyQueryRef.current = target;
+      setSearchTerm(target);
+    };
+    window.addEventListener("popstate", onHistoryNavigation);
+    return () => window.removeEventListener("popstate", onHistoryNavigation);
+  }, [urlQuery]);
   useEffect(() => {
     const heading = searchHeading({
       navigating: searchNavigating,
@@ -236,6 +259,7 @@ function LeadsWorkspace() {
       latestNavigation: navigationCountRef.current,
       requested: requestedQueryRef.current,
       shown: urlQuery,
+      history: historyQueryRef.current,
     });
     const next = searchQueryToRequest(debouncedSearch.trim(), heading);
     if (next === null) return;
