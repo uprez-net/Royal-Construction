@@ -80,17 +80,7 @@ export function DashboardHome({
 
       <DashboardGraphCards data={graphData} />
 
-      <DashboardProjectTable
-        isAdmin={isAdmin}
-        projects={projectsData.items}
-        pageInfo={{
-          totalCount: projectsData.totalCount,
-          totalPages: projectsData.totalPages,
-          currentPage: projectsData.page,
-        }}
-        onPageChange={(page) => console.log("Page changed to:", page)}
-        onSearch={(query) => console.log("Search query:", query)}
-      />
+      <DashboardProjectTable isAdmin={isAdmin} initialProjects={projectsData} />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)]">
         <DashboardSiteManagerTable siteManagers={siteManagersMock} />
