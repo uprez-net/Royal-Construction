@@ -54,7 +54,7 @@ export function LeadMetricCard({
       ) : null}
       <div className="min-w-0">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-2">
-          <p className="font-heading text-2xl font-semibold leading-none tracking-tight text-foreground">
+          <p className="font-heading text-2xl font-semibold leading-none tracking-tight text-foreground [overflow-wrap:anywhere]">
             {value}
           </p>
           <p className="break-words text-xs font-medium text-muted-foreground sm:truncate">

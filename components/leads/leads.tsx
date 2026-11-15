@@ -29,7 +29,7 @@ import {
   useLeadsData,
   type LeadListParams,
 } from "@/hooks/use-leads-data";
-import { compactCurrency } from "@/utils/formatters";
+import { currency } from "@/utils/formatters";
 import { createdRangeCaption } from "@/lib/leads/created-range";
 import { emptyLeadsMessage } from "@/lib/leads/empty-state";
 import { useToast, ToastContainer } from "@/components/common/use-toast";
@@ -642,8 +642,8 @@ function LeadsWorkspace() {
             />
             <LeadMetricCard
               label="Pipeline value"
-              value={compactCurrency.format(Number(stats.pipelineValue))}
-              note={`${compactCurrency.format(Number(stats.weightedValue))} weighted${
+              value={currency.format(Number(stats.pipelineValue))}
+              note={`${currency.format(Number(stats.weightedValue))} weighted${
                 stats.unvaluedCount > 0
                   ? ` · ${stats.unvaluedCount} with no value`
                   : ""
