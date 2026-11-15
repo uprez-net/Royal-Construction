@@ -1,5 +1,6 @@
 import { connection, NextResponse } from "next/server";
 import { AddressSuggestion } from "@/types/data";
+import { reportExternalError } from "@/lib/observability/external";
 import { successResponse, errorResponse } from "@/utils/validators";
 
 /**
@@ -81,6 +82,11 @@ type CacheValue = {
  * In-memory council cache
  */
 const councilCache = new Map<string, CacheValue>();
+
+/** An outside call that answered with a failure, in a shape `reportExternalError` reads. */
+function upstreamFailure(what: string, status: number) {
+  return Object.assign(new Error(`${what} failed with ${status}`), { status });
+}
 
 function getComponent(
   components: GooglePlaceDetailsResponse["addressComponents"] = [],
@@ -173,6 +179,14 @@ async function fetchCouncilFromGeoscape(
     });
 
     if (!response.ok) {
+      // Every suggestion would otherwise read "Unknown council", and that value
+      // is saved on the project.
+      console.error("Geoscape council lookup failed:", response.status);
+      reportExternalError(
+        "geoscape",
+        "findByPoint",
+        upstreamFailure("Geoscape council lookup", response.status),
+      );
       return null;
     }
 
@@ -190,7 +204,9 @@ async function fetchCouncilFromGeoscape(
     setCachedCouncil(result);
 
     return result;
-  } catch {
+  } catch (error) {
+    console.error("Geoscape council lookup threw:", error);
+    reportExternalError("geoscape", "findByPoint", error);
     return null;
   }
 }
@@ -205,6 +221,12 @@ async function fetchPlaceDetails(placeId: string, apiKey: string) {
   });
 
   if (!response.ok) {
+    console.error("Google place details error:", response.status);
+    reportExternalError(
+      "google",
+      "places.details",
+      upstreamFailure("Google place details", response.status),
+    );
     return null;
   }
 
@@ -235,7 +257,7 @@ export async function GET(request: Request) {
 
     // Validate query param
     if (query.length < 2) {
-      return NextResponse.json({
+      return successResponse({
         suggestions: [] as AddressSuggestion[],
         count: 0,
       });
@@ -295,7 +317,16 @@ export async function GET(request: Request) {
     });
 
     if (!autoResponse.ok) {
-      console.error("Google autocomplete error:", await autoResponse.text());
+      console.error(
+        "Google autocomplete error:",
+        autoResponse.status,
+        await autoResponse.text(),
+      );
+      reportExternalError(
+        "google",
+        "places.autocomplete",
+        upstreamFailure("Google autocomplete", autoResponse.status),
+      );
       return NextResponse.json(
         {
           message: "Autocomplete failed.",
@@ -331,7 +362,9 @@ export async function GET(request: Request) {
     // key without Place Details access, a quota). Answering 200 with an empty
     // list would be indistinguishable from "no such address".
     if (predictions.length > 0 && validPlaces.length === 0) {
-      console.error(
+      // Each failed call was logged and reported above; this line is the
+      // summary, not a second report.
+      console.warn(
         `Address lookup: Place Details failed for all ${predictions.length} suggestions.`,
       );
       return errorResponse("Address details unavailable.", {

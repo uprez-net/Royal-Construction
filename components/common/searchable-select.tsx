@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useId, useState } from "react";
+import { Fragment, useId, useRef, useState } from "react";
 import { ChevronDown, Loader2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -98,6 +98,7 @@ export function SearchableSelect({
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const reactId = useId();
   const triggerId = id ?? `${reactId}-trigger`;
   const ownLabelId = `${reactId}-label`;
@@ -220,6 +221,7 @@ export function SearchableSelect({
           >
             <CommandInput
               placeholder={searchNoun ? `Search ${searchNoun}...` : "Search..."}
+              ref={searchRef}
               value={searchValue}
               onValueChange={onQueryChange}
             />
@@ -329,7 +331,16 @@ export function SearchableSelect({
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={onRetry}
+                    // cmdk turns Enter anywhere inside it into "choose the
+                    // highlighted item" and cancels the key, so without this
+                    // the button works for a mouse and not for the keyboard.
+                    onKeyDown={(event) => event.stopPropagation()}
+                    onClick={() => {
+                      onRetry();
+                      // The button unmounts while the retry loads; without
+                      // this, focus falls to the page behind the popover.
+                      searchRef.current?.focus();
+                    }}
                   >
                     Try again
                   </Button>
@@ -347,6 +358,8 @@ export function SearchableSelect({
                   type="button"
                   variant="ghost"
                   className="w-full justify-center text-sm"
+                  // Same cmdk key capture as the retry button above.
+                  onKeyDown={(event) => event.stopPropagation()}
                   onClick={onLoadMore}
                 >
                   Load more

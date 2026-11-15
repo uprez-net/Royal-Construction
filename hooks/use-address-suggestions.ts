@@ -32,15 +32,19 @@ export function useAddressSuggestions(query: string, enabled: boolean) {
   // Bumped by `retry` so the same query is fetched again.
   const [attempt, setAttempt] = useState(0);
 
+  // Padding does not count: "ab " has not reached the floor.
+  const trimmed = query.trim();
+  const searched = trimmed.length >= MIN_ADDRESS_CHARS;
+
   useEffect(() => {
-    if (!enabled || query.length < MIN_ADDRESS_CHARS) return;
+    if (!enabled || !searched) return;
 
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       let failed = false;
       try {
         const response = await fetchJson<{ suggestions: AddressSuggestion[] }>(
-          `/api/address?query=${encodeURIComponent(query)}`,
+          `/api/address?query=${encodeURIComponent(trimmed)}`,
           { method: "GET" },
           "Address lookup failed",
           controller.signal,
@@ -62,7 +66,7 @@ export function useAddressSuggestions(query: string, enabled: boolean) {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [enabled, query, attempt]);
+  }, [enabled, searched, trimmed, query, attempt]);
 
   const retry = useCallback(() => {
     setSettled({ query: "", failed: false });
@@ -75,7 +79,6 @@ export function useAddressSuggestions(query: string, enabled: boolean) {
     setSettled({ query: "", failed: false });
   }, []);
 
-  const searched = query.length >= MIN_ADDRESS_CHARS;
   return {
     suggestions,
     loading: searched && settled.query !== query,
