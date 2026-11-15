@@ -104,7 +104,10 @@
   --muted-foreground: oklch(0.498 0.03 253.3);
   --accent: oklch(0.952 0.02 78.1);
   --accent-foreground: oklch(0.232 0.032 253.7);
-  --destructive: oklch(0.592 0.23 28.5);
+  /* 0.592 measured 4.31:1 as text on --background (needs 4.5:1 for small
+     text, #444). 0.56 is 4.92:1 there, 5.22:1 on --card and under white
+     button text. tests/design/destructive-contrast.test.ts holds it. */
+  --destructive: oklch(0.56 0.23 28.5);
   --border: oklch(0.905 0.02 248.7);
   --input: oklch(0.905 0.02 248.7);
   --ring: oklch(0.516 0.118 183.6);
@@ -875,7 +878,7 @@
   border: none;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   cursor: pointer;
   position: relative;
   transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -914,7 +917,7 @@
   justify-content: center;
   gap: 1rem;
   padding: 3.75rem 1.25rem;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-family: inherit;
 }
 
@@ -1018,7 +1021,7 @@
 
 .lead-card {
   background: var(--bg-card);
-  border: 1px solid hsl(var(--border) / 0.7);
+  border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
   border-radius: 0.625rem;
   padding: 0.75rem;
   cursor: pointer;
@@ -1209,7 +1212,6 @@
 .table-card {
   background: var(--bg-card);
   border-radius: 0.75rem;
-  border: 1px solid hsl(var(--border) / 0.7);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
@@ -1229,7 +1231,7 @@
 .table-title {
   font-size: 0.8125rem;
   font-weight: 700;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   margin: 0;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1271,16 +1273,23 @@
   border: 1px solid oklch(0.584 0.118 183.6);
   border-radius: 0.5rem;
   font-size: 0.8125rem;
-  background: hsl(var(--foreground));
-  color: hsl(var(--foreground));
+  background: var(--card);
+  color: var(--foreground);
   transition: all 0.2s;
   font-family: inherit;
   outline: none;
 }
 
 .search-box input:focus {
-  border-color: hsl(var(--ring));
-  box-shadow: 0 0 0 0.1875rem hsl(var(--ring) / 0.15);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 0.1875rem color-mix(in oklab, var(--ring) 15%, transparent);
+}
+
+/* The 15% halo above is too faint to be the focus indicator on its own, and
+   the base rule removes the outline, so draw one. */
+.search-box input:focus-visible {
+  outline: 0.125rem solid var(--ring);
+  outline-offset: 0.125rem;
 }
 
 .filter-chips {
@@ -1309,7 +1318,6 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
-  color: hsl(var(--muted-foreground));
   font-family: inherit;
   display: inline-flex;
   align-items: center;
@@ -1317,7 +1325,6 @@
 }
 
 .filter-chip:hover {
-  color: hsl(var(--foreground));
   background: color-mix(in oklab, var(--royal-gold) 10%, transparent);
 }
 
@@ -1430,12 +1437,9 @@
 .leads-table thead th {
   font-size: 0.6875rem;
   text-transform: uppercase;
-  color: hsl(var(--muted-foreground));
   font-weight: 600;
   letter-spacing: 0.1em;
   padding: 0.625rem 1rem;
-  border-bottom: 1px solid hsl(var(--border) / 0.7);
-  background: hsl(var(--muted) / 0.5);
   position: sticky;
   top: 0;
   text-align: left;
@@ -1729,14 +1733,13 @@
 .fu-card {
   background: var(--bg-card);
   border-radius: 0.75rem;
-  border: 1px solid hsl(var(--border) / 0.7);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
 
 .fu-card-header {
   padding: 0.875rem 1.25rem;
-  border-bottom: 1px solid hsl(var(--border) / 0.7);
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1759,7 +1762,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   margin: 0;
   font-family: inherit;
 }
@@ -1976,13 +1979,13 @@
   gap: 0.3125rem;
   padding: 0.3125rem 0.875rem;
   border-radius: 0.5rem;
-  border: 1px solid hsl(var(--border));
-  background: hsl(var(--background));
+  border: 1px solid var(--border);
+  background: var(--background);
   font-size: 0.6875rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-family: inherit;
 }
 
@@ -2388,9 +2391,11 @@
 /* ──────────────────────────────────── */
 /* Buttons */
 /* ──────────────────────────────────── */
+/* Only the Leads error state's "Try Again" uses this. Gold ink, like every
+   other error-state retry (Button variant="royal"), not the teal --primary. */
 .btn-primary-custom {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  background: var(--royal-gold-ink);
+  color: white;
   border: 1px solid transparent;
   padding: 0.4375rem 0.875rem;
   border-radius: 0.5rem;
@@ -2405,7 +2410,7 @@
 }
 
 .btn-primary-custom:hover {
-  background: hsl(var(--primary) / 0.85);
+  background: var(--royal-gold-ink-hover);
 }
 
 .btn-primary-custom:disabled {
@@ -2414,9 +2419,9 @@
 }
 
 .btn-outline-custom {
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-  border: 1px solid hsl(var(--border));
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
   padding: 0.4375rem 0.875rem;
   border-radius: 0.5rem;
   font-size: 0.8125rem;
@@ -2430,8 +2435,8 @@
 }
 
 .btn-outline-custom:hover {
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
+  background: var(--muted);
+  color: var(--foreground);
 }
 
 /* ──────────────────────────────────── */
@@ -2725,14 +2730,14 @@
 }
 
 .modal-content-custom {
-  background: hsl(var(--background));
+  background: var(--background);
   border-radius: 0.75rem;
   width: 90%;
   max-height: 85vh;
   overflow-y: auto;
   box-shadow: var(--shadow-lg);
   animation: modalIn 0.25s ease;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--border);
 }
 
 @keyframes modalIn {
@@ -2749,7 +2754,7 @@
 
 .modal-header-custom {
   padding: 1.25rem 1.5rem 1rem;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2758,13 +2763,13 @@
 .modal-title {
   font-size: 1rem;
   font-weight: 700;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   margin: 0;
 }
 
 .modal-subtitle {
   font-size: 0.75rem;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   margin: 2px 0 0;
 }
 
@@ -2776,13 +2781,13 @@
   width: 2rem;
   height: 2rem;
   border-radius: 0.5rem;
-  border: 1px solid hsl(var(--border));
-  background: hsl(var(--background));
+  border: 1px solid var(--border);
+  background: var(--background);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   transition: all 0.15s;
 }
 
@@ -3274,7 +3279,7 @@
   padding: 0.1875rem 0.625rem;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border-color);
-  background: hsl(var(--background));
+  background: var(--background);
   color: var(--text-secondary);
   cursor: pointer;
   line-height: 1.6;
@@ -3309,7 +3314,7 @@
   padding: 0.25rem 0.5625rem;
   border: 1px solid var(--border-color);
   border-radius: 0.375rem;
-  background: hsl(var(--background));
+  background: var(--background);
   color: var(--text-primary);
 }
 
@@ -3334,7 +3339,7 @@
   padding: 0.25rem 0.75rem;
   border-radius: 0.4375rem;
   border: 1px solid var(--border-color);
-  background: hsl(var(--background));
+  background: var(--background);
   color: var(--text-secondary);
   cursor: pointer;
 }
