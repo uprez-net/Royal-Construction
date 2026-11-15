@@ -12,6 +12,7 @@ import {
   UserPlus,
   CircleCheckBig,
   Clock,
+  UserCheck,
   Mail,
   Plus,
   Table2,
@@ -617,6 +618,15 @@ function LeadsWorkspace() {
               active={activeMetric === "New,Contacted"}
             />
             <LeadMetricCard
+              label="Qualified"
+              value={String(stats.qualified || 0)}
+              note="Leads qualified for a quote"
+              tone="info"
+              icon={UserCheck}
+              onClick={() => handleCardClick("Qualified")}
+              active={activeMetric === "Qualified"}
+            />
+            <LeadMetricCard
               label="Quoted"
               value={String(stats.quoted || 0)}
               note="Leads with active quotations"
@@ -645,13 +655,6 @@ function LeadsWorkspace() {
               note={`${winRate.won} won · ${winRate.lost} lost`}
               tone="success"
               icon={CircleCheckBig}
-            />
-            <LeadMetricCard
-              label="Overdue tasks"
-              value={String(stats.overdueTasks)}
-              note="Open tasks past their due date"
-              tone="danger"
-              icon={Clock}
             />
           </div>
         </>

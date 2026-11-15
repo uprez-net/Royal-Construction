@@ -11,11 +11,7 @@ import {
   type Lead as UiLead,
 } from "@/lib/leads/types";
 import { createdRangeFor } from "@/lib/leads/created-range";
-import {
-  CLOSED_LEAD_STAGES,
-  overdueLeadTaskWhere,
-} from "@/lib/leads/followup-due";
-import { sydneyStartOfDay, sydneyToday } from "@/lib/dates/sydney";
+import { CLOSED_LEAD_STAGES } from "@/lib/leads/followup-due";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
 import { readLeadRows } from "@/lib/domain/leads/row-read";
 import { leadListOrderBy } from "@/lib/domain/leads/list-sort";
@@ -821,10 +817,6 @@ export async function deleteLead(id: number) {
  * disqualified (OPEN_LEAD_DB_STAGES, derived from CLOSED_LEAD_STAGES). No
  * Response stays open. The pipeline figures below skip it (`isOpenStage` calls
  * it stalled), which is why the open count can exceed the valued count.
- *
- * Overdue tasks use the one overdue definition, measured from the start of
- * today in Sydney so a task due earlier today is not overdue, which is what the
- * Tasks tab shows.
  */
 export async function getLeadsStats(
   filterTiming?: string,
@@ -837,20 +829,13 @@ export async function getLeadsStats(
       where: { isArchived: false, stage: { in: [...stages] }, ...createdWhere },
     });
 
-  const [open, newLeads, contacted, quoted, overdueTasks, forMetrics] =
+  const [open, newLeads, contacted, qualified, quoted, forMetrics] =
     await Promise.all([
       inStages(OPEN_LEAD_DB_STAGES),
       inStages(["NEW"]),
       inStages(["CONTACTED"]),
+      inStages(["QUALIFIED"]),
       inStages(["QUOTED"]),
-      prisma.leadTask.count({
-        where: {
-          AND: [
-            overdueLeadTaskWhere(sydneyStartOfDay(sydneyToday(now)), null),
-            { lead: createdWhere },
-          ],
-        },
-      }),
       fetchLeadsForMetrics(created),
     ]);
 
@@ -859,8 +844,8 @@ export async function getLeadsStats(
     open,
     new: newLeads,
     contacted,
+    qualified,
     quoted,
-    overdueTasks,
     pipelineValue: pipeline.totalValue.toString(),
     weightedValue: pipeline.weightedValue.toString(),
     unvaluedCount: pipeline.openCount - pipeline.valuedCount,

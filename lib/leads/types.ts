@@ -173,9 +173,8 @@ export interface LeadsStats {
   open: number;
   new: number;
   contacted: number;
+  qualified: number;
   quoted: number;
-  /** Open tasks already past their due date, on live leads created in range. */
-  overdueTasks: number;
   /** Value and probability-weighted value of the pipeline (Decimal strings). */
   pipelineValue: string;
   weightedValue: string;
