@@ -1,5 +1,10 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Lead, LeadStage, LeadsStats } from "@/lib/leads/types";
+import {
+  Lead,
+  LeadStage,
+  LeadsStats,
+  OPEN_LEAD_STAGE_LABELS,
+} from "@/lib/leads/types";
 import { useAppSelector } from "@/lib/store/hooks";
 import { LeadAnalyticsData } from "@/types/lead";
 import { WIN_RATE_WINDOW_DAYS } from "@/lib/leads/pipeline-stages";
@@ -16,6 +21,8 @@ interface PageInfo {
 
 function resolveStatusFilter(status?: string): LeadStage[] | undefined {
   if (!status) return undefined;
+  // The "Open leads" card: every live stage, the same list its count uses.
+  if (status === "open") return [...OPEN_LEAD_STAGE_LABELS];
   if (status === "total") return [];
   if (status === "converted") return ["Won", "Converted"];
   // Scheduled work is a task now, so this cohort is no longer expressible as
@@ -45,7 +52,7 @@ export type LeadListParams = {
 };
 
 /** Fetch the requested lead cohort, stepping back if its remembered page no longer exists. */
-async function fetchLeadListPage(params: LeadListParams) {
+export async function fetchLeadListPage(params: LeadListParams) {
   const status = resolveStatusFilter(params.status);
   const request = {
     sort: params.sort,
@@ -129,11 +136,20 @@ export function useLeadsData() {
   // succession — closing several rows in a row — and the requests do not
   // necessarily resolve in the order they were issued.
   const statsRun = useRef(0);
-  const refreshStats = useCallback(async () => {
+  // The cards count leads created in the selected timeframe, and every path
+  // that reloads them (a task closed, a lead edited, the page shown again) has
+  // to ask for the same timeframe the select shows. Remembering it here means
+  // those callers do not each have to know it; the Leads page passes it when
+  // the select changes.
+  const statsTiming = useRef<string | undefined>(undefined);
+  const refreshStats = useCallback(async (filterTiming?: string) => {
+    if (filterTiming !== undefined) statsTiming.current = filterTiming;
     const run = ++statsRun.current;
     // No follow-up stats here any more. The Follow-ups tab derives its counts
     // from the task list it renders, so a second source could not agree with it.
-    const { stats: statsData, analytics } = await fetchLeadsOverview();
+    const { stats: statsData, analytics } = await fetchLeadsOverview(
+      statsTiming.current,
+    );
     // A newer refresh started while this one was in flight; that one wins.
     if (run !== statsRun.current) return;
     setStats(statsData);
@@ -207,6 +223,7 @@ export function useLeadsData() {
   const loadData = useCallback(
     async (params: LeadListParams = {}): Promise<number | null> => {
       const run = ++leadsRun.current;
+      statsTiming.current = params.filterTiming;
       try {
         setLoading(true);
         // Settled separately: a newer table request supersedes only this
@@ -220,7 +237,7 @@ export function useLeadsData() {
           fetchLeadListPage(params),
           // The cards and the analytics in one Server Action: two were
           // dispatched one after the other.
-          fetchLeadsOverview(),
+          fetchLeadsOverview(params.filterTiming),
         ]);
         if (overviewResult.status === "fulfilled") {
           setStats(overviewResult.value.stats);

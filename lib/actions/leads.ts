@@ -54,9 +54,11 @@ export async function getFollowupStats(): Promise<FollowupStats> {
 }
 
 /** The lead cards and analytics, in one action: see `getLeadsOverview`. */
-export async function getLeadsOverview(): Promise<LeadsOverview> {
+export async function getLeadsOverview(
+  filterTiming?: string,
+): Promise<LeadsOverview> {
   await assertStaff();
-  return leads.getLeadsOverview();
+  return leads.getLeadsOverview(filterTiming);
 }
 
 export async function getForecast(

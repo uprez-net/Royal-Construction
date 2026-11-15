@@ -129,7 +129,13 @@ type SearchParamsLike = {
   toString(): string;
 };
 
-const STATUS_KEYWORDS = ["total", "converted", "pendingFollowup", "lost"];
+const STATUS_KEYWORDS = [
+  "open",
+  "total",
+  "converted",
+  "pendingFollowup",
+  "lost",
+];
 
 // The timing select's options. The server reads any other value as "today", so
 // an unknown one would filter the table while the select showed nothing.
