@@ -7,6 +7,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { ResultStatus } from "@/components/common/result-status";
 import { useMemo } from "react";
 import type { PaginatedLeadsResult } from "@/lib/data/leads";
 
@@ -36,62 +37,64 @@ export function LeadPagination({ leads, onPageChange }: LeadPaginationProps) {
   }, [leads]);
 
   return (
-    <>
+    <div className={leads.totalCount > 0 ? "space-y-3 pt-2" : undefined}>
+      <ResultStatus
+        count={leads.totalCount}
+        shown={leads.items.length}
+        noun="lead"
+        hideWhenEmpty
+        className="text-center text-xs text-muted-foreground"
+      />
       {leads.totalCount > 0 ? (
-        <div className="space-y-3 pt-2">
-          <div className="text-center text-xs text-muted-foreground">
-            Showing {leads.items.length} of {leads.totalCount} leads
-          </div>
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  href="#"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    if (leads.page > 1) {
-                      onPageChange(leads.page - 1);
-                    }
-                  }}
-                  aria-disabled={leads.page === 1}
-                />
-              </PaginationItem>
-              {paginationItems.map((item, index) =>
-                item === "ellipsis" ? (
-                  <PaginationItem key={`ellipsis-${index}`}>
-                    <PaginationEllipsis />
-                  </PaginationItem>
-                ) : (
-                  <PaginationItem key={item}>
-                    <PaginationLink
-                      href="#"
-                      isActive={item === leads.page}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        onPageChange(item);
-                      }}
-                    >
-                      {item}
-                    </PaginationLink>
-                  </PaginationItem>
-                ),
-              )}
-              <PaginationItem>
-                <PaginationNext
-                  href="#"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    if (leads.page < leads.totalPages) {
-                      onPageChange(leads.page + 1);
-                    }
-                  }}
-                  aria-disabled={leads.page >= leads.totalPages}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        </div>
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                href="#"
+                onClick={(event) => {
+                  event.preventDefault();
+                  if (leads.page > 1) {
+                    onPageChange(leads.page - 1);
+                  }
+                }}
+                aria-disabled={leads.page === 1}
+              />
+            </PaginationItem>
+            {paginationItems.map((item, index) =>
+              item === "ellipsis" ? (
+                <PaginationItem key={`ellipsis-${index}`}>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              ) : (
+                <PaginationItem key={item}>
+                  <PaginationLink
+                    href="#"
+                    isActive={item === leads.page}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onPageChange(item);
+                    }}
+                  >
+                    {item}
+                  </PaginationLink>
+                </PaginationItem>
+              ),
+            )}
+            <PaginationItem>
+              <PaginationNext
+                href="#"
+                onClick={(event) => {
+                  event.preventDefault();
+                  if (leads.page < leads.totalPages) {
+                    onPageChange(leads.page + 1);
+                  }
+                }}
+                aria-disabled={leads.page >= leads.totalPages}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
       ) : null}
-    </>
+    </div>
   );
 }

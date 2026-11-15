@@ -157,7 +157,10 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
             value={activeTab}
             onValueChange={(v) => setActiveTab(v as InboxTab)}
           >
-            <TabsList className="border border-[#E2E8F0] bg-[#F7F4EE]">
+            <TabsList
+              aria-label="Show notifications"
+              className="border border-[#E2E8F0] bg-[#F7F4EE]"
+            >
               <TabsTrigger
                 value="all"
                 className="text-slate-500 data-[state=active]:bg-white data-[state=active]:text-slate-900 hover:bg-white hover:text-slate-900"

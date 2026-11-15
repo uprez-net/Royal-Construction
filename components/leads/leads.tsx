@@ -45,6 +45,7 @@ import {
   withLeadsListParams,
   type LeadsListParamChanges,
 } from "./leads-list-url";
+import { nextTabIndex } from "@/lib/a11y/tab-keys";
 import { Card, CardContent } from "@/components/ui/card";
 import { ListSortMenu } from "@/components/common/list-sort-menu";
 import type { LeadListSort } from "@/lib/leads/list-sort";
@@ -68,6 +69,16 @@ import AnalyticsView from "./views/analytics-view";
 import { useUser } from "@clerk/nextjs";
 
 type TabType = "table" | "followups" | "analytics";
+
+// The page's three views. A tab strip, so the active one has to be exposed
+// (aria-selected) and arrow keys move between them (#442).
+const VIEW_TABS = [
+  { key: "table" as TabType, label: "Leads", Icon: Table2 },
+  { key: "followups" as TabType, label: "Tasks", Icon: Clock },
+  { key: "analytics" as TabType, label: "Analytics", Icon: BarChart3 },
+] as const;
+const VIEW_PANEL_ID = "leads-view-panel";
+const viewTabId = (key: TabType) => `leads-view-tab-${key}`;
 
 type TableFilters = {
   readonly sort: LeadListSort;
@@ -294,6 +305,20 @@ function LeadsWorkspace() {
     setActiveTab(tab);
   };
 
+  // Arrow/Home/End move focus and select, as the other tab strips do. Roving
+  // tabindex below keeps the strip a single Tab stop.
+  const viewTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const handleViewTabKeyDown = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ) => {
+    const next = nextTabIndex(event.key, index, VIEW_TABS.length);
+    if (next === null) return;
+    event.preventDefault();
+    handleTabChange(VIEW_TABS[next].key);
+    viewTabRefs.current[next]?.focus();
+  };
+
   const handleMetricClick = (metric: string | null) => {
     setActiveTab("table");
     updateListParams({ status: metric, page: null });
@@ -510,34 +535,40 @@ function LeadsWorkspace() {
       {loading ? null : (
         <Card className="border-border/70 bg-white/95 shadow-sm">
           <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-4 py-3 sm:px-5">
-            {(
-              [
-                { key: "table" as TabType, label: "Leads", Icon: Table2 },
-                { key: "followups" as TabType, label: "Tasks", Icon: Clock },
-                {
-                  key: "analytics" as TabType,
-                  label: "Analytics",
-                  Icon: BarChart3,
-                },
-              ] as const
-            ).map(({ key, label, Icon }) => (
-              <button
-                key={key}
-                onClick={() => handleTabChange(key)}
-                className={cn(
-                  "group relative inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-sm font-semibold transition-colors duration-200 sm:min-h-9 sm:text-[12.5px]",
-                  activeTab === key
-                    ? "bg-teal-50 text-teal-700 shadow-sm"
-                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                )}
-              >
-                <Icon className="size-4" />
-                <span>{label}</span>
-                {activeTab === key && (
-                  <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-teal-600" />
-                )}
-              </button>
-            ))}
+            <div
+              role="tablist"
+              aria-label="Leads views"
+              className="flex flex-wrap items-center gap-1.5"
+            >
+              {VIEW_TABS.map(({ key, label, Icon }, index) => (
+                <button
+                  key={key}
+                  ref={(node) => {
+                    viewTabRefs.current[index] = node;
+                  }}
+                  type="button"
+                  role="tab"
+                  id={viewTabId(key)}
+                  aria-selected={activeTab === key}
+                  aria-controls={VIEW_PANEL_ID}
+                  tabIndex={activeTab === key ? 0 : -1}
+                  onClick={() => handleTabChange(key)}
+                  onKeyDown={(event) => handleViewTabKeyDown(event, index)}
+                  className={cn(
+                    "group relative inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-sm font-semibold transition-colors duration-200 sm:min-h-9 sm:text-[12.5px]",
+                    activeTab === key
+                      ? "bg-teal-50 text-teal-700 shadow-sm"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden="true" />
+                  <span>{label}</span>
+                  {activeTab === key && (
+                    <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-teal-600" />
+                  )}
+                </button>
+              ))}
+            </div>
 
             {!loading && activeTab === "table" && (
               <div className="flex w-full flex-wrap items-center gap-2 pt-2 sm:ml-auto sm:w-auto sm:gap-3 sm:pt-0">
@@ -597,7 +628,12 @@ function LeadsWorkspace() {
             )}
           </div>
 
-          <CardContent className="pt-5">
+          <CardContent
+            role="tabpanel"
+            id={VIEW_PANEL_ID}
+            aria-labelledby={viewTabId(activeTab)}
+            className="pt-5"
+          >
             {activeTab === "table" && (
               <TableView
                 loading={loadingLeads}

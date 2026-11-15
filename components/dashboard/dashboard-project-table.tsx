@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge } from "../ui/badge";
 import { formatStatus } from "@/utils/formatters";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import { ResultStatus } from "@/components/common/result-status";
 import { Search, ToolCaseIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader } from "../ui/card";
@@ -205,11 +206,15 @@ export function DashboardProjectTable({
           }
         />
 
-        {pageInfo.totalCount > 0 ? (
-          <div className="space-y-3 pt-2">
-            <div className="text-center text-xs text-muted-foreground">
-              Showing {projects.length} of {pageInfo.totalCount} projects
-            </div>
+        <div className={pageInfo.totalCount > 0 ? "space-y-3 pt-2" : undefined}>
+          <ResultStatus
+            count={pageInfo.totalCount}
+            shown={projects.length}
+            noun="project"
+            hideWhenEmpty
+            className="text-center text-xs text-muted-foreground"
+          />
+          {pageInfo.totalCount > 0 ? (
             <Pagination>
               <PaginationContent>
                 <PaginationItem>
@@ -254,8 +259,8 @@ export function DashboardProjectTable({
                 </PaginationItem>
               </PaginationContent>
             </Pagination>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </CardContent>
     </Card>
   );

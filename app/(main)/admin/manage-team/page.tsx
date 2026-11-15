@@ -29,6 +29,7 @@ import { useClerkManagement } from "@/hooks/use-clerk-management";
 import { toast } from "sonner";
 import type { User, Invitation } from "@clerk/nextjs/server";
 import { DataTable } from "@/components/common/data-table";
+import { ResultStatus } from "@/components/common/result-status";
 import {
   Pagination,
   PaginationContent,
@@ -150,7 +151,7 @@ export default function TeamManagementPage() {
           </form>
 
           <Tabs defaultValue="invite" className="w-full">
-            <TabsList className="mb-4 mt-3">
+            <TabsList aria-label="Team" className="mb-4 mt-3">
               <TabsTrigger value="invite">Invitations</TabsTrigger>
               <TabsTrigger value="members">Members</TabsTrigger>
             </TabsList>
@@ -549,9 +550,13 @@ function UserList({
       />
       {/* Pagination Controls (implement as needed) */}
       <div className="space-y-3 pt-2">
-        <div className="text-center text-xs text-muted-foreground">
-          Showing {count} of {total} members
-        </div>
+        <ResultStatus
+          count={isLoaded ? total : null}
+          shown={count}
+          noun="member"
+          hideWhenEmpty
+          className="text-center text-xs text-muted-foreground"
+        />
         <Pagination>
           <PaginationContent>
             <PaginationItem>
@@ -695,9 +700,13 @@ function InviteList({
       />
       {/* Pagination Controls (implement as needed) */}
       <div className="space-y-3 pt-2">
-        <div className="text-center text-xs text-muted-foreground">
-          Showing {count} of {total} invitations
-        </div>
+        <ResultStatus
+          count={isLoaded ? total : null}
+          shown={count}
+          noun="invitation"
+          hideWhenEmpty
+          className="text-center text-xs text-muted-foreground"
+        />
         <Pagination>
           <PaginationContent>
             <PaginationItem>
