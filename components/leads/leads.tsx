@@ -6,6 +6,7 @@ import {
   useLayoutEffect,
   useCallback,
   useRef,
+  useTransition,
 } from "react";
 import {
   UserPlus,
@@ -39,6 +40,8 @@ import {
   readLeadsListParams,
   LEAD_SORT_OPTIONS,
   MIN_SEARCH_CHARS,
+  searchHeading,
+  searchQueryToRequest,
   withLeadsListParams,
   type LeadsListParamChanges,
 } from "./leads-list-url";
@@ -185,8 +188,13 @@ function LeadsWorkspace() {
   // replace, not push: a page or filter change is not a step the back button
   // should walk through; the entry that matters is the one a lead was opened
   // from, which is whatever the URL says at that moment.
+  //
+  // Every change to the list's URL goes through here, so counting the calls
+  // says whether a request is still the latest one (see the search effect).
+  const navigationCountRef = useRef(0);
   const updateListParams = useCallback(
     (changes: LeadsListParamChanges) => {
+      navigationCountRef.current += 1;
       router.replace(
         `${pathname}${withLeadsListParams(searchParams, changes)}`,
         {
@@ -198,14 +206,33 @@ function LeadsWorkspace() {
   );
 
   /* ── Search box → ?query= ── */
+  // router.replace takes a round trip, and urlQuery only catches up when it
+  // lands. Marking the request as a transition says when it is still in flight,
+  // and the ref remembers what it asked for, so a clear made before the URL
+  // caught up is judged against that and not against the stale URL (#465).
+  //
+  // It only counts while it is still the latest navigation. A metric card, page
+  // or sort change made meanwhile preempts it (Next drops the older one), and
+  // judging a clear against a query that was dropped would send a replace built
+  // from stale params that wipes the card's filter.
+  const [searchNavigating, startSearchNavigation] = useTransition();
+  const requestedQueryRef = useRef<string | null>(null);
+  const requestedNavigationRef = useRef(-1);
   useEffect(() => {
-    const typed = debouncedSearch.trim();
-    // A query applies at MIN_SEARCH_CHARS. Clearing the box, or cutting an
-    // applied "smithx" back to "s", removes it and returns to page 1; a short
-    // query that was never applied changes nothing (the box says so).
-    const next =
-      typed.length >= MIN_SEARCH_CHARS || typed === urlQuery ? typed : "";
-    if (next !== urlQuery) updateListParams({ query: next, page: null });
+    const heading = searchHeading({
+      navigating: searchNavigating,
+      requestedNavigation: requestedNavigationRef.current,
+      latestNavigation: navigationCountRef.current,
+      requested: requestedQueryRef.current,
+      shown: urlQuery,
+    });
+    const next = searchQueryToRequest(debouncedSearch.trim(), heading);
+    if (next === null) return;
+    requestedQueryRef.current = next;
+    startSearchNavigation(() => {
+      updateListParams({ query: next, page: null });
+      requestedNavigationRef.current = navigationCountRef.current;
+    });
     // Only the person's typing drives this; the URL changing under it (a
     // metric card, paging) must not write the box back over it.
     // eslint-disable-next-line react-hooks/exhaustive-deps

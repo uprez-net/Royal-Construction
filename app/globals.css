@@ -1392,11 +1392,11 @@
 }
 
 .leads-table .col-location {
-  width: 13%;
+  width: 12%;
 }
 
 .leads-table .col-source {
-  width: 12%;
+  width: 11%;
 }
 
 .leads-table .col-stage {
@@ -1404,7 +1404,7 @@
 }
 
 .leads-table .col-followup {
-  width: 15%;
+  width: 14%;
 }
 
 .leads-table .col-assigned {
@@ -1412,7 +1412,19 @@
 }
 
 .leads-table .col-actions {
-  width: 9%;
+  width: 12%;
+}
+
+/* The row has up to six icon buttons (call, email, text, WhatsApp, archive,
+   meeting). Five need about 99px and six about 118px including this padding at
+   a 16px root, and the column used to get 9% of the table: that only cleared
+   above a ~1400px window, so the last icon was cut off at 1100px, at 1280-1366px
+   (4 of 5 visible) and at 125% browser zoom on a 1440px screen. 12% is taken
+   from the three columns with the most slack (location, source detail,
+   follow-up) and the side padding is halved. */
+.leads-table th.col-actions,
+.leads-table td.col-actions {
+  padding-inline: 0.5rem;
 }
 
 .leads-table thead th {
