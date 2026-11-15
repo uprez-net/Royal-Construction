@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 const toneMap = {
-  primary: "bg-teal-600 text-white",
+  primary: "bg-royal-gold-ink text-white",
   info: "bg-[#2563EB] text-white",
   success: "bg-emerald-500 text-white",
   warning: "bg-amber-500 text-white",
@@ -15,7 +15,7 @@ const toneMap = {
 };
 
 const activeRingMap = {
-  primary: "ring-teal-600",
+  primary: "ring-royal-gold-ink",
   info: "ring-[#2563EB]",
   success: "ring-emerald-600",
   warning: "ring-amber-500",

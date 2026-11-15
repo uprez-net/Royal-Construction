@@ -909,7 +909,7 @@ export function CreateProjectModal({
                   className="flex items-center gap-3 rounded-xl border border-border/70 bg-white px-3 py-2"
                 >
                   <span
-                    className={`inline-flex size-5 items-center justify-center rounded-full text-[11px] font-bold ${index <= progressStep ? "bg-teal-600 text-white" : "bg-muted text-muted-foreground"}`}
+                    className={`inline-flex size-5 items-center justify-center rounded-full text-[11px] font-bold ${index <= progressStep ? "bg-royal-gold-ink text-white" : "bg-muted text-muted-foreground"}`}
                   >
                     {index < progressStep ? (
                       <CheckCircle2 className="size-3.5" />
