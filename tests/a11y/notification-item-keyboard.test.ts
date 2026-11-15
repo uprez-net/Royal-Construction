@@ -3,7 +3,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, test, vi } from "vitest";
 
-import { NotificationItem } from "@/components/notification/notification-item";
+import {
+  NotificationItem,
+  openNotificationPlan,
+} from "@/components/notification/notification-item";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 // Issue #442. The card opened its notification from a <div onClick>, which a
@@ -52,5 +55,31 @@ describe("NotificationItem keyboard access", () => {
   });
   test("the hover-only actions also show when focus is inside the card", () => {
     assert.match(render(undefined), /group-focus-within:opacity-100/);
+  });
+});
+
+// Issue #476. A notification with no link used to fall back to url "#", so a
+// click opened a blank tab. A click now only marks an unread card read.
+describe("NotificationItem click", () => {
+  test("a card with no link only marks itself read", () => {
+    assert.deepEqual(openNotificationPlan({ isRead: false }), {
+      markRead: true,
+      open: null,
+    });
+  });
+  test("a read card with no link does nothing", () => {
+    assert.deepEqual(openNotificationPlan({ isRead: true }), {
+      markRead: false,
+      open: null,
+    });
+  });
+  test("a card with a link opens it and marks it read", () => {
+    assert.deepEqual(
+      openNotificationPlan({
+        isRead: false,
+        redirect: { url: "/projects/1", target: "_self" },
+      }),
+      { markRead: true, open: { url: "/projects/1", target: "_self" } },
+    );
   });
 });

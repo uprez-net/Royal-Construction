@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { OfferStatus } from "@prisma/client";
 import {
   CheckCircle,
@@ -17,7 +17,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Command, CommandGroup, CommandItem } from "@/components/ui/command";
+import {
+  Command,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 import { cn } from "@/lib/utils";
 import { OfferStatusLabels } from "@/types/offer";
@@ -110,6 +115,9 @@ export function OfferStatusBadge({
 }: OfferStatusBadgeProps) {
   const [open, setOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  // Focus goes to the list, not the popup: the list is the cmdk element that
+  // owns the arrow, Home, End and Enter keys and aria-activedescendant (#479).
+  const listRef = useRef<HTMLDivElement>(null);
 
   const Icon = StatusIcon[status];
   const availableTransitions = OFFER_STATE_MACHINE[status];
@@ -156,24 +164,34 @@ export function OfferStatusBadge({
         </button>
       </PopoverTrigger>
 
-      <PopoverContent align="start" className="w-56 p-1">
-        <Command label="Change status">
-          <CommandGroup heading="Change status">
-            {availableTransitions.map((nextStatus) => {
-              const NextIcon = StatusIcon[nextStatus];
+      <PopoverContent
+        aria-label="Change status"
+        align="start"
+        className="w-56 p-1"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          listRef.current?.focus();
+        }}
+      >
+        <Command>
+          <CommandList ref={listRef} label="Change status">
+            <CommandGroup heading="Change status">
+              {availableTransitions.map((nextStatus) => {
+                const NextIcon = StatusIcon[nextStatus];
 
-              return (
-                <CommandItem
-                  key={nextStatus}
-                  disabled={isUpdating}
-                  onSelect={() => handleStatusChange(nextStatus)}
-                >
-                  <NextIcon className="mr-2 h-4 w-4" />
-                  {OfferStatusLabels[nextStatus]}
-                </CommandItem>
-              );
-            })}
-          </CommandGroup>
+                return (
+                  <CommandItem
+                    key={nextStatus}
+                    disabled={isUpdating}
+                    onSelect={() => handleStatusChange(nextStatus)}
+                  >
+                    <NextIcon className="mr-2 h-4 w-4" />
+                    {OfferStatusLabels[nextStatus]}
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
         </Command>
       </PopoverContent>
     </Popover>

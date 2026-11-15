@@ -96,6 +96,24 @@ const cleanUrl = (url: string): string => {
   return cleanedUrl;
 };
 
+/**
+ * What a click on the card does. A notification with no link still marks
+ * itself read, but there is nowhere to open: it used to fall back to url "#",
+ * which opened a blank tab (#476).
+ */
+export const openNotificationPlan = (n: {
+  isRead: boolean;
+  redirect?: NotificationItemExtended["redirect"];
+}): {
+  markRead: boolean;
+  open: { url: string; target: string } | null;
+} => ({
+  markRead: !n.isRead,
+  open: n.redirect?.url
+    ? { url: n.redirect.url, target: n.redirect.target ?? "_blank" }
+    : null,
+});
+
 export function NotificationItem({
   n,
   busyId,
@@ -113,11 +131,7 @@ export function NotificationItem({
   const router = useRouter();
   const title = n.subject ?? "No title";
   const body = n.body ?? "";
-  const { url, target } =
-    n.redirect
-    ?? ({ url: "#", target: "_blank" } as NonNullable<
-      NotificationItemExtended["redirect"]
-    >);
+  const url = n.redirect?.url ?? "";
   const createdAt = n.createdAt ? new Date(n.createdAt) : null;
   const isBusy = busyId === n.id;
   const isAdminApproval = url ? isAdminApprovalNotification(url) : false;
@@ -163,23 +177,27 @@ export function NotificationItem({
   };
 
   const openNotification = () => {
-    if (url) {
-      // nice UX: mark read when user engages
-      if (!n.isRead) handleMarkOne(n.id);
-      // If it's an internal link, use router.push for faster navigation
-      if (target === "_self") {
-        router.push(cleanUrl(url));
-      } else {
-        window.open(cleanUrl(url), target, "noopener,noreferrer");
-      }
-      close();
+    const plan = openNotificationPlan(n);
+    // nice UX: mark read when user engages
+    if (plan.markRead) handleMarkOne(n.id);
+    if (!plan.open) return;
+    // If it's an internal link, use router.push for faster navigation
+    if (plan.open.target === "_self") {
+      router.push(cleanUrl(plan.open.url));
+    } else {
+      window.open(
+        cleanUrl(plan.open.url),
+        plan.open.target,
+        "noopener,noreferrer",
+      );
     }
+    close();
   };
   // The whole card is clickable for a mouse, but a <div onClick> is not
   // reachable from the keyboard, so a notification with a real destination
-  // also gets its title as a button (#442). Not for the "#" placeholder a
-  // notification without a link falls back to: there is nothing to open.
-  const hasDestination = Boolean(n.redirect?.url);
+  // also gets its title as a button (#442). Not for a notification without a
+  // link: there is nothing to open.
+  const hasDestination = Boolean(url);
 
   return (
     <div

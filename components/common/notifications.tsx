@@ -1,6 +1,6 @@
 import { Bell, CheckCheck, Inbox, Loader2, RefreshCcw, X } from "lucide-react";
 import { Button } from "../ui/button";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useNotification } from "@/context/NotificationContext";
 import { Badge } from "../ui/badge";
@@ -22,6 +22,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [busyAll, setBusyAll] = useState(false);
+  const headingId = useId();
   const {
     notifications,
     isLoading,
@@ -84,7 +85,11 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
           variant="ghost"
           size="icon"
           className="relative size-10 rounded-lg border border-[#E2E8F0] bg-white text-slate-500 shadow-sm hover:bg-[#F7F4EE] hover:text-slate-900"
-          aria-label="Notifications"
+          aria-label={
+            unreadCount > 0
+              ? `Notifications, ${unreadCount} unread`
+              : "Notifications"
+          }
         >
           <Bell className="size-4" />
           <UnreadDot isUnread={unreadCount > 0} />
@@ -92,6 +97,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
       </PopoverTrigger>
 
       <PopoverContent
+        aria-labelledby={headingId}
         align="end"
         sideOffset={12}
         className="w-96 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white p-0 text-slate-900 shadow-[0_24px_60px_rgba(15,23,42,0.12)]"
@@ -102,7 +108,9 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
             <Inbox className="size-7 text-[#C6923A]" />
             <div>
               <div className="flex items-center gap-2">
-                <p className="font-semibold">Notifications</p>
+                <p id={headingId} className="font-semibold">
+                  Notifications
+                </p>
                 {unreadCount > 0 && (
                   <Badge
                     variant="secondary"
