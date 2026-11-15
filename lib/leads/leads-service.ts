@@ -48,8 +48,8 @@ export type LeadCreatePayload = Omit<
  */
 
 // ── Fetch all leads ──
-export async function fetchLeadsOverview() {
-  return getLeadsOverview();
+export async function fetchLeadsOverview(filterTiming?: string) {
+  return getLeadsOverview(filterTiming);
 }
 
 export async function fetchAllLeads(): Promise<Lead[]> {

@@ -5,7 +5,13 @@ import prisma from "@/lib/prisma";
 import { mapLead, LeadAnalyticsData } from "@/types/lead";
 import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
-import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
+import {
+  OPEN_LEAD_DB_STAGES,
+  type LeadsStats,
+  type Lead as UiLead,
+} from "@/lib/leads/types";
+import { createdRangeFor } from "@/lib/leads/created-range";
+import { CLOSED_LEAD_STAGES } from "@/lib/leads/followup-due";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
 import { readLeadRows } from "@/lib/domain/leads/row-read";
 import { leadListOrderBy } from "@/lib/domain/leads/list-sort";
@@ -30,14 +36,7 @@ import {
   subMonths,
   startOfDay,
   endOfDay,
-  startOfWeek,
-  endOfWeek,
   startOfMonth,
-  endOfMonth,
-  startOfQuarter,
-  endOfQuarter,
-  startOfYear,
-  endOfYear,
 } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { sendEmail } from "../azureClient";
@@ -238,9 +237,10 @@ export async function getLeads(
       : defaultLookupPageSize;
   const search = normalizeSearch(query);
 
-  // 1. Determine if a timing filter should be active (skip if undefined or 'all')
-  const hasTimingFilter = filterTiming && filterTiming !== "all";
-  let timingFilter = {};
+  // 1. The timeframe select means "created in"; createdRangeFor is its one
+  // definition, shared with the cards above the table.
+  const created = createdRangeFor(filterTiming);
+  const timingFilter = created ? { createdAt: created } : {};
   const timeZone = "Australia/Sydney";
 
   // Current date in Sydney
@@ -249,53 +249,6 @@ export async function getLeads(
     pendingMeetings !== undefined
     || upcomingMeetings !== undefined
     || (status?.includes("MEETING_SCHEDULED") && status?.length === 1);
-
-  if (hasTimingFilter) {
-    let startSydney: Date;
-    let endSydney: Date;
-
-    switch (filterTiming) {
-      case "today":
-        startSydney = startOfDay(sydneyNow);
-        endSydney = endOfDay(sydneyNow);
-        break;
-
-      case "this_week":
-        startSydney = startOfWeek(sydneyNow, { weekStartsOn: 1 }); // Monday
-        endSydney = endOfWeek(sydneyNow, { weekStartsOn: 1 });
-        break;
-
-      case "this_month":
-        startSydney = startOfMonth(sydneyNow);
-        endSydney = endOfMonth(sydneyNow);
-        break;
-
-      case "quarter":
-        startSydney = startOfQuarter(sydneyNow);
-        endSydney = endOfQuarter(sydneyNow);
-        break;
-
-      case "this_year":
-        startSydney = startOfYear(sydneyNow);
-        endSydney = endOfYear(sydneyNow);
-        break;
-
-      default:
-        startSydney = startOfDay(sydneyNow);
-        endSydney = endOfDay(sydneyNow);
-    }
-
-    // Convert Sydney boundaries back to UTC for Prisma
-    const startUTC = fromZonedTime(startSydney, timeZone);
-    const endUTC = fromZonedTime(endSydney, timeZone);
-
-    timingFilter = {
-      createdAt: {
-        gte: startUTC,
-        lte: endUTC,
-      },
-    };
-  }
 
   const where: Prisma.LeadWhereInput | undefined =
     search.length > 0
@@ -377,15 +330,7 @@ export async function getLeads(
       ...(hasOpenTask && {
         AND: [
           {
-            stage: {
-              notIn: [
-                "CONVERTED",
-                "WON",
-                "LOST",
-                "CANCELLED",
-                "DISQUALIFIED",
-              ] as LeadStage[],
-            },
+            stage: { notIn: [...CLOSED_LEAD_STAGES] },
           },
           { tasks: { some: { completedAt: null } } },
         ],
@@ -861,65 +806,49 @@ export async function deleteLead(id: number) {
 }
 
 /**
- * Retrieves aggregate statistics for the lead pipeline.
+ * The cards on the Leads page, for leads created in the selected timeframe.
  *
- * Counts are calculated directly in PostgreSQL using aggregate filters for
- * improved performance.
+ * Each card that opens a list is counted with the same stage list and the same
+ * created range the list is filtered by, through Prisma on both sides, so the
+ * number on a card is the number of rows it opens. It used to be raw SQL here
+ * against a `where` there, and "Total Leads 67" opened a list of 66.
  *
- * @returns Summary statistics used by the leads dashboard.
+ * "Open" means live: not archived and not won, lost, cancelled or
+ * disqualified (OPEN_LEAD_DB_STAGES, derived from CLOSED_LEAD_STAGES). No
+ * Response stays open. The pipeline figures below skip it (`isOpenStage` calls
+ * it stalled), which is why the open count can exceed the valued count.
  */
-export async function getLeadsStats(): Promise<LeadsStats> {
-  const [stats] = await prisma.$queryRaw<
-    {
-      total: bigint;
-      new: bigint;
-      contacted: bigint;
-      qualified: bigint;
-      quoted: bigint;
-      won: bigint;
-      lost: bigint;
-      pendingFollowup: bigint;
-    }[]
-  >`
-    SELECT
-      COUNT(*) AS total,
-      COUNT(*) FILTER (WHERE stage = 'NEW') AS new,
-      COUNT(*) FILTER (WHERE stage = 'CONTACTED') AS contacted,
-      COUNT(*) FILTER (WHERE stage = 'QUALIFIED') AS qualified,
-      COUNT(*) FILTER (WHERE stage = 'QUOTED') AS quoted,
-      COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS won,
-      COUNT(*) FILTER (WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')) AS lost,
-      -- Open tasks, counted from LeadTask.
-      --
-      -- This read Lead.followupDate and Lead.meetingDate, the columns the task
-      -- table replaced. Nothing writes them any more, so the card was frozen at
-      -- whatever the backfill left while the Tasks tab grew: 15 against 34 on
-      -- staging, on the same screen. Every task created from here would have
-      -- widened the gap.
-      --
-      -- Counted as TASKS, not leads. They coincide today because no lead holds
-      -- two, but four task types exist precisely so a lead can have a call and
-      -- a meeting at once.
-      (
-        SELECT COUNT(*) FROM "LeadTask" t
-        JOIN "Lead" tl ON tl.id = t."leadId"
-        WHERE t."completedAt" IS NULL
-          AND tl."isArchived" = false
-          AND tl.stage NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')
-      ) AS "pendingFollowup"
-    FROM "Lead"
-    WHERE "isArchived" = false
-  `;
+export async function getLeadsStats(
+  filterTiming?: string,
+): Promise<LeadsStats> {
+  const now = new Date();
+  const created = createdRangeFor(filterTiming, now);
+  const createdWhere = created ? { createdAt: created } : {};
+  const inStages = (stages: readonly LeadStage[]) =>
+    prisma.lead.count({
+      where: { isArchived: false, stage: { in: [...stages] }, ...createdWhere },
+    });
 
+  const [open, newLeads, contacted, qualified, quoted, forMetrics] =
+    await Promise.all([
+      inStages(OPEN_LEAD_DB_STAGES),
+      inStages(["NEW"]),
+      inStages(["CONTACTED"]),
+      inStages(["QUALIFIED"]),
+      inStages(["QUOTED"]),
+      fetchLeadsForMetrics(created),
+    ]);
+
+  const pipeline = computePipelineMetrics(forMetrics, now);
   return {
-    total: Number(stats?.total ?? 0),
-    new: Number(stats?.new ?? 0),
-    contacted: Number(stats?.contacted ?? 0),
-    qualified: Number(stats?.qualified ?? 0),
-    quoted: Number(stats?.quoted ?? 0),
-    conversion: Number(stats?.won ?? 0),
-    pendingFollowup: Number(stats?.pendingFollowup ?? 0),
-    lost: Number(stats?.lost ?? 0),
+    open,
+    new: newLeads,
+    contacted,
+    qualified,
+    quoted,
+    pipelineValue: pipeline.totalValue.toString(),
+    weightedValue: pipeline.weightedValue.toString(),
+    unvaluedCount: pipeline.openCount - pipeline.valuedCount,
   };
 }
 
@@ -1112,9 +1041,11 @@ export type LeadsOverview = {
  * Server Actions, and the client dispatches Server Actions one at a time, so
  * two actions meant the analytics waited for the cards to finish.
  */
-export async function getLeadsOverview(): Promise<LeadsOverview> {
+export async function getLeadsOverview(
+  filterTiming?: string,
+): Promise<LeadsOverview> {
   const [stats, analytics] = await Promise.all([
-    getLeadsStats(),
+    getLeadsStats(filterTiming),
     getAnalyticsData(),
   ]);
   return { stats, analytics };
@@ -1137,12 +1068,14 @@ const PIPELINE_SELECT = {
   lostAt: true,
 } as const;
 
-async function fetchLeadsForMetrics(): Promise<LeadForMetrics[]> {
+async function fetchLeadsForMetrics(
+  created: { gte: Date; lte: Date } | null = null,
+): Promise<LeadForMetrics[]> {
   // The isArchived filter matches every other lead aggregate in this file.
   // Soft-deleted leads are invisible everywhere else and must not inflate
   // pipeline value here.
   const rows = await prisma.lead.findMany({
-    where: { isArchived: false },
+    where: { isArchived: false, ...(created ? { createdAt: created } : {}) },
     select: PIPELINE_SELECT,
   });
   return rows.map((row) => ({

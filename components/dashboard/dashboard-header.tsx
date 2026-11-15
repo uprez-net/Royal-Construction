@@ -90,7 +90,7 @@ export function DashboardHeader({
       await downloadWorkbook(
         [
           { name: "Lead Data", rows: [leadHeader, ...leadRows] },
-          { name: "History", rows: [historyHeader, ...historyRows] },
+          { name: "Lead history", rows: [historyHeader, ...historyRows] },
         ],
         `Royal_Constructions_Leads_${new Date().toISOString().slice(0, 10)}.xlsx`,
       );

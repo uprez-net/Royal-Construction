@@ -12,7 +12,7 @@ import {
   UserPlus,
   CircleCheckBig,
   Clock,
-  CircleX,
+  UserCheck,
   Mail,
   Plus,
   Table2,
@@ -22,10 +22,16 @@ import {
   Sparkles,
   FileText,
 } from "lucide-react";
-import { fetchAllLeads } from "@/lib/leads/leads-service";
 import { normalizeTypes } from "@/lib/leads/lead-helpers";
 import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
-import { useLeadsData, type LeadListParams } from "@/hooks/use-leads-data";
+import {
+  fetchLeadListPage,
+  useLeadsData,
+  type LeadListParams,
+} from "@/hooks/use-leads-data";
+import { compactCurrency } from "@/utils/formatters";
+import { createdRangeCaption } from "@/lib/leads/created-range";
+import { emptyLeadsMessage } from "@/lib/leads/empty-state";
 import { useToast, ToastContainer } from "@/components/common/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
 
@@ -93,13 +99,17 @@ type TableFilters = {
  * its own and dropped isArchived, so page 2 of the Archived chip listed leads
  * that were not archived.
  */
-function tableListParams(filters: TableFilters, page: number): LeadListParams {
+function tableListParams(
+  filters: TableFilters,
+  page: number,
+  limit = 10,
+): LeadListParams {
   const statusParam =
     filters.metric === "total" ? "total" : (filters.metric ?? undefined);
   return {
     sort: filters.sort,
     page,
-    limit: 10,
+    limit,
     query: filters.query.trim() || undefined,
     status:
       statusParam === "Archived"
@@ -156,6 +166,7 @@ function LeadsWorkspace() {
     loadData,
     refreshLeadsData,
     refreshStats,
+    statsStale,
     updateLeadInList,
     removeLeadFromList,
     replaceLeads,
@@ -180,11 +191,7 @@ function LeadsWorkspace() {
     && typedSearch !== urlQuery;
 
   /* ── Derived ── */
-  const conversionRate =
-    stats && stats.total > 0
-      ? ((stats.conversion / stats.total) * 100).toFixed(1)
-      : "0.0";
-
+  const winRate = analyticsData.pipelineMetrics.winRate;
   const tableParams = tableListParams(
     {
       query: urlQuery,
@@ -323,6 +330,17 @@ function LeadsWorkspace() {
     });
   }, [refreshStats]);
 
+  // The cards count leads created in the selected timeframe, so they reload
+  // when it changes, from the select, Back or a bookmark alike.
+  const timingSeen = useRef(activeFilterTiming);
+  useEffect(() => {
+    if (timingSeen.current === activeFilterTiming) return;
+    timingSeen.current = activeFilterTiming;
+    refreshStats(activeFilterTiming).catch((err: unknown) => {
+      console.error("Failed to refresh lead stats for the timeframe", err);
+    });
+  }, [activeFilterTiming, refreshStats]);
+
   /* ── Handlers ── */
 
   const handleTabChange = (tab: TabType) => {
@@ -343,10 +361,39 @@ function LeadsWorkspace() {
     viewTabRefs.current[next]?.focus();
   };
 
+  // A chip narrows the list you are on, search included.
   const handleMetricClick = (metric: string | null) => {
     setActiveTab("table");
     updateListParams({ status: metric, page: null });
   };
+
+  // A card shows the cohort its number counts, and the number ignores the
+  // search box, so a card click drops the search too. Left in, "Open leads 12"
+  // opened a list of the two that matched "Smith".
+  //
+  // Done as a search request for "": the box going empty makes the search
+  // effect ask for ?query= to be cleared, and until this replace lands the URL
+  // still shows the old query, so that second replace was built from stale
+  // params and wiped the card's own filter. Marking this one as the request in
+  // flight is what tells the effect there is nothing left to do (#465).
+  // Clear filters does the same thing with nothing left selected.
+  const dropSearchAndNavigate = (
+    changes: Parameters<typeof updateListParams>[0],
+  ) => {
+    setSearchTerm("");
+    setActiveTab("table");
+    startSearchNavigation(() => {
+      requestedQueryRef.current = "";
+      updateListParams({ ...changes, query: null, page: null });
+      requestedNavigationRef.current = navigationCountRef.current;
+    });
+  };
+  const handleCardClick = (metric: string) =>
+    dropSearchAndNavigate({ status: metric });
+
+  const hasFilters = activeMetric !== null || activeFilterTiming !== "all";
+  const clearFilters = () =>
+    dropSearchAndNavigate({ status: null, timing: null });
 
   const handleFilterTimingChange = (filterTiming: string) => {
     updateListParams({
@@ -362,8 +409,43 @@ function LeadsWorkspace() {
     [updateListParams],
   );
 
+  // Exports what the filters show: every page of the current list, 50 at a
+  // time (the server's cap), not every lead in the business.
+  const fetchFilteredLeads = async () => {
+    const filters = {
+      query: urlQuery,
+      metric: activeMetric,
+      filterTiming: activeFilterTiming,
+      sort: activeSort,
+    };
+    const rows = [];
+    for (let pageNumber = 1; ; pageNumber += 1) {
+      const result = await fetchLeadListPage(
+        tableListParams(filters, pageNumber, 50),
+      );
+      // fetchLeadListPage steps back to the last page when the one asked for
+      // has gone (a lead removed mid-export); appending that would repeat 50
+      // rows, and everything up to there is already collected.
+      if (result.page !== pageNumber) break;
+      rows.push(...result.items);
+      if (pageNumber >= result.totalPages || result.items.length === 0) break;
+    }
+    return rows;
+  };
+
   const handleExport = async () => {
-    const allLeads = await fetchAllLeads();
+    try {
+      await exportFilteredLeads();
+    } catch (err) {
+      // It used to fail with nothing on screen: the History sheet name is
+      // reserved in Excel and ExcelJS throws on it.
+      console.error("Failed to export leads", err);
+      showToast("Failed to export leads", "error");
+    }
+  };
+
+  const exportFilteredLeads = async () => {
+    const allLeads = await fetchFilteredLeads();
     const leadHeader = [
       "leadId",
       "name",
@@ -420,7 +502,7 @@ function LeadsWorkspace() {
     await downloadWorkbook(
       [
         { name: "Lead Data", rows: [leadHeader, ...leadRows] },
-        { name: "History", rows: [historyHeader, ...historyRows] },
+        { name: "Lead history", rows: [historyHeader, ...historyRows] },
       ],
       `Royal_Constructions_Leads_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
@@ -491,6 +573,31 @@ function LeadsWorkspace() {
         <>
           {/* Six cards stacked three rows deep pushed the list itself below
               the fold on a phone; there they scroll sideways instead. */}
+          {statsStale ? (
+            <p
+              role="alert"
+              className="-mb-1 flex flex-wrap items-center gap-2 text-xs text-destructive-ink"
+            >
+              The cards could not be reloaded and may not match the timeframe
+              above.
+              <button
+                type="button"
+                className="font-medium underline underline-offset-4"
+                onClick={() =>
+                  refreshStats(activeFilterTiming).catch((err: unknown) => {
+                    console.error("Failed to refresh lead stats", err);
+                  })
+                }
+              >
+                Try again
+              </button>
+            </p>
+          ) : (
+            <p className="-mb-1 text-xs text-muted-foreground">
+              {createdRangeCaption(activeFilterTiming)}. Win rate is always the
+              last 90 days.
+            </p>
+          )}
           <div
             className={cn(
               MOBILE_METRIC_STRIP_CLASS,
@@ -498,13 +605,13 @@ function LeadsWorkspace() {
             )}
           >
             <LeadMetricCard
-              label="Total Leads"
-              value={String(stats.total)}
-              note="All leads in the pipeline"
+              label="Open leads"
+              value={String(stats.open)}
+              note="Not won, lost or archived"
               tone="primary"
               icon={UserPlus}
-              onClick={() => handleMetricClick("total")}
-              active={activeMetric === "total"}
+              onClick={() => handleCardClick("open")}
+              active={activeMetric === "open"}
             />
             <LeadMetricCard
               label="New & Contacted"
@@ -512,8 +619,17 @@ function LeadsWorkspace() {
               note="Fresh and contacted leads"
               tone="info"
               icon={Sparkles}
-              onClick={() => handleMetricClick("New,Contacted")}
+              onClick={() => handleCardClick("New,Contacted")}
               active={activeMetric === "New,Contacted"}
+            />
+            <LeadMetricCard
+              label="Qualified"
+              value={String(stats.qualified || 0)}
+              note="Leads qualified for a quote"
+              tone="info"
+              icon={UserCheck}
+              onClick={() => handleCardClick("Qualified")}
+              active={activeMetric === "Qualified"}
             />
             <LeadMetricCard
               label="Quoted"
@@ -521,35 +637,29 @@ function LeadsWorkspace() {
               note="Leads with active quotations"
               tone="badge"
               icon={FileText}
-              onClick={() => handleMetricClick("Quoted")}
+              onClick={() => handleCardClick("Quoted")}
               active={activeMetric === "Quoted"}
             />
             <LeadMetricCard
-              label={`Converted (${conversionRate}%)`}
-              value={String(stats.conversion)}
-              note="Won and converted leads"
+              label="Pipeline value"
+              value={compactCurrency.format(Number(stats.pipelineValue))}
+              note={`${compactCurrency.format(Number(stats.weightedValue))} weighted${
+                stats.unvaluedCount > 0
+                  ? ` · ${stats.unvaluedCount} with no value`
+                  : ""
+              }`}
+              tone="warning"
+              icon={BarChart3}
+            />
+            <LeadMetricCard
+              label="Win rate (90 days)"
+              // An em dash, never 0%: nothing decided and everything lost are
+              // different statements. Always the last 90 days, whatever the
+              // timeframe above says.
+              value={winRate.percent === null ? "—" : `${winRate.percent}%`}
+              note={`${winRate.won} won · ${winRate.lost} lost`}
               tone="success"
               icon={CircleCheckBig}
-              onClick={() => handleMetricClick("converted")}
-              active={activeMetric === "converted"}
-            />
-            <LeadMetricCard
-              label="Open tasks"
-              value={String(stats.pendingFollowup)}
-              note="Calls, emails and meetings still open"
-              tone="warning"
-              icon={Clock}
-              onClick={() => handleMetricClick("pendingFollowup")}
-              active={activeMetric === "pendingFollowup"}
-            />
-            <LeadMetricCard
-              label="Lost Leads"
-              value={String(stats.lost)}
-              note="Lost, cancelled or disqualified"
-              tone="danger"
-              icon={CircleX}
-              onClick={() => handleMetricClick("lost")}
-              active={activeMetric === "lost"}
             />
           </div>
         </>
@@ -594,70 +704,77 @@ function LeadsWorkspace() {
               ))}
             </div>
 
-            {!loading && activeTab === "table" && (
-              <div className="flex w-full flex-wrap items-center gap-2 pt-2 sm:ml-auto sm:w-auto sm:gap-3 sm:pt-0">
+            <div className="flex w-full flex-wrap items-center gap-2 pt-2 sm:ml-auto sm:w-auto sm:gap-3 sm:pt-0">
+              {activeTab === "table" && (
                 <ListSortMenu
                   label="leads"
                   value={activeSort}
                   options={LEAD_SORT_OPTIONS}
                   onChange={(sort) => updateListParams({ sort, page: null })}
                 />
-                <Select
-                  value={activeFilterTiming}
-                  onValueChange={handleFilterTimingChange}
+              )}
+              {/* On every tab: the cards above it follow it, so it cannot
+                  hide on Tasks or Analytics and leave a filter nobody can see. */}
+              <Select
+                value={activeFilterTiming}
+                onValueChange={handleFilterTimingChange}
+              >
+                <SelectTrigger
+                  aria-label="Filter by date created"
+                  className="data-[size=default]:h-11 flex-1 rounded-lg border-border bg-background text-sm font-medium text-foreground shadow-none hover:bg-muted sm:flex-none"
                 >
-                  <SelectTrigger
-                    aria-label="Filter by timeframe"
-                    className="data-[size=default]:h-11 flex-1 rounded-lg border-border bg-background text-sm font-medium text-foreground shadow-none hover:bg-muted sm:flex-none"
-                  >
-                    <SelectValue placeholder="Select timeframe" />
-                  </SelectTrigger>
-                  <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">
-                    <SelectItem value="today">Today</SelectItem>
-                    <SelectItem value="this_week">This Week</SelectItem>
-                    <SelectItem value="this_month">This Month</SelectItem>
-                    <SelectItem value="quarter">This Quarter</SelectItem>
-                    <SelectItem value="this_year">This Year</SelectItem>
-                    <SelectItem value="all">All Time</SelectItem>
-                  </SelectContent>
-                </Select>
-                <div className="search-box min-w-0 flex-1">
-                  <Search size={16} />
-                  <input
-                    aria-label="Search leads"
-                    type="text"
-                    placeholder="Search leads..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    aria-describedby={
-                      searchTooShort ? "leads-search-hint" : undefined
-                    }
-                  />
-                  {/* Always mounted so the live region is registered before
+                  <span className="text-muted-foreground">Created</span>
+                  <SelectValue placeholder="Select timeframe" />
+                </SelectTrigger>
+                <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="this_week">This Week</SelectItem>
+                  <SelectItem value="this_month">This Month</SelectItem>
+                  <SelectItem value="quarter">This Quarter</SelectItem>
+                  <SelectItem value="this_year">This Year</SelectItem>
+                  <SelectItem value="all">All Time</SelectItem>
+                </SelectContent>
+              </Select>
+              {activeTab === "table" && (
+                <>
+                  <div className="search-box min-w-0 flex-1">
+                    <Search size={16} />
+                    <input
+                      aria-label="Search leads"
+                      type="text"
+                      placeholder="Search leads..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      aria-describedby={
+                        searchTooShort ? "leads-search-hint" : undefined
+                      }
+                    />
+                    {/* Always mounted so the live region is registered before
                       its text changes. Drawn inside the input's right edge, so
                       it moves nothing and cannot cover the row below on a
                       phone. */}
-                  <p
-                    id="leads-search-hint"
-                    role="status"
-                    className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted-foreground"
+                    <p
+                      id="leads-search-hint"
+                      role="status"
+                      className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted-foreground"
+                    >
+                      {searchTooShort
+                        ? `Type ${MIN_SEARCH_CHARS}+ characters`
+                        : ""}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="order-3 h-11 shrink-0"
+                    onClick={handleExport}
                   >
-                    {searchTooShort
-                      ? `Type ${MIN_SEARCH_CHARS}+ characters`
-                      : ""}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="order-3 h-11 shrink-0"
-                  onClick={handleExport}
-                >
-                  <Download data-icon="inline-start" aria-hidden="true" />
-                  Export
-                </Button>
-              </div>
-            )}
+                    <Download data-icon="inline-start" aria-hidden="true" />
+                    Export
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
           <CardContent
@@ -685,6 +802,15 @@ function LeadsWorkspace() {
                   fullName: user?.fullName ?? null,
                 }}
                 appendEmailToLead={appendEmailToLead}
+                emptyMessage={emptyLeadsMessage({
+                  hasSearch: urlQuery.trim() !== "",
+                  hasFilters,
+                })}
+                onClearFilters={
+                  hasFilters || urlQuery.trim() !== ""
+                    ? clearFilters
+                    : undefined
+                }
               />
             )}
             {activeTab === "followups" && (

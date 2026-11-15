@@ -1,9 +1,15 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Lead, LeadStage, LeadsStats } from "@/lib/leads/types";
+import {
+  Lead,
+  LeadStage,
+  LeadsStats,
+  OPEN_LEAD_STAGE_LABELS,
+} from "@/lib/leads/types";
 import { useAppSelector } from "@/lib/store/hooks";
 import { LeadAnalyticsData } from "@/types/lead";
 import { WIN_RATE_WINDOW_DAYS } from "@/lib/leads/pipeline-stages";
 import { fetchLeads, fetchLeadsOverview } from "@/lib/leads/leads-service";
+import { createStatsLoader } from "@/lib/leads/stats-loader";
 import type { LeadEmails } from "@prisma/client";
 import type { LeadListSort } from "@/lib/leads/list-sort";
 
@@ -16,6 +22,8 @@ interface PageInfo {
 
 function resolveStatusFilter(status?: string): LeadStage[] | undefined {
   if (!status) return undefined;
+  // The "Open leads" card: every live stage, the same list its count uses.
+  if (status === "open") return [...OPEN_LEAD_STAGE_LABELS];
   if (status === "total") return [];
   if (status === "converted") return ["Won", "Converted"];
   // Scheduled work is a task now, so this cohort is no longer expressible as
@@ -45,7 +53,7 @@ export type LeadListParams = {
 };
 
 /** Fetch the requested lead cohort, stepping back if its remembered page no longer exists. */
-async function fetchLeadListPage(params: LeadListParams) {
+export async function fetchLeadListPage(params: LeadListParams) {
   const status = resolveStatusFilter(params.status);
   const request = {
     sort: params.sort,
@@ -124,21 +132,42 @@ export function useLeadsData() {
   const [error, setError] = useState<string | null>(null);
 
   /* ── Stats ── */
-  // Guards against an older in-flight refresh landing after a newer one and
-  // putting stale counts back on the cards. Task changes can arrive in quick
-  // succession — closing several rows in a row — and the requests do not
-  // necessarily resolve in the order they were issued.
-  const statsRun = useRef(0);
-  const refreshStats = useCallback(async () => {
-    const run = ++statsRun.current;
-    // No follow-up stats here any more. The Follow-ups tab derives its counts
-    // from the task list it renders, so a second source could not agree with it.
-    const { stats: statsData, analytics } = await fetchLeadsOverview();
-    // A newer refresh started while this one was in flight; that one wins.
-    if (run !== statsRun.current) return;
-    setStats(statsData);
-    setAnalyticsData(analytics);
+  // One loader for every path that fills the cards (the full load, a task
+  // closed, a lead edited, the page shown again, the timeframe changing). It
+  // remembers the timeframe so callers that do not name one reuse it, and it
+  // returns only the newest answer, so an older response can never put stale
+  // counts back. See createStatsLoader for the two failures that came from
+  // doing this inline.
+  const [statsLoader] = useState(() => createStatsLoader(fetchLeadsOverview));
+  // True when the cards could not be reloaded for the timeframe on screen, so
+  // the page can say they may be out of date instead of captioning old numbers
+  // as the new timeframe.
+  const [statsStale, setStatsStaleState] = useState(false);
+  // Mirrors statsStale for async code that has to ask whether a card failure
+  // is still the current one (a state value in a closure would be stale).
+  const statsStaleRef = useRef(false);
+  const setStatsStale = useCallback((stale: boolean) => {
+    statsStaleRef.current = stale;
+    setStatsStaleState(stale);
   }, []);
+  const refreshStats = useCallback(
+    async (filterTiming?: string) => {
+      // No follow-up stats here any more. The Follow-ups tab derives its counts
+      // from the task list it renders, so a second source could not agree with it.
+      try {
+        const overview = await statsLoader.load(filterTiming);
+        // A newer load started while this one was in flight; that one wins.
+        if (overview === null) return;
+        setStats(overview.stats);
+        setAnalyticsData(overview.analytics);
+        setStatsStale(false);
+      } catch (err) {
+        setStatsStale(true);
+        throw err;
+      }
+    },
+    [statsLoader, setStatsStale],
+  );
 
   /**
    * Keep the six cards in step with the Tasks tab.
@@ -212,25 +241,42 @@ export function useLeadsData() {
         // Settled separately: a newer table request supersedes only this
         // one's rows, so the cards must neither wait on nor be swallowed by
         // the table's fate.
-        const [leadsResult, overviewResult] = await Promise.allSettled([
+        // The cards are committed the moment their own answer arrives, not
+        // after the table's: waiting for both first let an older overview land
+        // after a newer timeframe's refresh had already finished.
+        const overviewDone = statsLoader.load(params.filterTiming).then(
+          (overview) => {
+            // A null answer was superseded by a newer load of the cards.
+            if (overview) {
+              setStats(overview.stats);
+              setAnalyticsData(overview.analytics);
+              setStatsStale(false);
+            }
+            return null;
+          },
+          (reason: unknown) => {
+            setStatsStale(true);
+            return { reason };
+          },
+        );
+        const [leadsResult, cardFailure] = await Promise.all([
           // "pendingFollowup" is not a stage — resolveStatusFilter maps it to
           // an empty array — so without hasOpenTask the initial load for a
           // bookmarked ?status=pendingFollowup fetched every lead and raced
           // the filtered request the metric effect fires straight after.
-          fetchLeadListPage(params),
-          // The cards and the analytics in one Server Action: two were
-          // dispatched one after the other.
-          fetchLeadsOverview(),
+          fetchLeadListPage(params).then(
+            (value) => ({ status: "fulfilled" as const, value }),
+            (reason: unknown) => ({ status: "rejected" as const, reason }),
+          ),
+          overviewDone,
         ]);
-        if (overviewResult.status === "fulfilled") {
-          setStats(overviewResult.value.stats);
-          setAnalyticsData(overviewResult.value.analytics);
-        }
-        const cardFailures =
-          overviewResult.status === "rejected" ? [overviewResult.reason] : [];
+        const cardFailures = cardFailure ? [cardFailure.reason] : [];
         if (cardFailures.length > 0) {
           console.error(...cardFailures);
-          setError("Failed to load leads data");
+          // Only while it is still the current answer: a newer load of the
+          // cards may have succeeded while the table was pending, and the page
+          // error would then replace a workspace whose cards are fine.
+          if (statsStaleRef.current) setError("Failed to load leads data");
         }
         if (run !== leadsRun.current) return null;
         if (leadsResult.status === "rejected") {
@@ -246,13 +292,13 @@ export function useLeadsData() {
           total: leadsData.totalCount,
           totalPages: leadsData.totalPages,
         });
-        if (cardFailures.length === 0) setError(null);
+        if (cardFailures.length === 0 || !statsStaleRef.current) setError(null);
         return leadsData.page;
       } finally {
         setLoading(false);
       }
     },
-    [],
+    [statsLoader, setStatsStale],
   );
 
   /* ── Mutations ── */
@@ -315,6 +361,7 @@ export function useLeadsData() {
     loadData,
     refreshLeadsData,
     refreshStats,
+    statsStale,
     updateLeadInList,
     removeLeadFromList,
     prependLead,

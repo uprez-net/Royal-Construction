@@ -56,6 +56,10 @@ interface TableViewProps {
   activeMetric: string | null;
   onActiveMetricChange: (metric: string | null) => void;
   appendEmailToLead: (leadId: number, email: LeadEmails) => void;
+  /** Says what is narrowing an empty list (see `emptyLeadsMessage`). */
+  emptyMessage: string;
+  /** Set when a search, card, chip or timeframe is narrowing the list. */
+  onClearFilters?: () => void;
   user: {
     clerkUserId: string | null;
     fullName: string | null;
@@ -81,6 +85,8 @@ export default function TableView({
   onActiveMetricChange,
   user,
   appendEmailToLead,
+  emptyMessage,
+  onClearFilters,
 }: TableViewProps) {
   /* ── Shared hooks ── */
   const { toasts, showToast, dismissToast } = useToast();
@@ -274,7 +280,16 @@ export default function TableView({
         ) : leads.length === 0 ? (
           <div className="table-empty">
             <Search size={32} />
-            <p>No leads match your search.</p>
+            <p>{emptyMessage}</p>
+            {onClearFilters ? (
+              <button
+                type="button"
+                className="mt-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
+                onClick={onClearFilters}
+              >
+                Clear filters
+              </button>
+            ) : null}
           </div>
         ) : (
           <>
