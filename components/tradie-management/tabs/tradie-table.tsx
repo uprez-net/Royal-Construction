@@ -6,6 +6,7 @@ import { setQuery } from "@/lib/store/slices/tradieManagementSlice";
 import { TradieRow } from "@/types/tradie";
 import { rateCurrency } from "@/utils/formatters";
 import { HardHat } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TradieBadge } from "../trade-badge";
 import { TradieActionsDropdown } from "../tradie-actions";
@@ -55,7 +56,16 @@ export function TradieTable({
       ]}
       align={COLUMN_ALIGN}
       rows={filteredTradies.map((tradie) => [
-        tradie.name,
+        <Link
+          key={`name-${tradie.id}`}
+          href={`/tradie-management/${tradie.id}`}
+          prefetch={false}
+          // The row navigates on click too; this keeps one navigation per click.
+          onClick={(event) => event.stopPropagation()}
+          className="rounded-sm font-medium text-inherit hover:underline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+        >
+          {tradie.name}
+        </Link>,
         <span key={`trade-${tradie.id}`} className="flex flex-wrap gap-1">
           {tradie.trades.map((trade) => (
             <TradieBadge key={trade} trade={trade} />
