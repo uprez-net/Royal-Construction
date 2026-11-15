@@ -6,12 +6,18 @@ import {
   CREATED_RANGE_LABELS,
   createdRangeCaption,
   createdRangeFor,
+  previousMonthRange,
 } from "@/lib/leads/created-range";
 import { emptyLeadsMessage } from "@/lib/leads/empty-state";
-import { countLeadsWithoutValue } from "@/lib/leads/pipeline-math";
+import {
+  countLeadsWithoutValue,
+  sumValueInStages,
+} from "@/lib/leads/pipeline-math";
 import { CLOSED_LEAD_STAGES } from "@/lib/leads/followup-due";
 import { isKpiCohortMetric } from "@/lib/leads/lead-helpers";
 import {
+  OFFER_OUT_DB_STAGES,
+  OFFER_OUT_STAGE_LABELS,
   LeadStageToLeadStageDBMapping,
   OPEN_LEAD_DB_STAGES,
   OPEN_LEAD_STAGE_LABELS,
@@ -146,5 +152,58 @@ test("open leads without a value: empty, unusable and zero all count; closed lea
       open,
     ),
     4,
+  );
+});
+
+test("last month is the Sydney calendar month before this one, across the daylight-saving change", () => {
+  // Now is in November (AEDT, UTC+11); October began on AEST (UTC+10).
+  assert.deepEqual(iso(previousMonthRange(NOW)), [
+    "2026-09-30T14:00:00.000Z",
+    "2026-10-31T12:59:59.999Z",
+  ]);
+  // Early on the 1st in Sydney is still the 31st in UTC, and still this month.
+  assert.deepEqual(
+    iso(previousMonthRange(new Date("2026-10-31T13:30:00.000Z"))),
+    iso(previousMonthRange(NOW)),
+  );
+});
+
+test("offers-out value adds the leads in Quoted and Negotiating only, ignoring missing values", () => {
+  const lead = (stage: string, estimatedValue: string | null) =>
+    ({
+      id: 1,
+      stage,
+      estimatedValue,
+      probabilityOverride: null,
+      expectedCloseDate: null,
+      wonAt: null,
+      lostAt: null,
+    }) as unknown as Parameters<typeof sumValueInStages>[0][number];
+  const total = sumValueInStages(
+    [
+      lead("QUOTED", "600000"),
+      lead("NEGOTIATING", "715000.50"),
+      lead("QUOTED", null),
+      lead("DISCOVERY", "900000"),
+      lead("CONVERTED", "500000"),
+    ],
+    new Set(["QUOTED", "NEGOTIATING"] as const),
+  );
+  assert.equal(total.toString(), "1315000.5");
+});
+
+test("Offers out: the card's stages and its click's labels are one list (Quoted, Negotiating)", () => {
+  const { stages, unknown } = parseLeadStageFilter(
+    OFFER_OUT_STAGE_LABELS.join(","),
+  );
+  assert.deepEqual(unknown, []);
+  assert.deepEqual([...stages].sort(), [...OFFER_OUT_DB_STAGES].sort());
+  assert.deepEqual([...OFFER_OUT_DB_STAGES].sort(), ["NEGOTIATING", "QUOTED"]);
+  // The URL reader keeps the comma list, so the click survives a reload.
+  assert.equal(
+    readLeadsListParams(
+      new URLSearchParams(`status=${OFFER_OUT_STAGE_LABELS.join(",")}`),
+    ).status,
+    "Quoted,Negotiating",
   );
 });

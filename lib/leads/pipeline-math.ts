@@ -64,6 +64,23 @@ export function coerceMoney(
 }
 
 /**
+ * Total estimated value of the leads in `stages`. A missing or unusable value
+ * adds nothing (it is counted by `countLeadsWithoutValue`, not guessed).
+ */
+export function sumValueInStages(
+  leads: readonly LeadForMetrics[],
+  stages: ReadonlySet<LeadStage>,
+): Prisma.Decimal {
+  return leads.reduce(
+    (total, lead) =>
+      stages.has(lead.stage)
+        ? total.add(coerceMoney(lead.estimatedValue) ?? ZERO)
+        : total,
+    ZERO,
+  );
+}
+
+/**
  * How many of the given leads, among those in `openStages`, carry no usable
  * estimated value: nothing entered, something unparseable, or zero. A $0
  * estimate adds nothing to the pipeline, so for "which leads still need a

@@ -60,6 +60,18 @@ export function createdRangeFor(
   };
 }
 
+/**
+ * The Sydney calendar month before the one `now` falls in, for the "New leads
+ * this month" card's comparison.
+ */
+export function previousMonthRange(now: Date = new Date()): {
+  gte: Date;
+  lte: Date;
+} {
+  const thisMonth = createdRangeFor("this_month", now)!;
+  return createdRangeFor("this_month", new Date(thisMonth.gte.getTime() - 1))!;
+}
+
 /** What the strip above the cards says it covers. */
 export const CREATED_RANGE_LABELS: Record<string, string> = {
   today: "today",
