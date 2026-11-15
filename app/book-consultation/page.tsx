@@ -397,7 +397,7 @@ function BookingContent() {
         <div className="mb-10 text-center">
           <Badge
             variant="outline"
-            className="mb-5 gap-2 rounded-full border-border bg-card px-4 py-1.5 text-xs font-semibold tracking-wide text-royal-gold"
+            className="mb-5 gap-2 rounded-full border-border bg-card px-4 py-1.5 text-xs font-semibold tracking-wide text-royal-gold-ink"
           >
             <CalendarIcon className="h-3.5 w-3.5" />
             SCHEDULE MEETING
@@ -410,7 +410,7 @@ function BookingContent() {
           {!TeammateName ? (
             <p className="text-sm font-light text-muted-foreground">
               Welcome,{" "}
-              <strong className="font-semibold text-royal-gold">
+              <strong className="font-semibold text-royal-gold-ink">
                 {displayName}
               </strong>
               . Please choose a convenient date and time below.
