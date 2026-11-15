@@ -43,8 +43,8 @@ const editorVariants = cva(
   },
 );
 
-type EditorContainerProps = React.ComponentProps<"div"> &
-  VariantProps<typeof editorContainerVariants>;
+type EditorContainerProps = React.ComponentProps<"div">
+  & VariantProps<typeof editorContainerVariants>;
 
 export function EditorContainer({
   className,
@@ -59,8 +59,8 @@ export function EditorContainer({
   );
 }
 
-export type EditorProps = PlateContentProps &
-  VariantProps<typeof editorVariants>;
+export type EditorProps = PlateContentProps
+  & VariantProps<typeof editorVariants>;
 
 export function Editor({
   className,
