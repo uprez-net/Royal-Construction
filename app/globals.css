@@ -472,8 +472,7 @@
     display: block;
   }
 
-  .filter-chip,
-  .btn-export {
+  .filter-chip {
     min-height: 2.75rem;
     touch-action: manipulation;
   }
@@ -1067,11 +1066,14 @@
 
 .search-box input {
   width: 100%;
+  /* The same 44px, border, radius and type size as the Sort, timeframe and
+     Export controls beside it (the shared ListSortMenu is h-11). */
+  min-height: 2.75rem;
   padding: 0.4375rem 0.75rem 0.4375rem 2rem;
-  border: 1px solid oklch(0.584 0.118 183.6);
-  border-radius: 0.5rem;
-  font-size: 0.8125rem;
-  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem;
+  background: var(--background);
   color: var(--foreground);
   transition: all 0.2s;
   font-family: inherit;
@@ -1131,27 +1133,6 @@
   color: var(--royal-gold);
   border: none;
   font-weight: 600;
-}
-
-.btn-export {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3125rem;
-  padding: 0.375rem 0.875rem;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  font-weight: 500;
-  cursor: pointer;
-  font-family: inherit;
-  transition: color 0.2s;
-  flex-shrink: 0;
-  order: 3;
-}
-
-.btn-export:hover {
-  color: var(--leads-primary);
 }
 
 /* These rules are unlayered, so they outrank the Tailwind `flex-1` on the
@@ -1930,11 +1911,6 @@
     font-size: 0.75rem;
     font-weight: 700;
     cursor: pointer;
-  }
-
-  .btn-export {
-    order: 3;
-    align-self: flex-start;
   }
 
   .pipeline-col {

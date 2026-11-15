@@ -579,16 +579,16 @@ function LeadsWorkspace() {
                   onClick={() => handleTabChange(key)}
                   onKeyDown={(event) => handleViewTabKeyDown(event, index)}
                   className={cn(
-                    "group relative inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-sm font-semibold transition-colors duration-200 sm:min-h-9 sm:text-[12.5px]",
+                    "group relative inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-colors duration-200 sm:text-[12.5px]",
                     activeTab === key
-                      ? "bg-teal-50 text-teal-700 shadow-sm"
+                      ? "bg-royal-gold/15 text-royal-gold-ink shadow-sm"
                       : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                   )}
                 >
                   <Icon className="size-4" aria-hidden="true" />
                   <span>{label}</span>
                   {activeTab === key && (
-                    <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-teal-600" />
+                    <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-royal-gold-ink" />
                   )}
                 </button>
               ))}
@@ -608,7 +608,7 @@ function LeadsWorkspace() {
                 >
                   <SelectTrigger
                     aria-label="Filter by timeframe"
-                    className="h-9 flex-1 rounded-full sm:flex-none border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold"
+                    className="data-[size=default]:h-11 flex-1 rounded-lg border-border bg-background text-sm font-medium text-foreground shadow-none hover:bg-muted sm:flex-none"
                   >
                     <SelectValue placeholder="Select timeframe" />
                   </SelectTrigger>
@@ -647,10 +647,15 @@ function LeadsWorkspace() {
                       : ""}
                   </p>
                 </div>
-                <button className="btn-export" onClick={handleExport}>
-                  <Download size={14} />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="order-3 h-11 shrink-0"
+                  onClick={handleExport}
+                >
+                  <Download data-icon="inline-start" aria-hidden="true" />
                   Export
-                </button>
+                </Button>
               </div>
             )}
           </div>
