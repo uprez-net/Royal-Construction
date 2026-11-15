@@ -165,6 +165,7 @@ function LeadsWorkspace() {
     loadData,
     refreshLeadsData,
     refreshStats,
+    statsStale,
     updateLeadInList,
     removeLeadFromList,
     replaceLeads,
@@ -359,9 +360,29 @@ function LeadsWorkspace() {
     viewTabRefs.current[next]?.focus();
   };
 
+  // A chip narrows the list you are on, search included.
   const handleMetricClick = (metric: string | null) => {
     setActiveTab("table");
     updateListParams({ status: metric, page: null });
+  };
+
+  // A card shows the cohort its number counts, and the number ignores the
+  // search box, so a card click drops the search too. Left in, "Open leads 12"
+  // opened a list of the two that matched "Smith".
+  //
+  // Done as a search request for "": the box going empty makes the search
+  // effect ask for ?query= to be cleared, and until this replace lands the URL
+  // still shows the old query, so that second replace was built from stale
+  // params and wiped the card's own filter. Marking this one as the request in
+  // flight is what tells the effect there is nothing left to do (#465).
+  const handleCardClick = (metric: string) => {
+    setSearchTerm("");
+    setActiveTab("table");
+    startSearchNavigation(() => {
+      requestedQueryRef.current = "";
+      updateListParams({ status: metric, query: null, page: null });
+      requestedNavigationRef.current = navigationCountRef.current;
+    });
   };
 
   const hasFilters = activeMetric !== null || activeFilterTiming !== "all";
@@ -546,10 +567,31 @@ function LeadsWorkspace() {
         <>
           {/* Six cards stacked three rows deep pushed the list itself below
               the fold on a phone; there they scroll sideways instead. */}
-          <p className="-mb-1 text-xs text-muted-foreground">
-            {createdRangeCaption(activeFilterTiming)}. Win rate is always the
-            last 90 days.
-          </p>
+          {statsStale ? (
+            <p
+              role="alert"
+              className="-mb-1 flex flex-wrap items-center gap-2 text-xs text-destructive-ink"
+            >
+              The cards could not be reloaded and may not match the timeframe
+              above.
+              <button
+                type="button"
+                className="font-medium underline underline-offset-4"
+                onClick={() =>
+                  refreshStats(activeFilterTiming).catch((err: unknown) => {
+                    console.error("Failed to refresh lead stats", err);
+                  })
+                }
+              >
+                Try again
+              </button>
+            </p>
+          ) : (
+            <p className="-mb-1 text-xs text-muted-foreground">
+              {createdRangeCaption(activeFilterTiming)}. Win rate is always the
+              last 90 days.
+            </p>
+          )}
           <div
             className={cn(
               MOBILE_METRIC_STRIP_CLASS,
@@ -562,7 +604,7 @@ function LeadsWorkspace() {
               note="Not won, lost or archived"
               tone="primary"
               icon={UserPlus}
-              onClick={() => handleMetricClick("open")}
+              onClick={() => handleCardClick("open")}
               active={activeMetric === "open"}
             />
             <LeadMetricCard
@@ -571,7 +613,7 @@ function LeadsWorkspace() {
               note="Fresh and contacted leads"
               tone="info"
               icon={Sparkles}
-              onClick={() => handleMetricClick("New,Contacted")}
+              onClick={() => handleCardClick("New,Contacted")}
               active={activeMetric === "New,Contacted"}
             />
             <LeadMetricCard
@@ -580,7 +622,7 @@ function LeadsWorkspace() {
               note="Leads with active quotations"
               tone="badge"
               icon={FileText}
-              onClick={() => handleMetricClick("Quoted")}
+              onClick={() => handleCardClick("Quoted")}
               active={activeMetric === "Quoted"}
             />
             <LeadMetricCard
