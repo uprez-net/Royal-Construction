@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { leadDetailHref } from "@/components/leads/leads-list-url";
+import Link from "next/link";
 import { Lead } from "@/lib/leads/types";
 import { useAvailableUsers } from "@/hooks/use-available-users";
 import {
@@ -310,7 +311,23 @@ export default function TableView({
                               <span className="urgent-dot inline-block size-2 rounded-full bg-rose-600 animate-pulse" />
                             )}
                             <div className="cell-name-text">
-                              <strong>{lead.name}</strong>
+                              <strong>
+                                {/* The row opens the lead on click, which a
+                                    keyboard cannot do; this is the same
+                                    destination as a real link. The ring is
+                                    drawn inside: the cell clips overflow. */}
+                                <Link
+                                  href={leadDetailHref(
+                                    lead.id,
+                                    searchParams.toString(),
+                                  )}
+                                  prefetch={false}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="rounded-sm text-inherit hover:underline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                                >
+                                  {lead.name}
+                                </Link>
+                              </strong>
                               <small>{lead.email}</small>
                               {lead.secondaryName ? (
                                 <small className="text-muted-foreground/80">
@@ -371,15 +388,18 @@ export default function TableView({
                               <span>Assign</span>
                             </button>
                           ) : (
-                            <span
-                              className="assigned-name cursor-pointer transition-colors hover:text-royal-gold"
+                            <button
+                              type="button"
+                              className="assigned-name cursor-pointer rounded-sm bg-transparent p-0 text-left transition-colors hover:text-royal-gold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                              aria-label={`Reassign ${lead.name}, assigned to ${lead.assignedUser?.name ?? "someone"}`}
+                              title="Reassign Lead"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setAssignedLead(lead);
                               }}
                             >
                               {lead.assignedUser?.name}
-                            </span>
+                            </button>
                           )}
                         </td>
                         <td className="col-actions">

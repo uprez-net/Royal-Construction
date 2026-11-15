@@ -162,21 +162,28 @@ export function NotificationItem({
     dispatch(openModal({ type: "certifierExtract", payload }));
   };
 
+  const openNotification = () => {
+    if (url) {
+      // nice UX: mark read when user engages
+      if (!n.isRead) handleMarkOne(n.id);
+      // If it's an internal link, use router.push for faster navigation
+      if (target === "_self") {
+        router.push(cleanUrl(url));
+      } else {
+        window.open(cleanUrl(url), target, "noopener,noreferrer");
+      }
+      close();
+    }
+  };
+  // The whole card is clickable for a mouse, but a <div onClick> is not
+  // reachable from the keyboard, so a notification with a real destination
+  // also gets its title as a button (#442). Not for the "#" placeholder a
+  // notification without a link falls back to: there is nothing to open.
+  const hasDestination = Boolean(n.redirect?.url);
+
   return (
     <div
-      onClick={() => {
-        if (url) {
-          // nice UX: mark read when user engages
-          if (!n.isRead) handleMarkOne(n.id);
-          // If it's an internal link, use router.push for faster navigation
-          if (target === "_self") {
-            router.push(cleanUrl(url));
-          } else {
-            window.open(cleanUrl(url), target, "noopener,noreferrer");
-          }
-          close();
-        }
-      }}
+      onClick={openNotification}
       key={n.id}
       className={cn(
         "group max-w-86 rounded-2xl border p-3 transition-colors",
@@ -199,9 +206,22 @@ export function NotificationItem({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-900 wrap-break-word">
-                {title}
-              </p>
+              {hasDestination ? (
+                <button
+                  type="button"
+                  className="rounded-sm text-left text-sm font-semibold text-slate-900 wrap-break-word hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openNotification();
+                  }}
+                >
+                  {title}
+                </button>
+              ) : (
+                <p className="text-sm font-semibold text-slate-900 wrap-break-word">
+                  {title}
+                </p>
+              )}
               {createdAt && (
                 <p className="mt-0.5 text-[11px] text-slate-500">
                   {formatDistanceToNowStrict(createdAt, {
@@ -217,7 +237,7 @@ export function NotificationItem({
                 each button because a disabled Button has pointer-events:none
                 and its click lands on this wrapper instead. */}
             <div
-              className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+              className="flex items-center gap-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
               onClick={(e) => e.stopPropagation()}
             >
               <Tooltip>

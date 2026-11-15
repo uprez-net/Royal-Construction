@@ -51,6 +51,8 @@ export function TradieDirectoryModal({
 
         <div className="space-y-4">
           <input
+            type="search"
+            aria-label="Search the tradie directory"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search name, company, or trade type"

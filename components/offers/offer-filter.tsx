@@ -1,4 +1,5 @@
 "use client";
+import { ResultStatus } from "@/components/common/result-status";
 import { CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Search } from "lucide-react";
@@ -184,12 +185,13 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
               KPI total — that's what `offers.totalCount` holds after a fetch,
               and it is what the pagination footer divides up. Hidden until the
               store holds a result: before that it is the empty initial state,
-              and a hard reload flashed "0 results". */}
-          {hydrated ? (
-            <p className="ml-auto whitespace-nowrap text-[12px] font-medium text-muted-foreground">
-              {offers.totalCount} results
-            </p>
-          ) : null}
+              and a hard reload flashed "0 results". Always mounted, so the new
+              count is announced when a search or filter changes it (#441). */}
+          <ResultStatus
+            count={hydrated ? offers.totalCount : null}
+            noun="result"
+            className="ml-auto whitespace-nowrap text-[12px] font-medium text-muted-foreground"
+          />
         </div>
       </div>
     </CardHeader>

@@ -3,6 +3,7 @@ import { setQuery } from "@/lib/store/slices/tradieManagementSlice";
 import { useMemo } from "react";
 import { HardHat } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ResultStatus } from "@/components/common/result-status";
 import type { TradieRow, TradieTableQuery } from "@/types/tradie";
 import { TradieCategory } from "./tabs/tradie-category";
 import { TradieTable } from "./tabs/tradie-table";
@@ -116,6 +117,13 @@ export function TradieBody() {
     }
   })();
 
+  // Both views list the same people, so one count serves both. Counted over
+  // what survives the filters, since that is what changed on screen. Null until
+  // the store holds tradies: it is seeded from the server props in an effect,
+  // so the first render is empty and must not announce "No tradies found". A
+  // directory with no tradies at all shows its own empty state instead.
+  const visibleCount = tradies.length === 0 ? null : filteredTradies.length;
+
   return (
     <div
       role="tabpanel"
@@ -124,6 +132,7 @@ export function TradieBody() {
       tabIndex={0}
       className="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
+      <ResultStatus count={visibleCount} noun="tradie" className="sr-only" />
       {panel}
     </div>
   );

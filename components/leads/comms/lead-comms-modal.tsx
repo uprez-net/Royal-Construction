@@ -41,7 +41,7 @@ export function LeadCommsModal({
         onValueChange={(value) => setTab(value as LeadCommsTab)}
         className="flex h-[min(70dvh,620px)] min-h-0 flex-col gap-4"
       >
-        <TabsList className="self-start">
+        <TabsList aria-label="Communication type" className="self-start">
           <TabsTrigger value="calls">
             <Phone className="size-4" aria-hidden="true" />
             Calls
