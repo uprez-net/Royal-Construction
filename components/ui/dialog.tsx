@@ -59,11 +59,43 @@ function isPhoneDock(target: EventTarget | null): boolean {
   );
 }
 
+// The last focus target outside every dialog and menu. Radix returns focus on
+// close only to a DialogTrigger, which a dialog opened from state (the modal
+// manager) does not have, and a field that takes focus on mount (autoFocus) has
+// already moved focus before Radix records what to return to. Tracking focus as
+// it happens is the only point that sees the opener in both cases. A menu item
+// unmounts when its menu closes, so the menu's trigger is what is kept.
+let lastFocusOutsideDialog: HTMLElement | null = null;
+if (typeof document !== "undefined") {
+  const outside = (target: EventTarget | null): target is HTMLElement =>
+    target instanceof HTMLElement
+    && !target.closest('[role="dialog"], [role="alertdialog"], [role="menu"]');
+  document.addEventListener(
+    "focusin",
+    (event) => {
+      if (outside(event.target)) lastFocusOutsideDialog = event.target;
+    },
+    true,
+  );
+  // Focus leaving for nothing (a click on something that takes no focus, as
+  // Safari does with buttons) must not leave an old element to be focused later.
+  document.addEventListener(
+    "focusout",
+    (event) => {
+      if (outside(event.target) && event.relatedTarget === null) {
+        lastFocusOutsideDialog = null;
+      }
+    },
+    true,
+  );
+}
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
   onInteractOutside,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
@@ -73,6 +105,23 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event);
+          if (event.defaultPrevented) return;
+          // Radix runs its own return (the trigger, if there is one) right after
+          // this handler. Checked a microtask later: only when that left focus
+          // on nothing, and only if the opener is still on the page.
+          const opener = lastFocusOutsideDialog;
+          queueMicrotask(() => {
+            const active = document.activeElement;
+            if (
+              opener?.isConnected
+              && (active === null || active === document.body)
+            ) {
+              opener.focus();
+            }
+          });
+        }}
         onInteractOutside={(event) => {
           if (isPhoneDock(event.target)) event.preventDefault();
           onInteractOutside?.(event);

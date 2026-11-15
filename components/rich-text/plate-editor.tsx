@@ -25,7 +25,7 @@ const editorContainerVariants = cva(
 const editorVariants = cva(
   cn(
     "group/editor relative w-full cursor-text select-text overflow-x-hidden whitespace-pre-wrap break-words",
-    "rounded-none focus-visible:outline-none [&_a]:text-[#0D9488] [&_a]:underline [&_strong]:font-bold",
+    "rounded-none focus-visible:outline-none [&_a]:text-royal-gold-ink [&_a]:underline [&_strong]:font-bold",
   ),
   {
     defaultVariants: {
@@ -43,8 +43,8 @@ const editorVariants = cva(
   },
 );
 
-type EditorContainerProps = React.ComponentProps<"div"> &
-  VariantProps<typeof editorContainerVariants>;
+type EditorContainerProps = React.ComponentProps<"div">
+  & VariantProps<typeof editorContainerVariants>;
 
 export function EditorContainer({
   className,
@@ -59,8 +59,8 @@ export function EditorContainer({
   );
 }
 
-export type EditorProps = PlateContentProps &
-  VariantProps<typeof editorVariants>;
+export type EditorProps = PlateContentProps
+  & VariantProps<typeof editorVariants>;
 
 export function Editor({
   className,
