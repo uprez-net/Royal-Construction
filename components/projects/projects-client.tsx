@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -561,7 +560,7 @@ function ProjectsWorkspace({
                     ? [...TABLE_ALIGN, "start"]
                     : [...TABLE_ALIGN]
                 }
-                caption="Active projects, with budget, spend, progress and delivery status. Select a row to open its quick view."
+                caption="Active projects, with budget, spend, progress and delivery status. Select a project to open its quick view."
                 rowLabel={(rowIndex) =>
                   `Open ${visibleProjects[rowIndex]?.name ?? "project"}`
                 }
@@ -575,17 +574,18 @@ function ProjectsWorkspace({
                   const status = projectStatusConfig(project.status);
 
                   return [
-                    <Link
+                    <button
                       key={`name-${project.id}`}
-                      href={projectDetailHref(
-                        project.id,
-                        searchParams.toString(),
-                      )}
-                      className="font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                      onClick={(event) => event.stopPropagation()}
+                      type="button"
+                      className="rounded-sm text-left font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      // The row opens the same quick view; this is the keyboard route to it.
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openQuickView(project, role === "ADMIN");
+                      }}
                     >
                       {project.name}
-                    </Link>,
+                    </button>,
                     <span key={`client-${project.id}`}>
                       {project.customer.name}
                     </span>,
