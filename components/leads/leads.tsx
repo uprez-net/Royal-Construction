@@ -581,14 +581,14 @@ function LeadsWorkspace() {
                   className={cn(
                     "group relative inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-colors duration-200 sm:text-[12.5px]",
                     activeTab === key
-                      ? "bg-teal-50 text-teal-700 shadow-sm"
+                      ? "bg-royal-gold/15 text-royal-gold-ink shadow-sm"
                       : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                   )}
                 >
                   <Icon className="size-4" aria-hidden="true" />
                   <span>{label}</span>
                   {activeTab === key && (
-                    <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-teal-600" />
+                    <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-royal-gold-ink" />
                   )}
                 </button>
               ))}
