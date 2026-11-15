@@ -142,7 +142,14 @@ export function useLeadsData() {
   // True when the cards could not be reloaded for the timeframe on screen, so
   // the page can say they may be out of date instead of captioning old numbers
   // as the new timeframe.
-  const [statsStale, setStatsStale] = useState(false);
+  const [statsStale, setStatsStaleState] = useState(false);
+  // Mirrors statsStale for async code that has to ask whether a card failure
+  // is still the current one (a state value in a closure would be stale).
+  const statsStaleRef = useRef(false);
+  const setStatsStale = useCallback((stale: boolean) => {
+    statsStaleRef.current = stale;
+    setStatsStaleState(stale);
+  }, []);
   const refreshStats = useCallback(
     async (filterTiming?: string) => {
       // No follow-up stats here any more. The Follow-ups tab derives its counts
@@ -159,7 +166,7 @@ export function useLeadsData() {
         throw err;
       }
     },
-    [statsLoader],
+    [statsLoader, setStatsStale],
   );
 
   /**
@@ -266,7 +273,10 @@ export function useLeadsData() {
         const cardFailures = cardFailure ? [cardFailure.reason] : [];
         if (cardFailures.length > 0) {
           console.error(...cardFailures);
-          setError("Failed to load leads data");
+          // Only while it is still the current answer: a newer load of the
+          // cards may have succeeded while the table was pending, and the page
+          // error would then replace a workspace whose cards are fine.
+          if (statsStaleRef.current) setError("Failed to load leads data");
         }
         if (run !== leadsRun.current) return null;
         if (leadsResult.status === "rejected") {
@@ -282,13 +292,13 @@ export function useLeadsData() {
           total: leadsData.totalCount,
           totalPages: leadsData.totalPages,
         });
-        if (cardFailures.length === 0) setError(null);
+        if (cardFailures.length === 0 || !statsStaleRef.current) setError(null);
         return leadsData.page;
       } finally {
         setLoading(false);
       }
     },
-    [statsLoader],
+    [statsLoader, setStatsStale],
   );
 
   /* ── Mutations ── */
