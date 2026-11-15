@@ -1,6 +1,7 @@
 import { useAppDispatch } from "@/lib/store/hooks";
 import { ProjectWithStats } from "@/types/project";
 import { DataTable } from "../common/data-table";
+import Link from "next/link";
 import { Badge } from "../ui/badge";
 import { formatStatus } from "@/utils/formatters";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -54,13 +55,6 @@ export function DashboardProjectTable({
 }: DashboardProjectTableProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const openProject = (project: ProjectWithStats) =>
-    dispatch(
-      openModal({
-        type: "projectDetail",
-        payload: { project, isAdmin: isAdmin },
-      }),
-    );
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(pageInfo.currentPage);
   const paginationItems = useMemo(() => {
@@ -145,17 +139,13 @@ export function DashboardProjectTable({
           ]}
           rows={projects.map((project) => [
             <div key={`name-${project.id}`}>
-              <button
-                type="button"
-                className="rounded-sm text-left font-medium text-teal-600 hover:text-teal-700 hover:underline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
-                onClick={(event) => {
-                  // The row opens the same quick view; this is the keyboard route to it.
-                  event.stopPropagation();
-                  openProject(project);
-                }}
+              <Link
+                href={`/projects/${project.id}`}
+                className="font-medium text-teal-600 hover:text-teal-700 hover:underline"
+                onClick={(event) => event.stopPropagation()}
               >
                 {project.name}
-              </button>
+              </Link>
             </div>,
             <div key={`client-${project.id}`}>{project.customer.name}</div>,
             <div key={`loc-${project.id}`}>{project.location}</div>,
@@ -188,7 +178,14 @@ export function DashboardProjectTable({
           ])}
           onRowClick={(rowIndex) => {
             const project = projects[rowIndex];
-            if (project) openProject(project);
+            if (project) {
+              dispatch(
+                openModal({
+                  type: "projectDetail",
+                  payload: { project, isAdmin: isAdmin },
+                }),
+              );
+            }
           }}
           emptyState={
             <div className="flex flex-col items-center justify-center gap-3">
