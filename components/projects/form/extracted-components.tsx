@@ -46,7 +46,7 @@ import {
   ChevronUp,
   ChevronDown,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 // ---------------------------------------------------------------------------
 // Section metadata (icon + description) — mirrors the Project Overview tab
@@ -287,11 +287,14 @@ function FieldShell({
   label: React.ReactNode;
   unit?: string;
   isEmpty: boolean;
-  children: React.ReactNode;
+  /** Receives the id the label points at; put it on the control. */
+  children: (controlId: string) => React.ReactNode;
 }) {
+  const controlId = useId();
   return (
     <div className="space-y-1.5">
       <label
+        htmlFor={controlId}
         className={cn(
           "text-[11px] font-semibold uppercase tracking-wide text-slate-500",
           isEmpty && "text-red-500",
@@ -304,7 +307,7 @@ function FieldShell({
           </span>
         ) : null}
       </label>
-      {children}
+      {children(controlId)}
     </div>
   );
 }
@@ -327,21 +330,25 @@ function TextControl({
         value === null || value === undefined || String(value).trim() === ""
       }
     >
-      {multiline ? (
-        <Textarea
-          value={displayValue(value)}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Not specified"
-          className="min-h-20 resize-none rounded-lg border-slate-200 bg-white text-sm"
-        />
-      ) : (
-        <Input
-          value={displayValue(value)}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Not specified"
-          className="h-9 rounded-lg border-slate-200 bg-white text-sm"
-        />
-      )}
+      {(id) =>
+        multiline ? (
+          <Textarea
+            id={id}
+            value={displayValue(value)}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Not specified"
+            className="min-h-20 resize-none rounded-lg border-slate-200 bg-white text-sm"
+          />
+        ) : (
+          <Input
+            id={id}
+            value={displayValue(value)}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Not specified"
+            className="h-9 rounded-lg border-slate-200 bg-white text-sm"
+          />
+        )
+      }
     </FieldShell>
   );
 }
@@ -365,13 +372,16 @@ function NumberControl({
         value === null || value === undefined || String(value).trim() === ""
       }
     >
-      <Input
-        type="number"
-        value={displayValue(value)}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="—"
-        className="h-9 rounded-lg border-slate-200 bg-white text-sm"
-      />
+      {(id) => (
+        <Input
+          id={id}
+          type="number"
+          value={displayValue(value)}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="—"
+          className="h-9 rounded-lg border-slate-200 bg-white text-sm"
+        />
+      )}
     </FieldShell>
   );
 }
@@ -392,18 +402,21 @@ function CurrencyControl({
         value === null || value === undefined || String(value).trim() === ""
       }
     >
-      <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
-          $
-        </span>
-        <Input
-          type="number"
-          value={displayValue(value)}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="0.00"
-          className="h-9 rounded-lg border-slate-200 bg-white pl-6 text-sm"
-        />
-      </div>
+      {(id) => (
+        <div className="relative">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+            $
+          </span>
+          <Input
+            id={id}
+            type="number"
+            value={displayValue(value)}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="0.00"
+            className="h-9 rounded-lg border-slate-200 bg-white pl-6 text-sm"
+          />
+        </div>
+      )}
     </FieldShell>
   );
 }
@@ -424,18 +437,21 @@ function PercentControl({
         value === null || value === undefined || String(value).trim() === ""
       }
     >
-      <div className="relative">
-        <Input
-          type="number"
-          value={displayValue(value)}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="0"
-          className="h-9 rounded-lg border-slate-200 bg-white pr-7 text-sm"
-        />
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
-          %
-        </span>
-      </div>
+      {(id) => (
+        <div className="relative">
+          <Input
+            id={id}
+            type="number"
+            value={displayValue(value)}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="0"
+            className="h-9 rounded-lg border-slate-200 bg-white pr-7 text-sm"
+          />
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+            %
+          </span>
+        </div>
+      )}
     </FieldShell>
   );
 }
@@ -457,15 +473,18 @@ function BooleanControl({
         value === null || value === undefined || String(value).trim() === ""
       }
     >
-      <select
-        value={current}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"
-      >
-        <option value="">Unknown</option>
-        <option value="true">Yes</option>
-        <option value="false">No</option>
-      </select>
+      {(id) => (
+        <select
+          id={id}
+          value={current}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"
+        >
+          <option value="">Unknown</option>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      )}
     </FieldShell>
   );
 }
@@ -656,44 +675,47 @@ function TagListControl({
 
   return (
     <FieldShell label={label} isEmpty={isEmpty}>
-      <div className="space-y-2">
-        {values.length > 0 && (
-          <ul
-            className="grid gap-1.5 overflow-y-auto no-scrollbar pr-1 sm:grid-cols-2"
-            style={{ maxHeight }}
-          >
-            {values.map((v: string, i: number) => (
-              <TagRow
-                key={`${v}-${i}`}
-                value={v}
-                icon={icon}
-                onCommit={(nv: string) => updateAt(i, nv)}
-                onRemove={() => removeAt(i)}
-              />
-            ))}
-          </ul>
-        )}
+      {(id) => (
+        <div className="space-y-2">
+          {values.length > 0 && (
+            <ul
+              className="grid gap-1.5 overflow-y-auto no-scrollbar pr-1 sm:grid-cols-2"
+              style={{ maxHeight }}
+            >
+              {values.map((v: string, i: number) => (
+                <TagRow
+                  key={`${v}-${i}`}
+                  value={v}
+                  icon={icon}
+                  onCommit={(nv: string) => updateAt(i, nv)}
+                  onRemove={() => removeAt(i)}
+                />
+              ))}
+            </ul>
+          )}
 
-        <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-2.5 py-1.5">
-          <Plus
-            className="h-3 w-3 shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            value={draft}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setDraft(e.target.value)
-            }
-            onKeyDown={handleKeyDown}
-            onBlur={commitDraft}
-            onPaste={handlePaste}
-            placeholder={
-              values.length === 0 ? "Type and press Enter…" : "Add another…"
-            }
-            className="h-5 flex-1 border-none bg-transparent p-0 text-xs text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-0"
-          />
+          <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-2.5 py-1.5">
+            <Plus
+              className="h-3 w-3 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              id={id}
+              value={draft}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setDraft(e.target.value)
+              }
+              onKeyDown={handleKeyDown}
+              onBlur={commitDraft}
+              onPaste={handlePaste}
+              placeholder={
+                values.length === 0 ? "Type and press Enter…" : "Add another…"
+              }
+              className="h-5 flex-1 border-none bg-transparent p-0 text-xs text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-0"
+            />
+          </div>
         </div>
-      </div>
+      )}
     </FieldShell>
   );
 }

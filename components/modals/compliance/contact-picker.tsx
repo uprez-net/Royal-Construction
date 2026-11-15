@@ -65,7 +65,10 @@ export function ContactPicker({
   value,
   onChange,
   disabled,
+  id,
 }: {
+  /** Put on the trigger so a `<Label htmlFor>` focuses the picker. */
+  id?: string;
   /** The trade label to filter on — "Surveying", "Certifier". */
   trade: string;
   /** What the empty state calls this kind of firm. */
@@ -144,6 +147,7 @@ export function ContactPicker({
       <Popover open={open} onOpenChange={setOpen} modal>
         <PopoverTrigger asChild>
           <Button
+            id={id}
             type="button"
             variant="outline"
             role="combobox"
@@ -190,14 +194,6 @@ export function ContactPicker({
           <Command label={`Search ${label.toLowerCase()}s`}>
             <CommandInput placeholder={`Search ${label.toLowerCase()}s…`} />
             <CommandList>
-              <CommandEmpty>
-                {/* Two different problems, and telling them apart is the whole
-                    value of the message: an empty directory is fixed on the
-                    Tradies screen, a filtered-out search by typing less. */}
-                {options.length === 0
-                  ? `No ${label.toLowerCase()} in the directory yet. Add one under Tradies first.`
-                  : `No ${label.toLowerCase()} found.`}
-              </CommandEmpty>
               <CommandGroup>
                 {options.map((option) => (
                   <CommandItem
@@ -223,6 +219,14 @@ export function ContactPicker({
                 ))}
               </CommandGroup>
             </CommandList>
+            <CommandEmpty>
+              {/* Two different problems, and telling them apart is the whole
+                    value of the message: an empty directory is fixed on the
+                    Tradies screen, a filtered-out search by typing less. */}
+              {options.length === 0
+                ? `No ${label.toLowerCase()} in the directory yet. Add one under Tradies first.`
+                : `No ${label.toLowerCase()} found.`}
+            </CommandEmpty>
           </Command>
         </PopoverContent>
       </Popover>

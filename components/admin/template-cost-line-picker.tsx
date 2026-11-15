@@ -73,7 +73,6 @@ export function TemplateCostLinePicker({
               aria-multiselectable="true"
               aria-label="Cost schedule tasks"
             >
-              <CommandEmpty>No matching cost schedule tasks.</CommandEmpty>
               <CommandGroup heading="Cost schedule tasks">
                 {tasks.map((task) => (
                   <CommandItem
@@ -87,6 +86,7 @@ export function TemplateCostLinePicker({
                 ))}
               </CommandGroup>
             </CommandList>
+            <CommandEmpty>No matching cost schedule tasks.</CommandEmpty>
           </Command>
         </PopoverContent>
       </Popover>

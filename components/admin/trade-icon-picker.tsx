@@ -47,7 +47,11 @@ export function IconPicker({
           {compact ? null : "Icon"}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 p-2">
+      <PopoverContent
+        align="start"
+        aria-label="Select trade icon"
+        className="w-72 p-2"
+      >
         <div
           role="radiogroup"
           aria-label="Trade icon"

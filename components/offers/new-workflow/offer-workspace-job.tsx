@@ -132,7 +132,7 @@ export function JobSetupPanel({
                     onJobChange({ facade: value === "__none__" ? "" : value })
                   }
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger aria-label="Façade" className="w-full">
                     <SelectValue placeholder="Select a façade" />
                   </SelectTrigger>
                   <SelectContent>
@@ -503,9 +503,9 @@ function OwnersSection({
     // set that drives the legal documents. Refuse and say why instead (PR #124
     // review); the estimator can remove the extra directors deliberately.
     if (
-      kind === "individual" &&
-      target.kind === "company" &&
-      target.signatories.length > 1
+      kind === "individual"
+      && target.kind === "company"
+      && target.signatories.length > 1
     ) {
       setKindNotice(
         `Owner ${index + 1}: remove the extra directors first — an individual owner has a single signatory, so switching now would discard ${target.signatories.length - 1} of them.`,
@@ -548,8 +548,8 @@ function OwnersSection({
         // name was entered, leave it blank (the gate flags an empty name) rather
         // than promote the company name to a person.
         const first =
-          owner.signatories[0] ??
-          createOfferSignatory(
+          owner.signatories[0]
+          ?? createOfferSignatory(
             newOwnerId(`${owner.id}-signer`),
             OWNER_SIGNER_CAPACITY,
           );

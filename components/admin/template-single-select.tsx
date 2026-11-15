@@ -78,7 +78,6 @@ export function TemplateSingleSelect({
             aria-label={searchLabel}
           />
           <CommandList id={`${id}-options`} aria-label={searchLabel}>
-            <CommandEmpty>{emptyLabel}</CommandEmpty>
             {groups.map((group) => (
               <CommandGroup key={group ?? "default"} heading={group}>
                 {options
@@ -112,6 +111,7 @@ export function TemplateSingleSelect({
               </CommandGroup>
             ))}
           </CommandList>
+          <CommandEmpty>{emptyLabel}</CommandEmpty>
         </Command>
       </PopoverContent>
     </Popover>

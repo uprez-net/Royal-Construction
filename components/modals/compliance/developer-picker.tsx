@@ -64,7 +64,10 @@ export function DeveloperPicker({
   value,
   onChange,
   disabled = false,
+  id,
 }: {
+  /** Put on the trigger so a `<Label htmlFor>` focuses the picker. */
+  id?: string;
   council?: string | null;
   location?: string | null;
   value: DeveloperOption | null;
@@ -88,6 +91,7 @@ export function DeveloperPicker({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
+            id={id}
             type="button"
             variant="outline"
             role="combobox"
@@ -124,7 +128,6 @@ export function DeveloperPicker({
           <Command label="Search estates and developers">
             <CommandInput placeholder="Search estates and developers…" />
             <CommandList>
-              <CommandEmpty>No estate by that name.</CommandEmpty>
               <CommandGroup>
                 {options.map(({ developer, suggested }) => (
                   <CommandItem
@@ -167,6 +170,7 @@ export function DeveloperPicker({
                 ))}
               </CommandGroup>
             </CommandList>
+            <CommandEmpty>No estate by that name.</CommandEmpty>
           </Command>
         </PopoverContent>
       </Popover>
