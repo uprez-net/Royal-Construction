@@ -7,7 +7,7 @@ import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
-    "Send a reviewed opening compliance outreach to a party, resolving only project-scoped attachment IDs and recording the thread. The recipient must be a tradie from prepare_compliance_outreach's directoryContacts for that party (pass its tradieId; contactEmail only to pick one of that tradie's own addresses), or a known developerKey for the estate developer. A consultant can be engaged only for a checklist line that asks for their work. Require owner approval.",
+    "Send a reviewed opening compliance outreach to a party, resolving only project-scoped attachment IDs and recording the thread. The recipient must be a tradie from prepare_compliance_outreach's directoryContacts for that party (pass its tradieId; contactEmail only to pick one of that tradie's own addresses), or a known developerKey for the estate developer. A consultant can be engaged only for a checklist line that asks for their work. The party's standard pack is attached automatically; pass the file ids from prepare_compliance_outreach's attachments as omitAttachmentIds to leave any off. Require owner approval.",
   inputSchema: sendComplianceOutreachInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   toModelOutput: forModel,

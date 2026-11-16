@@ -51,7 +51,7 @@ import {
   isOptionalForOutreach,
   isSignedCopyType,
   PARTY_LABEL,
-  PARTY_OUTREACH_ATTACHMENTS,
+  outreachPackFiles,
   partyForDocumentType,
   SIGNED_COPY_DOCUMENTS,
   WASTE_MANAGEMENT_PLAN_PARTY,
@@ -799,17 +799,9 @@ export function ProjectComplianceTab({
      */
     checklistDocumentId?: string,
   ) => {
-    const attachmentTypes = new Set<ComplianceDocumentType>(
-      PARTY_OUTREACH_ATTACHMENTS[party],
+    const prefilled = outreachPackFiles(engagement?.documents ?? [], party).map(
+      (file) => ({ name: file.filename, url: file.url }),
     );
-    const prefilled = (engagement?.documents ?? [])
-      .filter((document) => attachmentTypes.has(document.documentType))
-      .flatMap((document) =>
-        document.files.map((file) => ({
-          name: file.filename,
-          url: file.url,
-        })),
-      );
 
     dispatch(
       openModal({

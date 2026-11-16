@@ -23,6 +23,13 @@ export type AgentOutreachDetails = {
   alertId: string | null;
   alertType: string | null;
   attachmentCount: number;
+  /**
+   * The files the email will carry, by name. Undefined while they are still
+   * being looked up, null when the lookup failed or was refused; an array
+   * (possibly empty) is the authoritative list, including the party's standard
+   * pack that no tool argument names (#366).
+   */
+  attachmentNames?: readonly string[] | null;
   body: string;
   contactEmail: string | null;
   contactName: string | null;
@@ -65,6 +72,10 @@ export function AgentOutreach({
     [onClient, outreach.body],
   );
   const missingRecipient = !outreach.contactEmail;
+  const names = outreach.attachmentNames;
+  const attachmentTotal = Array.isArray(names)
+    ? names.length
+    : outreach.attachmentCount;
 
   useEffect(() => {
     if (!copied) return;
@@ -112,10 +123,10 @@ export function AgentOutreach({
               {outreach.daysOpen}d open
             </Badge>
           ) : null}
-          {outreach.attachmentCount > 0 ? (
+          {attachmentTotal > 0 ? (
             <Badge variant="outline">
               <Paperclip data-icon="inline-start" />
-              {outreach.attachmentCount}
+              {attachmentTotal}
             </Badge>
           ) : null}
         </div>
@@ -143,6 +154,29 @@ export function AgentOutreach({
             <span className="font-semibold wrap-break-word text-foreground">
               {outreach.subject}
             </span>
+          </Row>
+        ) : null}
+        {names !== undefined ? (
+          <Row label="Files">
+            {Array.isArray(names) ? (
+              names.length > 0 ? (
+                <ul className="flex flex-col gap-0.5 text-foreground">
+                  {names.map((name, index) => (
+                    <li className="wrap-break-word" key={`${index}:${name}`}>
+                      {name}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <span className="text-foreground/80">No attachments</span>
+              )
+            ) : (
+              <span className="inline-flex items-center gap-1.5 font-medium text-destructive">
+                <AlertTriangle aria-hidden="true" className="size-3.5" />
+                Could not check. The party&apos;s standard document pack is
+                attached automatically.
+              </span>
+            )}
           </Row>
         ) : null}
         {outreach.alertType ? (

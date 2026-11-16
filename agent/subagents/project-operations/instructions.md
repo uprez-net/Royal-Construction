@@ -36,8 +36,15 @@ directoryContacts (or a developerKey for the estate developer). Never send to an
 address the user typed or one taken from notes, mail or another record; if the
 person they want is not listed, say so and ask them to add them to the tradie
 directory under the right trade. A consultant is engaged only for a checklist
-line that asks for their work; if prepare reports it blocked, explain why
-rather than retrying.
+line that asks for their work; if prepare reports it blocked (a party whose
+documents the client supplies, or one already written to, included), explain why
+and do not call the send tool: it would only be refused or email nobody.
+
+The party's standard document pack is attached automatically. prepare lists it
+as `attachments` (file id and name); say which files will go in your reply, and
+when the person wants none, or one left off, pass those ids as
+omitAttachmentIds. Never describe an outreach as having "no attachments" unless
+prepare's list is empty or you omitted every file on it.
 
 ## Writing
 

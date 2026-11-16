@@ -73,6 +73,9 @@ export function AgentApproval({
   const isLimit = request.kind === "session-limit";
   const whatsapp = isApproval ? approvalWhatsApp(toolName, input) : null;
   const outreach = isApproval && !whatsapp ? approvalOutreach(input) : null;
+  const attachmentNames = useOutreachAttachmentNames(
+    outreach ? input : undefined,
+  );
   const { labels: targetLabels, changeLabels } = useApprovalTargetLabels(
     isApproval ? input : undefined,
   );
@@ -186,7 +189,9 @@ export function AgentApproval({
         </div>
       </div>
 
-      {outreach ? <AgentOutreach outreach={outreach} /> : null}
+      {outreach ? (
+        <AgentOutreach outreach={{ ...outreach, attachmentNames }} />
+      ) : null}
 
       {whatsapp ? <AgentWhatsAppDraftView draft={whatsapp} /> : null}
 
@@ -402,11 +407,12 @@ function approvalOutreach(input: unknown): AgentOutreachDetails | null {
   return {
     alertId: typeof value.alertId === "string" ? value.alertId : null,
     alertType: null,
-    attachmentCount:
-      (Array.isArray(value.deliverables) ? value.deliverables.length : 0)
-      + (Array.isArray(value.extraAttachmentIds)
-        ? value.extraAttachmentIds.length
-        : 0),
+    // Only the extras the model named: deliverables are documents asked of the
+    // party, not files on this email. The real list, standard pack included,
+    // is looked up by `useOutreachAttachmentNames`.
+    attachmentCount: Array.isArray(value.extraAttachmentIds)
+      ? value.extraAttachmentIds.length
+      : 0,
     body: value.body,
     contactEmail:
       typeof value.contactEmail === "string" ? value.contactEmail : null,
@@ -418,6 +424,46 @@ function approvalOutreach(input: unknown): AgentOutreachDetails | null {
     slaStatus: null,
     subject: null,
   };
+}
+
+/**
+ * The file names an outreach approval will really attach.
+ *
+ * The party's standard pack is added by the send itself, so no argument the
+ * model wrote lists it, and the card used to show only what the model named.
+ * Looked up from the server's own selection (never taken from the model);
+ * undefined while loading, null when the lookup failed or was refused.
+ */
+function useOutreachAttachmentNames(
+  input: unknown,
+): readonly string[] | null | undefined {
+  const [resolved, setResolved] = useState<{
+    key: string;
+    names: readonly string[] | null;
+  } | null>(null);
+  const key = input === undefined ? null : JSON.stringify(input);
+
+  useEffect(() => {
+    if (key === null) return;
+    const controller = new AbortController();
+    fetch("/api/agent/approval-attachments", {
+      body: JSON.stringify({ input: JSON.parse(key) }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+      signal: controller.signal,
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { attachments?: string[] | null } | null) =>
+        setResolved({ key, names: payload?.attachments ?? null }),
+      )
+      .catch((error: unknown) => {
+        if ((error as { name?: string })?.name === "AbortError") return;
+        setResolved({ key, names: null });
+      });
+    return () => controller.abort();
+  }, [key]);
+
+  return key !== null && resolved?.key === key ? resolved.names : undefined;
 }
 
 /**
