@@ -135,3 +135,16 @@ for (const send of SENDS) {
     );
   });
 }
+
+test("Eve never tells the office the client has an envelope it cannot confirm exists (#502)", () => {
+  // A status now comes back for an unknown DocuSign outcome as well as for a
+  // recorded-but-unpersisted one. After a timeout nothing may have been
+  // created, so "the client already has this envelope" could send someone to
+  // tell a customer to sign a document they never received.
+  const operations = read("agent/lib/offer-operations.ts");
+  assert.doesNotMatch(operations, /client already has this envelope/);
+  assert.match(
+    operations,
+    /whether the envelope reached the client is not confirmed/,
+  );
+});
