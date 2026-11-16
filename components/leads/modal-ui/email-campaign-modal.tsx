@@ -13,11 +13,7 @@ import { ModalShell } from "@/components/common/modal-shell";
 import { ModalLoadingState } from "@/components/common/modal-loading-state";
 import { Lead, EmailTemplate } from "@/lib/leads/types";
 import { EMAIL_TEMPLATES } from "@/lib/leads/variables";
-import {
-  sendEmailToLead,
-  fetchAllLeads,
-  updateLead,
-} from "@/lib/leads/leads-service";
+import { sendEmailToLead, fetchAllLeads } from "@/lib/leads/leads-service";
 import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 import {
   hydrateVariable,
@@ -139,7 +135,6 @@ export function EmailCampaignModal({
     // (run, recipient) and replays rather than re-sending.
     const runId = crypto.randomUUID();
     let successCount = 0;
-    const now = new Date();
 
     try {
       // The AI template is used as written, then hydrated per recipient below.
@@ -187,38 +182,32 @@ export function EmailCampaignModal({
                 subject,
                 finalHtmlBody,
                 runId,
+                lead.id,
               );
 
               if (sent) {
                 successCount++;
-                // Both halves from one Sydney reading, as the single-send
-                // modal does. A UTC date beside a browser-local time is a day
-                // out for any campaign sent before 10am.
-                const historyEntry = {
-                  date: sydneyDateOnly(now),
-                  time: sydneyTimeOnly(now),
-                  action: "Email sent",
-                  detail: `Subject: ${subject}`,
-                  type: "email" as const,
+                // The server has already recorded this send on the lead (the
+                // lead id travels with it), so nothing is saved from the
+                // browser. This copy only keeps the table in step. Stamped at
+                // this recipient's own send, both halves from one Sydney
+                // reading: a UTC date beside a browser-local time is a day out
+                // before 10am, and a campaign start time is wrong for anyone
+                // sent after midnight.
+                const sentAt = new Date();
+                return {
+                  ...lead,
+                  history: [
+                    ...lead.history,
+                    {
+                      date: sydneyDateOnly(sentAt),
+                      time: sydneyTimeOnly(sentAt),
+                      action: "Email sent",
+                      detail: `Subject: ${subject}`,
+                      type: "email" as const,
+                    },
+                  ],
                 };
-                // Persisted, not just shown: the activity feed, the offer
-                // pre-fill and the agent all read the lead's stored history.
-                // Only the new entry goes up; `[...lead.history, entry]` is
-                // what duplicated every old row in #291. The email is already
-                // out, so a failed write is logged and never turns the send
-                // into a failure (which would invite a resend).
-                try {
-                  const saved = await updateLead(lead.id, {
-                    history: [historyEntry],
-                  });
-                  if (saved) return saved;
-                } catch (error) {
-                  console.error(
-                    `Campaign email to lead ${lead.id} was sent but its history entry was not saved:`,
-                    error,
-                  );
-                }
-                return { ...lead, history: [...lead.history, historyEntry] };
               }
 
               console.error(`Failed to send email to ${lead.email}`);

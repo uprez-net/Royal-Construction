@@ -75,25 +75,30 @@ test("the preview copy no longer promises what it cannot deliver", () => {
   );
 });
 
-test("each sent campaign email is saved on its lead, in Sydney time (#297)", () => {
+test("the modal sends the lead id so the server records each send (#297)", () => {
   const source = read(CAMPAIGN);
   // The entry used to live only in the value the loop returned, so the
-  // activity feed, the offer pre-fill and the agent never saw the send.
+  // activity feed, the offer pre-fill and the agent never saw the send. The
+  // server writes it now; a browser PATCH could be lost with the tab.
   assert.ok(
-    /updateLead\(\s*lead\.id,\s*\{\s*history:\s*\[historyEntry\],?\s*\}\s*\)/.test(
+    /sendEmailToLead\(\s*lead\.email,\s*subject,\s*finalHtmlBody,\s*runId,\s*lead\.id,?\s*\)/.test(
       source,
     ),
-    "a sent campaign email is not persisted as exactly the one new entry",
+    "the campaign send does not pass the lead id to be recorded server-side",
   );
   assert.ok(
-    !/\[\.\.\.lead\.history,\s*historyEntry\][\s\S]*updateLead/.test(source),
-    "updateLead must get only the new entry, never the whole history",
+    !/updateLead/.test(source),
+    "the modal saves history from the browser again",
   );
+});
+
+test("the table's copy of the entry is stamped at the recipient's own send, in Sydney time", () => {
+  const source = read(CAMPAIGN);
   assert.ok(
-    /date:\s*sydneyDateOnly\(now\)[\s\S]*?time:\s*sydneyTimeOnly\(now\)/.test(
+    /if \(sent\) \{[\s\S]*?const sentAt = new Date\(\);[\s\S]*?date:\s*sydneyDateOnly\(sentAt\)[\s\S]*?time:\s*sydneyTimeOnly\(sentAt\)/.test(
       source,
     ),
-    "the history date and time are not both read as Sydney",
+    "the entry is not stamped inside the successful-send branch, as Sydney",
   );
   assert.ok(
     !/toISOString\(\)\.slice\(0, 10\)|toTimeString\(\)/.test(source),
