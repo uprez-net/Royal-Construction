@@ -323,3 +323,30 @@ describe("no route answers 500 in silence", () => {
     );
   });
 });
+
+describe("a failed project list read is not an empty list (#486)", () => {
+  test("getProjects lets the read error through instead of answering an empty page", () => {
+    const source = read("lib/data/projects.ts");
+    const body = source.slice(
+      source.indexOf("export async function getProjects("),
+      source.indexOf("export async function getProjectsPage("),
+    );
+    assert.doesNotMatch(body, /catch/);
+    assert.doesNotMatch(body, /items:\s*\[\]/);
+  });
+
+  test("the list route answers 500 PROJECTS_FETCH_FAILED when the read fails", () => {
+    const source = read("app/api/(data)/projects/route.ts");
+    assert.match(
+      source,
+      /const refusal = domainErrorResponse\(error\);\s*if \(refusal\) return refusal;\s*console\.error\("Error fetching projects:", error\);\s*return errorResponse\("Failed to load projects", \{\s*status: 500,\s*code: "PROJECTS_FETCH_FAILED"/,
+    );
+  });
+
+  test("the Projects page reads through getProjectsPage and hands the client listFailed", () => {
+    const source = read("app/(main)/projects/page.tsx");
+    assert.match(source, /getProjectsPage\(projectsListQuery/);
+    assert.match(source, /listFailed=\{projectsResult\.failed\}/);
+    assert.doesNotMatch(source, /\bgetProjects\(/);
+  });
+});
