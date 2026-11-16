@@ -64,7 +64,7 @@ function OverdueProjectRow({
                 : formatStatus(project.status)}
             </StatusPill>
           </div>
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             <span className="font-medium text-foreground">{worst.name}</span>
             {" · due "}
             {formatSydneyDate(new Date(worst.expectedCompletion))}

@@ -240,7 +240,7 @@ function FollowUpRow({
             <StatusPill tone="success">Followed up</StatusPill>
           )}
         </div>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {alert.projectAddress || "No site address on the lead"}
           {" · "}Sent {formatSydneyDate(new Date(alert.sentAt))}
           {" · "}
