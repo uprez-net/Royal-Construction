@@ -29,7 +29,6 @@ import {
   type LeadListParams,
 } from "@/hooks/use-leads-data";
 import { currency } from "@/utils/formatters";
-import { createdRangeCaption } from "@/lib/leads/created-range";
 import { emptyLeadsMessage } from "@/lib/leads/empty-state";
 import { OFFER_OUT_STAGE_LABELS } from "@/lib/leads/types";
 import { useToast, ToastContainer } from "@/components/common/use-toast";
@@ -592,13 +591,7 @@ function LeadsWorkspace() {
                 Try again
               </button>
             </p>
-          ) : (
-            <p className="-mb-1 text-xs text-muted-foreground">
-              {createdRangeCaption(activeFilterTiming)}. New leads counts
-              calendar months; overdue follow-ups and win rate ignore the
-              timeframe.
-            </p>
-          )}
+          ) : null}
           <div
             className={cn(
               MOBILE_METRIC_STRIP_CLASS,
@@ -654,7 +647,7 @@ function LeadsWorkspace() {
             <LeadMetricCard
               label="Overdue follow-ups"
               value={String(stats.overdueTasks)}
-              note="Open tasks past their due date, on the Tasks tab"
+              note="Open tasks past due · all time · on the Tasks tab"
               tone="danger"
               icon={Clock}
               noteWraps

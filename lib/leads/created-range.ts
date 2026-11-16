@@ -71,21 +71,3 @@ export function previousMonthRange(now: Date = new Date()): {
   const thisMonth = createdRangeFor("this_month", now)!;
   return createdRangeFor("this_month", new Date(thisMonth.gte.getTime() - 1))!;
 }
-
-/** What the strip above the cards says it covers. */
-export const CREATED_RANGE_LABELS: Record<string, string> = {
-  today: "today",
-  this_week: "this week",
-  this_month: "this month",
-  quarter: "this quarter",
-  this_year: "this year",
-};
-
-/** "Leads created this month", or the all-time wording. */
-export function createdRangeCaption(filterTiming: string | undefined): string {
-  const label =
-    filterTiming && filterTiming !== "all"
-      ? (CREATED_RANGE_LABELS[filterTiming] ?? CREATED_RANGE_LABELS.today)
-      : null;
-  return label ? `Leads created ${label}` : "All leads, whenever created";
-}

@@ -2,12 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 import { LeadStage as DBLeadStage } from "@prisma/client";
 
-import {
-  CREATED_RANGE_LABELS,
-  createdRangeCaption,
-  createdRangeFor,
-  previousMonthRange,
-} from "@/lib/leads/created-range";
+import { createdRangeFor, previousMonthRange } from "@/lib/leads/created-range";
 import { emptyLeadsMessage } from "@/lib/leads/empty-state";
 import {
   countLeadsWithoutValue,
@@ -61,15 +56,6 @@ test("an unknown timeframe is read as today, as the table always has", () => {
     iso(createdRangeFor("fortnight", NOW)),
     iso(createdRangeFor("today", NOW)),
   );
-});
-
-test("the strip above the cards names the timeframe", () => {
-  assert.equal(createdRangeCaption("all"), "All leads, whenever created");
-  assert.equal(createdRangeCaption(undefined), "All leads, whenever created");
-  assert.equal(createdRangeCaption("this_month"), "Leads created this month");
-  for (const key of Object.keys(CREATED_RANGE_LABELS)) {
-    assert.match(createdRangeCaption(key), /^Leads created /);
-  }
 });
 
 test("Open leads is every stage that is not closed, and the card and its click use the same list", () => {
