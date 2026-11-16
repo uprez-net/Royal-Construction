@@ -9,6 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/common/data-table";
+import {
+  FLUSH_TABLE_CARD_CLASS,
+  FLUSH_TABLE_CONTENT_CLASS,
+} from "@/components/ui/table-styles";
+import { cn } from "@/lib/utils";
 import { FilterSelect } from "@/components/common/filter-select";
 import {
   FILE_KIND_ICON,
@@ -363,7 +368,12 @@ export function LeadDocumentsTab({
         </CardContent>
       </Card>
 
-      <Card className="rounded-xl border-border/70 bg-card shadow-sm">
+      <Card
+        className={cn(
+          "rounded-xl border-border/70 bg-card shadow-sm",
+          FLUSH_TABLE_CARD_CLASS,
+        )}
+      >
         <CardHeader className="space-y-3 border-b border-border/70 px-4 pb-4 sm:px-6">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <CardTitle
@@ -471,8 +481,9 @@ export function LeadDocumentsTab({
             </div>
           ) : null}
         </CardHeader>
-        <CardContent className="p-4">
+        <CardContent className={cn("p-4", FLUSH_TABLE_CONTENT_CLASS)}>
           <DataTable
+            flush
             mobileLayout="cards"
             mobileTitleColumn={0}
             onRowClick={openPreview}

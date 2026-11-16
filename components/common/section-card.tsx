@@ -1,6 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
+import {
+  FLUSH_TABLE_CARD_CLASS,
+  FLUSH_TABLE_CONTENT_CLASS,
+} from "@/components/ui/table-styles";
 import {
   Card,
   CardContent,
@@ -16,6 +21,7 @@ export function SectionCard({
   children,
   className,
   titleAs = "h2",
+  flush = false,
 }: {
   title: string;
   description?: string;
@@ -28,9 +34,19 @@ export function SectionCard({
    * card is nested inside another titled section, or "div" to opt out.
    */
   titleAs?: "div" | "h2" | "h3" | "h4";
+  /**
+   * The body is a flush table (`<DataTable flush>`): from md up it runs edge to
+   * edge under the header, as the Leads table does in its card.
+   */
+  flush?: boolean;
 }) {
   return (
-    <Card className={className ?? "bg-card shadow-sm"}>
+    <Card
+      className={cn(
+        className ?? "bg-card shadow-sm",
+        flush && FLUSH_TABLE_CARD_CLASS,
+      )}
+    >
       <CardHeader className="space-y-2 border-b border-border/70 pb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="min-w-0 flex-1">
@@ -49,7 +65,9 @@ export function SectionCard({
           {action ? <div className="shrink-0 self-start">{action}</div> : null}
         </div>
       </CardHeader>
-      <CardContent className="pt-5">{children}</CardContent>
+      <CardContent className={cn("pt-5", flush && FLUSH_TABLE_CONTENT_CLASS)}>
+        {children}
+      </CardContent>
     </Card>
   );
 }

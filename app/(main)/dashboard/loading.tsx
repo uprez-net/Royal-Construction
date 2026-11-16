@@ -43,7 +43,7 @@ export default function DashboardSkeleton() {
       </div>
 
       <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
-        <div className="flex flex-col gap-4 border-b px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-4 border-b px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
             <Skeleton className="h-4 w-48" />
             <Skeleton className="h-3 w-64 max-w-full" />
@@ -53,51 +53,33 @@ export default function DashboardSkeleton() {
             <Skeleton className="h-10 w-24 rounded-lg" />
           </div>
         </div>
-        <div className="p-4 sm:p-5">
-          <DataTableSkeleton columnCount={7} />
+        <div className="space-y-4 p-4 md:p-0">
+          <DataTableSkeleton columnCount={7} flush />
+          <div className="flex flex-col items-center gap-3 pt-2 md:px-4 md:pb-4">
+            <Skeleton className="h-4 w-40 max-w-full" />
+            <Skeleton className="h-9 w-64 max-w-full rounded-md" />
+          </div>
         </div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)]">
         <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
-          <div className="flex items-center justify-between border-b px-5 py-4">
+          <div className="flex items-center justify-between border-b px-4 py-4">
             <Skeleton className="h-4 w-52" />
             <Skeleton className="h-8 w-24 rounded-md" />
           </div>
-          <div className="overflow-x-auto p-5">
-            <div className="min-w-[480px] overflow-hidden rounded-lg border">
-              <div className="grid grid-cols-5 gap-4 border-b bg-muted/40 px-4 py-4">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} className="h-4 w-20" />
-                ))}
-              </div>
-              <div className="space-y-4 p-4">
-                {Array.from({ length: 4 }).map((_, row) => (
-                  <div
-                    key={row}
-                    className="grid grid-cols-5 items-center gap-4"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="size-10 rounded-full" />
-                      <Skeleton className="h-4 w-28" />
-                    </div>
-                    <Skeleton className="h-4 w-12" />
-                    <Skeleton className="h-4 w-20" />
-                    <Skeleton className="h-4 w-16" />
-                    <div className="flex gap-1">
-                      {Array.from({ length: 5 }).map((_, star) => (
-                        <Skeleton key={star} className="size-4 rounded-sm" />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <div className="p-4 md:p-0">
+            <DataTableSkeleton
+              columnCount={5}
+              rowCount={4}
+              mobileColumns={1}
+              flush
+            />
           </div>
         </div>
 
         <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
-          <div className="flex items-center justify-between border-b px-5 py-4">
+          <div className="flex items-center justify-between border-b px-4 py-4">
             <Skeleton className="h-4 w-40" />
             <Skeleton className="h-6 w-16 rounded-full" />
           </div>

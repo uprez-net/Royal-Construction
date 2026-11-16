@@ -6,6 +6,11 @@ import {
   PageSkeleton,
   Skeleton,
 } from "@/components/ui/skeleton";
+import {
+  FLUSH_TABLE_CARD_CLASS,
+  FLUSH_TABLE_CONTENT_CLASS,
+} from "@/components/ui/table-styles";
+import { cn } from "@/lib/utils";
 
 export default function ProjectsLoading() {
   return (
@@ -21,8 +26,13 @@ export default function ProjectsLoading() {
           <MetricCardSkeleton key={i} />
         ))}
       </KpiBand>
-      <div className="overflow-hidden rounded-xl bg-card py-4 shadow-sm ring-1 ring-foreground/4">
-        <div className="space-y-3 border-b border-border/70 px-6 pb-4">
+      <div
+        className={cn(
+          "flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 shadow-sm ring-1 ring-foreground/4",
+          FLUSH_TABLE_CARD_CLASS,
+        )}
+      >
+        <div className="space-y-3 border-b border-border/70 px-4 pb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
             <div className="min-w-0 space-y-2">
               <Skeleton className="h-6 w-48" />
@@ -34,18 +44,24 @@ export default function ProjectsLoading() {
             </div>
           </div>
         </div>
-        <div className="space-y-4 px-6 pt-5">
-          <div className="flex flex-wrap gap-2">
-            {Array.from({ length: 7 }, (_, i) => (
-              <Skeleton key={i} className="h-11 w-24 rounded-full" />
-            ))}
+        <div className={cn("px-4 pt-5", FLUSH_TABLE_CONTENT_CLASS)}>
+          <div className="space-y-4 md:pb-4">
+            <div className="space-y-4 md:px-4 md:pt-5">
+              <div className="flex flex-wrap gap-2">
+                {Array.from({ length: 7 }, (_, i) => (
+                  <Skeleton key={i} className="h-11 w-24 rounded-full" />
+                ))}
+              </div>
+              <div className="flex flex-col gap-3 md:flex-row md:justify-between">
+                <Skeleton className="h-11 w-full md:max-w-xs" />
+                <Skeleton className="h-11 w-28" />
+              </div>
+            </div>
+            <DataTableSkeleton columnCount={7} flush />
+            <div className="md:px-4">
+              <Skeleton className="mx-auto h-11 w-60" />
+            </div>
           </div>
-          <div className="flex flex-col gap-3 md:flex-row md:justify-between">
-            <Skeleton className="h-11 w-full md:max-w-xs" />
-            <Skeleton className="h-11 w-28" />
-          </div>
-          <DataTableSkeleton columnCount={7} />
-          <Skeleton className="mx-auto h-11 w-60" />
         </div>
       </div>
     </PageSkeleton>

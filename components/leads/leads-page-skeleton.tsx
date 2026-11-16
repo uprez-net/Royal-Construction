@@ -36,7 +36,7 @@ export function LeadsContentSkeleton() {
             <Skeleton className="h-11 w-24 rounded-md sm:order-3" />
           </div>
         </div>
-        <div className="mt-5 overflow-hidden rounded-lg bg-card shadow-sm">
+        <div className="mt-5 overflow-hidden rounded-xl bg-card shadow-sm">
           <LeadsTableSkeleton />
         </div>
       </div>
@@ -46,8 +46,8 @@ export function LeadsContentSkeleton() {
 
 function LeadsTableSkeleton() {
   return (
-    <div className="p-4 sm:p-5">
-      <DataTableSkeleton columnCount={8} rowCount={5} />
+    <div className="p-4 sm:p-5 md:p-0">
+      <DataTableSkeleton columnCount={8} rowCount={5} flush />
     </div>
   );
 }

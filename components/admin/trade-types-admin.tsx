@@ -248,6 +248,7 @@ export function TradeTypesAdmin({
   return (
     <TooltipProvider>
       <SectionCard
+        flush
         title="Trades"
         description="Archiving takes a trade off the pickers; tradies already under it keep it. Only a trade with no tradies can be deleted."
         action={
@@ -266,17 +267,20 @@ export function TradeTypesAdmin({
         }
       >
         <div className="space-y-4">
-          <AddTradeType
-            disabled={isPending}
-            onAdd={(label, icon) =>
-              submit(
-                () => createTradeTypeAction({ label, icon }),
-                () => `${label} added.`,
-              )
-            }
-          />
+          <div className="md:px-4 md:pt-5">
+            <AddTradeType
+              disabled={isPending}
+              onAdd={(label, icon) =>
+                submit(
+                  () => createTradeTypeAction({ label, icon }),
+                  () => `${label} added.`,
+                )
+              }
+            />
+          </div>
 
           <DataTable
+            flush
             mobileLayout="cards"
             mobileColumns={1}
             mobileTitleColumn={1}

@@ -5,6 +5,10 @@ import { UserCell } from "../common/user-table-cell";
 
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader } from "../ui/card";
+import {
+  FLUSH_TABLE_CARD_CLASS,
+  FLUSH_TABLE_CONTENT_CLASS,
+} from "@/components/ui/table-styles";
 import { useRouter } from "next/navigation";
 
 export interface SiteManagerPerformance {
@@ -27,7 +31,7 @@ export function DashboardSiteManagerTable({
 }: DashboardSiteManagerTableProps) {
   const router = useRouter();
   return (
-    <Card>
+    <Card className={FLUSH_TABLE_CARD_CLASS}>
       <CardHeader className="flex items-center justify-between border-b border-border/60 pb-4">
         <h2 className="font-heading text-[1.0625rem] leading-[1.3] font-semibold tracking-[-0.01em] text-foreground">
           Site Manager Performance
@@ -41,8 +45,9 @@ export function DashboardSiteManagerTable({
           Manage
         </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className={FLUSH_TABLE_CONTENT_CLASS}>
         <DataTable
+          flush
           mobileLayout="cards"
           mobileColumns={1}
           headers={[

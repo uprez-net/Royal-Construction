@@ -8,6 +8,11 @@ import { ResultStatus } from "@/components/common/result-status";
 import { Search, ToolCaseIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader } from "../ui/card";
+import {
+  FLUSH_TABLE_CARD_CLASS,
+  FLUSH_TABLE_CONTENT_CLASS,
+} from "@/components/ui/table-styles";
+import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
 import { useRouter } from "next/navigation";
 import {
@@ -135,7 +140,7 @@ export function DashboardProjectTable({
   }, [currentPage, totalPages]);
 
   return (
-    <Card className="border-border/70 bg-card/95">
+    <Card className={FLUSH_TABLE_CARD_CLASS}>
       <CardHeader className="grid gap-4 border-b border-border/60 pb-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
         <div className="space-y-1">
           <h2 className="font-heading text-[1.0625rem] leading-[1.3] font-semibold tracking-[-0.01em] text-foreground">
@@ -168,7 +173,7 @@ export function DashboardProjectTable({
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className={cn("space-y-4", FLUSH_TABLE_CONTENT_CLASS)}>
         <div
           aria-busy={loading}
           className={
@@ -176,6 +181,7 @@ export function DashboardProjectTable({
           }
         >
           <DataTable
+            flush
             mobileLayout="cards"
             headers={[
               "Project",
@@ -260,7 +266,10 @@ export function DashboardProjectTable({
           />
         </div>
 
-        <div className={totalCount > 0 ? "space-y-3 pt-2" : undefined}>
+        {/* The table is flush from md up, so the footer keeps the header's inset. */}
+        <div
+          className={cn("md:px-4 md:pb-4", totalCount > 0 && "space-y-3 pt-2")}
+        >
           {loadError ? (
             <div
               role="alert"

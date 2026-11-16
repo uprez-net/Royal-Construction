@@ -48,7 +48,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DataTableSkeleton, Skeleton } from "@/components/ui/skeleton";
+import {
+  TABLE_CELL_CLASS,
+  TABLE_HEAD_CELL_CLASS,
+  TABLE_HEAD_ROW_CLASS,
+  TABLE_ROW_CLASS,
+} from "@/components/ui/table-styles";
 import {
   fetchProjectVariations,
   issueVariationAction,
@@ -598,19 +604,19 @@ function VariationsTab({ projectId }: { projectId: string }) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full caption-bottom text-sm">
+            <table className="w-full caption-bottom text-[13px]">
               <caption className="sr-only">
                 Variations, grouped by who pays for them
               </caption>
-              <thead className="bg-muted/40">
+              <thead className={TABLE_HEAD_ROW_CLASS}>
                 {table.getHeaderGroups().map((group) => (
-                  <tr key={group.id} className="border-b border-border/70">
+                  <tr key={group.id}>
                     {group.headers.map((header) => (
                       <th
                         key={header.id}
                         scope="col"
                         className={cn(
-                          "h-10 px-3 text-left align-middle text-xs font-medium uppercase tracking-wide text-muted-foreground",
+                          TABLE_HEAD_CELL_CLASS,
                           COLUMN_CLASS[header.column.id],
                         )}
                       >
@@ -631,17 +637,14 @@ function VariationsTab({ projectId }: { projectId: string }) {
                     return (
                       <tr
                         key={row.id}
-                        className={cn(
-                          "border-b border-border/70 transition-colors",
-                          style.header,
-                        )}
+                        className={cn(TABLE_ROW_CLASS, style.header)}
                       >
                         <td colSpan={columns.length} className="p-0">
                           <button
                             type="button"
                             onClick={row.getToggleExpandedHandler()}
                             aria-expanded={open}
-                            className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                            className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                           >
                             {open ? (
                               <ChevronDown
@@ -670,7 +673,7 @@ function VariationsTab({ projectId }: { projectId: string }) {
                     <Fragment key={row.id}>
                       <tr
                         className={cn(
-                          "border-b border-border/70 transition-colors hover:bg-muted/40",
+                          TABLE_ROW_CLASS,
                           GROUP[original.variation.kind].row,
                           original.variation.needsAttention
                             && "bg-destructive-light/30",
@@ -680,7 +683,8 @@ function VariationsTab({ projectId }: { projectId: string }) {
                           <td
                             key={cell.id}
                             className={cn(
-                              "px-3 py-2.5 align-top",
+                              TABLE_CELL_CLASS,
+                              "align-top",
                               COLUMN_CLASS[cell.column.id],
                             )}
                           >
@@ -757,18 +761,8 @@ function VariationsSkeleton() {
           <Skeleton className="h-6 w-40" />
           <Skeleton className="h-9 w-36" />
         </div>
-        {Array.from({ length: 5 }, (_, index) => (
-          <div
-            key={index}
-            className="flex items-center gap-4 border-b border-border/70 px-4 py-3 last:border-b-0"
-          >
-            <Skeleton className="h-4 w-12" />
-            <Skeleton className="h-4 flex-1" />
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-6 w-16 rounded-full" />
-          </div>
-        ))}
+        {/* Mirrors the variation table: nine columns, a band, flush in the card. */}
+        <DataTableSkeleton columnCount={9} mobileLayout="scroll" flush />
       </Card>
     </div>
   );

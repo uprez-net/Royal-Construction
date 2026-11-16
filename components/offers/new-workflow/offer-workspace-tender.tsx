@@ -39,6 +39,8 @@ import {
 import { EnvelopeSendConfirm, SigningTracker } from "./offer-workspace-signing";
 import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 import { cn } from "@/lib/utils";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { TABLE_SURFACE_CLASS } from "@/components/ui/table-styles";
 
 type TenderPanelProps = {
   readonly status: OfferWorkspaceStatus;
@@ -511,28 +513,25 @@ function TenderPreview({
 
       <div>
         <p className={cn("mb-2", GROUP_HEADING_CLASS)}>Payment schedule</p>
-        <div className="overflow-hidden rounded-lg border border-border/70">
-          <table className="w-full text-[13px]">
-            <tbody>
+        <div className={TABLE_SURFACE_CLASS}>
+          <Table>
+            <TableBody>
               {paymentSchedule.map((row) => (
-                <tr
-                  key={row.id}
-                  className="border-b border-border/60 last:border-b-0"
-                >
-                  <td className="px-3 py-1.5 font-medium">{row.stageName}</td>
-                  <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+                <TableRow key={row.id}>
+                  <TableCell className="font-medium">{row.stageName}</TableCell>
+                  <TableCell className="text-right font-mono text-muted-foreground">
                     {formatPercent(row.percentOfContract)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono">
+                  </TableCell>
+                  <TableCell className="text-right font-mono">
                     {formatCurrency(contractValue * row.percentOfContract)}
-                  </td>
-                  <td className="px-3 py-1.5 text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="whitespace-normal text-muted-foreground">
                     {row.trigger}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </div>
 

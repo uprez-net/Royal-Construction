@@ -13,6 +13,10 @@ import {
 
 import { DataTable } from "@/components/common/data-table";
 import { METRIC_TONES, type MetricTone } from "@/components/common/metric-card";
+import {
+  FLUSH_TABLE_CARD_CLASS,
+  FLUSH_TABLE_CONTENT_CLASS,
+} from "@/components/ui/table-styles";
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -216,7 +220,12 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
         />
       </div>
 
-      <Card className="rounded-xl border-border/70 bg-card shadow-sm">
+      <Card
+        className={cn(
+          "rounded-xl border-border/70 bg-card shadow-sm",
+          FLUSH_TABLE_CARD_CLASS,
+        )}
+      >
         <CardHeader className="border-b border-border/70 pb-4">
           <CardTitle
             as="h2"
@@ -225,8 +234,9 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
             Invoices
           </CardTitle>
         </CardHeader>
-        <CardContent className="pt-5">
+        <CardContent className={cn("pt-5", FLUSH_TABLE_CONTENT_CLASS)}>
           <DataTable
+            flush
             mobileLayout="cards"
             caption={`Progress claims raised for ${project.name}`}
             headers={[

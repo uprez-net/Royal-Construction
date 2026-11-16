@@ -1,6 +1,12 @@
 import { KpiBand } from "@/components/common/kpi-band";
+import { Card, CardContent } from "@/components/ui/card";
 import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
 import { OFFER_TABLE_HEADERS } from "@/components/offers/offer-table-columns";
+import { cn } from "@/lib/utils";
+import {
+  FLUSH_TABLE_CARD_CLASS,
+  FLUSH_TABLE_CONTENT_CLASS,
+} from "@/components/ui/table-styles";
 import {
   DataTableSkeleton,
   MetricCardSkeleton,
@@ -28,8 +34,15 @@ export default function OfferPageSkeleton() {
         ))}
       </KpiBand>
 
-      <div className="rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
-        <div className="space-y-4 border-b px-5 py-4">
+      {/* Same flat card as the real table: the header strip and the table share it, flush from md up. */}
+      <Card
+        className={cn(
+          "border-border/70 bg-card/95 shadow-sm",
+          FLUSH_TABLE_CARD_CLASS,
+          "md:pt-0",
+        )}
+      >
+        <div className="space-y-4 border-b border-border/70 px-5 py-4">
           <div className="flex flex-wrap gap-2">
             {Array.from({ length: 5 }).map((_, index) => (
               <Skeleton key={index} className="h-11 w-20 rounded-md sm:h-9" />
@@ -41,10 +54,10 @@ export default function OfferPageSkeleton() {
           </div>
         </div>
 
-        <div className="overflow-x-auto px-5 py-4">
-          <DataTableSkeleton columnCount={OFFER_TABLE_HEADERS.length} />
+        <CardContent className={cn("px-5 py-4", FLUSH_TABLE_CONTENT_CLASS)}>
+          <DataTableSkeleton columnCount={OFFER_TABLE_HEADERS.length} flush />
 
-          <div className="mt-6 flex flex-col items-center gap-4">
+          <div className="mt-6 flex flex-col items-center gap-4 md:pb-4">
             <Skeleton className="h-4 w-36" />
             <div className="flex items-center gap-3">
               <Skeleton className="h-8 w-20" />
@@ -52,8 +65,8 @@ export default function OfferPageSkeleton() {
               <Skeleton className="h-8 w-16" />
             </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </PageSkeleton>
   );
 }

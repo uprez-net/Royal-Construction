@@ -682,11 +682,14 @@ function FollowupsView({
       </div>
 
       <div className="fu-card">
-        <div className="fu-list">
+        {/* fu-list's padding is unlayered CSS, so a plain md:p-0 would lose to
+            it: the task table runs edge to edge in the card from md up. */}
+        <div className="fu-list md:p-0!">
           {busy ? (
             <div role="status" aria-busy="true">
               <span className="sr-only">Loading tasks…</span>
               <DataTableSkeleton
+                flush
                 rowCount={3}
                 columnCount={6}
                 mobileColumns={1}

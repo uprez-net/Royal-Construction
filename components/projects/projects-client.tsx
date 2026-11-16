@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Download, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
+import { cn } from "@/lib/utils";
 import { DataTable } from "@/components/common/data-table";
 import { KpiBand } from "@/components/common/kpi-band";
 import { MetricCard } from "@/components/common/metric-card";
@@ -400,6 +401,9 @@ function ProjectsWorkspace({
     }
   };
 
+  // The table runs edge to edge in its flush card; the other states keep md padding.
+  const tableFlush = visibleProjects.length > 0 && view !== "grid";
+
   return (
     <div className="grid gap-6">
       <ProjectOverdueAlerts
@@ -423,6 +427,7 @@ function ProjectsWorkspace({
       <SectionCard
         title="Active projects"
         description="Select a project for a quick view, or Details for the full project page."
+        flush
         action={
           <div className="flex gap-2">
             <Button
@@ -455,36 +460,39 @@ function ProjectsWorkspace({
           </div>
         }
       >
-        <div className="space-y-4">
-          <ProjectFilters
-            kpis={kpis}
-            activeFilter={list.status}
-            onFilterChange={(status) =>
-              updateListParams({ status, page: null })
-            }
-          />
-          <ProjectToolbar
-            searchTerm={searchTerm}
-            onSearchTermChange={setSearchTerm}
-            sort={list.sort}
-            onSortChange={(sort) =>
-              updateListParams({
-                sort: sort === "name" ? null : sort,
-                page: null,
-              })
-            }
-          />
+        <div className="space-y-4 md:pb-4">
+          <div className="space-y-4 md:px-4 md:pt-5">
+            <ProjectFilters
+              kpis={kpis}
+              activeFilter={list.status}
+              onFilterChange={(status) =>
+                updateListParams({ status, page: null })
+              }
+            />
+            <ProjectToolbar
+              searchTerm={searchTerm}
+              onSearchTermChange={setSearchTerm}
+              sort={list.sort}
+              onSortChange={(sort) =>
+                updateListParams({
+                  sort: sort === "name" ? null : sort,
+                  page: null,
+                })
+              }
+            />
+          </div>
 
           {/* The list stays mounted while a refresh is in flight — dimming keeps
               scroll position, focus and context instead of replacing the
               content with a loading bar on every keystroke. */}
           <div
             aria-busy={isPageLoading}
-            className={
+            className={cn(
               isPageLoading
                 ? "opacity-60 transition-opacity motion-reduce:transition-none"
-                : "transition-opacity motion-reduce:transition-none"
-            }
+                : "transition-opacity motion-reduce:transition-none",
+              !tableFlush && "md:px-4",
+            )}
           >
             {visibleProjects.length === 0 && listFailed ? (
               <div
@@ -557,6 +565,7 @@ function ProjectsWorkspace({
                  The page-level empty state above covers both "no data" and
                  "no matches", and it offers Clear filters. */
               <DataTable
+                flush
                 mobileLayout="cards"
                 headers={
                   showAttentionColumn
@@ -663,7 +672,7 @@ function ProjectsWorkspace({
           </div>
 
           {pageInfo.totalCount > 0 ? (
-            <div className="space-y-3 pt-2">
+            <div className="space-y-3 pt-2 md:px-4">
               <div
                 className="text-center text-xs text-muted-foreground"
                 aria-live="polite"

@@ -274,8 +274,8 @@ export default function TableView({
         </div>
 
         {loading ? (
-          <PageSkeleton label="Loading leads" className="p-4 sm:p-5">
-            <DataTableSkeleton columnCount={8} />
+          <PageSkeleton label="Loading leads" className="p-4 sm:p-5 md:p-0">
+            <DataTableSkeleton columnCount={8} flush />
           </PageSkeleton>
         ) : leads.length === 0 ? (
           <div className="table-empty">

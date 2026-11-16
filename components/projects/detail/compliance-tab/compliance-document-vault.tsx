@@ -218,8 +218,12 @@ export function ComplianceDocumentVault({
                 </CollapsibleTrigger>
 
                 <CollapsibleContent className="overflow-hidden data-open:animate-collapsible-down data-closed:animate-collapsible-up">
-                  <div className="border-t border-border/70 bg-muted/15 p-2">
+                  {/* The collapsible is the card: from md up the table runs
+                      edge to edge inside it, and the phone cards keep the tint
+                      and padding. */}
+                  <div className="border-t border-border/70 bg-muted/15 p-2 md:bg-transparent md:p-0">
                     <DataTable
+                      flush
                       mobileLayout="cards"
                       mobileTitleColumn={1}
                       onRowClick={(rowIndex) =>

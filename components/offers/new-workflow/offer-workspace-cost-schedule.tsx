@@ -15,6 +15,10 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import {
+  FLUSH_TABLE_CARD_CLASS,
+  FLUSH_TABLE_CONTENT_CLASS,
+} from "@/components/ui/table-styles";
 import type { OfferWorkbookImportResult } from "@/lib/offer/workspace-import";
 import type { OfferWorkspaceCostLine } from "@/lib/offer/workspace-model";
 import {
@@ -125,7 +129,10 @@ export function CostSchedulePanel({
 
   return (
     <Card
-      className="border-border/70 bg-card/95 shadow-sm"
+      className={cn(
+        "border-border/70 bg-card/95 shadow-sm",
+        FLUSH_TABLE_CARD_CLASS,
+      )}
       aria-labelledby="cost-schedule-title"
     >
       <CardHeader className="border-b border-border/70">
@@ -155,45 +162,49 @@ export function CostSchedulePanel({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-3">
-        <WorkbookImportControl
-          importResult={importResult}
-          onImported={onImported}
-        />
-        <div
-          className="flex flex-wrap gap-2 text-xs text-muted-foreground"
-          id="cost-schedule-summary"
-        >
-          <OfferSummaryBadge label="tasks" value={lines.length} />
-          <OfferSummaryBadge label="priced" value={pricedCount} />
-          <OfferSummaryBadge label="included" value={includedCount} />
-          {importedCount > 0 ? (
-            <OfferSummaryBadge label="imported" value={importedCount} />
-          ) : null}
-          <span className="hidden rounded-md border border-border bg-background px-2 py-1 md:inline @6xl/pane:hidden">
-            Scroll sideways to review all columns
-          </span>
-        </div>
-        <p className="sr-only" id="cost-schedule-keyboard-help">
-          Use Tab and Shift Tab to move through calculation workbook cells.
-          Enter moves to the next editable cell. Shift Enter moves to the
-          previous editable cell.
-        </p>
-        <datalist id={TASK_DATALIST_ID}>
-          {OFFER_SEQUENCE_MAPPINGS.map((mapping) => (
-            <option key={mapping.taskName} value={mapping.taskName} />
-          ))}
-        </datalist>
-        {/* Shared suggestion source for the per-row building-sequence editor
+      <CardContent
+        className={cn("grid gap-3 md:gap-0", FLUSH_TABLE_CONTENT_CLASS)}
+      >
+        <div className="grid gap-3 md:border-b md:border-border/70 md:px-4 md:py-3">
+          <WorkbookImportControl
+            importResult={importResult}
+            onImported={onImported}
+          />
+          <div
+            className="flex flex-wrap gap-2 text-xs text-muted-foreground"
+            id="cost-schedule-summary"
+          >
+            <OfferSummaryBadge label="tasks" value={lines.length} />
+            <OfferSummaryBadge label="priced" value={pricedCount} />
+            <OfferSummaryBadge label="included" value={includedCount} />
+            {importedCount > 0 ? (
+              <OfferSummaryBadge label="imported" value={importedCount} />
+            ) : null}
+            <span className="hidden rounded-md border border-border bg-background px-2 py-1 md:inline @6xl/pane:hidden">
+              Scroll sideways to review all columns
+            </span>
+          </div>
+          <p className="sr-only" id="cost-schedule-keyboard-help">
+            Use Tab and Shift Tab to move through calculation workbook cells.
+            Enter moves to the next editable cell. Shift Enter moves to the
+            previous editable cell.
+          </p>
+          <datalist id={TASK_DATALIST_ID}>
+            {OFFER_SEQUENCE_MAPPINGS.map((mapping) => (
+              <option key={mapping.taskName} value={mapping.taskName} />
+            ))}
+          </datalist>
+          {/* Shared suggestion source for the per-row building-sequence editor
             below: the deduped catalog of every known sequence step, so a step
             added by hand can be picked from the existing list instead of typed
             from scratch (issue #112). One datalist serves every row's input. */}
-        <datalist id={SEQUENCE_STEP_DATALIST_ID}>
-          {OFFER_BUILDING_SEQUENCE_STEPS.map((step) => (
-            <option key={step} value={step} />
-          ))}
-        </datalist>
-        <div className="max-w-full overflow-hidden rounded-lg border border-border bg-card">
+          <datalist id={SEQUENCE_STEP_DATALIST_ID}>
+            {OFFER_BUILDING_SEQUENCE_STEPS.map((step) => (
+              <option key={step} value={step} />
+            ))}
+          </datalist>
+        </div>
+        <div className="max-w-full overflow-hidden rounded-lg border border-border bg-card md:rounded-none md:border-0">
           <Table
             aria-describedby="cost-schedule-summary cost-schedule-keyboard-help"
             className="cost-schedule-table md:min-w-270 table-fixed border-separate border-spacing-0 text-[13px]"
@@ -212,49 +223,35 @@ export function CostSchedulePanel({
               sequence, Offer and Tender line item, cost excluding GST,
               inclusion status and remove action.
             </TableCaption>
-            <TableHeader className="bg-muted/60">
+            <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="sticky left-0 z-20 border-r border-border/70 bg-muted/60 px-2 text-xs uppercase tracking-wide text-muted-foreground">
+                <TableHead className="sticky left-0 z-20 bg-muted px-2">
                   Row
                 </TableHead>
-                <TableHead
-                  className="border-r border-border/70 text-xs uppercase tracking-wide text-muted-foreground"
-                  id="cost-task-column"
-                >
+                <TableHead className="px-3" id="cost-task-column">
                   Task / phase
                 </TableHead>
-                <TableHead
-                  className="border-r border-border/70 text-xs uppercase tracking-wide text-muted-foreground"
-                  id="cost-sequence-column"
-                >
+                <TableHead className="px-3" id="cost-sequence-column">
                   Building sequence
                 </TableHead>
-                <TableHead
-                  className="border-r border-border/70 text-xs uppercase tracking-wide text-muted-foreground"
-                  id="cost-offer-line-column"
-                >
+                <TableHead className="px-3" id="cost-offer-line-column">
                   Offer/Tender line item
                 </TableHead>
-                <TableHead
-                  className="border-r border-border/70 text-right text-xs uppercase tracking-wide text-muted-foreground"
-                  id="cost-value-column"
-                >
+                <TableHead className="px-3 text-right" id="cost-value-column">
                   Value ex GST
                 </TableHead>
                 <TableHead
-                  className="border-r border-border/70 text-center text-xs uppercase tracking-wide text-muted-foreground"
+                  className="px-3 text-center"
                   id="cost-included-column"
                 >
                   Included
                 </TableHead>
-                <TableHead className="text-center text-xs uppercase tracking-wide text-muted-foreground">
-                  Remove
-                </TableHead>
+                <TableHead className="px-3 text-center">Remove</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {lines.length === 0 ? (
-                <TableRow className="hover:bg-transparent">
+                <TableRow>
                   <TableCell className="h-36 text-center" colSpan={7}>
                     <div className="flex flex-col items-center gap-2">
                       <ClipboardList
@@ -293,9 +290,9 @@ export function CostSchedulePanel({
                         selectedMobileLine !== "all"
                         && selectedMobileLine !== line.id
                       }
-                      className="cost-data-row group align-top hover:bg-royal-gold-light/25 focus-within:bg-royal-gold-light/35"
+                      className="cost-data-row group align-top has-aria-expanded:bg-transparent focus-within:bg-royal-gold-light/35 md:[&:not(:first-child)>td]:border-t md:[&:not(:first-child)>td]:border-border"
                     >
-                      <TableCell className="sticky left-0 z-10 border-r border-border/70 bg-card px-1 py-0 align-middle group-hover:bg-royal-gold-light/25 group-focus-within:bg-royal-gold-light/35">
+                      <TableCell className="sticky left-0 z-10 bg-card px-1 py-0 align-middle group-focus-within:bg-royal-gold-light/35">
                         <div className="flex items-center gap-0.5">
                           <button
                             aria-controls={detailRowId}
@@ -325,7 +322,7 @@ export function CostSchedulePanel({
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="border-r border-border/70 p-0">
+                      <TableCell className="p-0">
                         <span
                           aria-hidden="true"
                           className="mb-1 block px-3 text-xs font-medium text-muted-foreground md:hidden"
@@ -349,7 +346,7 @@ export function CostSchedulePanel({
                           }
                         />
                       </TableCell>
-                      <TableCell className="border-r border-border/70 p-0 align-middle">
+                      <TableCell className="p-0 align-middle">
                         <span
                           aria-hidden="true"
                           className="mb-1 block px-3 text-xs font-medium text-muted-foreground md:hidden"
@@ -392,7 +389,7 @@ export function CostSchedulePanel({
                           )}
                         </button>
                       </TableCell>
-                      <TableCell className="border-r border-border/70 p-0">
+                      <TableCell className="p-0">
                         <span
                           aria-hidden="true"
                           className="mb-1 block px-3 text-xs font-medium text-muted-foreground md:hidden"
@@ -416,7 +413,7 @@ export function CostSchedulePanel({
                           }
                         />
                       </TableCell>
-                      <TableCell className="border-r border-border/70 p-0">
+                      <TableCell className="p-0">
                         <span
                           aria-hidden="true"
                           className="mb-1 block px-3 text-xs font-medium text-muted-foreground md:hidden"
@@ -452,7 +449,7 @@ export function CostSchedulePanel({
                           }}
                         />
                       </TableCell>
-                      <TableCell className="border-r border-border/70 p-0 align-middle">
+                      <TableCell className="p-0 align-middle">
                         <span
                           aria-hidden="true"
                           className="mb-1 block px-3 text-xs font-medium text-muted-foreground md:hidden"
@@ -502,10 +499,9 @@ export function CostSchedulePanel({
                           selectedMobileLine !== "all"
                           && selectedMobileLine !== line.id
                         }
-                        className="hover:bg-transparent"
                         id={detailRowId}
                       >
-                        <TableCell className="sticky left-0 z-10 border-r border-border/70 bg-muted/20" />
+                        <TableCell className="sticky left-0 z-10 bg-muted/20" />
                         <TableCell
                           className="border-t border-border/60 bg-muted/20 p-0"
                           colSpan={6}

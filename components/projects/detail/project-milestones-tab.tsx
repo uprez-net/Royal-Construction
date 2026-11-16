@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { FLUSH_TABLE_CARD_CLASS } from "@/components/ui/table-styles";
 import {
   duenessOf,
   findWorkingStageIndex,
@@ -396,7 +397,12 @@ export function ProjectMilestonesTab({
 
   return (
     <section className="grid gap-4">
-      <Card className="rounded-xl border-border/70 bg-card shadow-sm">
+      <Card
+        className={cn(
+          "rounded-xl border-border/70 bg-card shadow-sm",
+          FLUSH_TABLE_CARD_CLASS,
+        )}
+      >
         <CardHeader className="border-b border-border/70 pb-4">
           <CardTitle
             as="h2"
@@ -462,7 +468,7 @@ export function ProjectMilestonesTab({
                       <Fragment key={ledgerStage.stage}>
                         <TableRow
                           className={cn(
-                            "cursor-pointer",
+                            "cursor-pointer hover:bg-muted",
                             isOpen && "bg-primary/5 hover:bg-primary/5",
                           )}
                           onClick={() => toggleStage(ledgerStage.stage)}

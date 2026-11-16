@@ -4,6 +4,8 @@ import { OfferHeader } from "@/components/offers/offer-header";
 import { OfferKPI } from "@/components/offers/offer-kpi";
 import { OfferTable } from "@/components/offers/offer-table";
 import { Card } from "@/components/ui/card";
+import { FLUSH_TABLE_CARD_CLASS } from "@/components/ui/table-styles";
+import { cn } from "@/lib/utils";
 import {
   emptyOfferGroupResult,
   emptyOfferKPIs,
@@ -64,7 +66,14 @@ async function OfferPageClient() {
         sentOffers={offerKPIs.sentOffers}
         totalVersions={offerKPIs.totalVersions}
       />
-      <Card className="border-border/70 bg-card/95 shadow-sm">
+      {/* The filter strip and the table share one flat card, as on Leads: no top padding from md up. */}
+      <Card
+        className={cn(
+          "border-border/70 bg-card/95 shadow-sm",
+          FLUSH_TABLE_CARD_CLASS,
+          "md:pt-0",
+        )}
+      >
         <OfferFilter
           initialTabCounts={{
             // Every offer not rejected: what the All tab lists (issue #450).

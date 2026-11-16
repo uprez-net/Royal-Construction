@@ -3,6 +3,15 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { TABLE_SURFACE_CLASS } from "@/components/ui/table-styles";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   ContractPreviewTerms,
@@ -569,38 +578,35 @@ function ContractScheduleToSend({
           <span>{terms.refusal}</span>
         </p>
       ) : null}
-      <div className="overflow-hidden rounded-lg border border-border/70">
-        <table className="w-full text-[13px]">
+      <div className={TABLE_SURFACE_CLASS}>
+        <Table>
           {/* The rows carry no visible header, so a screen reader had nothing
               to tie each value to. */}
-          <thead className="sr-only">
-            <tr>
-              <th scope="col">Stage</th>
-              <th scope="col">Percent of contract</th>
-              <th scope="col">Amount</th>
-              <th scope="col">Trigger</th>
-            </tr>
-          </thead>
-          <tbody>
+          <TableHeader className="sr-only">
+            <TableRow>
+              <TableHead scope="col">Stage</TableHead>
+              <TableHead scope="col">Percent of contract</TableHead>
+              <TableHead scope="col">Amount</TableHead>
+              <TableHead scope="col">Trigger</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {terms.paymentSchedule.map((row, index) => (
-              <tr
-                key={`${index}-${row.id}`}
-                className="border-b border-border/60 last:border-b-0"
-              >
-                <td className="px-3 py-1.5 font-medium">{row.stageName}</td>
-                <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+              <TableRow key={`${index}-${row.id}`}>
+                <TableCell className="font-medium">{row.stageName}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
                   {formatPercent(row.percentOfContract)}
-                </td>
-                <td className="px-3 py-1.5 text-right font-mono">
+                </TableCell>
+                <TableCell className="text-right font-mono">
                   {formatContractMoney(row.amount)}
-                </td>
-                <td className="px-3 py-1.5 text-muted-foreground">
+                </TableCell>
+                <TableCell className="whitespace-normal text-muted-foreground">
                   {row.trigger}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
       <p className="text-xs text-muted-foreground">
         Deposit:{" "}
@@ -629,32 +635,29 @@ function SentContractSchedule({
 }) {
   return (
     <div className="grid gap-2">
-      <div className="overflow-hidden rounded-lg border border-border/70">
-        <table className="w-full text-[13px]">
-          <thead className="sr-only">
-            <tr>
-              <th scope="col">Stage</th>
-              <th scope="col">Percent of contract</th>
-              <th scope="col">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className={TABLE_SURFACE_CLASS}>
+        <Table>
+          <TableHeader className="sr-only">
+            <TableRow>
+              <TableHead scope="col">Stage</TableHead>
+              <TableHead scope="col">Percent of contract</TableHead>
+              <TableHead scope="col">Amount</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {terms.paymentSchedule.map((row, index) => (
-              <tr
-                key={`${index}-${row.stageName}`}
-                className="border-b border-border/60 last:border-b-0"
-              >
-                <td className="px-3 py-1.5 font-medium">{row.stageName}</td>
-                <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+              <TableRow key={`${index}-${row.stageName}`}>
+                <TableCell className="font-medium">{row.stageName}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
                   {row.percent}
-                </td>
-                <td className="px-3 py-1.5 text-right font-mono">
+                </TableCell>
+                <TableCell className="text-right font-mono">
                   {row.amount}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
       <p className="text-xs text-muted-foreground">
         Deposit:{" "}
