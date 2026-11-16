@@ -73,6 +73,15 @@ const BUILD_WORK = [
   "construction project",
 ].join("|");
 
+/** The main dwelling, as a customer words it next to a granny flat. */
+const DWELLING = [
+  "house",
+  "home",
+  "duplex",
+  "dwelling",
+  "(?:single|double|two)[ -]stor(?:e)?y(?: (?:home|house))?",
+].join("|");
+
 /** Asking what it costs. */
 const PRICE_ASK = ["quot(?:e|es|ation)", "estimate", "costing", "pricing"].join(
   "|",
@@ -286,6 +295,21 @@ export const LEAD_SUBJECT_PATTERNS: readonly RegExp[] = [
     String.raw`\b(?:${BUILD_WORK})\b.{0,60}\b\d{1,4}[a-z]? [a-z]+(?: [a-z]+)? (?:rd|road|st|street|ave|avenue|cct|circuit|cres|crescent|dr|drive|pde|parade|tce|terrace|pl|place|way|ct|court|ln|lane|loop)\b`,
   ),
 
+  // "Lot 8360 oran park house and granny", "double storey and granny" — a
+  // customer listing what they want built, with the dwelling and the granny
+  // flat joined by "and", "&", "+" or "with" and no price or enquiry word
+  // (#389). Needs both halves, so "granny" or "house" alone still match
+  // nothing. The comma form ("Double Storey, Granny Flat") is the shape our own
+  // templates use and stays with OWN_OUTBOUND. A supplier catalogue naming
+  // both is not a customer, but only these two patterns say so: the word is
+  // not a veto for other subjects.
+  new RegExp(
+    String.raw`^(?!.*\bsupplier catalogues?\b).*\b(?:${DWELLING})\s*(?:and|&|\+|with)\s*(?:a |an )?granny(?: flat)?\b`,
+  ),
+  new RegExp(
+    String.raw`^(?!.*\bsupplier catalogues?\b).*\bgranny(?: flat)?\s*(?:and|&|\+|with)\s*(?:a |an |the )?(?:${DWELLING})\b`,
+  ),
+
   // Generic first-contact subjects the site and the directories send.
   /\b(?:website|web|online) (?:enquiry|inquiry)\b/,
   /\bnew (?:enquiry|inquiry|lead|submission|message|customer) (?:from|via|through)\b/,
@@ -302,8 +326,8 @@ for (const pattern of LEAD_SUBJECT_PATTERNS) {
   // See the note above: a lost String.raw leaves a real backspace behind.
   if (pattern.source.includes("\u0008")) {
     throw new Error(
-      "LEAD_SUBJECT_PATTERNS entry contains a literal backspace — a word " +
-        `boundary lost to template-literal escaping. Use String.raw: ${pattern}`,
+      "LEAD_SUBJECT_PATTERNS entry contains a literal backspace — a word "
+        + `boundary lost to template-literal escaping. Use String.raw: ${pattern}`,
     );
   }
 }
@@ -405,8 +429,8 @@ export function isLeadMessage(
   businessAddress: string | null | undefined,
 ): boolean {
   if (
-    isLeadSubject(subject) &&
-    LEAD_SUBJECT_LINES.has(
+    isLeadSubject(subject)
+    && LEAD_SUBJECT_LINES.has(
       normalizeSubject(subject).replace(MAIL_GATEWAY_LABEL, ""),
     )
   )
