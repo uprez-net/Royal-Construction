@@ -37,6 +37,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { AddLeadModal } from "@/components/leads/modal-ui/add-lead-modal";
 import { EmailCampaignModal } from "@/components/leads/modal-ui/email-campaign-modal";
 import { UnmatchedWhatsAppButton } from "@/components/leads/whatsapp/unmatched-whatsapp-review";
+import { PendingCommsButton } from "@/components/leads/comms/pending-comms";
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
 import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
 import { LeadPagination } from "./lead-pagination";
@@ -546,6 +547,7 @@ function LeadsWorkspace() {
               </p>
             </div>
             <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+              <PendingCommsButton />
               <UnmatchedWhatsAppButton />
               <Button
                 variant="outline"

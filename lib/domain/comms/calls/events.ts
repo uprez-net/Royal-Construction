@@ -94,6 +94,7 @@ const CALL_FOR_EVENT = {
   id: true,
   leadId: true,
   recordingConsent: true,
+  staffPhoneNumber: true,
   staffTarget: true,
   staffUserId: true,
   startedAt: true,
@@ -120,6 +121,7 @@ function forFlow(call: CallForEvent): CallForFlow {
     flowStep: call.flowStep,
     recordingConsent: call.recordingConsent,
     staffIdentity: call.staffUserId ? browserIdentity(call.staffUserId) : null,
+    staffPhoneNumber: call.staffPhoneNumber,
     staffTarget: call.staffTarget,
   };
 }
@@ -573,6 +575,7 @@ async function recordIncomingCall(
         flowStep: CallFlowStep.AGENT,
         recordingConsent: "NOT_ASKED",
         staffIdentity: null,
+        staffPhoneNumber: null,
         staffTarget: null,
       };
       const decision = decideCallStart(draft, ctx);

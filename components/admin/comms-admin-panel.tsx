@@ -22,6 +22,8 @@ import type {
 } from "@/lib/leads/comms-types";
 import { formatSydneyStamp } from "@/lib/leads/whatsapp-format";
 
+import { TeamPhonesCard } from "./team-phones-card";
+
 // Phone & SMS, for the office: what is set up, where each carrier must send
 // its webhooks, and the texts and calls from numbers no lead has. Secrets are
 // never shown; the server answers configuration without them.
@@ -174,23 +176,47 @@ export function CommsAdminPanel() {
     return () => window.clearTimeout(first);
   }, [load]);
 
-  if (error) return <p className="text-sm text-destructive">{error}</p>;
+  // Same header as the other admin pages, outside the cards, so it reads the
+  // same while loading or failing.
+  const header = (
+    <div>
+      <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+        Phone &amp; SMS
+      </h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Which phone provider is active, the team&apos;s phones for lead calls,
+        and texts and calls from numbers no lead has.
+      </p>
+    </div>
+  );
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <p className="text-sm text-destructive">{error}</p>
+      </div>
+    );
+  }
   if (!status) {
     return (
-      <p className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Loading…
-      </p>
+      <div className="space-y-6">
+        {header}
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />{" "}
+          Loading…
+        </p>
+      </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {header}
       <Card>
         <CardContent className="space-y-4 p-5">
           <div>
-            <h1 className="font-heading text-xl font-semibold">
-              Phone &amp; SMS
-            </h1>
+            <h2 className="text-base font-semibold">Provider</h2>
             <p className="text-sm text-muted-foreground">
               Active provider:{" "}
               <span className="font-medium text-foreground">
@@ -277,6 +303,8 @@ export function CommsAdminPanel() {
           ) : null}
         </CardContent>
       </Card>
+
+      <TeamPhonesCard officeMobile={status.staffForwardNumber} />
 
       <Card>
         <CardContent className="p-5">

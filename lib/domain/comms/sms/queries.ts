@@ -1,4 +1,4 @@
-import { CommsDirection, SmsReviewStatus } from "@prisma/client";
+import { SmsReviewStatus } from "@prisma/client";
 
 import { authorizeLead } from "../../access/leads";
 import type { DomainDb, TransactionalDomainDb } from "../../db";
@@ -10,6 +10,7 @@ import {
 import type { CommsChannel } from "../../ports/comms";
 import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
 import { recordCommsHistory } from "../shared";
+import { UNREAD_SMS_WHERE } from "../unread";
 import { evaluateSmsEligibility, type SmsEligibility } from "./policy";
 import {
   SMS_MESSAGE_SELECT,
@@ -84,39 +85,9 @@ export async function markLeadSmsRead(
   await authorizeLead(principal, input.leadId, db);
   const result = await db.smsMessage.updateMany({
     data: { readAt: new Date() },
-    where: {
-      direction: CommsDirection.INBOUND,
-      leadId: input.leadId,
-      readAt: null,
-    },
+    where: { ...UNREAD_SMS_WHERE, leadId: input.leadId },
   });
   return result.count;
-}
-
-/** Unread inbound texts per lead, for the list's row badges. */
-export async function leadSmsUnreadCounts(
-  principal: DomainPrincipal,
-  input: { readonly leadIds: readonly number[] },
-  db: DomainDb,
-): Promise<Map<number, number>> {
-  if (!isInternalPrincipal(principal)) {
-    throw new DomainAuthorizationError("SMS summaries are for staff.");
-  }
-  if (input.leadIds.length === 0) return new Map();
-  const rows = await db.smsMessage.groupBy({
-    _count: { _all: true },
-    by: ["leadId"],
-    where: {
-      direction: CommsDirection.INBOUND,
-      leadId: { in: [...input.leadIds] },
-      readAt: null,
-    },
-  });
-  return new Map(
-    rows
-      .filter((row) => row.leadId !== null)
-      .map((row) => [row.leadId as number, row._count._all]),
-  );
 }
 
 // ── The review queue ──────────────────────────────────────────────────

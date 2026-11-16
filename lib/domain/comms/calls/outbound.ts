@@ -31,6 +31,7 @@ import {
 import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
 import { normaliseLeadPhone } from "../../leads/whatsapp/phone";
 import { SMS_REFUSALS } from "../sms/policy";
+import { resolveCallablePhone } from "../team-phones";
 import {
   maskNumber,
   providerColumn,
@@ -46,7 +47,8 @@ import { CALL_TIME_LIMIT_SECONDS, isTerminalCallStatus } from "./state";
 // Server-originated, customer first (file 06 §8): the carrier rings the
 // lead; when they pick up, the flow (./flow.ts) greets them, asks about
 // recording if that is switched on, and puts them through to whoever pressed
-// Call — their browser, or the office mobile. A browser credential therefore
+// Call — their browser, or the phone they picked from the team's list
+// (../team-phones.ts). A browser credential therefore
 // only ever *receives* calls and can never dial an arbitrary number.
 //
 // Once: a click is keyed. A double click or a retry after a timeout is the
@@ -58,6 +60,11 @@ export type RequestLeadCallInput = {
   readonly leadId: number;
   readonly idempotencyKey: string;
   readonly target: "browser" | "mobile";
+  /**
+   * `mobile` only: the team phone to ring. Absent means the office mobile
+   * (COMMS_STAFF_FORWARD_NUMBER).
+   */
+  readonly phoneId?: string | null;
   readonly now?: Date;
 };
 
@@ -74,9 +81,9 @@ export const CALL_REFUSALS = {
   noSender:
     "No phone number is configured for the active phone provider. An administrator needs to add one to COMMS_PHONE_NUMBERS.",
   noBrowser:
-    "This phone provider can't ring a browser. Choose the office mobile instead.",
+    "This phone provider can't ring a browser. Call via a phone instead.",
   noMobile:
-    "No office mobile is configured (COMMS_STAFF_FORWARD_NUMBER). Take the call in the browser instead.",
+    "No phone is set up to take calls. An admin can add the team's phones under Admin → Phone & SMS; until then, take the call in the browser.",
 } as const;
 
 export function callOutboxKey(leadId: number, idempotencyKey: string) {
@@ -162,7 +169,16 @@ export async function requestLeadCall(
   if (input.target === "browser" && !channel.browserCalling) {
     throw new DomainTransitionError(CALL_REFUSALS.noBrowser);
   }
-  if (input.target === "mobile" && !channel.staffForwardNumber) {
+  const staffPhone =
+    input.target === "mobile"
+      ? await resolveCallablePhone(
+          principal,
+          input.phoneId ?? null,
+          channel,
+          db,
+        )
+      : null;
+  if (input.target === "mobile" && !staffPhone) {
     throw new DomainTransitionError(CALL_REFUSALS.noMobile);
   }
 
@@ -185,6 +201,15 @@ export async function requestLeadCall(
           : `This call was already attempted and needs reconciliation before calling again (outbox key ${outboxKey}).`,
       );
     }
+    // Claimed in the same transaction as the call row, so a request that
+    // loses the claim writes nothing — in particular it cannot overwrite the
+    // staff phone the winning request is about to ring.
+    const claimed = await claimOutboxEvent(tx, outboxKey);
+    if (!claimed) {
+      throw new DomainTransitionError(
+        "This call is already being placed. Wait for it to ring.",
+      );
+    }
     const fields = {
       businessNumber: sender.e164,
       customerNumber: phone.e164,
@@ -192,8 +217,10 @@ export async function requestLeadCall(
       flowStep: CallFlowStep.DIALING_CUSTOMER,
       providerErrorCode: null,
       providerErrorTitle: null,
-      // A retry after a definite refusal may switch browser <-> mobile; the
-      // flow rings whichever this attempt asked for.
+      // A retry after a definite refusal may switch browser <-> phone, or
+      // pick another phone; the flow rings whichever this attempt asked for.
+      staffPhoneLabel: staffPhone?.nickname ?? null,
+      staffPhoneNumber: staffPhone?.e164 ?? null,
       staffTarget:
         input.target === "mobile"
           ? CallStaffTarget.MOBILE
@@ -215,7 +242,7 @@ export async function requestLeadCall(
       update: fields,
       where: { idempotencyKey: outboxKey },
     });
-    return { callId: call.id, replay: false as const };
+    return { callId: call.id, claimed, replay: false as const };
   });
   if (prepared.replay) {
     return {
@@ -224,12 +251,7 @@ export async function requestLeadCall(
     };
   }
 
-  const claimed = await claimOutboxEvent(db, outboxKey);
-  if (!claimed) {
-    throw new DomainTransitionError(
-      "This call is already being placed. Wait for it to ring.",
-    );
-  }
+  const { claimed } = prepared;
 
   let providerCallId: string;
   try {
@@ -300,7 +322,9 @@ export async function requestLeadCall(
       action: "Call placed",
       at: now,
       detail: `Calling ${maskNumber(phone.e164)} from ${sender.label} (${sender.e164}); ${
-        input.target === "mobile" ? "the office mobile" : "the caller's browser"
+        staffPhone
+          ? `${staffPhone.nickname} (${maskNumber(staffPhone.e164)})`
+          : "the caller's browser"
       } rings when they answer.`,
       leadId: lead.id,
       principal,
