@@ -216,26 +216,20 @@ function FollowUpRow({
   const hasAddress = alert.clientEmails.length > 0;
 
   return (
-    <li
-      className={
-        isDue
-          ? "flex flex-wrap items-start gap-3 rounded-[10px] border border-warning/40 bg-warning-light px-4 py-3"
-          : "flex flex-wrap items-start gap-3 rounded-[10px] border border-border/70 bg-muted/40 px-4 py-3"
-      }
-    >
+    <li className="flex items-center gap-3 px-4 py-2.5">
       {isDue ? (
         <Clock
-          className="mt-0.5 size-4 shrink-0 text-warning-ink"
+          className="size-4 shrink-0 text-warning-ink"
           aria-hidden="true"
         />
       ) : (
         <Mail
-          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+          className="size-4 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
       )}
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="text-sm font-semibold text-foreground">
             {alert.clientName}
           </p>
@@ -248,18 +242,17 @@ function FollowUpRow({
         </div>
         <p className="text-xs text-muted-foreground">
           {alert.projectAddress || "No site address on the lead"}
-        </p>
-        <p className="text-sm text-foreground">
-          Sent {formatSydneyDate(new Date(alert.sentAt))} · pending{" "}
-          <span className="font-semibold">{days(alert.daysPending)}</span>
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {alert.followUpCount === 0
-            ? "Not followed up yet."
-            : `Followed up ${alert.followUpCount} ${alert.followUpCount === 1 ? "time" : "times"}, last ${formatSydneyDateTime(new Date(alert.lastFollowUpAt!))}.`}
+          {" · "}Sent {formatSydneyDate(new Date(alert.sentAt))}
+          {" · "}
+          <span className="font-semibold text-foreground">
+            {days(alert.daysPending)} pending
+          </span>
+          {alert.followUpCount > 0
+            ? ` · Followed up ${alert.followUpCount}×, last ${formatSydneyDateTime(new Date(alert.lastFollowUpAt!))}`
+            : ""}
           {isDue
             ? ""
-            : ` Due again ${formatSydneyDateTime(new Date(alert.nextDueAt))}.`}
+            : ` · Due again ${formatSydneyDateTime(new Date(alert.nextDueAt))}`}
         </p>
         {!hasAddress ? (
           <p className="text-xs text-destructive-ink">
@@ -267,18 +260,17 @@ function FollowUpRow({
           </p>
         ) : null}
       </div>
-      <div className="ml-auto flex shrink-0 items-center">
-        <Button
-          type="button"
-          size="sm"
-          variant={isDue ? "default" : "outline"}
-          disabled={!hasAddress}
-          onClick={onFollowUp}
-        >
-          <Send className="size-4" aria-hidden="true" />
-          {isDue ? "Do follow-up" : "Follow up again"}
-        </Button>
-      </div>
+      <Button
+        type="button"
+        size="sm"
+        variant={isDue ? "default" : "outline"}
+        disabled={!hasAddress}
+        onClick={onFollowUp}
+        className="shrink-0"
+      >
+        <Send className="size-4" aria-hidden="true" />
+        {isDue ? "Do follow-up" : "Follow up again"}
+      </Button>
     </li>
   );
 }
@@ -330,7 +322,7 @@ export function OfferFollowUpAlerts({
 
   return (
     <Card className="rounded-xl border-border/70 bg-card shadow-sm">
-      <CardHeader className="border-b border-border/70 pb-4">
+      <CardHeader className="border-b border-border/70 py-3">
         <CardTitle
           as="h2"
           className="flex flex-wrap items-center gap-2 text-base font-semibold text-foreground"
@@ -345,9 +337,9 @@ export function OfferFollowUpAlerts({
           ) : null}
         </CardTitle>
       </CardHeader>
-      <CardContent className="pt-5">
+      <CardContent className="p-0">
         <ul
-          className="space-y-2"
+          className="divide-y divide-border/70"
           aria-label="Offers awaiting a client response"
         >
           {alerts.map((alert) => (
