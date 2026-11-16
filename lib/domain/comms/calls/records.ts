@@ -5,6 +5,7 @@ import type {
   CallRecordingStatus,
   CallStaffTarget,
   CallStatus,
+  CallTranscriptStatus,
   CommsDirection,
   Prisma,
   RecordingConsent,
@@ -12,6 +13,7 @@ import type {
 
 import type { CommsProviderName } from "../../ports/comms";
 import { providerName } from "../shared";
+import { isUnreadCall } from "../unread";
 
 export const CALL_SELECT = {
   agentTranscript: true,
@@ -42,8 +44,11 @@ export const CALL_SELECT = {
       id: true,
       kind: true,
       status: true,
+      transcript: true,
+      transcriptStatus: true,
     },
   },
+  seenAt: true,
   staffTarget: true,
   staffUser: { select: { name: true } },
   startedAt: true,
@@ -60,6 +65,9 @@ export type CallRecordingRecord = {
   /** True once a copy is stored; the URL itself is served by a staff route. */
   readonly available: boolean;
   readonly failureReason: string | null;
+  /** Speech-to-text of the recording, once it has been transcribed. */
+  readonly transcript: string | null;
+  readonly transcriptStatus: CallTranscriptStatus;
 };
 
 export type CallRecord = {
@@ -88,6 +96,9 @@ export type CallRecord = {
   readonly recordings: readonly CallRecordingRecord[];
   /** What the caller and Mili said, one "Speaker: text" line per turn. */
   readonly agentTranscript: string | null;
+  readonly seenAt: Date | null;
+  /** Mili or the voicemail took it and nobody has opened it (../unread). */
+  readonly unread: boolean;
 };
 
 export function toCallRecord(row: CallRow): CallRecord {
@@ -118,10 +129,14 @@ export function toCallRecord(row: CallRow): CallRecord {
       id: recording.id,
       kind: recording.kind,
       status: recording.status,
+      transcript: recording.transcript,
+      transcriptStatus: recording.transcriptStatus,
     })),
+    seenAt: row.seenAt,
     staffName: row.staffUser?.name ?? null,
     staffTarget: row.staffTarget,
     startedAt: row.startedAt,
     status: row.status,
+    unread: isUnreadCall(row),
   };
 }

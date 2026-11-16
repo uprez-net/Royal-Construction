@@ -37,6 +37,12 @@ import { fetchWhatsAppSummaries } from "@/lib/leads/whatsapp-service";
 import type { WhatsAppSummaryDto } from "@/lib/leads/whatsapp-types";
 import { LeadWhatsAppModal } from "@/components/leads/whatsapp/lead-whatsapp-modal";
 import { LeadCommsModal } from "@/components/leads/comms/lead-comms-modal";
+import {
+  CommsUnreadBadge,
+  commsUnreadSummary,
+} from "@/components/leads/comms/comms-unread-badge";
+import { fetchLeadCommsUnread } from "@/lib/leads/comms-service";
+import type { LeadCommsUnreadDto } from "@/lib/leads/comms-types";
 import { useCommsAvailability } from "@/hooks/use-comms-availability";
 import { WhatsAppGlyph } from "@/components/whatsapp/whatsapp-logo";
 import {
@@ -109,6 +115,12 @@ export default function TableView({
   // Bumped when the WhatsApp modal closes, so the row indicator picks up the
   // messages just sent or read without refetching on every render.
   const [whatsappVersion, setWhatsappVersion] = React.useState(0);
+  // Calls Mili or the voicemail took and unread texts, for the badge over the
+  // call icon. Bumped when the Phone & SMS window has marked them read.
+  const [commsUnread, setCommsUnread] = React.useState<
+    Map<number, LeadCommsUnreadDto>
+  >(() => new Map());
+  const [commsUnreadVersion, setCommsUnreadVersion] = React.useState(0);
   const [openTasks, setOpenTasks] = React.useState<LeadTaskRow[]>([]);
   const [tasksLoaded, setTasksLoaded] = React.useState(false);
   // Failed is not the same as empty. Without this the catch marked the fetch
@@ -167,6 +179,29 @@ export default function TableView({
       });
     return () => controller.abort();
   }, [leadIdsKey, whatsappVersion]);
+
+  // Same shape as the WhatsApp summaries: one request for the page on screen.
+  // Only asked for when calls go through the app — otherwise the call icon is
+  // the device's own dialler, which cannot clear a badge.
+  useEffect(() => {
+    if (!comms.calls) return;
+    const controller = new AbortController();
+    const leadIds = leadIdsKey === "" ? [] : leadIdsKey.split(",").map(Number);
+    fetchLeadCommsUnread(leadIds, controller.signal)
+      .then((rows) =>
+        setCommsUnread(new Map(rows.map((row) => [row.leadId, row]))),
+      )
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setCommsUnread(new Map());
+      });
+    return () => controller.abort();
+  }, [leadIdsKey, commsUnreadVersion, comms.calls]);
+
+  const callLabel = (lead: Lead) => {
+    const summary = commsUnreadSummary(commsUnread.get(lead.id));
+    return summary ? `Call ${lead.name}, ${summary}` : `Call ${lead.name}`;
+  };
 
   const tasksReady = tasksLoaded && !tasksError;
 
@@ -422,12 +457,11 @@ export default function TableView({
                             {actions.call.visible && (
                               <button
                                 type="button"
-                                className="action-btn-icon"
+                                className="action-btn-icon relative"
                                 title={
-                                  actions.call.disabledReason
-                                  ?? `Call ${lead.name}`
+                                  actions.call.disabledReason ?? callLabel(lead)
                                 }
-                                aria-label={`Call ${lead.name}`}
+                                aria-label={callLabel(lead)}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleCall(lead);
@@ -435,6 +469,11 @@ export default function TableView({
                                 disabled={actions.call.disabled}
                               >
                                 <Phone size={15} />
+                                {comms.calls ? (
+                                  <CommsUnreadBadge
+                                    unread={commsUnread.get(lead.id)}
+                                  />
+                                ) : null}
                               </button>
                             )}
                             {actions.email.visible && (
@@ -630,14 +669,19 @@ export default function TableView({
                       {actions.call.visible && (
                         <button
                           type="button"
-                          className="mobile-action-btn"
+                          className="mobile-action-btn relative"
                           onClick={() => handleCall(lead)}
                           title={actions.call.disabledReason ?? undefined}
-                          aria-label={`Call ${lead.name}`}
+                          aria-label={callLabel(lead)}
                           disabled={actions.call.disabled}
                         >
                           <Phone size={15} />
                           Call
+                          {comms.calls ? (
+                            <CommsUnreadBadge
+                              unread={commsUnread.get(lead.id)}
+                            />
+                          ) : null}
                         </button>
                       )}
                       {actions.email.visible && (
@@ -758,7 +802,11 @@ export default function TableView({
         <LeadCommsModal
           key={phoneLead.id}
           lead={phoneLead}
-          onClose={() => setPhoneLead(null)}
+          onRead={() => setCommsUnreadVersion((version) => version + 1)}
+          onClose={() => {
+            setPhoneLead(null);
+            setCommsUnreadVersion((version) => version + 1);
+          }}
         />
       )}
       {whatsappLead && (

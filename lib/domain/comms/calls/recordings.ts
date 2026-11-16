@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { CallRecordingStatus } from "@prisma/client";
+import { CallRecordingStatus, CallTranscriptStatus } from "@prisma/client";
 
 import { canAccessLead } from "../../access/leads";
 import type { DomainDb } from "../../db";
@@ -196,15 +196,23 @@ async function deleteProviderCopy(
   }
 }
 
-/** Recordings the daily sweep should (re)start: pending, or stored but still on the carrier. */
+/**
+ * Recordings the daily sweep should (re)start: pending, stored but still on
+ * the carrier, or stored but not yet transcribed (./transcripts.ts).
+ */
 export async function recordingsNeedingWork(db: DomainDb): Promise<string[]> {
   const rows = await db.callRecording.findMany({
+    orderBy: { createdAt: "asc" },
     select: { id: true },
     take: 100,
     where: {
       OR: [
         { status: CallRecordingStatus.PENDING },
         { providerDeletedAt: null, status: CallRecordingStatus.STORED },
+        {
+          status: CallRecordingStatus.STORED,
+          transcriptStatus: CallTranscriptStatus.PENDING,
+        },
       ],
     },
   });

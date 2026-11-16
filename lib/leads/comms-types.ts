@@ -89,10 +89,26 @@ export type CallDto = {
     durationSeconds: number | null;
     available: boolean;
     failureReason: string | null;
+    /** Speech-to-text of the recording, once transcribed. */
+    transcript: string | null;
+    transcriptStatus: "PENDING" | "DONE" | "EMPTY" | "SKIPPED" | "FAILED";
   }[];
   /** What the caller and Mili said, one "Speaker: text" line per turn. */
   agentTranscript: string | null;
+  seenAt: string | null;
+  /** Mili or the voicemail took it and nobody has opened it yet. */
+  unread: boolean;
 };
+
+/** "Pending Calls/Messages": what came in from numbers no lead owns. */
+export type PendingCommsDto = {
+  calls: CallDto[];
+  sms: SmsMessageDto[];
+  unread: number;
+};
+
+/** Unread calls and texts for one lead, for the badge over the call icon. */
+export type LeadCommsUnreadDto = { leadId: number; calls: number; sms: number };
 
 export type LeadCallsDto = {
   calls: CallDto[];

@@ -3,19 +3,24 @@ import { FatalError, RetryableError, getStepMetadata } from "workflow";
 
 import { vercelRecordingBlobPut } from "@/lib/blob-port";
 import { commsRuntimeFromEnv } from "@/lib/comms/factory";
+import { gatewayCallTranscription } from "@/lib/comms/transcription";
 import { storeCallRecording } from "@/lib/domain/comms/calls/recordings";
+import { transcribeCallRecording } from "@/lib/domain/comms/calls/transcripts";
 import { DomainSideEffectError, isDomainError } from "@/lib/domain/errors";
 import { systemPrincipal } from "@/lib/domain/principal";
 import prisma from "@/lib/prisma";
 
 /**
  * Copies call recordings and voicemails off the carrier into Blob storage,
- * then deletes the carrier's copy.
+ * deletes the carrier's copy, then transcribes ours.
  *
  * Started by the webhook once a recording is on record, and by the daily
  * comms sweep for anything still pending. Each recording is its own step; a
- * replayed step finds it STORED and only retries the carrier-side delete. The
- * domain (lib/domain/comms/calls/recordings.ts) decides; this drives it.
+ * replayed step finds it STORED and only retries the carrier-side delete.
+ * Transcribing is a step of its own, so a model outage never re-downloads a
+ * recording, and a recording that fails to transcribe is still kept. The
+ * domain (lib/domain/comms/calls/recordings.ts, transcripts.ts) decides; this
+ * drives it.
  */
 
 async function storeOne(recordingId: string): Promise<string> {
@@ -51,6 +56,37 @@ async function storeOne(recordingId: string): Promise<string> {
 // @prisma/client — into the workflow sandbox (tests/comms/recording-workflow).
 storeOne.maxRetries = 4;
 
+async function transcribeOne(recordingId: string): Promise<string> {
+  "use step";
+  try {
+    return await transcribeCallRecording(
+      systemPrincipal("workflow:call-recording"),
+      { recordingId },
+      prisma,
+      { transcribe: gatewayCallTranscription },
+    );
+  } catch (error) {
+    console.error(
+      `[call-recording] transcribing recording ${recordingId} failed:`,
+      error instanceof Error ? error.message : error,
+    );
+    if (error instanceof DomainSideEffectError && error.retryable) {
+      const { attempt } = getStepMetadata();
+      throw new RetryableError(error.message, {
+        retryAfter: Math.min(30_000 * attempt ** 2, 5 * 60_000),
+      });
+    }
+    throw new FatalError(
+      isDomainError(error)
+        ? error.message
+        : "Transcribing a call recording failed.",
+    );
+  }
+}
+// Three attempts in all, matching MAX_TRANSCRIPT_ATTEMPTS in the domain; a
+// literal for the same sandbox reason as storeOne's.
+transcribeOne.maxRetries = 2;
+
 export const storeCallRecordings = async (
   recordingIds: string[],
 ): Promise<string[]> => {
@@ -71,11 +107,25 @@ const runStoreCallRecordings = async (
 ): Promise<string[]> => {
   const outcomes: string[] = [];
   for (const recordingId of recordingIds) {
+    let stored: string;
     try {
-      outcomes.push(await storeOne(recordingId));
+      stored = await storeOne(recordingId);
     } catch {
       outcomes.push("error");
+      continue;
     }
+    // A recording that was never kept has nothing to transcribe.
+    if (stored === "gave_up") {
+      outcomes.push(stored);
+      continue;
+    }
+    let transcript: string;
+    try {
+      transcript = await transcribeOne(recordingId);
+    } catch {
+      transcript = "error";
+    }
+    outcomes.push(`${stored}; transcript ${transcript}`);
   }
   return outcomes;
 };
