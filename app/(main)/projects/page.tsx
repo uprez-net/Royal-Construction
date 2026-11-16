@@ -1,7 +1,7 @@
 import { ProjectsClient } from "@/components/projects/projects-client";
 import {
   getProjectKPIs,
-  getProjects,
+  getProjectsPage,
   getProjectsNeedingAttention,
 } from "@/lib/data/projects";
 import { connection } from "next/server";
@@ -45,8 +45,8 @@ export default async function ProjectPage({
       return (Array.isArray(value) ? value[0] : value) ?? null;
     },
   });
-  const [projectsPage, kpis, attention, user] = await Promise.all([
-    getProjects(projectsListQuery(list, projectPageSize)),
+  const [projectsResult, kpis, attention, user] = await Promise.all([
+    getProjectsPage(projectsListQuery(list, projectPageSize)),
     getProjectKPIs(),
     getProjectsNeedingAttention(),
     auth().then(({ userId }) =>
@@ -61,8 +61,9 @@ export default async function ProjectPage({
           layout while giving assistive tech the page's top-level heading. */}
       <h1 className="sr-only">Projects</h1>
       <ProjectsClient
-        projects={projectsPage.items}
-        pagination={projectsPage}
+        projects={projectsResult.page.items}
+        pagination={projectsResult.page}
+        listFailed={projectsResult.failed}
         renderedFor={projectsListKey(list)}
         kpis={kpis}
         attention={attention}

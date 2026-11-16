@@ -52,26 +52,46 @@ export type {
 };
 
 /**
- * A page of projects, or an empty page.
+ * A page of projects. Throws when the read fails (#486).
  *
- * The domain throws; this swallows, because the projects screen renders the
- * list beside four other panels and a thrown read blanks the route. The log
- * line is the difference between this and the old behaviour: it used to be
- * indistinguishable from "you have no projects".
+ * This used to swallow the error and answer an empty page, so a failed
+ * database read looked exactly like "you have no projects": the API answered
+ * 200 with `items: []`, the Projects list said "No projects yet", and the
+ * dashboard said "No projects found". Callers now decide how a failure
+ * shows: `GET /api/projects` answers 500, the dashboard's
+ * `settleDashboardSection` logs and raises its warning banner, and the Projects page
+ * uses `getProjectsPage` below.
  */
 export async function getProjects(
   query?: ProjectListQuery,
 ): Promise<PaginatedProjectsResult> {
+  return listProjects(await currentPrincipal(), query, prisma);
+}
+
+/**
+ * `getProjects` for a screen that renders the list beside other panels, where
+ * a thrown read would blank the whole route. A failed read says so in
+ * `failed` instead of answering an empty list, so the screen can say "could
+ * not load" rather than "no projects" (the same shape as
+ * `getProjectsNeedingAttention`).
+ */
+export async function getProjectsPage(query?: ProjectListQuery): Promise<{
+  page: PaginatedProjectsResult;
+  failed: boolean;
+}> {
   try {
-    return await listProjects(await currentPrincipal(), query, prisma);
+    return { page: await getProjects(query), failed: false };
   } catch (error) {
     console.error("Error fetching projects:", error);
     return {
-      items: [],
-      page: query?.page ?? 1,
-      limit: query?.limit ?? 12,
-      totalCount: 0,
-      totalPages: 1,
+      page: {
+        items: [],
+        page: query?.page ?? 1,
+        limit: query?.limit ?? 12,
+        totalCount: 0,
+        totalPages: 1,
+      },
+      failed: true,
     };
   }
 }

@@ -47,16 +47,28 @@ export async function GET(request: NextRequest) {
   // "projects" tag — a compliance alert the cron raises, a checklist defect, a
   // variation. A list cached for "max" would keep reporting a job as fine
   // after it stopped being, which is the silent kind of wrong.
-  const projects = await getProjects({
-    status: params.data.status,
-    page: params.data.page,
-    limit: params.data.limit,
-    search: params.data.search,
-    sortBy: params.data.sortBy,
-    sortOrder: params.data.sortOrder,
-  });
+  //
+  // A failed read answers 500, not an empty 200 (#486): the Projects list and
+  // the dashboard search show "no projects" for an empty page and a failure
+  // message for an error, and they could not tell the two apart. getProjects
+  try {
+    const projects = await getProjects({
+      status: params.data.status,
+      page: params.data.page,
+      limit: params.data.limit,
+      search: params.data.search,
+      sortBy: params.data.sortBy,
+      sortOrder: params.data.sortOrder,
+    });
 
-  return successResponse(projects);
+    return successResponse(projects);
+  } catch (error) {
+    console.error("Error fetching projects:", error);
+    return errorResponse("Failed to load projects", {
+      status: 500,
+      code: "PROJECTS_FETCH_FAILED",
+    });
+  }
 }
 
 /**
