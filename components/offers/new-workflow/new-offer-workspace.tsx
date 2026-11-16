@@ -11,6 +11,7 @@ import {
   applyTaskMappingToCostLine,
   collectOwnerIssues,
   createOfferScopeItem,
+  nextManualScopeItemId,
   removeOfferScopeItem,
   updateOfferScopeItems,
   type OfferDocumentDraft,
@@ -309,7 +310,6 @@ export function NewOfferWorkspace({
   // minute so "expires in N days" stays honest without a reload.
   const [now, setNow] = useState<Date>(() => new Date());
   const manualLineCounterRef = useRef(0);
-  const scopeItemCounterRef = useRef(0);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000);
@@ -571,11 +571,10 @@ export function NewOfferWorkspace({
   }
 
   function addAllowance() {
-    scopeItemCounterRef.current += 1;
     setAllowances((current) => [
       ...current,
       createOfferScopeItem(
-        `allowance-manual-${scopeItemCounterRef.current}`,
+        nextManualScopeItemId("allowance", current),
         "prime_cost",
       ),
     ]);
@@ -586,11 +585,10 @@ export function NewOfferWorkspace({
   }
 
   function addExclusion() {
-    scopeItemCounterRef.current += 1;
     setExclusions((current) => [
       ...current,
       createOfferScopeItem(
-        `exclusion-manual-${scopeItemCounterRef.current}`,
+        nextManualScopeItemId("exclusion", current),
         "exclusion",
       ),
     ]);

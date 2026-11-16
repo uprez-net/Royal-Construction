@@ -140,9 +140,10 @@ async function attachSigningStatus(
 // from. When the offer is OPENED and that stamp is behind the live admin
 // version, one of two things happens:
 //
-//   - the offer is still editable (`pending`): the current admin defaults are
-//     re-applied and persisted, so an admin correction reaches every offer that
-//     has not gone out yet without anyone reopening each one by hand;
+//   - the offer is still editable (`pending`): the admin's current items are
+//     merged in and persisted (added tasks, allowances and exclusions appear,
+//     removed ones go), while what the estimator already holds is kept — see
+//     applyAdminPrefillToSnapshot;
 //   - the offer is agreed or sent: nothing is written. That snapshot is what the
 //     client was quoted and what the legal documents render from — rewriting it
 //     under them would change an issued price. The change is reported instead,
