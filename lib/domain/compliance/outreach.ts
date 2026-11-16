@@ -12,11 +12,11 @@ import {
   isApprovalParty,
   isConsultantParty,
   PARTY_LABEL,
-  PARTY_OUTREACH_ATTACHMENTS,
   PARTY_TRADE_LABEL,
 } from "@/constants/complianceDocuments";
 import { AREA_DEVELOPERS } from "@/constants/complianceDevelopers";
 import { COMPLIANCE_ALERT_PARTY } from "./alert-parties";
+import { outreachPackFiles } from "./outreach-pack";
 import { buildComplianceFollowUpBody } from "./party-outreach-email";
 import {
   consultantNotAskedForReason,
@@ -156,17 +156,37 @@ export async function prepareComplianceOutreach(
   );
   const blocked =
     (await partyBlockedReason(engagement, party))
+    ?? selfSuppliedReason(outreach)
     ?? (alert
       ? null
-      : consultantNotAskedForReason(
+      : (consultantNotAskedForReason(
           engagement,
           party,
           outreach?.checklistDocumentId ? [outreach.checklistDocumentId] : [],
-        ));
+        )
+        // An opening outreach on a party already written to would email
+        // nobody (the send answers alreadySent), so it is not worth an approval.
+        ?? (outreach && outreach.status !== ComplianceOutreachStatus.NOT_SENT
+          ? `The ${PARTY_LABEL[party].toLowerCase()} was already written to at ${outreach.contactEmail ?? "an address on file"}; send a follow-up instead of a new outreach.`
+          : null)));
   return {
     available: true as const,
     alert: alert ?? null,
     blocked,
+    // An SLA follow-up carries no files (sendComplianceFollowUp sends none), so
+    // only an opening outreach has a pack to list.
+    attachments: alert
+      ? []
+      : await outreachAttachments(
+          engagement,
+          {
+            extraAttachmentIds: [],
+            omitAttachmentIds: [],
+            party,
+            projectId: input.projectId,
+          },
+          db,
+        ),
     candidates: await outreachCandidates(party, db),
     body: outreachDraftBody(engagement.subjectAddress, party, alert?.detail),
     canSend:
@@ -183,6 +203,15 @@ export async function prepareComplianceOutreach(
     party,
     subjectAddress: engagement.subjectAddress,
   };
+}
+
+/** One rule, asked by prepare (so Eve never requests the approval) and by send. */
+function selfSuppliedReason(
+  outreach: { mode: ComplianceOutreachMode } | null | undefined,
+): string | null {
+  return outreach?.mode === ComplianceOutreachMode.SELF_SUPPLIED
+    ? "This party's documents were marked self-supplied; there is no outreach thread to send on."
+    : null;
 }
 
 export type SendComplianceOutreachInput = {
@@ -204,10 +233,76 @@ export type SendComplianceOutreachInput = {
     documentType: ComplianceDocumentType;
   }[];
   readonly extraAttachmentIds: readonly string[];
+  /**
+   * Files of the party's standard pack to leave off this email. The pack is
+   * added automatically, so without this the owner who asked for "no
+   * attachments" had no way to say it (#366).
+   */
+  readonly omitAttachmentIds?: readonly string[];
   readonly idempotencyKey?: string;
   readonly party: CompliancePartyType;
   readonly projectId: string;
 };
+
+type OutreachEngagement = Awaited<ReturnType<typeof requireEngagement>>;
+
+/**
+ * Every file an opening outreach will carry: the party's standard pack, then
+ * the extras asked for that belong to this project, less anything omitted. The
+ * send, Eve's prepare step and the approval card all call this, so the list the
+ * owner approves is the list that goes out.
+ */
+export async function outreachAttachments(
+  engagement: OutreachEngagement,
+  input: Pick<
+    SendComplianceOutreachInput,
+    "extraAttachmentIds" | "omitAttachmentIds" | "party" | "projectId"
+  >,
+  db: DomainDb,
+) {
+  const packFiles = outreachPackFiles(engagement.documents, input.party);
+  const extras = input.extraAttachmentIds.length
+    ? await db.file.findMany({
+        where: {
+          id: { in: [...input.extraAttachmentIds] },
+          OR: [
+            { projectId: input.projectId },
+            {
+              complianceDocument: {
+                engagement: { projectId: input.projectId },
+              },
+            },
+          ],
+        },
+        select: { id: true, filename: true, fileType: true, url: true },
+      })
+    : [];
+  const omitted = new Set(input.omitAttachmentIds ?? []);
+  const packIds = new Set(packFiles.map((file) => file.id));
+  return [...packFiles, ...extras.filter((file) => !packIds.has(file.id))]
+    .filter((file) => !omitted.has(file.id))
+    .map((file) => ({ id: file.id, name: file.filename, url: file.url }));
+}
+
+/**
+ * The files an outreach would carry, for the approval card: id and name, never
+ * the URL, which is a credential for the file. Authorised like the send itself.
+ */
+export async function previewOutreachAttachments(
+  principal: DomainPrincipal,
+  input: Pick<
+    SendComplianceOutreachInput,
+    "extraAttachmentIds" | "omitAttachmentIds" | "party" | "projectId"
+  >,
+  db: DomainDb,
+): Promise<{ id: string; name: string }[]> {
+  await authorizeComplianceAccess(principal, input.projectId, db);
+  const engagement = await requireEngagement(input.projectId, db);
+  return (await outreachAttachments(engagement, input, db)).map((file) => ({
+    id: file.id,
+    name: file.name,
+  }));
+}
 
 /** Persist, deliver and settle one opening party email through a durable key. */
 export async function sendComplianceOutreach(
@@ -227,11 +322,8 @@ export async function sendComplianceOutreach(
   const existing = engagement.outreaches.find(
     (candidate) => candidate.party === input.party,
   );
-  if (existing?.mode === ComplianceOutreachMode.SELF_SUPPLIED) {
-    throw new DomainTransitionError(
-      "This party's documents were marked self-supplied; there is no outreach thread to send on.",
-    );
-  }
+  const selfSupplied = selfSuppliedReason(existing);
+  if (selfSupplied) throw new DomainTransitionError(selfSupplied);
   if (existing && existing.status !== ComplianceOutreachStatus.NOT_SENT) {
     return {
       alreadySent: true as const,
@@ -313,31 +405,9 @@ export async function sendComplianceOutreach(
     return stored;
   });
 
-  const attachmentTypes = new Set(PARTY_OUTREACH_ATTACHMENTS[input.party]);
-  const packFiles = engagement.documents
-    .filter((document) => attachmentTypes.has(document.documentType))
-    .flatMap((document) => document.files);
-  const extras = input.extraAttachmentIds.length
-    ? await db.file.findMany({
-        where: {
-          id: { in: [...input.extraAttachmentIds] },
-          OR: [
-            { projectId: input.projectId },
-            {
-              complianceDocument: {
-                engagement: { projectId: input.projectId },
-              },
-            },
-          ],
-        },
-        select: { id: true, filename: true, fileType: true, url: true },
-      })
-    : [];
-  const packIds = new Set(packFiles.map((file) => file.id));
-  const attachments = [
-    ...packFiles,
-    ...extras.filter((file) => !packIds.has(file.id)),
-  ].map((file) => ({ name: file.filename, url: file.url }));
+  const attachments = (await outreachAttachments(engagement, input, db)).map(
+    (file) => ({ name: file.name, url: file.url }),
+  );
 
   const { replayed } = await runOutboxEffectWithOutcome(
     db,

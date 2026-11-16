@@ -163,6 +163,15 @@ function readOutreach(value: unknown): AgentOutreachDetails | null {
       typeof outreach.attachmentCount === "number"
         ? outreach.attachmentCount
         : 0,
+    attachmentNames: Array.isArray(outreach.attachments)
+      ? outreach.attachments.flatMap((file) =>
+          file
+          && typeof file === "object"
+          && typeof (file as { name?: unknown }).name === "string"
+            ? [(file as { name: string }).name]
+            : [],
+        )
+      : undefined,
     body: outreach.body,
     contactEmail:
       typeof outreach.contactEmail === "string" ? outreach.contactEmail : null,

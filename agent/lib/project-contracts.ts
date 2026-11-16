@@ -141,6 +141,12 @@ export const sendComplianceOutreachInputSchema = z.object({
     .max(20)
     .default([]),
   extraAttachmentIds: z.array(z.string().uuid()).max(20).default([]),
+  /**
+   * File ids from prepare_compliance_outreach's `attachments` to leave off.
+   * The party's standard pack is attached automatically; this is how a person
+   * who wants it left off, or one file of it, says so.
+   */
+  omitAttachmentIds: z.array(z.string().uuid()).max(20).default([]),
 });
 
 export const sendComplianceFollowUpInputSchema = z.object({

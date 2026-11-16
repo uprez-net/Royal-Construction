@@ -1,4 +1,6 @@
+import { CompliancePartyType } from "@prisma/client";
 import { formatSydneyDate } from "@/lib/dates/sydney";
+import { previewOutreachAttachments } from "../compliance/outreach";
 import type { DomainDb } from "../db";
 import { isDomainError } from "../errors";
 import type { DomainPrincipal } from "../principal";
@@ -77,7 +79,57 @@ export async function describeApprovalTargets(
         return label === null ? null : ([field, label] as const);
       }),
   );
-  return Object.fromEntries(entries.filter((entry) => entry !== null));
+  const labels: Record<string, string> = Object.fromEntries(
+    entries.filter((entry) => entry !== null),
+  );
+  // An opening outreach also carries the party's standard pack, which no field
+  // of its input names. Said here so a spoken approval over MCP hears the files
+  // too, not just the web card (#366).
+  const attachments = await describeOutreachAttachments(principal, input, db);
+  if (attachments) {
+    labels.attachments = `Attachments: ${attachments.map((file) => file.name).join(", ") || "none"}`;
+  }
+  return labels;
+}
+
+/**
+ * The files (id and name) a `send_compliance_outreach` approval would attach, or
+ * null when the input is not an opening outreach or the caller may not see the
+ * project. The same selection the send makes; never the model's own list.
+ */
+export async function describeOutreachAttachments(
+  principal: DomainPrincipal,
+  input: Readonly<Record<string, unknown>>,
+  db: DomainDb,
+): Promise<{ id: string; name: string }[] | null> {
+  const { party, projectId, body } = input;
+  if (
+    typeof projectId !== "string"
+    || typeof body !== "string"
+    || typeof party !== "string"
+    || !(Object.values(CompliancePartyType) as string[]).includes(party)
+  ) {
+    return null;
+  }
+  const ids = (value: unknown) =>
+    Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string")
+      : [];
+  try {
+    return await previewOutreachAttachments(
+      principal,
+      {
+        extraAttachmentIds: ids(input.extraAttachmentIds),
+        omitAttachmentIds: ids(input.omitAttachmentIds),
+        party: party as CompliancePartyType,
+        projectId,
+      },
+      db,
+    );
+  } catch (error) {
+    if (isDomainError(error)) return null;
+    throw error;
+  }
 }
 
 /** A refusal or a missing record is "no label"; anything else still throws. */

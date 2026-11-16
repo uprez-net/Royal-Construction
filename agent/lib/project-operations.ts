@@ -16,10 +16,7 @@ import {
   displayName,
   type AgentResultEnvelope,
 } from "@/agent/lib/result-contracts";
-import {
-  PARTY_LABEL,
-  PARTY_OUTREACH_ATTACHMENTS,
-} from "@/constants/complianceDocuments";
+import { PARTY_LABEL } from "@/constants/complianceDocuments";
 import { sendOnPartyThread } from "@/lib/compliance/party-mail";
 import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
 import {
@@ -820,7 +817,14 @@ export async function prepareAuthorizedComplianceOutreach(
       outreach: {
         alertId: alert?.id ?? null,
         alertType: alert?.type ?? null,
-        attachmentCount: PARTY_OUTREACH_ATTACHMENTS[party]?.length ?? 0,
+        // The files the standard pack adds on its own, by id and name: the
+        // owner approves the email that goes, not the one the model drafted.
+        // Pass an id as omitAttachmentIds to leave that file off.
+        attachmentCount: prepared.attachments.length,
+        attachments: prepared.attachments.map((file) => ({
+          fileId: file.id,
+          name: file.name,
+        })),
         body,
         contactEmail: outreach?.contactEmail ?? null,
         contactName: outreach?.contactName ?? null,
@@ -910,6 +914,7 @@ async function sendComplianceOutreachDirect(
       documentType: ComplianceDocumentType;
     }[];
     extraAttachmentIds: string[];
+    omitAttachmentIds: string[];
     party: CompliancePartyType;
     projectId: string;
   },
@@ -942,6 +947,7 @@ export async function sendAuthorizedComplianceOutreach(
       documentType: ComplianceDocumentType;
     }[];
     extraAttachmentIds: string[];
+    omitAttachmentIds: string[];
     party: CompliancePartyType;
     projectId: string;
   },
@@ -963,6 +969,7 @@ export async function sendAuthorizedComplianceOutreach(
       tradieId: input.tradieId ?? null,
       developerKey: input.developerKey ?? null,
       attachmentCount: input.extraAttachmentIds.length,
+      omittedAttachmentCount: input.omitAttachmentIds.length,
       deliverableCount: input.deliverables.length,
     },
     execute: async () => {
