@@ -1054,15 +1054,22 @@ export async function sendAuthorizedOfferForSignature(
       data: {
         document: input.document,
         offerId: input.offerId,
-        // Set when the envelope reached the client but recording it failed:
-        // the offer is out for signature and must not be sent again.
+        // Set when the offer is now recorded as sent but the send is not a
+        // clean success: DocuSign created the envelope and recording it
+        // failed, or DocuSign did not answer and nobody knows yet. Either way
+        // it must not be sent again.
         status: result.status ?? null,
       },
       kind: "error",
       summary: result.error,
-      title: `${label} was not sent for signature`,
+      title: result.status
+        ? `${label} send is not confirmed`
+        : `${label} was not sent for signature`,
+      // Not "the client has the envelope": after a timeout nothing may exist.
       warnings: result.status
-        ? ["Do not resend. The client already has this envelope."]
+        ? [
+            "Do not resend. The offer is marked as sent, but whether the envelope reached the client is not confirmed. Check DocuSign before telling the client anything.",
+          ]
         : [],
     });
   }
