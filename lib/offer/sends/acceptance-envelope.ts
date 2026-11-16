@@ -326,7 +326,16 @@ export async function sendOfferAcceptanceEnvelope(
       // so, so the screen and the lead follow the stored status. Returning no
       // status left the screen on the pre-send one until a reload (#502).
       effects.offerChanged(offer.id);
-      await effects.statusChanged(offer.id);
+      // Best effort. A failure here must not replace the "Do not resend"
+      // answer below with a generic error the office cannot act on.
+      try {
+        await effects.statusChanged(offer.id);
+      } catch (statusError) {
+        console.error(
+          `[offer] lead sync after an unconfirmed send failed for offer ${offer.id}:`,
+          statusError,
+        );
+      }
       return {
         ok: false,
         status: OfferStatus.OFFER_SENT,
