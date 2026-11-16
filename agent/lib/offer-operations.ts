@@ -7,6 +7,8 @@ import {
 } from "@/agent/lib/actor";
 import { runAuditedAgentOperation } from "@/agent/lib/audited-operation";
 import { blobStoreIdFromToken } from "@/lib/blob-url";
+import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
+import { describeOfferEditability } from "@/lib/offer/offer-editability";
 import {
   agentResultEnvelopeSchema,
   type AgentResultEnvelope,
@@ -131,6 +133,12 @@ function safeOffer(offer: OfferSummary) {
       ?? offer.contractValueIncGst?.toString()
       ?? null,
     createdAt: offer.createdAt.toISOString(),
+    // What this offer will accept right now, so a specialist can say an edit is
+    // impossible before it asks anyone to approve it. The write enforces the
+    // same rule; this only stops the pointless approval.
+    editability: describeOfferEditability(
+      offer.offerStatus.toLowerCase() as OfferWorkspaceStatus,
+    ),
     entityRef: offerReference(offer),
     gstAmount: (derived?.gstAmount ?? offer.gstAmount).toString(),
     lead: {

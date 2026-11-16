@@ -88,6 +88,30 @@ export function canCreateRevision(status: OfferWorkspaceStatus): boolean {
   return !REVISION_LOCKED_STATUSES.has(status);
 }
 
+/**
+ * What an offer at this status will accept, in the terms a reader (Eve) can act
+ * on before it asks anybody to approve an edit. It is the same two rules the
+ * workspace locks its controls with and the server save refuses by, read once,
+ * so a read can no longer say nothing about a lock the write will then enforce
+ * (#366). `status` is the workspace form (the stored status, lower-cased).
+ */
+export function describeOfferEditability(status: OfferWorkspaceStatus): {
+  readonly canEditPriceInputs: boolean;
+  readonly canEditScopeAndDocument: boolean;
+  readonly canCreateRevision: boolean;
+  readonly lockedReason: string | null;
+} {
+  const canEditScopeAndDocument = isOfferBuildStepEditable("scope", status);
+  return {
+    canCreateRevision: canCreateRevision(status),
+    canEditPriceInputs: isOfferBuildStepEditable("cost-schedule", status),
+    canEditScopeAndDocument,
+    lockedReason: canEditScopeAndDocument
+      ? null
+      : "Issued offer details are locked; create a revision before editing them.",
+  };
+}
+
 // The statuses at which the workspace snapshot is saved at all. The payment
 // schedule is edited after AGREED and the Tender is built from it, so the
 // snapshot stays writable until the Tender is sent; the tender access answers
@@ -243,17 +267,17 @@ function sameJsonValue(a: unknown, b: unknown): boolean {
   }
   if (Array.isArray(a) || Array.isArray(b)) {
     return (
-      Array.isArray(a) &&
-      Array.isArray(b) &&
-      a.length === b.length &&
-      a.every((item, index) => sameJsonValue(item, b[index]))
+      Array.isArray(a)
+      && Array.isArray(b)
+      && a.length === b.length
+      && a.every((item, index) => sameJsonValue(item, b[index]))
     );
   }
   if (
-    a === null ||
-    b === null ||
-    typeof a !== "object" ||
-    typeof b !== "object"
+    a === null
+    || b === null
+    || typeof a !== "object"
+    || typeof b !== "object"
   ) {
     return false;
   }
@@ -261,8 +285,8 @@ function sameJsonValue(a: unknown, b: unknown): boolean {
   const right = b as Record<string, unknown>;
   const keys = Object.keys(left);
   return (
-    keys.length === Object.keys(right).length &&
-    keys.every(
+    keys.length === Object.keys(right).length
+    && keys.every(
       (key) =>
         Object.hasOwn(right, key) && sameJsonValue(left[key], right[key]),
     )
