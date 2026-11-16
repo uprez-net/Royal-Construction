@@ -224,8 +224,10 @@ export async function sendEmailToLead(
    * where there is no run to be a duplicate of.
    */
   runId?: string,
+  /** Record the send on this lead, server-side, once it has been delivered. */
+  leadId?: number,
 ): Promise<boolean> {
   // Delegate to the server action which calls the Graph client directly,
   // bypassing the /api/graph/send route and its admin-token requirement.
-  return sendCampaignEmail(to, subject, body, runId);
+  return sendCampaignEmail(to, subject, body, runId, leadId);
 }

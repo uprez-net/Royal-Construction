@@ -1,9 +1,13 @@
-import { OutboxEventKind } from "@prisma/client";
+import { HistoryType, OutboxEventKind } from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError, DomainValidationError } from "../errors";
 import { runOutboxEffectWithOutcome } from "../outbox";
-import { isInternalPrincipal, type DomainPrincipal } from "../principal";
+import {
+  attributionUserId,
+  isInternalPrincipal,
+  type DomainPrincipal,
+} from "../principal";
 import type { BlobDeletePort } from "../ports/blob";
 import { isBlobStorageUrl } from "@/lib/blob-url";
 
@@ -84,10 +88,20 @@ export type CampaignSendResult = {
  * same person still goes out. When a caller supplies no `runId` the send is
  * not deduplicated — the rule is opt-in, because inventing a key would make
  * every ad-hoc send look like a replay of the last one.
+ *
+ * `leadId` names the lead the email is for. When it is given, the send is also
+ * written to that lead's history here, by the same server call that delivered
+ * it. The modal used to build the entry and keep it in browser memory, so the
+ * activity feed, the offer pre-fill and the agent never saw a campaign (#297),
+ * and a tab closed between the send and a second request would have lost it.
+ * A replay of an earlier send writes nothing: that first call recorded it.
  */
 export async function sendCampaignEmail(
   principal: DomainPrincipal,
-  input: EmailSendInput & { readonly runId?: string },
+  input: EmailSendInput & {
+    readonly leadId?: number;
+    readonly runId?: string;
+  },
   send: EmailSendPort,
   db?: DomainDb,
 ): Promise<CampaignSendResult> {
@@ -107,6 +121,7 @@ export async function sendCampaignEmail(
   const runId = input.runId?.trim();
   if (!runId || !db) {
     await send({ body: input.body, subject: input.subject, to });
+    await recordCampaignHistory(principal, db, undefined, input);
     return { alreadySent: false, sent: true };
   }
 
@@ -122,5 +137,65 @@ export async function sendCampaignEmail(
       return { to };
     },
   );
+  // Runs on a replay too. The history row has its own durable intent, so a
+  // process that stopped after the email went out but before the row was
+  // written, or a write that failed, is repaired by the retry; a row that was
+  // written is not written twice.
+  await recordCampaignHistory(principal, db, runId, input);
   return { alreadySent: replayed, sent: true };
+}
+
+/**
+ * The email is already out, so a failed history write is logged and swallowed:
+ * reporting the send as failed would invite a resend of a delivered email. With
+ * a `runId` the write is its own outbox effect, keyed to the run and the lead,
+ * which is what makes a retry safe: it repairs a missing row and never adds a
+ * second one. Without one there is no run to key it to and no retry to repair.
+ */
+async function recordCampaignHistory(
+  principal: DomainPrincipal,
+  db: DomainDb | undefined,
+  runId: string | undefined,
+  input: { readonly leadId?: number; readonly subject: string },
+): Promise<void> {
+  const leadId = input.leadId;
+  if (!db || leadId === undefined) return;
+  const write = async () => {
+    const authorId = attributionUserId(principal);
+    await db.leadHistory.create({
+      data: {
+        action: "Email sent",
+        actionDate: new Date(),
+        detail: `Subject: ${input.subject}`,
+        leadId,
+        type: HistoryType.EMAIL,
+        ...(authorId ? { authorId } : {}),
+      },
+    });
+    return { leadId };
+  };
+  try {
+    if (!runId) {
+      await write();
+      return;
+    }
+    await runOutboxEffectWithOutcome(
+      db,
+      {
+        key: `email-campaign-history:${runId}:${leadId}`,
+        kind: OutboxEventKind.EMAIL_CAMPAIGN_SEND,
+        payload: { leadId, runId, subject: input.subject },
+      },
+      write,
+      // A second run of an insert that committed but was not recorded as done
+      // costs one duplicate activity row, which is the lesser harm than a
+      // missing one.
+      { repeatable: true },
+    );
+  } catch (error) {
+    console.error(
+      `[Campaign] Email to lead ${leadId} was sent but its history entry was not saved:`,
+      error,
+    );
+  }
 }

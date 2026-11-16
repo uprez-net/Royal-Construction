@@ -416,6 +416,8 @@ export async function sendCampaignEmail(
    * not email the whole list twice from Royal's mailbox.
    */
   runId?: string,
+  /** The lead the email is for; a delivered send is then recorded on it. */
+  leadId?: number,
 ): Promise<boolean> {
   // false is what every caller already reads as "not sent".
   const access = await requireInternalUser();
@@ -428,7 +430,7 @@ export async function sendCampaignEmail(
     const client = await createGraphContext(config);
     const result = await sendCampaignEmailDomain(
       userPrincipal(access.user),
-      { body, runId, subject, to },
+      { body, leadId, runId, subject, to },
       async (input) => {
         await client.sendMail({ ...input, cc: config.cc });
       },

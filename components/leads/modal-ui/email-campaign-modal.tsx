@@ -14,6 +14,7 @@ import { ModalLoadingState } from "@/components/common/modal-loading-state";
 import { Lead, EmailTemplate } from "@/lib/leads/types";
 import { EMAIL_TEMPLATES } from "@/lib/leads/variables";
 import { sendEmailToLead, fetchAllLeads } from "@/lib/leads/leads-service";
+import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 import {
   hydrateVariable,
   previewTemplateText,
@@ -134,7 +135,6 @@ export function EmailCampaignModal({
     // (run, recipient) and replays rather than re-sending.
     const runId = crypto.randomUUID();
     let successCount = 0;
-    const now = new Date();
 
     try {
       // The AI template is used as written, then hydrated per recipient below.
@@ -182,17 +182,26 @@ export function EmailCampaignModal({
                 subject,
                 finalHtmlBody,
                 runId,
+                lead.id,
               );
 
               if (sent) {
                 successCount++;
+                // The server has already recorded this send on the lead (the
+                // lead id travels with it), so nothing is saved from the
+                // browser. This copy only keeps the table in step. Stamped at
+                // this recipient's own send, both halves from one Sydney
+                // reading: a UTC date beside a browser-local time is a day out
+                // before 10am, and a campaign start time is wrong for anyone
+                // sent after midnight.
+                const sentAt = new Date();
                 return {
                   ...lead,
                   history: [
                     ...lead.history,
                     {
-                      date: now.toISOString().slice(0, 10),
-                      time: now.toTimeString().slice(0, 5),
+                      date: sydneyDateOnly(sentAt),
+                      time: sydneyTimeOnly(sentAt),
                       action: "Email sent",
                       detail: `Subject: ${subject}`,
                       type: "email" as const,

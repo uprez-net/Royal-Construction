@@ -106,6 +106,114 @@ test("a campaign reaches each lead once per press of Send", async () => {
   assert.deepEqual(keys, ["email-campaign:run_1:lead@example.com"]);
 });
 
+/** Outbox rows: the send's own state, and the history row's, by key prefix. */
+function campaignOutbox(state: {
+  send: OutboxEventStatus;
+  history: OutboxEventStatus;
+}) {
+  return pendingOutbox({
+    "outboxEvent.upsert": (args: unknown) => {
+      const key = (args as { where: { key: string } }).where.key;
+      const status = key.startsWith("email-campaign-history:")
+        ? state.history
+        : state.send;
+      return {
+        id: key,
+        key,
+        result: status === OutboxEventStatus.SUCCEEDED ? { done: true } : null,
+        status,
+      };
+    },
+  });
+}
+
+const CAMPAIGN_FOR_LEAD = {
+  body: "b",
+  leadId: 42,
+  runId: "run_1",
+  subject: "Spring update",
+  to: "lead@example.com",
+};
+
+test("a campaign send writes the lead's history once, as its own keyed effect (#297)", async () => {
+  const sent: string[] = [];
+  const { db, calls } = recordingDb(
+    campaignOutbox({
+      history: OutboxEventStatus.PENDING,
+      send: OutboxEventStatus.PENDING,
+    }),
+  );
+  await sendCampaignEmail(
+    adminPrincipal(),
+    CAMPAIGN_FOR_LEAD,
+    async (input) => {
+      sent.push(input.to);
+    },
+    db,
+  );
+
+  assert.equal(sent.length, 1);
+  assert.equal(
+    calls.filter((call) => call.operation === "leadHistory.create").length,
+    1,
+  );
+  const keys = calls
+    .filter((call) => call.operation === "outboxEvent.upsert")
+    .map((call) => (call.args as { where: { key: string } }).where.key);
+  assert.deepEqual(keys, [
+    "email-campaign:run_1:lead@example.com",
+    "email-campaign-history:run_1:42",
+  ]);
+});
+
+test("a retry repairs a history row that was never written, without re-sending", async () => {
+  // The first attempt's email went out (the send effect SUCCEEDED) but the
+  // process stopped before the row was written: the history effect is still
+  // PENDING. The retry must write it and must not email the lead again.
+  const sent: string[] = [];
+  const { db, calls } = recordingDb(
+    campaignOutbox({
+      history: OutboxEventStatus.PENDING,
+      send: OutboxEventStatus.SUCCEEDED,
+    }),
+  );
+  const result = await sendCampaignEmail(
+    adminPrincipal(),
+    CAMPAIGN_FOR_LEAD,
+    async (input) => {
+      sent.push(input.to);
+    },
+    db,
+  );
+
+  assert.deepEqual(result, { alreadySent: true, sent: true });
+  assert.equal(sent.length, 0);
+  assert.equal(
+    calls.filter((call) => call.operation === "leadHistory.create").length,
+    1,
+  );
+});
+
+test("a retry of a send whose history was already written adds no second row", async () => {
+  const { db, calls } = recordingDb(
+    campaignOutbox({
+      history: OutboxEventStatus.SUCCEEDED,
+      send: OutboxEventStatus.SUCCEEDED,
+    }),
+  );
+  await sendCampaignEmail(
+    adminPrincipal(),
+    CAMPAIGN_FOR_LEAD,
+    async () => {},
+    db,
+  );
+
+  assert.equal(
+    calls.filter((call) => call.operation === "leadHistory.create").length,
+    0,
+  );
+});
+
 test("a new campaign to the same lead is a new send", async () => {
   const keys: string[] = [];
   const script = pendingOutbox({
