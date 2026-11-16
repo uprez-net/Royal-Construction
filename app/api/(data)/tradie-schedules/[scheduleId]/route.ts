@@ -5,6 +5,7 @@ import {
   updateTradieSchedule,
 } from "@/lib/data/tradieSchedules";
 import { domainErrorResponse } from "@/lib/http/domain-response";
+import { reportError } from "@/lib/observability/report-error";
 import {
   deleteTradieScheduleSchema,
   errorResponse,
@@ -43,6 +44,10 @@ export async function PATCH(
     // operator needs to read; a bare 500 just gets the button pressed again.
     const refusal = domainErrorResponse(error);
     if (refusal) return refusal;
+    reportError(error, {
+      source: "route:PATCH /api/tradie-schedules/[scheduleId]",
+      ids: { scheduleId: routeParams.data.scheduleId },
+    });
     return errorResponse("Failed to update tradie schedule.", {
       status: 500,
       code: "INTERNAL_ERROR",

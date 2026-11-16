@@ -221,3 +221,31 @@ describe("the production gate", () => {
     }
   });
 });
+
+describe("no route answers 500 in silence", () => {
+  // The gap this closes: a catch that returned a bare 500 and neither logged
+  // nor reported, so a failed booking reached nobody. Console capture reports
+  // `console.error` only (sentry.server.config.ts: `warn` is where handled
+  // refusals are logged), so a log line is enough; `reportError` adds a source.
+  //
+  // Coarse on purpose: it works per FILE, so one `console.error` lets a second
+  // silent catch in the same file through, and it keys on a literal
+  // `status: 500`, so an `errorResponse(...)` that relies on the default 500
+  // is not seen. It stops a whole new route shipping silent, not every catch.
+  const REPORTS =
+    /console\.error|reportError|reportExternalError|reportWorkflowError|withCronReporting/;
+
+  test("every file under app/ that answers 500 also logs or reports", () => {
+    const silent = walk(join(REPO_ROOT, "app"))
+      .filter((file) => {
+        const source = readFileSync(file, "utf8");
+        return /status:\s*500/.test(source) && !REPORTS.test(source);
+      })
+      .map((file) => relative(REPO_ROOT, file));
+    assert.deepEqual(
+      silent,
+      [],
+      `these answer 500 and report nothing — add reportError(error, { source }) in the catch:\n${silent.join("\n")}`,
+    );
+  });
+});

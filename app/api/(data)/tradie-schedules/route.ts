@@ -4,6 +4,7 @@ import {
 } from "@/lib/data/tradies";
 import { createTradieSchedule } from "@/lib/data/tradieSchedules";
 import { domainErrorResponse } from "@/lib/http/domain-response";
+import { reportError } from "@/lib/observability/report-error";
 import {
   createTradieScheduleSchema,
   errorResponse,
@@ -24,6 +25,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const refusal = domainErrorResponse(error);
     if (refusal) return refusal;
+    // Nothing else logs here, and the screen only sees a generic 500: without
+    // this a failed booking reaches nobody.
+    reportError(error, { source: "route:POST /api/tradie-schedules" });
     return errorResponse("Failed to create tradie schedule.", {
       status: 500,
       code: "INTERNAL_ERROR",
