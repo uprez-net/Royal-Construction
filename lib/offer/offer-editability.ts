@@ -102,18 +102,26 @@ export function describeOfferEditability(status: OfferWorkspaceStatus): {
   readonly lockedReason: string | null;
 } {
   const canEditScopeAndDocument = isOfferBuildStepEditable("scope", status);
+  const canEditPriceInputs = isOfferBuildStepEditable("cost-schedule", status);
   const revisable = canCreateRevision(status);
+  // Only name a remedy that exists. An offer past the tender signature (or
+  // superseded) can be neither edited nor revised, and "create a revision"
+  // there sends the office after a refusal; a sent offer can still have its
+  // scope and document edited, with only the price frozen.
+  let lockedReason: string | null = null;
+  if (!canEditScopeAndDocument) {
+    lockedReason = revisable
+      ? "Issued offer details are locked; create a revision before editing them."
+      : "A revision cannot be created from this offer (it is past the tender signature, or superseded), and its details are locked.";
+  } else if (!canEditPriceInputs) {
+    lockedReason =
+      "The price inputs (job setup, cost schedule, pricing) are frozen once an offer is sent; the offer document and scope can still be edited. Create a revision to change the price.";
+  }
   return {
     canCreateRevision: revisable,
-    canEditPriceInputs: isOfferBuildStepEditable("cost-schedule", status),
+    canEditPriceInputs,
     canEditScopeAndDocument,
-    // Only name a remedy that exists: a signed offer can be neither edited nor
-    // revised, and "create a revision" there sends the office after a refusal.
-    lockedReason: canEditScopeAndDocument
-      ? null
-      : revisable
-        ? "Issued offer details are locked; create a revision before editing them."
-        : "This offer is signed or closed: its details are locked and a revision cannot be created from it.",
+    lockedReason,
   };
 }
 

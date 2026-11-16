@@ -17,7 +17,9 @@ test("a sent offer keeps scope and document editable but freezes the price input
   const out = describeOfferEditability("sent");
   assert.equal(out.canEditPriceInputs, false);
   assert.equal(out.canEditScopeAndDocument, true);
-  assert.equal(out.lockedReason, null);
+  // The price is frozen, and the specialist is given the reason to say so.
+  assert.match(out.lockedReason ?? "", /price inputs/);
+  assert.match(out.lockedReason ?? "", /scope can still be edited/);
 });
 
 test("an offer out for tender signature is locked, with the reason the write gives", () => {
@@ -50,12 +52,19 @@ test("a signed offer cannot be edited or revised, and the reason does not sugges
     assert.equal(out.canEditScopeAndDocument, false, status);
     assert.equal(out.canCreateRevision, false, status);
     assert.doesNotMatch(out.lockedReason ?? "", /create a revision before/);
-    assert.match(out.lockedReason ?? "", /cannot be created/);
+    assert.match(out.lockedReason ?? "", /revision cannot be created/);
   }
 });
 
 test("a locked offer that can be revised says to create a revision", () => {
   const out = describeOfferEditability("tender_sent");
+  assert.equal(out.canCreateRevision, true);
+  assert.match(out.lockedReason ?? "", /create a revision before editing/);
+});
+
+test("an acceptance-signed offer is locked but can take a revision", () => {
+  const out = describeOfferEditability("offer_signed");
+  assert.equal(out.canEditScopeAndDocument, false);
   assert.equal(out.canCreateRevision, true);
   assert.match(out.lockedReason ?? "", /create a revision before editing/);
 });
