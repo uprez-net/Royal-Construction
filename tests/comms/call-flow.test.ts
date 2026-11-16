@@ -23,6 +23,7 @@ const inbound: CallForFlow = {
   flowStep: "RINGING_BROWSER",
   recordingConsent: "NOT_ASKED",
   staffIdentity: null,
+  staffPhoneNumber: null,
   staffTarget: null,
 };
 
@@ -254,4 +255,31 @@ test("outbound: the customer is greeted and put through to whoever pressed Call"
     nobody.instructions.map((step) => step.op),
     ["say", "hangup"],
   );
+});
+
+test("outbound to a phone: the phone picked when the call was placed rings, not the office mobile", () => {
+  const picked = decideCallStart(
+    { ...outbound, staffPhoneNumber: "+61411111111", staffTarget: "MOBILE" },
+    ctx(),
+  );
+  assert.equal(picked.step, "RINGING_MOBILE");
+  const dial = picked.instructions[1];
+  assert.equal(dial.op === "dialNumber" && dial.to, "+61411111111");
+  assert.equal(
+    dial.op === "dialNumber" && dial.callerId,
+    "+61280001234",
+    "the team member's phone shows the business number",
+  );
+
+  // Placed before the team list existed: the office mobile, as before.
+  const legacy = decideCallStart({ ...outbound, staffTarget: "MOBILE" }, ctx());
+  const legacyDial = legacy.instructions[1];
+  assert.equal(legacyDial.op === "dialNumber" && legacyDial.to, "+61400000000");
+
+  // A picked phone needs no office mobile configured at all.
+  const noOffice = decideCallStart(
+    { ...outbound, staffPhoneNumber: "+61411111111", staffTarget: "MOBILE" },
+    ctx({ staffForwardNumber: null }),
+  );
+  assert.equal(noOffice.step, "RINGING_MOBILE");
 });

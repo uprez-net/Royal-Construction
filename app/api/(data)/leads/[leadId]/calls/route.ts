@@ -23,11 +23,15 @@ import {
  *
  * POST needs an `Idempotency-Key` (one per press of Call, kept until the call
  * is placed): a double click or a retry rings the customer once.
- * `target` is where the member of staff takes it — their browser, or the
- * office mobile. `alreadyPlaced: true` means nothing new rang.
+ * `target` is where the member of staff takes it — their browser, or a
+ * phone: `phoneId` picks one of the team's phones, and none means the office
+ * mobile. `alreadyPlaced: true` means nothing new rang.
  */
 
-const placeBodySchema = z.object({ target: z.enum(["browser", "mobile"]) });
+const placeBodySchema = z.object({
+  phoneId: z.string().min(1).max(64).nullish(),
+  target: z.enum(["browser", "mobile"]),
+});
 
 export async function GET(
   _request: NextRequest,
@@ -74,7 +78,12 @@ export async function POST(
     const runtime = commsRuntimeFromEnv();
     const result = await requestLeadCall(
       principal,
-      { idempotencyKey, leadId, target: parsed.data.target },
+      {
+        idempotencyKey,
+        leadId,
+        phoneId: parsed.data.phoneId ?? null,
+        target: parsed.data.target,
+      },
       prisma,
       { channel: runtime.channel, voice: runtime.voice },
     );

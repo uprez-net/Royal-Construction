@@ -12,7 +12,6 @@ import {
   PhoneMissed,
   PhoneOutgoing,
   RefreshCw,
-  Smartphone,
   Voicemail,
 } from "lucide-react";
 
@@ -22,14 +21,20 @@ import { Button } from "@/components/ui/button";
 import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { formatE164ForDisplay } from "@/lib/domain/leads/whatsapp/phone";
 import { fetchLeadCalls, placeLeadCall } from "@/lib/leads/comms-service";
-import type { CallDto, LeadCallsDto } from "@/lib/leads/comms-types";
+import type {
+  CallablePhoneDto,
+  CallDto,
+  LeadCallsDto,
+} from "@/lib/leads/comms-types";
 import { formatSydneyStamp } from "@/lib/leads/whatsapp-format";
 
 import { CallRecordings } from "./call-recordings";
+import { CallViaPhoneButton } from "./call-via-phone-button";
 
 // Ringing a lead, and every call with them. The server places the call and
 // rings the lead first; when they pick up it puts them through to this
-// browser (answered automatically) or to the office mobile. Calls the lead
+// browser (answered automatically) or to the phone picked from the team's
+// list (Admin → Phone & SMS). Calls the lead
 // makes to the business number are answered by Mili, the voice agent, and
 // show her transcript.
 
@@ -103,7 +108,9 @@ function CallRow({
       <p className="text-xs text-muted-foreground">
         {call.direction === "OUTBOUND"
           ? `${call.staffName ?? "Staff"} → ${formatE164ForDisplay(call.customerNumber)}${
-              call.staffTarget === "MOBILE" ? " (office mobile)" : ""
+              call.staffTarget === "MOBILE"
+                ? ` (via ${call.staffPhoneLabel ?? "office mobile"})`
+                : ""
             }`
           : `From ${call.customerNumber === "withheld" ? "a withheld number" : formatE164ForDisplay(call.customerNumber)}`}
         {call.answeredBy === "AGENT" ? " · answered by Mili" : null}
@@ -174,12 +181,15 @@ export function LeadCallsPanel({
     };
   }, [load, hasLiveCall]);
 
-  async function place(target: "browser" | "mobile") {
+  async function place(
+    target: "browser" | "mobile",
+    via: CallablePhoneDto | null = null,
+  ) {
     if (placing) return;
     if (target === "browser" && phone?.status !== "ready") {
       toast.error(
         phone?.message
-          ?? "The browser phone isn't connected yet. Try the office mobile, or wait a moment.",
+          ?? "The browser phone isn't connected yet. Call via a phone, or wait a moment.",
       );
       return;
     }
@@ -194,7 +204,12 @@ export function LeadCallsPanel({
           return;
         }
       }
-      const result = await placeLeadCall(lead.id, target, callKey.current());
+      const result = await placeLeadCall(
+        lead.id,
+        target,
+        callKey.current(),
+        via?.id ?? null,
+      );
       callKey.rotate();
       if (target === "browser") {
         // The phone card takes it from here: calling, ringing, connected.
@@ -207,7 +222,7 @@ export function LeadCallsPanel({
         toast.info("That call was already placed — it wasn't placed again.");
       } else if (target === "mobile") {
         toast.success(
-          `Calling ${lead.name}. The office mobile rings when they answer.`,
+          `Calling ${lead.name}. ${via?.nickname ?? "The office mobile"} rings when they answer.`,
         );
       }
       void load();
@@ -268,19 +283,12 @@ export function LeadCallsPanel({
               </Button>
             ) : null}
             {options.mobile ? (
-              <Button
-                type="button"
-                variant="outline"
+              <CallViaPhoneButton
+                phones={options.phones}
                 disabled={!options.allowed || placing !== null}
-                onClick={() => void place("mobile")}
-              >
-                {placing === "mobile" ? (
-                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Smartphone className="size-4" aria-hidden="true" />
-                )}
-                Call via office mobile
-              </Button>
+                placing={placing === "mobile"}
+                onCall={(via) => void place("mobile", via)}
+              />
             ) : null}
           </div>
         ) : null}

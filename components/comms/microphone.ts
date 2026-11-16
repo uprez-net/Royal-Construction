@@ -4,7 +4,7 @@
 
 export async function checkMicrophone(): Promise<string | null> {
   if (!navigator.mediaDevices?.getUserMedia) {
-    return "This browser can't use a microphone here. Use the office mobile instead.";
+    return "This browser can't use a microphone here. Call via a phone instead.";
   }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -19,11 +19,11 @@ export async function checkMicrophone(): Promise<string | null> {
       return "The microphone is blocked for this site. Allow it from the icon in the address bar, then call again.";
     }
     if (name === "NotFoundError" || name === "OverconstrainedError") {
-      return "No microphone was found. Connect one, or use the office mobile.";
+      return "No microphone was found. Connect one, or call via a phone.";
     }
     if (name === "NotReadableError") {
-      return "The microphone is in use by another app. Close it, or use the office mobile.";
+      return "The microphone is in use by another app. Close it, or call via a phone.";
     }
-    return "The microphone couldn't be started. Check it's allowed, or use the office mobile.";
+    return "The microphone couldn't be started. Check it's allowed, or call via a phone.";
   }
 }

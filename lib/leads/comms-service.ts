@@ -13,6 +13,7 @@ import type {
   SmsMessageDto,
   SmsSendResultDto,
   SmsThreadDto,
+  TeamPhoneDto,
   WhatsAppCallDto,
   WhatsAppCallPermissionDto,
 } from "./comms-types";
@@ -101,15 +102,17 @@ export function fetchLeadCalls(
   );
 }
 
+/** `phoneId`: the team phone to ring for `mobile`; null is the office mobile. */
 export function placeLeadCall(
   leadId: number,
   target: "browser" | "mobile",
   idempotencyKey: string,
+  phoneId: string | null = null,
 ): Promise<PlaceCallResultDto> {
   return unwrap(
     `/api/leads/${leadId}/calls`,
     {
-      body: JSON.stringify({ target }),
+      body: JSON.stringify({ phoneId, target }),
       headers: { ...JSON_HEADERS, ...idempotencyHeader(idempotencyKey) },
       method: "POST",
     },
@@ -125,6 +128,46 @@ export function fetchCall(
     `/api/calls/${encodeURIComponent(callId)}`,
     { ...GET, signal },
     "Could not load the call.",
+  );
+}
+
+// ── Team phones ───────────────────────────────────────────────────────
+
+export function fetchTeamPhones(): Promise<{ phones: TeamPhoneDto[] }> {
+  return unwrap(
+    "/api/comms/team-phones",
+    GET,
+    "Could not load the team phones.",
+  );
+}
+
+export function addTeamPhone(input: {
+  nickname: string;
+  number: string;
+}): Promise<{ phone: TeamPhoneDto }> {
+  return unwrap(
+    "/api/comms/team-phones",
+    { body: JSON.stringify(input), headers: JSON_HEADERS, method: "POST" },
+    "Could not add the phone.",
+  );
+}
+
+export function updateTeamPhone(
+  phoneId: string,
+  input: { nickname?: string; number?: string },
+): Promise<{ phone: TeamPhoneDto }> {
+  return unwrap(
+    `/api/comms/team-phones/${encodeURIComponent(phoneId)}`,
+    { body: JSON.stringify(input), headers: JSON_HEADERS, method: "PATCH" },
+    "Could not update the phone.",
+  );
+}
+
+export function removeTeamPhone(phoneId: string): Promise<unknown> {
+  return unwrap(
+    `/api/comms/team-phones/${encodeURIComponent(phoneId)}`,
+    { method: "DELETE" },
+    "Could not remove the phone.",
   );
 }
 

@@ -7,6 +7,12 @@ import type { CommsChannel } from "../../ports/comms";
 import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
 import { normaliseLeadPhone } from "../../leads/whatsapp/phone";
 import { SMS_REFUSALS } from "../sms/policy";
+import {
+  callablePhones,
+  listTeamPhones,
+  type CallablePhone,
+  type TeamPhoneRecord,
+} from "../team-phones";
 import { CALL_REFUSALS } from "./outbound";
 import { CALL_SELECT, toCallRecord, type CallRecord } from "./records";
 
@@ -16,16 +22,20 @@ export type LeadCallOptions = {
   readonly to: string | null;
   readonly browser: boolean;
   readonly mobile: boolean;
+  /** The phones "Call via phone" can ring: the team's, then the office mobile. */
+  readonly phones: readonly CallablePhone[];
 };
 
 /** Whether this lead can be rung now, and how — for the Call button. */
 export function evaluateLeadCallOptions(
   lead: { readonly phone: string; readonly isArchived: boolean },
   channel: CommsChannel | null,
+  teamPhones: readonly TeamPhoneRecord[] = [],
 ): LeadCallOptions {
   const phone = normaliseLeadPhone(lead.phone);
   const browser = Boolean(channel?.browserCalling);
-  const mobile = Boolean(channel?.staffForwardNumber);
+  const phones = callablePhones(teamPhones, channel);
+  const mobile = phones.length > 0;
   const reason = lead.isArchived
     ? CALL_REFUSALS.archived
     : !phone.usable
@@ -39,7 +49,14 @@ export function evaluateLeadCallOptions(
           : !browser && !mobile
             ? CALL_REFUSALS.noMobile
             : null;
-  return { allowed: reason === null, browser, mobile, reason, to: phone.e164 };
+  return {
+    allowed: reason === null,
+    browser,
+    mobile,
+    phones,
+    reason,
+    to: phone.e164,
+  };
 }
 
 export async function getLeadCalls(
@@ -54,15 +71,18 @@ export async function getLeadCalls(
     where: { id: input.leadId },
   });
   if (!lead) throw new DomainNotFoundError("Lead not found");
-  const rows = await db.call.findMany({
-    orderBy: { startedAt: "desc" },
-    select: CALL_SELECT,
-    take: 50,
-    where: { leadId: input.leadId },
-  });
+  const [rows, teamPhones] = await Promise.all([
+    db.call.findMany({
+      orderBy: { startedAt: "desc" },
+      select: CALL_SELECT,
+      take: 50,
+      where: { leadId: input.leadId },
+    }),
+    listTeamPhones(principal, db),
+  ]);
   return {
     calls: rows.map(toCallRecord),
-    options: evaluateLeadCallOptions(lead, context.channel),
+    options: evaluateLeadCallOptions(lead, context.channel, teamPhones),
   };
 }
 

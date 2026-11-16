@@ -49,6 +49,7 @@ export const CALL_SELECT = {
     },
   },
   seenAt: true,
+  staffPhoneLabel: true,
   staffTarget: true,
   staffUser: { select: { name: true } },
   startedAt: true,
@@ -82,6 +83,8 @@ export type CallRecord = {
   readonly status: CallStatus;
   readonly flowStep: CallFlowStep;
   readonly staffTarget: CallStaffTarget | null;
+  /** Outbound to a phone: the nickname of the phone it rang. */
+  readonly staffPhoneLabel: string | null;
   readonly staffName: string | null;
   readonly answeredBy: CallAnsweredBy | null;
   readonly recordingConsent: RecordingConsent;
@@ -134,6 +137,7 @@ export function toCallRecord(row: CallRow): CallRecord {
     })),
     seenAt: row.seenAt,
     staffName: row.staffUser?.name ?? null,
+    staffPhoneLabel: row.staffPhoneLabel,
     staffTarget: row.staffTarget,
     startedAt: row.startedAt,
     status: row.status,

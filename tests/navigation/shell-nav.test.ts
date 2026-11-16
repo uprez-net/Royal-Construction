@@ -28,6 +28,16 @@ test("a numeric segment is titled as the lead", () => {
   assert.equal(getScreenTitle("tradie-management"), "Tradie Management");
 });
 
+test("an admin screen is named as its page is, not by its slug", () => {
+  assert.equal(getScreenTitle("comms"), "Phone & SMS");
+  assert.equal(getScreenTitle("whatsapp"), "WhatsApp");
+  assert.deepEqual(getShellTrail("/admin/comms", getScreenTitle("comms")), [
+    "Home",
+    "Admin",
+    "Phone & SMS",
+  ]);
+});
+
 test("a slug that only starts with a digit is not a lead", () => {
   assert.equal(getScreenTitle("2fa-settings"), "2fa Settings");
 });

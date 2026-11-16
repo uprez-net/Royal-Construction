@@ -71,6 +71,8 @@ export type CallDto = {
   status: CallStatusDto;
   flowStep: string;
   staffTarget: "BROWSER" | "MOBILE" | null;
+  /** Outbound to a phone: the nickname of the phone it rang. */
+  staffPhoneLabel: string | null;
   staffName: string | null;
   answeredBy: "BROWSER" | "MOBILE" | "VOICEMAIL" | "AGENT" | null;
   recordingConsent: "NOT_ASKED" | "GRANTED" | "DECLINED" | "DECLARED";
@@ -118,8 +120,19 @@ export type LeadCallsDto = {
     to: string | null;
     browser: boolean;
     mobile: boolean;
+    /** What "Call via phone" can ring. `id` is null for the office mobile. */
+    phones: CallablePhoneDto[];
   };
 };
+
+export type CallablePhoneDto = {
+  id: string | null;
+  nickname: string;
+  e164: string;
+};
+
+/** A team member's phone, as an admin manages it. */
+export type TeamPhoneDto = { id: string; nickname: string; e164: string };
 
 export type PlaceCallResultDto = { call: CallDto; alreadyPlaced: boolean };
 

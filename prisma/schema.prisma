@@ -2719,6 +2719,18 @@ enum RecordingConsent {
   DECLARED
 }
 
+/// A team member's own phone, added under Admin → Phone & SMS. "Call via
+/// phone" on a lead rings the customer first, then puts them through to the
+/// phone picked here, presenting the business number.
+model CommsTeamPhone {
+  id        String   @id @default(uuid())
+  /// Who carries it, as the office says it: "Raj", "Site mobile".
+  nickname  String
+  e164      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 /// One phone call with a customer. `providerCallId` is the customer's leg.
 model Call {
   id                  String           @id @default(uuid())
@@ -2734,6 +2746,12 @@ model Call {
   status              CallStatus
   flowStep            CallFlowStep
   staffTarget         CallStaffTarget?
+  /// Outbound to a phone: the number it rings once the customer answers, and
+  /// that phone's nickname. Copied when the call is placed, so editing the
+  /// team list never re-routes a call in progress. Null on older calls and on
+  /// inbound ones, which ring COMMS_STAFF_FORWARD_NUMBER.
+  staffPhoneNumber    String?
+  staffPhoneLabel     String?
   /// Who placed an outbound call.
   staffUserId         String?
   answeredBy          CallAnsweredBy?
