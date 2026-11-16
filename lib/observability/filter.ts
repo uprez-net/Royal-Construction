@@ -48,6 +48,24 @@ export function errorStatus(error: unknown): number | undefined {
   return undefined;
 }
 
+// Node writes its own process warnings with `console.error`, as one string:
+// "(node:7) ExperimentalWarning: …". Console capture sends that as an event, so
+// a runtime detail (a vm flag a dependency uses on every workflow step) read as
+// an application error and was 142 of 174 events in its first two days.
+// Node also prints a bracketed code before the name of a coded warning
+// ("(node:7) [DEP0005] DeprecationWarning: …"), and a plain `process.emitWarning`
+// is just "Warning" with no prefix on the name.
+const NODE_PROCESS_WARNING = /^\(node:\d+\) (?:\[[A-Z0-9_]+\] )?\w*Warning: /;
+
+/**
+ * Text that is a Node process warning (`ExperimentalWarning`,
+ * `DeprecationWarning`, `MaxListenersExceededWarning`), not a fault in this app.
+ * The caller must also know it is not a real `Error` — see `beforeSend`.
+ */
+export function isNodeProcessWarning(text: string | undefined): boolean {
+  return typeof text === "string" && NODE_PROCESS_WARNING.test(text);
+}
+
 // Next throws these to steer rendering (`redirect()`, `notFound()`, a dynamic
 // bailout). They are control flow that happens to travel as an exception.
 const NEXT_CONTROL_FLOW_DIGESTS = [

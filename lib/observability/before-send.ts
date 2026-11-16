@@ -3,10 +3,12 @@ import type { ErrorEvent, EventHint } from "@sentry/core";
 import {
   embeddedVendorStatus,
   isExpectedError,
+  isNodeProcessWarning,
   markReported,
   wasReported,
 } from "./filter";
 import { redactRecord, redactText } from "./redact";
+import { workflowRuntimeFailure } from "./workflow-runtime-failure";
 import { createThrottle, type Throttle } from "./throttle";
 
 /** Tag `reportError` sets so `beforeSend` knows the caller already decided. */
@@ -49,6 +51,48 @@ function isVendorErrorText(event: ErrorEvent): boolean {
     ...(event.exception?.values ?? []).map((value) => value.value),
   ];
   return texts.some((text) => embeddedVendorStatus(text) !== undefined);
+}
+
+/**
+ * A Node process warning that console capture turned into an event.
+ *
+ * Checked on the text, not on the absence of `event.exception`: a message sent
+ * with a stack trace still carries a synthetic exception, so the event has one
+ * either way. What separates it from a real failure is that there is no `Error`
+ * behind it (`original` is undefined for a string `console.error`), so a thrown
+ * `Error` that merely quotes a warning is never dropped by this rule. The text
+ * still reaches the Vercel logs; only the Sentry copy goes.
+ */
+function isNodeWarningEvent(event: ErrorEvent, original: unknown): boolean {
+  if (original instanceof Error) return false;
+  const texts = [
+    event.message,
+    ...(event.exception?.values ?? []).map((value) => value.value),
+  ];
+  return texts.some((text) => isNodeProcessWarning(text));
+}
+
+/**
+ * Turn the Workflow runtime's "[object Object]" failure line into one that says
+ * which kind of failure it was and which run, from a validated allow-list (see
+ * workflow-runtime-failure.ts). Leaves any other event untouched.
+ */
+function describeWorkflowRuntimeFailure(event: ErrorEvent): void {
+  const failure = workflowRuntimeFailure(
+    event.message ?? event.exception?.values?.[0]?.value,
+    event.extra?.arguments,
+  );
+  if (!failure) return;
+  const text = `Workflow run failed: ${failure.code} ${failure.name}`;
+  event.message = text;
+  for (const value of event.exception?.values ?? []) value.value = text;
+  // One issue per kind of failure, not one per run.
+  event.fingerprint = ["workflow-runtime", failure.code, failure.name];
+  event.tags = {
+    ...event.tags,
+    workflow_error_code: failure.code,
+    ...(failure.runId ? { workflow_run_id: failure.runId } : {}),
+  };
 }
 
 function redactEvent(event: ErrorEvent): void {
@@ -123,7 +167,10 @@ export function createBeforeSend(
       if (wasReported(original)) return null;
       if (isExpectedError(original)) return null;
       if (isVendorErrorText(event)) return null;
+      if (isNodeWarningEvent(event, original)) return null;
     }
+    // Before redactEvent deletes the raw console arguments this reads from.
+    describeWorkflowRuntimeFailure(event);
     redactEvent(event);
     if (!throttle.allow(throttleKey(event))) return null;
     markReported(original);
