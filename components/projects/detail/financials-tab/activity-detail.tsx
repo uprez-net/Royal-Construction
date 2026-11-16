@@ -16,6 +16,7 @@ import type {
   FinancialBooking,
   FinancialInvoice,
 } from "@/lib/domain/projects/financial-report";
+import type { TradieFigure } from "@/lib/domain/projects/milestone-tradie-figures";
 import {
   BILLING_STATE_LABELS,
   type BookingBillingState,
@@ -68,6 +69,15 @@ export type InvoiceActions = {
   readonly onPrice: (
     activity: FinancialActivity,
     price: number,
+  ) => Promise<boolean>;
+  /**
+   * Type an activity's own tradie quoted or total invoiced figure, ex GST, in
+   * cents; null puts the bookings' figure back. Resolves true once saved.
+   */
+  readonly onTradieFigure: (
+    activity: FinancialActivity,
+    figure: TradieFigure,
+    ownCents: number | null,
   ) => Promise<boolean>;
 };
 

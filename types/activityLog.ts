@@ -244,6 +244,16 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
     milestoneId: data.milestoneId,
   }),
 
+  milestoneTradieFigureChanged: (data) => ({
+    id: uuidv4(),
+    type: "milestoneTradieFigureChanged",
+    message: `${data.milestoneName} ${data.figure} changed from ${data.previous} to ${data.next}`,
+    authorId: "system",
+    timestamp: new Date().toISOString(),
+    projectId: data.projectId,
+    milestoneId: data.milestoneId,
+  }),
+
   newMilestonePhotoUploaded: (data) => ({
     id: uuidv4(),
     type: "newMilestonePhotoUploaded",

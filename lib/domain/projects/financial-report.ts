@@ -46,6 +46,12 @@ import { countsTowardsClientPrice, GST_RATE } from "./variation-rules";
 //   C  invoiced  — what those tradies have actually billed: the sum of the
 //                  invoices against its bookings, ex GST.
 //
+// The office can type B or C for an activity by hand on the Financials tab
+// (`Milestone.tradieQuotedOverride` / `tradieInvoicedOverride`). A typed
+// figure replaces what the activity's OWN bookings add up to; its
+// sub-activities still roll up on top, and the bookings and invoices listed
+// under it are unchanged, so the figure it stands in for stays in view.
+//
 // A stage's A is not the sum of its activities. It is pegged to the stage's
 // share of the contract — the same claim the Milestones tab shows and the
 // stage invoice bills (`resolveStageClaims`), brought to ex GST — plus the
@@ -144,6 +150,14 @@ export type FinancialActivity = {
   readonly status: MilestoneStatus;
   /** Chargeable variations raised on this activity itself, ex GST. In A. */
   readonly variationCents: Cents;
+  /**
+   * B for this activity alone, typed by hand in place of its own bookings'
+   * prices, ex GST; null when the bookings decide it. What
+   * `setMilestoneTradieFigure` compares and writes.
+   */
+  readonly quotedOverrideCents: Cents | null;
+  /** C for this activity alone, typed by hand; null when its invoices decide. */
+  readonly invoicedOverrideCents: Cents | null;
   /** This activity alone: its own tender share and its own bookings. */
   readonly own: FinancialFigures;
   /** With every activity beneath it. Equal to `own` for a leaf. */
@@ -206,6 +220,10 @@ export type ReportMilestone = {
   readonly projectStage: ProjectStage;
   readonly status: MilestoneStatus;
   readonly budgetCents: Cents;
+  /** B typed by hand for this activity alone; absent or null: its bookings'. */
+  readonly quotedOverrideCents?: Cents | null;
+  /** C typed by hand for this activity alone; absent or null: its invoices'. */
+  readonly invoicedOverrideCents?: Cents | null;
 };
 
 /** A raised variation, as the report counts it. */
@@ -376,6 +394,37 @@ function bookingSums(booking: FinancialBooking): Sums {
   };
 }
 
+/**
+ * An activity's own booking sums with any figure the office typed in their
+ * place. A typed figure is a single amount, not a set of bookings, so the
+ * per-booking flags it would contradict are dropped with it: a typed B is not
+ * missing and states no GST basis to assume, and once either figure is typed
+ * the forecast and the over-invoiced check read the two activity figures
+ * rather than the bookings beneath them.
+ */
+function withOverrides(
+  sums: Sums,
+  quotedOverride: Cents | null,
+  invoicedOverride: Cents | null,
+): Sums {
+  if (quotedOverride === null && invoicedOverride === null) return sums;
+  const quoted = quotedOverride ?? sums.quoted;
+  const invoiced = invoicedOverride ?? sums.invoiced;
+  const quoteMissing = quotedOverride === null && sums.quoteMissing;
+  return {
+    ...sums,
+    bookingOver: false,
+    forecastCost: Math.max(quoted, invoiced),
+    gstAssumed: quotedOverride === null && sums.gstAssumed,
+    invoiced,
+    invoicedGst:
+      invoicedOverride === null ? sums.invoicedGst : gstOnPrice(invoiced),
+    quoteMissing,
+    quoted,
+    quotedGst: quotedOverride === null ? sums.quotedGst : gstOnPrice(quoted),
+  };
+}
+
 /** Build the report from a project's rows. */
 export function buildProjectFinancialReport(input: {
   readonly milestones: readonly ReportMilestone[];
@@ -495,8 +544,14 @@ export function buildProjectFinancialReport(input: {
       0,
     );
     const variationCents = variationsByMilestone.get(node.id) ?? 0;
+    const quotedOverrideCents = node.quotedOverrideCents ?? null;
+    const invoicedOverrideCents = node.invoicedOverrideCents ?? null;
     const ownSums: Sums = {
-      ...sumBookings(bookings),
+      ...withOverrides(
+        sumBookings(bookings),
+        quotedOverrideCents,
+        invoicedOverrideCents,
+      ),
       tender: Math.max(0, node.budgetCents - childTender) + variationCents,
       // Round each activity's share once, then roll it up with its children.
       tenderGst:
@@ -518,12 +573,14 @@ export function buildProjectFinancialReport(input: {
         children: children.map((child) => child.activity),
         figures: figuresOf(sums),
         id: node.id,
+        invoicedOverrideCents,
         name: node.name,
         order: node.order,
         own: figuresOf(ownSums),
         // The stored budget, exactly: setMilestonePrice compares it with the
         // row, and a late child can push the summed tender above it.
         priceCents: node.budgetCents,
+        quotedOverrideCents,
         stage: node.projectStage,
         status: node.status,
         variationCents,

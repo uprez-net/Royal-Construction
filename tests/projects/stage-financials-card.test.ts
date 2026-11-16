@@ -107,6 +107,7 @@ function render(
     createElement(StageFinancialsCard, {
       actions: {
         onPrice: async () => true,
+        onTradieFigure: async () => true,
         onRecheck: noop,
         onRecord: noop,
         onVariation: noop,

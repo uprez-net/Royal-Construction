@@ -156,6 +156,17 @@ export const activityLogSchemas = {
     price: z.string(),
   }),
 
+  milestoneTradieFigureChanged: z.object({
+    projectId: z.string(),
+    milestoneId: z.string(),
+    milestoneName: z.string(),
+    /** "tradie quoted" or "total invoiced", as the Financials tab names it. */
+    figure: z.string(),
+    /** A dollar amount, or "the bookings' figure" when none was typed. */
+    previous: z.string(),
+    next: z.string(),
+  }),
+
   milestoneAdded: z.object({
     projectId: z.string(),
     milestoneId: z.string(),

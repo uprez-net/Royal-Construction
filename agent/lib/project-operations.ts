@@ -459,6 +459,16 @@ function financialActivities(
       ...financialFigures(activity.figures),
       variationsAdded:
         activity.variationCents > 0 ? dollars(activity.variationCents) : null,
+      // Typed by the office on the Financials tab in place of what this
+      // activity's own bookings or invoices add up to; null when derived.
+      tradieQuotedEnteredByHand:
+        activity.quotedOverrideCents === null
+          ? null
+          : dollars(activity.quotedOverrideCents),
+      totalInvoicedEnteredByHand:
+        activity.invoicedOverrideCents === null
+          ? null
+          : dollars(activity.invoicedOverrideCents),
     },
     ...financialActivities(activity.children, [...path, activity.name]),
   ]);
