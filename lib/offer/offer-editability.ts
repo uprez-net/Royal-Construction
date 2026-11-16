@@ -102,13 +102,18 @@ export function describeOfferEditability(status: OfferWorkspaceStatus): {
   readonly lockedReason: string | null;
 } {
   const canEditScopeAndDocument = isOfferBuildStepEditable("scope", status);
+  const revisable = canCreateRevision(status);
   return {
-    canCreateRevision: canCreateRevision(status),
+    canCreateRevision: revisable,
     canEditPriceInputs: isOfferBuildStepEditable("cost-schedule", status),
     canEditScopeAndDocument,
+    // Only name a remedy that exists: a signed offer can be neither edited nor
+    // revised, and "create a revision" there sends the office after a refusal.
     lockedReason: canEditScopeAndDocument
       ? null
-      : "Issued offer details are locked; create a revision before editing them.",
+      : revisable
+        ? "Issued offer details are locked; create a revision before editing them."
+        : "This offer is signed or closed: its details are locked and a revision cannot be created from it.",
   };
 }
 

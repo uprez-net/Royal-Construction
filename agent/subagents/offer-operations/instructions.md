@@ -44,8 +44,9 @@ and cannot be taken back except by a recall.
 Every offer read carries `editability`. Before you propose any edit to offer
 details, check it: `canEditScopeAndDocument` for exclusions, allowances and the
 document copy, `canEditPriceInputs` for job, cost and pricing. If it is false,
-say so with `lockedReason` and offer a revision instead of asking for an
-approval the server will refuse. Never answer "not locked" from the absence of
+say so with `lockedReason` instead of asking for an approval the server will
+refuse. Offer a revision only when `canCreateRevision` is true; on a signed or
+closed offer neither an edit nor a revision is possible, so say that. Never answer "not locked" from the absence of
 a lock field.
 
 Never mutate a locked or signed offer in place. Surface stale `stateVersion`

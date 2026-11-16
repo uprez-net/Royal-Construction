@@ -43,3 +43,19 @@ test("every status after the negotiation window is locked for scope", () => {
     );
   }
 });
+
+test("a signed offer cannot be edited or revised, and the reason does not suggest a revision", () => {
+  for (const status of ["tender_signed", "contract_signed"] as const) {
+    const out = describeOfferEditability(status);
+    assert.equal(out.canEditScopeAndDocument, false, status);
+    assert.equal(out.canCreateRevision, false, status);
+    assert.doesNotMatch(out.lockedReason ?? "", /create a revision before/);
+    assert.match(out.lockedReason ?? "", /cannot be created/);
+  }
+});
+
+test("a locked offer that can be revised says to create a revision", () => {
+  const out = describeOfferEditability("tender_sent");
+  assert.equal(out.canCreateRevision, true);
+  assert.match(out.lockedReason ?? "", /create a revision before editing/);
+});
