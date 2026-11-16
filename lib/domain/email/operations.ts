@@ -2,7 +2,7 @@ import { HistoryType, OutboxEventKind } from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError, DomainValidationError } from "../errors";
-import { runOutboxEffect, runOutboxEffectWithOutcome } from "../outbox";
+import { runOutboxEffectWithOutcome } from "../outbox";
 import {
   attributionUserId,
   isInternalPrincipal,
