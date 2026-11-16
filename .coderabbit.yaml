@@ -2,9 +2,7 @@ language: "en-AU"
 early_access: false
 inheritance: false
 tone_instructions: >-
-  Be concise, evidence-based, and specific. Prioritize correctness, security, data integrity,
-  accessibility, and user-visible regressions. Explain impact and cite the smallest practical fix.
-  Treat repository guidance and ADRs as authoritative.
+  Be concise, evidence-based and correctness-first. Lead with security, data integrity, client-facing output, unauthenticated access and silent failure. Cite file and line, the impact, and the smallest fix. Plain, short sentences.
 
 reviews:
   profile: "chill"
@@ -12,7 +10,8 @@ reviews:
   high_level_summary: true
   high_level_summary_instructions: >-
     Summarize user-visible behavior, data or schema changes, security implications, test and build
-    evidence, and rollout risks. Call out migration, signing, or legal-document impact explicitly.
+    evidence, and rollout risks. Call out migration, signing, or legal-document impact explicitly. Write the summary in
+    plain, short sentences in the active voice, with no filler, praise or em dashes.
   review_status: true
   review_details: true
   review_progress: true
@@ -62,7 +61,8 @@ reviews:
   path_instructions:
     - path: "**/*"
       instructions: |
-        Before reviewing, read AGENTS.md, CLAUDE.md, CONTEXT.md, and docs/coding-standards.md.
+        Before reviewing, read AGENTS.md, CLAUDE.md, CONTEXT.md, docs/coding-standards.md, and
+        lib/domain/GUIDE.md.
         For architecture or workflow changes, also read the relevant document in docs/architecture.md,
         docs/implementation.md, docs/adr/, or docs/offer/. Treat accepted ADRs and CONTEXT.md as the
         source of truth for domain terminology and lifecycle behavior. Do not invent a replacement
@@ -71,8 +71,9 @@ reviews:
 
     - path: "**/*.{ts,tsx,js,jsx,mjs,cjs}"
       instructions: |
-        Follow the repository's TypeScript and React standards. Keep server-side data access in
-        lib/data or route/server-action code, keep client components focused on rendering and
+        Follow the repository's TypeScript and React standards. Business rules live in lib/domain.
+        Server-side data access stays in lib/data or route/server-action code, as an adapter over a
+        lib/domain command. Keep client components focused on rendering and
         interaction, and preserve serializable client boundaries. Prefer explicit types, shared
         validators and response helpers, and the existing fetchJson/Redux/React Query patterns.
         Flag unsafe assertions, implicit any, swallowed errors, secret leakage, missing auth, and
@@ -98,19 +99,24 @@ reviews:
 
     - path: "lib/data/**/*.{ts,tsx}"
       instructions: |
-        Review data helpers as the server-side domain boundary. Check authorization assumptions,
+        Review lib/data as an adapter over a lib/domain command: it authenticates, validates and
+        formats, and does not decide a rule. Flag a mutation that decides or writes a business rule here
+        instead of calling the domain command. Check authorization assumptions,
         input validation, transaction scope, race conditions, N+1 queries, pagination/search behavior,
         Decimal and JSON serialization, error context, and cache invalidation. A mutation should
         return the refreshed canonical shape required by its callers and should not silently discard
         a failed write or overwrite a newer revision.
 
-    - path: "{components/offers,lib/offer,lib/docusign,app/api/docusign}/**/*.{ts,tsx}"
+    - path: "{components/offers,lib/offer,lib/domain/offers,lib/docusign,app/api/docusign}/**/*.{ts,tsx}"
       instructions: |
-        Treat CONTEXT.md and ADR 0001 through ADR 0005 as contract-grade requirements. Preserve the
+        Treat CONTEXT.md and ADR 0001 through ADR 0006 as contract-grade requirements, reading
+        each ADR's latest status and amendments. Preserve the
         distinction between Offer, Offer document, Tender, Contract, and Project. Preserve revision
         history and immutable snapshots after their lock points; do not allow a revision after
         tender_signed. Preserve owners[] including company director signatories, one tracked signer
-        per person, customer routingOrder 1 in parallel, and the builder counter-signing at order 2.
+        per person, customer signers at routingOrder 1 in parallel, and the builder counter-signing at order 2
+        on Tender and Contract envelopes only. The Offer acceptance envelope has customer signers only
+        and no builder recipient.
         Keep Current Location distinct from Site Location. Offer acceptance is customer-only and does
         not itself generate the Tender; Project handoff is gated solely by contract_signed. Flag any
         code that silently drops parties, changes status without an auditable event, treats a PDF
@@ -139,8 +145,17 @@ reviews:
         Prefer tests that prove observable domain behavior and invariants rather than implementation
         details. Keep cases independent and descriptive, cover boundary and failure states, and add
         regression coverage for changes to Offer status transitions, revisions, ownership/signers,
-        DocuSign callbacks, pricing/cents arithmetic, and physical document pagination. Match the
-        repository's existing tsx test scripts and do not assume a pnpm test script that is absent.
+        DocuSign callbacks, pricing/cents arithmetic, and physical document pagination.
+        Tests run on Vitest. Import test, describe, it and the lifecycle hooks from vitest, and assert
+        with node:assert/strict. Do not use expect, node:test, .only, .skip or .todo. Import
+        application code through @/ and sibling fixtures relatively, take the repo root from
+        tests/support/repo-root.ts, and restore process.env in afterEach. Do not import an app route
+        handler, or any module that reaches server-only, as about half of lib/data does: server-only
+        throws when Vitest loads it, and tests/architecture/test-suite-loadable.test.ts names the
+        import chain. Importing a lib/data module that does not reach it is fine. To cover a route, read its source as text the way
+        tests/architecture/error-reporting.test.ts does, or move the logic into lib/domain. Do not ask
+        for a direct route import. A browser test belongs in the print project and must fail, not
+        skip, when Chromium is missing.
 
     - path: "docs/adr/**/*.md"
       instructions: |
@@ -149,6 +164,139 @@ reviews:
         domain decision, require the same PR to update or explicitly reconcile the affected ADR and
         reference docs. Flag terminology that conflates Current Location/Site Location or Offer,
         Tender, and Contract.
+
+    - path: "**/*"
+      instructions: |
+        Rate severity by who is affected, not by the size of the diff. High: anything a client sees
+        (emails, PDFs, DocuSign envelopes, quoted prices, dates), anything reachable without logging in
+        (the public booking route and the inbound lead webhook), silent failure (reporting success while
+        committing nothing), and loss of data or money. Low: cosmetics only the office sees, and a race
+        between two different internal users. A race matters when one person can trigger it with a
+        double-click, a retry or two tabs, so say which kind it is. Do not ask for role scoping between
+        staff, who share one admin login, but use leadListScope wherever a lead list is read. This never
+        covers CUSTOMER or GUEST access. An authenticated CUSTOMER or GUEST reaching an internal route,
+        page or lead list is a high-severity finding, and the check is requireInternalUser() or
+        leadListScope, not proxy.ts.
+
+    - path: "**/*"
+      instructions: |
+        Write each review comment in one or two short sentences, in the active voice. Say what to check
+        and why, then give the smallest fix. Do not praise the code, summarise the diff, or open or close
+        with filler. Do not use emoji, em dashes, en dashes, curly quotes or stacked hedges ("could
+        potentially perhaps"). Use a colon only before a list or an example. Do not bold every name.
+        Use sentence case for headings. Prefer plain words: use, help, many, because, if. Avoid crucial,
+        pivotal, robust, seamless, ensure, leverage, utilize, facilitate, delve, landscape, and abstract
+        nouns such as surface, substrate, vector or paradigm. Do not write "not just X but Y", do not
+        force points into groups of three, and do not cycle synonyms for one thing. Name what the code
+        does, a number, or a file, not how it feels. If a sentence could appear unchanged in another
+        project's review, cut it.
+
+    - path: "lib/domain/**/*.ts"
+      instructions: |
+        A business rule has one implementation, in lib/domain. Before a rule is added, search the table
+        in lib/domain/GUIDE.md section 1 and call the existing command instead of writing a second copy.
+        A second copy of a rule is a defect here, so if two copies disagree, keep the stricter one and
+        say which behaviour was dropped. A command takes principal, input and db in that order. Domain
+        code must not import next/*, @clerk/nextjs, react, server-only, app/, agent/ or components/. A
+        refusal throws a DomainError subclass from lib/domain/errors.ts with a message an operator can
+        read, and a failed write must never return success. A call to email, Blob, DocuSign, Xero, Novu
+        or Graph goes through a port, and an effect that costs money or a client's trust twice records an
+        outbox intent first.
+
+    - path: "agent/**/*.ts"
+      instructions: |
+        The orchestrator reaches a specialist only through the delegate tool, and every specialist sets
+        tool: false. Do not give a specialist its own model tool back. Do not add a value import of
+        @clerk/nextjs, next/* or server-only in agent/ or in the application modules it imports, because
+        eve build fails; import type is safe. Clerk runs at the channel boundary, and tools read the
+        principal from ctx.session.auth.current through requireCurrentAgentActor. A new
+        agent/lib/*-operations.ts file starts at 0 direct Prisma, and the budget number in
+        tests/architecture/agent-operations-prisma.test.ts may only go down.
+
+    - path: "lib/observability/**/*.ts"
+      instructions: |
+        Shared code imports @sentry/core, never @sentry/nextjs, and only agent/lib/error-reporting.ts may
+        import @sentry/node. Report each error once: do not call reportError and console.error for the
+        same error, and never report a refusal below 500. Never put record contents, names, addresses or
+        raw console arguments on an event. Pass ids in ids. Keep @sentry/core, @sentry/nextjs and
+        @sentry/node pinned to one exact version and bump them together, or reportError becomes a no-op.
+
+    - path: "tests/architecture/**/*.ts"
+      instructions: |
+        These files are guards. Change one only with a reason stated in the PR. Do not raise a budget
+        number in agent-operations-prisma.test.ts, do not add an allowlist entry without a reason beside
+        it, and do not remove a guard's planted-violation self-check. Lowering a budget is the expected
+        change when a rule moves into lib/domain.
+
+    - path: "app/api/**/*.{ts,tsx}"
+      instructions: |
+        A route that reads an Idempotency-Key header must have a caller that sends one
+        (tests/architecture/idempotency-keys.test.ts). A catch block that answers 500 for a domain
+        refusal must surface it through domainErrorResponse or domainActionFailure in
+        lib/http/domain-response.ts, or be listed with a reason in domain-error-surfacing.test.ts. A
+        catch that answers a 5xx must log with console.error or call reportError, or a failure reaches
+        nobody. A retried send uses a key that changes when the effect changes, not one with no time in it.
+
+    - path: "lib/domain/offers/recall.ts"
+      instructions: |
+        When recall changes, check that the status commit still passes the status read before the
+        envelope void as expectedFromStatus. A concurrent status change must make the commit return
+        null, not overwrite the status. Do not demand assertTransitionAllowed here: recall moves an
+        offer backwards by design, and skipTransitionCheck is intentional.
+
+    - path: "app/api/**/leads/tasks/**/route.ts"
+      instructions: |
+        Every handler in the lead tasks routes must call requireInternalUser() and return its 403 before
+        it reads or writes a task. Do not accept proxy.ts as the access check, because it lets
+        authenticated CUSTOMER users through. Do not accept resolveActingUserId() as the check, because
+        it only stamps the audit author.
+
+    - path: "{lib/xero/contact.ts,lib/domain/projects/billing-contact.ts}"
+      instructions: |
+        projectBillingContact already trims and lower-cases the primary and co-owner emails and trims
+        the primary phone, so the Xero adapter sends those values as they are. Do not ask for another
+        normalisation of contact.email or the contact person emails in lib/xero/contact.ts. Lower-casing
+        the email Xero returns inside sameOwners is intended, because that value is remote data.
+
+    - path: "lib/domain/{projects/owners,identity/users,identity/customers}.ts"
+      instructions: |
+        Customer phone identity uses canonicalPhone: trimmed, digits only, a leading + kept, and no
+        country code inferred. Check that every write of Customer.phone and every Customer.phone lookup
+        passes the value through canonicalPhone, so the unique column compares like with like. Do not
+        ask for E.164 or a +61 prefix here, and do not apply teamPhoneE164 (identity/team.ts) to
+        Customer rows.
+
+    - path: "tests/design/brand-contrast.test.ts"
+      instructions: |
+        Keep both alternatives in INK_HOVER_STAND_IN. Do not ask to narrow it to hover:-prefixed
+        classes, because the unprefixed color-mix form is the stand-in it exists to catch. Narrow it
+        only when a legitimate non-hover match is added, and say which match it is.
+
+    - path: "{components/agent,components/offers}/**/*.tsx"
+      instructions: |
+        Small presentational helpers here, such as Chip, Row, Status, Meter and statusDot, need no doc
+        comment. Do not ask for JSDoc on them. Flag a helper only when it hides a rule the code does not
+        show.
+
+    - path: "components/agent/agent-reducer.ts"
+      instructions: |
+        In subagent.called handling, remote can be absent for a local child. Check that the handler keeps
+        a remote classification set earlier by actions.requested. The expression
+        event.data.remote !== undefined || run.remote is correct. Do not flag it as redundant, and do
+        not demand a plain boolean read of event.data.remote.
+
+    - path: "agent/subagents/lead-operations/instructions.md"
+      instructions: |
+        Check that edits keep the search_leads semantics intact and stated once. query is one text match
+        across name, email, phone and location. stages is the only stage filter. totalCount applies both
+        across all pages, and countsByStage ignores stages. Do not ask for assignee or date filtering,
+        since the tool supports neither.
+
+    - path: "components/agent/agent-workspace.tsx"
+      instructions: |
+        Keep the polled conversation title in the component-owned sessions state, which the sidebar
+        reads. Do not ask for a second store or context for a cosmetic title. Do check that the poll
+        stops at its attempt cap and clears its timer on cleanup.
 
   pre_merge_checks:
     title:
@@ -165,16 +313,18 @@ reviews:
         mode: "warning"
         instructions: >-
           For changes touching offers, tenders, contracts, DocuSign, signers, or project handoff,
-          compare the behavior with CONTEXT.md and ADR 0001 through ADR 0005. Flag any change that
-          conflates documents, drops an owner/director signer, violates customer-parallel or builder-
-          last routing, mutates a locked snapshot, permits a revision after tender_signed, creates a
+          compare the behavior with CONTEXT.md and ADR 0001 through ADR 0006. Flag any change that
+          conflates documents, drops an owner/director signer, violates customer-parallel routing on Offer and Tender envelopes or
+          builder-last routing on Tender and Contract envelopes, mutates a locked snapshot, permits a revision after tender_signed, creates a
           Project before contract_signed, uses a deposit/upload as the handoff gate, mixes Current
           Location with Site Location, stores JSON money as floating point, or is not safe to retry.
           Pass when the invariant is preserved or the governing documentation is updated in the PR.
       - name: "Server boundary and data safety"
         mode: "warning"
         instructions: >-
-          For API routes, server actions, lib/data, Prisma, and client components, flag missing
+          Adapters authenticate and call a lib/domain command, and the command owns the rule,
+          authorization and transaction. For API routes, server actions, lib/domain commands, lib/data,
+          Prisma, and client components, flag missing
           auth or input validation, server-only code crossing into the client, raw Prisma Decimal or
           secrets crossing a serialization boundary, missing mutation revalidation, N+1 queries,
           silent error handling, and non-idempotent webhook writes. Pass when the change follows the
@@ -209,8 +359,12 @@ knowledge_base:
     filePatterns:
       - files: "AGENTS.md, CLAUDE.md, CONTEXT.md, docs/coding-standards.md, docs/architecture.md, docs/implementation.md"
         applyTo: "**/*"
+      - files: "lib/domain/GUIDE.md, lib/domain/README.md"
+        applyTo: "lib/domain/**, lib/data/**, agent/**, app/api/**, lib/observability/**, tests/architecture/**"
+      - files: "docs/eve-office-context.md, docs/eve-mcp-endpoint.md"
+        applyTo: "agent/**"
       - files: "docs/adr/*.md, docs/offer/*.md"
-        applyTo: "components/offers/**, lib/offer/**, lib/docusign/**, app/api/docusign/**, lib/data/**, prisma/**, types/**"
+        applyTo: "components/offers/**, lib/offer/**, lib/domain/offers/**, lib/docusign/**, app/api/docusign/**, lib/data/**, prisma/**, types/**"
   learnings:
     scope: "local"
     approval_delay: 7
