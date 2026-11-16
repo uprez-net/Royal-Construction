@@ -21,7 +21,7 @@ export function TradieKPI() {
       title: "Incidents lodged",
       dataPoint: kpiData.incidentLodged,
       Icon: TriangleAlert,
-      tone: "danger",
+      tone: "warning",
       isInverse: true,
     },
     {

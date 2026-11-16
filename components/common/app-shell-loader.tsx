@@ -11,11 +11,11 @@ import { cn } from "@/lib/utils";
 // placeholders pulse, and Skeleton stops pulsing under reduced motion.
 export function AppShellLoader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0px))] overflow-hidden bg-[#F7F6F2] text-foreground">
+    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0px))] overflow-hidden bg-background text-foreground">
       <div className="flex h-full">
         {/* Sidebar */}
-        <aside className="hidden w-16 shrink-0 border-r border-border bg-white shadow-sm md:flex md:flex-col md:items-center md:py-4">
-          <div className="mb-5 grid size-10 place-items-center rounded-2xl bg-[#F7F6F2]">
+        <aside className="hidden w-16 shrink-0 border-r border-border bg-card shadow-sm md:flex md:flex-col md:items-center md:py-4">
+          <div className="mb-5 grid size-10 place-items-center rounded-lg bg-background">
             <Image
               src="/favicon.ico"
               alt="Royal Constructions Logo"
@@ -33,7 +33,7 @@ export function AppShellLoader({ children }: { children: React.ReactNode }) {
 
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Header */}
-          <header className="z-30 shrink-0 border-b border-border bg-white shadow-sm">
+          <header className="z-30 shrink-0 border-b border-border bg-card shadow-sm">
             <div className="flex w-full items-center justify-between gap-2 px-3 py-2 sm:gap-4 sm:px-6 sm:py-3 lg:px-8">
               <div className="flex min-w-0 items-center gap-2 sm:gap-4">
                 <Skeleton className="size-10 rounded-lg md:hidden" />

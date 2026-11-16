@@ -56,7 +56,7 @@ export function ScopePanel({
   onRemoveExclusion,
 }: ScopePanelProps) {
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
           description="Control Offer allowances and Tender exclusions without exposing internal calculation rows."
@@ -150,7 +150,7 @@ function ScopeList({
   readonly emptyLabel: string;
 }) {
   return (
-    <section className="rounded-xl border border-border/70 bg-white p-3 shadow-sm sm:p-5">
+    <section className="rounded-xl border border-border/70 bg-card p-3 shadow-sm sm:p-5">
       <div className="mb-4 flex items-center gap-2">
         {icon}
         <h4 className="text-sm font-semibold text-foreground">{title}</h4>

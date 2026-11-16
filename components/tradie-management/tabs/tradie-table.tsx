@@ -89,7 +89,7 @@ export function TradieTable({
           className="inline-flex items-center justify-end gap-2 whitespace-nowrap"
         >
           {tradie.incidentCount.open > 0 ? (
-            <span className="rounded-full bg-destructive-light px-2 py-0.5 text-xs font-medium tabular-nums text-destructive-ink">
+            <span className="rounded-full bg-warning-light px-2 py-0.5 text-xs font-medium tabular-nums text-warning-ink">
               {tradie.incidentCount.open} open
             </span>
           ) : (

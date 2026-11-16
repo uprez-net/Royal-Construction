@@ -296,13 +296,13 @@ function FieldShell({
       <label
         htmlFor={controlId}
         className={cn(
-          "text-[11px] font-semibold uppercase tracking-wide text-slate-500",
-          isEmpty && "text-red-500",
+          "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground",
+          isEmpty && "text-destructive-ink",
         )}
       >
         {label}
         {unit ? (
-          <span className="ml-1 font-normal normal-case text-slate-400">
+          <span className="ml-1 font-normal normal-case text-muted-foreground">
             ({unit})
           </span>
         ) : null}
@@ -337,7 +337,7 @@ function TextControl({
             value={displayValue(value)}
             onChange={(e) => onChange(e.target.value)}
             placeholder="Not specified"
-            className="min-h-20 resize-none rounded-lg border-slate-200 bg-white text-sm"
+            className="min-h-20 resize-none rounded-lg border-border bg-card text-sm"
           />
         ) : (
           <Input
@@ -345,7 +345,7 @@ function TextControl({
             value={displayValue(value)}
             onChange={(e) => onChange(e.target.value)}
             placeholder="Not specified"
-            className="h-9 rounded-lg border-slate-200 bg-white text-sm"
+            className="h-9 rounded-lg border-border bg-card text-sm"
           />
         )
       }
@@ -379,7 +379,7 @@ function NumberControl({
           value={displayValue(value)}
           onChange={(e) => onChange(e.target.value)}
           placeholder="—"
-          className="h-9 rounded-lg border-slate-200 bg-white text-sm"
+          className="h-9 rounded-lg border-border bg-card text-sm"
         />
       )}
     </FieldShell>
@@ -404,7 +404,7 @@ function CurrencyControl({
     >
       {(id) => (
         <div className="relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
             $
           </span>
           <Input
@@ -413,7 +413,7 @@ function CurrencyControl({
             value={displayValue(value)}
             onChange={(e) => onChange(e.target.value)}
             placeholder="0.00"
-            className="h-9 rounded-lg border-slate-200 bg-white pl-6 text-sm"
+            className="h-9 rounded-lg border-border bg-card pl-6 text-sm"
           />
         </div>
       )}
@@ -445,9 +445,9 @@ function PercentControl({
             value={displayValue(value)}
             onChange={(e) => onChange(e.target.value)}
             placeholder="0"
-            className="h-9 rounded-lg border-slate-200 bg-white pr-7 text-sm"
+            className="h-9 rounded-lg border-border bg-card pr-7 text-sm"
           />
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
             %
           </span>
         </div>
@@ -478,7 +478,7 @@ function BooleanControl({
           id={id}
           value={current}
           onChange={(e) => onChange(e.target.value)}
-          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"
+          className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground"
         >
           <option value="">Unknown</option>
           <option value="true">Yes</option>
@@ -791,7 +791,7 @@ function PaymentStageRow({
             setDraft(label);
           }
         }}
-        className="h-8 rounded-md border-slate-200 bg-white text-sm"
+        className="h-8 rounded-md border-border bg-card text-sm"
       />
 
       <div className="relative">
@@ -809,26 +809,26 @@ function PaymentStageRow({
               : undefined
           }
           className={cn(
-            "h-8 rounded-md border-slate-200 bg-white pr-5 text-sm tabular-nums",
-            isEstimated && "text-slate-400",
+            "h-8 rounded-md border-border bg-card pr-5 text-sm tabular-nums",
+            isEstimated && "text-muted-foreground",
           )}
         />
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400"
+          className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
         >
           %
         </span>
       </div>
 
-      <p className="truncate text-right text-sm tabular-nums text-slate-500">
+      <p className="truncate text-right text-sm tabular-nums text-muted-foreground">
         {amount === null ? "—" : currency.format(amount)}
       </p>
 
       <button
         type="button"
         onClick={onRemove}
-        className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+        className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         aria-label={`Remove stage ${index + 1}`}
       >
         <X aria-hidden="true" className="h-3.5 w-3.5" />
@@ -870,31 +870,31 @@ function PaymentStagesControl({
   };
 
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+    <div className="space-y-3 rounded-xl border border-border bg-muted/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Payment Stages
           </p>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted-foreground">
             The claim schedule in document order. Amounts are calculated from
             the total contract sum.
           </p>
         </div>
         <Badge
           variant="outline"
-          className="shrink-0 rounded-full border-slate-200 bg-white px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+          className="shrink-0 rounded-full border-border bg-card px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
         >
           {stages.length} stage{stages.length === 1 ? "" : "s"}
         </Badge>
       </div>
 
       {stages.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
           <div
             className={cn(
               STAGE_GRID,
-              "bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500",
+              "bg-muted px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground",
             )}
           >
             <span>Stage</span>
@@ -902,7 +902,7 @@ function PaymentStagesControl({
             <span className="text-right">Amount</span>
             <span className="sr-only">Actions</span>
           </div>
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-border">
             {stages.map((stage, index) => (
               <PaymentStageRow
                 key={index}
@@ -920,13 +920,16 @@ function PaymentStagesControl({
           </div>
         </div>
       ) : (
-        <p className="rounded-lg border border-dashed border-slate-200 py-4 text-center text-sm text-slate-400">
+        <p className="rounded-lg border border-dashed border-border py-4 text-center text-sm text-muted-foreground">
           No payment stages were extracted. Add the claim schedule below.
         </p>
       )}
 
-      <div className="flex items-center gap-2 rounded-lg border border-dashed border-slate-200 bg-white px-2.5 py-1.5">
-        <Plus className="h-3 w-3 shrink-0 text-slate-400" aria-hidden="true" />
+      <div className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-card px-2.5 py-1.5">
+        <Plus
+          className="h-3 w-3 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         <Input
           value={draft}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
@@ -947,15 +950,15 @@ function PaymentStagesControl({
               ? "e.g. Deposit 5% — press Enter"
               : "Add another stage…"
           }
-          className="h-6 flex-1 border-none bg-transparent p-0 text-xs text-slate-700 shadow-none outline-none placeholder:text-slate-400 focus-visible:ring-0"
+          className="h-6 flex-1 border-none bg-transparent p-0 text-xs text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-0"
         />
       </div>
 
       {hasPercentages ? (
         <p
           className={cn(
-            "text-right text-xs tabular-nums text-slate-500",
-            !sumsToWhole && "text-red-500",
+            "text-right text-xs tabular-nums text-muted-foreground",
+            !sumsToWhole && "text-destructive-ink",
           )}
         >
           Schedule totals {Number(percentTotal.toFixed(2))}%
@@ -964,7 +967,7 @@ function PaymentStagesControl({
       ) : null}
 
       {totalContractSum === null ? (
-        <p className="text-right text-xs text-slate-400">
+        <p className="text-right text-xs text-muted-foreground">
           Set the total contract sum to see stage amounts.
         </p>
       ) : null}
@@ -1120,13 +1123,13 @@ function OwnersControl({
     )?.message;
 
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+    <div className="space-y-3 rounded-xl border border-border bg-muted/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Owners
           </p>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Everyone the contract names as an owner — never the builder. Each
             becomes a customer on the project and needs a name, email and
             address; a phone only if they have one. Drag the grip, or use the
@@ -1135,7 +1138,7 @@ function OwnersControl({
         </div>
         <Badge
           variant="outline"
-          className="shrink-0 rounded-full border-slate-200 bg-white px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+          className="shrink-0 rounded-full border-border bg-card px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
         >
           {owners.length} owner{owners.length === 1 ? "" : "s"}
         </Badge>
@@ -1175,7 +1178,7 @@ function OwnersControl({
               dropAt === index
                 && dragFrom !== null
                 && dragFrom !== index
-                && "ring-2 ring-emerald-400 ring-offset-2",
+                && "ring-2 ring-success/40 ring-offset-2",
             )}
           >
             <OwnerRow
@@ -1199,7 +1202,7 @@ function OwnersControl({
       <button
         type="button"
         onClick={() => onChange([...rows, emptyOwner()])}
-        className="flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
+        className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border bg-card px-2.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-input hover:text-foreground"
       >
         <Plus className="h-3 w-3 shrink-0" aria-hidden="true" />
         Add another owner
@@ -1209,7 +1212,7 @@ function OwnersControl({
 }
 
 const OWNER_ICON_BUTTON =
-  "flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:pointer-events-none disabled:opacity-30";
+  "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30";
 
 function OwnerRow({
   index,
@@ -1248,8 +1251,8 @@ function OwnerRow({
       className={cn(
         "rounded-lg border p-3",
         isPrimary
-          ? "border-emerald-300 bg-emerald-50"
-          : "border-slate-200 bg-white",
+          ? "border-success/30 bg-success-light"
+          : "border-border bg-card",
         hasProblem && "border-destructive/60 ring-1 ring-destructive/40",
       )}
     >
@@ -1283,7 +1286,7 @@ function OwnerRow({
           <p
             className={cn(
               "flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide",
-              isPrimary ? "text-emerald-900" : "text-slate-500",
+              isPrimary ? "text-success-ink" : "text-muted-foreground",
             )}
           >
             <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1291,7 +1294,7 @@ function OwnerRow({
             {isPrimary ? (
               <Badge
                 variant="outline"
-                className="rounded-full border-emerald-300 bg-white px-2 py-0 text-[10px] font-semibold normal-case tracking-normal text-emerald-800"
+                className="rounded-full border-success/30 bg-card px-2 py-0 text-[10px] font-semibold normal-case tracking-normal text-success-ink"
               >
                 Primary owner · Xero contact
               </Badge>
@@ -1332,7 +1335,7 @@ function OwnerRow({
         </div>
       </div>
       {isPrimary ? (
-        <p className="mb-2 text-xs text-emerald-900/80">
+        <p className="mb-2 text-xs text-success-ink/80">
           The project&apos;s Xero contact is named after every owner, and uses
           this owner&apos;s email, phone and address. Invoices are sent here;
           the other owners are copied on invoice emails.
@@ -1365,7 +1368,7 @@ function OwnerRow({
                 }
                 placeholder={placeholder}
                 className={cn(
-                  "h-9 rounded-lg border-slate-200 bg-white text-sm",
+                  "h-9 rounded-lg border-border bg-card text-sm",
                   problem && "border-destructive/60",
                 )}
               />
@@ -1524,12 +1527,12 @@ function FieldGroupPanel({
   errors?: FieldErrorMap;
 }) {
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+    <div className="space-y-3 rounded-xl border border-border bg-muted/60 p-4">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {heading}
         </p>
-        <p className="text-xs text-slate-400">{caption}</p>
+        <p className="text-xs text-muted-foreground">{caption}</p>
       </div>
       <div
         className={cn(
@@ -1625,18 +1628,18 @@ export function ExtractionSectionCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border bg-white p-5 shadow-sm",
-        errorCount > 0 ? "border-destructive/50" : "border-slate-200",
+        "rounded-lg border bg-card p-5 shadow-sm",
+        errorCount > 0 ? "border-destructive/50" : "border-border",
       )}
     >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
             <Icon className="h-4 w-4" />
           </span>
           <div>
-            <p className="text-sm font-semibold text-slate-700">{title}</p>
-            <p className="text-xs text-slate-400">
+            <p className="text-sm font-semibold text-foreground">{title}</p>
+            <p className="text-xs text-muted-foreground">
               {description ?? meta.description}
             </p>
           </div>
@@ -1653,10 +1656,10 @@ export function ExtractionSectionCard({
           <Badge
             variant="outline"
             className={cn(
-              "shrink-0 rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+              "shrink-0 rounded-full border-border bg-muted px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
               filledCount === fields.length && fields.length > 0
-                ? "border-teal-200 bg-teal-50 text-teal-700"
-                : "text-slate-500",
+                ? "border-success/30 bg-success-light text-success-ink"
+                : "text-muted-foreground",
             )}
           >
             {filledCount}/{fields.length} filled

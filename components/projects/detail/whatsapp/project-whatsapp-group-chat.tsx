@@ -188,7 +188,7 @@ export function ProjectWhatsAppGroupChat({
                   variant="ghost"
                   size="sm"
                   onClick={onInvite}
-                  className="h-8 rounded-full px-3 text-[13px] text-[#008069] hover:bg-[#d9fdd3]/60"
+                  className="h-8 rounded-full px-3 text-[13px] text-royal-gold-ink-text hover:bg-royal-gold-light/60"
                 >
                   <Mail className="mr-1.5 size-4" aria-hidden="true" />
                   Invite owners
@@ -200,7 +200,7 @@ export function ProjectWhatsAppGroupChat({
                   label="Copy invite link"
                   copiedLabel="Invite link copied"
                   successToast="Invite link copied."
-                  className="rounded-full text-[#54656f] hover:bg-black/5"
+                  className="rounded-full text-muted-foreground hover:bg-black/5"
                 />
               </>
             ) : null
@@ -252,7 +252,7 @@ export function ProjectWhatsAppGroupChat({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="h-7 rounded-full bg-white text-xs"
+                className="h-7 rounded-full bg-card text-xs"
                 disabled={reconcilingId === message.id}
                 onClick={() => void reconcile(message, "sent")}
               >
@@ -262,7 +262,7 @@ export function ProjectWhatsAppGroupChat({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="h-7 rounded-full bg-white text-xs"
+                className="h-7 rounded-full bg-card text-xs"
                 disabled={reconcilingId === message.id}
                 onClick={() => void reconcile(message, "not_sent")}
               >

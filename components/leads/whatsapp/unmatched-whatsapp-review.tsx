@@ -61,7 +61,7 @@ export function UnmatchedWhatsAppButton() {
         <Inbox className="mr-2 size-4" aria-hidden="true" /> Unmatched WhatsApp
         {pending ? (
           <span
-            className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1.5 text-xs font-semibold text-white"
+            className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-success-ink px-1.5 text-xs font-semibold text-white"
             aria-label={`${pending} waiting for review`}
           >
             {pending}

@@ -115,10 +115,10 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
                 aria-pressed={active}
                 onClick={() => handleTabChange(tab)}
                 className={cn(
-                  "group relative inline-flex min-h-11 items-center rounded-md px-3 text-sm font-semibold transition-colors duration-200 sm:min-h-9 sm:text-[12.5px]",
+                  "group relative inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium transition-colors duration-200 sm:min-h-9 sm:text-[12.5px]",
                   active
-                    ? "bg-royal-gold-light text-royal-gold-ink shadow-sm"
-                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                    ? "font-semibold text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <span>
@@ -129,9 +129,9 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
 
                 <span
                   className={cn(
-                    "ml-2 inline-flex min-w-4.5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold transition-colors",
+                    "ml-2 inline-flex min-w-4.5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums transition-colors",
                     active
-                      ? "bg-royal-gold-ink text-white"
+                      ? "bg-muted text-foreground"
                       : "bg-muted text-muted-foreground group-hover:bg-background",
                   )}
                 >
@@ -139,7 +139,7 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
                 </span>
 
                 {active && (
-                  <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-royal-gold-ink" />
+                  <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-royal-gold" />
                 )}
               </button>
             );
@@ -156,7 +156,7 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
 
             <Input
               id="search"
-              className="h-10 rounded-lg border-border bg-background pl-9 text-[13px] shadow-none transition-all focus-visible:ring-4 focus-visible:ring-royal-gold/20 focus-visible:border-royal-gold-ink"
+              className="pl-9 text-[13px]"
               placeholder="Search offer #, client, email, phone or suburb"
               value={searchInput}
               onChange={handleSearchChange}

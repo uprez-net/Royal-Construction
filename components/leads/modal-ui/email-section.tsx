@@ -54,8 +54,7 @@ function EmailMessage({
   return (
     <article
       className={cn(
-        "group relative rounded-2xl border bg-card px-4 py-3.5 transition-shadow hover:shadow-sm",
-        sent ? "border-royal-gold/25" : "border-border/70",
+        "group relative rounded-lg border border-border/70 bg-card px-4 py-3.5",
       )}
       aria-label={`${sent ? "Sent" : "Received"} email: ${email.subject}`}
     >
@@ -166,7 +165,7 @@ export function LeadEmailSection({
   }, [orderedEmails.length]);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-border/70 bg-background shadow-sm">
+    <section className="overflow-hidden rounded-lg border border-border/70 bg-background shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-card px-4 py-3 sm:px-5">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-foreground">Email</h2>

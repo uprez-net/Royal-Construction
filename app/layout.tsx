@@ -18,6 +18,7 @@ const sans = Manrope({
 const heading = Fraunces({
   variable: "--font-heading",
   subsets: ["latin"],
+  axes: ["opsz"],
 });
 
 const mono = IBM_Plex_Mono({
@@ -55,7 +56,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         }
       >
         <SandboxBanner />
-        <ClerkProvider>
+        <ClerkProvider appearance={{ variables: { colorPrimary: "#926100" } }}>
           <ReduxProvider>
             {children}
             <Toaster />

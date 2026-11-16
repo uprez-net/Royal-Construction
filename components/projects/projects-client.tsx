@@ -642,7 +642,7 @@ function ProjectsWorkspace({
                       className="inline-flex items-center justify-end gap-2"
                     >
                       <span
-                        className="h-2 w-16 overflow-hidden rounded-full bg-muted"
+                        className="h-1.5 w-16 overflow-hidden rounded-full bg-muted"
                         role="progressbar"
                         aria-valuenow={progress}
                         aria-valuemin={0}
@@ -662,6 +662,10 @@ function ProjectsWorkspace({
                       key={`status-${project.id}`}
                       className={`whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ${status.badge}`}
                     >
+                      <span
+                        aria-hidden="true"
+                        className="mr-1.5 inline-block size-1.5 rounded-full bg-current"
+                      />
                       {formatStatus(project.status)}
                     </Badge>,
                     ...(showAttentionColumn

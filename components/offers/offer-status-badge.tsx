@@ -27,37 +27,46 @@ import {
 import { cn } from "@/lib/utils";
 import { OfferStatusLabels } from "@/types/offer";
 
-const YELLOW =
-  "border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-200 hover:shadow-yellow-300/50";
-const BLUE =
-  "border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200 hover:shadow-blue-300/50";
-const GREEN =
-  "border-green-300 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200 hover:shadow-green-300/50";
-const RED =
-  "border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200 hover:shadow-red-300/50";
-const GRAY =
-  "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 hover:shadow-slate-300/50";
+type StatusTone =
+  | "neutral"
+  | "info"
+  | "gold"
+  | "success"
+  | "warning"
+  | "danger";
 
-const statusStyle: Record<OfferStatus, string> = {
-  PENDING: YELLOW,
-  SENT: BLUE,
-  ACCEPTED: GREEN,
-  REJECTED: RED,
-  // New lifecycle states (driven by the offer workspace, not this badge)
-  OFFER_SENT: BLUE,
-  OFFER_SIGNED: GREEN,
-  OFFER_DECLINED: RED,
-  AGREED: GREEN,
-  TENDER_DRAFT: YELLOW,
-  TENDER_SENT: BLUE,
-  TENDER_SIGNED: GREEN,
-  TENDER_DECLINED: RED,
-  CONTRACT_DRAFT: YELLOW,
-  CONTRACT_SENT: BLUE,
-  CONTRACT_SIGNED: GREEN,
-  CONTRACT_DECLINED: RED,
-  PROJECT: GREEN,
-  SUPERSEDED: GRAY,
+// Tint + ink pairs from the status tokens. The pill carries a 6px dot in the
+// ink colour; the colour is the status, the label says it in words.
+const TONE_CLASS: Record<StatusTone, string> = {
+  neutral: "bg-muted text-foreground/80",
+  info: "bg-info-light text-info-ink",
+  gold: "bg-royal-gold-light text-royal-gold-ink-text",
+  success: "bg-success-light text-success-ink",
+  warning: "bg-warning-light text-warning-ink",
+  danger: "bg-destructive-light text-destructive-ink",
+};
+
+// Drafts and superseded are neutral; sent is info, except Tender sent, which
+// is gold because it is the active sales step. Declines are the only red.
+const statusTone: Record<OfferStatus, StatusTone> = {
+  PENDING: "neutral",
+  SENT: "info",
+  ACCEPTED: "success",
+  REJECTED: "danger",
+  OFFER_SENT: "info",
+  OFFER_SIGNED: "success",
+  OFFER_DECLINED: "danger",
+  AGREED: "success",
+  TENDER_DRAFT: "neutral",
+  TENDER_SENT: "gold",
+  TENDER_SIGNED: "success",
+  TENDER_DECLINED: "danger",
+  CONTRACT_DRAFT: "neutral",
+  CONTRACT_SENT: "info",
+  CONTRACT_SIGNED: "success",
+  CONTRACT_DECLINED: "danger",
+  PROJECT: "success",
+  SUPERSEDED: "neutral",
 };
 
 const StatusIcon: Record<OfferStatus, LucideIcon> = {
@@ -119,7 +128,6 @@ export function OfferStatusBadge({
   // owns the arrow, Home, End and Enter keys and aria-activedescendant (#479).
   const listRef = useRef<HTMLDivElement>(null);
 
-  const Icon = StatusIcon[status];
   const availableTransitions = OFFER_STATE_MACHINE[status];
 
   const handleStatusChange = async (nextStatus: OfferStatus) => {
@@ -148,13 +156,15 @@ export function OfferStatusBadge({
           <Badge
             variant="outline"
             className={cn(
-              "gap-1.5 rounded-full px-3 py-1 transition-all",
-              "cursor-pointer hover:shadow-sm",
-              "disabled:pointer-events-none",
-              statusStyle[status],
+              "h-[22px] gap-1.5 rounded-full border-transparent px-2.5 text-[11.5px] font-semibold",
+              "cursor-pointer disabled:pointer-events-none",
+              TONE_CLASS[statusTone[status]],
             )}
           >
-            <Icon className="h-3.5 w-3.5" />
+            <span
+              aria-hidden="true"
+              className="size-1.5 rounded-full bg-current"
+            />
             <span>{OfferStatusLabels[status]}</span>
 
             {availableTransitions.length > 0 && (

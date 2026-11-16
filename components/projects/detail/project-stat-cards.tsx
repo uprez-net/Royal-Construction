@@ -19,12 +19,11 @@ import { Role } from "@prisma/client";
  * These cards stay bespoke rather than reusing `MetricCard` because each one
  * carries a derived badge in the top-right slot (budget health, burn percent,
  * data availability) that `MetricCard` has no room for — its third grid column
- * is reserved for `TrendBadge`. Typography follows DESIGN.md §5 Metric Cards
- * (`font-heading text-3xl font-semibold`), which is the same scale family
- * `MetricCard` uses at its more compact `text-2xl`.
+ * is reserved for `TrendBadge`. Money figures follow the DESIGN.md §5 KPI band
+ * (mono, Mono Precision Rule), not the Fraunces display face.
  */
 
-const CARD_SURFACE = "rounded-xl border border-border/70 bg-card p-5 shadow-sm";
+const CARD_SURFACE = "rounded-lg border border-border/70 bg-card p-5 shadow-sm";
 // On a phone the three cards stacked at full size took about 500px before any
 // of the project appeared. There each one is a single row instead: icon,
 // figure over its label, badge. From md up the grid placement is inert and
@@ -35,16 +34,15 @@ const STAT_CARD = cn(
 );
 const STAT_CARD_TOP =
   "contents md:mb-2 md:flex md:items-start md:justify-between md:gap-2";
-// DESIGN.md §5 puts metric values in the display face, which is also what
-// `MetricCard` does. These three were overriding it back to `font-mono`, so the
-// one editorial moment on the page read like terminal output. `tabular-nums`
-// stays for even digit widths.
+// Money is mono (DESIGN.md Mono Precision Rule and the KPI band), so the
+// figures line up like the invoice schedule beneath them. `tabular-nums` keeps
+// digit widths even.
 const CARD_VALUE =
-  "col-start-2 row-start-1 font-heading text-xl font-semibold leading-tight tracking-tight tabular-nums text-foreground md:mt-2 md:text-3xl";
+  "col-start-2 row-start-1 font-mono text-xl font-semibold leading-tight tracking-tight tabular-nums text-foreground md:mt-2 md:text-3xl";
 const CARD_LABEL =
   "col-start-2 row-start-2 text-xs text-muted-foreground md:mt-1";
 const ICON_CONTAINER =
-  "row-span-2 flex size-9 items-center justify-center rounded-xl text-white md:size-11 md:rounded-2xl";
+  "row-span-2 flex size-9 items-center justify-center rounded-lg md:size-11";
 const BADGE =
   "col-start-3 row-span-2 row-start-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium";
 
@@ -127,7 +125,7 @@ export function ProjectStatCards({ role }: { role: Role }) {
       {/* Contract Value — badge is driven by the shared classifier. */}
       <div className={STAT_CARD}>
         <div className={STAT_CARD_TOP}>
-          <div className={cn(ICON_CONTAINER, METRIC_TONES.primary)}>
+          <div className={cn(ICON_CONTAINER, METRIC_TONES.neutral)}>
             <Wallet2 className="size-5" aria-hidden="true" />
           </div>
           <span className={cn(BADGE, TONE_BADGE_CLASS[statusConfig.tone])}>

@@ -108,7 +108,7 @@ export function TenderPanel({
         locked={isSent || isSigned || isDeclined}
       />
 
-      <Card className="border-border/70 bg-white/95 shadow-sm">
+      <Card className="border-border/70 bg-card/95 shadow-sm">
         <CardHeader className="border-b border-border/70">
           <OfferCardHeading
             description="Generate the fixed-price Tender from the agreed offer, then send it for signature via DocuSign (customer, then builder)."
@@ -476,16 +476,16 @@ function TenderPreview({
             {ownerNamesLine} · {job.siteAddress}
           </p>
         </div>
-        <span className="rounded-full border border-royal-gold/40 bg-royal-gold-light/40 px-2.5 py-1 text-xs font-medium text-royal-gold-dark">
+        <span className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-royal-gold-ink-text">
           {stateLabel}
         </span>
       </header>
 
-      <div className="rounded-lg bg-royal-gold-light/30 px-4 py-3">
+      <div className="rounded-lg bg-muted/50 px-4 py-3">
         <p className="text-xs uppercase tracking-wide text-muted-foreground">
           Contract value inc GST
         </p>
-        <p className="font-heading text-2xl font-semibold">
+        <p className="font-mono text-2xl font-semibold tabular-nums">
           {formatCurrency(contractValue)}
         </p>
       </div>

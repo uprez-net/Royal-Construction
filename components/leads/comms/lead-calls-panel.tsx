@@ -66,12 +66,12 @@ function duration(seconds: number | null): string | null {
 
 function CallIcon({ call }: { call: CallDto }) {
   if (call.answeredBy === "VOICEMAIL")
-    return <Voicemail className="size-4 text-amber-600" aria-hidden="true" />;
+    return <Voicemail className="size-4 text-warning-ink" aria-hidden="true" />;
   if (call.answeredBy === "AGENT")
-    return <Bot className="size-4 text-emerald-600" aria-hidden="true" />;
+    return <Bot className="size-4 text-success-ink" aria-hidden="true" />;
   if (call.direction === "INBOUND") {
     return call.connectedAt ? (
-      <PhoneIncoming className="size-4 text-emerald-600" aria-hidden="true" />
+      <PhoneIncoming className="size-4 text-success-ink" aria-hidden="true" />
     ) : (
       <PhoneMissed className="size-4 text-destructive" aria-hidden="true" />
     );
@@ -123,7 +123,7 @@ function CallRow({
         <p
           className={
             call.needsReconciliation
-              ? "text-xs text-amber-700"
+              ? "text-xs text-warning-ink"
               : "text-xs text-destructive"
           }
         >
@@ -334,7 +334,7 @@ export function LeadCallsPanel({
           </div>
         ) : null}
         {options && !options.allowed ? (
-          <p className="mt-3 flex items-start gap-2 rounded-md bg-amber-50 px-2.5 py-2 text-sm text-amber-800">
+          <p className="mt-3 flex items-start gap-2 rounded-md bg-warning-light px-2.5 py-2 text-sm text-warning-ink">
             <AlertTriangle
               className="mt-0.5 size-4 shrink-0"
               aria-hidden="true"

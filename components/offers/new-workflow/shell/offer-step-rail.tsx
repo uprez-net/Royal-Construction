@@ -174,7 +174,7 @@ export function OfferStepRail({
       <nav
         aria-label="Offer workflow"
         className={cn(
-          "hidden shrink-0 flex-col border-r border-border/70 bg-white/60 transition-[width] md:flex",
+          "hidden shrink-0 flex-col border-r border-border/70 bg-card/60 transition-[width] md:flex",
           // Icon-only below lg regardless of the toggle: a 240px rail against a
           // ~600px pane on a small laptop was a quarter of the width on nav.
           collapsed ? "w-14" : "w-14 lg:w-60",
@@ -282,8 +282,7 @@ function RailRow({
         "flex min-h-11 w-full items-center gap-2.5 px-4 py-2 text-left transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50",
         active ? "bg-royal-gold-light/70" : "hover:bg-muted/50",
-        blocked
-          && "bg-warning-light motion-safe:animate-[offer-step-shake_320ms_ease-in-out]",
+        blocked && "bg-warning-light",
       )}
     >
       <StepGlyph active={active} index={index} state={state} />
@@ -324,7 +323,7 @@ function StepGlyph({
     return (
       <span
         aria-hidden="true"
-        className={cn(base, "bg-royal-gold-ink text-white")}
+        className={cn(base, "bg-royal-gold-light text-royal-gold-ink-text")}
       >
         {index}
       </span>

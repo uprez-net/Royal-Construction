@@ -103,7 +103,7 @@ export function ContractPanel({
   const hasContract = isDraft || isSent || isSigned || isDeclined;
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
           description="Generate the building Contract from the signed Tender, capture the BC4 particulars, then send it for signature via DocuSign (customer, then builder)."
@@ -312,7 +312,7 @@ function ContractParticularsForm({
                   <span className="mb-1 block text-xs font-medium text-foreground">
                     {field.label}
                     {field.recommendedBeforeSend ? (
-                      <span className="ml-1 text-royal-gold-dark">
+                      <span className="ml-1 text-royal-gold-ink-text">
                         · recommended
                       </span>
                     ) : null}
@@ -715,7 +715,7 @@ function ContractPreview({
             Incorporates the executed Tender for {job.siteAddress}.
           </p>
         </div>
-        <span className="rounded-full border border-royal-gold/40 bg-royal-gold-light/40 px-2.5 py-1 text-xs font-medium text-royal-gold-dark">
+        <span className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-royal-gold-ink-text">
           {stateLabel}
         </span>
       </header>
@@ -730,11 +730,11 @@ function ContractPreview({
         <PartyBlock label="Prepared by" value={job.preparedBy} />
       </dl>
 
-      <div className="rounded-lg bg-royal-gold-light/30 px-4 py-3">
+      <div className="rounded-lg bg-muted/50 px-4 py-3">
         <p className="text-xs uppercase tracking-wide text-muted-foreground">
           Contract sum inc GST
         </p>
-        <p className="font-heading text-2xl font-semibold">
+        <p className="font-mono text-2xl font-semibold tabular-nums">
           {formatCurrency(contractSum)}
         </p>
       </div>

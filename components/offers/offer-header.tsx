@@ -1,5 +1,5 @@
 "use client";
-import { PageHeroCard } from "@/components/common/page-hero-card";
+import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -9,7 +9,7 @@ export function OfferHeader() {
   const dispatch = useAppDispatch();
 
   return (
-    <PageHeroCard
+    <PageHeader
       headingLevel="h1"
       title="Offer Management"
       description="Manage your offers, track their status, and ensure timely follow-ups."

@@ -683,9 +683,11 @@ export default function TradieRequestWizard({
                     <span
                       className={cn(
                         "inline-flex size-5 items-center justify-center rounded-full font-semibold",
-                        current || done
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground",
+                        current
+                          ? "bg-royal-gold-light text-royal-gold-ink-text"
+                          : done
+                            ? "bg-success-light text-success-ink"
+                            : "bg-muted text-muted-foreground",
                       )}
                     >
                       {index + 1}

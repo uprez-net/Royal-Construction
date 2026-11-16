@@ -239,7 +239,7 @@ export function TradieApprovalList() {
   return (
     <div className="space-y-4" key={`${approvals.length}-${activeTab}`}>
       {approvals.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 h-60 bg-white rounded-sm">
+        <div className="flex flex-col items-center justify-center gap-3 h-60 bg-card rounded-sm">
           <div className="flex size-12 items-center justify-center">
             <UserCheck className="size-5 text-muted-foreground" />
           </div>

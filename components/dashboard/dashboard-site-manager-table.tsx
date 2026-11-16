@@ -29,9 +29,9 @@ export function DashboardSiteManagerTable({
   return (
     <Card>
       <CardHeader className="flex items-center justify-between border-b border-border/60 pb-4">
-        <h4 className="uppercase font-bold text-muted-foreground">
+        <h2 className="font-heading text-[1.0625rem] leading-[1.3] font-semibold tracking-[-0.01em] text-foreground">
           Site Manager Performance
-        </h4>
+        </h2>
 
         <Button
           variant="outline"

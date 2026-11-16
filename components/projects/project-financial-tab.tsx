@@ -177,7 +177,7 @@ export function FinancialTab({ project, onClose }: FinancialTabProps) {
               ? "No budget recorded"
               : `${utilisation}% of budget spent`
           }
-          className="h-3 overflow-hidden rounded-full bg-muted"
+          className="h-1.5 overflow-hidden rounded-full bg-muted"
         >
           <div
             className={`h-full transition-[width] duration-200 ease-out motion-reduce:transition-none ${
@@ -252,7 +252,7 @@ export function FinancialTab({ project, onClose }: FinancialTabProps) {
           ])}
           emptyState={
             <div className="flex flex-col items-center gap-3">
-              <div className="flex size-12 items-center justify-center rounded-2xl bg-muted">
+              <div className="flex size-12 items-center justify-center rounded-lg bg-muted">
                 <ReceiptText
                   aria-hidden="true"
                   className="size-5 text-muted-foreground"

@@ -760,7 +760,7 @@ export function OfferWorkspaceScreen({
               {revisionNotice ? (
                 <p
                   role="status"
-                  className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 px-4 py-3 text-xs font-medium text-foreground/80"
+                  className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-xs font-medium text-foreground/80"
                 >
                   {revisionNotice}
                 </p>

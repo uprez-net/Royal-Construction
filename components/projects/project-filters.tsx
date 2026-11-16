@@ -63,7 +63,6 @@ export function ProjectFilters({
       >
         {filters.map((filter) => {
           const isActive = activeFilter === filter.value;
-          const isDrafting = filter.value === DRAFTING_FILTER;
 
           return (
             <button
@@ -74,10 +73,8 @@ export function ProjectFilters({
               className={cn(
                 "min-h-11 rounded-full border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                 isActive
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : isDrafting
-                    ? "border-(--stage-3) bg-(--stage-2) text-foreground hover:bg-(--stage-3)"
-                    : "border-border bg-card text-foreground hover:bg-muted/40",
+                  ? "border-royal-gold-light bg-royal-gold-light font-semibold text-royal-gold-ink-text"
+                  : "border-input bg-card text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               {filter.label} ({filter.count})

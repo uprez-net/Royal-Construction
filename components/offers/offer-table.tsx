@@ -287,13 +287,15 @@ function OfferMobileCard({
           {latest.sentAt ? (
             <div className="flex gap-1.5">
               <dt className="text-muted-foreground">Sent</dt>
-              <dd>{day(latest.sentAt)}</dd>
+              <dd className="font-mono tabular-nums">{day(latest.sentAt)}</dd>
             </div>
           ) : null}
           {latest.acceptedAt ? (
             <div className="flex gap-1.5">
               <dt className="text-muted-foreground">Approved</dt>
-              <dd>{day(latest.acceptedAt)}</dd>
+              <dd className="font-mono tabular-nums">
+                {day(latest.acceptedAt)}
+              </dd>
             </div>
           ) : null}
         </dl>
@@ -353,15 +355,21 @@ function OfferMobileCard({
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Created</dt>
-                    <dd>{day(revision.createdAt)}</dd>
+                    <dd className="font-mono tabular-nums">
+                      {day(revision.createdAt)}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Sent</dt>
-                    <dd>{day(revision.sentAt)}</dd>
+                    <dd className="font-mono tabular-nums">
+                      {day(revision.sentAt)}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Approved</dt>
-                    <dd>{day(revision.acceptedAt)}</dd>
+                    <dd className="font-mono tabular-nums">
+                      {day(revision.acceptedAt)}
+                    </dd>
                   </div>
                 </dl>
               </div>
@@ -435,7 +443,7 @@ function OfferGroupRows({
             </button>
           ) : null}
         </td>
-        <td className="px-4 py-3 font-medium">
+        <td className="px-4 py-3 font-mono font-medium tabular-nums">
           {/* stopPropagation: the row's click would push the same route again,
               and on cmd-click it would navigate this tab as well as opening
               the new one. */}
@@ -456,7 +464,7 @@ function OfferGroupRows({
             className={cn(
               "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold",
               hasHistory
-                ? "bg-royal-gold-light text-royal-gold-ink"
+                ? "bg-muted text-foreground"
                 : "bg-muted text-muted-foreground",
             )}
           >
@@ -467,19 +475,19 @@ function OfferGroupRows({
             {versionCount === 1 ? "version" : "versions"}
           </span>
         </td>
-        <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
+        <td className="whitespace-nowrap px-4 py-3 text-right font-mono tabular-nums">
           {money(latest.amount)}
         </td>
-        <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
+        <td className="whitespace-nowrap px-4 py-3 text-right font-mono tabular-nums">
           {money(latest.gstAmount)}
         </td>
-        <td className="whitespace-nowrap px-4 py-3 text-right font-medium tabular-nums">
+        <td className="whitespace-nowrap px-4 py-3 text-right font-mono font-medium tabular-nums">
           {money(latest.totalAmount)}
         </td>
-        <td className="whitespace-nowrap px-4 py-3 tabular-nums">
+        <td className="whitespace-nowrap px-4 py-3 font-mono tabular-nums">
           {day(latest.sentAt)}
         </td>
-        <td className="whitespace-nowrap px-4 py-3 tabular-nums">
+        <td className="whitespace-nowrap px-4 py-3 font-mono tabular-nums">
           {day(latest.acceptedAt)}
         </td>
         <td className="px-4 py-3">
@@ -493,7 +501,7 @@ function OfferGroupRows({
       {expanded && hasHistory ? (
         <tr id={panelId} className="border-t border-border/70 bg-muted/20">
           <td colSpan={OFFER_TABLE_HEADERS.length} className="px-4 py-3">
-            <div className="ml-6 border-l-2 border-royal-gold/30 pl-4">
+            <div className="ml-6 border-l-2 border-border pl-4">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Version history
               </p>
@@ -601,7 +609,7 @@ function OfferRevisionRow({
             v{revision.revisionNumber}
           </span>
           {revision.isActive ? (
-            <span className="rounded-full bg-royal-gold-ink px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+            <span className="rounded-full bg-royal-gold-light px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-royal-gold-ink-text">
               Active
             </span>
           ) : null}
@@ -612,22 +620,22 @@ function OfferRevisionRow({
           Doc v{revision.version}
         </span>
       </td>
-      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums">
         {money(revision.amount)}
       </td>
-      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums">
         {money(revision.gstAmount)}
       </td>
-      <td className="whitespace-nowrap px-3 py-2 text-right font-medium tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 text-right font-mono font-medium tabular-nums">
         {money(revision.totalAmount)}
       </td>
-      <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums">
         {day(revision.createdAt)}
       </td>
-      <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums">
         {day(revision.sentAt)}
       </td>
-      <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums">
         {day(revision.acceptedAt)}
       </td>
       <td className="px-3 py-2">

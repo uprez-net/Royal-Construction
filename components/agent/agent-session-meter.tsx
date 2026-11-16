@@ -46,7 +46,7 @@ export function AgentSessionMeter({ usage }: { usage: AgentSessionUsage }) {
               highest >= 0.9
                 ? "text-destructive"
                 : highest >= 0.6
-                  ? "text-royal-gold-ink"
+                  ? "text-warning-ink"
                   : "text-muted-foreground",
             )}
           />
@@ -60,8 +60,8 @@ export function AgentSessionMeter({ usage }: { usage: AgentSessionUsage }) {
                 highest >= 0.9
                   ? "bg-destructive"
                   : highest >= 0.6
-                    ? "bg-royal-gold"
-                    : "bg-emerald-600",
+                    ? "bg-warning"
+                    : "bg-success",
               )}
               style={{ width: `${percent}%` }}
             />

@@ -94,7 +94,7 @@ export default function TeamManagementPage() {
       <div className="container py-10">
         <div className="flex flex-col items-center justify-center gap-3">
           <div className="flex size-12 items-center justify-center">
-            <X className="size-5 text-red-600" />
+            <X className="size-5 text-destructive-ink" />
           </div>
 
           <div className="space-y-1">
@@ -151,7 +151,7 @@ export default function TeamManagementPage() {
           </form>
 
           <Tabs defaultValue="invite" className="w-full">
-            <TabsList aria-label="Team" className="mb-4 mt-3">
+            <TabsList aria-label="Team" className="mb-4 mt-3" variant="line">
               <TabsTrigger value="invite">Invitations</TabsTrigger>
               <TabsTrigger value="members">Members</TabsTrigger>
             </TabsList>
@@ -669,7 +669,7 @@ function InviteList({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="text-red-600 border-red-600 hover:bg-red-600 hover:text-white disabled:border-red-300 disabled:text-red-300 disabled:hover:bg-transparent"
+                    className="border-destructive/50 text-destructive-ink hover:bg-destructive-light hover:text-destructive-ink disabled:border-border disabled:text-muted-foreground disabled:hover:bg-transparent"
                     onClick={() => handleAction({ invitationId: invite.id })}
                     disabled={invite.status !== "pending"}
                   >

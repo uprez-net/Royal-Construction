@@ -43,11 +43,11 @@ export function ApprovalDetailModal({
   const getStatusVariant = () => {
     switch (approval.status) {
       case "APPROVED":
-        return "bg-green-100 text-green-700";
+        return "bg-success-light text-success-ink";
       case "REJECTED":
-        return "bg-red-100 text-red-700";
+        return "bg-destructive-light text-destructive-ink";
       default:
-        return "bg-yellow-100 text-yellow-700";
+        return "bg-warning-light text-warning-ink";
     }
   };
 
@@ -176,7 +176,7 @@ export function ApprovalDetailModal({
                 Requested Changes
               </h3>
 
-              <pre className="max-h-72 overflow-auto rounded-lg border bg-slate-950 p-4 text-xs text-slate-100">
+              <pre className="max-h-72 overflow-auto rounded-lg border bg-muted p-4 font-mono text-xs text-foreground">
                 {JSON.stringify(approval.updationData, null, 2)}
               </pre>
             </div>

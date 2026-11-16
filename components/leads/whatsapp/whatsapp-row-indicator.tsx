@@ -38,7 +38,7 @@ export function WhatsAppBadge({
   if (summary.unreadCount > 0) {
     return (
       <span
-        className="absolute -right-1 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-semibold leading-4 text-white"
+        className="absolute -right-1 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-success-ink px-1 text-[10px] font-semibold leading-4 text-white"
         aria-label={`${summary.unreadCount} unread WhatsApp message${summary.unreadCount === 1 ? "" : "s"}`}
       >
         {summary.unreadCount > 9 ? "9+" : summary.unreadCount}
@@ -48,7 +48,7 @@ export function WhatsAppBadge({
   if (summary.windowOpen) {
     return (
       <span
-        className="absolute -right-0.5 -top-0.5 inline-block size-2 rounded-full bg-emerald-500 ring-2 ring-background"
+        className="absolute -right-0.5 -top-0.5 inline-block size-2 rounded-full bg-success ring-2 ring-background"
         aria-label="WhatsApp reply window open"
       />
     );

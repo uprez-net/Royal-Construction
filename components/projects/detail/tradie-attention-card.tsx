@@ -60,7 +60,7 @@ export function TradieAttentionCard({
     // only one cut-off row showed.
     <Card
       role="alert"
-      className="flex max-h-[55dvh] flex-col overflow-hidden sm:max-h-[30vh] border-warning/40 bg-linear-to-br from-warning-light/80 via-card to-card shadow-sm"
+      className="flex max-h-[55dvh] flex-col overflow-hidden sm:max-h-[30vh] border-warning/40 bg-warning-light shadow-sm"
     >
       <CardContent className="flex min-h-0 flex-1 flex-col p-0">
         <div className="flex shrink-0 items-start gap-3 p-4">

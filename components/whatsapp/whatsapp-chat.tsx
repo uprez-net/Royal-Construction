@@ -42,15 +42,15 @@ import { WhatsAppMedia } from "./whatsapp-media";
 // a member of the public typed.
 
 export const WA = {
-  accent: "#00a884",
-  bubbleIn: "#ffffff",
-  bubbleOut: "#d9fdd3",
-  icon: "#54656f",
-  panel: "#f0f2f5",
-  read: "#53bdeb",
-  text: "#111b21",
-  textMuted: "#667781",
-  wallpaper: "#efeae2",
+  accent: "var(--royal-gold-ink)",
+  bubbleIn: "var(--card)",
+  bubbleOut: "var(--muted)",
+  icon: "var(--muted-foreground)",
+  panel: "var(--muted)",
+  read: "var(--info-ink)",
+  text: "var(--foreground)",
+  textMuted: "var(--muted-foreground)",
+  wallpaper: "var(--background)",
 } as const;
 
 export type ChatMedia = Jsonified<WhatsAppMediaRecord>;
@@ -94,10 +94,7 @@ export function WhatsAppChatFrame({
 }) {
   return (
     <div
-      className={cn(
-        "flex min-h-0 flex-col overflow-hidden bg-white",
-        className,
-      )}
+      className={cn("flex min-h-0 flex-col overflow-hidden bg-card", className)}
       style={{ color: WA.text }}
     >
       {header}
@@ -133,7 +130,7 @@ export function ChatAvatar({
     <span
       aria-hidden="true"
       className={cn(
-        "inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-[#dfe5e7] text-sm font-semibold text-[#54656f]",
+        "inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground",
         className,
       )}
     >
@@ -192,7 +189,7 @@ function Ticks({ message }: { message: ChatMessage }) {
   if (message.needsReconciliation || message.status === "FAILED") {
     return (
       <AlertTriangle
-        className="size-3.5 text-[#ea0038]"
+        className="size-3.5 text-destructive-ink"
         aria-label={message.needsReconciliation ? "Unconfirmed" : "Not sent"}
       />
     );
@@ -230,7 +227,7 @@ function Tail({ outbound }: { outbound: boolean }) {
     >
       <path
         d="M5.188 1H0v11.193l6.467-8.625C7.526 2.156 6.958 1 5.188 1z"
-        fill={outbound ? WA.bubbleOut : WA.bubbleIn}
+        style={{ fill: outbound ? WA.bubbleOut : WA.bubbleIn }}
       />
     </svg>
   );
@@ -289,6 +286,7 @@ function Bubble({
         className={cn(
           "relative max-w-[85%] rounded-lg px-2 pb-1.5 pt-1.5 text-[14.2px] leading-[19px] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] sm:max-w-[65%]",
           firstOfRun && (outbound ? "rounded-tr-none" : "rounded-tl-none"),
+          !outbound && "border border-border",
         )}
         style={{ backgroundColor: outbound ? WA.bubbleOut : WA.bubbleIn }}
       >
@@ -302,7 +300,7 @@ function Bubble({
           </p>
         ) : null}
         {outbound && message.authorName && firstOfRun ? (
-          <p className="mb-0.5 text-[12px] font-medium text-[#008069]">
+          <p className="mb-0.5 text-[12px] font-medium text-success-ink">
             {message.authorName}
           </p>
         ) : null}
@@ -339,7 +337,7 @@ function Bubble({
         )}
         {message.providerErrorTitle
         && (message.status === "FAILED" || message.needsReconciliation) ? (
-          <p className="mt-1 text-[12px] text-[#ea0038]">
+          <p className="mt-1 text-[12px] text-destructive-ink">
             {message.providerErrorTitle}
           </p>
         ) : null}
@@ -426,7 +424,7 @@ export function WhatsAppMessageList({
             type="button"
             onClick={onLoadOlder}
             disabled={loadingOlder}
-            className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-[12.5px] shadow-sm transition hover:bg-white disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-full bg-card/90 px-3 py-1 text-[12.5px] shadow-sm transition hover:bg-card disabled:opacity-60"
             style={{ color: WA.icon }}
           >
             {loadingOlder ? (
@@ -458,7 +456,7 @@ export function WhatsAppMessageList({
                 {newDay ? (
                   <li className="my-2 flex justify-center" aria-hidden="false">
                     <span
-                      className="rounded-lg bg-white px-3 py-1.5 text-[12.5px] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
+                      className="rounded-lg bg-card px-3 py-1.5 text-[12.5px] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
                       style={{ color: WA.icon }}
                     >
                       {chatDayLabel(message.occurredAt, now)}
@@ -487,8 +485,8 @@ export function WhatsAppMessageList({
 export function ChatNotice({ children }: { children: ReactNode }) {
   return (
     <p
-      className="max-w-md rounded-lg bg-[#fff5c4] px-3 py-1.5 text-center text-[12.5px] leading-snug shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
-      style={{ color: "#54656f" }}
+      className="max-w-md rounded-lg bg-warning-light px-3 py-1.5 text-center text-[12.5px] leading-snug shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
+      style={{ color: "var(--muted-foreground)" }}
     >
       {children}
     </p>
@@ -571,7 +569,7 @@ export function WhatsAppComposerBar({
             if (canSend) onSend();
           }
         }}
-        className="max-h-[140px] min-h-[42px] flex-1 resize-none rounded-lg border-0 bg-white px-3.5 py-2.5 text-[15px] leading-5 shadow-none outline-none placeholder:text-[#8696a0] focus-visible:ring-2 focus-visible:ring-[#00a884]/40 disabled:opacity-60"
+        className="max-h-[140px] min-h-[42px] flex-1 resize-none rounded-lg border-0 bg-card px-3.5 py-2.5 text-[15px] leading-5 shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-royal-gold-ink/40 disabled:opacity-60"
         style={{ color: WA.text }}
       />
       <button

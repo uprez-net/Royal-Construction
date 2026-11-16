@@ -273,7 +273,7 @@ export function AgentResult({
       ) : null}
 
       {result.warnings.length > 0 ? (
-        <div className="rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+        <div className="rounded-md border border-warning/40 bg-warning-light px-3 py-2 text-xs text-warning-ink">
           <p className="font-medium">Review notes</p>
           <ul className="mt-1 list-disc pl-4">
             {result.warnings.map((warning) => (

@@ -57,7 +57,7 @@ export function ForecastPanel({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="mb-3 flex flex-wrap gap-0.5 rounded-md border border-border bg-muted p-0.5">
+        <div className="mb-3 flex flex-wrap gap-0.5 rounded-md border border-input bg-card p-0.5">
           {QUARTERS.map(({ q, label }) => {
             const isCurrent = forecast.quarter === q;
             return (
@@ -67,10 +67,10 @@ export function ForecastPanel({
                 onClick={() => select(q)}
                 aria-pressed={isCurrent}
                 disabled={pending}
-                className={`rounded px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-60 ${
+                className={`rounded px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60 ${
                   isCurrent
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-royal-gold-light font-semibold text-royal-gold-ink-text"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 {label}
@@ -96,16 +96,10 @@ export function ForecastPanel({
           </div>
         ))}
 
-        <div
-          className="mt-3 rounded-md border p-3"
-          style={{
-            background: "var(--success-light)",
-            borderColor: "var(--success-ink)",
-          }}
-        >
+        <div className="mt-3 rounded-md border border-success-light bg-success-light p-3">
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-[12.5px] font-semibold">Banked</span>
-            <span className="font-heading text-xl font-semibold tabular-nums">
+            <span className="font-mono text-xl font-semibold tabular-nums">
               {compactCurrency.format(Number(forecast.bankedValue))}
             </span>
           </div>

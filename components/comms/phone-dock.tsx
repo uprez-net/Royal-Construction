@@ -141,7 +141,7 @@ export function PhoneDock() {
         <span
           className={
             call.kind === "whatsapp"
-              ? "inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white"
+              ? "inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-success-ink text-white"
               : "inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"
           }
           aria-hidden="true"
@@ -165,7 +165,7 @@ export function PhoneDock() {
         </div>
         {incoming || outgoing ? (
           <span
-            className="size-2.5 animate-pulse rounded-full bg-emerald-500"
+            className="size-2.5 animate-pulse rounded-full bg-success"
             aria-hidden="true"
           />
         ) : null}
@@ -201,7 +201,7 @@ export function PhoneDock() {
           <>
             <Button
               type="button"
-              className="h-9 flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
+              className="h-9 flex-1 bg-success-ink text-white hover:bg-success-ink/90"
               disabled={busy}
               onClick={() => void run(phone.answer)}
             >

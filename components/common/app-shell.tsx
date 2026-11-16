@@ -139,7 +139,7 @@ export function AppShell({
     // the sandbox (where the variable is unset) the height used to drop to
     // auto. The shell then grew with its content, the window scrolled instead
     // of <main>, and the agent workspace collapsed to its composer.
-    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0px))] overflow-hidden bg-[#F7F6F2] text-foreground">
+    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0px))] overflow-hidden bg-background text-foreground">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-background focus:p-3 focus:text-foreground focus:outline-2 focus:outline-ring"
@@ -149,8 +149,8 @@ export function AppShell({
       {/* Clean Light Background matching Email Theme */}
       <div className="flex h-full">
         {/* ── Desktop Sidebar ── */}
-        <aside className="hidden w-16 shrink-0 border-r border-border bg-white text-muted-foreground shadow-sm md:flex md:flex-col md:items-center md:py-4">
-          <div className="mb-5 grid size-10 place-items-center rounded-2xl bg-[#F7F6F2]">
+        <aside className="hidden w-16 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex md:flex-col md:items-center md:py-4">
+          <div className="mb-5 grid size-10 place-items-center rounded-lg bg-background">
             <Image
               src="/favicon.ico"
               alt="Royal Constructions Logo"
@@ -167,15 +167,21 @@ export function AppShell({
                 key={item.slug}
                 href={`/${item.slug}`}
                 className={cn(
-                  "group relative grid size-10 place-items-center rounded-lg transition-colors hover:bg-muted hover:text-foreground",
+                  "group relative grid size-10 place-items-center rounded-lg text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                   item.slug === sectionSlug
-                    && "bg-royal-gold-light text-royal-gold-ink",
+                    && "bg-sidebar-accent text-sidebar-accent-foreground",
                   item.checkAdmin && !isAdmin && "hidden",
                 )}
                 aria-label={item.label}
                 aria-current={item.slug === sectionSlug ? "page" : undefined}
               >
                 {item.icon}
+                {item.slug === sectionSlug ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -left-3 inset-y-2 w-[3px] rounded-r-full bg-royal-gold"
+                  />
+                ) : null}
                 {/* Duplicate of the Link's aria-label; hide it from the a11y
                     tree so the item is not announced twice. */}
                 <span
@@ -195,12 +201,12 @@ export function AppShell({
             <SheetContent
               side="left"
               showCloseButton={false}
-              className="w-80 max-w-[calc(100vw-2rem)] border-r border-border bg-white p-0 text-foreground"
+              className="w-80 max-w-[calc(100vw-2rem)] border-r border-sidebar-border bg-sidebar p-0 text-sidebar-foreground"
             >
               <div className="flex h-full flex-col">
-                <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-4">
+                <div className="flex items-start justify-between gap-4 border-b border-sidebar-border px-4 py-4">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#F7F6F2]">
+                    <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-background">
                       <Image
                         src="/favicon.ico"
                         alt="Royal Constructions Logo"
@@ -209,7 +215,7 @@ export function AppShell({
                       />
                     </div>
                     <div className="min-w-0">
-                      <SheetTitle className="font-heading truncate text-base font-semibold text-foreground">
+                      <SheetTitle className="font-heading truncate text-base font-semibold text-sidebar-accent-foreground">
                         Royal Constructions
                       </SheetTitle>
                     </div>
@@ -219,7 +225,7 @@ export function AppShell({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="rounded-lg border border-border bg-muted text-muted-foreground hover:bg-border hover:text-foreground"
+                      className="rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-foreground hover:bg-sidebar-border hover:text-sidebar-accent-foreground"
                       aria-label="Close navigation menu"
                     >
                       <X className="size-4" aria-hidden="true" />
@@ -240,20 +246,21 @@ export function AppShell({
                           item.slug === sectionSlug ? "page" : undefined
                         }
                         className={cn(
-                          "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground",
+                          "relative flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                           item.slug === sectionSlug
-                            ? "bg-royal-gold-light text-royal-gold-ink"
-                            : "text-muted-foreground",
+                            && "bg-sidebar-accent text-sidebar-accent-foreground",
                           item.checkAdmin && !isAdmin && "hidden",
                         )}
                       >
+                        {item.slug === sectionSlug ? (
+                          <span
+                            aria-hidden="true"
+                            className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-royal-gold"
+                          />
+                        ) : null}
                         <span
                           aria-hidden="true"
-                          className={cn(
-                            "grid size-9 place-items-center rounded-lg bg-muted text-muted-foreground",
-                            item.slug === sectionSlug
-                              && "bg-royal-gold-light text-royal-gold-ink",
-                          )}
+                          className="grid size-9 place-items-center rounded-lg"
                         >
                           {item.icon}
                         </span>
@@ -264,11 +271,11 @@ export function AppShell({
                 </nav>
 
                 {!isSignedIn ? (
-                  <div className="border-t border-border px-4 py-4">
+                  <div className="border-t border-sidebar-border px-4 py-4">
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
-                        className="flex-1 rounded-lg border-border bg-white text-foreground hover:bg-muted hover:text-foreground"
+                        className="flex-1 rounded-lg border-border bg-card text-foreground hover:bg-muted hover:text-foreground"
                         asChild
                       >
                         <Link href="/sign-in">Sign in</Link>
@@ -283,17 +290,17 @@ export function AppShell({
                     </div>
                   </div>
                 ) : (
-                  <div className="border-t border-border px-4 py-4">
+                  <div className="border-t border-sidebar-border px-4 py-4">
                     <UserButton
                       showName={true}
                       appearance={{
                         elements: {
                           avatarBox: "size-9",
                           userButtonBox:
-                            "w-full! flex! flex-row-reverse!  gap-2 justify-end text-foreground",
+                            "w-full! flex! flex-row-reverse!  gap-2 justify-end text-sidebar-foreground",
                           userButtonTrigger: "w-full",
                           userButtonOuterIdentifier:
-                            "text-base text-foreground",
+                            "text-base text-sidebar-foreground!",
                           userButtonAvatarBox: "w-8 h-8",
                           rootBox: "w-full shadow-xs",
                         },
@@ -311,7 +318,7 @@ export function AppShell({
           </Sheet>
 
           {/* ── Top Header ── */}
-          <header className="shrink-0 z-30 border-b border-border bg-white text-foreground shadow-sm backdrop-blur">
+          <header className="shrink-0 z-30 border-b border-border bg-background text-foreground">
             <div className="flex w-full items-center justify-between gap-2 px-3 py-2 sm:gap-4 sm:px-6 sm:py-3 lg:px-8">
               <div className="flex min-w-0 items-center gap-2 sm:gap-4">
                 <Button
@@ -324,7 +331,7 @@ export function AppShell({
                   <Menu className="size-4" aria-hidden="true" />
                 </Button>
                 <div className="min-w-0">
-                  <p className="font-heading truncate text-base font-semibold tracking-tight text-royal-gold-ink sm:text-xl">
+                  <p className="font-heading truncate text-base font-semibold tracking-tight text-foreground sm:text-xl">
                     Royal Constructions
                   </p>
                   <p className="truncate text-xs text-muted-foreground md:hidden">
@@ -374,7 +381,7 @@ export function AppShell({
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
-                        className="rounded-lg border-border bg-white text-foreground hover:bg-muted hover:text-foreground"
+                        className="rounded-lg border-border bg-card text-foreground hover:bg-muted hover:text-foreground"
                         asChild
                       >
                         <Link href="/sign-in">Sign in</Link>

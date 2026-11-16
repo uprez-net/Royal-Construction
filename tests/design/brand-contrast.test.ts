@@ -343,3 +343,121 @@ test("the offer print template keeps its fills when background graphics are off"
   assert.match(rule, /(?:^|[\s;])print-color-adjust:\s*exact/);
   assert.match(rule, /-webkit-print-color-adjust:\s*exact/);
 });
+
+// ── The warm light theme (DESIGN.md §2, owner decision 16 Nov 2026) ────────────
+// Gold is the app's only action colour and teal is retired, so `--primary` and
+// `--ring` are the royal ink. They are written out rather than aliased (the
+// helper parses literal oklch values), and nothing else keeps them in step.
+test("--primary and --ring are the royal gold ink", () => {
+  const ink = themeColour(css, ":root", "--royal-gold-ink");
+
+  assert.deepEqual(themeColour(css, ":root", "--primary"), ink);
+  assert.deepEqual(themeColour(css, ":root", "--ring"), ink);
+});
+
+test("white on --primary clears AA", () => {
+  const measured = contrastRatio(WHITE, themeColour(css, ":root", "--primary"));
+
+  assert.ok(
+    measured >= AA_TEXT,
+    `white on --primary measures ${ratio(measured)}`,
+  );
+});
+
+// Every text colour against every surface it is drawn on. --muted is the
+// surface most likely to fail: the warm --muted is darker than the cool one it
+// replaced, and the -ink tokens' own comment claims 4.55:1 on it.
+const SURFACES = ["--background", "--card", "--muted", "--secondary"] as const;
+const TEXT_ON_SURFACES = [
+  "--foreground",
+  "--muted-foreground",
+  "--destructive-ink",
+  "--success-ink",
+  "--warning-ink",
+  "--info-ink",
+  "--royal-gold-ink-text",
+] as const;
+
+for (const text of TEXT_ON_SURFACES) {
+  test(`${text} clears AA on every light surface`, () => {
+    const colour = themeColour(css, ":root", text);
+
+    for (const surface of SURFACES) {
+      const measured = contrastRatio(
+        themeColour(css, ":root", surface),
+        colour,
+      );
+      assert.ok(
+        measured >= AA_TEXT,
+        `${text} on ${surface} measures ${ratio(measured)}`,
+      );
+    }
+  });
+}
+
+test("the rail's text clears AA on the charcoal rail", () => {
+  const rail = themeColour(css, ":root", "--sidebar");
+
+  for (const text of ["--sidebar-foreground", "--sidebar-accent-foreground"]) {
+    const measured = contrastRatio(rail, themeColour(css, ":root", text));
+    assert.ok(
+      measured >= AA_TEXT,
+      `${text} on --sidebar measures ${ratio(measured)}`,
+    );
+  }
+});
+
+// Gold is a fill on the rail's active item, so dark ink sits on it.
+test("the rail's gold fill carries dark ink at AA", () => {
+  const measured = contrastRatio(
+    themeColour(css, ":root", "--sidebar-primary"),
+    themeColour(css, ":root", "--sidebar-primary-foreground"),
+  );
+
+  assert.ok(
+    measured >= AA_TEXT,
+    `ink on the rail's gold measures ${ratio(measured)}`,
+  );
+});
+
+// A control's border and the focus ring must read against the page (3:1).
+test("the focus ring stands out from the page", () => {
+  const page = themeColour(css, ":root", "--background");
+
+  for (const token of ["--ring"] as const) {
+    const measured = contrastRatio(page, themeColour(css, ":root", token));
+    assert.ok(
+      measured >= 3,
+      `${token} on --background measures ${ratio(measured)}`,
+    );
+  }
+});
+
+// Teal is retired from the light theme's tokens (hue 183). The .dark block is
+// unreachable (DESIGN.md: no dark mode) and is left for a later cleanup.
+test("no light-theme token is still teal", () => {
+  const TEAL_HUE = /oklch\(\s*[\d.]+\s+[\d.]+\s+18\d(?:\.\d+)?/;
+  const root = css.match(/^:root \{([\s\S]*?)^\}/m)?.[1] ?? "";
+  const stale = root
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("/*") && TEAL_HUE.test(line));
+
+  assert.deepEqual(stale, [], "teal-hued tokens remain in :root");
+});
+
+// The status inks are also solid chip fills with white text, so white must clear
+// AA on each of them, not only the ink-on-surface pairs above.
+test("white text clears AA on the solid status inks", () => {
+  for (const token of [
+    "--success-ink",
+    "--warning-ink",
+    "--destructive-ink",
+    "--info-ink",
+  ] as const) {
+    const measured = contrastRatio(WHITE, themeColour(css, ":root", token));
+    assert.ok(
+      measured >= AA_TEXT,
+      `white on ${token} measures ${ratio(measured)}`,
+    );
+  }
+});

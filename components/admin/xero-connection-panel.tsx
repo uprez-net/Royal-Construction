@@ -242,7 +242,7 @@ export function XeroConnectionPanel({
             </>
           ) : (
             <div className="mx-auto flex max-w-xl flex-col items-center gap-3 py-8 text-center">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
+              <div className="flex size-11 items-center justify-center rounded-lg bg-muted">
                 <Plug
                   className="size-5 text-muted-foreground"
                   aria-hidden="true"

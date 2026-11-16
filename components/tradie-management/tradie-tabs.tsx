@@ -166,7 +166,12 @@ export function TradieTabs() {
                 aria-controls={isActive ? TRADIE_VIEW_PANEL_ID : undefined}
                 aria-label={tab.label}
                 tabIndex={isActive ? 0 : -1}
-                variant={isActive ? "default" : "ghost"}
+                variant="ghost"
+                className={cn(
+                  isActive
+                    ? "bg-royal-gold-light font-semibold text-royal-gold-ink-text hover:bg-royal-gold-light"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
                 onClick={() => handleTabChange(tab.value)}
                 onKeyDown={(event) => handleTabKeyDown(event, index)}
               >
@@ -302,8 +307,8 @@ export function TradieTabs() {
             className={cn(
               "inline-flex min-h-8 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
               query.tab === "all"
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-background hover:bg-muted/40",
+                ? "border-royal-gold-light bg-royal-gold-light font-semibold text-royal-gold-ink-text"
+                : "border-input bg-card text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
             <Users className="size-3.5" aria-hidden="true" />
@@ -313,7 +318,7 @@ export function TradieTabs() {
               className={cn(
                 "rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums",
                 query.tab === "all"
-                  ? "bg-primary-foreground/20"
+                  ? "bg-card text-royal-gold-ink-text"
                   : "bg-muted text-muted-foreground",
               )}
             >
@@ -328,8 +333,8 @@ export function TradieTabs() {
             className={cn(
               "inline-flex min-h-8 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
               query.tab === "flagged"
-                ? "border-destructive/40 bg-destructive-light text-destructive-ink"
-                : "border-border bg-background hover:bg-muted/40",
+                ? "border-warning-light bg-warning-light font-semibold text-warning-ink"
+                : "border-input bg-card text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
             <AlertTriangle className="size-3.5" aria-hidden="true" />
@@ -340,8 +345,8 @@ export function TradieTabs() {
               className={cn(
                 "rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums",
                 query.tab === "flagged"
-                  ? "bg-destructive-ink text-white"
-                  : "bg-destructive-light text-destructive-ink",
+                  ? "bg-card text-warning-ink"
+                  : "bg-warning-light text-warning-ink",
               )}
             >
               {flaggedCount}

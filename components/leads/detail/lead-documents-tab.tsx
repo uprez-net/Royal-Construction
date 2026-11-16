@@ -525,7 +525,7 @@ export function LeadDocumentsTab({
             })}
             emptyState={
               <div className="mx-auto flex max-w-md flex-col items-center gap-3">
-                <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
+                <div className="flex size-11 items-center justify-center rounded-lg bg-muted">
                   <Files
                     className="size-5 text-muted-foreground"
                     aria-hidden="true"

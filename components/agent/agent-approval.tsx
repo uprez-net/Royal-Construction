@@ -159,7 +159,7 @@ export function AgentApproval({
         responded
           ? "border-border/70 bg-muted/30"
           : isApproval || isLimit
-            ? "border-royal-gold/55 bg-royal-gold-light/50 shadow-xs"
+            ? "border-border bg-royal-gold-light/50"
             : "border-border bg-background",
       )}
     >
@@ -169,7 +169,9 @@ export function AgentApproval({
             "mt-0.5 grid size-7 shrink-0 place-items-center rounded-md",
             responded
               ? "bg-background text-muted-foreground"
-              : "bg-royal-gold text-royal-gold-ink",
+              : isApproval || isLimit
+                ? "bg-warning-light text-warning-ink"
+                : "bg-royal-gold-light text-royal-gold-ink",
           )}
         >
           <Icon aria-hidden="true" className="size-4" />

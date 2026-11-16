@@ -83,7 +83,7 @@ export function TradieCard() {
   };
 
   return (
-    <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
+    <div>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-4">
           <div

@@ -90,24 +90,24 @@ const SOURCE_ICON: Record<
   ProjectDocumentSource,
   { icon: LucideIcon; className: string }
 > = {
-  project: { icon: FolderUp, className: "text-primary" },
-  milestone: { icon: Flag, className: "text-orange-600 dark:text-orange-400" },
+  project: { icon: FolderUp, className: "text-muted-foreground" },
+  milestone: { icon: Flag, className: "text-warning-ink" },
   compliance: {
     icon: ShieldCheck,
-    className: "text-emerald-600 dark:text-emerald-400",
+    className: "text-muted-foreground",
   },
-  lead: { icon: UserRound, className: "text-sky-600 dark:text-sky-400" },
+  lead: { icon: UserRound, className: "text-info-ink" },
   incident: {
     icon: TriangleAlert,
-    className: "text-amber-600 dark:text-amber-400",
+    className: "text-muted-foreground",
   },
   "tradie-invoice": {
     icon: Receipt,
-    className: "text-violet-600 dark:text-violet-400",
+    className: "text-muted-foreground",
   },
   variation: {
     icon: PencilRuler,
-    className: "text-pink-600 dark:text-pink-400",
+    className: "text-muted-foreground",
   },
 };
 
@@ -235,7 +235,7 @@ export function ProjectDocumentsTab({
         value,
         label: value,
         count,
-        iconClassName: "text-orange-600 dark:text-orange-400",
+        iconClassName: "text-muted-foreground",
       })),
     }),
     [indexed],
@@ -587,7 +587,7 @@ export function ProjectDocumentsTab({
           })}
           emptyState={
             <div className="mx-auto flex max-w-md flex-col items-center gap-3">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
+              <div className="flex size-11 items-center justify-center rounded-lg bg-muted">
                 <Files
                   className="size-5 text-muted-foreground"
                   aria-hidden="true"

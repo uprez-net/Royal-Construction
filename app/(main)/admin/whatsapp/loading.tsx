@@ -3,7 +3,7 @@ import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 export default function WhatsAppAdminSkeleton() {
   return (
     <PageSkeleton label="Loading WhatsApp settings" className="space-y-6">
-      <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+      <div className="overflow-hidden rounded-lg border border-border/70 bg-card">
         <div className="flex items-center gap-4 border-b border-border/70 p-6">
           <Skeleton className="size-12 rounded-full" />
           <div className="flex-1 space-y-2">
@@ -19,8 +19,8 @@ export default function WhatsAppAdminSkeleton() {
         </div>
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
-        <Skeleton className="h-64 w-full rounded-2xl" />
-        <Skeleton className="h-64 w-full rounded-2xl" />
+        <Skeleton className="h-64 w-full rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-lg" />
       </div>
     </PageSkeleton>
   );

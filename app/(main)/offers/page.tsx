@@ -64,7 +64,7 @@ async function OfferPageClient() {
         sentOffers={offerKPIs.sentOffers}
         totalVersions={offerKPIs.totalVersions}
       />
-      <Card className="border-border/70 bg-white/95 shadow-sm">
+      <Card className="border-border/70 bg-card/95 shadow-sm">
         <OfferFilter
           initialTabCounts={{
             // Every offer not rejected: what the All tab lists (issue #450).

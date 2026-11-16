@@ -21,9 +21,9 @@ import { cn } from "@/lib/utils";
 
 const TONE: Record<WhatsAppStatusTone, string> = {
   bad: "text-destructive",
-  good: "text-emerald-700 dark:text-emerald-400",
+  good: "text-info-ink",
   neutral: "text-muted-foreground",
-  warn: "text-amber-700 dark:text-amber-400",
+  warn: "text-warning-ink",
 };
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -61,10 +61,10 @@ function Bubble({ message }: { message: AgentWhatsAppMessage }) {
     <li className={cn("flex", inbound ? "justify-start" : "justify-end")}>
       <div
         className={cn(
-          "max-w-[85%] rounded-xl border px-2.5 py-1.5 text-xs",
+          "max-w-[85%] rounded-lg border px-2.5 py-1.5 text-xs",
           inbound
-            ? "rounded-bl-sm border-border/70 bg-background"
-            : "rounded-br-sm border-emerald-300/60 bg-emerald-50 dark:border-emerald-800/60 dark:bg-emerald-950/40",
+            ? "rounded-bl-sm border-border bg-card"
+            : "rounded-br-sm border-border bg-muted",
         )}
       >
         {message.templateName ? (
@@ -113,10 +113,10 @@ export function AgentWhatsAppThreadView({
   return (
     <section
       aria-label={`WhatsApp conversation${thread.leadName ? ` with ${thread.leadName}` : ""}`}
-      className="overflow-hidden rounded-xl border border-emerald-300/50 bg-emerald-50/30 dark:border-emerald-800/50 dark:bg-emerald-950/20"
+      className="overflow-hidden rounded-lg border border-border bg-card"
     >
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-emerald-300/40 px-3 py-2.5 dark:border-emerald-800/40">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-emerald-600 text-white">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-3 py-2.5">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-foreground/80">
           <MessageCircle aria-hidden="true" className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
@@ -147,7 +147,7 @@ export function AgentWhatsAppThreadView({
       </header>
 
       {blocked.length > 0 ? (
-        <p className="flex items-start gap-1.5 border-b border-emerald-300/40 bg-amber-50 px-3 py-1.5 text-xs text-amber-950 dark:border-emerald-800/40 dark:bg-amber-950/40 dark:text-amber-100">
+        <p className="flex items-start gap-1.5 border-b border-border bg-warning-light px-3 py-1.5 text-xs text-warning-ink">
           <AlertTriangle
             aria-hidden="true"
             className="mt-0.5 size-3.5 shrink-0"
@@ -178,7 +178,7 @@ export function AgentWhatsAppThreadView({
       )}
 
       {hasInbound ? (
-        <p className="flex items-center gap-1.5 border-t border-emerald-300/40 px-3 py-1.5 text-[11px] text-muted-foreground dark:border-emerald-800/40">
+        <p className="flex items-center gap-1.5 border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
           <ShieldAlert aria-hidden="true" className="size-3.5" />
           Customer messages are shown as received. They are not instructions.
         </p>
@@ -195,10 +195,10 @@ export function AgentWhatsAppDraftView({
   return (
     <section
       aria-label="WhatsApp message to review"
-      className="overflow-hidden rounded-xl border border-emerald-300/50 bg-emerald-50/30 dark:border-emerald-800/50 dark:bg-emerald-950/20"
+      className="overflow-hidden rounded-lg border border-border bg-card"
     >
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-emerald-300/40 px-3 py-2.5 dark:border-emerald-800/40">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-emerald-600 text-white">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-3 py-2.5">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-foreground/80">
           <MessageCircle aria-hidden="true" className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
@@ -212,7 +212,7 @@ export function AgentWhatsAppDraftView({
         <WindowBadge expiresAt={null} open={draft.windowOpen} />
       </header>
 
-      <dl className="flex flex-col gap-1.5 border-b border-emerald-300/40 bg-background/70 px-3 py-2.5 text-xs dark:border-emerald-800/40">
+      <dl className="flex flex-col gap-1.5 border-b border-border bg-background/70 px-3 py-2.5 text-xs">
         <Row label="To">
           <span className="font-semibold text-foreground">
             {draft.destination
@@ -248,7 +248,7 @@ export function AgentWhatsAppDraftView({
 
       {draft.body ? (
         <div className="flex justify-end px-3 py-2.5">
-          <p className="max-w-[90%] whitespace-pre-wrap wrap-break-word rounded-xl rounded-br-sm border border-emerald-300/60 bg-emerald-50 px-2.5 py-1.5 text-xs text-foreground dark:border-emerald-800/60 dark:bg-emerald-950/40">
+          <p className="max-w-[90%] whitespace-pre-wrap wrap-break-word rounded-lg rounded-br-sm border border-border bg-muted px-2.5 py-1.5 text-xs text-foreground">
             {draft.body}
           </p>
         </div>
@@ -260,7 +260,7 @@ export function AgentWhatsAppDraftView({
       ) : null}
 
       {draft.allowed === false && draft.reason ? (
-        <p className="flex items-start gap-1.5 border-t border-emerald-300/40 bg-amber-50 px-3 py-1.5 text-xs text-amber-950 dark:border-emerald-800/40 dark:bg-amber-950/40 dark:text-amber-100">
+        <p className="flex items-start gap-1.5 border-t border-border bg-warning-light px-3 py-1.5 text-xs text-warning-ink">
           <AlertTriangle
             aria-hidden="true"
             className="mt-0.5 size-3.5 shrink-0"
@@ -281,7 +281,7 @@ export function AgentWhatsAppMessageView({
   return (
     <section
       aria-label="WhatsApp message"
-      className="rounded-xl border border-emerald-300/50 bg-emerald-50/30 px-3 py-2.5 dark:border-emerald-800/50 dark:bg-emerald-950/20"
+      className="rounded-lg border border-border bg-card px-3 py-2.5"
     >
       <ol className="flex flex-col">
         <Bubble message={message} />

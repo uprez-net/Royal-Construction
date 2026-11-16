@@ -40,7 +40,7 @@ export function PricingDecisionPanel({
       : null;
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
           description="Choose the fixed inc-GST price shown to the client, with a required reason when it differs from the computed build-up."
@@ -61,8 +61,8 @@ export function PricingDecisionPanel({
               onChange={(event) => {
                 const nextValue = event.target.value;
                 if (
-                  nextValue.length === 0 ||
-                  parseNonNegativeNumberInput(nextValue) !== null
+                  nextValue.length === 0
+                  || parseNonNegativeNumberInput(nextValue) !== null
                 ) {
                   onStandardPriceInputChange(nextValue);
                 }
@@ -89,17 +89,17 @@ export function PricingDecisionPanel({
             onChange={(event) => {
               const nextValue = event.target.value;
               if (
-                nextValue.length === 0 ||
-                parseNonNegativeNumberInput(nextValue) !== null
+                nextValue.length === 0
+                || parseNonNegativeNumberInput(nextValue) !== null
               ) {
                 onSelectedPriceInputChange(nextValue);
               }
             }}
           />
-          {selectedPriceInput.trim() !==
-          String(customerPrice.computedContractValueIncGst) ? (
+          {selectedPriceInput.trim()
+          !== String(customerPrice.computedContractValueIncGst) ? (
             <button
-              className="mt-1 text-xs font-medium text-royal-gold-dark hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+              className="mt-1 text-xs font-medium text-royal-gold-ink-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
               onClick={() =>
                 onSelectedPriceInputChange(
                   String(customerPrice.computedContractValueIncGst),

@@ -49,7 +49,7 @@ export function PriceBuildupPanel({
   const hasLoadingCharge = hbcf.loadingCharge > 0;
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
           description="The Royal quote build-up: direct cost plus fixed additions, marked up by the Royal Construction Overhead and Fee, then GST. This is the price shown to the client."
@@ -123,7 +123,7 @@ export function PriceBuildupPanel({
             </div>
           ) : null}
         </div>
-        <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
+        <div className="rounded-lg border border-border bg-muted/50 p-3">
           <div className="grid gap-2 text-sm">
             <SummaryRow
               label="Direct quote total"

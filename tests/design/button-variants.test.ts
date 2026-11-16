@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 
 import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import {
   WHITE,
   contrastRatio,
@@ -36,7 +35,7 @@ test("no variant scopes its styles to an <a> element", () => {
 });
 
 // A translucent bg-primary/90 hover would lighten the fill toward the page and
-// drop white text below AA, so the hover is an opaque darker teal.
+// drop white text below AA, so the hover is an opaque darker gold ink.
 test("the default variant darkens on hover and keeps white text at AA", () => {
   const classes = buttonVariants({ variant: "default" });
   const hover = classes.match(/(?:^|\s)hover:bg-\[(oklch\([^\]]+\))\]/)?.[1];
@@ -59,45 +58,37 @@ test("the royal variant hovers onto the ink hover token", () => {
   assert.ok(classes.includes("hover:bg-royal-gold-ink-hover"));
 });
 
-// Pins the royal focus ring. It was ring-royal-gold/40, 1.46:1 against a white
-// page and fainter than the teal ring these gold CTAs had before. An opaque ring
-// clears 3:1 against the page, and Tailwind's white offset gap keeps it from
-// merging into the ink fill when the ring shares its colour.
+// Pins the keyboard focus outline. A 3px translucent ring measured 1.46:1 on
+// the page, so every control draws a solid 2px outline in --ring (the gold ink)
+// set 2px off its edge. Every variant shares it, the royal CTA included.
+test("every variant draws the solid gold-ink focus outline, offset from its edge", () => {
+  for (const variant of VARIANTS) {
+    const classes = buttonVariants({ variant }).split(/\s+/);
+    for (const name of [
+      "focus-visible:outline-2",
+      "focus-visible:outline-offset-2",
+      "focus-visible:outline-ring",
+    ]) {
+      assert.ok(
+        classes.includes(name),
+        `the ${variant} variant has no ${name}`,
+      );
+    }
+  }
+});
+
+// The outline has to clear 3:1 against the page it sits on and against white,
+// since a control can sit on either. The page is --background (cream).
 const NON_TEXT = 3;
 
-test("the royal focus ring stands out from the page and from its own fill", () => {
-  const classes = cn(buttonVariants({ variant: "royal" })).split(/\s+/);
-  const rings = classes
-    .map(
-      (name) =>
-        name.match(
-          /^focus-visible:ring-(?!offset-)([a-z][\w-]*(?:\/\d+)?)$/,
-        )?.[1],
-    )
-    .filter((name): name is string => name !== undefined);
-  const ring = rings[rings.length - 1];
-  assert.ok(
-    ring,
-    `the royal variant has no focus ring colour: ${classes.join(" ")}`,
-  );
-  assert.doesNotMatch(
-    ring,
-    /\//,
-    `focus-visible:ring-${ring} is translucent, so its contrast depends on what sits under it`,
-  );
-
+test("the focus outline stands out from the page and from white", () => {
   const css = readGlobalsCss();
-  const colour = themeColour(css, ":root", `--${ring}`);
+  const ring = themeColour(css, ":root", "--ring");
   const page = themeColour(css, ":root", "--background");
-  const fill = themeColour(css, ":root", "--royal-gold-ink");
+
   assert.ok(
-    contrastRatio(WHITE, colour) >= NON_TEXT
-      && contrastRatio(page, colour) >= NON_TEXT,
-    `the focus ring measures ${contrastRatio(WHITE, colour).toFixed(2)}:1 on white and ${contrastRatio(page, colour).toFixed(2)}:1 on --background`,
+    contrastRatio(WHITE, ring) >= NON_TEXT
+      && contrastRatio(page, ring) >= NON_TEXT,
+    `the focus outline measures ${contrastRatio(WHITE, ring).toFixed(2)}:1 on white and ${contrastRatio(page, ring).toFixed(2)}:1 on --background`,
   );
-  assert.ok(
-    classes.some((name) => /^focus-visible:ring-offset-[1-9]\d*$/.test(name)),
-    "without a ring offset the ring touches the ink fill",
-  );
-  assert.ok(contrastRatio(WHITE, fill) >= NON_TEXT);
 });

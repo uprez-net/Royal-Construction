@@ -120,7 +120,7 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
   if (dueness.kind === "overdue") {
     return (
       <MetaItem icon={<CircleAlert className="size-3.5" />}>
-        <span className="font-semibold text-destructive-ink">
+        <span className="font-semibold text-warning-ink">
           Overdue {Math.abs(dueness.days)}d
         </span>{" "}
         · was due{" "}

@@ -1,4 +1,4 @@
-import { PageHeroCard } from "@/components/common/page-hero-card";
+import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -10,7 +10,6 @@ import {
   PenLine,
   Phone,
   Plug,
-  Sparkles,
   Users,
 } from "lucide-react";
 import type { Metadata } from "next";
@@ -86,66 +85,43 @@ export default function AdminPage() {
     },
   ];
 
-  const accentStyles = {
-    icon: "bg-royal-gold-light text-royal-gold-ink group-hover:bg-royal-gold-ink group-hover:text-white",
-    ring: "group-hover:border-royal-gold/40",
-    glow: "bg-royal-gold/10",
-  };
-
   return (
     <div className="space-y-6 min-h-[85vh]">
-      <PageHeroCard
+      <PageHeader
         headingLevel="h1"
         title="Admin Dashboard"
         description="Manage offer pre-fill content and review task approvals, all from one place."
-        eyebrow={
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-card/70 px-3 py-1 text-xs font-semibold text-royal-gold-ink shadow-sm ring-1 ring-royal-gold/20">
-            <Sparkles className="size-3.5" aria-hidden="true" />
-            Admin controls
-          </span>
-        }
         aside={
-          <div className="rounded-2xl bg-card/60 px-4 py-3 text-center shadow-sm ring-1 ring-royal-gold/20">
-            <p className="text-2xl font-bold text-royal-gold-ink">
+          <p className="hidden text-sm text-muted-foreground sm:block">
+            <span className="font-semibold tabular-nums text-foreground">
               {adminAction.length}
-            </p>
-            <p className="text-xs font-medium text-muted-foreground">
-              Tools available
-            </p>
-          </div>
+            </span>{" "}
+            Tools available
+          </p>
         }
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {adminAction.map((action, index) => (
-          <Card
-            key={index}
-            className={`group relative overflow-hidden border border-slate-200 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${accentStyles.ring}`}
-          >
-            <div
-              aria-hidden="true"
-              className={`pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full transition-transform duration-300 group-hover:scale-125 ${accentStyles.glow}`}
-            />
-            <CardContent className="relative p-6">
-              <div
-                className={`inline-flex rounded-full p-2.5 transition-colors duration-200 ${accentStyles.icon}`}
-              >
+          <Card key={index} className="border border-border">
+            <CardContent className="p-6">
+              <div className="inline-flex rounded-full bg-muted p-2.5 text-foreground/80">
                 <action.icon className="size-5" />
               </div>
-              <h2 className="mt-4 font-semibold text-slate-900">
+              <h2 className="mt-4 font-semibold text-foreground">
                 {action.label}
               </h2>
-              <p className="mt-1 text-sm leading-relaxed text-slate-600">
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                 {action.description}
               </p>
               <Button
                 asChild
                 variant="outline"
-                className="mt-5 group/btn w-full justify-between"
+                className="mt-5 w-full justify-between"
               >
                 <Link href={action.href}>
                   Manage
-                  <ArrowRight className="size-4 transition-transform duration-200 group-hover/btn:translate-x-0.5" />
+                  <ArrowRight className="size-4" />
                 </Link>
               </Button>
             </CardContent>

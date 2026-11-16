@@ -4,6 +4,7 @@ import {
   PageSkeleton,
   Skeleton,
 } from "@/components/ui/skeleton";
+import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
 
 export default function DashboardSkeleton() {
   return (
@@ -12,27 +13,15 @@ export default function DashboardSkeleton() {
       className="flex flex-col gap-6 lg:gap-7"
     >
       <section className="flex flex-col gap-4 lg:gap-5">
-        <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm sm:p-5 lg:p-6">
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-              <div className="space-y-2">
-                <Skeleton className="h-3 w-28" />
-                <Skeleton className="h-6 w-56 max-w-full" />
-              </div>
-              <div className="grid grid-cols-3 gap-3 sm:min-w-90">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="space-y-1 sm:text-right">
-                    <Skeleton className="h-3 w-16 sm:ml-auto" />
-                    <Skeleton className="h-4 w-8 sm:ml-auto" />
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 lg:justify-end">
-              <Skeleton className="h-9 w-24 rounded-md" />
-              <Skeleton className="h-9 w-32 rounded-md" />
-              <Skeleton className="h-9 w-9 rounded-md" />
-            </div>
+        <div className={PAGE_HEADER_CLASS}>
+          <div className="min-w-0">
+            <Skeleton className="h-8 w-48 max-w-full" />
+            <Skeleton className="mt-1 h-5 w-32" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-9 w-24 rounded-md" />
+            <Skeleton className="h-9 w-32 rounded-md" />
+            <Skeleton className="h-9 w-9 rounded-md" />
           </div>
         </div>
 

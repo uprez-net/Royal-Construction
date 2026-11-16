@@ -125,7 +125,7 @@ export function CostSchedulePanel({
 
   return (
     <Card
-      className="border-border/70 bg-white/95 shadow-sm"
+      className="border-border/70 bg-card/95 shadow-sm"
       aria-labelledby="cost-schedule-title"
     >
       <CardHeader className="border-b border-border/70">
@@ -373,7 +373,7 @@ export function CostSchedulePanel({
                           {stepCount > 0 ? (
                             <>
                               <Link2
-                                className="size-3.5 shrink-0 text-royal-gold"
+                                className="size-3.5 shrink-0 text-royal-gold-ink-text"
                                 aria-hidden="true"
                               />
                               <span className="font-medium">
@@ -583,7 +583,7 @@ function SequenceStepEditor({
               className="flex items-start gap-2 rounded-md border border-border/60 bg-card px-2.5 py-1.5 text-[13px] leading-5"
             >
               <Link2
-                className="mt-0.5 size-3.5 shrink-0 text-royal-gold"
+                className="mt-0.5 size-3.5 shrink-0 text-royal-gold-ink-text"
                 aria-hidden="true"
               />
               <span className="min-w-0 flex-1 wrap-break-word">{task}</span>

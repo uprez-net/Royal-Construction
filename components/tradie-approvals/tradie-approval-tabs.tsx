@@ -177,7 +177,7 @@ export function TradieApprovalTabs() {
 
           <Input
             id="search"
-            className="h-10 rounded-lg border-border bg-background pl-9 text-[13px] shadow-none transition-all focus-visible:ring-4 focus-visible:ring-teal-500/10 focus-visible:border-teal-600"
+            className="h-10 rounded-lg border-border bg-background pl-9 text-[13px] shadow-none transition-all focus-visible:ring-4 focus-visible:ring-ring/20 focus-visible:border-ring"
             placeholder="Search approvals…"
             aria-label="Search approvals"
             value={query.search}
@@ -189,7 +189,7 @@ export function TradieApprovalTabs() {
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
-              className="bg-green-500 hover:bg-green-600 text-white"
+              className="bg-success hover:bg-success text-white"
               onClick={() => startTransition(handleSelectedApprove)}
               disabled={isPending}
             >
@@ -206,8 +206,7 @@ export function TradieApprovalTabs() {
               )}
             </Button>
             <Button
-              variant="outline"
-              className="bg-red-500 hover:bg-red-600 text-white"
+              variant="destructive"
               onClick={() => startTransition(handleSelectedReject)}
               disabled={isPending}
             >
@@ -333,7 +332,7 @@ function ApprovalTabs({ activeTab, onTabChange }: ApprovalTabsProps) {
               className={cn(
                 "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 activeTab === tab.key
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-royal-gold-light font-semibold text-royal-gold-ink-text"
                   : "hover:bg-muted",
               )}
             >
@@ -369,7 +368,7 @@ function ApprovalTabs({ activeTab, onTabChange }: ApprovalTabsProps) {
               className={cn(
                 "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 activeTab === tab.key
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-royal-gold-light font-semibold text-royal-gold-ink-text"
                   : "hover:bg-muted",
               )}
             >

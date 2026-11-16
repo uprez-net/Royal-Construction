@@ -113,7 +113,7 @@ export function HBCFClaimPage() {
   const saveBlocked = claimAmountMissing || loadingChargeMissing;
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
           description="Edit the system wide HBCF claim amount."

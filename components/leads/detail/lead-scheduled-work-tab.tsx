@@ -117,7 +117,7 @@ export function LeadScheduledWorkTab({
         <CardContent className="px-4 pt-4 sm:px-6 sm:pt-5">
           {openTasks.length === 0 ? (
             <div className="mx-auto flex max-w-md flex-col items-center gap-3 py-8 text-center">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
+              <div className="flex size-11 items-center justify-center rounded-lg bg-muted">
                 <CalendarClock
                   className="size-5 text-muted-foreground"
                   aria-hidden="true"

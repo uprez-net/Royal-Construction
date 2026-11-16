@@ -62,12 +62,15 @@ function Placeholder({
     <div
       className={cn(
         "flex min-w-[220px] items-center gap-3 rounded-md px-3 py-3",
-        failed ? "bg-[#fde8ec]" : "bg-black/[0.04]",
+        failed ? "bg-destructive-light" : "bg-black/[0.04]",
       )}
     >
-      <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-white/80 text-[#54656f]">
+      <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-card/80 text-muted-foreground">
         {failed ? (
-          <AlertTriangle className="size-5 text-[#ea0038]" aria-hidden="true" />
+          <AlertTriangle
+            className="size-5 text-destructive-ink"
+            aria-hidden="true"
+          />
         ) : (
           <Icon className="size-5" aria-hidden="true" />
         )}
@@ -75,16 +78,16 @@ function Placeholder({
       <div className="min-w-0 flex-1 text-[13px] leading-snug">
         {failed ? (
           <>
-            <p className="font-medium text-[#111b21]">
+            <p className="font-medium text-foreground">
               Couldn&apos;t save this {label}
             </p>
-            <p className="text-[#667781]">
+            <p className="text-muted-foreground">
               {media.failureReason
                 ?? "Open WhatsApp on the business phone to view it."}
             </p>
           </>
         ) : (
-          <p className="flex items-center gap-1.5 text-[#667781]">
+          <p className="flex items-center gap-1.5 text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
             Saving {label}…
           </p>
@@ -98,7 +101,7 @@ function Placeholder({
             setRetrying(true);
             onRetry(media.id);
           }}
-          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[12px] font-medium text-[#008069] shadow-sm hover:bg-[#f0f2f5] disabled:opacity-60"
+          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-card px-2.5 py-1 text-[12px] font-medium text-success-ink shadow-sm hover:bg-muted disabled:opacity-60"
         >
           <RotateCw
             className={cn("size-3.5", retrying && "animate-spin")}
@@ -151,27 +154,27 @@ export function WhatsAppMedia({
             className={cn(
               "inline-flex h-10 w-8 shrink-0 items-end justify-center rounded-[3px] pb-1 text-[9px] font-bold text-white",
               kind === "PDF"
-                ? "bg-[#e5464f]"
+                ? "bg-destructive"
                 : kind.startsWith("XLS")
-                  ? "bg-[#1d9d58]"
+                  ? "bg-success"
                   : kind.startsWith("DOC")
-                    ? "bg-[#2f6edb]"
-                    : "bg-[#8696a0]",
+                    ? "bg-info"
+                    : "bg-muted-foreground",
             )}
             aria-hidden="true"
           >
             {kind.slice(0, 4)}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[14px] text-[#111b21]">
+            <span className="block truncate text-[14px] text-foreground">
               {media.fileName ?? "Document"}
             </span>
-            <span className="block text-[12px] text-[#667781]">
+            <span className="block text-[12px] text-muted-foreground">
               {[kind, size].filter(Boolean).join(" · ")}
             </span>
           </span>
           <Download
-            className="size-4.5 shrink-0 text-[#54656f]"
+            className="size-4.5 shrink-0 text-muted-foreground"
             aria-label="Open"
           />
         </a>

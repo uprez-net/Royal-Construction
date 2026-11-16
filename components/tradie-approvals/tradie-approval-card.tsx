@@ -47,61 +47,57 @@ const approvalConfig = {
   [TradieApprovalActionType.PRICE_CHANGE]: {
     label: "Price Change",
     icon: Tag,
-    badgeClass:
-      "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300",
+    badgeClass: "bg-info-light text-info-ink border-info/30",
   },
 
   [TradieApprovalActionType.INCIDENT_RESOLUTION]: {
     label: "Incident",
     icon: AlertTriangle,
     badgeClass:
-      "bg-red-100 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300",
+      "bg-destructive-light text-destructive-ink border-destructive/30",
   },
 
   [TradieApprovalActionType.TRADIE_REMOVAL]: {
     label: "Deletion",
     icon: Trash2,
-    badgeClass:
-      "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-300",
+    badgeClass: "bg-warning-light text-warning-ink border-warning/30",
   },
 
   [TradieApprovalActionType.SCHEDULE_APPROVAL]: {
     label: "Scheduling",
     icon: Calendar,
-    badgeClass:
-      "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300",
+    badgeClass: "bg-info-light text-info-ink border-info/30",
   },
 
   [TradieApprovalActionType.SCHEDULE_DELETION]: {
     label: "Schedule Removal",
     icon: CalendarX,
     badgeClass:
-      "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300",
+      "bg-destructive-light text-destructive-ink border-destructive/30",
   },
 
   [TradieApprovalActionType.TRADE_CANCELLATION]: {
     label: "Trade Cancellation",
     icon: CalendarX,
-    badgeClass:
-      "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300",
+    badgeClass: "bg-warning-light text-warning-ink border-warning/30",
   },
 };
 
 const severityConfig = {
   LOW: {
-    dot: "bg-green-500",
+    dot: "bg-success",
     badge: "secondary",
   },
   MEDIUM: {
-    dot: "bg-yellow-500",
+    dot: "bg-warning",
     badge: "secondary",
   },
   HIGH: {
-    dot: "bg-orange-500",
+    dot: "bg-warning",
     badge: "destructive",
   },
   CRITICAL: {
-    dot: "bg-red-600",
+    dot: "bg-destructive",
     badge: "destructive",
   },
 } as const;
@@ -110,7 +106,7 @@ function StatusBadge({ status }: { status: TradieApprovalStatus }) {
   switch (status) {
     case TradieApprovalStatus.PENDING:
       return (
-        <Badge variant="outline" className="gap-1 text-amber-600">
+        <Badge variant="outline" className="gap-1 text-warning-ink">
           <Clock3 className="h-3 w-3" />
           Pending
         </Badge>
@@ -162,7 +158,7 @@ export function ApprovalCard({
     <div
       onClick={onClick}
       className={cn(
-        "group cursor-pointer rounded-xl border bg-card p-4 transition-all hover:shadow-md",
+        "group cursor-pointer rounded-xl border bg-card p-4 transition-all",
         selected && "ring-2 ring-primary",
         disabled && "opacity-50",
       )}

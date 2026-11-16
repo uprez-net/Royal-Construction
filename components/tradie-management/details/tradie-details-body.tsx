@@ -205,8 +205,8 @@ export function TradiePriorityCard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-lg border border-border/70 p-3">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+          <div>
             <div className="text-xs text-muted-foreground">
               Last quoted price
             </div>
@@ -222,7 +222,7 @@ export function TradiePriorityCard() {
             )}
           </div>
 
-          <div className="rounded-lg border border-border/70 p-3">
+          <div>
             <div className="text-xs text-muted-foreground">Total jobs</div>
 
             <div className="text-lg font-semibold font-mono tabular-nums">

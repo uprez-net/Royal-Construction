@@ -112,7 +112,7 @@ export function AgentTranscript({
             <Empty className="border-0 p-2 sm:min-h-96 sm:p-6">
               <EmptyHeader>
                 <EmptyMedia
-                  className="size-12 rounded-xl bg-royal-gold-light text-royal-gold-ink"
+                  className="size-12 rounded-lg bg-muted text-foreground/80"
                   variant="icon"
                 >
                   <Sparkles aria-hidden="true" />
@@ -308,7 +308,7 @@ export function AgentTranscript({
           aria-label="Scroll to the latest message"
           // In the right-hand gutter rather than the middle of the column: in
           // the middle it sat on top of the answer text (#432).
-          className="absolute right-4 bottom-4 z-20 rounded-full border-border/80 bg-white/95 text-foreground shadow-lg backdrop-blur transition hover:-translate-y-0.5 hover:bg-royal-gold-light sm:right-6"
+          className="absolute right-4 bottom-4 z-20 rounded-full border-border/80 bg-card text-foreground transition-colors hover:bg-muted sm:right-6"
           onClick={scrollToBottom}
           size="icon-sm"
           title="Scroll to latest message"

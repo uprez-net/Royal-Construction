@@ -154,8 +154,7 @@ export function AgentComposer({
     switch (action.kind) {
       case "move":
         setActiveIndex(
-          (index) =>
-            (index + action.delta + results.length) % results.length,
+          (index) => (index + action.delta + results.length) % results.length,
         );
         return;
       case "pick": {
@@ -177,7 +176,7 @@ export function AgentComposer({
 
   return (
     <footer
-      className="relative z-10 shrink-0 border-t border-border/70 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4"
+      className="relative z-10 shrink-0 border-t border-border/70 bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4"
       onDragLeave={(event) => {
         if (event.currentTarget.contains(event.relatedTarget as Node)) return;
         setDraggingOver(false);
@@ -221,7 +220,7 @@ export function AgentComposer({
         ) : null}
 
         {editingMessageId ? (
-          <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-royal-gold/30 bg-royal-gold-light/35 px-3 py-2 text-xs text-muted-foreground">
+          <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
             <span>
               Editing a previous message. Send it to start a new turn.
             </span>
@@ -236,7 +235,7 @@ export function AgentComposer({
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-xl border border-border bg-muted/20 shadow-xs focus-within:border-royal-gold/60">
+        <div className="overflow-hidden rounded-lg border border-border bg-muted/20 focus-within:border-royal-gold/60">
           {annotations.length > 0 ? (
             <ChipRow label="References">
               {annotations.map((annotation) => (
@@ -413,7 +412,7 @@ function Chip({
   removeLabel: string;
 }) {
   return (
-    <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-white py-0.5 pr-0.5 pl-1.5 text-xs">
+    <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-card py-0.5 pr-0.5 pl-1.5 text-xs">
       {children}
       <button
         aria-label={removeLabel}

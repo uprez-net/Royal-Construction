@@ -2133,7 +2133,7 @@ export function ProjectComplianceTab({
           look like one thing with parts. The send bar and the vault sit on it
           too, for the same reason.
       --------------------------------------------------------------- */}
-      <div className="space-y-4 rounded-2xl border border-border/70 bg-gradient-to-br from-muted/60 via-background to-primary/[0.035] p-3 sm:p-4">
+      <div className="space-y-4 rounded-lg border border-border/70 bg-background p-3 sm:p-4">
         {/* -------------------------------------------------------------
             Two columns, and the checklist across both.
 
@@ -2236,7 +2236,7 @@ export function ProjectComplianceTab({
               <AlertDialogFooter>
                 <AlertDialogCancel>Keep it</AlertDialogCancel>
                 <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  className="bg-destructive text-white hover:bg-destructive/90"
                   onClick={() => {
                     if (dismissTarget) void handleDismiss(dismissTarget.id);
                     setDismissTarget(null);

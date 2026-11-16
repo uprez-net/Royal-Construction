@@ -7,7 +7,7 @@ function UnreadDot({ isUnread }: { isUnread: boolean }) {
     <span
       className={cn(
         isUnread
-          ? "absolute right-1 top-1 size-2 rounded-full bg-[#C6923A]"
+          ? "absolute right-1 top-1 size-2 rounded-full bg-royal-gold"
           : "opacity-0",
       )}
     />
@@ -36,8 +36,8 @@ function InboxLoading() {
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-10">
-      <Inbox className="size-10 text-[#C6923A]" />
-      <p className="text-sm text-slate-500">No notifications yet</p>
+      <Inbox className="size-10 text-royal-gold-ink-text" />
+      <p className="text-sm text-muted-foreground">No notifications yet</p>
     </div>
   );
 }

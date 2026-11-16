@@ -43,12 +43,12 @@ interface ProjectPaymentsTabProps {
 // Four full-size cards stacked to about 580px on a phone before the first
 // invoice. There they sit two by two, smaller and without the icon tile.
 const CARD_SURFACE =
-  "rounded-xl border border-border/70 bg-card p-3 shadow-sm sm:p-5";
+  "rounded-lg border border-border/70 bg-card p-3 shadow-sm sm:p-5";
 const CARD_VALUE =
-  "mt-1 font-heading text-xl font-semibold leading-tight tracking-tight tabular-nums text-foreground sm:mt-2 sm:text-3xl";
+  "mt-1 font-mono text-xl font-semibold leading-tight tracking-tight tabular-nums text-foreground sm:mt-2 sm:text-3xl";
 const CARD_LABEL = "mt-1 text-xs text-muted-foreground";
 const ICON_CONTAINER =
-  "hidden size-11 shrink-0 items-center justify-center rounded-2xl text-white sm:flex";
+  "hidden size-11 shrink-0 items-center justify-center rounded-lg sm:flex";
 
 /**
  * Money that may legitimately be unknown.
@@ -308,7 +308,7 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
             ])}
             emptyState={
               <div className="mx-auto flex max-w-xl flex-col items-center gap-3 py-8 text-center">
-                <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
+                <div className="flex size-11 items-center justify-center rounded-xl bg-muted">
                   <ReceiptText
                     className="size-5 text-muted-foreground"
                     aria-hidden="true"

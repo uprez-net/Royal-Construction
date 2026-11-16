@@ -252,7 +252,7 @@ export function EmailComposer({
             if (canSend) startTransition(handleSend);
           }
         }}
-        className="relative z-10 overflow-visible rounded-2xl border border-border bg-background shadow-xs transition focus-within:border-royal-gold/60 focus-within:ring-4 focus-within:ring-royal-gold/10"
+        className="relative z-10 overflow-visible rounded-lg border border-border bg-background shadow-xs transition focus-within:border-royal-gold/60 focus-within:ring-4 focus-within:ring-royal-gold/10"
       >
         <div className="flex items-center gap-2 border-b border-border/60 px-3.5 py-2 text-xs">
           <span className="text-muted-foreground">To</span>

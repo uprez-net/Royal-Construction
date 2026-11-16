@@ -315,7 +315,7 @@ export default function TableView({
                       <tr
                         key={lead.id}
                         className={cn(
-                          lead.urgent && "urgent-row bg-rose-50/50",
+                          lead.urgent && "urgent-row",
                           lead.isArchived && "opacity-50",
                         )}
                         onClick={() => openLeadDetail(lead)}
@@ -323,7 +323,7 @@ export default function TableView({
                         <td className="col-lead">
                           <div className="cell-name">
                             {lead.urgent && (
-                              <span className="urgent-dot inline-block size-2 rounded-full bg-rose-600 animate-pulse" />
+                              <span className="urgent-dot inline-block size-2 rounded-full bg-warning" />
                             )}
                             <div className="cell-name-text">
                               <strong>
@@ -391,7 +391,7 @@ export default function TableView({
                           {!lead.assignedId ? (
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold"
+                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold-ink-text"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setAssignedLead(lead);
@@ -405,7 +405,7 @@ export default function TableView({
                           ) : (
                             <button
                               type="button"
-                              className="assigned-name cursor-pointer rounded-sm bg-transparent p-0 text-left transition-colors hover:text-royal-gold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                              className="assigned-name cursor-pointer rounded-sm bg-transparent p-0 text-left transition-colors hover:text-royal-gold-ink-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                               aria-label={`Reassign ${lead.name}, assigned to ${lead.assignedUser?.name ?? "someone"}`}
                               title="Reassign Lead"
                               onClick={(e) => {
@@ -571,7 +571,7 @@ export default function TableView({
                       <span className="mobile-lead-name-row">
                         <span className="mobile-lead-name">
                           {lead.urgent && (
-                            <span className="urgent-dot inline-block size-2 rounded-full bg-rose-600 animate-pulse" />
+                            <span className="urgent-dot inline-block size-2 rounded-full bg-warning" />
                           )}
                           {lead.name}
                         </span>

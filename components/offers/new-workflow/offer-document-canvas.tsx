@@ -94,7 +94,7 @@ export function OfferDocumentCanvas({
 
   return (
     <div className="space-y-5">
-      <Card className="border-border/70 bg-white/95 shadow-sm">
+      <Card className="border-border/70 bg-card/95 shadow-sm">
         <CardHeader className="border-b border-border/70">
           <OfferCardHeading
             description={`${schedule.length} contractual rows. Prints on the tender, not on this offer — the offer sells, the tender contracts. The selling list below is drafted from these.`}
@@ -104,7 +104,7 @@ export function OfferDocumentCanvas({
         </CardHeader>
         <CardContent>
           <details open={schedule.length === 0}>
-            <summary className="cursor-pointer text-sm font-medium text-muted-foreground marker:text-royal-gold">
+            <summary className="cursor-pointer text-sm font-medium text-muted-foreground marker:text-muted-foreground">
               {schedule.length === 0
                 ? "No inclusions yet"
                 : `Show all ${schedule.length} rows`}
@@ -191,7 +191,7 @@ export function OfferDocumentCanvas({
         </CardContent>
       </Card>
 
-      <Card className="border-border/70 bg-white/95 shadow-sm">
+      <Card className="border-border/70 bg-card/95 shadow-sm">
         <CardHeader className="border-b border-border/70">
           <OfferCardHeading
             description="What your client receives. Edit any part of it here — the PDF prints exactly what you see."
@@ -200,7 +200,7 @@ export function OfferDocumentCanvas({
           />
         </CardHeader>
         <CardContent>
-          <article className="rounded-lg border border-border bg-background px-5 py-6 sm:px-8">
+          <article className="rounded-lg border border-border bg-card px-5 py-6 sm:px-8">
             <header className="border-b border-border pb-3">
               <p className="px-1.5 font-mono text-xs text-muted-foreground">
                 {job.reference}-{job.revision}
@@ -229,11 +229,11 @@ export function OfferDocumentCanvas({
                 placeholder="Opening paragraph…"
                 value={draft.introText}
               />
-              <div className="rounded-lg border border-border bg-royal-gold-light/40 px-6 py-4 text-center lg:min-w-64">
+              <div className="rounded-lg border border-border bg-card px-6 py-4 text-center lg:min-w-64">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Your fixed contract price
                 </p>
-                <p className="mt-0.5 font-heading text-3xl font-semibold text-sidebar">
+                <p className="mt-0.5 font-mono text-3xl font-semibold text-sidebar">
                   {formatCurrency(customerPrice.selectedContractValueIncGst)}
                 </p>
                 <p className="mt-0.5 font-mono text-xs text-muted-foreground">

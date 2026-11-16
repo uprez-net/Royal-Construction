@@ -428,7 +428,7 @@ export function ProjectHistoryTabs({ project }: ProjectHistoryTabsProps) {
       <CardContent className="p-4 sm:p-6">
         {days.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-muted">
+            <div className="flex size-12 items-center justify-center rounded-lg bg-muted">
               <History
                 className="size-5 text-muted-foreground"
                 aria-hidden="true"

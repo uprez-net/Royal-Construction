@@ -142,7 +142,7 @@ function NextUp({ ledgerStage }: { ledgerStage: LedgerStage }) {
         className={cn(
           "block",
           dueness.kind === "overdue"
-            ? "font-semibold text-destructive-ink"
+            ? "font-semibold text-warning-ink"
             : dueness.kind === "today" || dueness.kind === "soon"
               ? "font-semibold text-warning-ink"
               : "text-muted-foreground",
@@ -157,7 +157,7 @@ function NextUp({ ledgerStage }: { ledgerStage: LedgerStage }) {
 function StageStatusPill({ state }: { state: StageState }) {
   if (state === "complete")
     return <StatusPill tone="success">Complete</StatusPill>;
-  if (state === "active") return <StatusPill tone="warning">Active</StatusPill>;
+  if (state === "active") return <StatusPill tone="primary">Active</StatusPill>;
   return <StatusPill tone="neutral">Upcoming</StatusPill>;
 }
 

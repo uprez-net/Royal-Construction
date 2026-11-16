@@ -200,7 +200,7 @@ export function LeadWhatsAppConversation({
             type="button"
             variant="ghost"
             size="icon"
-            className="size-9 rounded-full text-[#54656f] hover:bg-black/5"
+            className="size-9 rounded-full text-muted-foreground hover:bg-black/5"
             onClick={() => void refresh()}
             disabled={refreshing}
             aria-label={
@@ -219,7 +219,7 @@ export function LeadWhatsAppConversation({
             variant="ghost"
             size="icon"
             className={cn(
-              "size-9 rounded-full text-[#54656f] hover:bg-black/5",
+              "size-9 rounded-full text-muted-foreground hover:bg-black/5",
               showDetails && "bg-black/5",
             )}
             onClick={() => setShowDetails((value) => !value)}
@@ -239,7 +239,7 @@ export function LeadWhatsAppConversation({
       <WhatsAppChatFrame header={header} className={className}>
         <div className="flex h-full min-h-[240px] items-center justify-center">
           {error ? (
-            <div className="space-y-3 rounded-lg bg-white/90 px-5 py-4 text-center shadow-sm">
+            <div className="space-y-3 rounded-lg bg-card/90 px-5 py-4 text-center shadow-sm">
               <p role="alert" className="text-sm text-destructive-ink">
                 {error}
               </p>
@@ -253,7 +253,7 @@ export function LeadWhatsAppConversation({
               </Button>
             </div>
           ) : (
-            <p className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm text-[#54656f] shadow-sm">
+            <p className="inline-flex items-center gap-2 rounded-full bg-card/90 px-4 py-2 text-sm text-muted-foreground shadow-sm">
               <Loader2 className="size-4 animate-spin" aria-hidden="true" />
               Loading conversation…
             </p>
@@ -270,7 +270,7 @@ export function LeadWhatsAppConversation({
       footer={
         <>
           {showDetails ? (
-            <div className="max-h-[45%] shrink-0 space-y-3 overflow-y-auto border-t border-black/5 bg-white px-4 py-3">
+            <div className="max-h-[45%] shrink-0 space-y-3 overflow-y-auto border-t border-black/5 bg-card px-4 py-3">
               <WhatsAppConsentPanel
                 thread={thread}
                 onChanged={() => void refresh()}
@@ -347,7 +347,7 @@ export function LeadWhatsAppConversation({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="h-7 rounded-full bg-white text-xs"
+                className="h-7 rounded-full bg-card text-xs"
                 disabled={reconcilingId === message.id}
                 onClick={() => void handleReconcile(message, "sent")}
               >
@@ -357,7 +357,7 @@ export function LeadWhatsAppConversation({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="h-7 rounded-full bg-white text-xs"
+                className="h-7 rounded-full bg-card text-xs"
                 disabled={reconcilingId === message.id}
                 onClick={() => void handleReconcile(message, "not_sent")}
               >

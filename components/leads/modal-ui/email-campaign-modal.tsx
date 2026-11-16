@@ -266,7 +266,7 @@ export function EmailCampaignModal({
         maxWidthClass="max-w-[720px]"
       >
         <div className="space-y-4">
-          <div className="rounded-lg border border-teal-100 bg-teal-50/30 px-4 py-3 text-sm text-foreground">
+          <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-foreground">
             Sending to:{" "}
             <span className="font-medium">{emailTargets.length}</span> leads
             with email
@@ -276,12 +276,12 @@ export function EmailCampaignModal({
               <button
                 type="button"
                 onClick={() => setStep("custom")}
-                className="group flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-background p-6 shadow-sm transition hover:border-teal-600 hover:bg-teal-50/50 hover:shadow-md"
+                className="group flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-background p-6 shadow-sm transition hover:border-royal-gold-ink hover:bg-royal-gold-light/50 "
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/30 bg-muted/50 transition group-hover:border-teal-600 group-hover:bg-teal-100/80">
-                  <Plus className="size-5 text-muted-foreground transition group-hover:text-teal-700" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/30 bg-muted/50 transition group-hover:border-royal-gold-ink group-hover:bg-royal-gold-light">
+                  <Plus className="size-5 text-muted-foreground transition group-hover:text-royal-gold-ink-text" />
                 </div>
-                <div className="mt-3 text-sm font-semibold text-foreground transition group-hover:text-teal-700">
+                <div className="mt-3 text-sm font-semibold text-foreground transition group-hover:text-royal-gold-ink-text">
                   Custom Template
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
@@ -293,7 +293,7 @@ export function EmailCampaignModal({
                   key={template.id}
                   type="button"
                   onClick={() => handleTemplateSelect(template)}
-                  className="group rounded-xl border border-border bg-background p-4 text-left shadow-sm transition hover:border-teal-600 hover:shadow-md"
+                  className="group rounded-xl border border-border bg-background p-4 text-left shadow-sm transition hover:border-royal-gold-ink "
                 >
                   <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {template.category}
@@ -327,8 +327,8 @@ export function EmailCampaignModal({
       >
         <CustomTemplateCreation
           hook={hook}
-          backgroundColor="#26a6b5"
-          borderColor="#26A7B5DA"
+          backgroundColor="var(--royal-gold-ink)"
+          borderColor="var(--royal-gold-ink)"
         />
       </ModalShell>
     );
@@ -349,7 +349,7 @@ export function EmailCampaignModal({
         <div className="rounded-lg border border-border bg-muted/20 p-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex min-w-0 gap-3">
-              <div className="grid size-9 shrink-0 place-items-center rounded-full bg-teal-50 text-teal-700">
+              <div className="grid size-9 shrink-0 place-items-center rounded-full bg-royal-gold-light text-royal-gold-ink-text">
                 <Users className="size-4" />
               </div>
               <div className="min-w-0">
@@ -407,7 +407,7 @@ export function EmailCampaignModal({
           </div>
 
           {invalidTargets.length > 0 && (
-            <div className="mt-3 flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <div className="mt-3 flex gap-2 rounded-md border border-warning bg-warning-light px-3 py-2 text-xs text-warning-ink">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
                 {invalidTargets.length} recipient{" "}
@@ -442,7 +442,7 @@ export function EmailCampaignModal({
             Subject
           </label>
           <input
-            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-all focus:border-teal-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/10"
+            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-all focus:border-royal-gold-ink focus:outline-none focus-visible:ring-4 focus-visible:ring-royal-gold-ink/10"
             value={subjectTemplate}
             onChange={(e) => setSubjectTemplate(e.target.value)}
           />

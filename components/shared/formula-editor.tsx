@@ -494,7 +494,7 @@ function SuggestionIcon({ kind }: { kind: SuggestionKind }) {
   if (kind === "variable") {
     return (
       <VariableIcon
-        className="size-3.5 shrink-0 text-royal-gold"
+        className="size-3.5 shrink-0 text-royal-gold-ink-text"
         aria-hidden="true"
       />
     );

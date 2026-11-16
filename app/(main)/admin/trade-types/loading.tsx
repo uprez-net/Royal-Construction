@@ -7,7 +7,7 @@ export default function TradeTypesLoading() {
         <Skeleton className="h-8 w-48 max-w-full" />
         <Skeleton className="h-4 w-96 max-w-full" />
       </div>
-      <div className="space-y-4 rounded-xl border border-border/70 bg-card p-6 shadow-sm">
+      <div className="space-y-4 rounded-lg border border-border/70 bg-card p-6 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row">
           <Skeleton className="h-11 w-full sm:flex-1" />
           <Skeleton className="h-11 w-24" />

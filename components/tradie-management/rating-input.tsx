@@ -106,10 +106,9 @@ export function StarRatingInput({
               onMouseEnter={() => setHovered(rating)}
               onMouseLeave={() => setHovered(null)}
               className={cn(
-                "rounded-sm transition-transform motion-reduce:transition-none",
+                "rounded-sm",
                 "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                !readonly &&
-                  "cursor-pointer hover:scale-110 motion-reduce:hover:scale-100",
+                !readonly && "cursor-pointer",
               )}
             >
               {/* Fill — not hue — is the cue that a star is earned, so the

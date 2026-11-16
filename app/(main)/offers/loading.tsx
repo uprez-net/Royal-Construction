@@ -1,3 +1,4 @@
+import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
 import { OFFER_TABLE_HEADERS } from "@/components/offers/offer-table-columns";
 import {
   DataTableSkeleton,
@@ -9,17 +10,14 @@ import {
 export default function OfferPageSkeleton() {
   return (
     <PageSkeleton label="Loading offers" className="space-y-6">
-      {/* Card padding and the mobile action row match PageHeroCard. */}
-      <div className="relative overflow-hidden rounded-lg border border-royal-gold/20 bg-linear-to-br from-royal-gold-light to-card px-4 py-8 shadow-sm sm:px-6 sm:py-10">
-        <div className="pointer-events-none absolute -right-12 -top-10 size-40 rounded-full bg-royal-gold/10" />
-        <div className="relative flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-0 space-y-1">
-            <Skeleton className="h-7 w-56 max-w-full bg-royal-gold/15" />
-            <Skeleton className="h-10 w-80 max-w-full bg-royal-gold/15 sm:h-5" />
-          </div>
-          <div className="w-full sm:w-auto">
-            <Skeleton className="h-11 w-52 rounded-lg bg-royal-gold/20 sm:h-9" />
-          </div>
+      {/* Same layout and title height as PageHeader, so the swap does not jump. */}
+      <div className={PAGE_HEADER_CLASS}>
+        <div className="min-w-0">
+          <Skeleton className="h-8 w-64 max-w-full" />
+          <Skeleton className="mt-1 h-10 w-96 max-w-full sm:h-5" />
+        </div>
+        <div className="w-full sm:w-auto">
+          <Skeleton className="h-11 w-52 rounded-lg sm:h-9" />
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
+import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
 import {
   DataTableSkeleton,
   MetricCardSkeleton,
@@ -10,16 +11,14 @@ import {
 export default function TradieManagementSkeleton() {
   return (
     <PageSkeleton label="Loading tradies" className="space-y-6">
-      <div className="rounded-lg border border-border/70 bg-card px-4 py-8 shadow-sm sm:px-6 sm:py-10">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0 space-y-2">
-            <Skeleton className="h-7 w-56" />
-            <Skeleton className="h-5 w-96" />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Skeleton className="h-11 w-32" />
-            <Skeleton className="h-11 w-28" />
-          </div>
+      <div className={PAGE_HEADER_CLASS}>
+        <div className="min-w-0">
+          <Skeleton className="h-8 w-56" />
+          <Skeleton className="mt-1 h-5 w-96 max-w-full" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Skeleton className="h-11 w-32" />
+          <Skeleton className="h-11 w-28" />
         </div>
       </div>
       <div

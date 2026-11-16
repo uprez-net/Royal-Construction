@@ -6,13 +6,12 @@ import { useState, useEffect } from "react";
 interface GeneratingModalProps {
   /** The accent/border color for the spinner, progress bar, and text */
   borderColor?: string;
-  /** The background accent color */
+  /** Kept for callers; the flat layout no longer draws a background glow. */
   backgroundColor?: string;
 }
 
 export function GeneratingModal({
-  borderColor = "#C6923A",
-  backgroundColor = "#C6923A",
+  borderColor = "var(--royal-gold-ink)",
 }: GeneratingModalProps) {
   const [progress, setProgress] = useState(0);
   const [messageIndex, setMessageIndex] = useState(0);
@@ -53,12 +52,6 @@ export function GeneratingModal({
   return (
     <div className="flex items-center justify-center py-10 w-full">
       <div className="relative flex flex-col items-center gap-8 w-full overflow-hidden px-4 py-8">
-        {/* Decorative background glow */}
-        <div
-          className="absolute -top-20 left-1/2 -translate-x-1/2 h-64 w-64 rounded-full blur-3xl transition-all animate-pulse"
-          style={{ backgroundColor: `${backgroundColor}20` }}
-        ></div>
-
         {/* Animated Icon Container */}
         <div className="relative flex h-24 w-24 items-center justify-center">
           {/* Rotating Ring */}
@@ -66,13 +59,10 @@ export function GeneratingModal({
             className="absolute inset-0 rounded-full border-2 border-transparent animate-spin"
             style={{
               borderTopColor: borderColor,
-              borderRightColor: `${borderColor}80`,
+              borderRightColor: `color-mix(in oklab, ${borderColor} 50%, transparent)`,
               animationDuration: "1.5s",
             }}
           ></div>
-
-          {/* Inner Pulsing Circle */}
-          <div className="absolute inset-2 rounded-full bg-[#F7F6F2] border border-[#E2E8F0] animate-pulse"></div>
 
           {/* Center Icon */}
           <div className="relative z-10 flex items-center justify-center">
@@ -82,7 +72,7 @@ export function GeneratingModal({
 
         {/* Text Content */}
         <div className="relative flex flex-col items-center gap-3 text-center z-10">
-          <h3 className="text-2xl font-semibold text-slate-900 tracking-tight">
+          <h3 className="text-2xl font-semibold text-foreground tracking-tight">
             Generating Your Email
           </h3>
 
@@ -90,21 +80,20 @@ export function GeneratingModal({
           <div className="h-6 flex items-center justify-center">
             <p
               key={messageIndex}
-              className="text-sm font-medium animate-fade-in-down"
-              style={{ color: borderColor }}
+              className="text-sm font-medium text-muted-foreground animate-fade-in-down"
             >
               {messages[messageIndex]}
             </p>
           </div>
 
-          <p className="text-sm text-slate-500 leading-relaxed max-w-xs">
+          <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
             Our AI is crafting your custom HTML template. This usually takes
             about 15-20 seconds.
           </p>
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden z-10">
+        <div className="w-full bg-muted rounded-full h-2 overflow-hidden z-10">
           <div
             className="h-2 rounded-full transition-all duration-300 ease-out"
             style={{
@@ -114,7 +103,7 @@ export function GeneratingModal({
           ></div>
         </div>
 
-        <p className="text-xs text-slate-400 z-10">
+        <p className="text-xs text-muted-foreground z-10">
           Please don&apos;t close or refresh this page
         </p>
 

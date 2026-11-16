@@ -124,8 +124,8 @@ function stageTimeline(stage: ComplianceStage) {
       ? null
       : Math.max(
           0,
-          (stage.elapsedBusinessDays / Math.max(stage.slaBusinessDays, 1)) *
-            100,
+          (stage.elapsedBusinessDays / Math.max(stage.slaBusinessDays, 1))
+            * 100,
         );
 
   return {
@@ -244,13 +244,13 @@ function StageTimeline({ stage }: { stage: ComplianceStage }) {
         <div
           className={cn(
             "flex flex-col gap-0.5 rounded-lg px-3 py-2.5",
-            isOverdue ? "bg-destructive/25" : "bg-background/10",
+            isOverdue ? "bg-warning/25" : "bg-background/10",
           )}
         >
           <span
             className={cn(
               "text-sm leading-none font-semibold tabular-nums",
-              isOverdue ? "text-destructive-light" : "text-background",
+              isOverdue ? "text-warning-light" : "text-background",
             )}
           >
             {remainingLabel(timeline.daysLeft, timeline.isComplete)}
@@ -335,10 +335,10 @@ function StageTooltip({
                 variant={status.variant}
                 className={cn(
                   "shrink-0",
-                  status.variant === "outline" &&
-                    "border-background/20 text-background",
-                  status.tone === "warning" &&
-                    "border-warning/40 bg-warning-light text-warning-ink",
+                  status.variant === "outline"
+                    && "border-background/20 text-background",
+                  status.tone === "warning"
+                    && "border-warning/40 bg-warning-light text-warning-ink",
                 )}
               >
                 {status.label === "Complete" ? (

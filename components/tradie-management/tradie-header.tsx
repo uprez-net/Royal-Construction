@@ -1,6 +1,6 @@
 "use client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/common/page-header";
 import { exportTradies } from "@/lib/data/tradie-management";
 import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
 import { useAppDispatch } from "@/lib/store/hooks";
@@ -53,41 +53,33 @@ export function TradieHeader() {
   };
 
   return (
-    <Card className="border border-border/70 bg-card shadow-sm">
-      <CardContent className="p-4 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground">
-              Tradie management
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Browse by trade category or switch views. Add tradies, track
-              incidents, update priority levels and update pricing.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="lg"
-              onClick={() => dispatch(openModal({ type: "addTradie" }))}
-            >
-              <Plus className="mr-2 size-4" aria-hidden="true" />
-              Add tradie
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              onClick={() => startTransition(handleExport)}
-              disabled={isPending}
-            >
-              <Download
-                className={cn("mr-2 size-4", isPending && "animate-pulse")}
-                aria-hidden="true"
-              />
-              {isPending ? "Exporting…" : "Export"}
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <PageHeader
+      headingLevel="h1"
+      title="Tradie management"
+      description="Browse by trade category or switch views. Add tradies, track incidents, update priority levels and update pricing."
+      actions={
+        <>
+          <Button
+            size="lg"
+            onClick={() => dispatch(openModal({ type: "addTradie" }))}
+          >
+            <Plus className="mr-2 size-4" aria-hidden="true" />
+            Add tradie
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            onClick={() => startTransition(handleExport)}
+            disabled={isPending}
+          >
+            <Download
+              className={cn("mr-2 size-4", isPending && "animate-pulse")}
+              aria-hidden="true"
+            />
+            {isPending ? "Exporting…" : "Export"}
+          </Button>
+        </>
+      }
+    />
   );
 }

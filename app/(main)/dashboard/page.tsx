@@ -12,6 +12,7 @@ import type { DashboardKPI } from "@/types/dashboard";
 import type { FollowUpItem } from "@/components/dashboard/dashboard-follow-ups";
 import type { Metadata } from "next";
 import { getUserByClerkIdCached } from "@/lib/data/user";
+import { formatSydneyDate } from "@/lib/dates/sydney";
 
 const emptyDashboardKPI: DashboardKPI = {
   followUpsCount: 0,
@@ -105,13 +106,10 @@ export default async function DashboardPageClient() {
   return (
     <DashboardHome
       isAdmin={user?.role === "ADMIN"}
-      userFirstName={user?.name.split(" ")[0] ?? "User"}
+      today={formatSydneyDate(new Date())}
       graphData={graphResult.data}
       projectsData={projectsResult.data}
       kpiData={dashboardKPI}
-      newLeadsCount={dashboardKPI.newLeadsThisMonth.total}
-      newProjectsCount={dashboardKPI.newProjectsCount}
-      followUpsCount={dashboardKPI.followUpsCount}
       followUpItems={followUpItems}
       dataWarnings={warnings}
     />

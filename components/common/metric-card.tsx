@@ -12,12 +12,11 @@ export interface DataPoint {
 
 /**
  * Semantic icon tones. Prefer these over `iconTone` class strings — passing raw
- * palette classes (`bg-blue-600`, `bg-yellow-600`) is what produced four
+ * palette classes (off-palette hues) is what produced four
  * different colour encodings of the same four statuses across the app.
  *
- * These map to the -ink tokens, not the base fills, because the glyph on top is
- * white: `--warning` only reaches 2.05:1 against white, so a white icon on it is
- * invisible. The -ink variants all clear 4.55:1.
+ * Each tone is a -light tint with its -ink glyph. The base status fills are
+ * not used for glyphs: `--warning` only reaches 2.05:1 against white.
  */
 /**
  * A row of metric cards above a list. On a phone the cards scroll sideways,
@@ -28,14 +27,16 @@ export interface DataPoint {
 export const MOBILE_METRIC_STRIP_CLASS =
   "-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-1 no-scrollbar *:w-[44%] *:min-w-36 *:shrink-0 *:snap-start sm:mx-0 sm:grid sm:overflow-visible sm:px-0 sm:pb-0 sm:*:w-auto sm:*:min-w-0";
 
+// Tinted tiles with ink glyphs, not solid fills: a KPI icon is a label, not an
+// action, so gold stays out of it except as a light tint with gold ink text.
 export const METRIC_TONES = {
-  primary: "bg-primary",
-  success: "bg-success-ink",
-  warning: "bg-warning-ink",
-  danger: "bg-destructive-ink",
-  info: "bg-info-ink",
-  accent: "bg-royal-gold-ink",
-  neutral: "bg-muted-foreground",
+  primary: "bg-royal-gold-light text-royal-gold-ink-text",
+  success: "bg-success-light text-success-ink",
+  warning: "bg-warning-light text-warning-ink",
+  danger: "bg-destructive-light text-destructive-ink",
+  info: "bg-info-light text-info-ink",
+  accent: "bg-royal-gold-light text-royal-gold-ink-text",
+  neutral: "bg-muted text-muted-foreground",
 } as const;
 
 export type MetricTone = keyof typeof METRIC_TONES;
@@ -91,30 +92,39 @@ export function MetricCard({
       })()
     : value;
 
+  // The deprecated raw iconTone strings were written for a white glyph.
   const toneClass = tone
     ? METRIC_TONES[tone]
-    : (iconTone ?? METRIC_TONES.primary);
+    : iconTone
+      ? `${iconTone} text-white`
+      : METRIC_TONES.primary;
 
   return (
-    <Card className="overflow-hidden rounded-lg border-border/70 bg-white/95 py-0 shadow-sm sm:py-4">
+    <Card className="overflow-hidden rounded-lg border-border/70 bg-card py-0 shadow-sm sm:py-4">
       <CardContent className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)] items-center gap-2 px-3 py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-3 sm:px-4">
         <div
           className={cn(
-            "grid size-7 place-items-center rounded-lg text-white sm:size-9",
+            "grid size-7 place-items-center rounded-lg sm:size-9",
             toneClass,
           )}
         >
           <Icon className="size-4" aria-hidden="true" />
         </div>
         <div className="min-w-0">
-          <p className="font-heading text-2xl font-semibold leading-none tracking-tight text-foreground">
+          <p
+            className={cn(
+              "text-2xl font-semibold leading-none tracking-tight text-foreground",
+              // Money is mono; counts stay in the display face.
+              isCurrency ? "font-mono tabular-nums" : "font-heading",
+            )}
+          >
             {displayValue}
           </p>
           <p className="mt-1 text-xs text-muted-foreground sm:truncate">
             {title}
           </p>
           {caption ? (
-            <p className="mt-0.5 break-words font-mono text-[10.5px] tabular-nums text-muted-foreground sm:truncate">
+            <p className="mt-0.5 break-words font-mono text-[11px] tabular-nums text-muted-foreground sm:truncate">
               {caption}
             </p>
           ) : null}

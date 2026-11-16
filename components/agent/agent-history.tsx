@@ -69,9 +69,7 @@ export function AgentHistory({
       id="agent-conversation-history"
     >
       <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
-        <p className="font-heading text-sm font-semibold text-foreground">
-          Conversations
-        </p>
+        <p className="text-sm font-semibold text-foreground">Conversations</p>
         <div className="flex items-center gap-1">
           <Button
             asChild
@@ -137,7 +135,7 @@ export function AgentHistory({
                     "block rounded-lg border px-2.5 py-2 pr-9 transition-colors pointer-coarse:py-3 pointer-coarse:pr-14",
                     active
                       ? "border-royal-gold/50 bg-royal-gold-light/55"
-                      : "border-transparent hover:border-border hover:bg-white",
+                      : "border-transparent hover:border-border hover:bg-card",
                   )}
                   href={`/agent/${session.eveSessionId}`}
                   onClick={onNavigate}
@@ -202,7 +200,7 @@ function formatSessionDate(value: string) {
 
 function statusDot(status: AgentSessionListItem["status"]) {
   if (status === "FAILED") return "bg-destructive";
-  if (status === "WAITING") return "bg-amber-500";
-  if (status === "ACTIVE") return "bg-emerald-600";
+  if (status === "WAITING") return "bg-warning";
+  if (status === "ACTIVE") return "bg-success";
   return "bg-muted-foreground/45";
 }

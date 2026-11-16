@@ -26,7 +26,7 @@ export function TradieApprovalKPI() {
         trendDelta: 0, // Placeholder for trend delta calculation
       },
       Icon: Clock7Icon,
-      iconTone: "bg-yellow-600",
+      tone: "warning",
     },
     {
       title: "Price Changes",
@@ -35,7 +35,7 @@ export function TradieApprovalKPI() {
         trendDelta: 0, // Placeholder for trend delta calculation
       },
       Icon: Tag,
-      iconTone: "bg-blue-600",
+      tone: "info",
       isInverse: true,
     },
     {
@@ -45,7 +45,7 @@ export function TradieApprovalKPI() {
         trendDelta: 0, // Placeholder for trend delta calculation
       },
       Icon: AlertTriangle,
-      iconTone: "bg-red-600",
+      tone: "danger",
     },
     {
       title: "Deletions",
@@ -54,7 +54,7 @@ export function TradieApprovalKPI() {
         trendDelta: 0, // Placeholder for trend delta calculation
       },
       Icon: Trash2,
-      iconTone: "bg-amber-600",
+      tone: "warning",
     },
     {
       title: "Scheduling",
@@ -63,7 +63,7 @@ export function TradieApprovalKPI() {
         trendDelta: 0, // Placeholder for trend delta calculation
       },
       Icon: CalendarDays,
-      iconTone: "bg-purple-600",
+      tone: "info",
     },
     {
       title: "Schedule Removals",
@@ -72,7 +72,7 @@ export function TradieApprovalKPI() {
         trendDelta: 0, // Placeholder for trend delta calculation
       },
       Icon: CalendarX,
-      iconTone: "bg-rose-600",
+      tone: "danger",
     },
     {
       title: "Resolved Approvals",
@@ -81,7 +81,7 @@ export function TradieApprovalKPI() {
         trendDelta: 0, // Placeholder for trend delta calculation
       },
       Icon: CheckCircle,
-      iconTone: "bg-green-600",
+      tone: "success",
     },
   ];
 
@@ -96,7 +96,7 @@ export function TradieApprovalKPI() {
           value={kpi.dataPoint.total}
           trendDelta={kpi.dataPoint.trendDelta}
           Icon={kpi.Icon}
-          iconTone={kpi.iconTone}
+          tone={kpi.tone}
           isInverse={kpi.isInverse}
         />
       ))}

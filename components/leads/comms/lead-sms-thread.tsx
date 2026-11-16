@@ -282,7 +282,7 @@ export function LeadSmsThread({
         ))}
       </ul>
       {eligibility && !eligibility.allowed ? (
-        <p className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="flex items-start gap-2 rounded-md bg-warning-light px-3 py-2 text-sm text-warning-ink">
           <AlertTriangle
             className="mt-0.5 size-4 shrink-0"
             aria-hidden="true"

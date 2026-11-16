@@ -3,18 +3,19 @@ import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 export default function ProjectDetailLoading() {
   return (
     <PageSkeleton label="Loading project details" className="space-y-4 pb-4">
-      <section className="rounded-xl border border-border/70 bg-card p-4 shadow-sm sm:p-6 sm:px-7">
+      {/* Mirrors project-header.tsx: the title sits on the page, with no card. */}
+      <header>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 space-y-2">
             <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-[1.95rem] w-64" />
             <Skeleton className="h-6 w-24 rounded-full" />
             <Skeleton className="h-4 w-80" />
             <Skeleton className="h-4 w-56" />
           </div>
           <Skeleton className="h-11 w-24 sm:h-9" />
         </div>
-      </section>
+      </header>
       <section className="grid grid-cols-1 gap-2 md:grid-cols-3 md:gap-4">
         {Array.from({ length: 3 }, (_, i) => (
           <div
@@ -22,7 +23,7 @@ export default function ProjectDetailLoading() {
             className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 rounded-xl border border-border/70 bg-card p-3 shadow-sm md:block md:p-5"
           >
             <div className="contents md:mb-2 md:flex md:justify-between md:gap-2">
-              <Skeleton className="row-span-2 size-9 rounded-xl md:size-11 md:rounded-2xl" />
+              <Skeleton className="row-span-2 size-9 rounded-xl md:size-11 md:rounded-lg" />
               <Skeleton className="col-start-3 row-span-2 row-start-1 h-5 w-20 rounded-full" />
             </div>
             <Skeleton className="col-start-2 row-start-1 h-6 w-32 md:mt-2 md:h-9 md:w-40" />

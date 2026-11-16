@@ -53,7 +53,7 @@ function Flag({ on, label }: { on: boolean; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-sm">
       {on ? (
-        <CheckCircle2 className="size-4 text-emerald-600" aria-hidden="true" />
+        <CheckCircle2 className="size-4 text-success-ink" aria-hidden="true" />
       ) : (
         <XCircle className="size-4 text-muted-foreground" aria-hidden="true" />
       )}
@@ -188,7 +188,7 @@ export function CommsAdminPanel() {
       <Card>
         <CardContent className="space-y-4 p-5">
           <div>
-            <h1 className="font-heading text-xl font-semibold">
+            <h1 className="font-heading text-[1.625rem] leading-[1.2] font-semibold tracking-[-0.015em] text-foreground">
               Phone &amp; SMS
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -223,7 +223,7 @@ export function CommsAdminPanel() {
             />
           </div>
           {status.problems.length > 0 ? (
-            <ul className="space-y-1 rounded-md bg-amber-50 p-3 text-sm text-amber-900">
+            <ul className="space-y-1 rounded-md bg-warning-light p-3 text-sm text-warning-ink">
               {status.problems.map((problem) => (
                 <li key={problem} className="flex gap-2">
                   <AlertTriangle

@@ -34,8 +34,8 @@ export function ProjectToolbar({
     cn(
       "inline-flex size-[44px] items-center justify-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
       isActive
-        ? "bg-primary text-primary-foreground"
-        : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+        ? "bg-royal-gold-light text-royal-gold-ink-text"
+        : "text-muted-foreground hover:bg-muted hover:text-foreground",
     );
 
   return (
@@ -68,7 +68,7 @@ export function ProjectToolbar({
       </div>
 
       <div
-        className="flex gap-1 self-start rounded-lg border border-border bg-background p-1"
+        className="flex gap-1 self-start rounded-lg border border-input bg-card p-1"
         role="group"
         aria-label="Project layout"
       >

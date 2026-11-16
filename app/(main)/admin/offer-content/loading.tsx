@@ -1,22 +1,18 @@
+import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
 import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 
 export default function OfferContentSkeleton() {
   return (
     <PageSkeleton label="Loading offer pre-fill content" className="space-y-6">
-      {/* Same surface and padding as PageHeroCard, so the swap to the loaded
-          page does not flash from a white card to a gold one. */}
-      <div className="relative overflow-hidden rounded-lg border border-royal-gold/20 bg-linear-to-br from-royal-gold-light to-card px-4 py-8 shadow-sm sm:px-6 sm:py-10">
-        <div className="pointer-events-none absolute -right-12 -top-10 size-40 rounded-full bg-royal-gold/10" />
-        <div className="relative flex items-start gap-3">
-          <Skeleton className="size-9 shrink-0 rounded-lg" />
-          <div className="min-w-0 flex-1 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <Skeleton className="h-6 w-56 max-w-full" />
-              <Skeleton className="h-5 w-16 rounded-full" />
-            </div>
-            <Skeleton className="h-4 w-full max-w-xl" />
-            <Skeleton className="h-4 w-2/3 max-w-md" />
+      {/* Same layout and title height as PageHeader, so the swap does not jump. */}
+      <div className={PAGE_HEADER_CLASS}>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Skeleton className="h-8 w-72 max-w-full" />
+            <Skeleton className="h-5 w-16 rounded-full" />
           </div>
+          <Skeleton className="mt-1 h-4 w-full max-w-2xl" />
+          <Skeleton className="mt-1 h-4 w-2/3 max-w-md" />
         </div>
       </div>
 

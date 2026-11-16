@@ -317,7 +317,7 @@ function VariationWizard({
                 className={cn(
                   "inline-flex size-6 items-center justify-center rounded-full border text-xs font-medium",
                   index < step
-                    && "border-primary bg-primary text-primary-foreground",
+                    && "border-success-ink bg-success-light text-success-ink",
                   index === step && "border-primary text-primary",
                   index > step && "border-border text-muted-foreground",
                 )}

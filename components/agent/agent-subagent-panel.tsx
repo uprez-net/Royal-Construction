@@ -68,14 +68,14 @@ export function AgentSubagentPanel({
   return (
     <Collapsible
       className={cn(
-        "rounded-xl border",
+        "rounded-lg border",
         run.status === "failed"
           ? "border-destructive/30 bg-destructive/5"
           : run.status === "completed"
-            ? "border-emerald-200 bg-emerald-50/60"
+            ? "border-success/30 bg-success-light/50"
             : run.status === "interrupted"
-              ? "border-border/70 bg-muted/30"
-              : "border-blue-200/80 bg-blue-50/50",
+              ? "border-border bg-muted/30"
+              : "border-info/25 bg-info-light/50",
       )}
       onOpenChange={setOpen}
       open={open}
@@ -90,10 +90,10 @@ export function AgentSubagentPanel({
             run.status === "failed"
               ? "bg-destructive/10 text-destructive"
               : run.status === "completed"
-                ? "bg-emerald-100 text-emerald-700"
+                ? "bg-success-light text-success-ink"
                 : run.status === "interrupted"
                   ? "bg-background text-muted-foreground"
-                  : "bg-blue-100 text-blue-700",
+                  : "bg-info-light text-info-ink",
           )}
         >
           <Bot aria-hidden="true" className="size-4" />
@@ -236,8 +236,8 @@ function AgentSubagentTimeline({
                     || tool.state === "output-denied"
                     ? "bg-destructive"
                     : tool.state === "output-available"
-                      ? "bg-emerald-600"
-                      : "animate-pulse bg-blue-500",
+                      ? "bg-success"
+                      : "animate-pulse bg-info",
                 )}
               />
               <span className="truncate">{humanize(tool.toolName)}</span>
@@ -257,7 +257,7 @@ function AgentSubagentTimeline({
         {text || fallback}
       </p>
       {child.error ? (
-        <p className="text-xs text-amber-700">
+        <p className="text-xs text-warning-ink">
           Live progress is reconnecting; the specialist is still running.
         </p>
       ) : null}
@@ -292,10 +292,10 @@ function StatusChip({
         status === "failed"
           ? "text-destructive"
           : status === "completed"
-            ? "text-emerald-700"
+            ? "text-success-ink"
             : status === "interrupted"
               ? "text-muted-foreground"
-              : "text-blue-700",
+              : "text-info-ink",
       )}
     >
       <Icon

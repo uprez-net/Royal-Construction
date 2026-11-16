@@ -193,7 +193,7 @@ export function PreviewPictureModal({
                 type="button"
                 onClick={goToPrevious}
                 aria-label="Previous image"
-                className="absolute left-4 top-1/2 z-50 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:scale-105 hover:bg-black/80"
+                className="absolute left-4 top-1/2 z-50 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:bg-black/80"
               >
                 <ChevronLeft className="h-6 w-6" />
               </button>
@@ -201,7 +201,7 @@ export function PreviewPictureModal({
                 type="button"
                 onClick={goToNext}
                 aria-label="Next image"
-                className="absolute right-4 top-1/2 z-50 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:scale-105 hover:bg-black/80"
+                className="absolute right-4 top-1/2 z-50 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:bg-black/80"
               >
                 <ChevronRight className="h-6 w-6" />
               </button>
@@ -214,7 +214,7 @@ export function PreviewPictureModal({
               type="button"
               onClick={zoomIn}
               aria-label="Zoom in"
-              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:scale-105 hover:bg-black/80"
+              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:bg-black/80"
             >
               <ZoomIn className="h-5 w-5" />
             </button>
@@ -222,7 +222,7 @@ export function PreviewPictureModal({
               type="button"
               onClick={zoomOut}
               aria-label="Zoom out"
-              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:scale-105 hover:bg-black/80"
+              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:bg-black/80"
             >
               <ZoomOut className="h-5 w-5" />
             </button>
@@ -230,14 +230,14 @@ export function PreviewPictureModal({
               type="button"
               onClick={resetView}
               aria-label="Reset zoom"
-              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:scale-105 hover:bg-black/80"
+              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:bg-black/80"
             >
               <RotateCcw className="h-5 w-5" />
             </button>
             <button
               type="button"
               aria-label="Close preview"
-              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:scale-105 hover:bg-black/80"
+              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:bg-black/80"
               onClick={onClose}
             >
               <X className="h-5 w-5" />

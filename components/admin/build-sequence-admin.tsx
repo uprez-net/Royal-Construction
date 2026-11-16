@@ -227,7 +227,7 @@ export function BuildSequenceAdmin({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-royal-gold-ink">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Project planning
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">

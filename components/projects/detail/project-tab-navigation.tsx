@@ -111,7 +111,8 @@ type ProjectDetailTab = {
 };
 
 const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
-  primary: "bg-primary/15 text-primary",
+  // Counts are neutral: gold is for actions, not for numbers.
+  primary: "bg-muted text-foreground",
   warning: "bg-warning-light text-warning-ink",
   danger: "bg-destructive-light text-destructive-ink",
   neutral: "bg-muted text-muted-foreground",
@@ -504,8 +505,8 @@ export function ProjectTabNavigation({
               tabIndex={isActive ? 0 : -1}
               onClick={() => onTabChange(tab.key)}
               className={cn(
-                "relative -mb-0.5 inline-flex min-h-11 shrink-0 snap-start items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm md:px-4 font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                isActive && "border-primary font-semibold text-primary",
+                "relative -mb-0.5 inline-flex min-h-11 shrink-0 snap-start items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm md:px-4 font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                isActive && "border-royal-gold font-semibold text-foreground",
               )}
             >
               <Icon className="size-4" aria-hidden="true" />

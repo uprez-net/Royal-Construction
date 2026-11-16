@@ -54,7 +54,7 @@ export function SignOffPanel({
               <img
                 src={checklist.closure.signatureDataUrl}
                 alt={`Signature of ${checklist.closure.reviewerName}`}
-                className="mt-1 h-16 rounded border border-border/70 bg-white object-contain"
+                className="mt-1 h-16 rounded border border-border/70 bg-card object-contain"
               />
             </div>
             <div>

@@ -11,24 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { Check, ChevronDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LeadStage } from "@/lib/leads/types";
-import { STAGE_STYLES, stageOptionsFor } from "@/lib/leads/lead-helpers";
-
-const STAGE_DOT_STYLES: Record<LeadStage, string> = {
-  New: "bg-blue-500",
-  Contacted: "bg-amber-500",
-  Discovery: "bg-sky-500",
-  Qualified: "bg-purple-500",
-  Quoted: "bg-teal-500",
-  Negotiating: "bg-pink-500",
-  Won: "bg-green-500",
-  Lost: "bg-red-500",
-  "Meeting Scheduled": "bg-blue-500",
-  "In Follow-up": "bg-amber-500",
-  "No Response": "bg-red-500",
-  Converted: "bg-green-500",
-  Cancelled: "bg-red-500",
-  Disqualified: "bg-red-500",
-};
+import {
+  STAGE_STYLES,
+  stageInkClass,
+  stageOptionsFor,
+} from "@/lib/leads/lead-helpers";
 
 interface StageBadgeSelectProps {
   value: LeadStage;
@@ -83,7 +70,11 @@ export function StageBadgeSelect({
             className="gap-2"
           >
             <span
-              className={cn("h-2 w-2 rounded-full", STAGE_DOT_STYLES[stage])}
+              aria-hidden="true"
+              className={cn(
+                "size-1.5 rounded-full bg-current",
+                stageInkClass(stage),
+              )}
             />
             <span className="flex-1">{stage}</span>
             {stage === value && <Check className="h-4 w-4 opacity-70" />}

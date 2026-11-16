@@ -117,7 +117,7 @@ export function OfferScopePage() {
   };
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
           description="Control the PC allowances and exclusions that appear on every new offer's scope section, with their variation rules."
@@ -128,7 +128,9 @@ export function OfferScopePage() {
       </CardHeader>
       <CardContent className="flex flex-col gap-8 pt-6">
         <ScopeSection
-          icon={<Coins className="size-4 text-amber-600" aria-hidden="true" />}
+          icon={
+            <Coins className="size-4 text-warning-ink" aria-hidden="true" />
+          }
           title="PC Allowances"
           banner={{
             tone: "warning",
@@ -224,7 +226,7 @@ function ScopeSection<T extends { id: string }>({
   renderItem,
 }: ScopeSectionProps<T>) {
   return (
-    <section className="rounded-xl border border-border/70 bg-white p-5 shadow-sm">
+    <section className="rounded-xl border border-border/70 bg-card p-5 shadow-sm">
       <div className="mb-4 flex items-center gap-2">
         {icon}
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
@@ -232,10 +234,10 @@ function ScopeSection<T extends { id: string }>({
 
       <div
         className={
-          "mb-5 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm " +
-          (banner.tone === "warning"
-            ? "border-amber-200 bg-amber-50 text-amber-800"
-            : "border-blue-200 bg-blue-50 text-blue-800")
+          "mb-5 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm "
+          + (banner.tone === "warning"
+            ? "border-warning/30 bg-warning-light text-warning-ink"
+            : "border-info/30 bg-info-light text-info-ink")
         }
       >
         {banner.icon}
@@ -255,7 +257,7 @@ function ScopeSection<T extends { id: string }>({
       <button
         onClick={onAdd}
         type="button"
-        className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-amber-300 py-3 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-50"
+        className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-input py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
       >
         <Plus className="size-4" aria-hidden="true" />
         {addLabel}

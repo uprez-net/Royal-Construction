@@ -200,9 +200,9 @@ export function CertifierThread({
                     >
                       <div
                         className={cn(
-                          "max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-5",
+                          "max-w-[75%] rounded-lg px-4 py-2.5 text-sm leading-5",
                           isSent
-                            ? "bg-royal-gold-ink text-white rounded-br-sm"
+                            ? "bg-muted text-foreground rounded-br-sm"
                             : "bg-muted text-foreground rounded-bl-sm",
                         )}
                       >
@@ -221,7 +221,7 @@ export function CertifierThread({
                                   }
                                   className={cn(
                                     "inline-flex items-center gap-1.5 text-xs underline-offset-4 hover:underline",
-                                    isSent ? "text-white/90" : "text-primary",
+                                    "text-royal-gold-ink-text",
                                   )}
                                 >
                                   <Paperclip
@@ -238,7 +238,7 @@ export function CertifierThread({
                         <p
                           className={cn(
                             "mt-1.5 text-right text-[10px]",
-                            isSent ? "text-white/70" : "text-muted-foreground",
+                            "text-muted-foreground",
                           )}
                         >
                           {dataTimeFormat.format(new Date(email.sentAt))}

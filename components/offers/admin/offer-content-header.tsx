@@ -60,7 +60,7 @@ export function OfferContentHeader({
   return (
     <nav
       aria-label="Offer pre-fill sections"
-      className="max-w-full overflow-x-auto rounded-lg border border-border/70 bg-white/95 px-4 py-3 shadow-sm"
+      className="max-w-full overflow-x-auto rounded-lg border border-border/70 bg-card px-4 py-3 shadow-sm"
     >
       <ol
         role="tablist"
@@ -101,17 +101,14 @@ export function OfferContentHeader({
                 >
                   <span
                     className={cn(
-                      "relative flex size-8 items-center justify-center rounded-full bg-background font-mono text-xs font-medium transition-shadow",
+                      "relative flex size-8 items-center justify-center rounded-full bg-background font-mono text-xs font-medium transition-colors",
                       isCurrent
-                        ? "border-2 border-royal-gold-ink shadow-[0_0_0_6px_var(--royal-gold-light)]"
-                        : "border border-royal-gold/50 text-foreground group-hover:border-royal-gold group-hover:shadow-[0_0_0_5px_var(--royal-gold-light)]",
+                        ? "border-2 border-royal-gold-ink"
+                        : "border border-border text-foreground group-hover:bg-muted",
                     )}
                   >
                     {isCurrent ? (
-                      <>
-                        <span className="absolute size-5 rounded-full bg-royal-gold/35 motion-safe:animate-ping" />
-                        <span className="relative size-2.5 rounded-full bg-royal-gold-ink" />
-                      </>
+                      <span className="size-2.5 rounded-full bg-royal-gold" />
                     ) : (
                       index + 1
                     )}
@@ -122,7 +119,7 @@ export function OfferContentHeader({
                 </div>
                 <span
                   className={cn(
-                    "mt-2 text-center text-sm text-foreground transition-colors group-hover:text-royal-gold-ink",
+                    "mt-2 text-center text-sm text-foreground transition-colors",
                     isCurrent ? "font-semibold" : "font-medium",
                   )}
                 >

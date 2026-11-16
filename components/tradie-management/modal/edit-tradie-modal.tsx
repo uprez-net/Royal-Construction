@@ -239,8 +239,11 @@ export default function EditTradieModal({
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
-            <div className="rounded-lg bg-primary/10 p-2">
-              <Pencil className="h-5 w-5 text-primary" aria-hidden="true" />
+            <div className="rounded-lg bg-muted p-2">
+              <Pencil
+                className="h-5 w-5 text-muted-foreground"
+                aria-hidden="true"
+              />
             </div>
             Edit tradie details
           </DialogTitle>

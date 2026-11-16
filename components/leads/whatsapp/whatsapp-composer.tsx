@@ -89,7 +89,7 @@ export function WhatsAppComposer({
         className="shrink-0 px-4 py-3 text-center text-[13px]"
         style={{ backgroundColor: WA.panel, color: WA.textMuted }}
       >
-        <p className="font-medium text-[#111b21]">
+        <p className="font-medium text-foreground">
           You can&apos;t send a WhatsApp message to this lead right now.
         </p>
         <p className="mt-0.5">
@@ -153,7 +153,7 @@ export function WhatsAppComposer({
       <div className="flex flex-wrap items-center gap-2">
         {textAllowed && templateAllowed ? (
           <div
-            className="inline-flex rounded-full bg-white p-0.5 text-xs shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
+            className="inline-flex rounded-full bg-card p-0.5 text-xs shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
             role="tablist"
             aria-label="Message type"
           >
@@ -167,8 +167,8 @@ export function WhatsAppComposer({
                 className={cn(
                   "rounded-full px-3 py-1 font-medium transition-colors",
                   mode === value
-                    ? "bg-[#d9fdd3] text-[#005c4b]"
-                    : "text-[#54656f] hover:text-[#111b21]",
+                    ? "bg-royal-gold-light text-royal-gold-ink-text"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {value === "text" ? "Message" : "Template"}
@@ -179,14 +179,17 @@ export function WhatsAppComposer({
 
         {senders.length > 1 ? (
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <Label htmlFor="whatsapp-sender" className="text-xs text-[#667781]">
+            <Label
+              htmlFor="whatsapp-sender"
+              className="text-xs text-muted-foreground"
+            >
               From
             </Label>
             <select
               id="whatsapp-sender"
               value={senderId}
               onChange={(event) => setSenderOverride(event.target.value)}
-              className="h-7 rounded-full border-0 bg-white px-2.5 text-xs shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
+              className="h-7 rounded-full border-0 bg-card px-2.5 text-xs shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
             >
               {senders.map((sender) => (
                 <option key={sender.phoneNumberId} value={sender.phoneNumberId}>
@@ -198,14 +201,14 @@ export function WhatsAppComposer({
         ) : null}
 
         {!textAllowed ? (
-          <p className="text-[12px] text-[#667781]">
+          <p className="text-[12px] text-muted-foreground">
             {eligibility.text.reason}
           </p>
         ) : null}
       </div>
 
       {senderChoice ? (
-        <p className="text-[12px] text-[#667781]">
+        <p className="text-[12px] text-muted-foreground">
           The reply window shown is for {eligibility.sender?.label}; WhatsApp
           checks this number&apos;s own window when you send.
         </p>
@@ -234,7 +237,7 @@ export function WhatsAppComposer({
             rows={1}
             maxLength={MAX_WHATSAPP_TEXT_LENGTH + 200}
             disabled={sending}
-            className="max-h-36 min-h-[42px] flex-1 resize-none rounded-lg border-0 bg-white px-3.5 py-2.5 text-[15px] leading-5 shadow-none placeholder:text-[#8696a0] focus-visible:ring-2 focus-visible:ring-[#00a884]/40"
+            className="max-h-36 min-h-[42px] flex-1 resize-none rounded-lg border-0 bg-card px-3.5 py-2.5 text-[15px] leading-5 shadow-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-royal-gold-ink/40"
           />
           <button
             type="submit"
@@ -251,11 +254,11 @@ export function WhatsAppComposer({
           </button>
         </div>
       ) : option ? (
-        <div className="space-y-3 rounded-lg bg-white p-3 shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]">
+        <div className="space-y-3 rounded-lg bg-card p-3 shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]">
           <div className="space-y-1.5">
             <Label
               htmlFor="whatsapp-template"
-              className="text-xs text-[#54656f]"
+              className="text-xs text-muted-foreground"
             >
               Approved template
             </Label>
@@ -302,11 +305,11 @@ export function WhatsAppComposer({
             </div>
           ) : null}
           <div>
-            <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#667781]">
+            <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               What the customer will read
             </p>
             <p
-              className="whitespace-pre-wrap rounded-lg rounded-tr-none px-2.5 py-2 text-[14px] leading-[19px] text-[#111b21] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
+              className="whitespace-pre-wrap rounded-lg rounded-tr-none px-2.5 py-2 text-[14px] leading-[19px] text-foreground shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
               style={{ backgroundColor: WA.bubbleOut }}
             >
               {preview}
@@ -334,7 +337,7 @@ export function WhatsAppComposer({
         <p
           className={cn(
             "text-right text-[11px]",
-            textTooLong ? "text-destructive-ink" : "text-[#667781]",
+            textTooLong ? "text-destructive-ink" : "text-muted-foreground",
           )}
         >
           {body.length} / {MAX_WHATSAPP_TEXT_LENGTH}
