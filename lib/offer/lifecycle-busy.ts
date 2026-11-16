@@ -12,7 +12,23 @@ import type { OfferWorkspaceStatus } from "./workspace-model";
 export type LifecycleAction =
   | OfferWorkspaceStatus
   | `recall-${RecallScope}`
-  | "revision";
+  | "revision"
+  // A DocuSign send is running. It is not a lifecycle action, but it must lock
+  // the same buttons: a recall or revision started while an envelope is being
+  // created races it on a signed document (#286).
+  | "send";
+
+/**
+ * The value the lifecycle buttons read: the running lifecycle action, or "send"
+ * while any DocuSign send is in flight, so one flag disables every control that
+ * could race it.
+ */
+export function effectiveLifecycleBusy(
+  lifecycle: LifecycleAction | null,
+  sendInFlight: boolean,
+): LifecycleAction | null {
+  return lifecycle ?? (sendInFlight ? "send" : null);
+}
 
 export function lifecycleActionFor(
   next: OfferWorkspaceStatus,
