@@ -30,13 +30,19 @@ test("the workspace records which action holds its one guard", () => {
   );
   assert.match(workspace, /setLifecycleBusy\("revision"\)/);
   assert.equal(workspace.match(/setLifecycleBusy\(null\)/g)?.length, 2);
-  // Still one guard: the ref set in transition and in createRevision.
+  // Still one guard: the ref set in transition and in createRevision, and now
+  // in the three DocuSign sends, which must not run with a recall (#286).
   assert.equal(
     workspace.match(/transitioningRef\.current = true;/g)?.length,
-    2,
+    5,
   );
   assert.doesNotMatch(workspace, /setTransitioning\(/);
-  assert.match(workspace, /lifecycleBusy=\{lifecycleBusy\}/);
+  // The panels read one value: the running lifecycle action, or "send" while
+  // an envelope is being created.
+  assert.match(
+    workspace,
+    /lifecycleBusy=\{effectiveLifecycleBusy\(\s*lifecycleBusy,/,
+  );
 });
 
 test("the screen passes the running action to every lifecycle panel", () => {

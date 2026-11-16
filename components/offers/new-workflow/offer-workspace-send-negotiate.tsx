@@ -265,10 +265,11 @@ export function SendNegotiatePanel({
                 <div className="flex flex-wrap gap-2">
                   <Button
                     disabled={
-                      !canSend ||
-                      offerSignSending ||
-                      signConfirming ||
-                      !hasRecipients
+                      !canSend
+                      || offerSignSending
+                      || lifecycleBusy !== null
+                      || signConfirming
+                      || !hasRecipients
                     }
                     onClick={() => setSignConfirming(true)}
                     size="sm"
@@ -291,9 +292,8 @@ export function SendNegotiatePanel({
                     customerOnly
                     documentName="Offer document"
                     recipientName={
-                      recipients
-                        .map((recipient) => recipient.label)
-                        .join(", ") || "the customer"
+                      recipients.map((recipient) => recipient.label).join(", ")
+                      || "the customer"
                     }
                     valueLabel="Fixed price inc GST"
                     value={contractValueIncGst}
@@ -387,9 +387,9 @@ export function SendNegotiatePanel({
           <Button
             aria-busy={lifecycleBusy === "agreed" || undefined}
             disabled={
-              (!isSent && !isOfferSigned) ||
-              !canMarkAgreed ||
-              lifecycleBusy !== null
+              (!isSent && !isOfferSigned)
+              || !canMarkAgreed
+              || lifecycleBusy !== null
             }
             size="sm"
             title={

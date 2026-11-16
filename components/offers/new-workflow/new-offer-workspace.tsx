@@ -100,6 +100,7 @@ import type { ContractPreviewTerms } from "@/lib/offer/contract-terms";
 import { hasContractTerms } from "@/lib/offer/contract-terms-status";
 import {
   lifecycleActionFor,
+  effectiveLifecycleBusy,
   type LifecycleAction,
 } from "@/lib/offer/lifecycle-busy";
 import {
@@ -1859,6 +1860,12 @@ export function NewOfferWorkspace({
     if (leadId === undefined || offerId === null) {
       return;
     }
+    // One guard with the lifecycle actions: a send and a recall or revision
+    // must not run together on the same offer (#286).
+    if (transitioningRef.current) {
+      return;
+    }
+    transitioningRef.current = true;
     setOfferSignSending(true);
     setOfferSignError(null);
     void (async () => {
@@ -1888,6 +1895,7 @@ export function NewOfferWorkspace({
         );
       } finally {
         setOfferSignSending(false);
+        transitioningRef.current = false;
       }
     })();
   }, [leadId, flushWorkspace]);
@@ -1901,6 +1909,12 @@ export function NewOfferWorkspace({
       transition("tender_sent");
       return;
     }
+    // One guard with the lifecycle actions: a send and a recall or revision
+    // must not run together on the same offer (#286).
+    if (transitioningRef.current) {
+      return;
+    }
+    transitioningRef.current = true;
     setTenderSending(true);
     setTenderSendError(null);
     void (async () => {
@@ -1933,6 +1947,7 @@ export function NewOfferWorkspace({
         );
       } finally {
         setTenderSending(false);
+        transitioningRef.current = false;
       }
     })();
   }, [leadId, transition, flushWorkspace]);
@@ -1946,6 +1961,12 @@ export function NewOfferWorkspace({
       transition("contract_sent");
       return;
     }
+    // One guard with the lifecycle actions: a send and a recall or revision
+    // must not run together on the same offer (#286).
+    if (transitioningRef.current) {
+      return;
+    }
+    transitioningRef.current = true;
     setContractSending(true);
     setContractSendError(null);
     void (async () => {
@@ -1985,6 +2006,7 @@ export function NewOfferWorkspace({
         );
       } finally {
         setContractSending(false);
+        transitioningRef.current = false;
       }
     })();
   }, [leadId, transition, flushContractParticulars]);
@@ -2064,7 +2086,10 @@ export function NewOfferWorkspace({
         onExtraCostsChange={setExtraCosts}
         hydrated={hydrated}
         loadFailed={loadFailed}
-        lifecycleBusy={lifecycleBusy}
+        lifecycleBusy={effectiveLifecycleBusy(
+          lifecycleBusy,
+          offerSignSending || tenderSending || contractSending,
+        )}
         rateConstants={resolvedRateConstants}
         customerPrice={customerPrice}
         directTotal={directTotal}

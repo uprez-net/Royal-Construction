@@ -348,7 +348,12 @@ function TenderActions({
 
         {isDraft ? (
           <Button
-            disabled={sending || confirming || !scheduleBalanced}
+            disabled={
+              sending
+              || lifecycleBusy !== null
+              || confirming
+              || !scheduleBalanced
+            }
             size="sm"
             type="button"
             variant="royal"
