@@ -232,8 +232,20 @@ describe("no route answers 500 in silence", () => {
   // silent catch in the same file through, and it keys on a literal
   // `status: 500`, so an `errorResponse(...)` that relies on the default 500
   // is not seen. It stops a whole new route shipping silent, not every catch.
+  // Matches a CALL (`name(`), not the name: a file that imports `reportError`
+  // and never calls it must not pass.
   const REPORTS =
-    /console\.error|reportError|reportExternalError|reportWorkflowError|withCronReporting/;
+    /console\.error\(|reportError\(|reportExternalError\(|reportWorkflowError\(|withCronReporting\(/;
+
+  test("an import without a call does not count as reporting", () => {
+    assert.ok(
+      !REPORTS.test(
+        'import { reportError } from "@/lib/observability/report-error";\nreturn errorResponse("x", { status: 500 });',
+      ),
+    );
+    assert.ok(REPORTS.test("reportError(error, { source: 'route:POST /x' });"));
+    assert.ok(REPORTS.test("console.error(\n  'failed',\n);"));
+  });
 
   test("every file under app/ that answers 500 also logs or reports", () => {
     const silent = walk(join(REPO_ROOT, "app"))
