@@ -237,6 +237,38 @@ describe("no route answers 500 in silence", () => {
   const REPORTS =
     /console\.error\(|reportError\(|reportExternalError\(|reportWorkflowError\(|withCronReporting\(/;
 
+  // The two catches #497 was about, checked directly rather than by the file-
+  // wide guard below. Read as source, not imported: a route reaches
+  // `server-only` through lib/data/*, which test-suite-loadable.test.ts
+  // forbids a test from loading. The ORDER matters: a refusal returns before
+  // the report, so a 4xx is answered and not reported.
+  for (const [file, source] of [
+    [
+      "app/api/(data)/tradie-schedules/route.ts",
+      "route:POST /api/tradie-schedules",
+    ],
+    [
+      "app/api/(data)/tradie-schedules/[scheduleId]/route.ts",
+      "route:PATCH /api/tradie-schedules/[scheduleId]",
+    ],
+  ] as const) {
+    test(`${file} reports an unexpected failure, after the refusal check`, () => {
+      const text = read(file);
+      const refusal = text.indexOf("if (refusal) return refusal;");
+      const report = text.indexOf("reportError(error");
+      assert.ok(refusal >= 0, `${file} should return a domain refusal first`);
+      assert.ok(report >= 0, `${file} must call reportError(error, …)`);
+      assert.ok(
+        refusal < report,
+        `${file} must report only after the refusal return, or a 4xx gets reported`,
+      );
+      assert.ok(
+        text.includes(`source: "${source}"`),
+        `${file} should label the report ${source}`,
+      );
+    });
+  }
+
   test("an import without a call does not count as reporting", () => {
     assert.ok(
       !REPORTS.test(
