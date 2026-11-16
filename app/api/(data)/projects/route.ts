@@ -10,6 +10,7 @@ import {
   successResponse,
   errorResponse,
 } from "@/utils/validators";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import { NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -63,6 +64,10 @@ export async function GET(request: NextRequest) {
 
     return successResponse(projects);
   } catch (error) {
+    // A refusal (the caller may not list projects) keeps its own status and
+    // message; only an unexpected failure becomes the generic 500.
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
     console.error("Error fetching projects:", error);
     return errorResponse("Failed to load projects", {
       status: 500,

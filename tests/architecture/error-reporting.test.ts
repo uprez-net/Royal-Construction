@@ -309,7 +309,7 @@ describe("a failed project list read is not an empty list (#486)", () => {
     const source = read("app/api/(data)/projects/route.ts");
     assert.match(
       source,
-      /catch \(error\) \{\s*console\.error\("Error fetching projects:", error\);\s*return errorResponse\("Failed to load projects", \{\s*status: 500,\s*code: "PROJECTS_FETCH_FAILED"/,
+      /const refusal = domainErrorResponse\(error\);\s*if \(refusal\) return refusal;\s*console\.error\("Error fetching projects:", error\);\s*return errorResponse\("Failed to load projects", \{\s*status: 500,\s*code: "PROJECTS_FETCH_FAILED"/,
     );
   });
 
