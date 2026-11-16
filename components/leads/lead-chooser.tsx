@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -15,12 +14,6 @@ export function LeadChooser({
   onChoose: (lead: { id: number; name: string }) => void;
 }) {
   const leadSearch = useLeadSearch("");
-  const [search, setSearch] = useState("");
-  const { setQuery } = leadSearch;
-
-  useEffect(() => {
-    setQuery(search);
-  }, [search, setQuery]);
 
   return (
     <div className="mt-3 space-y-2 rounded-md border border-border bg-muted/30 p-3">
@@ -30,8 +23,8 @@ export function LeadChooser({
           aria-hidden="true"
         />
         <Input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          value={leadSearch.query}
+          onChange={(event) => leadSearch.setQuery(event.target.value)}
           aria-label="Search leads by name, email or phone"
           placeholder="Search leads by name, email or phone"
           className="pl-8"
@@ -62,7 +55,7 @@ export function LeadChooser({
               </button>
             </li>
           ))}
-          {leadSearch.items.length === 0 ? (
+          {leadSearch.items.length === 0 && !leadSearch.error ? (
             <li className="px-2.5 py-1.5 text-xs text-muted-foreground">
               No leads match.
             </li>

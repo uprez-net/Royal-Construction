@@ -1,4 +1,8 @@
-import { CallRecordingStatus, CallTranscriptStatus } from "@prisma/client";
+import {
+  CallRecordingStatus,
+  CallTranscriptStatus,
+  type Prisma,
+} from "@prisma/client";
 
 import type { DomainDb } from "../../db";
 import {
@@ -23,9 +27,10 @@ import type { DomainPrincipal } from "../../principal";
 
 export const MAX_TRANSCRIPT_ATTEMPTS = 3;
 /**
- * The transcription model's upload limit. A larger file is SKIPPED with the
- * reason rather than sent and refused; at the carriers' MP3 bitrates this is
- * well over an hour of conversation.
+ * The largest recording sent for transcription. The gateway takes the audio
+ * as base64 in one JSON request, so a larger file is SKIPPED with the reason
+ * rather than sent and refused; at the carriers' MP3 bitrates this is well
+ * over an hour of conversation.
  */
 export const MAX_TRANSCRIBE_BYTES = 25 * 1024 * 1024;
 /** Kept on the row, at most. A longer transcript keeps its start. */
@@ -37,7 +42,9 @@ export type TranscribeRecordingOutcome =
   | "skipped"
   | "not_ready"
   | "already_done"
-  | "gave_up";
+  | "gave_up"
+  /** Another run (the webhook's, the sweep's, a retry) holds this recording. */
+  | "superseded";
 
 export async function transcribeCallRecording(
   principal: DomainPrincipal,
@@ -74,25 +81,44 @@ export async function transcribeCallRecording(
   if (recording.status !== CallRecordingStatus.STORED || !recording.blobUrl) {
     return "not_ready";
   }
+  // Every write from here is conditional on the attempt count it read, so the
+  // webhook's run, the daily sweep and a retry overlapping on one recording
+  // cannot both call the model, and the loser's result never overwrites the
+  // winner's.
+  const settle = async (
+    attempt: number,
+    data: Prisma.CallRecordingUpdateManyMutationInput,
+  ): Promise<boolean> => {
+    const result = await db.callRecording.updateMany({
+      data,
+      where: {
+        id: recording.id,
+        transcriptAttempts: attempt,
+        transcriptStatus: CallTranscriptStatus.PENDING,
+      },
+    });
+    return result.count === 1;
+  };
+
   if (
     recording.byteSize !== null
     && recording.byteSize > MAX_TRANSCRIBE_BYTES
   ) {
-    await db.callRecording.update({
-      data: {
-        transcriptFailure: "This recording is too long to transcribe.",
-        transcriptStatus: CallTranscriptStatus.SKIPPED,
-      },
-      where: { id: recording.id },
+    const applied = await settle(recording.transcriptAttempts, {
+      transcriptFailure: "This recording is too long to transcribe.",
+      transcriptStatus: CallTranscriptStatus.SKIPPED,
     });
-    return "skipped";
+    return applied ? "skipped" : "superseded";
   }
 
   const attempts = recording.transcriptAttempts + 1;
-  await db.callRecording.update({
-    data: { transcriptAttempts: attempts },
-    where: { id: recording.id },
-  });
+  if (
+    !(await settle(recording.transcriptAttempts, {
+      transcriptAttempts: attempts,
+    }))
+  ) {
+    return "superseded";
+  }
 
   let result;
   try {
@@ -104,15 +130,17 @@ export async function transcribeCallRecording(
   } catch (error) {
     const retryable = attempts < MAX_TRANSCRIPT_ATTEMPTS;
     const reason = "The recording couldn't be transcribed.";
-    await db.callRecording.update({
-      data: retryable
+    const applied = await settle(
+      attempts,
+      retryable
         ? { transcriptFailure: reason }
         : {
             transcriptFailure: reason,
             transcriptStatus: CallTranscriptStatus.FAILED,
           },
-      where: { id: recording.id },
-    });
+    );
+    // A later run has claimed it: that run retries, not this one.
+    if (!applied) return "superseded";
     throw new DomainSideEffectError(reason, "transcription", retryable, {
       cause: error,
     });
@@ -120,28 +148,23 @@ export async function transcribeCallRecording(
   if (result === null) {
     // Our copy is missing: nothing to transcribe until the recording is
     // stored again, and retrying the model would not help.
-    await db.callRecording.update({
-      data: {
-        transcriptFailure: "The stored recording couldn't be found.",
-        transcriptStatus: CallTranscriptStatus.FAILED,
-      },
-      where: { id: recording.id },
+    const applied = await settle(attempts, {
+      transcriptFailure: "The stored recording couldn't be found.",
+      transcriptStatus: CallTranscriptStatus.FAILED,
     });
-    return "gave_up";
+    return applied ? "gave_up" : "superseded";
   }
 
   const text = normaliseTranscript(result.text);
-  await db.callRecording.update({
-    data: {
-      transcribedAt: new Date(),
-      transcript: text || null,
-      transcriptFailure: null,
-      transcriptStatus: text
-        ? CallTranscriptStatus.DONE
-        : CallTranscriptStatus.EMPTY,
-    },
-    where: { id: recording.id },
+  const applied = await settle(attempts, {
+    transcribedAt: new Date(),
+    transcript: text || null,
+    transcriptFailure: null,
+    transcriptStatus: text
+      ? CallTranscriptStatus.DONE
+      : CallTranscriptStatus.EMPTY,
   });
+  if (!applied) return "superseded";
   return text ? "transcribed" : "empty";
 }
 

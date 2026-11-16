@@ -196,27 +196,41 @@ async function deleteProviderCopy(
   }
 }
 
+const SWEEP_BATCH = 100;
+
 /**
  * Recordings the daily sweep should (re)start: pending, stored but still on
  * the carrier, or stored but not yet transcribed (./transcripts.ts).
+ *
+ * Two queries, each with its own limit: the transcript backlog (every
+ * recording stored before transcription existed) must never crowd out a
+ * recording still waiting to be copied off the carrier, which is the
+ * Privacy Act work. Up to 200 ids, oldest first within each, no repeats.
  */
 export async function recordingsNeedingWork(db: DomainDb): Promise<string[]> {
-  const rows = await db.callRecording.findMany({
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-    take: 100,
-    where: {
-      OR: [
-        { status: CallRecordingStatus.PENDING },
-        { providerDeletedAt: null, status: CallRecordingStatus.STORED },
-        {
-          status: CallRecordingStatus.STORED,
-          transcriptStatus: CallTranscriptStatus.PENDING,
-        },
-      ],
-    },
-  });
-  return rows.map((row) => row.id);
+  const [copying, transcribing] = await Promise.all([
+    db.callRecording.findMany({
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+      take: SWEEP_BATCH,
+      where: {
+        OR: [
+          { status: CallRecordingStatus.PENDING },
+          { providerDeletedAt: null, status: CallRecordingStatus.STORED },
+        ],
+      },
+    }),
+    db.callRecording.findMany({
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+      take: SWEEP_BATCH,
+      where: {
+        status: CallRecordingStatus.STORED,
+        transcriptStatus: CallTranscriptStatus.PENDING,
+      },
+    }),
+  ]);
+  return [...new Set([...copying, ...transcribing].map((row) => row.id))];
 }
 
 /** Put a FAILED recording back in the queue, for the retry button. */

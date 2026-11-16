@@ -4,13 +4,28 @@ import { readStoredBlob } from "@/lib/blob-port";
 import type { CallTranscriptionPort } from "@/lib/domain/ports/transcription";
 import { gateway, TRANSCRIPTION_MODEL_ID } from "@/lib/model";
 
+/** Names and trade terms the model should prefer when it hears them. */
+const CONTEXT_BIAS = [
+  "Royal Constructions",
+  "Mili",
+  "knockdown rebuild",
+  "HBCF",
+  "granny flat",
+  "duplex",
+  "DA",
+  "CDC",
+  "tradie",
+  "site visit",
+  "quote",
+];
+
 /**
  * The AI Gateway implementation of the domain's transcription port.
  *
  * Reads Royal's own stored copy (public or private Blob store — the carrier's
  * copy is already deleted) and sends it to the speech-to-text model. The model
- * is told what it is listening to, so the trade words and names Royal's calls
- * are full of ("knockdown rebuild", "HBCF", "Mili") come out spelled right.
+ * is given the words Royal's calls are full of ("knockdown rebuild", "HBCF",
+ * "Mili") as context bias, so they come out spelled right.
  * A failed model call is reported by the wrapped gateway in lib/model.ts.
  */
 export const gatewayCallTranscription: CallTranscriptionPort = async (
@@ -22,14 +37,9 @@ export const gatewayCallTranscription: CallTranscriptionPort = async (
   const result = await transcribe({
     audio: bytes,
     model: gateway.transcription(TRANSCRIPTION_MODEL_ID),
+    // Keyed by the provider behind the gateway model (Mistral's Voxtral).
     providerOptions: {
-      openai: {
-        language: "en",
-        prompt:
-          audio.kind === "VOICEMAIL"
-            ? "A voicemail left for Royal Constructions, a residential home builder in Sydney, Australia. Australian English."
-            : "A phone call with Royal Constructions, a residential home builder in Sydney, Australia. Mili is the company's virtual receptionist. Topics: new homes, knockdown rebuilds, extensions, renovations, quotes, site visits, HBCF insurance, tradies. Australian English.",
-      },
+      mistral: { contextBias: CONTEXT_BIAS, language: "en" },
     },
   });
   return { text: result.text };

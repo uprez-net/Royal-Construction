@@ -77,4 +77,4 @@ export const TEXT_MODEL_ID = "openai/gpt-6-luna-fast";
  * (lib/comms/transcription.ts). Australian-English phone audio; one id, so
  * changing model is one line.
  */
-export const TRANSCRIPTION_MODEL_ID = "openai/gpt-4o-transcribe";
+export const TRANSCRIPTION_MODEL_ID = "mistral/voxtral-small-transcribe-3";

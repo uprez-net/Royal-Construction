@@ -7,6 +7,7 @@ import { gatewayCallTranscription } from "@/lib/comms/transcription";
 import { storeCallRecording } from "@/lib/domain/comms/calls/recordings";
 import { transcribeCallRecording } from "@/lib/domain/comms/calls/transcripts";
 import { DomainSideEffectError, isDomainError } from "@/lib/domain/errors";
+import { markReported, wasReported } from "@/lib/observability/filter";
 import { systemPrincipal } from "@/lib/domain/principal";
 import prisma from "@/lib/prisma";
 
@@ -66,9 +67,16 @@ async function transcribeOne(recordingId: string): Promise<string> {
       { transcribe: gatewayCallTranscription },
     );
   } catch (error) {
+    // A model failure was already reported by the wrapped gateway (vendor ai,
+    // operation transcribe). Marked here too, and the error object logged, so
+    // console capture recognises it and the log line is not a second event.
+    // Anything else (the stored copy unreadable) is reported by this line.
+    if (error instanceof Error && wasReported(error.cause)) {
+      markReported(error);
+    }
     console.error(
       `[call-recording] transcribing recording ${recordingId} failed:`,
-      error instanceof Error ? error.message : error,
+      error,
     );
     if (error instanceof DomainSideEffectError && error.retryable) {
       const { attempt } = getStepMetadata();

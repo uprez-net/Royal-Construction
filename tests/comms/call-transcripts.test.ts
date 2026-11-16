@@ -49,7 +49,7 @@ function port(answer: Awaited<ReturnType<CallTranscriptionPort>> | Error) {
 const updates = (harness: ReturnType<typeof recordingDb>) =>
   harness
     .writes()
-    .filter((call) => call.operation === "callRecording.update")
+    .filter((call) => call.operation === "callRecording.updateMany")
     .map((call) => (call.args as { data: Record<string, unknown> }).data);
 
 test("a stored recording is transcribed and the text kept on it", async () => {
@@ -203,19 +203,82 @@ test("only the recording workflow transcribes", async () => {
   assert.deepEqual(harness.calls, []);
 });
 
-test("the sweep picks up stored recordings still waiting for a transcript", async () => {
-  let where: unknown;
+test("the transcript backlog cannot crowd out recordings still on the carrier", async () => {
+  const queries: { where: unknown; take: unknown }[] = [];
   const harness = recordingDb({
     "callRecording.findMany": (args: unknown) => {
-      where = (args as { where: unknown }).where;
-      return [{ id: "rec-1" }];
+      const { where, take } = args as { where: unknown; take: unknown };
+      queries.push({ take, where });
+      // rec-2 is both still on the carrier and untranscribed: listed once.
+      return queries.length === 1
+        ? [{ id: "rec-1" }, { id: "rec-2" }]
+        : [{ id: "rec-2" }, { id: "rec-3" }];
     },
   });
-  assert.deepEqual(await recordingsNeedingWork(harness.db), ["rec-1"]);
-  assert.deepEqual((where as { OR: unknown[] }).OR.at(-1), {
+  assert.deepEqual(await recordingsNeedingWork(harness.db), [
+    "rec-1",
+    "rec-2",
+    "rec-3",
+  ]);
+  assert.deepEqual(
+    queries.map((query) => query.take),
+    [100, 100],
+    "each kind of work has its own limit",
+  );
+  assert.deepEqual(queries[1].where, {
     status: "STORED",
     transcriptStatus: "PENDING",
   });
+});
+
+test("a recording another run has claimed is not sent to the model again", async () => {
+  const harness = recordingDb({
+    "callRecording.findUnique": stored(),
+    "callRecording.updateMany": { count: 0 },
+  });
+  const model = port({ text: "never asked" });
+  assert.equal(
+    await transcribeCallRecording(
+      SYSTEM,
+      { recordingId: "rec-1" },
+      harness.db,
+      model,
+    ),
+    "superseded",
+  );
+  assert.deepEqual(model.seen, []);
+  const claim = harness.writes()[0].args as {
+    data: Record<string, unknown>;
+    where: Record<string, unknown>;
+  };
+  assert.deepEqual(claim.data, { transcriptAttempts: 1 });
+  assert.deepEqual(claim.where, {
+    id: "rec-1",
+    transcriptAttempts: 0,
+    transcriptStatus: "PENDING",
+  });
+});
+
+test("a result is kept only while this run's claim still stands", async () => {
+  let call = 0;
+  const harness = recordingDb({
+    "callRecording.findUnique": stored(),
+    // The claim lands; by the time the model answers, a later run has claimed.
+    "callRecording.updateMany": () => ({ count: call++ === 0 ? 1 : 0 }),
+  });
+  assert.equal(
+    await transcribeCallRecording(
+      SYSTEM,
+      { recordingId: "rec-1" },
+      harness.db,
+      port({ text: "hello" }),
+    ),
+    "superseded",
+  );
+  const settle = harness.writes()[1].args as {
+    where: Record<string, unknown>;
+  };
+  assert.equal(settle.where.transcriptAttempts, 1, "conditioned on its claim");
 });
 
 test("a transcript is tidied and capped", () => {

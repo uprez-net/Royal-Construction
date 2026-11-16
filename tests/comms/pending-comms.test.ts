@@ -15,11 +15,17 @@ import {
 } from "@/lib/domain/comms/unread";
 import {
   DomainAuthorizationError,
+  DomainNotFoundError,
   DomainTransitionError,
+  DomainValidationError,
 } from "@/lib/domain/errors";
 import { anonymousPrincipal, systemPrincipal } from "@/lib/domain/principal";
 
-import { adminPrincipal, recordingDb } from "../architecture/domain-harness";
+import {
+  adminPrincipal,
+  customerPrincipal,
+  recordingDb,
+} from "../architecture/domain-harness";
 
 // What counts as unread on a call and a text, what the Pending Calls/Messages
 // list holds, and filing a call from it: one rule each, read by the badge and
@@ -140,6 +146,55 @@ test("the pending list and its count are for staff only", async () => {
     DomainAuthorizationError,
   );
   assert.deepEqual(harness.calls, []);
+});
+
+test("the per-lead counts refuse a non-staff caller and an oversized page", async () => {
+  const harness = recordingDb();
+  await assert.rejects(
+    listLeadCommsUnread(customerPrincipal(), { leadIds: [7] }, harness.db),
+    DomainAuthorizationError,
+  );
+  await assert.rejects(
+    listLeadCommsUnread(
+      adminPrincipal(),
+      { leadIds: Array.from({ length: 201 }, (_, i) => i + 1) },
+      harness.db,
+    ),
+    DomainValidationError,
+  );
+  assert.deepEqual(harness.calls, []);
+});
+
+test("marking read refuses more ids than one window shows", async () => {
+  const harness = recordingDb();
+  await assert.rejects(
+    markPendingCommsRead(
+      adminPrincipal(),
+      {
+        callIds: Array.from({ length: 150 }, (_, i) => `call-${i}`),
+        smsIds: Array.from({ length: 51 }, (_, i) => `sms-${i}`),
+      },
+      harness.db,
+    ),
+    DomainValidationError,
+  );
+  assert.deepEqual(harness.writes(), []);
+});
+
+test("filing a call onto a lead that isn't there writes nothing", async () => {
+  const harness = recordingDb({
+    "call.findUnique": { dismissedAt: null, id: "call-1", leadId: null },
+    "lead.findUnique": null,
+  });
+  await assert.rejects(
+    resolvePendingCall(
+      adminPrincipal(),
+      { action: "attach", callId: "call-1", leadId: 404 },
+      harness.transactionalDb,
+    ),
+    DomainNotFoundError,
+  );
+  assert.deepEqual(harness.writes(), []);
 });
 
 test("filing a pending call onto a lead moves it there and logs it", async () => {
