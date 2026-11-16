@@ -40,6 +40,7 @@ import { UnmatchedWhatsAppButton } from "@/components/leads/whatsapp/unmatched-w
 import { PendingCommsButton } from "@/components/leads/comms/pending-comms";
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
 import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
+import { LeadStageCounts } from "./lead-stage-counts";
 import { LeadPagination } from "./lead-pagination";
 import { reloadLeadList, updateAndRefreshLeadList } from "./leads-list-refresh";
 import {
@@ -597,7 +598,7 @@ function LeadsWorkspace() {
           <div
             className={cn(
               MOBILE_METRIC_STRIP_CLASS,
-              "sm:grid-cols-2 md:grid-cols-3",
+              "sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-6",
             )}
           >
             <LeadMetricCard
@@ -665,6 +666,12 @@ function LeadsWorkspace() {
               icon={CircleCheckBig}
             />
           </div>
+          {/* Every stage's own count, under the grouped cards above. */}
+          <LeadStageCounts
+            byStage={stats.byStage}
+            activeMetric={activeMetric}
+            onSelect={handleCardClick}
+          />
         </>
       )}
 
