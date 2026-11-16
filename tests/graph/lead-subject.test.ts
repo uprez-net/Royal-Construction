@@ -520,6 +520,13 @@ test("a customer listing a house and a granny flat creates a lead (#389)", () =>
   }
 });
 
+test("a supplier catalogue veto does not reach subjects outside the granny patterns", () => {
+  assert.equal(
+    isLeadSubject("Quote for a new home - supplier catalogue attached"),
+    true,
+  );
+});
+
 test("granny flat words next to something that is not a dwelling are not a lead", () => {
   for (const s of [
     "Granny flat supplier catalogue",

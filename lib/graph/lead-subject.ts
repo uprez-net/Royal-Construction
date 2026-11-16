@@ -203,7 +203,6 @@ const SOLICITATION = [
   "precast",
   "clearance stock",
   "price book",
-  "supplier catalogues?",
   "construction finance",
   "finance partner",
 ].join("|");
@@ -301,12 +300,14 @@ export const LEAD_SUBJECT_PATTERNS: readonly RegExp[] = [
   // flat joined by "and", "&", "+" or "with" and no price or enquiry word
   // (#389). Needs both halves, so "granny" or "house" alone still match
   // nothing. The comma form ("Double Storey, Granny Flat") is the shape our own
-  // templates use and stays with OWN_OUTBOUND.
+  // templates use and stays with OWN_OUTBOUND. A supplier catalogue naming
+  // both is not a customer, but only these two patterns say so: the word is
+  // not a veto for other subjects.
   new RegExp(
-    String.raw`\b(?:${DWELLING})\s*(?:and|&|\+|with)\s*(?:a |an )?granny(?: flat)?\b`,
+    String.raw`^(?!.*\bsupplier catalogues?\b).*\b(?:${DWELLING})\s*(?:and|&|\+|with)\s*(?:a |an )?granny(?: flat)?\b`,
   ),
   new RegExp(
-    String.raw`\bgranny(?: flat)?\s*(?:and|&|\+|with)\s*(?:a |an |the )?(?:${DWELLING})\b`,
+    String.raw`^(?!.*\bsupplier catalogues?\b).*\bgranny(?: flat)?\s*(?:and|&|\+|with)\s*(?:a |an |the )?(?:${DWELLING})\b`,
   ),
 
   // Generic first-contact subjects the site and the directories send.
