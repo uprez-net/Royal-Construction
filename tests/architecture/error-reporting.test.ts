@@ -269,6 +269,36 @@ describe("no route answers 500 in silence", () => {
     });
   }
 
+  // The voice token route used to `console.error("…")` a bare string, which
+  // carries no error, so a carrier 503 arrived as a message with no cause. It
+  // reports the error itself, with the carrier's providerCode as the fingerprint.
+  test("the voice token route reports the error, not a bare string", () => {
+    const route = "app/api/comms/voice/token/route.ts";
+    const text = read(route);
+    const refusal = text.indexOf("if (refusal) return refusal;");
+    const report = text.indexOf("reportError(error");
+    assert.ok(
+      refusal >= 0 && report > refusal,
+      `${route} must report after the refusal check`,
+    );
+    assert.ok(
+      !/console\.error\(\s*"\[calls\] Could not issue a browser credential"\s*\)/.test(
+        text,
+      ),
+      `${route} must not log the credential failure as a bare string`,
+    );
+    assert.ok(
+      text.includes('"voice-token"'),
+      `${route} should fingerprint a carrier failure`,
+    );
+    // A shared fingerprint for every other error would fold a second bug into
+    // the first issue, and the alert only fires on a NEW issue.
+    assert.ok(
+      !text.includes('"unexpected"'),
+      `${route} must leave non-carrier errors to default grouping`,
+    );
+  });
+
   test("an import without a call does not count as reporting", () => {
     assert.ok(
       !REPORTS.test(

@@ -3,7 +3,9 @@ import { connection } from "next/server";
 import { commsRuntimeFromEnv } from "@/lib/comms/factory";
 import { signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
 import { recordBrowserPresence } from "@/lib/domain/comms/calls/presence";
+import { isCommsError } from "@/lib/domain/ports/comms";
 import { domainErrorResponse } from "@/lib/http/domain-response";
+import { reportError } from "@/lib/observability/report-error";
 import prisma from "@/lib/prisma";
 import {
   errorResponse,
@@ -53,7 +55,29 @@ export async function GET() {
   } catch (error) {
     const refusal = domainErrorResponse(error);
     if (refusal) return refusal;
-    console.error("[calls] Could not issue a browser credential");
+    // The bare string this used to log carried no cause, so a carrier 503 read
+    // as "Could not issue a browser credential" and nothing else. A CommsError's
+    // message is operator-readable by contract (no token, body or stack), and
+    // its providerCode (TELNYX_HTTP_503) groups one outage as one issue.
+    //
+    // Only a CommsError gets that grouping. Any other error in this route (a
+    // database failure, an adapter bug) keeps Sentry's default stack grouping:
+    // sharing one fingerprint would fold a second, different bug into the first
+    // issue, and the alert fires on a NEW issue, so nobody would be told.
+    if (isCommsError(error)) {
+      reportError(error, {
+        source: "route:GET /api/comms/voice/token",
+        tags: { vendor: error.providerCode?.split("_")[0]?.toLowerCase() },
+        fingerprint: ["voice-token", error.providerCode ?? "comms"],
+        extra: {
+          providerCode: error.providerCode,
+          kind: error.kind,
+          httpStatus: error.httpStatus,
+        },
+      });
+    } else {
+      reportError(error, { source: "route:GET /api/comms/voice/token" });
+    }
     return errorResponse(
       "The browser phone couldn't connect. It will try again shortly.",
       {
