@@ -73,9 +73,10 @@ export function AgentApproval({
   const isLimit = request.kind === "session-limit";
   const whatsapp = isApproval ? approvalWhatsApp(toolName, input) : null;
   const outreach = isApproval && !whatsapp ? approvalOutreach(input) : null;
-  const attachmentNames = useOutreachAttachmentNames(
-    outreach ? input : undefined,
-  );
+  const { names: attachmentNames, unchanged: attachmentsUnchanged } =
+    useOutreachAttachmentNames(outreach ? input : undefined);
+  // An outreach cannot be approved before the owner can see its files.
+  const filesLoading = outreach !== null && attachmentNames === undefined;
   const { labels: targetLabels, changeLabels } = useApprovalTargetLabels(
     isApproval ? input : undefined,
   );
@@ -112,11 +113,20 @@ export function AgentApproval({
    * attempt is guarded locally and any refusal is shown beside the buttons
    * rather than swallowed.
    */
-  async function respond(response: AgentInputResponse) {
+  async function respond(
+    response: AgentInputResponse,
+    { verifyFiles = false }: { verifyFiles?: boolean } = {},
+  ) {
     if (submitting) return;
     setSubmitting(true);
     setRespondError(null);
     try {
+      if (verifyFiles && outreach && !(await attachmentsUnchanged())) {
+        setRespondError(
+          "The files on this email changed while you were reading it. Check the list above and approve again.",
+        );
+        return;
+      }
       await onRespond([response]);
       setDecliningOptionId(null);
       setReason("");
@@ -190,7 +200,10 @@ export function AgentApproval({
       </div>
 
       {outreach ? (
-        <AgentOutreach outreach={{ ...outreach, attachmentNames }} />
+        <AgentOutreach
+          checking={filesLoading}
+          outreach={{ ...outreach, attachmentNames }}
+        />
       ) : null}
 
       {whatsapp ? <AgentWhatsAppDraftView draft={whatsapp} /> : null}
@@ -255,15 +268,18 @@ export function AgentApproval({
             <div className="flex flex-wrap gap-2">
               {request.options?.map((option) => (
                 <Button
-                  disabled={busy}
+                  disabled={busy || (filesLoading && option.style !== "danger")}
                   key={option.id}
                   onClick={() =>
                     option.style === "danger"
                       ? setDecliningOptionId(option.id)
-                      : void respond({
-                          optionId: option.id,
-                          requestId: request.requestId,
-                        })
+                      : void respond(
+                          {
+                            optionId: option.id,
+                            requestId: request.requestId,
+                          },
+                          { verifyFiles: isApproval },
+                        )
                   }
                   size="sm"
                   title={option.description}
@@ -426,17 +442,41 @@ function approvalOutreach(input: unknown): AgentOutreachDetails | null {
   };
 }
 
+/** The server's list of files this outreach would attach now; null if unavailable. */
+async function fetchOutreachAttachmentNames(
+  input: unknown,
+  signal?: AbortSignal,
+): Promise<readonly string[] | null> {
+  try {
+    const response = await fetch("/api/agent/approval-attachments", {
+      body: JSON.stringify({ input }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+      signal,
+    });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as {
+      attachments?: string[] | null;
+    };
+    return payload.attachments ?? null;
+  } catch (error) {
+    if ((error as { name?: string })?.name === "AbortError") throw error;
+    return null;
+  }
+}
+
 /**
  * The file names an outreach approval will really attach.
  *
  * The party's standard pack is added by the send itself, so no argument the
  * model wrote lists it, and the card used to show only what the model named.
- * Looked up from the server's own selection (never taken from the model);
- * undefined while loading, null when the lookup failed or was refused.
+ * Looked up from the server's own selection (never taken from the model):
+ * `names` is undefined while loading and null when the lookup failed or was
+ * refused. The pack can change while the card is open (a file uploaded in
+ * another tab), so `unchanged()` asks again at the moment of approval and
+ * reports whether the list the owner read is still the list that would go.
  */
-function useOutreachAttachmentNames(
-  input: unknown,
-): readonly string[] | null | undefined {
+function useOutreachAttachmentNames(input: unknown) {
   const [resolved, setResolved] = useState<{
     key: string;
     names: readonly string[] | null;
@@ -446,24 +486,23 @@ function useOutreachAttachmentNames(
   useEffect(() => {
     if (key === null) return;
     const controller = new AbortController();
-    fetch("/api/agent/approval-attachments", {
-      body: JSON.stringify({ input: JSON.parse(key) }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-      signal: controller.signal,
-    })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload: { attachments?: string[] | null } | null) =>
-        setResolved({ key, names: payload?.attachments ?? null }),
-      )
-      .catch((error: unknown) => {
-        if ((error as { name?: string })?.name === "AbortError") return;
-        setResolved({ key, names: null });
-      });
+    fetchOutreachAttachmentNames(JSON.parse(key), controller.signal)
+      .then((names) => setResolved({ key, names }))
+      .catch(() => undefined);
     return () => controller.abort();
   }, [key]);
 
-  return key !== null && resolved?.key === key ? resolved.names : undefined;
+  const names =
+    key !== null && resolved?.key === key ? resolved.names : undefined;
+
+  async function unchanged(): Promise<boolean> {
+    if (key === null) return true;
+    const fresh = await fetchOutreachAttachmentNames(JSON.parse(key));
+    setResolved({ key, names: fresh });
+    return JSON.stringify(fresh) === JSON.stringify(names);
+  }
+
+  return { names, unchanged };
 }
 
 /**

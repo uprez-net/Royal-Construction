@@ -56,8 +56,11 @@ export type AgentOutreachDetails = {
  * is treated as untrusted content even though the domain composes it.
  */
 export function AgentOutreach({
+  checking = false,
   outreach,
 }: {
+  /** The file list is still being looked up; an approval waits for it. */
+  checking?: boolean;
   outreach: AgentOutreachDetails;
 }) {
   const [view, setView] = useState<"preview" | "text">("preview");
@@ -154,6 +157,11 @@ export function AgentOutreach({
             <span className="font-semibold wrap-break-word text-foreground">
               {outreach.subject}
             </span>
+          </Row>
+        ) : null}
+        {checking ? (
+          <Row label="Files">
+            <span className="text-muted-foreground">Checking the files…</span>
           </Row>
         ) : null}
         {names !== undefined ? (

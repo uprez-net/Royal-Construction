@@ -173,16 +173,20 @@ export async function prepareComplianceOutreach(
     available: true as const,
     alert: alert ?? null,
     blocked,
-    attachments: await outreachAttachments(
-      engagement,
-      {
-        extraAttachmentIds: [],
-        omitAttachmentIds: [],
-        party,
-        projectId: input.projectId,
-      },
-      db,
-    ),
+    // An SLA follow-up carries no files (sendComplianceFollowUp sends none), so
+    // only an opening outreach has a pack to list.
+    attachments: alert
+      ? []
+      : await outreachAttachments(
+          engagement,
+          {
+            extraAttachmentIds: [],
+            omitAttachmentIds: [],
+            party,
+            projectId: input.projectId,
+          },
+          db,
+        ),
     candidates: await outreachCandidates(party, db),
     body: outreachDraftBody(engagement.subjectAddress, party, alert?.detail),
     canSend:

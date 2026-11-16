@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import {
+  ComplianceAlertStatus,
+  ComplianceAlertType,
   ComplianceDocumentType,
   ComplianceOutreachMode,
   ComplianceOutreachStatus,
@@ -336,4 +338,44 @@ test("prepare blocks an opening outreach to a party already written to", async (
     (prepared.available && prepared.blocked) || "",
     /already written to at earlier@basix\.example; send a follow-up/,
   );
+});
+
+test("preparing an SLA follow-up lists no files, because a follow-up sends none", async () => {
+  const sent = [
+    {
+      checklistDocumentId: null,
+      contactEmail: "earlier@basix.example",
+      id: "outreach_9",
+      mode: ComplianceOutreachMode.OUTREACH,
+      party: CompliancePartyType.BASIX_CONSULTANT,
+      status: ComplianceOutreachStatus.SENT,
+    },
+  ];
+  const alert = {
+    createdAt: new Date("2026-11-01T00:00:00Z"),
+    detail: "No reply yet",
+    id: "alert_1",
+    status: ComplianceAlertStatus.OPEN,
+    type: ComplianceAlertType.BASIX_RESPONSE_OVERDUE,
+  };
+  const db = recordingDb({
+    ...script(sent),
+    "certifierEngagement.findUnique": {
+      ...script(sent)["certifierEngagement.findUnique"],
+      alerts: [alert],
+    },
+  }).db;
+
+  const prepared = await prepareComplianceOutreach(
+    adminPrincipal(),
+    { alertId: "alert_1", projectId },
+    db,
+  );
+
+  assert.equal(prepared.available, true);
+  if (!prepared.available) return;
+  assert.deepEqual(prepared.attachments, []);
+  // A SENT thread must stay sendable for the follow-up.
+  assert.equal(prepared.blocked, null);
+  assert.equal(prepared.canSend, true);
 });
