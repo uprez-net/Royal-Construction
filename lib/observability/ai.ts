@@ -12,7 +12,12 @@
 // seen here, including the ones the SDK then retries; they group into one issue
 // by operation and status, so a blip is one issue, not one email per call.
 
-import type { LanguageModelMiddleware } from "ai";
+import type { LanguageModelMiddleware, TranscriptionModel } from "ai";
+
+type TranscriptionModelV4 = Extract<
+  TranscriptionModel,
+  { readonly specificationVersion: "v4" }
+>;
 
 import { reportExternalError } from "./external";
 
@@ -34,3 +39,33 @@ export const failureReportingMiddleware: LanguageModelMiddleware = {
     }
   },
 };
+
+/**
+ * The same report for a transcription model (call recordings), which has no
+ * middleware hook of its own: `doGenerate` is wrapped in place of one.
+ */
+export function watchTranscriptionModel(
+  model: TranscriptionModelV4,
+): TranscriptionModelV4 {
+  return new Proxy(model, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (property !== "doGenerate" || typeof value !== "function") {
+        return value;
+      }
+      return async (
+        ...args: Parameters<TranscriptionModelV4["doGenerate"]>
+      ) => {
+        try {
+          return await (value as TranscriptionModelV4["doGenerate"]).apply(
+            target,
+            args,
+          );
+        } catch (error) {
+          reportExternalError("ai", "transcribe", error);
+          throw error;
+        }
+      };
+    },
+  });
+}

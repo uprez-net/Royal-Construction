@@ -186,8 +186,9 @@ adding a call.
 - **Blob, Novu and AI are hooked once, too.** Import Blob from `@/lib/blob`,
   never `@vercel/blob` (a test fails on it): its errors carry no status, so
   `lib/blob.ts` classifies by the SDK's own classes. Every model comes from the
-  wrapped `gateway` in `lib/model.ts`, so a failed `generateText` anywhere is
-  reported; do not create a second gateway. The Novu client is wrapped because
+  wrapped `gateway` in `lib/model.ts`, so a failed `generateText` (or a
+  `transcribe` through `gateway.transcription`, as call recordings use) anywhere
+  is reported; do not create a second gateway. The Novu client is wrapped because
   `triggerNotification` swallows its failures into `{ success: false }`.
 - **A failure inside `after()`** is logged by Next with `console.error` and the
   original error, which console capture reports. `tests/observability/

@@ -7,6 +7,8 @@ import type {
   CommsAvailabilityDto,
   CommsStatusDto,
   LeadCallsDto,
+  LeadCommsUnreadDto,
+  PendingCommsDto,
   PlaceCallResultDto,
   SmsMessageDto,
   SmsSendResultDto,
@@ -193,6 +195,75 @@ export function fileUnmatchedSms(
     `/api/comms/unmatched/sms/${encodeURIComponent(messageId)}`,
     { body: JSON.stringify(body), headers: JSON_HEADERS, method: "POST" },
     "Could not file the text.",
+  );
+}
+
+// ── Unread and pending ────────────────────────────────────────────────
+
+/** Unread calls and texts per lead, for a page of the lead list. */
+export function fetchLeadCommsUnread(
+  leadIds: number[],
+  signal?: AbortSignal,
+): Promise<LeadCommsUnreadDto[]> {
+  if (leadIds.length === 0) return Promise.resolve([]);
+  return unwrap(
+    `/api/leads/comms/unread?leadIds=${leadIds.join(",")}`,
+    { ...GET, signal },
+    "Could not load unread calls and texts.",
+  );
+}
+
+/** Mark a lead's unread calls and texts read: its Phone & SMS window opened. */
+export function markLeadCommsRead(
+  leadId: number,
+): Promise<{ marked: { calls: number; sms: number } }> {
+  return unwrap(
+    `/api/leads/${leadId}/comms/read`,
+    { method: "POST" },
+    "Could not mark the calls and texts read.",
+  );
+}
+
+export function fetchPendingComms(
+  signal?: AbortSignal,
+): Promise<PendingCommsDto> {
+  return unwrap(
+    "/api/comms/pending",
+    { ...GET, signal },
+    "Could not load pending calls and messages.",
+  );
+}
+
+export function fetchPendingCommsCount(
+  signal?: AbortSignal,
+): Promise<{ unread: number }> {
+  return unwrap(
+    "/api/comms/pending/count",
+    { ...GET, signal },
+    "Could not count pending calls and messages.",
+  );
+}
+
+/** Mark exactly the pending items a person was shown as read. */
+export function markPendingCommsRead(body: {
+  callIds: string[];
+  smsIds: string[];
+}): Promise<unknown> {
+  return unwrap(
+    "/api/comms/pending/read",
+    { body: JSON.stringify(body), headers: JSON_HEADERS, method: "POST" },
+    "Could not mark the calls and messages read.",
+  );
+}
+
+export function filePendingCall(
+  callId: string,
+  body: { action: "attach"; leadId: number } | { action: "dismiss" },
+): Promise<{ call: CallDto }> {
+  return unwrap(
+    `/api/comms/pending/calls/${encodeURIComponent(callId)}`,
+    { body: JSON.stringify(body), headers: JSON_HEADERS, method: "POST" },
+    "Could not file the call.",
   );
 }
 

@@ -21,16 +21,11 @@ import { useOptionalPhone } from "@/components/comms/phone-provider";
 import { Button } from "@/components/ui/button";
 import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { formatE164ForDisplay } from "@/lib/domain/leads/whatsapp/phone";
-import {
-  fetchLeadCalls,
-  placeLeadCall,
-  recordingUrl,
-  retryRecording,
-} from "@/lib/leads/comms-service";
+import { fetchLeadCalls, placeLeadCall } from "@/lib/leads/comms-service";
 import type { CallDto, LeadCallsDto } from "@/lib/leads/comms-types";
 import { formatSydneyStamp } from "@/lib/leads/whatsapp-format";
 
-import { CallTranscript } from "./call-transcript";
+import { CallRecordings } from "./call-recordings";
 
 // Ringing a lead, and every call with them. The server places the call and
 // rings the lead first; when they pick up it puts them through to this
@@ -118,7 +113,6 @@ function CallRow({
           : null}
         {call.recordingConsent === "DECLINED" ? " · not recorded" : null}
       </p>
-      <CallTranscript transcript={call.agentTranscript} />
       {call.problem ? (
         <p
           className={
@@ -130,50 +124,7 @@ function CallRow({
           {call.problem}
         </p>
       ) : null}
-      {call.recordings.map((recording) => (
-        <div key={recording.id} className="flex items-center gap-2 text-xs">
-          <span className="text-muted-foreground">
-            {recording.kind === "VOICEMAIL" ? "Voicemail" : "Recording"}
-          </span>
-          {recording.available ? (
-            <audio
-              controls
-              preload="none"
-              src={recordingUrl(recording.id)}
-              className="h-8 max-w-full flex-1"
-            />
-          ) : recording.status === "FAILED" ? (
-            <>
-              <span className="text-destructive">
-                {recording.failureReason ?? "Couldn't be saved."}
-              </span>
-              <Button
-                type="button"
-                size="xs"
-                variant="outline"
-                onClick={() =>
-                  void retryRecording(recording.id).then(
-                    () => {
-                      toast.success("Trying the recording again.");
-                      onRetried();
-                    },
-                    (error: unknown) =>
-                      toast.error(
-                        error instanceof Error
-                          ? error.message
-                          : "Couldn't retry.",
-                      ),
-                  )
-                }
-              >
-                Retry
-              </Button>
-            </>
-          ) : (
-            <span className="text-muted-foreground">Saving…</span>
-          )}
-        </div>
-      ))}
+      <CallRecordings call={call} onRetried={onRetried} />
     </li>
   );
 }

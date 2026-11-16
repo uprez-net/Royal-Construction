@@ -4,6 +4,7 @@ import { join, relative } from "node:path";
 import { test } from "vitest";
 
 import { MAX_RECORDING_ATTEMPTS } from "@/lib/domain/comms/calls/recordings";
+import { MAX_TRANSCRIPT_ATTEMPTS } from "@/lib/domain/comms/calls/transcripts";
 
 import { collectSourceFiles, ROOT } from "./module-graph";
 
@@ -117,5 +118,9 @@ test("the recording workflow's retry literal matches the domain's attempt limit"
   assert.equal(
     Number(workflow.match(/storeOne\.maxRetries = (\d+);/)?.[1]),
     MAX_RECORDING_ATTEMPTS - 1,
+  );
+  assert.equal(
+    Number(workflow.match(/transcribeOne\.maxRetries = (\d+);/)?.[1]),
+    MAX_TRANSCRIPT_ATTEMPTS - 1,
   );
 });
