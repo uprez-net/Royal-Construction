@@ -113,12 +113,125 @@ test("re-applying admin defaults restamps the admin version", () => {
   assert.equal(next.adminContentVersion, 7);
 });
 
-test("admin copy (allowances, exclusions, draft) is replaced outright", () => {
+test("the admin lists decide which allowances and exclusions exist", () => {
   const next = applyAdminPrefillToSnapshot(BASE_SNAPSHOT, PREFILL);
 
+  // The base offer carries the built-in defaults, which the admin lists stand
+  // in for, so they are replaced and not kept beside their admin twins.
   assert.deepEqual(next.allowances, PREFILL.allowances);
   assert.deepEqual(next.exclusions, PREFILL.exclusions);
-  assert.equal(next.draft.headline, "New admin headline");
+});
+
+test("an estimator's edits to an admin allowance or exclusion survive a re-apply (#328)", () => {
+  const snapshot = {
+    ...BASE_SNAPSHOT,
+    allowances: [
+      {
+        ...scopeItem("admin-allowance-1-tiling", "Tiling allowance"),
+        includedInOfferDocument: true,
+      },
+    ],
+    exclusions: [
+      scopeItem("admin-exclusion-1-pool", "Boundary or pool fencing"),
+    ],
+  };
+  const prefill = {
+    ...PREFILL,
+    allowances: [
+      {
+        ...scopeItem("admin-allowance-1-tiling", "Tiling allowance"),
+        includedInOfferDocument: false,
+      },
+    ],
+    exclusions: [
+      scopeItem("admin-exclusion-1-pool", "Landscaping and fencing"),
+    ],
+  };
+
+  const next = applyAdminPrefillToSnapshot(snapshot, prefill);
+
+  // The tick that puts the allowance on the customer's offer document.
+  assert.equal(next.allowances[0].includedInOfferDocument, true);
+  assert.equal(next.exclusions[0].label, "Boundary or pool fencing");
+});
+
+test("an exclusion the estimator or Eve added is kept", () => {
+  const snapshot = {
+    ...BASE_SNAPSHOT,
+    exclusions: [
+      scopeItem("admin-exclusion-1-pool", "Pool"),
+      scopeItem("exclusion-manual-1", "Letterbox and house numbering"),
+    ],
+  };
+
+  const next = applyAdminPrefillToSnapshot(snapshot, PREFILL);
+
+  assert.deepEqual(
+    next.exclusions.map((item) => item.label),
+    ["Pool", "Letterbox and house numbering"],
+  );
+});
+
+test("an admin item inserted above the others does not duplicate or drop the rest", () => {
+  // The position inside the id shifts when the admin inserts a row; the admin
+  // id after it is what names the item.
+  const snapshot = {
+    ...BASE_SNAPSHOT,
+    exclusions: [
+      { ...scopeItem("admin-exclusion-1-pool", "Pool"), description: "edited" },
+    ],
+  };
+  const prefill = {
+    ...PREFILL,
+    exclusions: [
+      scopeItem("admin-exclusion-1-solar", "Solar"),
+      scopeItem("admin-exclusion-2-pool", "Pool"),
+    ],
+  };
+
+  const next = applyAdminPrefillToSnapshot(snapshot, prefill);
+
+  assert.deepEqual(
+    next.exclusions.map((item) => [item.label, item.description]),
+    [
+      ["Solar", ""],
+      ["Pool", "edited"],
+    ],
+  );
+});
+
+test("an admin item the admin has removed is dropped from the offer", () => {
+  const snapshot = {
+    ...BASE_SNAPSHOT,
+    exclusions: [
+      scopeItem("admin-exclusion-1-pool", "Pool"),
+      scopeItem("admin-exclusion-2-retired", "Retired"),
+    ],
+  };
+
+  const next = applyAdminPrefillToSnapshot(snapshot, PREFILL);
+
+  assert.deepEqual(
+    next.exclusions.map((item) => item.label),
+    ["Pool"],
+  );
+});
+
+test("the estimator's document draft is not replaced, so a negotiated deposit schedule survives (#328)", () => {
+  const snapshot = {
+    ...BASE_SNAPSHOT,
+    draft: {
+      ...INITIAL_OFFER_DRAFT,
+      termsSummary: "Deposit: $5,000 payable now",
+      exclusionBullets: ["Boundary or pool fencing"],
+    },
+  };
+
+  const next = applyAdminPrefillToSnapshot(snapshot, PREFILL);
+
+  assert.equal(next.draft.termsSummary, "Deposit: $5,000 payable now");
+  assert.deepEqual(next.draft.exclusionBullets, ["Boundary or pool fencing"]);
+  assert.equal(next.adminContentVersion, 7);
 });
 
 test("the admin cost-line set replaces the offer's, so added and removed tasks propagate", () => {

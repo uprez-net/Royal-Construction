@@ -371,15 +371,26 @@ export function reevaluateFormulaCostLinesForStatus(
   return reevaluateFormulaCostLines(...args);
 }
 
-// Re-seed an EXISTING offer's admin-derived fields from the current admin
-// defaults, leaving everything project-specific (job, areas, pricing, payment
-// schedule, images, tender gate) exactly as the estimator left it. Called when a
-// still-editable offer is opened and its stamped admin version is behind the
-// live one; an agreed/sent offer never reaches here (see
-// reapplyAdminContentIfStale in lib/data/offer-workspace.ts).
+// Re-seed an EXISTING offer from the current admin content, leaving everything
+// the estimator owns exactly as they left it. Called when a still-editable offer
+// is opened and its stamped admin version is behind the live one; an agreed/sent
+// offer never reaches here (see reapplyAdminContentIfStale in
+// lib/data/offer-workspace.ts).
 //
-// Allowances, exclusions and the draft copy are pure admin content, so they are
-// replaced outright. Cost lines are a MERGE: the admin set decides which tasks
+// What the admin decides is WHICH items exist: a task, an allowance or an
+// exclusion the admin adds appears on the offer, and one the admin removes goes.
+// What the offer already holds is not the admin's to overwrite. This used to
+// replace allowances, exclusions and the draft copy outright, so opening a live
+// quote after any admin edit reverted the estimator's work without a word (#328):
+// a ticked "on the offer document" flag, a hand-edited exclusion, an exclusion
+// added by hand or by Eve, a negotiated deposit schedule in the terms summary.
+// Nothing here can tell "the estimator edited this" from "the admin changed it
+// since" — the offer stores only the version it was stamped with, not the admin
+// copy it was stamped from — so the cost of being wrong decides it: a reverted
+// edit changes what a client was quoted, a missed admin wording correction does
+// not. The offer's copy wins for any item it already has, and for the draft.
+//
+// Cost lines are a MERGE of their own: the admin set decides which tasks
 // exist and carries the admin's own prices, but a line the admin does not price
 // (priceMode "none", or a formula whose cost is deferred — both arrive as 0)
 // keeps the offer's existing figure and include flag. That number is the
@@ -407,11 +418,49 @@ export function applyAdminPrefillToSnapshot(
   return {
     ...snapshot,
     lines: withExtraCostLines(workbookLines, snapshot.extraCosts),
-    allowances: prefill.allowances,
-    exclusions: prefill.exclusions,
-    draft: prefill.draft,
+    allowances: mergeAdminScopeItems(snapshot.allowances, prefill.allowances),
+    exclusions: mergeAdminScopeItems(snapshot.exclusions, prefill.exclusions),
+    // The estimator's draft copy is theirs; see the note above.
+    draft: snapshot.draft,
     adminContentVersion: prefill.adminVersion,
   };
+}
+
+// An admin-seeded item's id is `admin-allowance-<position>-<admin id>`. The
+// position shifts when an admin inserts or removes a row, so the admin id after
+// it is the only part that names the same item across a refresh.
+const ADMIN_SEEDED_ID = /^admin-(?:allowance|exclusion)-\d+-(.+)$/;
+
+// The built-in fallback rows ("allowance-1", "exclusion-2") an offer carried
+// before the admin content seeded it. They are defaults the admin list now
+// stands in for, not anything the estimator made, so they are replaced rather
+// than kept beside their admin twins.
+const LEGACY_DEFAULT_ID = /^(?:allowance|exclusion)-\d+$/;
+
+function adminItemKey(id: string): string | null {
+  return ADMIN_SEEDED_ID.exec(id)?.[1] ?? null;
+}
+
+// The admin's current list sets which items exist and their order. An item the
+// offer already has keeps the offer's copy (ticks, wording, amounts); a new one
+// arrives as the admin wrote it; an admin item the admin has removed is dropped;
+// anything the estimator added themselves (not admin-seeded, not a legacy
+// default) is kept, after.
+function mergeAdminScopeItems(
+  existing: readonly OfferWorkspaceScopeItem[],
+  fresh: readonly OfferWorkspaceScopeItem[],
+): readonly OfferWorkspaceScopeItem[] {
+  const seeded = new Map<string, OfferWorkspaceScopeItem>();
+  const estimatorAdded: OfferWorkspaceScopeItem[] = [];
+  for (const item of existing) {
+    const key = adminItemKey(item.id);
+    if (key !== null) seeded.set(key, item);
+    else if (!LEGACY_DEFAULT_ID.test(item.id)) estimatorAdded.push(item);
+  }
+  const merged = fresh.map(
+    (item) => seeded.get(adminItemKey(item.id) ?? item.id) ?? item,
+  );
+  return [...merged, ...estimatorAdded];
 }
 
 // The entry point. Joins AdminOfferContent against the static sequence
