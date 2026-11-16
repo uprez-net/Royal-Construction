@@ -15,6 +15,7 @@ import {
   type ProjectFinancials,
 } from "@/lib/domain/projects/financials";
 import { setMilestonePrice } from "@/lib/domain/projects/milestone-price";
+import { setMilestoneTradieFigure } from "@/lib/domain/projects/milestone-tradie-figures";
 import {
   prepareTradieInvoiceRecheck,
   requestTradieInvoiceRecheck,
@@ -41,7 +42,9 @@ import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
   milestonePriceSchema,
+  milestoneTradieFigureSchema,
   type MilestonePriceInput,
+  type MilestoneTradieFigureInput,
 } from "@/utils/validators/milestone";
 import {
   allocateTradieInvoiceSchema,
@@ -285,6 +288,39 @@ export async function setMilestonePriceAction(
       return result;
     });
     if (outcome.changed) expireProject(outcome.projectId);
+    return outcome.projectId;
+  });
+}
+
+/**
+ * Type an activity's own tradie quoted or total invoiced figure by hand, or
+ * clear it back to what its bookings say. Only the Financials tab reads it, so
+ * the project page's cache has nothing to expire.
+ */
+export async function setMilestoneTradieFigureAction(
+  raw: MilestoneTradieFigureInput,
+): Promise<ProjectFinancialsResult> {
+  return answer(async (principal) => {
+    const input = parse(milestoneTradieFigureSchema.safeParse(raw));
+    const outcome = await prisma.$transaction(async (tx) => {
+      const result = await setMilestoneTradieFigure(
+        principal,
+        {
+          cents: input.amount === null ? null : Math.round(input.amount * 100),
+          figure: input.figure,
+          milestoneId: input.milestoneId,
+          previousCents: input.previousCents,
+        },
+        tx,
+      );
+      // As for the price: the milestone names its own project.
+      if (result.projectId !== input.projectId) {
+        throw new DomainValidationError(
+          "That activity is not on this project.",
+        );
+      }
+      return result;
+    });
     return outcome.projectId;
   });
 }

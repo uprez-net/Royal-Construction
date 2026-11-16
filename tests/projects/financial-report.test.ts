@@ -226,6 +226,108 @@ describe("activity profit and loss", () => {
   });
 });
 
+describe("figures typed by hand", () => {
+  test("a typed B and C replace the activity's own bookings, and the report is read from them", () => {
+    const report = buildProjectFinancialReport({
+      bookings: [
+        booking({ id: "b1", milestoneId: "m1", price: priced(400_00) }),
+      ],
+      invoices: [invoice({ scheduleId: "b1", subTotalCents: 349_00 })],
+      milestones: [
+        milestone({
+          budgetCents: 1_000_00,
+          id: "m1",
+          invoicedOverrideCents: 700_00,
+          quotedOverrideCents: 600_00,
+        }),
+      ],
+    });
+    const activity = report.stages[0].activities[0];
+    assert.equal(activity.quotedOverrideCents, 600_00);
+    assert.equal(activity.invoicedOverrideCents, 700_00);
+    const { figures } = activity;
+    assert.equal(figures.quotedCents, 600_00);
+    assert.equal(figures.quotedGstCents, 60_00);
+    assert.equal(figures.invoicedCents, 700_00);
+    assert.equal(figures.invoicedGstCents, 70_00);
+    assert.equal(figures.profitCents, 300_00);
+    // The larger of the two typed figures is what the work will cost.
+    assert.equal(figures.forecastProfitCents, 300_00);
+    assert.equal(figures.overInvoiced, true);
+    // The bookings beneath it still show what they actually say.
+    assert.equal(activity.bookings[0].agreedCents, 400_00);
+    assert.equal(activity.bookings[0].invoicedCents, 349_00);
+    assert.equal(report.totals.quotedCents, 600_00);
+    assert.equal(report.totals.invoicedCents, 700_00);
+  });
+
+  test("a typed B stands in for a missing price; C stays the invoices'", () => {
+    const report = buildProjectFinancialReport({
+      bookings: [
+        booking({
+          id: "b1",
+          milestoneId: "m1",
+          price: {
+            basis: "NONE",
+            exGstCents: 0,
+            gstCents: 0,
+            gstStated: false,
+          },
+        }),
+      ],
+      invoices: [
+        invoice({
+          scheduleId: "b1",
+          subTotalCents: 200_00,
+          totalTaxCents: 20_00,
+        }),
+      ],
+      milestones: [
+        milestone({
+          budgetCents: 500_00,
+          id: "m1",
+          quotedOverrideCents: 250_00,
+        }),
+      ],
+    });
+    const { figures, invoicedOverrideCents } = report.stages[0].activities[0];
+    assert.equal(invoicedOverrideCents, null);
+    assert.equal(figures.quoteMissing, false);
+    assert.equal(figures.gstAssumed, false);
+    assert.equal(figures.quotedCents, 250_00);
+    assert.equal(figures.invoicedCents, 200_00);
+    assert.equal(figures.invoicedGstCents, 20_00);
+    assert.equal(figures.overInvoiced, false);
+  });
+
+  test("a parent's typed figure is its own share; its children still roll up", () => {
+    const report = buildProjectFinancialReport({
+      bookings: [
+        booking({ id: "b-child", milestoneId: "child", price: priced(300_00) }),
+      ],
+      invoices: [],
+      milestones: [
+        milestone({
+          budgetCents: 500_00,
+          id: "parent",
+          order: 1,
+          quotedOverrideCents: 50_00,
+        }),
+        milestone({
+          budgetCents: 400_00,
+          id: "child",
+          order: 2,
+          parentId: "parent",
+        }),
+      ],
+    });
+    const [parent] = report.stages[0].activities;
+    assert.equal(parent.own.quotedCents, 50_00);
+    assert.equal(parent.figures.quotedCents, 350_00);
+    assert.equal(parent.children[0].quotedOverrideCents, null);
+  });
+});
+
 describe("consolidation", () => {
   test("a parent's own tender is what its budget leaves after its children, and its figures roll them up", () => {
     const report = buildProjectFinancialReport({

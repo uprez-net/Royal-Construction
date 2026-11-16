@@ -59,6 +59,8 @@ export async function getProjectFinancials(
           parentId: true,
           projectStage: true,
           status: true,
+          tradieInvoicedOverride: true,
+          tradieQuotedOverride: true,
         },
         where: { projectId: project.id },
       }),
@@ -157,10 +159,18 @@ export async function getProjectFinancials(
     milestones: milestones.map((milestone) => ({
       budgetCents: toCents(milestone.budget),
       id: milestone.id,
+      invoicedOverrideCents:
+        milestone.tradieInvoicedOverride === null
+          ? null
+          : toCents(milestone.tradieInvoicedOverride),
       name: milestone.name,
       order: milestone.order,
       parentId: milestone.parentId,
       projectStage: milestone.projectStage,
+      quotedOverrideCents:
+        milestone.tradieQuotedOverride === null
+          ? null
+          : toCents(milestone.tradieQuotedOverride),
       status: milestone.status,
     })),
     // The stage prices the Milestones tab shows and the stage invoices bill.

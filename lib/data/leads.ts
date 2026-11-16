@@ -862,6 +862,7 @@ export async function getLeadsStats(
     newLastMonth,
     overdueTasks,
     forMetrics,
+    stageGroups,
   ] = await Promise.all([
     inStages(OPEN_LEAD_DB_STAGES),
     inStages(OFFER_OUT_DB_STAGES),
@@ -874,7 +875,17 @@ export async function getLeadsStats(
       where: overdueLeadTaskWhere(sydneyStartOfDay(sydneyToday(now)), null),
     }),
     fetchLeadsForMetrics(created),
+    // One count per stage, by the same `where` a stage filter lists with
+    // (`inStages` above), so a stage card's number is the rows it opens.
+    prisma.lead.groupBy({
+      by: ["stage"],
+      where: { isArchived: false, ...createdWhere },
+      _count: { _all: true },
+    }),
   ]);
+
+  const byStage: LeadsStats["byStage"] = {};
+  for (const group of stageGroups) byStage[group.stage] = group._count._all;
 
   const pipeline = computePipelineMetrics(forMetrics, now);
   return {
@@ -895,6 +906,7 @@ export async function getLeadsStats(
     newThisMonth,
     newLastMonth,
     overdueTasks,
+    byStage,
   };
 }
 

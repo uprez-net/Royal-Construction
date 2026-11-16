@@ -72,6 +72,7 @@ const TITLES: Readonly<Record<string, string>> = {
   newMilestonePhotoUploaded: "Milestone photos uploaded",
   milestoneStatusChanged: "Milestone status changed",
   milestonePriceChanged: "Milestone price changed",
+  milestoneTradieFigureChanged: "Tradie figure changed",
   milestoneAdded: "Milestone added",
   variationCreated: "Variation raised",
   variationUpdated: "Variation updated",

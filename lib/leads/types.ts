@@ -189,6 +189,12 @@ export interface LeadsStats {
   newLastMonth: number;
   /** Open tasks past their due date on live leads, all time (as the Tasks tab). */
   overdueTasks: number;
+  /**
+   * Leads in each stage, not archived, created in the timeframe: the count a
+   * stage card shows and the rows its click opens. A stage with no leads is
+   * absent.
+   */
+  byStage: Partial<Record<DBLeadStage, number>>;
 }
 
 export interface EmailTemplate {
