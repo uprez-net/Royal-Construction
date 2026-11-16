@@ -9,6 +9,7 @@ import { normaliseLeadPhone } from "../../leads/whatsapp/phone";
 import { SMS_REFUSALS } from "../sms/policy";
 import {
   callablePhones,
+  canSeeTeamPhones,
   listTeamPhones,
   type CallablePhone,
   type TeamPhoneRecord,
@@ -78,7 +79,8 @@ export async function getLeadCalls(
       take: 50,
       where: { leadId: input.leadId },
     }),
-    listTeamPhones(principal, db),
+    // A GUEST gets the office mobile only, as before the team list existed.
+    canSeeTeamPhones(principal) ? listTeamPhones(principal, db) : [],
   ]);
   return {
     calls: rows.map(toCallRecord),

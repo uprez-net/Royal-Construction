@@ -56,12 +56,20 @@ function whyUnmatched(candidateLeadIds: number[]): string {
 export function PendingCommsButton() {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState<number | null>(null);
+  // Focus, filing and closing each ask for the count; only the latest answer
+  // may set the badge, or an old one landing late shows a stale number.
+  const latestCount = useRef(0);
 
   const loadCount = useCallback((signal?: AbortSignal) => {
+    const request = ++latestCount.current;
     fetchPendingCommsCount(signal)
-      .then((result) => setUnread(result.unread))
+      .then((result) => {
+        if (request === latestCount.current) setUnread(result.unread);
+      })
       .catch(() => {
-        if (!signal?.aborted) setUnread(null);
+        if (!signal?.aborted && request === latestCount.current) {
+          setUnread(null);
+        }
       });
   }, []);
 
@@ -114,7 +122,11 @@ function PendingCommsModal({
 }) {
   const [list, setList] = useState<PendingCommsDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // One filing at a time, held until its reload lands: a second filing's
+  // reload could otherwise be overtaken by the first's, putting back an item
+  // that had just gone.
   const [busyId, setBusyId] = useState<string | null>(null);
+  const filing = useRef(false);
   const [attachingId, setAttachingId] = useState<string | null>(null);
   // What was unread when this window first showed it. Kept for the whole time
   // the window is open, so "New" stays on what was new on arrival even though
@@ -191,6 +203,8 @@ function PendingCommsModal({
   }, [list]);
 
   async function file(item: PendingItem, body: FileBody, label: string) {
+    if (filing.current) return;
+    filing.current = true;
     setBusyId(item.id);
     try {
       if (item.kind === "call") await filePendingCall(item.id, body);
@@ -207,6 +221,7 @@ function PendingCommsModal({
             : "Could not file the text.",
       );
     } finally {
+      filing.current = false;
       setBusyId(null);
     }
   }
@@ -244,7 +259,8 @@ function PendingCommsModal({
             item.kind === "call"
               ? item.call.candidateLeadIds
               : item.sms.candidateLeadIds;
-          const busy = busyId === item.id;
+          // Every item's controls wait while any filing is in flight.
+          const busy = busyId !== null;
           return (
             <li
               key={`${item.kind}:${item.id}`}

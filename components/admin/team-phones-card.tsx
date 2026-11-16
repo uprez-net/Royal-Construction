@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { toast } from "sonner";
 import {
   Check,
@@ -173,12 +179,19 @@ export function TeamPhonesCard({
   const [nickname, setNickname] = useState("");
   const [number, setNumber] = useState("");
   const [adding, setAdding] = useState(false);
+  // Each reload takes a number; only the latest may write. An add followed
+  // quickly by a remove starts two reloads, and the first can land last.
+  const latestLoad = useRef(0);
 
   const load = useCallback(async () => {
+    const request = ++latestLoad.current;
     try {
-      setPhones((await fetchTeamPhones()).phones);
+      const { phones: next } = await fetchTeamPhones();
+      if (request !== latestLoad.current) return;
+      setPhones(next);
       setError(null);
     } catch (loadError) {
+      if (request !== latestLoad.current) return;
       setError(message(loadError, "Could not load the team phones."));
     }
   }, []);

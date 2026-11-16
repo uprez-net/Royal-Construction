@@ -171,7 +171,12 @@ export async function requestLeadCall(
   }
   const staffPhone =
     input.target === "mobile"
-      ? await resolveCallablePhone(input.phoneId ?? null, channel, db)
+      ? await resolveCallablePhone(
+          principal,
+          input.phoneId ?? null,
+          channel,
+          db,
+        )
       : null;
   if (input.target === "mobile" && !staffPhone) {
     throw new DomainTransitionError(CALL_REFUSALS.noMobile);
@@ -194,6 +199,15 @@ export async function requestLeadCall(
         intent.status === OutboxEventStatus.RUNNING
           ? "This call is already being placed. Wait for it to ring."
           : `This call was already attempted and needs reconciliation before calling again (outbox key ${outboxKey}).`,
+      );
+    }
+    // Claimed in the same transaction as the call row, so a request that
+    // loses the claim writes nothing — in particular it cannot overwrite the
+    // staff phone the winning request is about to ring.
+    const claimed = await claimOutboxEvent(tx, outboxKey);
+    if (!claimed) {
+      throw new DomainTransitionError(
+        "This call is already being placed. Wait for it to ring.",
       );
     }
     const fields = {
@@ -228,7 +242,7 @@ export async function requestLeadCall(
       update: fields,
       where: { idempotencyKey: outboxKey },
     });
-    return { callId: call.id, replay: false as const };
+    return { callId: call.id, claimed, replay: false as const };
   });
   if (prepared.replay) {
     return {
@@ -237,12 +251,7 @@ export async function requestLeadCall(
     };
   }
 
-  const claimed = await claimOutboxEvent(db, outboxKey);
-  if (!claimed) {
-    throw new DomainTransitionError(
-      "This call is already being placed. Wait for it to ring.",
-    );
-  }
+  const { claimed } = prepared;
 
   let providerCallId: string;
   try {

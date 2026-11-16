@@ -1,4 +1,4 @@
-import { Prisma, type CommsTeamPhone } from "@prisma/client";
+import { Prisma, Role, type CommsTeamPhone } from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import {
@@ -115,18 +115,27 @@ async function assertNumberFree(
   }
 }
 
-function requireStaff(principal: DomainPrincipal): void {
-  if (!isInternalPrincipal(principal)) {
-    throw new DomainAuthorizationError("Team phones are for members of staff.");
-  }
+/**
+ * May this caller see the team's phone numbers? Staff, but not GUEST: a new
+ * sign-up is a GUEST until an admin promotes them, and these are people's own
+ * mobiles. GUEST stays inside INTERNAL_ROLES for lead access; this rule is
+ * only about the numbers.
+ */
+export function canSeeTeamPhones(principal: DomainPrincipal): boolean {
+  return (
+    isInternalPrincipal(principal)
+    && !(principal.kind === "user" && principal.role === Role.GUEST)
+  );
 }
 
-/** The team's phones, by nickname. Any member of staff: the Call picker. */
+/** The team's phones, by nickname. Staff other than GUEST: the Call picker. */
 export async function listTeamPhones(
   principal: DomainPrincipal,
   db: DomainDb,
 ): Promise<TeamPhoneRecord[]> {
-  requireStaff(principal);
+  if (!canSeeTeamPhones(principal)) {
+    throw new DomainAuthorizationError("Team phones are for members of staff.");
+  }
   const rows = await db.commsTeamPhone.findMany({
     orderBy: [{ nickname: "asc" }, { createdAt: "asc" }],
   });
@@ -155,11 +164,17 @@ export function callablePhones(
  * loaded, rather than quietly ringing a different one.
  */
 export async function resolveCallablePhone(
+  principal: DomainPrincipal,
   phoneId: string | null,
   channel: Pick<CommsChannel, "staffForwardNumber" | "numbers">,
   db: DomainDb,
 ): Promise<CallablePhone | null> {
   if (phoneId) {
+    if (!canSeeTeamPhones(principal)) {
+      throw new DomainAuthorizationError(
+        "Only staff can put a call through to a team phone.",
+      );
+    }
     const row = await db.commsTeamPhone.findUnique({ where: { id: phoneId } });
     if (!row) {
       throw new DomainValidationError(

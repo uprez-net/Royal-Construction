@@ -31,6 +31,9 @@ test("a numeric segment is titled as the lead", () => {
 test("an admin screen is named as its page is, not by its slug", () => {
   assert.equal(getScreenTitle("comms"), "Phone & SMS");
   assert.equal(getScreenTitle("whatsapp"), "WhatsApp");
+  // Inherited keys are not titles.
+  assert.equal(getScreenTitle("__proto__"), "__proto__");
+  assert.equal(getScreenTitle("constructor"), "Constructor");
   assert.deepEqual(getShellTrail("/admin/comms", getScreenTitle("comms")), [
     "Home",
     "Admin",

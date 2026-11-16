@@ -14,6 +14,10 @@ export function LeadChooser({
   onChoose: (lead: { id: number; name: string }) => void;
 }) {
   const leadSearch = useLeadSearch("");
+  const { page, totalPages } = leadSearch.pageInfo;
+  // The search returns ten at a time; without this, a lead past the first
+  // page could only be reached by typing more of its name.
+  const hasMore = page < totalPages;
 
   return (
     <div className="mt-3 space-y-2 rounded-md border border-border bg-muted/30 p-3">
@@ -58,6 +62,28 @@ export function LeadChooser({
           {leadSearch.items.length === 0 && !leadSearch.error ? (
             <li className="px-2.5 py-1.5 text-xs text-muted-foreground">
               No leads match.
+            </li>
+          ) : null}
+          {hasMore ? (
+            <li>
+              <button
+                type="button"
+                disabled={leadSearch.loadingMore}
+                onClick={() => leadSearch.setPage(page + 1)}
+                className="flex w-full items-center justify-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-60"
+              >
+                {leadSearch.loadingMore ? (
+                  <>
+                    <Loader2
+                      className="size-3.5 animate-spin"
+                      aria-hidden="true"
+                    />
+                    Loading more…
+                  </>
+                ) : (
+                  "Show more leads"
+                )}
+              </button>
             </li>
           ) : null}
         </ul>

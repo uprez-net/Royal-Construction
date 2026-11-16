@@ -13,9 +13,10 @@ const SCREEN_TITLES: Readonly<Record<string, string>> = {
 };
 
 export function getScreenTitle(slug: string): string {
-  const named = SCREEN_TITLES[slug];
-  if (named) {
-    return named;
+  // Own keys only: a path segment like "__proto__" or "constructor" would
+  // otherwise return an inherited object, not a title.
+  if (Object.hasOwn(SCREEN_TITLES, slug)) {
+    return SCREEN_TITLES[slug];
   }
 
   // A bare number is a lead id (/leads/123, /offers/123). The offer route used

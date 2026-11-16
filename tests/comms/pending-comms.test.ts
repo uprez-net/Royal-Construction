@@ -183,7 +183,7 @@ test("marking read refuses more ids than one window shows", async () => {
 
 test("filing a call onto a lead that isn't there writes nothing", async () => {
   const harness = recordingDb({
-    "call.findUnique": { dismissedAt: null, id: "call-1", leadId: null },
+    "call.findUnique": pendingCall(),
     "lead.findUnique": null,
   });
   await assert.rejects(
@@ -199,7 +199,7 @@ test("filing a call onto a lead that isn't there writes nothing", async () => {
 
 test("filing a pending call onto a lead moves it there and logs it", async () => {
   const harness = recordingDb({
-    "call.findUnique": { dismissedAt: null, id: "call-1", leadId: null },
+    "call.findUnique": pendingCall(),
     "call.findUniqueOrThrow": callRow({ leadId: 7 }),
     "lead.findUnique": { assignedId: null, id: 7 },
   });
@@ -218,6 +218,8 @@ test("filing a pending call onto a lead moves it there and logs it", async () =>
   assert.equal(args.data.leadId, 7);
   assert.ok(args.data.seenAt instanceof Date);
   assert.deepEqual(args.where, {
+    answeredBy: { in: ["AGENT", "VOICEMAIL"] },
+    direction: "INBOUND",
     dismissedAt: null,
     id: "call-1",
     leadId: null,
@@ -227,7 +229,7 @@ test("filing a pending call onto a lead moves it there and logs it", async () =>
 
 test("dismissing a pending call records who, without touching a lead", async () => {
   const harness = recordingDb({
-    "call.findUnique": { dismissedAt: null, id: "call-1", leadId: null },
+    "call.findUnique": pendingCall(),
     "call.findUniqueOrThrow": callRow({ dismissedAt: new Date() }),
   });
   await resolvePendingCall(
@@ -247,7 +249,7 @@ test("dismissing a pending call records who, without touching a lead", async () 
 
 test("a call already filed is not filed twice", async () => {
   const harness = recordingDb({
-    "call.findUnique": { dismissedAt: null, id: "call-1", leadId: 4 },
+    "call.findUnique": pendingCall({ leadId: 4 }),
   });
   await assert.rejects(
     resolvePendingCall(
@@ -261,7 +263,7 @@ test("a call already filed is not filed twice", async () => {
 
   // Two tabs: the second click loses the conditional update.
   const raced = recordingDb({
-    "call.findUnique": { dismissedAt: null, id: "call-1", leadId: null },
+    "call.findUnique": pendingCall(),
     "call.updateMany": { count: 0 },
   });
   await assert.rejects(
@@ -272,6 +274,25 @@ test("a call already filed is not filed twice", async () => {
     ),
     DomainTransitionError,
   );
+});
+
+test("a call the pending list doesn't show can't be filed or dismissed from it", async () => {
+  for (const shape of [
+    { direction: "OUTBOUND" },
+    { answeredBy: null },
+    { answeredBy: "MOBILE" },
+  ]) {
+    const harness = recordingDb({ "call.findUnique": pendingCall(shape) });
+    await assert.rejects(
+      resolvePendingCall(
+        adminPrincipal(),
+        { action: "dismiss", callId: "call-1" },
+        harness.transactionalDb,
+      ),
+      /Only calls on the pending list/,
+    );
+    assert.deepEqual(harness.writes(), [], JSON.stringify(shape));
+  }
 });
 
 test("a cron cannot file a call", async () => {
@@ -286,6 +307,17 @@ test("a cron cannot file a call", async () => {
   );
   assert.deepEqual(harness.calls, []);
 });
+
+function pendingCall(overrides: Record<string, unknown> = {}) {
+  return {
+    answeredBy: "AGENT",
+    direction: "INBOUND",
+    dismissedAt: null,
+    id: "call-1",
+    leadId: null,
+    ...overrides,
+  };
+}
 
 function callRow(overrides: Record<string, unknown>) {
   return {

@@ -179,12 +179,31 @@ export async function resolvePendingCall(
     );
   }
   const call = await db.call.findUnique({
-    select: { dismissedAt: true, id: true, leadId: true },
+    select: {
+      answeredBy: true,
+      direction: true,
+      dismissedAt: true,
+      id: true,
+      leadId: true,
+    },
     where: { id: input.callId },
   });
   if (!call) throw new DomainNotFoundError("Call not found");
   if (call.leadId !== null || call.dismissedAt !== null) {
     throw new DomainTransitionError("This call has already been filed.");
+  }
+  // Only what the pending list shows can be filed from it: an outbound call,
+  // or one nobody spoke on, is not waiting for a person to decide.
+  if (
+    call.direction !== PENDING_CALL_WHERE.direction
+    || !call.answeredBy
+    || !(PENDING_CALL_WHERE.answeredBy.in as readonly string[]).includes(
+      call.answeredBy,
+    )
+  ) {
+    throw new DomainTransitionError(
+      "Only calls on the pending list can be filed or dismissed here.",
+    );
   }
   if (input.action === "attach") {
     await authorizeLead(principal, input.leadId, db);
@@ -197,7 +216,7 @@ export async function resolvePendingCall(
         input.action === "attach"
           ? { leadId: input.leadId, seenAt: now }
           : { dismissedAt: now, dismissedById: principal.userId, seenAt: now },
-      where: { dismissedAt: null, id: call.id, leadId: null },
+      where: { ...PENDING_CALL_WHERE, id: call.id },
     });
     if (claimed.count !== 1) {
       throw new DomainTransitionError("This call has already been filed.");

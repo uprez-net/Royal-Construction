@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Role } from "@prisma/client";
 import { test } from "vitest";
 
 import { requestLeadCall } from "@/lib/domain/comms/calls/outbound";
@@ -7,10 +8,12 @@ import {
   callablePhones,
   createTeamPhone,
   deleteTeamPhone,
+  listTeamPhones,
   OFFICE_MOBILE_LABEL,
 } from "@/lib/domain/comms/team-phones";
 import { DomainValidationError } from "@/lib/domain/errors";
 import type { CommsChannel, VoicePort } from "@/lib/domain/ports/comms";
+import type { DomainPrincipal } from "@/lib/domain/principal";
 
 import {
   adminPrincipal,
@@ -292,5 +295,91 @@ test("removing a phone that is already gone says so", async () => {
   await assert.rejects(
     deleteTeamPhone(adminPrincipal(), { id: "phone-gone" }, recorder.db),
     /no longer listed/,
+  );
+});
+
+const GUEST: DomainPrincipal = {
+  kind: "user",
+  role: Role.GUEST,
+  userId: "user_guest",
+};
+
+test("a GUEST never sees the team's numbers or routes a call to one", async () => {
+  // A new sign-up is a GUEST until promoted; these are people's own mobiles.
+  await assert.rejects(
+    listTeamPhones(GUEST, recordingDb().db),
+    /for members of staff/,
+  );
+  assert.equal(
+    (
+      await listTeamPhones(
+        siteManagerPrincipal(),
+        recordingDb({
+          "commsTeamPhone.findMany": [],
+        }).db,
+      )
+    ).length,
+    0,
+    "other staff still may",
+  );
+
+  const recorder = recordingDb(
+    placingScript({ "commsTeamPhone.findUnique": RAJ }),
+  );
+  await assert.rejects(
+    requestLeadCall(
+      GUEST,
+      {
+        idempotencyKey: "k",
+        leadId: 7,
+        now: NOW,
+        phoneId: "phone-raj",
+        target: "mobile",
+      },
+      recorder.transactionalDb,
+      { channel: channel(), voice },
+    ),
+    /Only staff can put a call through to a team phone/,
+  );
+  assert.deepEqual(recorder.writes(), []);
+});
+
+test("a request that loses the claim writes no call row, so it can't change the phone", async () => {
+  const recorder = recordingDb(
+    placingScript({
+      "commsTeamPhone.findUnique": RAJ,
+      // Another request with the same key claimed it first.
+      "outboxEvent.updateMany": { count: 0 },
+    }),
+  );
+  let rang = false;
+  await assert.rejects(
+    requestLeadCall(
+      adminPrincipal(),
+      {
+        idempotencyKey: "k",
+        leadId: 7,
+        now: NOW,
+        phoneId: "phone-raj",
+        target: "mobile",
+      },
+      recorder.transactionalDb,
+      {
+        channel: channel(),
+        voice: {
+          ...voice,
+          placeCall: async () => {
+            rang = true;
+            return { providerCallId: "CA1" };
+          },
+        },
+      },
+    ),
+    /already being placed/,
+  );
+  assert.equal(rang, false);
+  assert.ok(
+    !recorder.operations().includes("call.upsert"),
+    recorder.operations().join(", "),
   );
 });
