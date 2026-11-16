@@ -17,14 +17,24 @@ import {
 } from "@/lib/domain/leads/booking";
 import {
   assertConsultationSlot,
+  assertWithinBookingWindow,
   DEFAULT_CONSULTATION_MINUTES,
 } from "@/lib/domain/leads/consultation-hours";
+import {
+  calendarSafeName,
+  checkBookingLimits,
+} from "@/lib/domain/leads/booking-limits";
+import {
+  createFixedWindowRateLimiter,
+  requestAddress,
+} from "@/lib/http/rate-limit";
 import { isDomainError } from "@/lib/domain/errors";
 import { anonymousPrincipal } from "@/lib/domain/principal";
 import {
   sydneyDateOnly,
   sydneyTimeOnly,
   sydneyTimeZoneAbbreviation,
+  sydneyToday,
 } from "@/lib/dates/sydney";
 import type { HistoryItem } from "@/lib/leads/types";
 import BookConsultantScheduleMeeting from "@/lib/graph/Email/book-consultant-ScheduleMeeting";
@@ -34,6 +44,21 @@ const NOTE_ACTION = "NOTE";
 const NOTE_SOURCE_DETAIL = "Book consultation form";
 
 const BOOKING_TIMEZONE = "Australia/Sydney";
+
+// A per-instance brake on one address (#322): a real person books once, maybe
+// twice. The durable limits (per email, and across everyone) are counted from
+// the database in checkBookingLimits, which survives serverless instances.
+const bookingAddressBrake = createFixedWindowRateLimiter({
+  limit: 5,
+  windowMs: 10 * 60 * 1000,
+});
+
+function tooManyBookings(message: string): Response {
+  return NextResponse.json(
+    { error: message },
+    { status: 429, headers: { "Retry-After": "3600" } },
+  );
+}
 
 // This route is open. Anonymous is the honest value for its caller: a lead id
 // arriving here is a claim to be proved, which resolveLeadClaim does, not an
@@ -398,6 +423,9 @@ export async function POST(req: NextRequest): Promise<Response> {
         : body.durationMinutes;
     try {
       assertConsultationSlot(String(startDateTime), durationMinutes);
+      // Not in the past and not further out than the page offers, so a script
+      // cannot claim a year of Fridays (#322).
+      assertWithinBookingWindow(String(startDateTime), sydneyToday());
     } catch (slotError) {
       if (!isDomainError(slotError)) throw slotError;
       return NextResponse.json({ error: slotError.message }, { status: 400 });
@@ -421,6 +449,17 @@ export async function POST(req: NextRequest): Promise<Response> {
       return NextResponse.json(
         { error: "This booking link is no longer valid. Request a new one." },
         { status: 403 },
+      );
+    }
+
+    // Abuse brakes apply to the anonymous path only: a lead proved by its signed
+    // link or a staff session is not the open door (#322).
+    if (
+      leadClaim.kind === "anonymous"
+      && !bookingAddressBrake.allow(requestAddress(req))
+    ) {
+      return tooManyBookings(
+        "Too many booking attempts from this connection. Please wait a few minutes, or call us.",
       );
     }
 
@@ -487,6 +526,23 @@ export async function POST(req: NextRequest): Promise<Response> {
         },
         { status: 400 },
       );
+    }
+
+    // Durable limits, before the calendar is read or touched: per email, and
+    // across everyone so rotating addresses does not get round it (#322).
+    if (leadClaim.kind === "anonymous") {
+      const verdict = await checkBookingLimits(prisma, {
+        key: consultationBookingKey({
+          email,
+          name,
+          startsAt: slotStart,
+        }),
+        email,
+      });
+      if (!verdict.allowed) {
+        console.warn("Booking refused: the abuse limits were reached.");
+        return tooManyBookings(verdict.message);
+      }
     }
 
     // The booking UI is not a reliable guard: it can only reflect what it was
@@ -593,10 +649,14 @@ export async function POST(req: NextRequest): Promise<Response> {
       });
     }
 
+    // The caller's own word for who they are, with line breaks and control
+    // characters removed and a sane length, so it cannot carry a second line or
+    // a page of text into the company calendar (#322).
+    const subjectName = calendarSafeName(String(name));
     const event = {
       subject: inPerson
-        ? `In-person consultation with ${name} - Royal Constructions`
-        : `Consultation with ${name} - Royal Constructions`,
+        ? `In-person consultation with ${subjectName} - Royal Constructions`
+        : `Consultation with ${subjectName} - Royal Constructions`,
       body: {
         contentType: "HTML",
         content: emailHtml,
