@@ -1,4 +1,6 @@
 import {
+  INITIAL_ALLOWANCES,
+  INITIAL_EXCLUSIONS,
   inferOfferStageCode,
   type OfferDocumentDraft,
   type OfferInclusionEntry,
@@ -431,11 +433,14 @@ export function applyAdminPrefillToSnapshot(
 // it is the only part that names the same item across a refresh.
 const ADMIN_SEEDED_ID = /^admin-(?:allowance|exclusion)-\d+-(.+)$/;
 
-// The built-in fallback rows ("allowance-1", "exclusion-2") an offer carried
-// before the admin content seeded it. They are defaults the admin list now
-// stands in for, not anything the estimator made, so they are replaced rather
-// than kept beside their admin twins.
-const LEGACY_DEFAULT_ID = /^(?:allowance|exclusion)-\d+$/;
+// The built-in fallback rows an offer carried before the admin content seeded
+// it. They are defaults the admin list now stands in for, not anything the
+// estimator made, so they are replaced rather than kept beside their admin
+// twins. Only the known ids: Eve accepts any id string, and an `exclusion-3` it
+// added is the office's, not a default.
+const LEGACY_DEFAULT_IDS = new Set(
+  [...INITIAL_ALLOWANCES, ...INITIAL_EXCLUSIONS].map((item) => item.id),
+);
 
 function adminItemKey(id: string): string | null {
   return ADMIN_SEEDED_ID.exec(id)?.[1] ?? null;
@@ -455,7 +460,7 @@ function mergeAdminScopeItems(
   for (const item of existing) {
     const key = adminItemKey(item.id);
     if (key !== null) seeded.set(key, item);
-    else if (!LEGACY_DEFAULT_ID.test(item.id)) estimatorAdded.push(item);
+    else if (!LEGACY_DEFAULT_IDS.has(item.id)) estimatorAdded.push(item);
   }
   const merged = fresh.map(
     (item) => seeded.get(adminItemKey(item.id) ?? item.id) ?? item,

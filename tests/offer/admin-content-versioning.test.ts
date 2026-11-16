@@ -172,6 +172,25 @@ test("an exclusion the estimator or Eve added is kept", () => {
   );
 });
 
+test("an exclusion Eve added with a numeric id is kept; only the built-in defaults are replaced", () => {
+  // Eve accepts any id string. `exclusion-3` is not one of the built-in rows
+  // (`exclusion-1`, `exclusion-2`), so it is the office's and must survive.
+  const snapshot = {
+    ...BASE_SNAPSHOT,
+    exclusions: [
+      scopeItem("exclusion-1", "Built-in default"),
+      scopeItem("exclusion-3", "Added by Eve"),
+    ],
+  };
+
+  const next = applyAdminPrefillToSnapshot(snapshot, PREFILL);
+
+  assert.deepEqual(
+    next.exclusions.map((item) => item.label),
+    ["Pool", "Added by Eve"],
+  );
+});
+
 test("an admin item inserted above the others does not duplicate or drop the rest", () => {
   // The position inside the id shifts when the admin inserts a row; the admin
   // id after it is what names the item.
