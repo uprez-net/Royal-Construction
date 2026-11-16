@@ -38,6 +38,16 @@ export type VoiceAgentTurn = {
 /** What Mili says first, once the recording declaration has played. */
 export const VOICE_AGENT_GREETING = `Hi, you're speaking with ${VOICE_AGENT_NAME}, Royal Constructions' virtual assistant. How can I help you today?`;
 
+/**
+ * Sent once the Live session has started, so Mili opens the call herself.
+ * "Speak first" in her instructions is not enough: GPT-Live is full duplex
+ * and, with only phone-line silence coming in, waits for the caller to make a
+ * sound. An instructions append does not make her speak either; a commentary
+ * append does, in about a second (checked against the live service on
+ * 2026-11-16).
+ */
+export const VOICE_AGENT_GREETING_CUE = `The caller is on the line now and has heard the recording notice. Greet them first, with exactly these words: "${VOICE_AGENT_GREETING}"`;
+
 /** Mili's system instructions. */
 export function voiceAgentInstructions(): string {
   return [
