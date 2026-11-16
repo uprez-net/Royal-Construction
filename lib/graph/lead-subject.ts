@@ -203,6 +203,7 @@ const SOLICITATION = [
   "precast",
   "clearance stock",
   "price book",
+  "supplier catalogues?",
   "construction finance",
   "finance partner",
 ].join("|");

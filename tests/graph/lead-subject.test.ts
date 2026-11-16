@@ -527,6 +527,8 @@ test("granny flat words next to something that is not a dwelling are not a lead"
     "Fwd: house and granny",
     "Bunnings and granny",
     "Granny flat estimator wanted",
+    "House and granny flat supplier catalogue",
+    "Granny flat and house supplier catalogue",
     // Our own templates join the two with a comma, not a conjunction.
     "Following up on your Double Storey, Granny Flat in Lot 3100 in Orchard Hills",
   ]) {
