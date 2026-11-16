@@ -41,7 +41,7 @@ function Section({
   return (
     <section
       className={cn(
-        "rounded-lg border border-border/70 bg-card p-5 shadow-sm sm:p-6",
+        "rounded-xl bg-card p-5 shadow-sm ring-1 ring-foreground/4 sm:p-6",
         className,
       )}
     >
@@ -142,7 +142,7 @@ export function WhatsAppStatusPanel({
 
   return (
     <div className="space-y-6">
-      <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+      <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
         <div className="flex flex-wrap items-center gap-4 p-6">
           <WhatsAppBadgeIcon className="size-12" />
           <div className="min-w-0 flex-1">
@@ -528,7 +528,7 @@ export function WhatsAppMetaHealthPanel({
 
 export function WhatsAppMetaHealthSkeleton() {
   return (
-    <div className="rounded-lg border border-border/70 bg-card p-6 shadow-sm">
+    <div className="rounded-xl bg-card p-6 shadow-sm ring-1 ring-foreground/4">
       <div className="mb-4 flex items-center gap-3">
         <Skeleton className="size-9 rounded-md" />
         <div className="space-y-1.5">

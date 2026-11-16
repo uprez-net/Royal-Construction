@@ -46,7 +46,7 @@ export default function LeadDetailLoading() {
         </div>
 
         {/* Overview tab structure: one card holding six collapsed sections */}
-        <div className="rounded-xl border border-border/70 bg-card shadow-sm">
+        <div className="rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
           <div className="border-b border-border/70 p-6 pb-4">
             <Skeleton className="h-5 w-40" />
             <Skeleton className="mt-2 h-3.5 w-80" />

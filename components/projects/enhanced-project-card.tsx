@@ -45,7 +45,7 @@ export function EnhancedProjectCard({
   const openQuickView = () => onDetailsClick?.(project.id);
 
   return (
-    <div className="group overflow-hidden rounded-lg border border-border bg-card shadow-sm transition-colors hover:bg-muted/40">
+    <div className="group overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4 transition-colors hover:bg-muted/40">
       {/* The card body is a mouse convenience only: the project-name button
           below performs the same action, so keyboard users have full parity
           without turning the whole card (which contains its own links) into a

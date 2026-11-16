@@ -23,7 +23,8 @@ import { Role } from "@prisma/client";
  * (mono, Mono Precision Rule), not the Fraunces display face.
  */
 
-const CARD_SURFACE = "rounded-lg border border-border/70 bg-card p-5 shadow-sm";
+const CARD_SURFACE =
+  "rounded-xl bg-card p-5 shadow-sm ring-1 ring-foreground/4";
 // On a phone the three cards stacked at full size took about 500px before any
 // of the project appeared. There each one is a single row instead: icon,
 // figure over its label, badge. From md up the grid placement is inert and

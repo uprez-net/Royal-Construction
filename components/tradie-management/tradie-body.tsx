@@ -76,7 +76,7 @@ export function TradieBody() {
   const filtersActive = hasActiveTradieFilters(query);
 
   const groupedEmptyState = (
-    <div className="flex flex-col items-center gap-3 rounded-lg border border-border/70 bg-card px-4 py-16 text-center shadow-sm">
+    <div className="flex flex-col items-center gap-3 rounded-xl bg-card px-4 py-16 text-center shadow-sm ring-1 ring-foreground/4">
       <HardHat className="size-5 text-muted-foreground" aria-hidden="true" />
 
       <div className="space-y-1">

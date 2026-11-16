@@ -60,7 +60,7 @@ export function OfferContentHeader({
   return (
     <nav
       aria-label="Offer pre-fill sections"
-      className="max-w-full overflow-x-auto rounded-lg border border-border/70 bg-card px-4 py-3 shadow-sm"
+      className="max-w-full overflow-x-auto rounded-xl bg-card px-4 py-3 shadow-sm ring-1 ring-foreground/4"
     >
       <ol
         role="tablist"

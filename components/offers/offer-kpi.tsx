@@ -1,5 +1,5 @@
 "use client";
-import { CheckCircle2, Hourglass, Receipt, Send } from "lucide-react";
+import { KpiBand } from "../common/kpi-band";
 import { DataPoint, KPIListItem, MetricCard } from "../common/metric-card";
 
 interface OfferKPIProps {
@@ -25,8 +25,6 @@ export function OfferKPI({
     {
       title: "Total Offers",
       dataPoint: activeOffers,
-      Icon: Receipt,
-      tone: "primary",
       caption:
         totalVersions > activeOffers.total
           ? `${totalVersions} versions across all offers`
@@ -35,30 +33,24 @@ export function OfferKPI({
     {
       title: "Approved Offers",
       dataPoint: approvedOffers,
-      Icon: CheckCircle2,
-      tone: "success",
     },
     {
       title: "Pending Offers",
       dataPoint: pendingOffers,
-      Icon: Hourglass,
-      tone: "warning",
     },
-    { title: "Sent Offers", dataPoint: sentOffers, Icon: Send, tone: "info" },
+    { title: "Sent Offers", dataPoint: sentOffers },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+    <KpiBand className="grid-cols-2 xl:grid-cols-4">
       {allKPIs.map((kpi, index) => (
         <MetricCard
           key={index}
           title={kpi.title}
           value={kpi.dataPoint.total}
           trendDelta={kpi.dataPoint.trendDelta}
-          Icon={kpi.Icon}
-          tone={kpi.tone}
           caption={kpi.caption}
         />
       ))}
-    </div>
+    </KpiBand>
   );
 }

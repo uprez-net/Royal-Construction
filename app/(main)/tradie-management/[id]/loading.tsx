@@ -7,7 +7,7 @@ export default function TradieDetailsSkeleton() {
       <Skeleton className="h-8 w-36 rounded-lg" />
 
       {/* Header: avatar + title/trade chip, then one primary action + overflow */}
-      <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
+      <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
             <Skeleton className="size-14 shrink-0 rounded-full" />

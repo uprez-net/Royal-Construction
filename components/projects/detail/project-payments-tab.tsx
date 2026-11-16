@@ -43,7 +43,7 @@ interface ProjectPaymentsTabProps {
 // Four full-size cards stacked to about 580px on a phone before the first
 // invoice. There they sit two by two, smaller and without the icon tile.
 const CARD_SURFACE =
-  "rounded-lg border border-border/70 bg-card p-3 shadow-sm sm:p-5";
+  "rounded-xl bg-card p-3 shadow-sm ring-1 ring-foreground/4 sm:p-5";
 const CARD_VALUE =
   "mt-1 font-mono text-xl font-semibold leading-tight tracking-tight tabular-nums text-foreground sm:mt-2 sm:text-3xl";
 const CARD_LABEL = "mt-1 text-xs text-muted-foreground";

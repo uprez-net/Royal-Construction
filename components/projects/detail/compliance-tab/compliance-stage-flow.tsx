@@ -462,7 +462,7 @@ export function ComplianceStageFlow({
       <nav
         aria-label="Compliance stages"
         className={cn(
-          "rounded-xl border border-border/70 bg-card px-3 py-4 shadow-sm",
+          "rounded-xl bg-card px-3 py-4 shadow-sm ring-1 ring-foreground/4",
           className,
         )}
       >

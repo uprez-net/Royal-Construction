@@ -82,7 +82,7 @@ export function ProjectCommunicationTabs({
       <div
         role="tablist"
         aria-label="Channel"
-        className="inline-flex w-full gap-1 rounded-lg border border-border/70 bg-card p-1 shadow-sm sm:w-auto"
+        className="inline-flex w-full gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-foreground/4 sm:w-auto"
       >
         {channels.map((item) => {
           const active = channel === item.key;

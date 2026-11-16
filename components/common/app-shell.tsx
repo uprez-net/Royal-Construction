@@ -183,10 +183,12 @@ export function AppShell({
                   />
                 ) : null}
                 {/* Duplicate of the Link's aria-label; hide it from the a11y
-                    tree so the item is not announced twice. */}
+                    tree so the item is not announced twice. z-50 lifts it
+                    over the content column (and its z-30 top bar), which
+                    otherwise paints across it. Keyboard focus shows it too. */}
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow-xl group-hover:block"
+                  className="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow-xl group-hover:block group-focus-visible:block"
                 >
                   {item.label}
                 </span>
@@ -195,7 +197,10 @@ export function AppShell({
           </nav>
         </aside>
 
-        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {/* --topbar-h is the top bar's fixed height. The bar floats over <main>,
+            which pads its top by the same amount, so the page scrolls up under
+            frosted glass. Anything sticky inside <main> sticks at this offset. */}
+        <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden [--topbar-h:3.5rem] sm:[--topbar-h:4.25rem]">
           {/* ── Mobile Sidebar Sheet ── */}
           <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
             <SheetContent
@@ -318,8 +323,10 @@ export function AppShell({
           </Sheet>
 
           {/* ── Top Header ── */}
-          <header className="shrink-0 z-30 border-b border-border bg-background text-foreground">
-            <div className="flex w-full items-center justify-between gap-2 px-3 py-2 sm:gap-4 sm:px-6 sm:py-3 lg:px-8">
+          {/* The one piece of glass in the app (DESIGN.md §8). Without
+              backdrop-filter support the bar stays near-opaque cream. */}
+          <header className="absolute inset-x-0 top-0 z-30 h-(--topbar-h) border-b border-border/70 bg-background/95 text-foreground supports-backdrop-filter:bg-background/75 supports-backdrop-filter:backdrop-blur-md supports-backdrop-filter:backdrop-saturate-150">
+            <div className="flex h-full w-full items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6 lg:px-8">
               <div className="flex min-w-0 items-center gap-2 sm:gap-4">
                 <Button
                   variant="ghost"
@@ -334,15 +341,18 @@ export function AppShell({
                   <p className="font-heading truncate text-base font-semibold tracking-tight text-foreground sm:text-xl">
                     Royal Constructions
                   </p>
-                  <p className="truncate text-xs text-muted-foreground md:hidden">
+                  <p className="truncate text-xs text-foreground/80 md:hidden">
                     {title}
                   </p>
-                  <div className="hidden items-center gap-2 text-xs text-muted-foreground md:flex">
+                  <div className="hidden min-w-0 items-center gap-2 text-xs whitespace-nowrap text-foreground/80 md:flex">
                     {trail.map((segment, index) => (
-                      <div key={segment} className="flex items-center gap-2">
+                      <div
+                        key={segment}
+                        className="flex min-w-0 items-center gap-2 last:shrink"
+                      >
                         {index > 0 ? (
                           <span
-                            className="text-muted-foreground/50"
+                            className="text-foreground/60"
                             aria-hidden="true"
                           >
                             /
@@ -351,7 +361,7 @@ export function AppShell({
                         <span
                           className={cn(
                             index === trail.length - 1
-                              && "font-medium text-foreground",
+                              && "truncate font-medium text-foreground",
                           )}
                         >
                           {segment}
@@ -363,7 +373,7 @@ export function AppShell({
               </div>
 
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="hidden text-right text-xs text-muted-foreground md:block">
+                <div className="hidden text-right text-xs text-foreground/80 md:block">
                   <div className="font-medium text-foreground">
                     {time || "--:--:--"}
                   </div>
@@ -413,8 +423,8 @@ export function AppShell({
                 ? // The workspace is its own full-height card; on a phone the
                   // gutter around it only takes room from the transcript, and
                   // the composer pads for the home indicator itself.
-                  "grid h-0 grid-rows-[minmax(0,1fr)] overflow-hidden p-0 sm:px-6 sm:py-4 lg:px-8 lg:py-6"
-                : "flex flex-col overflow-y-auto px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-6",
+                  "grid h-0 grid-rows-[minmax(0,1fr)] overflow-hidden px-0 pt-(--topbar-h) pb-0 sm:px-6 sm:pt-[calc(var(--topbar-h)+1rem)] sm:pb-4 lg:px-8 lg:pt-[calc(var(--topbar-h)+1.5rem)] lg:pb-6"
+                : "flex scroll-pt-(--topbar-h) flex-col overflow-y-auto px-3 pt-[calc(var(--topbar-h)+1rem)] pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:pt-[calc(var(--topbar-h)+1.5rem)] lg:pb-6",
               "scrollbar-none",
               "[-ms-overflow-style:none]",
               "[&::-webkit-scrollbar]:hidden",

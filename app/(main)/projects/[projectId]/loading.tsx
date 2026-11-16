@@ -20,7 +20,7 @@ export default function ProjectDetailLoading() {
         {Array.from({ length: 3 }, (_, i) => (
           <div
             key={i}
-            className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 rounded-xl border border-border/70 bg-card p-3 shadow-sm md:block md:p-5"
+            className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 rounded-xl bg-card p-3 shadow-sm ring-1 ring-foreground/4 md:block md:p-5"
           >
             <div className="contents md:mb-2 md:flex md:justify-between md:gap-2">
               <Skeleton className="row-span-2 size-9 rounded-xl md:size-11 md:rounded-lg" />
@@ -36,7 +36,7 @@ export default function ProjectDetailLoading() {
           <Skeleton key={i} className="h-11 w-28 shrink-0" />
         ))}
       </div>
-      <section className="rounded-lg border border-border/70 bg-card py-4 shadow-sm">
+      <section className="rounded-xl bg-card py-4 shadow-sm ring-1 ring-foreground/4">
         <div className="flex flex-col gap-3 border-b border-border/70 px-6 pb-4 sm:flex-row sm:justify-between">
           <div className="min-w-0 space-y-2">
             <Skeleton className="h-5 w-44" />

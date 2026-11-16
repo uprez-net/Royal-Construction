@@ -301,7 +301,7 @@ export function BuildSequenceAdmin({
           </Sheet>
         </div>
         {selected ? (
-          <Card className="min-w-0 lg:sticky lg:top-6">
+          <Card className="min-w-0 lg:sticky lg:top-[calc(var(--topbar-h)+1.5rem)]">
             <CardHeader>
               <CardTitle as="h2">Activity details</CardTitle>
               <CardDescription>

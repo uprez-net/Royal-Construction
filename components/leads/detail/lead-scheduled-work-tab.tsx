@@ -50,12 +50,12 @@ export function LeadScheduledWorkTab({
           const open = event.currentTarget.open;
           if (open !== taskForm.open) setTaskForm({ ...taskForm, open });
         }}
-        className="rounded-xl border border-border/70 bg-card shadow-sm"
+        className="rounded-xl bg-card shadow-sm ring-1 ring-foreground/4"
       >
         <summary className="min-h-11 cursor-pointer px-4 py-3 font-medium md:hidden">
           Add a task
         </summary>
-        <Card className="rounded-xl border-0 bg-card shadow-none">
+        <Card className="rounded-xl border-0 bg-card shadow-none ring-0">
           <CardHeader className="border-b border-border/70 px-4 pb-4 sm:px-6">
             <CardTitle
               as="h2"

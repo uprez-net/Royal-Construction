@@ -129,7 +129,7 @@ function LeadDealValuePanel({
   return (
     <section
       aria-labelledby={headingId}
-      className="rounded-lg border border-border/70 bg-card p-4 shadow-sm"
+      className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/4"
     >
       <div className="flex items-center justify-between gap-3">
         <h2

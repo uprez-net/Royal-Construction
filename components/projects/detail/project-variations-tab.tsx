@@ -20,21 +20,19 @@ import {
   ChevronRight,
   FileDiff,
   FileText,
-  Gift,
   Loader2,
   Mail,
   Plus,
-  ReceiptText,
   RotateCw,
-  Wallet,
 } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
-  MetricCard,
+  KpiBand,
   MOBILE_METRIC_STRIP_CLASS,
-} from "@/components/common/metric-card";
+} from "@/components/common/kpi-band";
+import { MetricCard } from "@/components/common/metric-card";
 import { StatusPill } from "@/components/common/status-pill";
 import { CreateVariationModal } from "@/components/projects/create-variation-modal";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -527,7 +525,7 @@ function VariationsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      <div
+      <KpiBand
         className={cn(
           MOBILE_METRIC_STRIP_CLASS,
           "sm:grid-cols-2 xl:grid-cols-4",
@@ -536,32 +534,24 @@ function VariationsTab({ projectId }: { projectId: string }) {
         <MetricCard
           title="Variations raised"
           value={summary.count}
-          Icon={FileDiff}
-          tone="primary"
           caption={`${money(summary.chargeable.cents + summary.promotional.cents)} in price changes`}
         />
         <MetricCard
           title="Billed to the client"
           value={money(summary.chargeable.cents)}
-          Icon={ReceiptText}
-          tone="success"
           caption={`${summary.chargeable.count} paid by the client · ex GST`}
         />
         <MetricCard
           title="Cost borne by the builder"
           value={money(summary.promotional.cents)}
-          Icon={Gift}
-          tone="danger"
           caption={`${summary.promotional.count} promotional · ex GST`}
         />
         <MetricCard
           title="Awaiting payment"
           value={money(summary.awaitingPaymentCents)}
-          Icon={Wallet}
-          tone="warning"
           caption="Invoiced in Xero, inc GST"
         />
-      </div>
+      </KpiBand>
 
       {summary.needsAttention > 0 ? (
         <Alert variant="destructive">

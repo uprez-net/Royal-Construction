@@ -1,5 +1,8 @@
 import { cn } from "@/lib/utils";
-import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
+import {
+  KpiBand,
+  MOBILE_METRIC_STRIP_CLASS,
+} from "@/components/common/kpi-band";
 import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
 import {
   DataTableSkeleton,
@@ -21,16 +24,11 @@ export default function TradieManagementSkeleton() {
           <Skeleton className="h-11 w-28" />
         </div>
       </div>
-      <div
-        className={cn(
-          MOBILE_METRIC_STRIP_CLASS,
-          "overflow-hidden sm:grid-cols-3",
-        )}
-      >
+      <KpiBand className={cn(MOBILE_METRIC_STRIP_CLASS, "sm:grid-cols-3")}>
         {Array.from({ length: 3 }, (_, i) => (
-          <MetricCardSkeleton key={i} />
+          <MetricCardSkeleton key={i} foot />
         ))}
-      </div>
+      </KpiBand>
       <div className="flex flex-wrap items-center gap-2">
         <Skeleton className="h-11 w-44" />
         <Skeleton className="h-11 w-full sm:w-64" />

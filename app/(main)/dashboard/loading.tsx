@@ -4,6 +4,7 @@ import {
   PageSkeleton,
   Skeleton,
 } from "@/components/ui/skeleton";
+import { KpiBand } from "@/components/common/kpi-band";
 import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
 
 export default function DashboardSkeleton() {
@@ -25,11 +26,11 @@ export default function DashboardSkeleton() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <KpiBand className="grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <MetricCardSkeleton key={i} compact />
+            <MetricCardSkeleton key={i} foot />
           ))}
-        </div>
+        </KpiBand>
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
@@ -41,7 +42,7 @@ export default function DashboardSkeleton() {
         <GraphCardSkeleton />
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+      <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
         <div className="flex flex-col gap-4 border-b px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
             <Skeleton className="h-4 w-48" />
@@ -58,7 +59,7 @@ export default function DashboardSkeleton() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)]">
-        <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+        <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
           <div className="flex items-center justify-between border-b px-5 py-4">
             <Skeleton className="h-4 w-52" />
             <Skeleton className="h-8 w-24 rounded-md" />
@@ -95,7 +96,7 @@ export default function DashboardSkeleton() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+        <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
           <div className="flex items-center justify-between border-b px-5 py-4">
             <Skeleton className="h-4 w-40" />
             <Skeleton className="h-6 w-16 rounded-full" />
@@ -120,7 +121,7 @@ export default function DashboardSkeleton() {
 
 function GraphCardSkeleton() {
   return (
-    <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+    <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
       <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
         <Skeleton className="h-4 w-44 max-w-full" />
         <Skeleton className="h-8 w-24 rounded-md" />

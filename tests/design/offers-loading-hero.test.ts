@@ -53,3 +53,18 @@ for (const path of SKELETONS) {
     );
   });
 }
+
+// The figures under the header are one KpiBand, and so are their skeletons;
+// a skeleton still drawing separate tiles would jump on the swap the same way.
+test("the KPI rows and their skeletons are KpiBands", () => {
+  for (const path of [
+    "components/offers/offer-kpi.tsx",
+    "app/(main)/offers/loading.tsx",
+    "components/dashboard/dashboard-kpi.tsx",
+    "app/(main)/dashboard/loading.tsx",
+    "components/leads/leads.tsx",
+    "components/leads/leads-page-skeleton.tsx",
+  ]) {
+    assert.ok(read(path).includes("<KpiBand"), `${path} does not use KpiBand`);
+  }
+});

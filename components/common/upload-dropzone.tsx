@@ -189,7 +189,7 @@ export function UploadDropzone({
             <div
               key={file.id}
               className={cn(
-                "rounded-lg border border-border/70 bg-card p-3 shadow-sm",
+                "rounded-xl bg-card p-3 shadow-sm ring-1 ring-foreground/4",
                 itemClassName,
               )}
             >

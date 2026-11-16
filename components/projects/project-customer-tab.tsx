@@ -100,8 +100,8 @@ function DetailRow({
 }
 
 export function CustomerTab({ project, isAdmin }: CustomerTabProps) {
-  const requirements = (project.requirements ??
-    {}) as ProjectRequirementsPayload;
+  const requirements = (project.requirements
+    ?? {}) as ProjectRequirementsPayload;
   const ownerContacts = requirements.legalAdministration?.ownerContacts;
   const commercials = requirements.commercialsAndClaims;
   const inclusions = requirements.inclusionsAndExclusions?.inclusions ?? [];
@@ -185,7 +185,7 @@ export function CustomerTab({ project, isAdmin }: CustomerTabProps) {
       </dl>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
+        <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/4">
           <h3 className="text-base font-semibold text-foreground">
             Contract owner contacts
           </h3>
@@ -205,7 +205,7 @@ export function CustomerTab({ project, isAdmin }: CustomerTabProps) {
         </div>
 
         {isAdmin && (
-          <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
+          <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/4">
             <h3 className="text-base font-semibold text-foreground">
               Commercial snapshot
             </h3>
@@ -243,7 +243,7 @@ export function CustomerTab({ project, isAdmin }: CustomerTabProps) {
         </h3>
 
         {hasRequirementFlags ? (
-          <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm grid grid-cols-2 gap-4">
+          <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/4 grid grid-cols-2 gap-4">
             <div className="col-span-2 md:col-span-1 space-y-3">
               <h5 className="text-sm font-medium text-foreground flex items-center">
                 <Check

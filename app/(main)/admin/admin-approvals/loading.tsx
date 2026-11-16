@@ -1,5 +1,8 @@
 import { cn } from "@/lib/utils";
-import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
+import {
+  KpiBand,
+  MOBILE_METRIC_STRIP_CLASS,
+} from "@/components/common/kpi-band";
 import {
   MetricCardSkeleton,
   PageSkeleton,
@@ -9,16 +12,16 @@ import {
 export default function ApprovalDashboardSkeleton() {
   return (
     <PageSkeleton label="Loading approvals" className="space-y-6">
-      <div
+      <KpiBand
         className={cn(
           MOBILE_METRIC_STRIP_CLASS,
-          "overflow-hidden sm:grid-cols-2 xl:grid-cols-7",
+          "sm:grid-cols-2 xl:grid-cols-7",
         )}
       >
         {Array.from({ length: 7 }).map((_, index) => (
           <MetricCardSkeleton key={index} />
         ))}
-      </div>
+      </KpiBand>
 
       <Skeleton className="h-10 w-full max-w-sm rounded-md" />
 

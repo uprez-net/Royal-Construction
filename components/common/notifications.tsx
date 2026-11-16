@@ -84,7 +84,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
         <Button
           variant="ghost"
           size="icon"
-          className="relative size-10 rounded-lg border border-border bg-card text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground"
+          className="relative size-10 rounded-xl bg-card text-muted-foreground shadow-sm ring-1 ring-foreground/4 hover:bg-muted hover:text-foreground"
           aria-label={
             unreadCount > 0
               ? `Notifications, ${unreadCount} unread`

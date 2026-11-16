@@ -16,7 +16,7 @@ export default function OfferContentSkeleton() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border/70 bg-card px-4 py-3 shadow-sm">
+      <div className="overflow-x-auto rounded-xl bg-card px-4 py-3 shadow-sm ring-1 ring-foreground/4">
         <div className="grid grid-cols-2 gap-x-2 gap-y-4 sm:grid-cols-3 md:flex md:min-w-190 md:gap-0">
           {Array.from({ length: 6 }).map((_, index) => (
             <div
@@ -30,7 +30,7 @@ export default function OfferContentSkeleton() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+      <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
         <div className="space-y-2 border-b border-border/70 p-6">
           <Skeleton className="h-5 w-40" />
           <Skeleton className="h-4 w-80 max-w-full" />

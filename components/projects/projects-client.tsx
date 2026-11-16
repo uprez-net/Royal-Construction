@@ -3,18 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  CircleDot,
-  ClipboardList,
-  Download,
-  Loader2,
-  Plus,
-} from "lucide-react";
+import { Download, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { DataTable } from "@/components/common/data-table";
+import { KpiBand } from "@/components/common/kpi-band";
 import { MetricCard } from "@/components/common/metric-card";
 import { SectionCard } from "@/components/common/section-card";
 import {
@@ -417,32 +410,15 @@ function ProjectsWorkspace({
           projectDetailHref(projectId, searchParams.toString())
         }
       />
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <MetricCard
-          title="Total active"
-          value={String(kpis.totalActive)}
-          Icon={ClipboardList}
-          tone="info"
-        />
-        <MetricCard
-          title="On track"
-          value={String(kpis.onTrack)}
-          Icon={CheckCircle2}
-          tone="success"
-        />
+      <KpiBand className="grid-cols-2 xl:grid-cols-4">
+        <MetricCard title="Total active" value={String(kpis.totalActive)} />
+        <MetricCard title="On track" value={String(kpis.onTrack)} />
         <MetricCard
           title="Needs attention"
           value={String(kpis.needsAttention)}
-          Icon={AlertTriangle}
-          tone="warning"
         />
-        <MetricCard
-          title="Delayed"
-          value={String(kpis.delayed)}
-          Icon={CircleDot}
-          tone="danger"
-        />
-      </div>
+        <MetricCard title="Delayed" value={String(kpis.delayed)} />
+      </KpiBand>
 
       <SectionCard
         title="Active projects"

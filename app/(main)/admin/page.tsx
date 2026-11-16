@@ -103,7 +103,7 @@ export default function AdminPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {adminAction.map((action, index) => (
-          <Card key={index} className="border border-border">
+          <Card key={index}>
             <CardContent className="p-6">
               <div className="inline-flex rounded-full bg-muted p-2.5 text-foreground/80">
                 <action.icon className="size-5" />

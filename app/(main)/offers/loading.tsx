@@ -1,3 +1,4 @@
+import { KpiBand } from "@/components/common/kpi-band";
 import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
 import { OFFER_TABLE_HEADERS } from "@/components/offers/offer-table-columns";
 import {
@@ -21,13 +22,13 @@ export default function OfferPageSkeleton() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <KpiBand className="grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <MetricCardSkeleton key={index} />
+          <MetricCardSkeleton key={index} foot />
         ))}
-      </div>
+      </KpiBand>
 
-      <div className="rounded-lg border border-border/70 bg-card shadow-sm">
+      <div className="rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
         <div className="space-y-4 border-b px-5 py-4">
           <div className="flex flex-wrap gap-2">
             {Array.from({ length: 5 }).map((_, index) => (

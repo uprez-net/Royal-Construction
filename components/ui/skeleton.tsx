@@ -36,19 +36,16 @@ function PageSkeleton({
   );
 }
 
-function MetricCardSkeleton({ compact = false }: { compact?: boolean }) {
+/**
+ * One figure in a KpiBand, as MetricCard lays it out. `foot` stands in for the
+ * trend badge or note line under the figure, so the row does not grow on load.
+ */
+function MetricCardSkeleton({ foot = false }: { foot?: boolean }) {
   return (
-    <div
-      className={cn(
-        "grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-lg border border-border/70 bg-card px-3 py-3 shadow-sm sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-3 sm:px-4",
-        !compact && "sm:py-7",
-      )}
-    >
-      <Skeleton className="size-7 rounded-lg sm:size-9" />
-      <div className="min-w-0 space-y-2">
-        <Skeleton className="h-5 w-16" />
-        <Skeleton className="h-3 w-28 max-w-full" />
-      </div>
+    <div className="min-w-0 space-y-2.5 px-4 py-3.5 sm:px-5 sm:py-4">
+      <Skeleton className="h-3 w-24 max-w-full" />
+      <Skeleton className="h-7 w-16" />
+      {foot ? <Skeleton className="h-4 w-28 max-w-full" /> : null}
     </div>
   );
 }

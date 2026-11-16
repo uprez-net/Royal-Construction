@@ -10,7 +10,7 @@ export default function ManageTeamSkeleton() {
       label="Loading team management"
       className="container py-4 sm:py-10"
     >
-      <div className="mb-8 w-full rounded-lg border border-border/70 bg-card py-4 shadow-sm">
+      <div className="mb-8 w-full rounded-xl bg-card py-4 shadow-sm ring-1 ring-foreground/4">
         <div className="space-y-2 px-6">
           <Skeleton className="h-5 w-40" />
           <Skeleton className="h-5 w-72" />

@@ -287,7 +287,7 @@ function Inspection({
       ) : null}
 
       {!configured ? (
-        <Card className="rounded-xl border-dashed p-8 text-center">
+        <Card className="rounded-xl border border-dashed p-8 text-center">
           <p className="text-sm font-medium text-foreground">
             No inspection items configured
           </p>

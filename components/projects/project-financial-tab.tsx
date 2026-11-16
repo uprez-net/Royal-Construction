@@ -71,7 +71,7 @@ function MoneyTile({
   const hasValue = Number.isFinite(value);
 
   return (
-    <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
+    <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/4">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p
         className={`mt-1 font-mono text-lg font-semibold tabular-nums ${valueTone}`}

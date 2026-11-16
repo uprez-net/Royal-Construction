@@ -9,8 +9,6 @@ import {
   useTransition,
 } from "react";
 import {
-  UserPlus,
-  CircleCheckBig,
   Clock,
   Mail,
   Plus,
@@ -18,8 +16,6 @@ import {
   BarChart3,
   Search,
   Download,
-  Sparkles,
-  FileText,
 } from "lucide-react";
 import { normalizeTypes } from "@/lib/leads/lead-helpers";
 import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
@@ -38,7 +34,10 @@ import { AddLeadModal } from "@/components/leads/modal-ui/add-lead-modal";
 import { EmailCampaignModal } from "@/components/leads/modal-ui/email-campaign-modal";
 import { UnmatchedWhatsAppButton } from "@/components/leads/whatsapp/unmatched-whatsapp-review";
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
-import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
+import {
+  KpiBand,
+  MOBILE_METRIC_STRIP_CLASS,
+} from "@/components/common/kpi-band";
 import { PageHeader } from "@/components/common/page-header";
 import { LeadPagination } from "./lead-pagination";
 import { reloadLeadList, updateAndRefreshLeadList } from "./leads-list-refresh";
@@ -582,7 +581,7 @@ function LeadsWorkspace() {
               </button>
             </p>
           ) : null}
-          <div
+          <KpiBand
             className={cn(
               MOBILE_METRIC_STRIP_CLASS,
               "sm:grid-cols-2 md:grid-cols-3",
@@ -592,8 +591,6 @@ function LeadsWorkspace() {
               label="Open leads"
               value={String(stats.open)}
               note="Not won, lost or archived"
-              tone="primary"
-              icon={UserPlus}
               onClick={() => handleCardClick("open")}
               active={activeMetric === "open"}
             />
@@ -601,8 +598,6 @@ function LeadsWorkspace() {
               label="Offers out"
               value={String(stats.offersOut)}
               note={`${currency.format(Number(stats.offersOutValue))} · quoted or negotiating`}
-              tone="info"
-              icon={FileText}
               onClick={() => handleCardClick(OFFER_OUT_STAGE_LABELS.join(","))}
               active={activeMetric === OFFER_OUT_STAGE_LABELS.join(",")}
               noteWraps
@@ -615,16 +610,12 @@ function LeadsWorkspace() {
                   ? ` · ${stats.unvaluedCount} of ${stats.open} open leads have no value`
                   : ""
               }`}
-              tone="neutral"
-              icon={BarChart3}
               noteWraps
             />
             <LeadMetricCard
               label="New leads this month"
               value={String(stats.newThisMonth)}
               note={`${stats.newLastMonth} last month`}
-              tone="info"
-              icon={Sparkles}
               // Opens this month's leads in the table: the card counts the same
               // working list (not archived, not Lost), always by calendar month.
               onClick={() =>
@@ -638,8 +629,6 @@ function LeadsWorkspace() {
               label="Overdue follow-ups"
               value={String(stats.overdueTasks)}
               note="Open tasks past due · all time · on the Tasks tab"
-              tone="warning"
-              icon={Clock}
               noteWraps
             />
             <LeadMetricCard
@@ -649,10 +638,8 @@ function LeadsWorkspace() {
               // timeframe above says.
               value={winRate.percent === null ? "—" : `${winRate.percent}%`}
               note={`${winRate.won} won · ${winRate.lost} lost`}
-              tone="success"
-              icon={CircleCheckBig}
             />
-          </div>
+          </KpiBand>
         </>
       )}
 

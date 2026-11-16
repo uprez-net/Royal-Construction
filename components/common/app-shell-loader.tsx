@@ -11,10 +11,12 @@ import { cn } from "@/lib/utils";
 // placeholders pulse, and Skeleton stops pulsing under reduced motion.
 export function AppShellLoader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0px))] overflow-hidden bg-background text-foreground">
+    // --topbar-h is 0 here: this header sits in the flow above <main>, so a
+    // page sticky at top-(--topbar-h) sticks at the top of <main>.
+    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0px))] overflow-hidden bg-background text-foreground [--topbar-h:0px]">
       <div className="flex h-full">
         {/* Sidebar */}
-        <aside className="hidden w-16 shrink-0 border-r border-border bg-card shadow-sm md:flex md:flex-col md:items-center md:py-4">
+        <aside className="hidden w-16 shrink-0 border-r border-sidebar-border bg-sidebar md:flex md:flex-col md:items-center md:py-4">
           <div className="mb-5 grid size-10 place-items-center rounded-lg bg-background">
             <Image
               src="/favicon.ico"

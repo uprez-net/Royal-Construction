@@ -1,3 +1,4 @@
+import { KpiBand } from "@/components/common/kpi-band";
 import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
 import {
   DataTableSkeleton,
@@ -15,12 +16,12 @@ export default function ProjectsLoading() {
           <Skeleton className="mt-1 h-5 w-96 max-w-full" />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <KpiBand className="grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, i) => (
           <MetricCardSkeleton key={i} />
         ))}
-      </div>
-      <div className="overflow-hidden rounded-lg border border-border/70 bg-card py-4 shadow-sm">
+      </KpiBand>
+      <div className="overflow-hidden rounded-xl bg-card py-4 shadow-sm ring-1 ring-foreground/4">
         <div className="space-y-3 border-b border-border/70 px-6 pb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
             <div className="min-w-0 space-y-2">

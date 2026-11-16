@@ -8,7 +8,7 @@ export default function XeroConnectionSkeleton() {
         <Skeleton className="h-4 w-80 max-w-full" />
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+      <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/70 p-6">
           <div className="min-w-0 flex-1 space-y-2">
             <Skeleton className="h-5 w-40" />

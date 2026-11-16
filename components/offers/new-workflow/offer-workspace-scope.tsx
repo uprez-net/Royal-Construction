@@ -150,7 +150,7 @@ function ScopeList({
   readonly emptyLabel: string;
 }) {
   return (
-    <section className="rounded-xl border border-border/70 bg-card p-3 shadow-sm sm:p-5">
+    <section className="rounded-xl bg-card p-3 shadow-sm ring-1 ring-foreground/4 sm:p-5">
       <div className="mb-4 flex items-center gap-2">
         {icon}
         <h4 className="text-sm font-semibold text-foreground">{title}</h4>

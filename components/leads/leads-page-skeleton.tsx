@@ -1,4 +1,7 @@
-import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
+import {
+  KpiBand,
+  MOBILE_METRIC_STRIP_CLASS,
+} from "@/components/common/kpi-band";
 import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
 import { cn } from "@/lib/utils";
 import {
@@ -11,16 +14,16 @@ import {
 export function LeadsContentSkeleton() {
   return (
     <PageSkeleton label="Loading leads" className="space-y-6">
-      <div
+      <KpiBand
         className={cn(
           MOBILE_METRIC_STRIP_CLASS,
           "sm:grid-cols-2 md:grid-cols-3",
         )}
       >
         {Array.from({ length: 6 }).map((_, index) => (
-          <MetricCardSkeleton key={index} compact />
+          <MetricCardSkeleton key={index} foot />
         ))}
-      </div>
+      </KpiBand>
 
       <div>
         <div className="flex flex-wrap items-center gap-2 border-b border-border/70 pb-3">

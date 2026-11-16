@@ -116,7 +116,7 @@ export function ProjectWhatsAppPanel({
   ];
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+    <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
       {/* Phone: the chat list as chips. */}
       <div className="flex gap-2 overflow-x-auto border-b border-black/5 bg-muted p-2 md:hidden">
         {chats.map((chat) => (

@@ -426,7 +426,7 @@ function DocumentPreview({ job }: { readonly job: PrototypeJob }) {
       <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
         Proposal snapshot · live
       </p>
-      <article className="rounded-lg border border-border/70 bg-card p-5 shadow-sm">
+      <article className="rounded-xl bg-card p-5 shadow-sm ring-1 ring-foreground/4">
         <p className="font-mono text-[0.625rem] uppercase tracking-[0.1em] text-muted-foreground">
           {job.reference}-{job.revision}
         </p>

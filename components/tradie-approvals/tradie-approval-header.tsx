@@ -1,18 +1,6 @@
 "use client";
-import {
-  Clock7Icon,
-  Tag,
-  AlertTriangle,
-  Trash2,
-  CalendarDays,
-  CalendarX,
-  CheckCircle,
-} from "lucide-react";
-import {
-  KPIListItem,
-  MetricCard,
-  MOBILE_METRIC_STRIP_CLASS,
-} from "../common/metric-card";
+import { KpiBand, MOBILE_METRIC_STRIP_CLASS } from "../common/kpi-band";
+import { KPIListItem, MetricCard } from "../common/metric-card";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/lib/store/hooks";
 
@@ -25,8 +13,6 @@ export function TradieApprovalKPI() {
         total: kpiData.pendingCount,
         trendDelta: 0, // Placeholder for trend delta calculation
       },
-      Icon: Clock7Icon,
-      tone: "warning",
     },
     {
       title: "Price Changes",
@@ -34,8 +20,6 @@ export function TradieApprovalKPI() {
         total: kpiData.priceChangeCount,
         trendDelta: 0, // Placeholder for trend delta calculation
       },
-      Icon: Tag,
-      tone: "info",
       isInverse: true,
     },
     {
@@ -44,8 +28,6 @@ export function TradieApprovalKPI() {
         total: kpiData.incidentReportCount,
         trendDelta: 0, // Placeholder for trend delta calculation
       },
-      Icon: AlertTriangle,
-      tone: "danger",
     },
     {
       title: "Deletions",
@@ -53,8 +35,6 @@ export function TradieApprovalKPI() {
         total: kpiData.deletionCount,
         trendDelta: 0, // Placeholder for trend delta calculation
       },
-      Icon: Trash2,
-      tone: "warning",
     },
     {
       title: "Scheduling",
@@ -62,8 +42,6 @@ export function TradieApprovalKPI() {
         total: kpiData.scheduleCount,
         trendDelta: 0, // Placeholder for trend delta calculation
       },
-      Icon: CalendarDays,
-      tone: "info",
     },
     {
       title: "Schedule Removals",
@@ -71,8 +49,6 @@ export function TradieApprovalKPI() {
         total: kpiData.scheduleDeletionCount,
         trendDelta: 0, // Placeholder for trend delta calculation
       },
-      Icon: CalendarX,
-      tone: "danger",
     },
     {
       title: "Resolved Approvals",
@@ -80,13 +56,11 @@ export function TradieApprovalKPI() {
         total: kpiData.resolvedCount.accepted + kpiData.resolvedCount.rejected,
         trendDelta: 0, // Placeholder for trend delta calculation
       },
-      Icon: CheckCircle,
-      tone: "success",
     },
   ];
 
   return (
-    <div
+    <KpiBand
       className={cn(MOBILE_METRIC_STRIP_CLASS, "sm:grid-cols-2 xl:grid-cols-7")}
     >
       {allKPIs.map((kpi, index) => (
@@ -95,11 +69,9 @@ export function TradieApprovalKPI() {
           title={kpi.title}
           value={kpi.dataPoint.total}
           trendDelta={kpi.dataPoint.trendDelta}
-          Icon={kpi.Icon}
-          tone={kpi.tone}
           isInverse={kpi.isInverse}
         />
       ))}
-    </div>
+    </KpiBand>
   );
 }

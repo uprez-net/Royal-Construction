@@ -63,7 +63,7 @@ function CategoryCard({
       onClick={onClick}
       aria-label={`${name}: ${count} tradie${count === 1 ? "" : "s"}, ${totalJobs} total jobs`}
       className={cn(
-        "relative flex flex-col rounded-lg border border-border/70 bg-card p-4 text-left shadow-sm transition-colors",
+        "relative flex flex-col rounded-xl bg-card p-4 text-left shadow-sm ring-1 ring-foreground/4 transition-colors",
         "hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
       )}
     >
