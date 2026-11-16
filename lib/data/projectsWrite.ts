@@ -11,6 +11,8 @@ import { createLeadProjectInferencePrompt } from "@/lib/agent/project-prompt";
 import { LEAD_NOTES_HISTORY_INCLUDE } from "@/lib/leads/notes-text";
 import { leadFollowup } from "@/lib/leads/followup-due";
 import { NEXT_FOLLOWUP_TASK } from "@/lib/leads/followup-resolution";
+import { blobStoreIdFromToken } from "@/lib/blob-url";
+import { assertSourceDocumentsInStore } from "@/lib/domain/projects/source-documents";
 import {
   createProjectFromLead,
   type CreateProjectFromLeadInput,
@@ -94,6 +96,13 @@ export async function createProjectWithLead(
   input: CreateProjectFromLeadInput,
 ): Promise<ProjectDetail> {
   const principal = await currentPrincipal();
+
+  // Every caller passes here, including the offer handoff, which skips the
+  // action's schema. Before any write.
+  assertSourceDocumentsInStore(
+    input.sourceDocuments,
+    blobStoreIdFromToken(process.env.BLOB_READ_WRITE_TOKEN),
+  );
 
   const created = await prisma.$transaction(
     (tx) => createProjectFromLead(principal, input, tx, { inferProjectSpecs }),
