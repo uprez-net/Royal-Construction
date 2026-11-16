@@ -4,9 +4,11 @@ import { join } from "node:path";
 import { test } from "vitest";
 
 import {
+  FOLLOWUP_TASK_TYPES,
   NEXT_FOLLOWUP_TASK,
   resolveFollowup,
 } from "@/lib/leads/followup-resolution";
+import { leadFollowup } from "@/lib/leads/followup-due";
 import {
   dropEmptyPlaceholders,
   hydrateVariable,
@@ -83,12 +85,16 @@ test("a lead with no task and no column has no follow-up", () => {
 
 // ── The query that makes the three states distinguishable ──
 
-test("the include does NOT filter to open work", () => {
+test("the include filters to follow-up TYPES but NOT to open work", () => {
   // The entire fix depends on a completed task surviving the query. Filtering
-  // it out is what made "done" and "never had one" the same empty array.
+  // it out is what made "done" and "never had one" the same empty array. The
+  // type filter is the other half (#316): a booked meeting is not a follow-up.
+  assert.deepEqual(NEXT_FOLLOWUP_TASK.where, {
+    type: { in: ["CALL", "EMAIL", "WHATSAPP"] },
+  });
   assert.ok(
-    !("where" in NEXT_FOLLOWUP_TASK),
-    "the include filters again, so a completed task is invisible",
+    !("completedAt" in NEXT_FOLLOWUP_TASK.where),
+    "the include filters to open work again, so a completed task is invisible",
   );
   assert.equal(NEXT_FOLLOWUP_TASK.take, 1);
   assert.equal(NEXT_FOLLOWUP_TASK.select.completedAt, true);
@@ -128,6 +134,13 @@ test("no query feeding mapLead omits the task", () => {
 
   // The one include names the task, and the SQL loads it in the same order.
   assert.match(rowRead, /tasks: NEXT_FOLLOWUP_TASK/);
+  // ...and the SQL reads the same types from the same constant, not a copy.
+  assert.match(
+    rowRead,
+    /lt\.type::text IN \(\$\{Prisma\.join\(\[\.\.\.FOLLOWUP_TASK_TYPES\]\)\}\)/,
+  );
+  assert.match(rowRead, /_count: \{ select: \{ tasks: true \} \}/);
+  assert.match(rowRead, /'_count', jsonb_build_object\('tasks'/);
   assert.match(
     rowRead,
     /ORDER BY lt\."completedAt" ASC NULLS FIRST, lt\."dueDate" ASC NULLS LAST, lt\.id ASC\s+LIMIT 1/,
@@ -138,6 +151,57 @@ test("no query feeding mapLead omits the task", () => {
     3,
     "a lead write is reading relations without the task include",
   );
+});
+
+// ── #316: a meeting is not a follow-up, a closed lead has none ──
+
+test("a lead whose only tasks are meetings or holds has no follow-up, not the stale column", () => {
+  // The follow-up list is empty (the query only returns follow-up types) but
+  // the lead has a task, so the retired column is not consulted.
+  const r = resolveFollowup([], LEGACY, "08:30", 1);
+  assert.deepEqual(r, { date: null, time: null });
+});
+
+test("the retired column is still the answer for a lead that never had any task", () => {
+  assert.deepEqual(resolveFollowup([], LEGACY, "08:30", 0), {
+    date: LEGACY,
+    time: "08:30",
+  });
+});
+
+test("the follow-up types are the client-facing channels, never a meeting or a hold", () => {
+  assert.deepEqual([...FOLLOWUP_TASK_TYPES], ["CALL", "EMAIL", "WHATSAPP"]);
+});
+
+test("mapLead resolves the follow-up through leadFollowup, with the task count", () => {
+  const source = code("types/lead.ts");
+  assert.match(source, /leadFollowup\(\{/);
+  assert.match(source, /taskCount:\s*lead\._count\.tasks/);
+});
+
+test("a closed lead advertises no follow-up, and an open one resolves from its tasks", () => {
+  const open = { date: DUE, time: "09:50" };
+  const task = [{ dueDate: DUE, dueTime: "09:50", completedAt: null }];
+  const base = {
+    tasks: task,
+    taskCount: 1,
+    legacyDate: LEGACY,
+    legacyTime: "08:30",
+  };
+  assert.deepEqual(leadFollowup({ ...base, stage: "NEGOTIATING" }), open);
+  for (const stage of [
+    "CONVERTED",
+    "WON",
+    "LOST",
+    "CANCELLED",
+    "DISQUALIFIED",
+  ]) {
+    assert.deepEqual(
+      leadFollowup({ ...base, stage }),
+      { date: null, time: null },
+      stage,
+    );
+  }
 });
 
 test("the tasks field is required, which is what forces the include", () => {
@@ -155,7 +219,7 @@ test("mapLead no longer reads the retired columns directly", () => {
     !/lead\.tasks && lead\.tasks\.length > 0/.test(source),
     "the old task-first/column-second ternary is back",
   );
-  assert.ok(source.includes("resolveFollowup("));
+  assert.ok(source.includes("leadFollowup("));
 });
 
 // ── What the client is told ──
@@ -333,4 +397,19 @@ test("SiteVisitEmail still has its own empty state to fall back on", () => {
     /date = "TBD"/.test(source) && /time = "TBD"/.test(source),
     "passing undefined now renders blank rather than TBD",
   );
+});
+
+test("the SQL lead read keeps Prisma's _count, which it would otherwise drop as an unknown key", async () => {
+  // reviveRow drops keys the model does not have. `_count` is not a field but
+  // it is part of what Prisma returns for `include: { _count }`, and without it
+  // a lead read through SQL has no task count: resolveFollowup would read
+  // undefined. scripts/perf/compare-lead-read.ts found it on real rows; this
+  // pins it without a database.
+  const { reviveRow } = await import("@/lib/domain/sql-json");
+  const row = reviveRow(
+    { id: 7, name: "x", _count: { tasks: 2 }, notAColumn: 1 },
+    "Lead",
+  ) as Record<string, unknown>;
+  assert.deepEqual(row._count, { tasks: 2 });
+  assert.equal("notAColumn" in row, false);
 });

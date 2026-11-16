@@ -14,9 +14,12 @@ import {
 import { createdRangeFor, previousMonthRange } from "@/lib/leads/created-range";
 import {
   CLOSED_LEAD_STAGES,
+  LIVE_LEAD,
+  openFollowUpTaskWhere,
   overdueLeadTaskWhere,
 } from "@/lib/leads/followup-due";
 import { sydneyStartOfDay, sydneyToday } from "@/lib/dates/sydney";
+import { FOLLOWUP_TASK_TYPES } from "@/lib/leads/followup-resolution";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
 import { readLeadRows } from "@/lib/domain/leads/row-read";
 import { leadListOrderBy } from "@/lib/domain/leads/list-sort";
@@ -311,18 +314,6 @@ export async function getLeads(
             { stage: { not: "LOST" as LeadStage } }
           : {}),
       isArchived: isArchived ?? false,
-      ...(pendingFollowUps !== undefined && {
-        followupDate: {
-          not: null,
-          lte: fromZonedTime(startOfDay(sydneyNow), timeZone),
-        },
-      }),
-      ...(upcomingFollowUps !== undefined && {
-        followupDate: {
-          not: null,
-          gte: fromZonedTime(endOfDay(sydneyNow), timeZone),
-        },
-      }),
       // Leads carrying scheduled work. Replaces filtering the Follow-ups tab by
       // stage: a lead at Quoted or Negotiating can have a follow-up booked, and
       // the stage filter never returned it.
@@ -334,14 +325,31 @@ export async function getLeads(
       // Lead, so this stays in step with what the Follow-ups tab lists. The
       // columns are still written for now and are dropped once nothing reads
       // them; the tasks are the source of truth from here.
-      ...(hasOpenTask && {
-        AND: [
-          {
-            stage: { notIn: [...CLOSED_LEAD_STAGES] },
-          },
-          { tasks: { some: { completedAt: null } } },
-        ],
-      }),
+      // The follow-up filters select on the same open follow-up task the
+      // Follow-up cell shows (#315), not on the retired Lead.followupDate
+      // column, which listed a lead because of a stale date and then printed an
+      // empty cell. They share this AND with hasOpenTask: two bare AND keys in
+      // the object would overwrite one another.
+      ...(hasOpenTask
+      || pendingFollowUps !== undefined
+      || upcomingFollowUps !== undefined
+        ? {
+            AND: [
+              ...(hasOpenTask
+                ? [
+                    { stage: { notIn: [...CLOSED_LEAD_STAGES] } },
+                    { tasks: { some: { completedAt: null } } },
+                  ]
+                : []),
+              ...(pendingFollowUps !== undefined
+                ? [{ tasks: { some: openFollowUpTaskWhere("due") } }]
+                : []),
+              ...(upcomingFollowUps !== undefined
+                ? [{ tasks: { some: openFollowUpTaskWhere("upcoming") } }]
+                : []),
+            ] satisfies Prisma.LeadWhereInput[],
+          }
+        : {}),
       ...(isMeetingScheduledFilterActive && {
         meetingDate: {
           not: null,
@@ -900,45 +908,54 @@ export async function getFollowupStats(): Promise<FollowupStats> {
   const todayUTC = fromZonedTime(todayStart, timeZone);
   const tomorrowUTC = fromZonedTime(tomorrowStart, timeZone);
 
+  // The follow-up counts are leads with an open follow-up TASK, by the same
+  // predicate the leads filters use (#315): they used to count the retired
+  // Lead.followupDate column and so disagreed with getLeadsStats, which was
+  // already migrated, on the same screen. A lead with several is counted once.
+  const now = new Date();
+  const leadsWithFollowUp = (where: Prisma.LeadTaskWhereInput) =>
+    prisma.lead.count({ where: { tasks: { some: where } } });
+
+  // The meeting counters below still read Lead.meetingDate: the same fix, left
+  // for its own change because nothing calls them yet.
+  //
   // A Prisma.sql fragment, not a plain string: `${x}` in a $queryRaw template
   // becomes a bound parameter, so a bare string would be sent as a value and
   // the query would fail rather than filter.
-  //
-  // These counts used to key off stage IN ('IN_FOLLOW_UP', 'MEETING_SCHEDULED').
-  // Scheduled work is a task now, so the filter is the date plus "not yet
-  // completed", and the stage only decides whether the lead is still live at
-  // all. Without this clause the 13 closed and won leads on production that
-  // carry stale dates would count as outstanding work.
   const OPEN_STAGES = Prisma.sql`stage NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')`;
 
-  const [stats] = await prisma.$queryRaw<
-    {
-      totalFollowUps: bigint;
-      pendingFollowUps: bigint;
-      upcomingFollowUps: bigint;
-      totalMeetings: bigint;
-      pendingMeetings: bigint;
-      upcomingMeetings: bigint;
-    }[]
-  >`
-    SELECT
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES}) AS "totalFollowUps",
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES} AND "followupDate" <= ${todayUTC}) AS "pendingFollowUps",
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES} AND "followupDate" >= ${tomorrowUTC}) AS "upcomingFollowUps",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES}) AS "totalMeetings",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES} AND "meetingDate" < ${todayUTC}) AS "pendingMeetings",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES} AND "meetingDate" >= ${tomorrowUTC}) AS "upcomingMeetings"
-    FROM "Lead"
-    WHERE "isArchived" = false
-  `;
+  const [dueNow, upcoming, anyOpen, [meetings]] = await Promise.all([
+    leadsWithFollowUp(openFollowUpTaskWhere("due", now)),
+    leadsWithFollowUp(openFollowUpTaskWhere("upcoming", now)),
+    leadsWithFollowUp({
+      completedAt: null,
+      type: { in: [...FOLLOWUP_TASK_TYPES] },
+      dueDate: { not: null },
+      lead: LIVE_LEAD,
+    }),
+    prisma.$queryRaw<
+      {
+        totalMeetings: bigint;
+        pendingMeetings: bigint;
+        upcomingMeetings: bigint;
+      }[]
+    >`
+      SELECT
+        COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES}) AS "totalMeetings",
+        COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES} AND "meetingDate" < ${todayUTC}) AS "pendingMeetings",
+        COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES} AND "meetingDate" >= ${tomorrowUTC}) AS "upcomingMeetings"
+      FROM "Lead"
+      WHERE "isArchived" = false
+    `,
+  ]);
 
   return {
-    totalFollowUps: Number(stats?.totalFollowUps ?? 0),
-    pendingFollowUps: Number(stats?.pendingFollowUps ?? 0),
-    upcomingFollowUps: Number(stats?.upcomingFollowUps ?? 0),
-    totalMeetings: Number(stats?.totalMeetings ?? 0),
-    pendingMeetings: Number(stats?.pendingMeetings ?? 0),
-    upcomingMeetings: Number(stats?.upcomingMeetings ?? 0),
+    totalFollowUps: anyOpen,
+    pendingFollowUps: dueNow,
+    upcomingFollowUps: upcoming,
+    totalMeetings: Number(meetings?.totalMeetings ?? 0),
+    pendingMeetings: Number(meetings?.pendingMeetings ?? 0),
+    upcomingMeetings: Number(meetings?.upcomingMeetings ?? 0),
   };
 }
 

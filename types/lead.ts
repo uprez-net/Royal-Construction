@@ -10,11 +10,9 @@ import type {
 } from "@prisma/client";
 import type { HistoryItem, Lead as UiLead, LeadStage } from "@/lib/leads/types";
 import { coerceLeadNotesDocument } from "@/lib/rich-text/lead-notes";
+import { leadFollowup } from "@/lib/leads/followup-due";
 import { inferFileTags, normalizeFileTags } from "@/lib/domain/file-tags";
-import {
-  resolveFollowup,
-  type NextFollowupTask,
-} from "@/lib/leads/followup-resolution";
+import type { NextFollowupTask } from "@/lib/leads/followup-resolution";
 
 export const stageMap: Record<PrismaLeadStage, LeadStage> = {
   NEW: "New",
@@ -134,6 +132,8 @@ export function mapLead(
      * Load it with `NEXT_FOLLOWUP_TASK`.
      */
     tasks: NextFollowupTask[];
+    /** Tasks of any type: the retired column is only for a lead with none. */
+    _count: { tasks: number };
     noteAnnotations?: Array<{
       id: string;
       selectedText: string;
@@ -163,11 +163,13 @@ export function mapLead(
     ? { id: "", name: lead.assigned, email: "" }
     : null;
 
-  const followup = resolveFollowup(
-    lead.tasks,
-    lead.followupDate,
-    lead.followupTime,
-  );
+  const followup = leadFollowup({
+    stage: lead.stage,
+    tasks: lead.tasks,
+    taskCount: lead._count.tasks,
+    legacyDate: lead.followupDate,
+    legacyTime: lead.followupTime,
+  });
 
   return {
     id: lead.id,

@@ -1,6 +1,11 @@
 import type { LeadStage, Prisma } from "@prisma/client";
 
 import { sydneyEndOfDay, sydneyToday } from "@/lib/dates/sydney";
+import {
+  FOLLOWUP_TASK_TYPES,
+  resolveFollowup,
+  type NextFollowupTask,
+} from "@/lib/leads/followup-resolution";
 
 /**
  * Closed leads get no tasks in any list.
@@ -86,6 +91,56 @@ export function dueFollowUpTaskWhere({
     completedAt: null,
     dueDate: { not: null, lte: sydneyEndOfDay(sydneyToday(now)) },
     lead: assignedId === null ? LIVE_LEAD : { ...LIVE_LEAD, assignedId },
+  };
+}
+
+/**
+ * The follow-up a lead shows: the one rule behind the Follow-up cell, the lead
+ * detail page, the exports and the AI project prompt (#316).
+ *
+ * A won, lost, cancelled or disqualified lead advertises none, the same
+ * closed-stage rule the Tasks tab and the reminder crons apply through
+ * LIVE_LEAD. Otherwise it is `resolveFollowup` over the lead's follow-up tasks.
+ */
+export function leadFollowup(lead: {
+  stage: LeadStage | string;
+  tasks: readonly NextFollowupTask[];
+  /** Tasks of any type, not just follow-ups. */
+  taskCount: number;
+  legacyDate: Date | null;
+  legacyTime: string | null;
+}): { date: Date | null; time: string | null } {
+  if ((CLOSED_LEAD_STAGES as readonly string[]).includes(lead.stage)) {
+    return { date: null, time: null };
+  }
+  return resolveFollowup(
+    lead.tasks,
+    lead.legacyDate,
+    lead.legacyTime,
+    lead.taskCount,
+  );
+}
+
+/**
+ * An open follow-up task (a call, email or WhatsApp message, never a meeting or
+ * a hold) on a live lead, either due by the end of today in Sydney (`due`) or
+ * due after it (`upcoming`).
+ *
+ * What the leads filters and the follow-up counters select on (#315), so a lead
+ * is listed because of the same task its Follow-up cell shows. They used to
+ * select on the retired `Lead.followupDate` column and print the task.
+ */
+export function openFollowUpTaskWhere(
+  phase: "due" | "upcoming",
+  now: Date = new Date(),
+): Prisma.LeadTaskWhereInput {
+  const endOfToday = sydneyEndOfDay(sydneyToday(now));
+  return {
+    completedAt: null,
+    type: { in: [...FOLLOWUP_TASK_TYPES] },
+    dueDate:
+      phase === "due" ? { not: null, lte: endOfToday } : { gt: endOfToday },
+    lead: LIVE_LEAD,
   };
 }
 

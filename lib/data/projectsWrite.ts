@@ -9,6 +9,8 @@ import { getCachedProjectById } from "@/lib/data/projects";
 import { handleProjectSpecsGeneration } from "@/lib/agent/projectCreationAgent";
 import { createLeadProjectInferencePrompt } from "@/lib/agent/project-prompt";
 import { LEAD_NOTES_HISTORY_INCLUDE } from "@/lib/leads/notes-text";
+import { leadFollowup } from "@/lib/leads/followup-due";
+import { NEXT_FOLLOWUP_TASK } from "@/lib/leads/followup-resolution";
 import {
   createProjectFromLead,
   type CreateProjectFromLeadInput,
@@ -46,12 +48,25 @@ const inferProjectSpecs: ProjectInferencePort = async ({ leadId }) => {
       // save. Without them the prompt says "No notes available." and the
       // project is inferred from the contact details alone.
       history: LEAD_NOTES_HISTORY_INCLUDE,
+      // The follow-up the app shows, from the lead's tasks. The Lead column the
+      // prompt used to read is retired and stale (#315).
+      tasks: NEXT_FOLLOWUP_TASK,
+      _count: { select: { tasks: true } },
     },
   });
   if (!lead) return null;
 
   const specs = await handleProjectSpecsGeneration(
-    createLeadProjectInferencePrompt(lead),
+    createLeadProjectInferencePrompt(
+      lead,
+      leadFollowup({
+        stage: lead.stage,
+        tasks: lead.tasks,
+        taskCount: lead._count.tasks,
+        legacyDate: lead.followupDate,
+        legacyTime: lead.followupTime,
+      }),
+    ),
   );
   if (!specs) return null;
 
