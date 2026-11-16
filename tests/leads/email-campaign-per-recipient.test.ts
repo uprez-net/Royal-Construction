@@ -74,3 +74,29 @@ test("the preview copy no longer promises what it cannot deliver", () => {
     "the copy should say the preview is read-only",
   );
 });
+
+test("each sent campaign email is saved on its lead, in Sydney time (#297)", () => {
+  const source = read(CAMPAIGN);
+  // The entry used to live only in the value the loop returned, so the
+  // activity feed, the offer pre-fill and the agent never saw the send.
+  assert.ok(
+    /updateLead\(\s*lead\.id,\s*\{\s*history:\s*\[historyEntry\],?\s*\}\s*\)/.test(
+      source,
+    ),
+    "a sent campaign email is not persisted as exactly the one new entry",
+  );
+  assert.ok(
+    !/\[\.\.\.lead\.history,\s*historyEntry\][\s\S]*updateLead/.test(source),
+    "updateLead must get only the new entry, never the whole history",
+  );
+  assert.ok(
+    /date:\s*sydneyDateOnly\(now\)[\s\S]*?time:\s*sydneyTimeOnly\(now\)/.test(
+      source,
+    ),
+    "the history date and time are not both read as Sydney",
+  );
+  assert.ok(
+    !/toISOString\(\)\.slice\(0, 10\)|toTimeString\(\)/.test(source),
+    "a UTC date or browser-local time is back in the campaign entry",
+  );
+});
