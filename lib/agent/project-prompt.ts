@@ -67,7 +67,14 @@ Guidelines:
 - Return ONLY the structured JSON object.
 `;
 
-export function createLeadProjectInferencePrompt(lead: Lead): string {
+export function createLeadProjectInferencePrompt(
+  lead: Lead,
+  /**
+   * The lead's follow-up as the app shows it, resolved from its tasks. The raw
+   * Lead column is retired and stale, so it is never read here (#315).
+   */
+  followup: { date: Date | null; time: string | null },
+): string {
   return `
 You are analysing the following construction lead.
 
@@ -102,9 +109,9 @@ ${resolveLeadNotesTextOr(lead, "No notes available.")}
 
 Follow Up
 ---------
-Date: ${lead.followupDate ? sydneyDateOnly(lead.followupDate) : "Not scheduled"}
+Date: ${followup.date ? sydneyDateOnly(followup.date) : "Not scheduled"}
 
-Time: ${lead.followupTime ?? "Not specified"}
+Time: ${followup.time ?? "Not specified"}
 
 Follow-up Notes:
 ${lead.followupNotes?.trim() || "No follow-up notes."}

@@ -1,6 +1,9 @@
 import { Prisma } from "@prisma/client";
 
-import { NEXT_FOLLOWUP_TASK } from "@/lib/leads/followup-resolution";
+import {
+  FOLLOWUP_TASK_TYPES,
+  NEXT_FOLLOWUP_TASK,
+} from "@/lib/leads/followup-resolution";
 
 import type { DomainDb } from "../db";
 import { reviveRow } from "../sql-json";
@@ -43,6 +46,9 @@ export const LEAD_ROW_INCLUDE = {
   // mapLead has to tell "the follow-up is done" apart from "this lead never
   // had one". See NEXT_FOLLOWUP_TASK.
   tasks: NEXT_FOLLOWUP_TASK,
+  // How many tasks of ANY type the lead has. The retired follow-up column is
+  // only a fallback for a lead that never had one (resolveFollowup, #316).
+  _count: { select: { tasks: true } },
 } satisfies Prisma.LeadInclude;
 
 export type LeadRow = Prisma.LeadGetPayload<{
@@ -107,13 +113,19 @@ export async function readLeadRows(
         )), '[]')
         FROM "File" f WHERE f."leadId" = l.id
       ),
-      -- NEXT_FOLLOWUP_TASK: open work first, then the earliest due, take 1.
+      -- Tasks of any type, for resolveFollowup's "never had one" fallback.
+      '_count', jsonb_build_object('tasks', (
+        SELECT count(*) FROM "LeadTask" ct WHERE ct."leadId" = l.id
+      )),
+      -- NEXT_FOLLOWUP_TASK: follow-up types only (FOLLOWUP_TASK_TYPES), open
+      -- work first, then the earliest due, take 1.
       'tasks', (
         SELECT coalesce(jsonb_agg(jsonb_build_object(
           'dueDate', t."dueDate", 'dueTime', t."dueTime", 'completedAt', t."completedAt"
         )), '[]')
         FROM (
-          SELECT * FROM "LeadTask" lt WHERE lt."leadId" = l.id
+          SELECT * FROM "LeadTask" lt
+          WHERE lt."leadId" = l.id AND lt.type::text IN (${Prisma.join([...FOLLOWUP_TASK_TYPES])})
           ORDER BY lt."completedAt" ASC NULLS FIRST, lt."dueDate" ASC NULLS LAST, lt.id ASC
           LIMIT 1
         ) t
