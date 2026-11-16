@@ -74,3 +74,34 @@ test("the preview copy no longer promises what it cannot deliver", () => {
     "the copy should say the preview is read-only",
   );
 });
+
+test("the modal sends the lead id so the server records each send (#297)", () => {
+  const source = read(CAMPAIGN);
+  // The entry used to live only in the value the loop returned, so the
+  // activity feed, the offer pre-fill and the agent never saw the send. The
+  // server writes it now; a browser PATCH could be lost with the tab.
+  assert.ok(
+    /sendEmailToLead\(\s*lead\.email,\s*subject,\s*finalHtmlBody,\s*runId,\s*lead\.id,?\s*\)/.test(
+      source,
+    ),
+    "the campaign send does not pass the lead id to be recorded server-side",
+  );
+  assert.ok(
+    !/updateLead/.test(source),
+    "the modal saves history from the browser again",
+  );
+});
+
+test("the table's copy of the entry is stamped at the recipient's own send, in Sydney time", () => {
+  const source = read(CAMPAIGN);
+  assert.ok(
+    /if \(sent\) \{[\s\S]*?const sentAt = new Date\(\);[\s\S]*?date:\s*sydneyDateOnly\(sentAt\)[\s\S]*?time:\s*sydneyTimeOnly\(sentAt\)/.test(
+      source,
+    ),
+    "the entry is not stamped inside the successful-send branch, as Sydney",
+  );
+  assert.ok(
+    !/toISOString\(\)\.slice\(0, 10\)|toTimeString\(\)/.test(source),
+    "a UTC date or browser-local time is back in the campaign entry",
+  );
+});

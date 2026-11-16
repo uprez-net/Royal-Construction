@@ -37,6 +37,12 @@ export function reviveRow(value: unknown, model: string): unknown {
   if (!fields) throw new Error(`reviveRow: no model named ${model}`);
   const out: Record<string, unknown> = {};
   for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    // Prisma's `_count` (relation counts from an `include: { _count }`) is not a
+    // model field but is part of what it returns; its values are plain numbers.
+    if (key === "_count") {
+      out[key] = raw;
+      continue;
+    }
     const field = fields.get(key);
     if (!field) continue;
     if (raw === null) {

@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  Fragment,
-  isValidElement,
-  type KeyboardEvent,
-  type ReactNode,
-} from "react";
+import { Fragment, isValidElement, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -43,9 +38,9 @@ interface DataTableProps {
    */
   caption?: string;
   /**
-   * Accessible name for each clickable row, e.g. (i) => `Open ${items[i].name}`.
-   * Set this whenever `onRowClick` is set — without it the row is a control with
-   * no name.
+   * Accessible name for the phone card's open button, e.g. (i) => `Open ${items[i].name}`.
+   * Desktop rows are not controls: a caller makes its primary cell a real link or
+   * button that does the same as `onRowClick` (see components/leads/views/table-view.tsx).
    */
   rowLabel?: (rowIndex: number) => string;
   /** Extra classes for one row, on the desktop row and the phone card alike. */
@@ -84,17 +79,6 @@ export function DataTable({
     );
   const alignClass = (index: number) =>
     align?.[index] === "end" ? "text-right tabular-nums" : "text-left";
-
-  const handleRowKeyDown = (
-    event: KeyboardEvent<HTMLTableRowElement>,
-    rowIndex: number,
-  ) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    // Let controls inside the row (links, menus, buttons) handle their own keys.
-    if (event.target !== event.currentTarget) return;
-    event.preventDefault();
-    onRowClick?.(rowIndex);
-  };
 
   return (
     <>
@@ -259,26 +243,12 @@ export function DataTable({
                         && "cursor-pointer hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
                       rowClassName?.(rowIndex),
                     )}
-                    // A clickable row is an interactive control: without role, name,
-                    // tab stop and Enter/Space, keyboard users cannot reach the
-                    // navigation that mouse users get for free.
-                    {...(onRowClick
-                      ? {
-                          role: "button" as const,
-                          tabIndex: 0,
-                          // Falls back to a positional name. `rowLabel` is optional,
-                          // so without this a caller that forgets it ships a
-                          // role="button" with aria-label={undefined} — an unnamed
-                          // interactive control. A generic name is a poor label but
-                          // a far better failure mode than none.
-                          "aria-label":
-                            rowLabel?.(rowIndex) ?? `Open row ${rowIndex + 1}`,
-                          onClick: () => onRowClick(rowIndex),
-                          onKeyDown: (
-                            event: KeyboardEvent<HTMLTableRowElement>,
-                          ) => handleRowKeyDown(event, rowIndex),
-                        }
-                      : {})}
+                    // The row is a mouse shortcut only. role=button here would hide
+                    // the links and buttons inside it (nested-interactive) and drop
+                    // table semantics; each caller makes its primary cell the control.
+                    onClick={
+                      onRowClick ? () => onRowClick(rowIndex) : undefined
+                    }
                   >
                     {row.map((cell, cellIndex) => (
                       <td

@@ -858,6 +858,45 @@ export async function prepareAuthorizedComplianceOutreach(
   });
 }
 
+/**
+ * What to tell the model about a send. The domain answers `alreadySent` both
+ * when this very call was a replay and when the party already had an outreach
+ * thread and the new request was ignored; in neither case did this call email
+ * anyone, and in the second the recipient is the earlier contact, not the one
+ * asked for. Saying "sent" there reported a send that never happened (#366).
+ */
+export function describeOutreachResult(
+  result: {
+    alreadySent: boolean;
+    attachmentCount: number;
+    recipient: string;
+  },
+  requestedEmail?: string,
+): { summary: string; title: string; warnings?: string[] } {
+  if (!result.alreadySent) {
+    return {
+      summary: `Outreach sent to ${result.recipient} with ${result.attachmentCount} attachment${result.attachmentCount === 1 ? "" : "s"}.`,
+      title: "Compliance outreach sent",
+    };
+  }
+  const existing = result.recipient || "the contact already on file";
+  const differs =
+    requestedEmail !== undefined
+    && result.recipient !== ""
+    && requestedEmail.trim().toLowerCase() !== result.recipient.toLowerCase();
+  return {
+    summary: `This party was already contacted (${existing}); nothing was sent this time.`,
+    title: "Compliance outreach already sent",
+    ...(differs
+      ? {
+          warnings: [
+            `${requestedEmail} was NOT emailed. The earlier outreach went to ${result.recipient}.`,
+          ],
+        }
+      : {}),
+  };
+}
+
 async function sendComplianceOutreachDirect(
   input: {
     body: string;
@@ -935,8 +974,7 @@ export async function sendAuthorizedComplianceOutreach(
       return actionEnvelope({
         entityRef: projectReference(project),
         data: result,
-        summary: `Outreach sent to ${result.recipient} with ${result.attachmentCount} attachment${result.attachmentCount === 1 ? "" : "s"}.`,
-        title: "Compliance outreach sent",
+        ...describeOutreachResult(result, input.contactEmail),
       });
     },
   });

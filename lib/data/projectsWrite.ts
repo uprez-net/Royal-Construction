@@ -9,6 +9,9 @@ import { getCachedProjectById } from "@/lib/data/projects";
 import { handleProjectSpecsGeneration } from "@/lib/agent/projectCreationAgent";
 import { createLeadProjectInferencePrompt } from "@/lib/agent/project-prompt";
 import { LEAD_NOTES_HISTORY_INCLUDE } from "@/lib/leads/notes-text";
+import { leadFollowup } from "@/lib/leads/followup-due";
+import { NEXT_FOLLOWUP_TASK } from "@/lib/leads/followup-resolution";
+import { blobStoreIdFromToken } from "@/lib/blob-url";
 import {
   createProjectFromLead,
   type CreateProjectFromLeadInput,
@@ -46,12 +49,25 @@ const inferProjectSpecs: ProjectInferencePort = async ({ leadId }) => {
       // save. Without them the prompt says "No notes available." and the
       // project is inferred from the contact details alone.
       history: LEAD_NOTES_HISTORY_INCLUDE,
+      // The follow-up the app shows, from the lead's tasks. The Lead column the
+      // prompt used to read is retired and stale (#315).
+      tasks: NEXT_FOLLOWUP_TASK,
+      _count: { select: { tasks: true } },
     },
   });
   if (!lead) return null;
 
   const specs = await handleProjectSpecsGeneration(
-    createLeadProjectInferencePrompt(lead),
+    createLeadProjectInferencePrompt(
+      lead,
+      leadFollowup({
+        stage: lead.stage,
+        tasks: lead.tasks,
+        taskCount: lead._count.tasks,
+        legacyDate: lead.followupDate,
+        legacyTime: lead.followupTime,
+      }),
+    ),
   );
   if (!specs) return null;
 
@@ -81,7 +97,11 @@ export async function createProjectWithLead(
   const principal = await currentPrincipal();
 
   const created = await prisma.$transaction(
-    (tx) => createProjectFromLead(principal, input, tx, { inferProjectSpecs }),
+    (tx) =>
+      createProjectFromLead(principal, input, tx, {
+        inferProjectSpecs,
+        sourceStoreId: blobStoreIdFromToken(process.env.BLOB_READ_WRITE_TOKEN),
+      }),
     // The conversion writes a customer, a project, its whole milestone
     // template and an activity entry, and the inference call that may precede
     // it is already done by here. The default 5s interactive timeout is not

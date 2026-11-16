@@ -221,3 +221,132 @@ describe("the production gate", () => {
     }
   });
 });
+
+describe("no route answers 500 in silence", () => {
+  // The gap this closes: a catch that returned a bare 500 and neither logged
+  // nor reported, so a failed booking reached nobody. Console capture reports
+  // `console.error` only (sentry.server.config.ts: `warn` is where handled
+  // refusals are logged), so a log line is enough; `reportError` adds a source.
+  //
+  // Coarse on purpose: it works per FILE, so one `console.error` lets a second
+  // silent catch in the same file through, and it keys on a literal
+  // `status: 500`, so an `errorResponse(...)` that relies on the default 500
+  // is not seen. It stops a whole new route shipping silent, not every catch.
+  // Matches a CALL (`name(`), not the name: a file that imports `reportError`
+  // and never calls it must not pass.
+  const REPORTS =
+    /console\.error\(|reportError\(|reportExternalError\(|reportWorkflowError\(|withCronReporting\(/;
+
+  // The two catches #497 was about, checked directly rather than by the file-
+  // wide guard below. Read as source, not imported: a route reaches
+  // `server-only` through lib/data/*, which test-suite-loadable.test.ts
+  // forbids a test from loading. The ORDER matters: a refusal returns before
+  // the report, so a 4xx is answered and not reported.
+  for (const [file, source] of [
+    [
+      "app/api/(data)/tradie-schedules/route.ts",
+      "route:POST /api/tradie-schedules",
+    ],
+    [
+      "app/api/(data)/tradie-schedules/[scheduleId]/route.ts",
+      "route:PATCH /api/tradie-schedules/[scheduleId]",
+    ],
+  ] as const) {
+    test(`${file} reports an unexpected failure, after the refusal check`, () => {
+      const text = read(file);
+      const refusal = text.indexOf("if (refusal) return refusal;");
+      const report = text.indexOf("reportError(error");
+      assert.ok(refusal >= 0, `${file} should return a domain refusal first`);
+      assert.ok(report >= 0, `${file} must call reportError(error, …)`);
+      assert.ok(
+        refusal < report,
+        `${file} must report only after the refusal return, or a 4xx gets reported`,
+      );
+      assert.ok(
+        text.includes(`source: "${source}"`),
+        `${file} should label the report ${source}`,
+      );
+    });
+  }
+
+  // The voice token route used to `console.error("…")` a bare string, which
+  // carries no error, so a carrier 503 arrived as a message with no cause. It
+  // reports the error itself, with the carrier's providerCode as the fingerprint.
+  test("the voice token route reports the error, not a bare string", () => {
+    const route = "app/api/comms/voice/token/route.ts";
+    const text = read(route);
+    const refusal = text.indexOf("if (refusal) return refusal;");
+    const report = text.indexOf("reportError(error");
+    assert.ok(
+      refusal >= 0 && report > refusal,
+      `${route} must report after the refusal check`,
+    );
+    assert.ok(
+      !/console\.error\(\s*"\[calls\] Could not issue a browser credential"\s*\)/.test(
+        text,
+      ),
+      `${route} must not log the credential failure as a bare string`,
+    );
+    assert.ok(
+      text.includes('"voice-token"'),
+      `${route} should fingerprint a carrier failure`,
+    );
+    // A shared fingerprint for every other error would fold a second bug into
+    // the first issue, and the alert only fires on a NEW issue.
+    assert.ok(
+      !text.includes('"unexpected"'),
+      `${route} must leave non-carrier errors to default grouping`,
+    );
+  });
+
+  test("an import without a call does not count as reporting", () => {
+    assert.ok(
+      !REPORTS.test(
+        'import { reportError } from "@/lib/observability/report-error";\nreturn errorResponse("x", { status: 500 });',
+      ),
+    );
+    assert.ok(REPORTS.test("reportError(error, { source: 'route:POST /x' });"));
+    assert.ok(REPORTS.test("console.error(\n  'failed',\n);"));
+  });
+
+  test("every file under app/ that answers 500 also logs or reports", () => {
+    const silent = walk(join(REPO_ROOT, "app"))
+      .filter((file) => {
+        const source = readFileSync(file, "utf8");
+        return /status:\s*500/.test(source) && !REPORTS.test(source);
+      })
+      .map((file) => relative(REPO_ROOT, file));
+    assert.deepEqual(
+      silent,
+      [],
+      `these answer 500 and report nothing — add reportError(error, { source }) in the catch:\n${silent.join("\n")}`,
+    );
+  });
+});
+
+describe("a failed project list read is not an empty list (#486)", () => {
+  test("getProjects lets the read error through instead of answering an empty page", () => {
+    const source = read("lib/data/projects.ts");
+    const body = source.slice(
+      source.indexOf("export async function getProjects("),
+      source.indexOf("export async function getProjectsPage("),
+    );
+    assert.doesNotMatch(body, /catch/);
+    assert.doesNotMatch(body, /items:\s*\[\]/);
+  });
+
+  test("the list route answers 500 PROJECTS_FETCH_FAILED when the read fails", () => {
+    const source = read("app/api/(data)/projects/route.ts");
+    assert.match(
+      source,
+      /const refusal = domainErrorResponse\(error\);\s*if \(refusal\) return refusal;\s*console\.error\("Error fetching projects:", error\);\s*return errorResponse\("Failed to load projects", \{\s*status: 500,\s*code: "PROJECTS_FETCH_FAILED"/,
+    );
+  });
+
+  test("the Projects page reads through getProjectsPage and hands the client listFailed", () => {
+    const source = read("app/(main)/projects/page.tsx");
+    assert.match(source, /getProjectsPage\(projectsListQuery/);
+    assert.match(source, /listFailed=\{projectsResult\.failed\}/);
+    assert.doesNotMatch(source, /\bgetProjects\(/);
+  });
+});

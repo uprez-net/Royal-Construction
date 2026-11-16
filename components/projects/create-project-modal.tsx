@@ -38,6 +38,7 @@ import {
   SearchableSelect,
   type LookupOption,
 } from "@/components/common/searchable-select";
+import { useAddressSuggestions } from "@/hooks/use-address-suggestions";
 import { useLeadSearch } from "@/hooks/useLeadSearch";
 import { shownSelection } from "@/lib/leads/lead-search-paging";
 import {
@@ -143,15 +144,7 @@ export function CreateProjectModal({
   const [totalFields, setTotalFields] = useState(0);
   const [siteAddress, setSiteAddress] = useState("");
   const [startDate, setStartDate] = useState("");
-  const [locationSuggestions, setLocationSuggestions] = useState<
-    AddressSuggestion[]
-  >([]);
-  // The query whose lookup has finished, success or failure. Loading is "typed
-  // past the 3-character floor and that query has not settled", derived rather
-  // than set inside the effect.
-  const [settledAddress, setSettledAddress] = useState("");
-  const addressLoading =
-    siteAddress.length >= 3 && settledAddress !== siteAddress;
+  const address = useAddressSuggestions(siteAddress, open);
   const [selectedLocation, setSelectedLocation] =
     useState<AddressSuggestion | null>(null);
   const [managerSearch, setManagerSearch] = useState("");
@@ -356,37 +349,6 @@ export function CreateProjectModal({
   }, [dispatch, managerSearch, open]);
 
   useEffect(() => {
-    if (!open || siteAddress.length < 3) {
-      return;
-    }
-
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      try {
-        const response = await fetchJson<{ suggestions: AddressSuggestion[] }>(
-          `/api/address?query=${encodeURIComponent(siteAddress)}`,
-          { method: "GET" },
-          "Error fetching location suggestions",
-          controller.signal,
-        );
-
-        setLocationSuggestions(response.data.suggestions);
-      } catch (error) {
-        if (error instanceof Error && error.name !== "AbortError") {
-          console.error("Failed to fetch location suggestions", error);
-        }
-      } finally {
-        if (!controller.signal.aborted) setSettledAddress(siteAddress);
-      }
-    }, 300);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [open, siteAddress]);
-
-  useEffect(() => {
     const timeoutId = setTimeout(() => {
       const event = extractingTender;
 
@@ -423,7 +385,7 @@ export function CreateProjectModal({
     setTotalFields(0);
     setSiteAddress("");
     setStartDate("");
-    setLocationSuggestions([]);
+    address.reset();
     setSelectedLocation(null);
     setSelectedManagerId(null);
     setManagerSearch("");
@@ -830,6 +792,8 @@ export function CreateProjectModal({
             <div className="relative">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                type="search"
+                aria-label="Search leads by name, email, address or build type"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search lead, email, address, or build type..."
@@ -907,7 +871,7 @@ export function CreateProjectModal({
                   className="flex items-center gap-3 rounded-xl border border-border/70 bg-white px-3 py-2"
                 >
                   <span
-                    className={`inline-flex size-5 items-center justify-center rounded-full text-[11px] font-bold ${index <= progressStep ? "bg-teal-600 text-white" : "bg-muted text-muted-foreground"}`}
+                    className={`inline-flex size-5 items-center justify-center rounded-full text-[11px] font-bold ${index <= progressStep ? "bg-royal-gold-ink text-white" : "bg-muted text-muted-foreground"}`}
                   >
                     {index < progressStep ? (
                       <CheckCircle2 className="size-3.5" />
@@ -1014,8 +978,10 @@ export function CreateProjectModal({
                         placeholder="Select address..."
                         searchValue={siteAddress}
                         selectedItem={selectedLocation}
-                        items={locationSuggestions}
-                        loading={addressLoading}
+                        items={address.suggestions}
+                        loading={address.loading}
+                        error={address.error}
+                        onRetry={address.retry}
                         onQueryChange={(query) => setSiteAddress(query)}
                         onSelect={(item) => {
                           const suggestion = item as AddressSuggestion;

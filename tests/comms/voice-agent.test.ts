@@ -37,6 +37,7 @@ import { PROMPTS } from "@/lib/domain/comms/calls/flow";
 import {
   formatVoiceAgentTranscript,
   VOICE_AGENT_GREETING,
+  VOICE_AGENT_GREETING_CUE,
   VOICE_AGENT_MAX_SECONDS,
   VOICE_AGENT_WRAP_UP_INSTRUCTION,
   type VoiceAgentTurn,
@@ -427,6 +428,22 @@ test("Live starts as Mili, in phone μ-law, with client delegation", async () =>
     start.session.instructions.includes(VOICE_AGENT_GREETING),
     "she opens the call herself, in the agreed words",
   );
+});
+
+test("once Live has started Mili is cued to greet first, once, before the caller says anything", async () => {
+  const h = await started();
+  const cue = {
+    content: VOICE_AGENT_GREETING_CUE,
+    delegation_id: null,
+    type: "session.commentary.append",
+  } as const;
+  // Straight after session.start: she does not wait for caller audio.
+  assert.equal(h.modelOut.length, 2);
+  assert.deepEqual(h.modelOut[1], cue);
+  assert.ok(VOICE_AGENT_GREETING_CUE.includes(VOICE_AGENT_GREETING));
+  // A repeated session.started does not make her greet twice.
+  h.session.handleModelEvent({ type: "session.started" });
+  assert.equal(h.modelOut.filter((e) => e.type === cue.type).length, 1);
 });
 
 test("one conversation: audio passes through, transcripts kept, the desk ends it after her goodbye", async () => {

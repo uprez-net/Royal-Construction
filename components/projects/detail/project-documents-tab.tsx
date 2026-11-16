@@ -332,6 +332,20 @@ export function ProjectDocumentsTab({
     }
   };
 
+  // The gallery covers every image in the filtered list, so the filters define
+  // "the rest of the images" here.
+  const openPreview = (index: number) => {
+    const action = filePreviewModal(
+      visible.map(({ document }) => ({
+        url: document.url,
+        name: document.name,
+        fileType: document.fileType ?? undefined,
+      })),
+      index,
+    );
+    if (action) dispatch(openModal(action));
+  };
+
   return (
     <Card className="rounded-xl border-border/70 bg-card shadow-sm">
       <CardHeader className="space-y-3 border-b border-border/70 pb-4">
@@ -465,19 +479,7 @@ export function ProjectDocumentsTab({
         <DataTable
           mobileLayout="cards"
           mobileTitleColumn={0}
-          onRowClick={(index) => {
-            // The gallery covers every image in the filtered list, so the
-            // filters define "the rest of the images" here.
-            const action = filePreviewModal(
-              visible.map(({ document }) => ({
-                url: document.url,
-                name: document.name,
-                fileType: document.fileType ?? undefined,
-              })),
-              index,
-            );
-            if (action) dispatch(openModal(action));
-          }}
+          onRowClick={openPreview}
           rowLabel={(index) =>
             `Open ${visible[index]?.document.name ?? "document"}`
           }
@@ -496,7 +498,7 @@ export function ProjectDocumentsTab({
             "end",
             ...(isAdmin ? ["end" as const] : []),
           ]}
-          rows={visible.map(({ document, kind }) => {
+          rows={visible.map(({ document, kind }, index) => {
             const { icon: Icon, className: iconClassName } =
               FILE_KIND_ICON[kind];
             const uploadedAt = parseDate(document.createdAt);
@@ -509,7 +511,15 @@ export function ProjectDocumentsTab({
                   className={`size-4 shrink-0 ${iconClassName}`}
                   aria-hidden="true"
                 />
-                <span className="max-w-[min(32rem,55vw)] min-w-0">
+                <button
+                  type="button"
+                  className="max-w-[min(32rem,55vw)] min-w-0 rounded-sm text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                  // The row opens the same preview; this is the keyboard route to it.
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openPreview(index);
+                  }}
+                >
                   <span
                     className="block truncate font-medium text-primary underline-offset-4 hover:underline"
                     title={document.name}
@@ -521,7 +531,7 @@ export function ProjectDocumentsTab({
                       {document.milestoneName}
                     </span>
                   ) : null}
-                </span>
+                </button>
               </span>,
 
               <span

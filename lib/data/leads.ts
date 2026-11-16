@@ -5,7 +5,21 @@ import prisma from "@/lib/prisma";
 import { mapLead, LeadAnalyticsData } from "@/types/lead";
 import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
-import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
+import {
+  OFFER_OUT_DB_STAGES,
+  OPEN_LEAD_DB_STAGES,
+  type LeadsStats,
+  type Lead as UiLead,
+} from "@/lib/leads/types";
+import { createdRangeFor, previousMonthRange } from "@/lib/leads/created-range";
+import {
+  CLOSED_LEAD_STAGES,
+  LIVE_LEAD,
+  openFollowUpTaskWhere,
+  overdueLeadTaskWhere,
+} from "@/lib/leads/followup-due";
+import { sydneyStartOfDay, sydneyToday } from "@/lib/dates/sydney";
+import { FOLLOWUP_TASK_TYPES } from "@/lib/leads/followup-resolution";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
 import { readLeadRows } from "@/lib/domain/leads/row-read";
 import { leadListOrderBy } from "@/lib/domain/leads/list-sort";
@@ -15,6 +29,8 @@ import { cache } from "react";
 import {
   computeForecast,
   computePipelineMetrics,
+  countLeadsWithoutValue,
+  sumValueInStages,
   type ForecastResult,
   type LeadForMetrics,
   type PipelineMetrics,
@@ -30,14 +46,7 @@ import {
   subMonths,
   startOfDay,
   endOfDay,
-  startOfWeek,
-  endOfWeek,
   startOfMonth,
-  endOfMonth,
-  startOfQuarter,
-  endOfQuarter,
-  startOfYear,
-  endOfYear,
 } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { sendEmail } from "../azureClient";
@@ -238,9 +247,10 @@ export async function getLeads(
       : defaultLookupPageSize;
   const search = normalizeSearch(query);
 
-  // 1. Determine if a timing filter should be active (skip if undefined or 'all')
-  const hasTimingFilter = filterTiming && filterTiming !== "all";
-  let timingFilter = {};
+  // 1. The timeframe select means "created in"; createdRangeFor is its one
+  // definition, shared with the cards above the table.
+  const created = createdRangeFor(filterTiming);
+  const timingFilter = created ? { createdAt: created } : {};
   const timeZone = "Australia/Sydney";
 
   // Current date in Sydney
@@ -249,53 +259,6 @@ export async function getLeads(
     pendingMeetings !== undefined
     || upcomingMeetings !== undefined
     || (status?.includes("MEETING_SCHEDULED") && status?.length === 1);
-
-  if (hasTimingFilter) {
-    let startSydney: Date;
-    let endSydney: Date;
-
-    switch (filterTiming) {
-      case "today":
-        startSydney = startOfDay(sydneyNow);
-        endSydney = endOfDay(sydneyNow);
-        break;
-
-      case "this_week":
-        startSydney = startOfWeek(sydneyNow, { weekStartsOn: 1 }); // Monday
-        endSydney = endOfWeek(sydneyNow, { weekStartsOn: 1 });
-        break;
-
-      case "this_month":
-        startSydney = startOfMonth(sydneyNow);
-        endSydney = endOfMonth(sydneyNow);
-        break;
-
-      case "quarter":
-        startSydney = startOfQuarter(sydneyNow);
-        endSydney = endOfQuarter(sydneyNow);
-        break;
-
-      case "this_year":
-        startSydney = startOfYear(sydneyNow);
-        endSydney = endOfYear(sydneyNow);
-        break;
-
-      default:
-        startSydney = startOfDay(sydneyNow);
-        endSydney = endOfDay(sydneyNow);
-    }
-
-    // Convert Sydney boundaries back to UTC for Prisma
-    const startUTC = fromZonedTime(startSydney, timeZone);
-    const endUTC = fromZonedTime(endSydney, timeZone);
-
-    timingFilter = {
-      createdAt: {
-        gte: startUTC,
-        lte: endUTC,
-      },
-    };
-  }
 
   const where: Prisma.LeadWhereInput | undefined =
     search.length > 0
@@ -351,18 +314,6 @@ export async function getLeads(
             { stage: { not: "LOST" as LeadStage } }
           : {}),
       isArchived: isArchived ?? false,
-      ...(pendingFollowUps !== undefined && {
-        followupDate: {
-          not: null,
-          lte: fromZonedTime(startOfDay(sydneyNow), timeZone),
-        },
-      }),
-      ...(upcomingFollowUps !== undefined && {
-        followupDate: {
-          not: null,
-          gte: fromZonedTime(endOfDay(sydneyNow), timeZone),
-        },
-      }),
       // Leads carrying scheduled work. Replaces filtering the Follow-ups tab by
       // stage: a lead at Quoted or Negotiating can have a follow-up booked, and
       // the stage filter never returned it.
@@ -374,22 +325,31 @@ export async function getLeads(
       // Lead, so this stays in step with what the Follow-ups tab lists. The
       // columns are still written for now and are dropped once nothing reads
       // them; the tasks are the source of truth from here.
-      ...(hasOpenTask && {
-        AND: [
-          {
-            stage: {
-              notIn: [
-                "CONVERTED",
-                "WON",
-                "LOST",
-                "CANCELLED",
-                "DISQUALIFIED",
-              ] as LeadStage[],
-            },
-          },
-          { tasks: { some: { completedAt: null } } },
-        ],
-      }),
+      // The follow-up filters select on the same open follow-up task the
+      // Follow-up cell shows (#315), not on the retired Lead.followupDate
+      // column, which listed a lead because of a stale date and then printed an
+      // empty cell. They share this AND with hasOpenTask: two bare AND keys in
+      // the object would overwrite one another.
+      ...(hasOpenTask
+      || pendingFollowUps !== undefined
+      || upcomingFollowUps !== undefined
+        ? {
+            AND: [
+              ...(hasOpenTask
+                ? [
+                    { stage: { notIn: [...CLOSED_LEAD_STAGES] } },
+                    { tasks: { some: { completedAt: null } } },
+                  ]
+                : []),
+              ...(pendingFollowUps !== undefined
+                ? [{ tasks: { some: openFollowUpTaskWhere("due") } }]
+                : []),
+              ...(upcomingFollowUps !== undefined
+                ? [{ tasks: { some: openFollowUpTaskWhere("upcoming") } }]
+                : []),
+            ] satisfies Prisma.LeadWhereInput[],
+          }
+        : {}),
       ...(isMeetingScheduledFilterActive && {
         meetingDate: {
           not: null,
@@ -861,65 +821,80 @@ export async function deleteLead(id: number) {
 }
 
 /**
- * Retrieves aggregate statistics for the lead pipeline.
+ * The cards on the Leads page, for leads created in the selected timeframe.
  *
- * Counts are calculated directly in PostgreSQL using aggregate filters for
- * improved performance.
+ * Each card that opens a list is counted with the same stage list and the same
+ * created range the list is filtered by, through Prisma on both sides, so the
+ * number on a card is the number of rows it opens. It used to be raw SQL here
+ * against a `where` there, and "Total Leads 67" opened a list of 66.
  *
- * @returns Summary statistics used by the leads dashboard.
+ * "Open" means live: not archived and not won, lost, cancelled or
+ * disqualified (OPEN_LEAD_DB_STAGES, derived from CLOSED_LEAD_STAGES). No
+ * Response stays open. The pipeline figures below skip it (`isOpenStage` calls
+ * it stalled), which is why the open count can exceed the valued count.
  */
-export async function getLeadsStats(): Promise<LeadsStats> {
-  const [stats] = await prisma.$queryRaw<
-    {
-      total: bigint;
-      new: bigint;
-      contacted: bigint;
-      qualified: bigint;
-      quoted: bigint;
-      won: bigint;
-      lost: bigint;
-      pendingFollowup: bigint;
-    }[]
-  >`
-    SELECT
-      COUNT(*) AS total,
-      COUNT(*) FILTER (WHERE stage = 'NEW') AS new,
-      COUNT(*) FILTER (WHERE stage = 'CONTACTED') AS contacted,
-      COUNT(*) FILTER (WHERE stage = 'QUALIFIED') AS qualified,
-      COUNT(*) FILTER (WHERE stage = 'QUOTED') AS quoted,
-      COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS won,
-      COUNT(*) FILTER (WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')) AS lost,
-      -- Open tasks, counted from LeadTask.
-      --
-      -- This read Lead.followupDate and Lead.meetingDate, the columns the task
-      -- table replaced. Nothing writes them any more, so the card was frozen at
-      -- whatever the backfill left while the Tasks tab grew: 15 against 34 on
-      -- staging, on the same screen. Every task created from here would have
-      -- widened the gap.
-      --
-      -- Counted as TASKS, not leads. They coincide today because no lead holds
-      -- two, but four task types exist precisely so a lead can have a call and
-      -- a meeting at once.
-      (
-        SELECT COUNT(*) FROM "LeadTask" t
-        JOIN "Lead" tl ON tl.id = t."leadId"
-        WHERE t."completedAt" IS NULL
-          AND tl."isArchived" = false
-          AND tl.stage NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')
-      ) AS "pendingFollowup"
-    FROM "Lead"
-    WHERE "isArchived" = false
-  `;
+export async function getLeadsStats(
+  filterTiming?: string,
+): Promise<LeadsStats> {
+  const now = new Date();
+  const created = createdRangeFor(filterTiming, now);
+  const createdWhere = created ? { createdAt: created } : {};
+  const inStages = (stages: readonly LeadStage[]) =>
+    prisma.lead.count({
+      where: { isArchived: false, stage: { in: [...stages] }, ...createdWhere },
+    });
+  // The table's "All" list: not archived and not Lost. This repeats the
+  // `excludeLost` rule in getLeads (#450) because the New leads card opens
+  // that list for this month and has to count the same rows; change both.
+  const createdIn = (range: { gte: Date; lte: Date }) =>
+    prisma.lead.count({
+      where: {
+        isArchived: false,
+        stage: { not: "LOST" },
+        createdAt: range,
+      },
+    });
 
+  const [
+    open,
+    offersOut,
+    newThisMonth,
+    newLastMonth,
+    overdueTasks,
+    forMetrics,
+  ] = await Promise.all([
+    inStages(OPEN_LEAD_DB_STAGES),
+    inStages(OFFER_OUT_DB_STAGES),
+    createdIn(createdRangeFor("this_month", now)!),
+    createdIn(previousMonthRange(now)),
+    // The one overdue definition, measured from the start of today in Sydney
+    // so a task due earlier today is not overdue. All time, not the selected
+    // timeframe: the Tasks tab it points at lists every open task.
+    prisma.leadTask.count({
+      where: overdueLeadTaskWhere(sydneyStartOfDay(sydneyToday(now)), null),
+    }),
+    fetchLeadsForMetrics(created),
+  ]);
+
+  const pipeline = computePipelineMetrics(forMetrics, now);
   return {
-    total: Number(stats?.total ?? 0),
-    new: Number(stats?.new ?? 0),
-    contacted: Number(stats?.contacted ?? 0),
-    qualified: Number(stats?.qualified ?? 0),
-    quoted: Number(stats?.quoted ?? 0),
-    conversion: Number(stats?.won ?? 0),
-    pendingFollowup: Number(stats?.pendingFollowup ?? 0),
-    lost: Number(stats?.lost ?? 0),
+    open,
+    offersOut,
+    offersOutValue: sumValueInStages(
+      forMetrics,
+      new Set<LeadStage>(OFFER_OUT_DB_STAGES),
+    ).toString(),
+    pipelineValue: pipeline.totalValue.toString(),
+    weightedValue: pipeline.weightedValue.toString(),
+    // Among the same leads the Open leads card counts, so "23 of 30 have no
+    // value" is about one set of leads.
+    unvaluedCount: countLeadsWithoutValue(
+      forMetrics,
+      new Set<LeadStage>(OPEN_LEAD_DB_STAGES),
+    ),
+    newThisMonth,
+    newLastMonth,
+    overdueTasks,
   };
 }
 
@@ -933,45 +908,54 @@ export async function getFollowupStats(): Promise<FollowupStats> {
   const todayUTC = fromZonedTime(todayStart, timeZone);
   const tomorrowUTC = fromZonedTime(tomorrowStart, timeZone);
 
+  // The follow-up counts are leads with an open follow-up TASK, by the same
+  // predicate the leads filters use (#315): they used to count the retired
+  // Lead.followupDate column and so disagreed with getLeadsStats, which was
+  // already migrated, on the same screen. A lead with several is counted once.
+  const now = new Date();
+  const leadsWithFollowUp = (where: Prisma.LeadTaskWhereInput) =>
+    prisma.lead.count({ where: { tasks: { some: where } } });
+
+  // The meeting counters below still read Lead.meetingDate: the same fix, left
+  // for its own change because nothing calls them yet.
+  //
   // A Prisma.sql fragment, not a plain string: `${x}` in a $queryRaw template
   // becomes a bound parameter, so a bare string would be sent as a value and
   // the query would fail rather than filter.
-  //
-  // These counts used to key off stage IN ('IN_FOLLOW_UP', 'MEETING_SCHEDULED').
-  // Scheduled work is a task now, so the filter is the date plus "not yet
-  // completed", and the stage only decides whether the lead is still live at
-  // all. Without this clause the 13 closed and won leads on production that
-  // carry stale dates would count as outstanding work.
   const OPEN_STAGES = Prisma.sql`stage NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')`;
 
-  const [stats] = await prisma.$queryRaw<
-    {
-      totalFollowUps: bigint;
-      pendingFollowUps: bigint;
-      upcomingFollowUps: bigint;
-      totalMeetings: bigint;
-      pendingMeetings: bigint;
-      upcomingMeetings: bigint;
-    }[]
-  >`
-    SELECT
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES}) AS "totalFollowUps",
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES} AND "followupDate" <= ${todayUTC}) AS "pendingFollowUps",
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES} AND "followupDate" >= ${tomorrowUTC}) AS "upcomingFollowUps",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES}) AS "totalMeetings",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES} AND "meetingDate" < ${todayUTC}) AS "pendingMeetings",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES} AND "meetingDate" >= ${tomorrowUTC}) AS "upcomingMeetings"
-    FROM "Lead"
-    WHERE "isArchived" = false
-  `;
+  const [dueNow, upcoming, anyOpen, [meetings]] = await Promise.all([
+    leadsWithFollowUp(openFollowUpTaskWhere("due", now)),
+    leadsWithFollowUp(openFollowUpTaskWhere("upcoming", now)),
+    leadsWithFollowUp({
+      completedAt: null,
+      type: { in: [...FOLLOWUP_TASK_TYPES] },
+      dueDate: { not: null },
+      lead: LIVE_LEAD,
+    }),
+    prisma.$queryRaw<
+      {
+        totalMeetings: bigint;
+        pendingMeetings: bigint;
+        upcomingMeetings: bigint;
+      }[]
+    >`
+      SELECT
+        COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES}) AS "totalMeetings",
+        COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES} AND "meetingDate" < ${todayUTC}) AS "pendingMeetings",
+        COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES} AND "meetingDate" >= ${tomorrowUTC}) AS "upcomingMeetings"
+      FROM "Lead"
+      WHERE "isArchived" = false
+    `,
+  ]);
 
   return {
-    totalFollowUps: Number(stats?.totalFollowUps ?? 0),
-    pendingFollowUps: Number(stats?.pendingFollowUps ?? 0),
-    upcomingFollowUps: Number(stats?.upcomingFollowUps ?? 0),
-    totalMeetings: Number(stats?.totalMeetings ?? 0),
-    pendingMeetings: Number(stats?.pendingMeetings ?? 0),
-    upcomingMeetings: Number(stats?.upcomingMeetings ?? 0),
+    totalFollowUps: anyOpen,
+    pendingFollowUps: dueNow,
+    upcomingFollowUps: upcoming,
+    totalMeetings: Number(meetings?.totalMeetings ?? 0),
+    pendingMeetings: Number(meetings?.pendingMeetings ?? 0),
+    upcomingMeetings: Number(meetings?.upcomingMeetings ?? 0),
   };
 }
 
@@ -1112,9 +1096,11 @@ export type LeadsOverview = {
  * Server Actions, and the client dispatches Server Actions one at a time, so
  * two actions meant the analytics waited for the cards to finish.
  */
-export async function getLeadsOverview(): Promise<LeadsOverview> {
+export async function getLeadsOverview(
+  filterTiming?: string,
+): Promise<LeadsOverview> {
   const [stats, analytics] = await Promise.all([
-    getLeadsStats(),
+    getLeadsStats(filterTiming),
     getAnalyticsData(),
   ]);
   return { stats, analytics };
@@ -1137,12 +1123,14 @@ const PIPELINE_SELECT = {
   lostAt: true,
 } as const;
 
-async function fetchLeadsForMetrics(): Promise<LeadForMetrics[]> {
+async function fetchLeadsForMetrics(
+  created: { gte: Date; lte: Date } | null = null,
+): Promise<LeadForMetrics[]> {
   // The isArchived filter matches every other lead aggregate in this file.
   // Soft-deleted leads are invisible everywhere else and must not inflate
   // pipeline value here.
   const rows = await prisma.lead.findMany({
-    where: { isArchived: false },
+    where: { isArchived: false, ...(created ? { createdAt: created } : {}) },
     select: PIPELINE_SELECT,
   });
   return rows.map((row) => ({

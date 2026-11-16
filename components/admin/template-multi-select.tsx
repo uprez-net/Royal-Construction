@@ -85,7 +85,6 @@ export function TemplateMultiSelect({
               aria-multiselectable="true"
               aria-label={searchLabel}
             >
-              <CommandEmpty>{emptyLabel}</CommandEmpty>
               {groups.map((group) => (
                 <CommandGroup key={group ?? "default"} heading={group}>
                   {options
@@ -116,6 +115,7 @@ export function TemplateMultiSelect({
                 </CommandGroup>
               ))}
             </CommandList>
+            <CommandEmpty>{emptyLabel}</CommandEmpty>
           </Command>
         </PopoverContent>
       </Popover>

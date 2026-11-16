@@ -138,7 +138,6 @@ export function IdentifyDocumentPicker({
         <Command label="Search document types">
           <CommandInput placeholder="Search document types…" />
           <CommandList className="max-h-80">
-            <CommandEmpty>No document type matches.</CommandEmpty>
             {IDENTIFIABLE_DOCUMENT_GROUPS.map((group) =>
               group.types.length > 0 ? (
                 <CommandGroup key={group.heading} heading={group.heading}>
@@ -174,6 +173,7 @@ export function IdentifyDocumentPicker({
               ) : null,
             )}
           </CommandList>
+          <CommandEmpty>No document type matches.</CommandEmpty>
         </Command>
       </PopoverContent>
     </Popover>

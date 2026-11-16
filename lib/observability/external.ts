@@ -20,6 +20,8 @@ export type ExternalService =
   | "blob"
   | "ai"
   | "mistral"
+  | "google"
+  | "geoscape"
   | "clerk";
 
 export interface ExternalFailureContext {

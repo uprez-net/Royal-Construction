@@ -57,7 +57,7 @@ function LinkElement(props: PlateElementProps) {
         rel: "noreferrer",
         target: "_blank",
       }}
-      className="font-medium text-[#0D9488] underline decoration-[#5eead4] underline-offset-2"
+      className="font-medium text-royal-gold-ink underline underline-offset-2"
     >
       {props.children}
     </PlateElement>

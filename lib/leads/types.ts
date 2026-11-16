@@ -4,6 +4,8 @@ import {
   LeadEmails,
 } from "@prisma/client";
 
+import { CLOSED_LEAD_STAGES } from "@/lib/leads/followup-due";
+
 export type LeadStage =
   | "New"
   | "Contacted"
@@ -161,15 +163,32 @@ export interface Lead {
   }[];
 }
 
+/**
+ * The Leads page cards. Everything but the win rate (which is the trailing
+ * 90 days and comes from the analytics) counts leads created in the selected
+ * timeframe.
+ */
 export interface LeadsStats {
-  total: number;
-  new: number;
-  contacted: number;
-  qualified: number;
-  quoted: number;
-  conversion: number;
-  pendingFollowup: number;
-  lost: number;
+  /** Live leads: not archived and not won, lost, cancelled or disqualified. */
+  open: number;
+  /** Leads with an offer out with the customer: Quoted or Negotiating. */
+  offersOut: number;
+  /** Estimated value of those leads (Decimal string). */
+  offersOutValue: string;
+  /** Value and probability-weighted value of the pipeline (Decimal strings). */
+  pipelineValue: string;
+  weightedValue: string;
+  /** Open leads with no estimated value (empty, unusable or zero). */
+  unvaluedCount: number;
+  /**
+   * Leads created this Sydney calendar month and last month, as the table's
+   * working list counts them (not archived, not Lost). Always calendar months,
+   * whatever the timeframe select says.
+   */
+  newThisMonth: number;
+  newLastMonth: number;
+  /** Open tasks past their due date on live leads, all time (as the Tasks tab). */
+  overdueTasks: number;
 }
 
 export interface EmailTemplate {
@@ -196,6 +215,35 @@ export const LeadStageToLeadStageDBMapping: Record<LeadStage, DBLeadStage> = {
   Cancelled: DBLeadStage.CANCELLED,
   Disqualified: DBLeadStage.DISQUALIFIED,
 };
+
+/**
+ * The stages a lead can be in and still be live. The "Open leads" card counts
+ * these and its click filters the table by these labels, so the number on the
+ * card is the number of rows it opens. Derived from CLOSED_LEAD_STAGES, the one
+ * list of closed stages, not written out a third time.
+ */
+export const OPEN_LEAD_DB_STAGES: readonly DBLeadStage[] = Object.values(
+  LeadStageToLeadStageDBMapping,
+).filter(
+  (stage) => !(CLOSED_LEAD_STAGES as readonly DBLeadStage[]).includes(stage),
+);
+
+export const OPEN_LEAD_STAGE_LABELS: readonly LeadStage[] = (
+  Object.keys(LeadStageToLeadStageDBMapping) as LeadStage[]
+).filter((label) =>
+  OPEN_LEAD_DB_STAGES.includes(LeadStageToLeadStageDBMapping[label]),
+);
+
+/**
+ * An offer is out with the customer: Quoted, or Negotiating over it. The
+ * "Offers out" card counts these stages and its click filters by these labels.
+ */
+export const OFFER_OUT_STAGE_LABELS = [
+  "Quoted",
+  "Negotiating",
+] as const satisfies readonly LeadStage[];
+export const OFFER_OUT_DB_STAGES: readonly DBLeadStage[] =
+  OFFER_OUT_STAGE_LABELS.map((label) => LeadStageToLeadStageDBMapping[label]);
 
 /**
  * Filter labels that are not stages but may still arrive in a bookmarked URL

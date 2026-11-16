@@ -282,6 +282,18 @@ export function LeadDocumentsTab({
     }
   };
 
+  const openPreview = (index: number) => {
+    const action = filePreviewModal(
+      visibleFiles.map((candidate) => ({
+        url: candidate.url,
+        name: candidate.name,
+        fileType: candidate.fileType ?? undefined,
+      })),
+      index,
+    );
+    if (action) dispatch(openModal(action));
+  };
+
   return (
     <section className="space-y-4">
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
@@ -463,32 +475,28 @@ export function LeadDocumentsTab({
           <DataTable
             mobileLayout="cards"
             mobileTitleColumn={0}
-            onRowClick={(index) => {
-              const action = filePreviewModal(
-                visibleFiles.map((candidate) => ({
-                  url: candidate.url,
-                  name: candidate.name,
-                  fileType: candidate.fileType ?? undefined,
-                })),
-                index,
-              );
-              if (action) dispatch(openModal(action));
-            }}
+            onRowClick={openPreview}
             rowLabel={(index) => `Open ${visibleFiles[index]?.name ?? "file"}`}
             caption="Files uploaded against this lead, with type, upload date and size."
             headers={["Name", "Type", "Uploaded", "Size"]}
             align={["start", "start", "start", "end"]}
-            rows={visibleFiles.map((file) => {
+            rows={visibleFiles.map((file, index) => {
               const uploadedAt = new Date(file.createdAt);
               const hasDate = !Number.isNaN(uploadedAt.getTime());
               return [
-                <span
+                <button
                   key={`${file.id}-name`}
-                  className="block max-w-[min(36rem,60vw)] truncate font-medium text-primary underline-offset-4 hover:underline"
+                  type="button"
+                  className="block max-w-[min(36rem,60vw)] truncate rounded-sm text-left font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                   title={file.name}
+                  // The row opens the same preview; this is the keyboard route to it.
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openPreview(index);
+                  }}
                 >
                   {displayFileName(file.name)}
-                </span>,
+                </button>,
 
                 <span
                   key={`${file.id}-type`}

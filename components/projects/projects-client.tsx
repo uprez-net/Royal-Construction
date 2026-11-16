@@ -100,6 +100,8 @@ type ProjectsClientProps = {
   attention: ProjectAttentionResult;
   /** `projectsListKey` of the list the server rendered `projects` for. */
   renderedFor: string;
+  /** The server could not read the list, so `projects` is empty by default (#486). */
+  listFailed: boolean;
 };
 
 export function ProjectsClient(props: ProjectsClientProps) {
@@ -119,6 +121,7 @@ function ProjectsWorkspace({
   kpis,
   attention,
   renderedFor,
+  listFailed: listFailedOnServer,
 }: ProjectsClientProps) {
   const dispatch = useAppDispatch();
   const pathname = usePathname();
@@ -136,6 +139,10 @@ function ProjectsWorkspace({
   const [searchTerm, setSearchTerm] = useState(list.query);
   const debouncedSearch = useDebounce(searchTerm, 250);
   const [isPageLoading, setIsPageLoading] = useState(false);
+  // True while the list could not be read, so an empty list says "could not
+  // load" and not "No projects yet". Starts as the server's answer; the
+  // client's own fetch below settles it either way.
+  const [listFailed, setListFailed] = useState(listFailedOnServer);
   const [isExporting, setIsExporting] = useState(false);
   // Hard re-entry guard: `disabled` alone still allows a second call from the
   // toast's Retry action or a rapid double activation before React re-renders.
@@ -255,6 +262,7 @@ function ProjectsWorkspace({
 
         dispatch(setProjects(data.items));
         setPageInfo(data);
+        setListFailed(false);
         setIsPageLoading(false);
         // A remembered page past the end is answered with the last real one;
         // put that in the URL too, or the link a project is opened from, and a
@@ -268,6 +276,7 @@ function ProjectsWorkspace({
         if (error instanceof Error && error.name === "AbortError") return;
 
         setIsPageLoading(false);
+        setListFailed(true);
         console.error("Error fetching projects:", error);
         toast.error("Couldn't refresh projects", {
           description:
@@ -501,7 +510,29 @@ function ProjectsWorkspace({
                 : "transition-opacity motion-reduce:transition-none"
             }
           >
-            {visibleProjects.length === 0 ? (
+            {visibleProjects.length === 0 && listFailed ? (
+              <div
+                role="alert"
+                className="rounded-lg border-2 border-dashed border-destructive/40 bg-muted/30 px-6 py-12 text-center"
+              >
+                <p className="text-sm font-medium text-foreground">
+                  Couldn&apos;t load projects
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  The list could not be read, so it may not be empty. Try again
+                  in a moment.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setReloadNonce((nonce) => nonce + 1)}
+                  className="mt-3"
+                >
+                  Try again
+                </Button>
+              </div>
+            ) : visibleProjects.length === 0 ? (
               <div className="rounded-lg border-2 border-dashed border-border bg-muted/30 px-6 py-12 text-center">
                 <div className="text-muted-foreground">
                   <p className="text-sm font-medium text-foreground">

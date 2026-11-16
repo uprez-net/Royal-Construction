@@ -12,7 +12,6 @@ import {
   UserPlus,
   CircleCheckBig,
   Clock,
-  CircleX,
   Mail,
   Plus,
   Table2,
@@ -22,10 +21,16 @@ import {
   Sparkles,
   FileText,
 } from "lucide-react";
-import { fetchAllLeads } from "@/lib/leads/leads-service";
 import { normalizeTypes } from "@/lib/leads/lead-helpers";
 import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
-import { useLeadsData, type LeadListParams } from "@/hooks/use-leads-data";
+import {
+  fetchLeadListPage,
+  useLeadsData,
+  type LeadListParams,
+} from "@/hooks/use-leads-data";
+import { currency } from "@/utils/formatters";
+import { emptyLeadsMessage } from "@/lib/leads/empty-state";
+import { OFFER_OUT_STAGE_LABELS } from "@/lib/leads/types";
 import { useToast, ToastContainer } from "@/components/common/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
 
@@ -45,6 +50,7 @@ import {
   withLeadsListParams,
   type LeadsListParamChanges,
 } from "./leads-list-url";
+import { nextTabIndex } from "@/lib/a11y/tab-keys";
 import { Card, CardContent } from "@/components/ui/card";
 import { ListSortMenu } from "@/components/common/list-sort-menu";
 import type { LeadListSort } from "@/lib/leads/list-sort";
@@ -69,6 +75,16 @@ import { useUser } from "@clerk/nextjs";
 
 type TabType = "table" | "followups" | "analytics";
 
+// The page's three views. A tab strip, so the active one has to be exposed
+// (aria-selected) and arrow keys move between them (#442).
+const VIEW_TABS = [
+  { key: "table" as TabType, label: "Leads", Icon: Table2 },
+  { key: "followups" as TabType, label: "Tasks", Icon: Clock },
+  { key: "analytics" as TabType, label: "Analytics", Icon: BarChart3 },
+] as const;
+const VIEW_PANEL_ID = "leads-view-panel";
+const viewTabId = (key: TabType) => `leads-view-tab-${key}`;
+
 type TableFilters = {
   readonly sort: LeadListSort;
   readonly query: string;
@@ -82,13 +98,17 @@ type TableFilters = {
  * its own and dropped isArchived, so page 2 of the Archived chip listed leads
  * that were not archived.
  */
-function tableListParams(filters: TableFilters, page: number): LeadListParams {
+function tableListParams(
+  filters: TableFilters,
+  page: number,
+  limit = 10,
+): LeadListParams {
   const statusParam =
     filters.metric === "total" ? "total" : (filters.metric ?? undefined);
   return {
     sort: filters.sort,
     page,
-    limit: 10,
+    limit,
     query: filters.query.trim() || undefined,
     status:
       statusParam === "Archived"
@@ -145,6 +165,7 @@ function LeadsWorkspace() {
     loadData,
     refreshLeadsData,
     refreshStats,
+    statsStale,
     updateLeadInList,
     removeLeadFromList,
     replaceLeads,
@@ -169,11 +190,7 @@ function LeadsWorkspace() {
     && typedSearch !== urlQuery;
 
   /* ── Derived ── */
-  const conversionRate =
-    stats && stats.total > 0
-      ? ((stats.conversion / stats.total) * 100).toFixed(1)
-      : "0.0";
-
+  const winRate = analyticsData.pipelineMetrics.winRate;
   const tableParams = tableListParams(
     {
       query: urlQuery,
@@ -218,6 +235,29 @@ function LeadsWorkspace() {
   const [searchNavigating, startSearchNavigation] = useTransition();
   const requestedQueryRef = useRef<string | null>(null);
   const requestedNavigationRef = useRef(-1);
+  // Browser Back or Forward (#484) is not counted above, and it takes the URL
+  // to a query the box must follow. The box is set to that query when Back
+  // arrives (the pending debounce is cancelled with it), and the query is the
+  // heading until the URL lands, so the search does not re-apply the one Back
+  // just left.
+  const historyQueryRef = useRef<string | null>(null);
+  useEffect(() => {
+    historyQueryRef.current = null;
+  }, [urlQuery]);
+  useEffect(() => {
+    const onHistoryNavigation = () => {
+      const target = readLeadsListParams(
+        new URLSearchParams(window.location.search),
+      ).query;
+      // Back supersedes a search request still in flight.
+      requestedQueryRef.current = null;
+      if (target === urlQuery) return;
+      historyQueryRef.current = target;
+      setSearchTerm(target);
+    };
+    window.addEventListener("popstate", onHistoryNavigation);
+    return () => window.removeEventListener("popstate", onHistoryNavigation);
+  }, [urlQuery]);
   useEffect(() => {
     const heading = searchHeading({
       navigating: searchNavigating,
@@ -225,6 +265,7 @@ function LeadsWorkspace() {
       latestNavigation: navigationCountRef.current,
       requested: requestedQueryRef.current,
       shown: urlQuery,
+      history: historyQueryRef.current,
     });
     const next = searchQueryToRequest(debouncedSearch.trim(), heading);
     if (next === null) return;
@@ -288,16 +329,70 @@ function LeadsWorkspace() {
     });
   }, [refreshStats]);
 
+  // The cards count leads created in the selected timeframe, so they reload
+  // when it changes, from the select, Back or a bookmark alike.
+  const timingSeen = useRef(activeFilterTiming);
+  useEffect(() => {
+    if (timingSeen.current === activeFilterTiming) return;
+    timingSeen.current = activeFilterTiming;
+    refreshStats(activeFilterTiming).catch((err: unknown) => {
+      console.error("Failed to refresh lead stats for the timeframe", err);
+    });
+  }, [activeFilterTiming, refreshStats]);
+
   /* ── Handlers ── */
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
   };
 
+  // Arrow/Home/End move focus and select, as the other tab strips do. Roving
+  // tabindex below keeps the strip a single Tab stop.
+  const viewTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const handleViewTabKeyDown = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ) => {
+    const next = nextTabIndex(event.key, index, VIEW_TABS.length);
+    if (next === null) return;
+    event.preventDefault();
+    handleTabChange(VIEW_TABS[next].key);
+    viewTabRefs.current[next]?.focus();
+  };
+
+  // A chip narrows the list you are on, search included.
   const handleMetricClick = (metric: string | null) => {
     setActiveTab("table");
     updateListParams({ status: metric, page: null });
   };
+
+  // A card shows the cohort its number counts, and the number ignores the
+  // search box, so a card click drops the search too. Left in, "Open leads 12"
+  // opened a list of the two that matched "Smith".
+  //
+  // Done as a search request for "": the box going empty makes the search
+  // effect ask for ?query= to be cleared, and until this replace lands the URL
+  // still shows the old query, so that second replace was built from stale
+  // params and wiped the card's own filter. Marking this one as the request in
+  // flight is what tells the effect there is nothing left to do (#465).
+  // Clear filters does the same thing with nothing left selected.
+  const dropSearchAndNavigate = (
+    changes: Parameters<typeof updateListParams>[0],
+  ) => {
+    setSearchTerm("");
+    setActiveTab("table");
+    startSearchNavigation(() => {
+      requestedQueryRef.current = "";
+      updateListParams({ ...changes, query: null, page: null });
+      requestedNavigationRef.current = navigationCountRef.current;
+    });
+  };
+  const handleCardClick = (metric: string) =>
+    dropSearchAndNavigate({ status: metric });
+
+  const hasFilters = activeMetric !== null || activeFilterTiming !== "all";
+  const clearFilters = () =>
+    dropSearchAndNavigate({ status: null, timing: null });
 
   const handleFilterTimingChange = (filterTiming: string) => {
     updateListParams({
@@ -313,8 +408,43 @@ function LeadsWorkspace() {
     [updateListParams],
   );
 
+  // Exports what the filters show: every page of the current list, 50 at a
+  // time (the server's cap), not every lead in the business.
+  const fetchFilteredLeads = async () => {
+    const filters = {
+      query: urlQuery,
+      metric: activeMetric,
+      filterTiming: activeFilterTiming,
+      sort: activeSort,
+    };
+    const rows = [];
+    for (let pageNumber = 1; ; pageNumber += 1) {
+      const result = await fetchLeadListPage(
+        tableListParams(filters, pageNumber, 50),
+      );
+      // fetchLeadListPage steps back to the last page when the one asked for
+      // has gone (a lead removed mid-export); appending that would repeat 50
+      // rows, and everything up to there is already collected.
+      if (result.page !== pageNumber) break;
+      rows.push(...result.items);
+      if (pageNumber >= result.totalPages || result.items.length === 0) break;
+    }
+    return rows;
+  };
+
   const handleExport = async () => {
-    const allLeads = await fetchAllLeads();
+    try {
+      await exportFilteredLeads();
+    } catch (err) {
+      // It used to fail with nothing on screen: the History sheet name is
+      // reserved in Excel and ExcelJS throws on it.
+      console.error("Failed to export leads", err);
+      showToast("Failed to export leads", "error");
+    }
+  };
+
+  const exportFilteredLeads = async () => {
+    const allLeads = await fetchFilteredLeads();
     const leadHeader = [
       "leadId",
       "name",
@@ -371,7 +501,7 @@ function LeadsWorkspace() {
     await downloadWorkbook(
       [
         { name: "Lead Data", rows: [leadHeader, ...leadRows] },
-        { name: "History", rows: [historyHeader, ...historyRows] },
+        { name: "Lead history", rows: [historyHeader, ...historyRows] },
       ],
       `Royal_Constructions_Leads_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
@@ -442,6 +572,26 @@ function LeadsWorkspace() {
         <>
           {/* Six cards stacked three rows deep pushed the list itself below
               the fold on a phone; there they scroll sideways instead. */}
+          {statsStale ? (
+            <p
+              role="alert"
+              className="-mb-1 flex flex-wrap items-center gap-2 text-xs text-destructive-ink"
+            >
+              The cards could not be reloaded and may not match the timeframe
+              above.
+              <button
+                type="button"
+                className="font-medium underline underline-offset-4"
+                onClick={() =>
+                  refreshStats(activeFilterTiming).catch((err: unknown) => {
+                    console.error("Failed to refresh lead stats", err);
+                  })
+                }
+              >
+                Try again
+              </button>
+            </p>
+          ) : null}
           <div
             className={cn(
               MOBILE_METRIC_STRIP_CLASS,
@@ -449,58 +599,68 @@ function LeadsWorkspace() {
             )}
           >
             <LeadMetricCard
-              label="Total Leads"
-              value={String(stats.total)}
-              note="All leads in the pipeline"
+              label="Open leads"
+              value={String(stats.open)}
+              note="Not won, lost or archived"
               tone="primary"
               icon={UserPlus}
-              onClick={() => handleMetricClick("total")}
-              active={activeMetric === "total"}
+              onClick={() => handleCardClick("open")}
+              active={activeMetric === "open"}
             />
             <LeadMetricCard
-              label="New & Contacted"
-              value={String((stats.new || 0) + (stats.contacted || 0))}
-              note="Fresh and contacted leads"
-              tone="info"
-              icon={Sparkles}
-              onClick={() => handleMetricClick("New,Contacted")}
-              active={activeMetric === "New,Contacted"}
-            />
-            <LeadMetricCard
-              label="Quoted"
-              value={String(stats.quoted || 0)}
-              note="Leads with active quotations"
+              label="Offers out"
+              value={String(stats.offersOut)}
+              note={`${currency.format(Number(stats.offersOutValue))} · quoted or negotiating`}
               tone="badge"
               icon={FileText}
-              onClick={() => handleMetricClick("Quoted")}
-              active={activeMetric === "Quoted"}
+              onClick={() => handleCardClick(OFFER_OUT_STAGE_LABELS.join(","))}
+              active={activeMetric === OFFER_OUT_STAGE_LABELS.join(",")}
+              noteWraps
             />
             <LeadMetricCard
-              label={`Converted (${conversionRate}%)`}
-              value={String(stats.conversion)}
-              note="Won and converted leads"
+              label="Pipeline value"
+              value={currency.format(Number(stats.pipelineValue))}
+              note={`${currency.format(Number(stats.weightedValue))} weighted${
+                stats.unvaluedCount > 0
+                  ? ` · ${stats.unvaluedCount} of ${stats.open} open leads have no value`
+                  : ""
+              }`}
+              tone="warning"
+              icon={BarChart3}
+              noteWraps
+            />
+            <LeadMetricCard
+              label="New leads this month"
+              value={String(stats.newThisMonth)}
+              note={`${stats.newLastMonth} last month`}
+              tone="info"
+              icon={Sparkles}
+              // Opens this month's leads in the table: the card counts the same
+              // working list (not archived, not Lost), always by calendar month.
+              onClick={() =>
+                dropSearchAndNavigate({ status: null, timing: "this_month" })
+              }
+              active={
+                activeMetric === null && activeFilterTiming === "this_month"
+              }
+            />
+            <LeadMetricCard
+              label="Overdue follow-ups"
+              value={String(stats.overdueTasks)}
+              note="Open tasks past due · all time · on the Tasks tab"
+              tone="danger"
+              icon={Clock}
+              noteWraps
+            />
+            <LeadMetricCard
+              label="Win rate (90 days)"
+              // An em dash, never 0%: nothing decided and everything lost are
+              // different statements. Always the last 90 days, whatever the
+              // timeframe above says.
+              value={winRate.percent === null ? "—" : `${winRate.percent}%`}
+              note={`${winRate.won} won · ${winRate.lost} lost`}
               tone="success"
               icon={CircleCheckBig}
-              onClick={() => handleMetricClick("converted")}
-              active={activeMetric === "converted"}
-            />
-            <LeadMetricCard
-              label="Open tasks"
-              value={String(stats.pendingFollowup)}
-              note="Calls, emails and meetings still open"
-              tone="warning"
-              icon={Clock}
-              onClick={() => handleMetricClick("pendingFollowup")}
-              active={activeMetric === "pendingFollowup"}
-            />
-            <LeadMetricCard
-              label="Lost Leads"
-              value={String(stats.lost)}
-              note="Lost, cancelled or disqualified"
-              tone="danger"
-              icon={CircleX}
-              onClick={() => handleMetricClick("lost")}
-              active={activeMetric === "lost"}
             />
           </div>
         </>
@@ -510,94 +670,120 @@ function LeadsWorkspace() {
       {loading ? null : (
         <Card className="border-border/70 bg-white/95 shadow-sm">
           <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-4 py-3 sm:px-5">
-            {(
-              [
-                { key: "table" as TabType, label: "Leads", Icon: Table2 },
-                { key: "followups" as TabType, label: "Tasks", Icon: Clock },
-                {
-                  key: "analytics" as TabType,
-                  label: "Analytics",
-                  Icon: BarChart3,
-                },
-              ] as const
-            ).map(({ key, label, Icon }) => (
-              <button
-                key={key}
-                onClick={() => handleTabChange(key)}
-                className={cn(
-                  "group relative inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-sm font-semibold transition-colors duration-200 sm:min-h-9 sm:text-[12.5px]",
-                  activeTab === key
-                    ? "bg-teal-50 text-teal-700 shadow-sm"
-                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                )}
-              >
-                <Icon className="size-4" />
-                <span>{label}</span>
-                {activeTab === key && (
-                  <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-teal-600" />
-                )}
-              </button>
-            ))}
+            <div
+              role="tablist"
+              aria-label="Leads views"
+              className="flex flex-wrap items-center gap-1.5"
+            >
+              {VIEW_TABS.map(({ key, label, Icon }, index) => (
+                <button
+                  key={key}
+                  ref={(node) => {
+                    viewTabRefs.current[index] = node;
+                  }}
+                  type="button"
+                  role="tab"
+                  id={viewTabId(key)}
+                  aria-selected={activeTab === key}
+                  aria-controls={VIEW_PANEL_ID}
+                  tabIndex={activeTab === key ? 0 : -1}
+                  onClick={() => handleTabChange(key)}
+                  onKeyDown={(event) => handleViewTabKeyDown(event, index)}
+                  className={cn(
+                    "group relative inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-colors duration-200 sm:text-[12.5px]",
+                    activeTab === key
+                      ? "bg-royal-gold/15 text-royal-gold-ink shadow-sm"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden="true" />
+                  <span>{label}</span>
+                  {activeTab === key && (
+                    <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-royal-gold-ink" />
+                  )}
+                </button>
+              ))}
+            </div>
 
-            {!loading && activeTab === "table" && (
-              <div className="flex w-full flex-wrap items-center gap-2 pt-2 sm:ml-auto sm:w-auto sm:gap-3 sm:pt-0">
+            <div className="flex w-full flex-wrap items-center gap-2 pt-2 sm:ml-auto sm:w-auto sm:gap-3 sm:pt-0">
+              {activeTab === "table" && (
                 <ListSortMenu
                   label="leads"
                   value={activeSort}
                   options={LEAD_SORT_OPTIONS}
                   onChange={(sort) => updateListParams({ sort, page: null })}
                 />
-                <Select
-                  value={activeFilterTiming}
-                  onValueChange={handleFilterTimingChange}
+              )}
+              {/* On every tab: the cards above it follow it, so it cannot
+                  hide on Tasks or Analytics and leave a filter nobody can see. */}
+              <Select
+                value={activeFilterTiming}
+                onValueChange={handleFilterTimingChange}
+              >
+                <SelectTrigger
+                  aria-label="Filter by date created"
+                  className="data-[size=default]:h-11 flex-1 rounded-lg border-border bg-background text-sm font-medium text-foreground shadow-none hover:bg-muted sm:flex-none"
                 >
-                  <SelectTrigger className="h-9 flex-1 rounded-full sm:flex-none border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
-                    <SelectValue placeholder="Select timeframe" />
-                  </SelectTrigger>
-                  <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">
-                    <SelectItem value="today">Today</SelectItem>
-                    <SelectItem value="this_week">This Week</SelectItem>
-                    <SelectItem value="this_month">This Month</SelectItem>
-                    <SelectItem value="quarter">This Quarter</SelectItem>
-                    <SelectItem value="this_year">This Year</SelectItem>
-                    <SelectItem value="all">All Time</SelectItem>
-                  </SelectContent>
-                </Select>
-                <div className="search-box min-w-0 flex-1">
-                  <Search size={16} />
-                  <input
-                    aria-label="Search leads"
-                    type="text"
-                    placeholder="Search leads..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    aria-describedby={
-                      searchTooShort ? "leads-search-hint" : undefined
-                    }
-                  />
-                  {/* Always mounted so the live region is registered before
+                  <span className="text-muted-foreground">Created</span>
+                  <SelectValue placeholder="Select timeframe" />
+                </SelectTrigger>
+                <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="this_week">This Week</SelectItem>
+                  <SelectItem value="this_month">This Month</SelectItem>
+                  <SelectItem value="quarter">This Quarter</SelectItem>
+                  <SelectItem value="this_year">This Year</SelectItem>
+                  <SelectItem value="all">All Time</SelectItem>
+                </SelectContent>
+              </Select>
+              {activeTab === "table" && (
+                <>
+                  <div className="search-box min-w-0 flex-1">
+                    <Search size={16} />
+                    <input
+                      aria-label="Search leads"
+                      type="text"
+                      placeholder="Search leads..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      aria-describedby={
+                        searchTooShort ? "leads-search-hint" : undefined
+                      }
+                    />
+                    {/* Always mounted so the live region is registered before
                       its text changes. Drawn inside the input's right edge, so
                       it moves nothing and cannot cover the row below on a
                       phone. */}
-                  <p
-                    id="leads-search-hint"
-                    role="status"
-                    className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted-foreground"
+                    <p
+                      id="leads-search-hint"
+                      role="status"
+                      className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted-foreground"
+                    >
+                      {searchTooShort
+                        ? `Type ${MIN_SEARCH_CHARS}+ characters`
+                        : ""}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="order-3 h-11 shrink-0"
+                    onClick={handleExport}
                   >
-                    {searchTooShort
-                      ? `Type ${MIN_SEARCH_CHARS}+ characters`
-                      : ""}
-                  </p>
-                </div>
-                <button className="btn-export" onClick={handleExport}>
-                  <Download size={14} />
-                  Export
-                </button>
-              </div>
-            )}
+                    <Download data-icon="inline-start" aria-hidden="true" />
+                    Export
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
-          <CardContent className="pt-5">
+          <CardContent
+            role="tabpanel"
+            id={VIEW_PANEL_ID}
+            aria-labelledby={viewTabId(activeTab)}
+            className="pt-5"
+          >
             {activeTab === "table" && (
               <TableView
                 loading={loadingLeads}
@@ -617,6 +803,15 @@ function LeadsWorkspace() {
                   fullName: user?.fullName ?? null,
                 }}
                 appendEmailToLead={appendEmailToLead}
+                emptyMessage={emptyLeadsMessage({
+                  hasSearch: urlQuery.trim() !== "",
+                  hasFilters,
+                })}
+                onClearFilters={
+                  hasFilters || urlQuery.trim() !== ""
+                    ? clearFilters
+                    : undefined
+                }
               />
             )}
             {activeTab === "followups" && (

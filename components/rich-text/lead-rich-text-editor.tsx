@@ -235,7 +235,7 @@ export function LinkElement(props: PlateElementProps) {
         rel: "noreferrer",
         target: "_blank",
       }}
-      className="font-medium text-[#0D9488] underline decoration-[#5eead4] underline-offset-2"
+      className="font-medium text-royal-gold-ink underline underline-offset-2"
     >
       {props.children}
     </PlateElement>
@@ -434,7 +434,7 @@ export function AiActionButton({
   return (
     <button
       type="button"
-      className="inline-flex h-8 items-center gap-1.5 rounded-[5px] border border-transparent bg-[#0D9488] px-3 text-xs font-medium text-white transition-colors hover:bg-[#0f766e] disabled:cursor-not-allowed disabled:opacity-50"
+      className="inline-flex h-8 items-center gap-1.5 rounded-[5px] border border-transparent bg-royal-gold-ink px-3 text-xs font-medium text-white transition-colors hover:bg-royal-gold-ink-hover disabled:cursor-not-allowed disabled:opacity-50"
       onMouseDown={(event) => {
         event.preventDefault();
         onClick();
@@ -717,7 +717,7 @@ export function LeadRichTextEditor({
         <div className="flex items-center justify-end border-t border-[#e7e5e4] bg-[#f8fafc] px-3 py-2">
           <button
             type="button"
-            className="inline-flex min-h-11 w-full items-center justify-center gap-1 rounded bg-[#0D9488] px-3 text-sm font-medium text-white hover:bg-[#0f766e] disabled:cursor-not-allowed disabled:opacity-50 md:min-h-8 md:w-auto md:text-xs"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-1 rounded bg-royal-gold-ink px-3 text-sm font-medium text-white hover:bg-royal-gold-ink-hover disabled:cursor-not-allowed disabled:opacity-50 md:min-h-8 md:w-auto md:text-xs"
             onClick={onSaveNote}
             disabled={!canSaveNote || isSavingNote}
           >

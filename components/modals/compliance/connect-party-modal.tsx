@@ -434,12 +434,13 @@ export function ConnectPartyModal({
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   Delivery details
                 </p>
-                <Label>{label}</Label>
+                <Label htmlFor="party-contact">{label}</Label>
                 {isApproval ? (
                   // Its own picker rather than the directory's. A developer is
                   // not a trade, is never scheduled and is never paid, and the
                   // list they come from is keyed by the estate a lot sits in.
                   <DeveloperPicker
+                    id="party-contact"
                     council={council}
                     location={location}
                     value={developer}
@@ -448,6 +449,7 @@ export function ConnectPartyModal({
                   />
                 ) : trade ? (
                   <ContactPicker
+                    id="party-contact"
                     trade={trade}
                     label={label}
                     value={contact}

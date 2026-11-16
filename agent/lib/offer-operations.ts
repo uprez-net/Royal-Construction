@@ -6,6 +6,9 @@ import {
   requireCurrentAgentActor,
 } from "@/agent/lib/actor";
 import { runAuditedAgentOperation } from "@/agent/lib/audited-operation";
+import { blobStoreIdFromToken } from "@/lib/blob-url";
+import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
+import { describeOfferEditability } from "@/lib/offer/offer-editability";
 import {
   agentResultEnvelopeSchema,
   type AgentResultEnvelope,
@@ -130,6 +133,12 @@ function safeOffer(offer: OfferSummary) {
       ?? offer.contractValueIncGst?.toString()
       ?? null,
     createdAt: offer.createdAt.toISOString(),
+    // What this offer will accept right now, so a specialist can say an edit is
+    // impossible before it asks anyone to approve it. The write enforces the
+    // same rule; this only stops the pointless approval.
+    editability: describeOfferEditability(
+      offer.offerStatus.toLowerCase() as OfferWorkspaceStatus,
+    ),
     entityRef: offerReference(offer),
     gstAmount: (derived?.gstAmount ?? offer.gstAmount).toString(),
     lead: {
@@ -1054,15 +1063,22 @@ export async function sendAuthorizedOfferForSignature(
       data: {
         document: input.document,
         offerId: input.offerId,
-        // Set when the envelope reached the client but recording it failed:
-        // the offer is out for signature and must not be sent again.
+        // Set when the offer is now recorded as sent but the send is not a
+        // clean success: DocuSign created the envelope and recording it
+        // failed, or DocuSign did not answer and nobody knows yet. Either way
+        // it must not be sent again.
         status: result.status ?? null,
       },
       kind: "error",
       summary: result.error,
-      title: `${label} was not sent for signature`,
+      title: result.status
+        ? `${label} send is not confirmed`
+        : `${label} was not sent for signature`,
+      // Not "the client has the envelope": after a timeout nothing may exist.
       warnings: result.status
-        ? ["Do not resend. The client already has this envelope."]
+        ? [
+            "Do not resend. The offer is marked as sent, but whether the envelope reached the client is not confirmed. Check DocuSign before telling the client anything.",
+          ]
         : [],
     });
   }
@@ -1103,7 +1119,12 @@ export async function createAuthorizedProjectFromOffer(
     result = await handOffOfferToProject(actor, input, agentDb, {
       createProject: async (projectInput) => {
         const created = await agentDb.$transaction(
-          (tx) => createProjectFromLead(principal, projectInput, tx),
+          (tx) =>
+            createProjectFromLead(principal, projectInput, tx, {
+              sourceStoreId: blobStoreIdFromToken(
+                process.env.BLOB_READ_WRITE_TOKEN,
+              ),
+            }),
           // The same ceiling the app's adapter uses: the template insert needs
           // more than the default five seconds on a cold connection.
           { timeout: 30_000 },

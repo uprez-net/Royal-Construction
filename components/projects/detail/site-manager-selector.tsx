@@ -145,17 +145,6 @@ export function SiteManagerSelector({
                 onValueChange={setSearch}
               />
               <CommandList>
-                {siteManagers.loading && siteManagers.items.length === 0 ? (
-                  <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-                    <Loader2
-                      className="size-4 animate-spin motion-reduce:animate-none"
-                      aria-hidden="true"
-                    />
-                    Loading…
-                  </div>
-                ) : (
-                  <CommandEmpty>No site managers found.</CommandEmpty>
-                )}
                 <CommandGroup>
                   {siteManagers.items.map((manager) => {
                     const role = manager.role;
@@ -184,6 +173,17 @@ export function SiteManagerSelector({
                   })}
                 </CommandGroup>
               </CommandList>
+              {siteManagers.loading && siteManagers.items.length === 0 ? (
+                <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                  <Loader2
+                    className="size-4 animate-spin motion-reduce:animate-none"
+                    aria-hidden="true"
+                  />
+                  Loading…
+                </div>
+              ) : (
+                <CommandEmpty>No site managers found.</CommandEmpty>
+              )}
               {siteManagers.page < siteManagers.totalPages ? (
                 <div className="border-t border-border p-1">
                   <Button

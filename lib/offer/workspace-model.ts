@@ -1139,6 +1139,25 @@ export function updateOfferScopeItems(
   );
 }
 
+// The next unused `<kind>-manual-N` id in this list. A counter kept in the
+// component restarts at zero every time the workspace opens, so an item added in
+// an earlier session (`exclusion-manual-1`, saved) collided with the first one
+// added after reopening: editing or deleting either changed both. Reading the
+// list itself is the only count that survives a reload.
+export function nextManualScopeItemId(
+  kind: "allowance" | "exclusion",
+  items: readonly { readonly id: string }[],
+): string {
+  const prefix = `${kind}-manual-`;
+  let highest = 0;
+  for (const { id } of items) {
+    if (!id.startsWith(prefix)) continue;
+    const n = Number(id.slice(prefix.length));
+    if (Number.isInteger(n) && n > highest) highest = n;
+  }
+  return `${prefix}${highest + 1}`;
+}
+
 // A blank scope item ready for the operator to fill in. Exclusions default to a
 // note (no dollar amount); allowances to a fixed amount. The `id` is supplied by
 // the caller so it stays stable and serializable in the snapshot.

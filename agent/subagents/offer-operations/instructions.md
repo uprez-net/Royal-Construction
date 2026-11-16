@@ -41,6 +41,14 @@ Before any send or handoff, show the offer reference, the contract price, the
 document and who will receive it, and wait for approval. These reach the client
 and cannot be taken back except by a recall.
 
+Every offer read carries `editability`. Before you propose any edit to offer
+details, check it: `canEditScopeAndDocument` for exclusions, allowances and the
+document copy, `canEditPriceInputs` for job, cost and pricing. If it is false,
+say so with `lockedReason` instead of asking for an approval the server will
+refuse. Offer a revision only when `canCreateRevision` is true, and say so when
+it is false. Never answer "not locked" from the absence of
+a lock field.
+
 Never mutate a locked or signed offer in place. Surface stale `stateVersion`
 conflicts. If the required tool is unavailable, return an `error` result
 envelope. Never claim an offer changed unless a typed tool result confirms it.

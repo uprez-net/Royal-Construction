@@ -444,8 +444,8 @@ export function getTemplateDescription(template: EmailTemplate): string {
       "Share the builder profile and portfolio with a personalized snapshot of the lead's project type, location, and enquiry details.",
   };
   return (
-    descriptions[template.category] ??
-    "Curated and professionally designed email template adhering to brand standards to streamline client communications."
+    descriptions[template.category]
+    ?? "Curated and professionally designed email template adhering to brand standards to streamline client communications."
   );
 }
 
@@ -468,8 +468,8 @@ export function leadToFormData(lead: Lead): LeadDetailFormData {
     estimatedValue: lead.estimatedValue ?? "",
     estimatedValueSource: lead.estimatedValueSource ?? null,
     probabilityOverride:
-      lead.probabilityOverride === null ||
-      lead.probabilityOverride === undefined
+      lead.probabilityOverride === null
+      || lead.probabilityOverride === undefined
         ? ""
         : String(lead.probabilityOverride),
     // <input type="date"> wants YYYY-MM-DD, not a full ISO timestamp.
@@ -530,15 +530,15 @@ export function shouldSetFollowupStage(
     originalLead.stage !== formData.stage && formData.stage === "In Follow-up";
 
   const isReschedulingFollowup =
-    (formData.followupDate !== originalLead.followupDate ||
-      formData.followupTime !== originalLead.followupTime) &&
-    formData.stage === "In Follow-up" &&
-    originalLead.stage === "In Follow-up";
+    (formData.followupDate !== originalLead.followupDate
+      || formData.followupTime !== originalLead.followupTime)
+    && formData.stage === "In Follow-up"
+    && originalLead.stage === "In Follow-up";
 
   const isFollowupDateTimeAdded = !!(
-    (!originalLead.followupDate || !originalLead.followupTime) &&
-    formData.followupDate &&
-    formData.followupTime
+    (!originalLead.followupDate || !originalLead.followupTime)
+    && formData.followupDate
+    && formData.followupTime
   );
 
   return (
@@ -711,10 +711,10 @@ export function isQuotingStage(stage: LeadStage): boolean {
   // Check with Offer from 33 of the 59 leads on staging, every one of them in
   // the stage where scoping a build actually happens.
   return (
-    isWonStage(stage) ||
-    ["Discovery", "Qualified", "Quoted", "Negotiating"].includes(stage) ||
+    isWonStage(stage)
+    || ["Discovery", "Qualified", "Quoted", "Negotiating"].includes(stage)
     // Retired, kept until no row holds them.
-    ["In Follow-up", "Meeting Scheduled"].includes(stage)
+    || ["In Follow-up", "Meeting Scheduled"].includes(stage)
   );
 }
 
@@ -727,13 +727,24 @@ export function isQuotingStage(stage: LeadStage): boolean {
  * selected on its own, so clicking the Converted chip to clear it filtered the
  * table to Won with no chip highlighted to explain why.
  */
-const KPI_COHORT_METRICS = ["total", "converted", "pendingFollowup", "lost"];
+const KPI_COHORT_METRICS = [
+  "open",
+  "total",
+  "converted",
+  "pendingFollowup",
+  "lost",
+];
 
 export function isKpiCohortMetric(
   activeMetric: string | null | undefined,
 ): boolean {
   if (!activeMetric) return false;
-  return KPI_COHORT_METRICS.some((metric) => activeMetric.includes(metric));
+  // A whole token, not a substring: the metric is a comma list of chip labels
+  // or one of these names, and "open" must not match a label that merely
+  // contains it.
+  return activeMetric
+    .split(",")
+    .some((token) => KPI_COHORT_METRICS.includes(token.trim()));
 }
 /**
  * Wording for the mandatory reason on a closed-unsuccessful lead.

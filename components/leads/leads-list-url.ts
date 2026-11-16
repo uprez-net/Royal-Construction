@@ -36,6 +36,12 @@ export const MIN_SEARCH_CHARS = 3;
  * replace built from stale params that wipes the card's filter. The caller
  * counts every navigation it makes; `requestedNavigation` is that count when
  * the search request was made (-1 before any), `latestNavigation` the count now.
+ *
+ * `history` is the query a browser Back or Forward is taking the URL to, until
+ * it lands (#484). Back is not a navigation the caller counts, so it does not
+ * make the search request stale by itself: the caller clears `requested` when
+ * Back arrives, and the query Back is heading for is the heading until the URL
+ * catches up, or the box would re-apply the query Back just left.
  */
 export function searchHeading({
   navigating,
@@ -43,12 +49,14 @@ export function searchHeading({
   latestNavigation,
   requested,
   shown,
+  history,
 }: {
   navigating: boolean;
   requestedNavigation: number;
   latestNavigation: number;
   requested: string | null;
   shown: string;
+  history?: string | null;
 }): string {
   if (
     navigating
@@ -57,7 +65,7 @@ export function searchHeading({
   ) {
     return requested;
   }
-  return shown;
+  return history ?? shown;
 }
 
 /**
@@ -121,7 +129,13 @@ type SearchParamsLike = {
   toString(): string;
 };
 
-const STATUS_KEYWORDS = ["total", "converted", "pendingFollowup", "lost"];
+const STATUS_KEYWORDS = [
+  "open",
+  "total",
+  "converted",
+  "pendingFollowup",
+  "lost",
+];
 
 // The timing select's options. The server reads any other value as "today", so
 // an unknown one would filter the table while the select showed nothing.

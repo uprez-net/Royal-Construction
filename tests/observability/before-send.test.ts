@@ -247,3 +247,154 @@ describe("beforeSend — the last gate before an event leaves", () => {
     assert.notEqual(beforeSend(b, { originalException: new Error("b") }), null);
   });
 });
+
+// A Node process warning is written with console.error, so console capture sends
+// it as a message. Sentry still attaches a synthetic exception to it (the live
+// event had interface_type: exception), so the tests build that real shape.
+describe("beforeSend — Node process warnings are not sent", () => {
+  const WARNING =
+    "(node:7) ExperimentalWarning: vm.USE_MAIN_CONTEXT_DEFAULT_LOADER is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)";
+
+  function warningEvent(): ErrorEvent {
+    return event({
+      message: WARNING,
+      exception: { values: [{ type: "Error", value: WARNING }] },
+    });
+  }
+
+  test("a console-captured warning is dropped, with its synthetic exception", () => {
+    assert.equal(send(warningEvent(), undefined), null);
+  });
+
+  test("it is dropped with only a message and no exception too", () => {
+    assert.equal(
+      send(event({ message: WARNING, exception: undefined }), undefined),
+      null,
+    );
+  });
+
+  test("a real Error that quotes a warning is still sent", () => {
+    assert.notEqual(send(warningEvent(), new Error(WARNING)), null);
+  });
+
+  test("an explicit reportError is never dropped by this rule", () => {
+    const explicit = warningEvent();
+    explicit.tags = { [EXPLICIT_TAG]: "1" };
+    assert.notEqual(send(explicit, undefined), null);
+  });
+
+  test("an ordinary console error with no original Error is still sent", () => {
+    assert.notEqual(
+      send(
+        event({
+          message: "[cron] agent-context: something broke",
+          exception: {
+            values: [{ type: "Error", value: "[cron] agent-context" }],
+          },
+        }),
+        undefined,
+      ),
+      null,
+    );
+  });
+});
+
+// The runtime's terminal-failure line arrives as "[object Object]": console
+// capture joined the metadata object into the message, and the raw arguments are
+// deleted before send. Only a validated allow-list of the metadata gets back in.
+describe("beforeSend — the Workflow runtime's failure line says what failed", () => {
+  const LINE = "[Workflow] Error while running workflow";
+  const RUN = "wrun_01M7GQN8W3QA716BGBG03D81CY";
+
+  function runtimeEvent(metadata: unknown): ErrorEvent {
+    return event({
+      message: `${LINE} [object Object]`,
+      exception: {
+        values: [{ type: "Error", value: `${LINE} [object Object]` }],
+      },
+      extra: { arguments: [LINE, metadata] },
+    });
+  }
+
+  test("it is sent with its code, class and run, and groups by kind not run", () => {
+    const sent = send(
+      runtimeEvent({
+        workflowRunId: RUN,
+        errorCode: "USER_ERROR",
+        errorName: "FatalError",
+        errorStack: "FatalError: no reply for jane@example.com at 12 Smith St",
+      }),
+      undefined,
+    );
+    assert.ok(sent);
+    assert.equal(sent.message, "Workflow run failed: USER_ERROR FatalError");
+    assert.equal(
+      sent.exception?.values?.[0]?.value,
+      "Workflow run failed: USER_ERROR FatalError",
+    );
+    assert.deepEqual(sent.fingerprint, [
+      "workflow-runtime",
+      "USER_ERROR",
+      "FatalError",
+    ]);
+    assert.equal(sent.tags?.workflow_error_code, "USER_ERROR");
+    assert.equal(sent.tags?.workflow_run_id, RUN);
+  });
+
+  test("the stack, and what is in it, never reaches the event", () => {
+    const sent = send(
+      runtimeEvent({
+        workflowRunId: RUN,
+        errorCode: "RUNTIME_ERROR",
+        errorName: "Error",
+        errorStack: "Error: no reply for jane@example.com at 12 Smith St",
+      }),
+      undefined,
+    );
+    const wire = JSON.stringify(sent);
+    assert.ok(!wire.includes("jane@example.com"));
+    assert.ok(!wire.includes("Smith St"));
+    assert.ok(!wire.includes("errorStack"));
+  });
+
+  test("metadata outside the expected shape leaves the event as it was", () => {
+    for (const metadata of [
+      { errorCode: "user_error", errorName: "FatalError" },
+      { errorCode: "USER_ERROR\njane@example.com", errorName: "FatalError" },
+      { errorName: "FatalError" },
+      "not an object",
+      null,
+    ]) {
+      const sent = send(runtimeEvent(metadata), undefined);
+      assert.ok(sent);
+      assert.equal(sent.message, `${LINE} [object Object]`);
+      assert.equal(sent.fingerprint, undefined);
+    }
+  });
+
+  test("a bad run id or class name is dropped, not trusted", () => {
+    const sent = send(
+      runtimeEvent({
+        workflowRunId: "not a run <script>",
+        errorCode: "USER_ERROR",
+        errorName: "has spaces and jane@example.com",
+      }),
+      undefined,
+    );
+    assert.ok(sent);
+    assert.equal(sent.message, "Workflow run failed: USER_ERROR Error");
+    assert.equal(sent.tags?.workflow_run_id, undefined);
+  });
+
+  test("an unrelated console error is untouched", () => {
+    const sent = send(
+      event({
+        message: "[cron] agent-context: something broke",
+        extra: { arguments: ["x", { errorCode: "USER_ERROR" }] },
+      }),
+      undefined,
+    );
+    assert.ok(sent);
+    assert.equal(sent.message, "[cron] agent-context: something broke");
+  });
+});

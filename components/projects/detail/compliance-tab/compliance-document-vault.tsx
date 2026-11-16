@@ -235,12 +235,18 @@ export function ComplianceDocumentVault({
                         <span key={`index-${file.id}`} className="tabular-nums">
                           {rowIndex + 1}
                         </span>,
-                        <span
+                        <button
                           key={`name-${file.id}`}
-                          className="font-medium text-primary underline-offset-4 hover:underline"
+                          type="button"
+                          className="rounded-sm text-left font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                          // The row opens the same preview; this is the keyboard route to it.
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openPreview(section.offset + rowIndex);
+                          }}
                         >
                           {file.filename}
-                        </span>,
+                        </button>,
                         <span key={`type-${file.id}`}>
                           {file.documentLabel}
                         </span>,

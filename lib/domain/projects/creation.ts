@@ -13,6 +13,7 @@ import { logActionOrThrow } from "../audit/action-log";
 import type { DomainDb } from "../db";
 import { DomainTransitionError, DomainValidationError } from "../errors";
 import { resolveCustomersForProject } from "../identity/customers";
+import { assertProjectDocumentsInStore } from "./source-documents";
 import { requireAssignableSiteManager } from "../identity/site-managers";
 import {
   unavailableProjectInference,
@@ -327,8 +328,17 @@ export async function createProjectFromLead(
   principal: DomainPrincipal,
   input: CreateProjectFromLeadInput,
   db: DomainDb,
-  ports: { inferProjectSpecs?: ProjectInferencePort } = {},
+  ports: {
+    inferProjectSpecs?: ProjectInferencePort;
+    /**
+     * The Blob store this deployment uploads to (from BLOB_READ_WRITE_TOKEN),
+     * or null when there is none. Required, so an adapter cannot forget it.
+     */
+    sourceStoreId: string | null;
+  },
 ): Promise<CreateProjectFromLeadResult> {
+  // Before anything is read or written, and before inference spends money.
+  assertProjectDocumentsInStore(input, ports.sourceStoreId);
   const inferProjectSpecs =
     ports.inferProjectSpecs ?? unavailableProjectInference;
 

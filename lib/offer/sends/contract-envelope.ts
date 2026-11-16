@@ -524,8 +524,23 @@ export async function sendContractEnvelope(
         offerId: offer.id,
         toStatus: OfferStatus.CONTRACT_SENT,
       });
+      // The claim already moved the offer to CONTRACT_SENT and the event above says
+      // so, so the screen and the lead follow the stored status. Returning no
+      // status left the screen on the pre-send one until a reload (#502).
+      effects.offerChanged(offer.id);
+      // Best effort. A failure here must not replace the "Do not resend"
+      // answer below with a generic error the office cannot act on.
+      try {
+        await effects.statusChanged(offer.id);
+      } catch (statusError) {
+        console.error(
+          `[offer] lead sync after an unconfirmed send failed for offer ${offer.id}:`,
+          statusError,
+        );
+      }
       return {
         ok: false,
+        status: OfferStatus.CONTRACT_SENT,
         error:
           "DocuSign did not confirm whether the Contract was sent. Do not resend — wait for reconciliation or check DocuSign before trying again.",
       };

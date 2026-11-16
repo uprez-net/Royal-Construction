@@ -1,4 +1,5 @@
 import {
+  VOICE_AGENT_GREETING_CUE,
   VOICE_AGENT_WRAP_UP_INSTRUCTION,
   VOICE_AGENT_WRAP_UP_SECONDS,
   voiceAgentInstructions,
@@ -17,7 +18,8 @@ import { verifyStreamToken, type StreamTokenClaims } from "./token";
 // call desk (desk.ts) deciding when the call moves on.
 //
 //   carrier opens the socket → "start" frame → token checked → Live opened
-//   → session started → Mili greets → μ-law audio both ways, transcripts kept
+//   → session started → greeting cue sent → Mili greets first
+//   → μ-law audio both ways, transcripts kept
 //   → after each thing she says (or a Live delegation) the desk is asked
 //   → desk: end_call / transfer_to_team, caller hangs up, time, or a failure
 //   → outcome reported (the call router decides what the caller hears next)
@@ -292,7 +294,14 @@ export class VoiceAgentSession {
     if (this.finished) return;
     switch (event.type) {
       case "session.started":
+        if (this.ready) return;
         this.ready = true;
+        // Without this cue she waits for the caller to speak first.
+        this.sendModel({
+          content: VOICE_AGENT_GREETING_CUE,
+          delegation_id: null,
+          type: "session.commentary.append",
+        });
         return;
       case "session.output_audio.delta":
         // Once the call is moving on there is nothing left to ask the desk.

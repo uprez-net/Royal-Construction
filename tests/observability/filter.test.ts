@@ -9,6 +9,7 @@ import {
 import {
   errorStatus,
   isExpectedError,
+  isNodeProcessWarning,
   isReportableExternalFailure,
   isServerOriginError,
   markReported,
@@ -172,5 +173,47 @@ describe("isServerOriginError", () => {
     assert.equal(isServerOriginError(new Error("x")), false);
     assert.equal(isServerOriginError("string"), false);
     assert.equal(isServerOriginError(null), false);
+  });
+});
+
+describe("isNodeProcessWarning — Node's own warnings are not app faults", () => {
+  test("matches the process warning shapes Node writes with console.error", () => {
+    assert.equal(
+      isNodeProcessWarning(
+        "(node:7) ExperimentalWarning: vm.USE_MAIN_CONTEXT_DEFAULT_LOADER is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)",
+      ),
+      true,
+    );
+    assert.equal(isNodeProcessWarning("(node:1) DeprecationWarning: x"), true);
+    // Real Node output: a coded deprecation, and a plain emitWarning.
+    assert.equal(
+      isNodeProcessWarning("(node:1) [DEP0005] DeprecationWarning: x"),
+      true,
+    );
+    assert.equal(isNodeProcessWarning("(node:1) Warning: plain message"), true);
+    assert.equal(
+      isNodeProcessWarning("(node:20) MaxListenersExceededWarning: x"),
+      true,
+    );
+  });
+
+  test("does not match a real failure, or text that only mentions a warning", () => {
+    assert.equal(isNodeProcessWarning(undefined), false);
+    assert.equal(isNodeProcessWarning("(node:7) Error: boom"), false);
+    assert.equal(
+      isNodeProcessWarning("(node:7) [lowercase] Warning: x"),
+      false,
+    );
+    assert.equal(isNodeProcessWarning("ExperimentalWarning: x"), false);
+    assert.equal(
+      isNodeProcessWarning(
+        "[cron] failed after (node:7) ExperimentalWarning: x",
+      ),
+      false,
+    );
+    assert.equal(
+      isNodeProcessWarning("Failed to send tradie reminders"),
+      false,
+    );
   });
 });

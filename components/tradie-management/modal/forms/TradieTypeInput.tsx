@@ -119,34 +119,6 @@ export function TradeTypeMultiCombobox({
               aria-multiselectable="true"
               aria-label="Trade types"
             >
-              {status === "error" ? (
-                <div className="space-y-2 px-3 py-4 text-sm" role="alert">
-                  <p className="text-destructive">{loadError}</p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void reload()}
-                  >
-                    Try again
-                  </Button>
-                </div>
-              ) : null}
-              {tradeTypes.length === 0
-              && (status === "idle" || status === "loading") ? (
-                <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
-                  <Loader2
-                    className="h-4 w-4 animate-spin"
-                    aria-hidden="true"
-                  />
-                  Loading trades…
-                </div>
-              ) : (
-                <CommandEmpty>
-                  No trade type found. An admin can add one under Admin → Trade
-                  types.
-                </CommandEmpty>
-              )}
               <CommandGroup>
                 {tradeTypes.map((tradeType) => {
                   const checked = isSelected(tradeType.label);
@@ -168,6 +140,31 @@ export function TradeTypeMultiCombobox({
                 })}
               </CommandGroup>
             </CommandList>
+            {status === "error" ? (
+              <div className="space-y-2 px-3 py-4 text-sm" role="alert">
+                <p className="text-destructive">{loadError}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void reload()}
+                >
+                  Try again
+                </Button>
+              </div>
+            ) : null}
+            {tradeTypes.length === 0
+            && (status === "idle" || status === "loading") ? (
+              <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Loading trades…
+              </div>
+            ) : (
+              <CommandEmpty>
+                No trade type found. An admin can add one under Admin → Trade
+                types.
+              </CommandEmpty>
+            )}
           </Command>
         </PopoverContent>
       </Popover>

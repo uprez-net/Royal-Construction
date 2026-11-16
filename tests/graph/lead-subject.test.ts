@@ -502,3 +502,63 @@ test("certifier vocabulary a customer also uses is not vetoed", () => {
     true,
   );
 });
+
+test("a customer listing a house and a granny flat creates a lead (#389)", () => {
+  // The recorded miss: a prospect emailed the business directly from a consumer
+  // address with this subject, twice, and it needed no price or enquiry word,
+  // so neither pair of vocabularies matched and nobody was told.
+  for (const s of [
+    "Lot 8360 oran park house and granny",
+    "House and granny flat",
+    "Double storey and granny flat - Oran Park",
+    "single story & granny",
+    "Duplex + granny flat",
+    "Granny flat and house, Gregory Hills",
+    "granny flat with the house",
+  ]) {
+    assert.equal(isLeadSubject(s), true, s);
+  }
+});
+
+test("a supplier catalogue veto does not reach subjects outside the granny patterns", () => {
+  assert.equal(
+    isLeadSubject("Quote for a new home - supplier catalogue attached"),
+    true,
+  );
+});
+
+test("granny flat words next to something that is not a dwelling are not a lead", () => {
+  for (const s of [
+    "Granny flat supplier catalogue",
+    "Re: Lot 8360 oran park house and granny",
+    "Fwd: house and granny",
+    "Bunnings and granny",
+    "Granny flat estimator wanted",
+    "House and granny flat supplier catalogue",
+    "Granny flat and house supplier catalogue",
+    // Our own templates join the two with a comma, not a conjunction.
+    "Following up on your Double Storey, Granny Flat in Lot 3100 in Orchard Hills",
+  ]) {
+    assert.equal(isLeadSubject(s), false, s);
+  }
+});
+
+test("the #389 enquiry is a lead from a consumer address and not from our own domain", () => {
+  const subject = "Lot 8360 oran park house and granny";
+  assert.equal(
+    isLeadMessage(
+      subject,
+      "someone@gmail.com",
+      "info@royalconstructions.com.au",
+    ),
+    true,
+  );
+  assert.equal(
+    isLeadMessage(
+      subject,
+      "info@royalconstructions.com.au",
+      "info@royalconstructions.com.au",
+    ),
+    false,
+  );
+});

@@ -108,6 +108,12 @@ function CommandList({
   );
 }
 
+// Put this AFTER <CommandList>, never inside it. cmdk's list is always
+// role="listbox", and a listbox whose only content is "No results" or
+// "Loading..." has no option children, which axe reports as a critical
+// aria-required-children failure (#457). cmdk's own Empty reads the Command
+// context, so it still shows and hides correctly outside the list.
+// tests/design/command-empty-outside-list.test.ts holds the rule.
 function CommandEmpty({
   className,
   ...props

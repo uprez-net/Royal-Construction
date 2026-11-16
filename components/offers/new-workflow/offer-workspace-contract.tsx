@@ -464,7 +464,7 @@ function ContractActions({
 
         {isDraft ? (
           <Button
-            disabled={sending || confirming}
+            disabled={sending || confirming || lifecycleBusy !== null}
             size="sm"
             type="button"
             variant="royal"

@@ -156,6 +156,9 @@ export function ApprovalCard({
   const Icon = config.icon;
 
   return (
+    // The card body is a mouse convenience only: the "View request" button in
+    // the footer performs the same action, and the checkbox is its own control,
+    // so keyboard users have full parity (#442).
     <div
       onClick={onClick}
       className={cn(
