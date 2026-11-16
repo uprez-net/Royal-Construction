@@ -72,6 +72,36 @@ function clockHour(hour: number): string {
   return `${hour % 12 || 12}${hour >= 12 ? "pm" : "am"}`;
 }
 
+/** How far ahead a consultation can be booked: the page offers sixty days. */
+export const MAX_BOOKING_DAYS_AHEAD = 60;
+
+/**
+ * Refuse a start in the past or beyond the booking window (#322), so a script
+ * cannot claim a year of Fridays. `todaySydney` is the Sydney calendar date as
+ * "YYYY-MM-DD" and the start is the wall-clock string the page sends.
+ */
+export function assertWithinBookingWindow(
+  startWallClock: string,
+  todaySydney: string,
+): void {
+  const startDay = startWallClock.slice(0, 10);
+  const day = (value: string) => Date.parse(`${value}T00:00:00Z`);
+  const ahead = (day(startDay) - day(todaySydney)) / (24 * 60 * 60 * 1000);
+  // The page offers from tomorrow, so today and earlier are never genuine.
+  if (!Number.isFinite(ahead) || ahead < 1) {
+    throw new DomainValidationError(
+      "Please choose a day from tomorrow.",
+      "startDateTime",
+    );
+  }
+  if (ahead > MAX_BOOKING_DAYS_AHEAD) {
+    throw new DomainValidationError(
+      `Consultations can be booked up to ${MAX_BOOKING_DAYS_AHEAD} days ahead.`,
+      "startDateTime",
+    );
+  }
+}
+
 const WALL_CLOCK = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
 
 /**
