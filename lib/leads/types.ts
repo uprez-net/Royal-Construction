@@ -171,15 +171,24 @@ export interface Lead {
 export interface LeadsStats {
   /** Live leads: not archived and not won, lost, cancelled or disqualified. */
   open: number;
-  new: number;
-  contacted: number;
-  qualified: number;
-  quoted: number;
+  /** Leads with an offer out with the customer: Quoted or Negotiating. */
+  offersOut: number;
+  /** Estimated value of those leads (Decimal string). */
+  offersOutValue: string;
   /** Value and probability-weighted value of the pipeline (Decimal strings). */
   pipelineValue: string;
   weightedValue: string;
-  /** Open leads with no estimated value, so the total says what it leaves out. */
+  /** Open leads with no estimated value (empty, unusable or zero). */
   unvaluedCount: number;
+  /**
+   * Leads created this Sydney calendar month and last month, as the table's
+   * working list counts them (not archived, not Lost). Always calendar months,
+   * whatever the timeframe select says.
+   */
+  newThisMonth: number;
+  newLastMonth: number;
+  /** Open tasks past their due date on live leads, all time (as the Tasks tab). */
+  overdueTasks: number;
 }
 
 export interface EmailTemplate {
@@ -224,6 +233,17 @@ export const OPEN_LEAD_STAGE_LABELS: readonly LeadStage[] = (
 ).filter((label) =>
   OPEN_LEAD_DB_STAGES.includes(LeadStageToLeadStageDBMapping[label]),
 );
+
+/**
+ * An offer is out with the customer: Quoted, or Negotiating over it. The
+ * "Offers out" card counts these stages and its click filters by these labels.
+ */
+export const OFFER_OUT_STAGE_LABELS = [
+  "Quoted",
+  "Negotiating",
+] as const satisfies readonly LeadStage[];
+export const OFFER_OUT_DB_STAGES: readonly DBLeadStage[] =
+  OFFER_OUT_STAGE_LABELS.map((label) => LeadStageToLeadStageDBMapping[label]);
 
 /**
  * Filter labels that are not stages but may still arrive in a bookmarked URL

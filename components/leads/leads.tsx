@@ -12,7 +12,6 @@ import {
   UserPlus,
   CircleCheckBig,
   Clock,
-  UserCheck,
   Mail,
   Plus,
   Table2,
@@ -29,9 +28,10 @@ import {
   useLeadsData,
   type LeadListParams,
 } from "@/hooks/use-leads-data";
-import { compactCurrency } from "@/utils/formatters";
+import { currency } from "@/utils/formatters";
 import { createdRangeCaption } from "@/lib/leads/created-range";
 import { emptyLeadsMessage } from "@/lib/leads/empty-state";
+import { OFFER_OUT_STAGE_LABELS } from "@/lib/leads/types";
 import { useToast, ToastContainer } from "@/components/common/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
 
@@ -594,8 +594,9 @@ function LeadsWorkspace() {
             </p>
           ) : (
             <p className="-mb-1 text-xs text-muted-foreground">
-              {createdRangeCaption(activeFilterTiming)}. Win rate is always the
-              last 90 days.
+              {createdRangeCaption(activeFilterTiming)}. New leads counts
+              calendar months; overdue follow-ups and win rate ignore the
+              timeframe.
             </p>
           )}
           <div
@@ -614,42 +615,49 @@ function LeadsWorkspace() {
               active={activeMetric === "open"}
             />
             <LeadMetricCard
-              label="New & Contacted"
-              value={String((stats.new || 0) + (stats.contacted || 0))}
-              note="Fresh and contacted leads"
-              tone="info"
-              icon={Sparkles}
-              onClick={() => handleCardClick("New,Contacted")}
-              active={activeMetric === "New,Contacted"}
-            />
-            <LeadMetricCard
-              label="Qualified"
-              value={String(stats.qualified || 0)}
-              note="Leads qualified for a quote"
-              tone="info"
-              icon={UserCheck}
-              onClick={() => handleCardClick("Qualified")}
-              active={activeMetric === "Qualified"}
-            />
-            <LeadMetricCard
-              label="Quoted"
-              value={String(stats.quoted || 0)}
-              note="Leads with active quotations"
+              label="Offers out"
+              value={String(stats.offersOut)}
+              note={`${currency.format(Number(stats.offersOutValue))} · quoted or negotiating`}
               tone="badge"
               icon={FileText}
-              onClick={() => handleCardClick("Quoted")}
-              active={activeMetric === "Quoted"}
+              onClick={() => handleCardClick(OFFER_OUT_STAGE_LABELS.join(","))}
+              active={activeMetric === OFFER_OUT_STAGE_LABELS.join(",")}
+              noteWraps
             />
             <LeadMetricCard
               label="Pipeline value"
-              value={compactCurrency.format(Number(stats.pipelineValue))}
-              note={`${compactCurrency.format(Number(stats.weightedValue))} weighted${
+              value={currency.format(Number(stats.pipelineValue))}
+              note={`${currency.format(Number(stats.weightedValue))} weighted${
                 stats.unvaluedCount > 0
-                  ? ` · ${stats.unvaluedCount} with no value`
+                  ? ` · ${stats.unvaluedCount} of ${stats.open} open leads have no value`
                   : ""
               }`}
               tone="warning"
               icon={BarChart3}
+              noteWraps
+            />
+            <LeadMetricCard
+              label="New leads this month"
+              value={String(stats.newThisMonth)}
+              note={`${stats.newLastMonth} last month`}
+              tone="info"
+              icon={Sparkles}
+              // Opens this month's leads in the table: the card counts the same
+              // working list (not archived, not Lost), always by calendar month.
+              onClick={() =>
+                dropSearchAndNavigate({ status: null, timing: "this_month" })
+              }
+              active={
+                activeMetric === null && activeFilterTiming === "this_month"
+              }
+            />
+            <LeadMetricCard
+              label="Overdue follow-ups"
+              value={String(stats.overdueTasks)}
+              note="Open tasks past their due date, on the Tasks tab"
+              tone="danger"
+              icon={Clock}
+              noteWraps
             />
             <LeadMetricCard
               label="Win rate (90 days)"

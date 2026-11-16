@@ -6,12 +6,17 @@ import { mapLead, LeadAnalyticsData } from "@/types/lead";
 import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 import {
+  OFFER_OUT_DB_STAGES,
   OPEN_LEAD_DB_STAGES,
   type LeadsStats,
   type Lead as UiLead,
 } from "@/lib/leads/types";
-import { createdRangeFor } from "@/lib/leads/created-range";
-import { CLOSED_LEAD_STAGES } from "@/lib/leads/followup-due";
+import { createdRangeFor, previousMonthRange } from "@/lib/leads/created-range";
+import {
+  CLOSED_LEAD_STAGES,
+  overdueLeadTaskWhere,
+} from "@/lib/leads/followup-due";
+import { sydneyStartOfDay, sydneyToday } from "@/lib/dates/sydney";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
 import { readLeadRows } from "@/lib/domain/leads/row-read";
 import { leadListOrderBy } from "@/lib/domain/leads/list-sort";
@@ -21,6 +26,8 @@ import { cache } from "react";
 import {
   computeForecast,
   computePipelineMetrics,
+  countLeadsWithoutValue,
+  sumValueInStages,
   type ForecastResult,
   type LeadForMetrics,
   type PipelineMetrics,
@@ -828,27 +835,58 @@ export async function getLeadsStats(
     prisma.lead.count({
       where: { isArchived: false, stage: { in: [...stages] }, ...createdWhere },
     });
+  // The table's "All" list: not archived and not Lost. This repeats the
+  // `excludeLost` rule in getLeads (#450) because the New leads card opens
+  // that list for this month and has to count the same rows; change both.
+  const createdIn = (range: { gte: Date; lte: Date }) =>
+    prisma.lead.count({
+      where: {
+        isArchived: false,
+        stage: { not: "LOST" },
+        createdAt: range,
+      },
+    });
 
-  const [open, newLeads, contacted, qualified, quoted, forMetrics] =
-    await Promise.all([
-      inStages(OPEN_LEAD_DB_STAGES),
-      inStages(["NEW"]),
-      inStages(["CONTACTED"]),
-      inStages(["QUALIFIED"]),
-      inStages(["QUOTED"]),
-      fetchLeadsForMetrics(created),
-    ]);
+  const [
+    open,
+    offersOut,
+    newThisMonth,
+    newLastMonth,
+    overdueTasks,
+    forMetrics,
+  ] = await Promise.all([
+    inStages(OPEN_LEAD_DB_STAGES),
+    inStages(OFFER_OUT_DB_STAGES),
+    createdIn(createdRangeFor("this_month", now)!),
+    createdIn(previousMonthRange(now)),
+    // The one overdue definition, measured from the start of today in Sydney
+    // so a task due earlier today is not overdue. All time, not the selected
+    // timeframe: the Tasks tab it points at lists every open task.
+    prisma.leadTask.count({
+      where: overdueLeadTaskWhere(sydneyStartOfDay(sydneyToday(now)), null),
+    }),
+    fetchLeadsForMetrics(created),
+  ]);
 
   const pipeline = computePipelineMetrics(forMetrics, now);
   return {
     open,
-    new: newLeads,
-    contacted,
-    qualified,
-    quoted,
+    offersOut,
+    offersOutValue: sumValueInStages(
+      forMetrics,
+      new Set<LeadStage>(OFFER_OUT_DB_STAGES),
+    ).toString(),
     pipelineValue: pipeline.totalValue.toString(),
     weightedValue: pipeline.weightedValue.toString(),
-    unvaluedCount: pipeline.openCount - pipeline.valuedCount,
+    // Among the same leads the Open leads card counts, so "23 of 30 have no
+    // value" is about one set of leads.
+    unvaluedCount: countLeadsWithoutValue(
+      forMetrics,
+      new Set<LeadStage>(OPEN_LEAD_DB_STAGES),
+    ),
+    newThisMonth,
+    newLastMonth,
+    overdueTasks,
   };
 }
 
