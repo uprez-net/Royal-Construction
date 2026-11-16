@@ -40,7 +40,6 @@ import { EnvelopeSendConfirm, SigningTracker } from "./offer-workspace-signing";
 import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
-import { TABLE_SURFACE_CLASS } from "@/components/ui/table-styles";
 
 type TenderPanelProps = {
   readonly status: OfferWorkspaceStatus;
@@ -465,7 +464,7 @@ function TenderPreview({
         : "Draft";
 
   return (
-    <article className="grid gap-4 rounded-lg border border-border bg-background p-4">
+    <article className="grid gap-4">
       <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border/70 pb-3">
         <div>
           <p className="font-mono text-xs text-muted-foreground">
@@ -513,7 +512,7 @@ function TenderPreview({
 
       <div>
         <p className={cn("mb-2", GROUP_HEADING_CLASS)}>Payment schedule</p>
-        <div className={TABLE_SURFACE_CLASS}>
+        <div className="overflow-x-auto">
           <Table>
             <TableBody>
               {paymentSchedule.map((row) => (

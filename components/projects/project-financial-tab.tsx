@@ -15,6 +15,7 @@ import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 import { DataTable } from "../common/data-table";
 import { StatusPill } from "../common/status-pill";
 import { Button } from "../ui/button";
+import { TableCard } from "../common/list-toolbar";
 import { projectDetailHref } from "./projects-list-url";
 
 interface FinancialTabProps {
@@ -202,76 +203,85 @@ export function FinancialTab({ project, onClose }: FinancialTabProps) {
       </div>
 
       <section className="space-y-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <h3 className="text-base font-semibold text-foreground">Invoices</h3>
-          <p className="text-xs text-muted-foreground">
-            <span className="font-mono tabular-nums">
-              {currency.format(Number(project.invoiceTotals.outstanding))}
-            </span>{" "}
-            outstanding
-          </p>
-        </div>
-
-        {/*
+        <TableCard
+          header={
+            <div className="flex items-baseline justify-between gap-3">
+              <h3 className="text-base font-semibold text-foreground">
+                Invoices
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                <span className="font-mono tabular-nums">
+                  {currency.format(Number(project.invoiceTotals.outstanding))}
+                </span>{" "}
+                outstanding
+              </p>
+            </div>
+          }
+        >
+          <div className="p-4 md:p-0">
+            {/*
           A read-only summary. This tab renders inside the quick-view modal and
           the modal manager holds one modal at a time, so opening a claim's PDF
           from here would replace the project it belongs to. The Payments tab on
           the project page is where a claim opens.
         */}
-        <DataTable
-          mobileLayout="cards"
-          mobileColumns={1}
-          headers={["Invoice", "Stage", "Amount", "Paid", "Due", "Status"]}
-          align={["start", "start", "end", "end", "start", "start"]}
-          caption="Progress claims raised against this project"
-          rows={project.invoices.map((invoice) => [
-            <span
-              key="number"
-              className="font-mono font-medium tabular-nums text-foreground"
-            >
-              {invoice.invoiceNumber ?? "—"}
-            </span>,
-            PROJECT_STAGE_LABELS[invoice.projectStage as ProjectStage]
-              ?? invoice.projectStage,
-            <span
-              key="total"
-              className="font-mono tabular-nums text-foreground"
-            >
-              {currency.format(Number(invoice.total))}
-            </span>,
-            <span
-              key="paid"
-              className="font-mono tabular-nums text-success-ink"
-            >
-              {currency.format(Number(invoice.amountPaid))}
-            </span>,
-            dateFormat.format(new Date(invoice.dueDate)),
-            <StatusPill key="status" tone={invoiceTone(invoice, today)}>
-              {formatStatus(invoice.status)}
-            </StatusPill>,
-          ])}
-          emptyState={
-            <div className="flex flex-col items-center gap-3">
-              <div className="flex size-12 items-center justify-center rounded-lg bg-muted">
-                <ReceiptText
-                  aria-hidden="true"
-                  className="size-5 text-muted-foreground"
-                />
-              </div>
+            <DataTable
+              flush
+              mobileLayout="cards"
+              mobileColumns={1}
+              headers={["Invoice", "Stage", "Amount", "Paid", "Due", "Status"]}
+              align={["start", "start", "end", "end", "start", "start"]}
+              caption="Progress claims raised against this project"
+              rows={project.invoices.map((invoice) => [
+                <span
+                  key="number"
+                  className="font-mono font-medium tabular-nums text-foreground"
+                >
+                  {invoice.invoiceNumber ?? "—"}
+                </span>,
+                PROJECT_STAGE_LABELS[invoice.projectStage as ProjectStage]
+                  ?? invoice.projectStage,
+                <span
+                  key="total"
+                  className="font-mono tabular-nums text-foreground"
+                >
+                  {currency.format(Number(invoice.total))}
+                </span>,
+                <span
+                  key="paid"
+                  className="font-mono tabular-nums text-success-ink"
+                >
+                  {currency.format(Number(invoice.amountPaid))}
+                </span>,
+                dateFormat.format(new Date(invoice.dueDate)),
+                <StatusPill key="status" tone={invoiceTone(invoice, today)}>
+                  {formatStatus(invoice.status)}
+                </StatusPill>,
+              ])}
+              emptyState={
+                <div className="flex flex-col items-center gap-3">
+                  <div className="flex size-12 items-center justify-center rounded-lg bg-muted">
+                    <ReceiptText
+                      aria-hidden="true"
+                      className="size-5 text-muted-foreground"
+                    />
+                  </div>
 
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">
-                  No progress claims have been raised yet
-                </p>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">
+                      No progress claims have been raised yet
+                    </p>
 
-                <p className="text-xs text-muted-foreground">
-                  A claim is raised once every milestone in a contract stage is
-                  finished.
-                </p>
-              </div>
-            </div>
-          }
-        />
+                    <p className="text-xs text-muted-foreground">
+                      A claim is raised once every milestone in a contract stage
+                      is finished.
+                    </p>
+                  </div>
+                </div>
+              }
+            />
+          </div>
+        </TableCard>
       </section>
     </div>
   );

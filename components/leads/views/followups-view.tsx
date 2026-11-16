@@ -40,6 +40,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
+import {
+  FilterChip,
+  FilterChips,
+  TableCard,
+} from "@/components/common/list-toolbar";
 import { DataTableSkeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -229,7 +234,16 @@ function FollowupItem({
             document.body,
           )
         : null}
-      <TableRow data-task-row>
+      {/* Overdue and due-today rows take the Leads table's urgent-row tint
+          (.leads-table tr.urgent-row), so they stand out in the list. */}
+      <TableRow
+        data-task-row
+        className={
+          isOverdue || isToday
+            ? "bg-[color-mix(in_oklab,var(--warning)_6%,transparent)]"
+            : undefined
+        }
+      >
         <TableCell data-label="Lead" className="max-w-56">
           {/* Link, not a bare anchor. A worklist is somewhere you open a lead,
               deal with it and come back, and a plain href tears the app down
@@ -644,44 +658,40 @@ function FollowupsView({
 
   return (
     <div className="followups-view">
-      <MobileFilterSelect
-        label="Task filter"
-        value={taskFilter}
-        options={filterChips.map(({ key, count, label }) => ({
-          value: key,
-          count,
-          label,
-        }))}
-        onChange={(value) => setTaskFilter(value as TaskFilter)}
-      />
-      {/* One list, full width. Summary chips are real filters — each count
-          matches what the list shows when that chip is pressed. */}
-      <div
-        className="mb-2 hidden flex-wrap gap-1.5 md:flex"
-        role="toolbar"
-        aria-label="Filter tasks"
-      >
-        {filterChips.map(({ key, count, label }) => {
-          const pressed = taskFilter === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={pressed}
-              className={
-                pressed
-                  ? "inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-royal-gold-light px-2.5 py-1.5 text-xs font-medium text-royal-gold-ink-text"
-                  : "inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              }
-              onClick={() => setTaskFilter(key)}
+      {/* One list, full width, in one card. The summary chips are real
+          filters: each count matches what the list shows when it is pressed.
+          On a phone the same choice is a dropdown. */}
+      <TableCard
+        header={
+          <div className="flex flex-col gap-2">
+            <MobileFilterSelect
+              label="Task filter"
+              value={taskFilter}
+              options={filterChips.map(({ key, count, label }) => ({
+                value: key,
+                count,
+                label,
+              }))}
+              onChange={(value) => setTaskFilter(value as TaskFilter)}
+            />
+            <FilterChips
+              className="hidden md:flex"
+              role="toolbar"
+              aria-label="Filter tasks"
             >
-              <strong className="tabular-nums">{count}</strong> {label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="fu-card">
+              {filterChips.map(({ key, count, label }) => (
+                <FilterChip
+                  key={key}
+                  active={taskFilter === key}
+                  onClick={() => setTaskFilter(key)}
+                >
+                  <strong className="tabular-nums">{count}</strong> {label}
+                </FilterChip>
+              ))}
+            </FilterChips>
+          </div>
+        }
+      >
         {/* fu-list's padding is unlayered CSS, so a plain md:p-0 would lose to
             it: the task table runs edge to edge in the card from md up. */}
         <div className="fu-list md:p-0!">
@@ -810,7 +820,7 @@ function FollowupsView({
             </>
           )}
         </div>
-      </div>
+      </TableCard>
     </div>
   );
 }

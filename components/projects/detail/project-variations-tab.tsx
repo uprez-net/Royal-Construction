@@ -47,7 +47,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import {
+  TableCard,
+  TOOLBAR_BUTTON_CLASS,
+} from "@/components/common/list-toolbar";
 import { DataTableSkeleton, Skeleton } from "@/components/ui/skeleton";
 import {
   TABLE_CELL_CLASS,
@@ -574,22 +577,28 @@ function VariationsTab({ projectId }: { projectId: string }) {
         </Alert>
       ) : null}
 
-      <Card className="gap-0 overflow-hidden bg-card py-0 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-3 sm:px-5">
-          <div>
-            <h3 className="font-heading text-lg font-semibold text-foreground">
-              Variation log
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Prices are ex GST. What the client pays includes GST.
-            </p>
+      <TableCard
+        header={
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-heading text-lg font-semibold text-foreground">
+                Variation log
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Prices are ex GST. What the client pays includes GST.
+              </p>
+            </div>
+            <Button
+              type="button"
+              className={TOOLBAR_BUTTON_CLASS}
+              onClick={() => setCreating(true)}
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              Create variation
+            </Button>
           </div>
-          <Button type="button" onClick={() => setCreating(true)}>
-            <Plus className="size-4" aria-hidden="true" />
-            Create variation
-          </Button>
-        </div>
-
+        }
+      >
         {variations.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
             <FileDiff
@@ -699,7 +708,7 @@ function VariationsTab({ projectId }: { projectId: string }) {
             </table>
           </div>
         )}
-      </Card>
+      </TableCard>
 
       <CreateVariationModal
         projectId={projectId}
@@ -756,14 +765,17 @@ function VariationsSkeleton() {
           <Skeleton key={index} className="h-[76px] rounded-lg" />
         ))}
       </div>
-      <Card className="gap-0 overflow-hidden py-0">
-        <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
-          <Skeleton className="h-6 w-40" />
-          <Skeleton className="h-9 w-36" />
-        </div>
+      <TableCard
+        header={
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-9 w-36" />
+          </div>
+        }
+      >
         {/* Mirrors the variation table: nine columns, a band, flush in the card. */}
         <DataTableSkeleton columnCount={9} mobileLayout="scroll" flush />
-      </Card>
+      </TableCard>
     </div>
   );
 }

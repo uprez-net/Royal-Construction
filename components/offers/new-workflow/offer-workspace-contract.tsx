@@ -11,7 +11,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { TABLE_SURFACE_CLASS } from "@/components/ui/table-styles";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   ContractPreviewTerms,
@@ -578,7 +577,7 @@ function ContractScheduleToSend({
           <span>{terms.refusal}</span>
         </p>
       ) : null}
-      <div className={TABLE_SURFACE_CLASS}>
+      <div className="overflow-x-auto">
         <Table>
           {/* The rows carry no visible header, so a screen reader had nothing
               to tie each value to. */}
@@ -635,7 +634,7 @@ function SentContractSchedule({
 }) {
   return (
     <div className="grid gap-2">
-      <div className={TABLE_SURFACE_CLASS}>
+      <div className="overflow-x-auto">
         <Table>
           <TableHeader className="sr-only">
             <TableRow>
@@ -705,7 +704,7 @@ function ContractPreview({
         : "Draft";
 
   return (
-    <article className="grid gap-4 rounded-lg border border-border bg-background p-4">
+    <article className="grid gap-4">
       <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border/70 pb-3">
         <div>
           <p className="font-mono text-xs text-muted-foreground">

@@ -15,7 +15,7 @@ import {
 import { toast } from "sonner";
 
 import { DataTable } from "@/components/common/data-table";
-import { SectionCard } from "@/components/common/section-card";
+import { ListToolbar, TableCard } from "@/components/common/list-toolbar";
 import { TradeIconGlyph } from "@/components/tradie-management/trade-icon";
 import {
   AlertDialog,
@@ -247,13 +247,25 @@ export function TradeTypesAdmin({
 
   return (
     <TooltipProvider>
-      <SectionCard
-        flush
-        title="Trades"
-        description="Archiving takes a trade off the pickers; tradies already under it keep it. Only a trade with no tradies can be deleted."
-        action={
-          archivedCount > 0 ? (
-            <div className="flex items-center gap-2">
+      <div className="space-y-5">
+        <p className="text-sm text-muted-foreground">
+          Archiving takes a trade off the pickers; tradies already under it keep
+          it. Only a trade with no tradies can be deleted.
+        </p>
+
+        <AddTradeType
+          disabled={isPending}
+          onAdd={(label, icon) =>
+            submit(
+              () => createTradeTypeAction({ label, icon }),
+              () => `${label} added.`,
+            )
+          }
+        />
+
+        {archivedCount > 0 ? (
+          <ListToolbar>
+            <div className="flex min-h-11 items-center gap-2">
               <Switch
                 id="show-archived-trades"
                 checked={showArchived}
@@ -263,33 +275,23 @@ export function TradeTypesAdmin({
                 Show archived ({archivedCount})
               </Label>
             </div>
-          ) : undefined
-        }
-      >
-        <div className="space-y-4">
-          <div className="md:px-4 md:pt-5">
-            <AddTradeType
-              disabled={isPending}
-              onAdd={(label, icon) =>
-                submit(
-                  () => createTradeTypeAction({ label, icon }),
-                  () => `${label} added.`,
-                )
-              }
+          </ListToolbar>
+        ) : null}
+
+        <TableCard>
+          <div className="p-4 sm:p-5 md:p-0">
+            <DataTable
+              flush
+              mobileLayout="cards"
+              mobileColumns={1}
+              mobileTitleColumn={1}
+              headers={["", "Trade", "Tradies", "Status", ""]}
+              align={["start", "start", "end", "start", "end"]}
+              caption="Trades a tradie can be listed under, with how many tradies each holds."
+              rows={rows}
             />
           </div>
-
-          <DataTable
-            flush
-            mobileLayout="cards"
-            mobileColumns={1}
-            mobileTitleColumn={1}
-            headers={["", "Trade", "Tradies", "Status", ""]}
-            align={["start", "start", "end", "start", "end"]}
-            caption="Trades a tradie can be listed under, with how many tradies each holds."
-            rows={rows}
-          />
-        </div>
+        </TableCard>
 
         <AlertDialog
           open={pendingDelete !== null}
@@ -325,7 +327,7 @@ export function TradeTypesAdmin({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </SectionCard>
+      </div>
     </TooltipProvider>
   );
 }
@@ -353,7 +355,7 @@ function AddTradeType({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3 sm:flex-row sm:items-end"
+      className="flex flex-col gap-2 sm:flex-row sm:items-end"
     >
       <div className="flex-1 space-y-1.5">
         <Label htmlFor={inputId}>New trade</Label>

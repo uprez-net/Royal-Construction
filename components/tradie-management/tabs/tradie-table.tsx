@@ -40,107 +40,112 @@ export function TradieTable({
   const { query } = useAppSelector((state) => state.tradieManagement);
   const filtersActive = hasActiveTradieFilters(query);
 
+  // Below md the rows are ring cards, which need the card's padding; from md the
+  // table sits edge to edge in the card. Same split as the Leads skeleton.
   return (
-    <DataTable
-      mobileLayout="cards"
-      mobileActionsPlacement="header"
-      caption="Tradies with their trade, last quoted price, rating, completed jobs and incident counts."
-      headers={[
-        "Tradie",
-        "Trade",
-        "Last Quoted Price",
-        "Rating",
-        "Jobs",
-        "Incidents",
-        "Actions",
-      ]}
-      align={COLUMN_ALIGN}
-      rows={filteredTradies.map((tradie) => [
-        <Link
-          key={`name-${tradie.id}`}
-          href={`/tradie-management/${tradie.id}`}
-          prefetch={false}
-          // The row navigates on click too; this keeps one navigation per click.
-          onClick={(event) => event.stopPropagation()}
-          className="rounded-sm font-medium text-inherit hover:underline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
-        >
-          {tradie.name}
-        </Link>,
-        <span key={`trade-${tradie.id}`} className="flex flex-wrap gap-1">
-          {tradie.trades.map((trade) => (
-            <TradieBadge key={trade} trade={trade} />
-          ))}
-        </span>,
-        <span key={`rate-${tradie.id}`} className="whitespace-nowrap">
-          <span className="font-mono tabular-nums">
-            {formatPrice(tradie.lastQuotedPrice, tradie.lastQuotedPriceUnit)}
-          </span>
-        </span>,
-        <RatingStars
-          rating={parseFloat(tradie.rating ?? "0")}
-          key={`rating-${tradie.id}`}
-        />,
-        tradie.jobsCompleted,
-        // Open incidents are the alert concept of this page, so they get badge
-        // weight instead of being buried in a "2 open / 3 closed" string. The
-        // word "open" carries the meaning; the tint only reinforces it.
-        <span
-          key={`incidents-${tradie.id}`}
-          className="inline-flex items-center justify-end gap-2 whitespace-nowrap"
-        >
-          {tradie.incidentCount.open > 0 ? (
-            <span className="rounded-full bg-warning-light px-2 py-0.5 text-xs font-medium tabular-nums text-warning-ink">
-              {tradie.incidentCount.open} open
+    <div className="p-4 sm:p-5 md:p-0">
+      <DataTable
+        flush
+        mobileLayout="cards"
+        mobileActionsPlacement="header"
+        caption="Tradies with their trade, last quoted price, rating, completed jobs and incident counts."
+        headers={[
+          "Tradie",
+          "Trade",
+          "Last Quoted Price",
+          "Rating",
+          "Jobs",
+          "Incidents",
+          "Actions",
+        ]}
+        align={COLUMN_ALIGN}
+        rows={filteredTradies.map((tradie) => [
+          <Link
+            key={`name-${tradie.id}`}
+            href={`/tradie-management/${tradie.id}`}
+            prefetch={false}
+            // The row navigates on click too; this keeps one navigation per click.
+            onClick={(event) => event.stopPropagation()}
+            className="rounded-sm font-medium text-inherit hover:underline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+          >
+            {tradie.name}
+          </Link>,
+          <span key={`trade-${tradie.id}`} className="flex flex-wrap gap-1">
+            {tradie.trades.map((trade) => (
+              <TradieBadge key={trade} trade={trade} />
+            ))}
+          </span>,
+          <span key={`rate-${tradie.id}`} className="whitespace-nowrap">
+            <span className="font-mono tabular-nums">
+              {formatPrice(tradie.lastQuotedPrice, tradie.lastQuotedPriceUnit)}
             </span>
-          ) : (
-            <span className="text-xs text-muted-foreground">None open</span>
-          )}
+          </span>,
+          <RatingStars
+            rating={parseFloat(tradie.rating ?? "0")}
+            key={`rating-${tradie.id}`}
+          />,
+          tradie.jobsCompleted,
+          // Open incidents are the alert concept of this page, so they get badge
+          // weight instead of being buried in a "2 open / 3 closed" string. The
+          // word "open" carries the meaning; the tint only reinforces it.
+          <span
+            key={`incidents-${tradie.id}`}
+            className="inline-flex items-center justify-end gap-2 whitespace-nowrap"
+          >
+            {tradie.incidentCount.open > 0 ? (
+              <span className="rounded-full bg-warning-light px-2 py-0.5 text-xs font-medium tabular-nums text-warning-ink">
+                {tradie.incidentCount.open} open
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground">None open</span>
+            )}
 
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {tradie.incidentCount.resolved} closed
-          </span>
-        </span>,
-        <TradieActionsDropdown
-          tradieRow={tradie}
-          key={`actions-${tradie.id}`}
-        />,
-      ])}
-      emptyState={
-        <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
-          <HardHat
-            className="size-5 text-muted-foreground"
-            aria-hidden="true"
-          />
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {tradie.incidentCount.resolved} closed
+            </span>
+          </span>,
+          <TradieActionsDropdown
+            tradieRow={tradie}
+            key={`actions-${tradie.id}`}
+          />,
+        ])}
+        emptyState={
+          <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
+            <HardHat
+              className="size-5 text-muted-foreground"
+              aria-hidden="true"
+            />
 
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">
-              {filtersActive
-                ? "No tradies match these filters"
-                : "No tradies yet"}
-            </p>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">
+                {filtersActive
+                  ? "No tradies match these filters"
+                  : "No tradies yet"}
+              </p>
 
-            <p className="text-xs text-muted-foreground">
-              {filtersActive
-                ? "Try a broader search, or clear the filters to see every tradie."
-                : "Add your first tradie to start tracking rates, jobs and incidents."}
-            </p>
+              <p className="text-xs text-muted-foreground">
+                {filtersActive
+                  ? "Try a broader search, or clear the filters to see every tradie."
+                  : "Add your first tradie to start tracking rates, jobs and incidents."}
+              </p>
+            </div>
+
+            {filtersActive && (
+              <Button
+                variant="outline"
+                onClick={() => dispatch(setQuery(CLEARED_TRADIE_QUERY))}
+              >
+                Clear filters
+              </Button>
+            )}
           </div>
-
-          {filtersActive && (
-            <Button
-              variant="outline"
-              onClick={() => dispatch(setQuery(CLEARED_TRADIE_QUERY))}
-            >
-              Clear filters
-            </Button>
-          )}
-        </div>
-      }
-      rowLabel={(row) => `Open ${filteredTradies[row].name}`}
-      onRowClick={(row) => {
-        const tradieId = filteredTradies[row].id;
-        router.push(`/tradie-management/${tradieId}`);
-      }}
-    />
+        }
+        rowLabel={(row) => `Open ${filteredTradies[row].name}`}
+        onRowClick={(row) => {
+          const tradieId = filteredTradies[row].id;
+          router.push(`/tradie-management/${tradieId}`);
+        }}
+      />
+    </div>
   );
 }

@@ -204,7 +204,7 @@ export function CostSchedulePanel({
             ))}
           </datalist>
         </div>
-        <div className="max-w-full overflow-hidden rounded-lg border border-border bg-card md:rounded-none md:border-0">
+        <div className="max-w-full overflow-hidden">
           <Table
             aria-describedby="cost-schedule-summary cost-schedule-keyboard-help"
             className="cost-schedule-table md:min-w-270 table-fixed border-separate border-spacing-0 text-[13px]"

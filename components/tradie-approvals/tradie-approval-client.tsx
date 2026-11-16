@@ -14,7 +14,11 @@ import {
 } from "@/types/tradie-approvals";
 import { useEffect } from "react";
 import { TradieApprovalKPI } from "./tradie-approval-header";
-import { TradieApprovalTabs } from "./tradie-approval-tabs";
+import {
+  TradieApprovalTabs,
+  TradieApprovalTypeFilters,
+} from "./tradie-approval-tabs";
+import { TableCard } from "@/components/common/list-toolbar";
 import { TradieApprovalPagination } from "./tradie-approval-pagination";
 import { TradieApprovalList } from "./tradie-approval-list";
 import { useSearchParams } from "next/navigation";
@@ -62,7 +66,9 @@ export function TradieApprovalClient({
     <div className="space-y-6">
       <TradieApprovalKPI />
       <TradieApprovalTabs />
-      <TradieApprovalList />
+      <TableCard header={<TradieApprovalTypeFilters />}>
+        <TradieApprovalList />
+      </TableCard>
       <TradieApprovalPagination />
     </div>
   );

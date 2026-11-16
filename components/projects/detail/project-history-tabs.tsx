@@ -12,13 +12,18 @@ import {
   History,
   Mail,
   Receipt,
-  Search,
   ShieldCheck,
   X,
   type LucideIcon,
 } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardTitle } from "@/components/ui/card";
+import {
+  FilterChip,
+  FilterChips,
+  TableCard,
+  ToolbarSearch,
+} from "@/components/common/list-toolbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FilterSelect } from "@/components/common/filter-select";
@@ -39,7 +44,6 @@ import {
   isTimeWindow,
   isWithinWindow,
 } from "@/lib/files/file-filters";
-import { cn } from "@/lib/utils";
 import type { ProjectDetail } from "@/types/project";
 
 interface ProjectHistoryTabsProps {
@@ -249,183 +253,178 @@ export function ProjectHistoryTabs({ project }: ProjectHistoryTabsProps) {
   };
 
   return (
-    <Card className="rounded-xl border-border/70 bg-card shadow-sm">
-      <CardHeader className="space-y-4 border-b border-border/70 pb-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <CardTitle
-              as="h2"
-              className="text-base font-semibold text-foreground"
-            >
-              Activity timeline
-            </CardTitle>
-            <p
-              className="text-sm text-muted-foreground tabular-nums"
-              aria-live="polite"
-            >
-              {isFiltered
-                ? `${filtered.length} of ${history.length} events match`
-                : `${history.length} ${history.length === 1 ? "event" : "events"} · newest first`}
-            </p>
-          </div>
-          <div className="relative w-full sm:w-72">
-            <Search
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              type="search"
+    <TableCard
+      header={
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle
+                as="h2"
+                className="text-base font-semibold text-foreground"
+              >
+                Activity timeline
+              </CardTitle>
+              <p
+                className="text-sm text-muted-foreground tabular-nums"
+                aria-live="polite"
+              >
+                {isFiltered
+                  ? `${filtered.length} of ${history.length} events match`
+                  : `${history.length} ${history.length === 1 ? "event" : "events"} · newest first`}
+              </p>
+            </div>
+            <ToolbarSearch
+              className="order-none"
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
                 setLimit(PAGE_SIZE);
               }}
               placeholder="Search events, people or milestones"
-              className="h-9 rounded-lg pl-9 text-sm"
               aria-label="Search history"
             />
           </div>
-        </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-          <FilterSelect
-            label="When"
-            allLabel="Any time"
-            value={when ?? ""}
-            onChange={(histWhen) => {
-              setLimit(PAGE_SIZE);
-              setFilters(
-                histWhen === "custom"
-                  ? { histWhen }
-                  : { histWhen, histFrom: null, histTo: null },
-              );
-            }}
-            options={TIME_WINDOWS.map((window) => ({
-              value: window,
-              label: TIME_WINDOW_LABEL[window],
-            }))}
-          />
-          <FilterSelect
-            label="Category"
-            allLabel="All categories"
-            value={filters.histCat}
-            onChange={(histCat) => {
-              setLimit(PAGE_SIZE);
-              // A type from another category would leave nothing to show.
-              setFilters({ histCat, histType: null });
-            }}
-            options={options.categories}
-          />
-          <FilterSelect
-            label="Activity type"
-            allLabel="All types"
-            value={filters.histType}
-            onChange={(histType) => {
-              setLimit(PAGE_SIZE);
-              setFilters({ histType });
-            }}
-            options={options.types}
-          />
-          <FilterSelect
-            label="Milestone"
-            allLabel="All milestones"
-            value={filters.histMilestone}
-            onChange={(histMilestone) => {
-              setLimit(PAGE_SIZE);
-              setFilters({ histMilestone });
-            }}
-            options={options.milestones}
-            disabled={options.milestones.length === 0 && !filters.histMilestone}
-          />
-          <FilterSelect
-            label="By"
-            allLabel="Anyone"
-            value={filters.histBy}
-            onChange={(histBy) => {
-              setLimit(PAGE_SIZE);
-              setFilters({ histBy });
-            }}
-            options={options.authors}
-          />
-        </div>
-
-        {when === "custom" ? (
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
-              <span className="block">From</span>
-              <Input
-                type="date"
-                value={filters.histFrom}
-                max={filters.histTo || undefined}
-                onChange={(event) =>
-                  setFilters({ histFrom: event.target.value })
-                }
-                className="h-9 w-40"
-              />
-            </label>
-            <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
-              <span className="block">To</span>
-              <Input
-                type="date"
-                value={filters.histTo}
-                min={filters.histFrom || undefined}
-                onChange={(event) => setFilters({ histTo: event.target.value })}
-                className="h-9 w-40"
-              />
-            </label>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+            <FilterSelect
+              label="When"
+              allLabel="Any time"
+              value={when ?? ""}
+              onChange={(histWhen) => {
+                setLimit(PAGE_SIZE);
+                setFilters(
+                  histWhen === "custom"
+                    ? { histWhen }
+                    : { histWhen, histFrom: null, histTo: null },
+                );
+              }}
+              options={TIME_WINDOWS.map((window) => ({
+                value: window,
+                label: TIME_WINDOW_LABEL[window],
+              }))}
+            />
+            <FilterSelect
+              label="Category"
+              allLabel="All categories"
+              value={filters.histCat}
+              onChange={(histCat) => {
+                setLimit(PAGE_SIZE);
+                // A type from another category would leave nothing to show.
+                setFilters({ histCat, histType: null });
+              }}
+              options={options.categories}
+            />
+            <FilterSelect
+              label="Activity type"
+              allLabel="All types"
+              value={filters.histType}
+              onChange={(histType) => {
+                setLimit(PAGE_SIZE);
+                setFilters({ histType });
+              }}
+              options={options.types}
+            />
+            <FilterSelect
+              label="Milestone"
+              allLabel="All milestones"
+              value={filters.histMilestone}
+              onChange={(histMilestone) => {
+                setLimit(PAGE_SIZE);
+                setFilters({ histMilestone });
+              }}
+              options={options.milestones}
+              disabled={
+                options.milestones.length === 0 && !filters.histMilestone
+              }
+            />
+            <FilterSelect
+              label="By"
+              allLabel="Anyone"
+              value={filters.histBy}
+              onChange={(histBy) => {
+                setLimit(PAGE_SIZE);
+                setFilters({ histBy });
+              }}
+              options={options.authors}
+            />
           </div>
-        ) : null}
 
-        {options.categories.length > 1 || isFiltered ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {options.categories.map(({ value, label, count }) => {
-              const Icon = CATEGORY_ICON[value as ActivityCategory] ?? Activity;
-              const active = filters.histCat === value;
-              return (
-                <button
-                  key={value}
+          {when === "custom" ? (
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
+                <span className="block">From</span>
+                <Input
+                  type="date"
+                  value={filters.histFrom}
+                  max={filters.histTo || undefined}
+                  onChange={(event) =>
+                    setFilters({ histFrom: event.target.value })
+                  }
+                  className="h-9 w-40"
+                />
+              </label>
+              <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
+                <span className="block">To</span>
+                <Input
+                  type="date"
+                  value={filters.histTo}
+                  min={filters.histFrom || undefined}
+                  onChange={(event) =>
+                    setFilters({ histTo: event.target.value })
+                  }
+                  className="h-9 w-40"
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {options.categories.length > 1 || isFiltered ? (
+            <div className="flex items-center gap-2">
+              <FilterChips>
+                {options.categories.map(({ value, label, count }) => {
+                  const Icon =
+                    CATEGORY_ICON[value as ActivityCategory] ?? Activity;
+                  const active = filters.histCat === value;
+                  return (
+                    <FilterChip
+                      key={value}
+                      active={active}
+                      onClick={() => {
+                        setLimit(PAGE_SIZE);
+                        setFilters({
+                          histCat: active ? null : value,
+                          histType: null,
+                        });
+                      }}
+                    >
+                      <Icon className="size-3.5" aria-hidden="true" />
+                      {label}
+                      <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
+                        {count}
+                      </span>
+                    </FilterChip>
+                  );
+                })}
+              </FilterChips>
+              {isFiltered ? (
+                <Button
                   type="button"
-                  aria-pressed={active}
-                  onClick={() => {
-                    setLimit(PAGE_SIZE);
-                    setFilters({
-                      histCat: active ? null : value,
-                      histType: null,
-                    });
-                  }}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
-                    active
-                      ? "border-primary/50 bg-primary/10 text-primary"
-                      : "border-border/70 bg-background text-foreground hover:border-primary/40 hover:text-primary",
-                  )}
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 shrink-0 text-xs"
+                  onClick={clearFilters}
                 >
-                  <Icon className="size-3.5" aria-hidden="true" />
-                  {label}
-                  <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-            {isFiltered ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="ml-auto h-7 text-xs"
-                onClick={clearFilters}
-              >
-                <X data-icon="inline-start" aria-hidden="true" />
-                Clear {activeFilterCount}{" "}
-                {activeFilterCount === 1 ? "filter" : "filters"}
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-      </CardHeader>
-
-      <CardContent className="p-4 sm:p-6">
+                  <X data-icon="inline-start" aria-hidden="true" />
+                  Clear {activeFilterCount}{" "}
+                  {activeFilterCount === 1 ? "filter" : "filters"}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      }
+    >
+      <div className="p-4 sm:p-6">
         {days.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
             <div className="flex size-12 items-center justify-center rounded-lg bg-muted">
@@ -531,7 +530,7 @@ export function ProjectHistoryTabs({ project }: ProjectHistoryTabsProps) {
             ) : null}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </TableCard>
   );
 }

@@ -1,5 +1,4 @@
 "use client";
-import { CardContent } from "../ui/card";
 import { currency, dateFormat } from "@/utils/formatters";
 import { ChevronRight, Layers, ReceiptText } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
@@ -127,16 +126,16 @@ export function OfferTable({
 
   if (loading && offers.items.length === 0) {
     return (
-      <CardContent className={cn("px-5 py-4", FLUSH_TABLE_CONTENT_CLASS)}>
+      <div className={cn("px-4 py-4 sm:px-5", FLUSH_TABLE_CONTENT_CLASS)}>
         <PageSkeleton label="Loading offers">
           <DataTableSkeleton columnCount={OFFER_TABLE_HEADERS.length} flush />
         </PageSkeleton>
-      </CardContent>
+      </div>
     );
   }
 
   return (
-    <CardContent className={cn("px-5 py-4", FLUSH_TABLE_CONTENT_CLASS)}>
+    <div className={cn("px-4 py-4 sm:px-5", FLUSH_TABLE_CONTENT_CLASS)}>
       {offers.items.length > 0 ? (
         <div className="flex flex-col gap-3 md:hidden">
           {offers.items.map((group) => (
@@ -236,7 +235,7 @@ export function OfferTable({
       <div className={cn(offers.totalCount > 0 && "md:px-5 md:pb-4")}>
         <OfferPagination offers={offers} onPageChange={handlePageChange} />
       </div>
-    </CardContent>
+    </div>
   );
 }
 

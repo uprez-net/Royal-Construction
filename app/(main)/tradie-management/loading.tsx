@@ -4,6 +4,7 @@ import {
   MOBILE_METRIC_STRIP_CLASS,
 } from "@/components/common/kpi-band";
 import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
+import { ListToolbar, TableCard } from "@/components/common/list-toolbar";
 import {
   DataTableSkeleton,
   MetricCardSkeleton,
@@ -29,14 +30,31 @@ export default function TradieManagementSkeleton() {
           <MetricCardSkeleton key={i} foot />
         ))}
       </KpiBand>
-      <div className="flex flex-wrap items-center gap-2">
-        <Skeleton className="h-11 w-44" />
-        <Skeleton className="h-11 w-full sm:w-64" />
-        <Skeleton className="h-11 w-36" />
-        <Skeleton className="h-11 w-36" />
-        <Skeleton className="h-11 w-28" />
-      </div>
-      <DataTableSkeleton columnCount={7} />
+      <ListToolbar
+        start={
+          <div className="flex items-center gap-1.5">
+            <Skeleton className="h-11 w-24 rounded-md" />
+            <Skeleton className="h-11 w-20 rounded-md" />
+          </div>
+        }
+      >
+        <Skeleton className="h-11 w-36 rounded-lg" />
+        <Skeleton className="h-11 w-36 rounded-lg" />
+        <Skeleton className="h-11 w-28 rounded-md" />
+        <Skeleton className="h-11 w-full rounded-lg sm:w-55" />
+      </ListToolbar>
+      <TableCard
+        header={
+          <div className="flex gap-1">
+            <Skeleton className="h-11 w-28 rounded-lg" />
+            <Skeleton className="h-11 w-24 rounded-lg" />
+          </div>
+        }
+      >
+        <div className="p-4 sm:p-5 md:p-0">
+          <DataTableSkeleton columnCount={7} flush />
+        </div>
+      </TableCard>
     </PageSkeleton>
   );
 }

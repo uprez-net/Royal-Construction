@@ -14,7 +14,8 @@ import {
 
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardTitle } from "@/components/ui/card";
+import { TableCard } from "@/components/common/list-toolbar";
 import {
   Table,
   TableBody,
@@ -24,7 +25,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { FLUSH_TABLE_CARD_CLASS } from "@/components/ui/table-styles";
 import {
   duenessOf,
   findWorkingStageIndex,
@@ -397,13 +397,8 @@ export function ProjectMilestonesTab({
 
   return (
     <section className="grid gap-4">
-      <Card
-        className={cn(
-          "rounded-xl border-border/70 bg-card shadow-sm",
-          FLUSH_TABLE_CARD_CLASS,
-        )}
-      >
-        <CardHeader className="border-b border-border/70 pb-4">
+      <TableCard
+        header={
           <CardTitle
             as="h2"
             className="flex items-center gap-2 text-base font-semibold text-foreground"
@@ -414,416 +409,402 @@ export function ProjectMilestonesTab({
             />
             Stage schedule
           </CardTitle>
-        </CardHeader>
+        }
+      >
+        {ledgerStages.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+            <p className="text-sm font-medium text-foreground">
+              No activities yet
+            </p>
+            <p className="max-w-sm text-xs text-muted-foreground">
+              Add the first activity to break this project into stages with
+              target dates and budgets.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table className="project-stage-table">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Stage</TableHead>
+                  {isAdmin ? (
+                    <TableHead className="text-right">Claim</TableHead>
+                  ) : null}
+                  <TableHead className="hidden md:table-cell">
+                    Progress
+                  </TableHead>
+                  <TableHead className="hidden md:table-cell">Status</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Next up
+                  </TableHead>
+                  <TableHead className="w-12">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
 
-        <CardContent className="px-0 pt-0">
-          {ledgerStages.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
-              <p className="text-sm font-medium text-foreground">
-                No activities yet
-              </p>
-              <p className="max-w-sm text-xs text-muted-foreground">
-                Add the first activity to break this project into stages with
-                target dates and budgets.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table className="project-stage-table">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Stage</TableHead>
-                    {isAdmin ? (
-                      <TableHead className="text-right">Claim</TableHead>
-                    ) : null}
-                    <TableHead className="hidden md:table-cell">
-                      Progress
-                    </TableHead>
-                    <TableHead className="hidden md:table-cell">
-                      Status
-                    </TableHead>
-                    <TableHead className="hidden md:table-cell">
-                      Next up
-                    </TableHead>
-                    <TableHead className="w-12">
-                      <span className="sr-only">Actions</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
+              <TableBody>
+                {ledgerStages.map((ledgerStage) => {
+                  const isOpen = openStages.includes(ledgerStage.stage);
+                  const rollup = stageRollup(ledgerStage.milestones);
+                  const { open, settled } = partitionActivities(
+                    ledgerStage.milestones,
+                  );
+                  const isShowingDone = stagesShowingDone.includes(
+                    ledgerStage.stage,
+                  );
+                  const mostRecent = lastCompleted(ledgerStage.milestones);
+                  const bodyId = `stage-activities-${ledgerStage.stage}`;
 
-                <TableBody>
-                  {ledgerStages.map((ledgerStage) => {
-                    const isOpen = openStages.includes(ledgerStage.stage);
-                    const rollup = stageRollup(ledgerStage.milestones);
-                    const { open, settled } = partitionActivities(
-                      ledgerStage.milestones,
-                    );
-                    const isShowingDone = stagesShowingDone.includes(
-                      ledgerStage.stage,
-                    );
-                    const mostRecent = lastCompleted(ledgerStage.milestones);
-                    const bodyId = `stage-activities-${ledgerStage.stage}`;
-
-                    return (
-                      <Fragment key={ledgerStage.stage}>
-                        <TableRow
-                          className={cn(
-                            "cursor-pointer hover:bg-muted",
-                            isOpen && "bg-primary/5 hover:bg-primary/5",
-                          )}
-                          onClick={() => toggleStage(ledgerStage.stage)}
-                        >
-                          <TableCell className="stage-heading">
-                            <span className="font-medium text-foreground">
-                              {ledgerStage.label}
+                  return (
+                    <Fragment key={ledgerStage.stage}>
+                      <TableRow
+                        className={cn(
+                          "cursor-pointer hover:bg-muted",
+                          isOpen && "bg-primary/5 hover:bg-primary/5",
+                        )}
+                        onClick={() => toggleStage(ledgerStage.stage)}
+                      >
+                        <TableCell className="stage-heading">
+                          <span className="font-medium text-foreground">
+                            {ledgerStage.label}
+                          </span>
+                          {ledgerStage.percentage != null ? (
+                            <span className="ml-1.5 font-mono text-xs tabular-nums text-muted-foreground">
+                              {ledgerStage.percentage}%
                             </span>
-                            {ledgerStage.percentage != null ? (
-                              <span className="ml-1.5 font-mono text-xs tabular-nums text-muted-foreground">
-                                {ledgerStage.percentage}%
-                              </span>
-                            ) : null}
-
-                            {/* Below `sm` the Status and Next up columns are
-                                gone, so both fold in under the stage name. */}
-                            <span className="ml-1.5 inline-flex align-middle md:hidden">
-                              <StageStatusPill state={ledgerStage.state} />
-                            </span>
-                            <span className="mt-1 block text-xs md:hidden">
-                              <NextUp ledgerStage={ledgerStage} />
-                            </span>
-                          </TableCell>
-
-                          {isAdmin ? (
-                            <TableCell className="stage-claim text-right font-mono tabular-nums">
-                              <span className="mb-1 block font-sans text-xs text-muted-foreground md:hidden">
-                                Stage claim
-                              </span>
-                              {ledgerStage.claim === null
-                                ? "—"
-                                : currency.format(ledgerStage.claim)}
-                            </TableCell>
                           ) : null}
 
-                          <TableCell className="hidden md:table-cell">
-                            <span className="flex items-center gap-2">
-                              <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                                {rollup.done} / {rollup.total}
-                              </span>
-                              <span
-                                className="h-1 w-14 overflow-hidden rounded-full bg-muted"
-                                aria-hidden="true"
-                              >
-                                <span
-                                  className={cn(
-                                    "block h-full rounded-full",
-                                    ledgerStage.state === "complete"
-                                      ? "bg-success-ink"
-                                      : "bg-warning-ink",
-                                  )}
-                                  style={{
-                                    width: `${
-                                      rollup.total
-                                        ? Math.round(
-                                            (rollup.done / rollup.total) * 100,
-                                          )
-                                        : 0
-                                    }%`,
-                                  }}
-                                />
-                              </span>
-                            </span>
-                          </TableCell>
-
-                          <TableCell className="hidden md:table-cell">
+                          {/* Below `sm` the Status and Next up columns are
+                                gone, so both fold in under the stage name. */}
+                          <span className="ml-1.5 inline-flex align-middle md:hidden">
                             <StageStatusPill state={ledgerStage.state} />
-                          </TableCell>
-
-                          <TableCell className="hidden max-w-[22rem] text-xs md:table-cell">
+                          </span>
+                          <span className="mt-1 block text-xs md:hidden">
                             <NextUp ledgerStage={ledgerStage} />
-                          </TableCell>
+                          </span>
+                        </TableCell>
 
-                          <TableCell className="stage-actions">
-                            <span className="flex items-center justify-end gap-1">
-                              {/* A finished stage has no open activity left to
+                        {isAdmin ? (
+                          <TableCell className="stage-claim text-right font-mono tabular-nums">
+                            <span className="mb-1 block font-sans text-xs text-muted-foreground md:hidden">
+                              Stage claim
+                            </span>
+                            {ledgerStage.claim === null
+                              ? "—"
+                              : currency.format(ledgerStage.claim)}
+                          </TableCell>
+                        ) : null}
+
+                        <TableCell className="hidden md:table-cell">
+                          <span className="flex items-center gap-2">
+                            <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                              {rollup.done} / {rollup.total}
+                            </span>
+                            <span
+                              className="h-1 w-14 overflow-hidden rounded-full bg-muted"
+                              aria-hidden="true"
+                            >
+                              <span
+                                className={cn(
+                                  "block h-full rounded-full",
+                                  ledgerStage.state === "complete"
+                                    ? "bg-success-ink"
+                                    : "bg-warning-ink",
+                                )}
+                                style={{
+                                  width: `${
+                                    rollup.total
+                                      ? Math.round(
+                                          (rollup.done / rollup.total) * 100,
+                                        )
+                                      : 0
+                                  }%`,
+                                }}
+                              />
+                            </span>
+                          </span>
+                        </TableCell>
+
+                        <TableCell className="hidden md:table-cell">
+                          <StageStatusPill state={ledgerStage.state} />
+                        </TableCell>
+
+                        <TableCell className="hidden max-w-[22rem] text-xs md:table-cell">
+                          <NextUp ledgerStage={ledgerStage} />
+                        </TableCell>
+
+                        <TableCell className="stage-actions">
+                          <span className="flex items-center justify-end gap-1">
+                            {/* A finished stage has no open activity left to
                                   book a tradie onto, so it gets no button. */}
-                              {ledgerStage.state !== "complete" ? (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-primary"
-                                  aria-label={`Schedule tradies for ${ledgerStage.label}`}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    handleScheduleTradies(ledgerStage.stage);
-                                  }}
-                                >
-                                  <CalendarPlus
-                                    className="size-4"
-                                    aria-hidden="true"
-                                  />
-                                  <span className="hidden whitespace-nowrap md:inline">
-                                    Schedule tradies
-                                  </span>
-                                </Button>
-                              ) : null}
-                              {onOpenChecklist ? (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-primary"
-                                  aria-label={`Verify the ${ledgerStage.label} checklist`}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    onOpenChecklist(
-                                      checklistNumberForStage(
-                                        ledgerStage.stage,
-                                      ),
-                                    );
-                                  }}
-                                >
-                                  <ClipboardCheck
-                                    className="size-4"
-                                    aria-hidden="true"
-                                  />
-                                  <span className="hidden whitespace-nowrap md:inline">
-                                    Verify checklist
-                                  </span>
-                                </Button>
-                              ) : null}
+                            {ledgerStage.state !== "complete" ? (
                               <Button
-                                size="icon"
+                                size="sm"
                                 variant="ghost"
-                                aria-expanded={isOpen}
-                                aria-controls={isOpen ? bodyId : undefined}
-                                aria-label={`${isOpen ? "Hide" : "Show"} ${ledgerStage.label} activities`}
+                                className="text-primary"
+                                aria-label={`Schedule tradies for ${ledgerStage.label}`}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  toggleStage(ledgerStage.stage);
+                                  handleScheduleTradies(ledgerStage.stage);
                                 }}
                               >
-                                <ChevronDown
-                                  className={cn(
-                                    "size-4 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
-                                    isOpen && "rotate-180",
-                                  )}
+                                <CalendarPlus
+                                  className="size-4"
                                   aria-hidden="true"
                                 />
+                                <span className="hidden whitespace-nowrap md:inline">
+                                  Schedule tradies
+                                </span>
                               </Button>
-                            </span>
-                          </TableCell>
-                        </TableRow>
-
-                        {isOpen ? (
-                          <TableRow className="hover:bg-transparent">
-                            <TableCell
-                              colSpan={columnCount}
-                              className="bg-background p-0"
+                            ) : null}
+                            {onOpenChecklist ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-primary"
+                                aria-label={`Verify the ${ledgerStage.label} checklist`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onOpenChecklist(
+                                    checklistNumberForStage(ledgerStage.stage),
+                                  );
+                                }}
+                              >
+                                <ClipboardCheck
+                                  className="size-4"
+                                  aria-hidden="true"
+                                />
+                                <span className="hidden whitespace-nowrap md:inline">
+                                  Verify checklist
+                                </span>
+                              </Button>
+                            ) : null}
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-expanded={isOpen}
+                              aria-controls={isOpen ? bodyId : undefined}
+                              aria-label={`${isOpen ? "Hide" : "Show"} ${ledgerStage.label} activities`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                toggleStage(ledgerStage.stage);
+                              }}
                             >
-                              <div id={bodyId}>
-                                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/70 px-4 py-2 text-xs text-muted-foreground">
-                                  {ledgerStage.isWorkable
-                                  || ledgerStage.state === "complete" ? (
+                              <ChevronDown
+                                className={cn(
+                                  "size-4 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
+                                  isOpen && "rotate-180",
+                                )}
+                                aria-hidden="true"
+                              />
+                            </Button>
+                          </span>
+                        </TableCell>
+                      </TableRow>
+
+                      {isOpen ? (
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell
+                            colSpan={columnCount}
+                            className="bg-background p-0"
+                          >
+                            <div id={bodyId}>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/70 px-4 py-2 text-xs text-muted-foreground">
+                                {ledgerStage.isWorkable
+                                || ledgerStage.state === "complete" ? (
+                                  <span>
+                                    {ledgerStage.state === "complete"
+                                      ? `All ${rollup.total} activities done`
+                                      : `${rollup.remaining} to go · ${rollup.done} done`}
+                                    {rollup.notRequired > 0
+                                      ? ` · ${rollup.notRequired} not required`
+                                      : null}
+                                  </span>
+                                ) : (
+                                  /* One explanation for the stage beats the
+                                       same sentence repeated on every row. */
+                                  <span className="flex items-center gap-1.5">
+                                    <Lock
+                                      className="size-3.5"
+                                      aria-hidden="true"
+                                    />
                                     <span>
-                                      {ledgerStage.state === "complete"
-                                        ? `All ${rollup.total} activities done`
-                                        : `${rollup.remaining} to go · ${rollup.done} done`}
+                                      <span className="font-medium text-foreground">
+                                        Opens when{" "}
+                                        {ledgerStage.blockedBy?.label} is
+                                        complete
+                                      </span>
+                                      {ledgerStage.blockedBy
+                                        ? ` · ${
+                                            stageRollup(
+                                              ledgerStage.blockedBy.milestones,
+                                            ).remaining
+                                          } ${ledgerStage.blockedBy.label} activities to go`
+                                        : null}
+                                    </span>
+                                  </span>
+                                )}
+
+                                <Button
+                                  size="default"
+                                  variant="ghost"
+                                  className="ml-auto text-primary"
+                                  onClick={() =>
+                                    handleAddMilestone(ledgerStage.stage)
+                                  }
+                                >
+                                  <Plus className="size-4" aria-hidden="true" />
+                                  Add activity
+                                  <span className="sr-only">
+                                    to {ledgerStage.label}
+                                  </span>
+                                </Button>
+                              </div>
+
+                              {open.length > 0 ? (
+                                <ul className="list-none px-4">
+                                  {open.map((milestone) => (
+                                    <MilestoneCard
+                                      key={milestone.id}
+                                      isActiveStage={ledgerStage.isWorkable}
+                                      isAdmin={isAdmin}
+                                      notesViewer={notesViewer}
+                                      milestone={milestone}
+                                      project={project}
+                                      tradieAlertsByMilestone={
+                                        tradieAlertsByMilestone
+                                      }
+                                      onOpenAddUpdateModal={
+                                        handleOpenAddUpdateModal
+                                      }
+                                      onStatusUpdate={handleStatusUpdate}
+                                      onStartMilestone={handleStartMilestone}
+                                      onSendReminder={handleSendReminder}
+                                      onOpenViewPicture={handleOpenViewPicture}
+                                      onMarkasNotRequired={
+                                        handleMarkAsNotRequired
+                                      }
+                                      onCreateVariation={
+                                        isAdmin ? setVariationFor : undefined
+                                      }
+                                    />
+                                  ))}
+                                </ul>
+                              ) : null}
+
+                              {settled.length > 0 ? (
+                                <>
+                                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 bg-muted/60 px-4 py-1.5 text-xs text-muted-foreground">
+                                    <span>
+                                      {rollup.done} done
+                                      {mostRecent && open.length > 0 ? (
+                                        <>
+                                          {" · last "}
+                                          {mostRecent.name}{" "}
+                                          <span className="font-mono tabular-nums">
+                                            {shortDate(
+                                              new Date(
+                                                mostRecent.actualDate as Date,
+                                              ),
+                                            )}
+                                          </span>
+                                        </>
+                                      ) : null}
                                       {rollup.notRequired > 0
                                         ? ` · ${rollup.notRequired} not required`
                                         : null}
                                     </span>
-                                  ) : (
-                                    /* One explanation for the stage beats the
-                                       same sentence repeated on every row. */
-                                    <span className="flex items-center gap-1.5">
-                                      <Lock
-                                        className="size-3.5"
+
+                                    <Button
+                                      size="default"
+                                      variant="ghost"
+                                      className="text-primary"
+                                      aria-expanded={isShowingDone}
+                                      onClick={() =>
+                                        toggleDone(ledgerStage.stage)
+                                      }
+                                    >
+                                      {isShowingDone ? "Hide" : "Show"}
+                                      <span className="sr-only">
+                                        done activities in {ledgerStage.label}
+                                      </span>
+                                      <ChevronDown
+                                        className={cn(
+                                          "size-4 transition-transform duration-200 motion-reduce:transition-none",
+                                          isShowingDone && "rotate-180",
+                                        )}
                                         aria-hidden="true"
                                       />
-                                      <span>
-                                        <span className="font-medium text-foreground">
-                                          Opens when{" "}
-                                          {ledgerStage.blockedBy?.label} is
-                                          complete
-                                        </span>
-                                        {ledgerStage.blockedBy
-                                          ? ` · ${
-                                              stageRollup(
-                                                ledgerStage.blockedBy
-                                                  .milestones,
-                                              ).remaining
-                                            } ${ledgerStage.blockedBy.label} activities to go`
-                                          : null}
-                                      </span>
-                                    </span>
-                                  )}
+                                    </Button>
+                                  </div>
 
-                                  <Button
-                                    size="default"
-                                    variant="ghost"
-                                    className="ml-auto text-primary"
-                                    onClick={() =>
-                                      handleAddMilestone(ledgerStage.stage)
-                                    }
-                                  >
-                                    <Plus
-                                      className="size-4"
-                                      aria-hidden="true"
-                                    />
-                                    Add activity
-                                    <span className="sr-only">
-                                      to {ledgerStage.label}
-                                    </span>
-                                  </Button>
-                                </div>
-
-                                {open.length > 0 ? (
-                                  <ul className="list-none px-4">
-                                    {open.map((milestone) => (
-                                      <MilestoneCard
-                                        key={milestone.id}
-                                        isActiveStage={ledgerStage.isWorkable}
-                                        isAdmin={isAdmin}
-                                        notesViewer={notesViewer}
-                                        milestone={milestone}
-                                        project={project}
-                                        tradieAlertsByMilestone={
-                                          tradieAlertsByMilestone
-                                        }
-                                        onOpenAddUpdateModal={
-                                          handleOpenAddUpdateModal
-                                        }
-                                        onStatusUpdate={handleStatusUpdate}
-                                        onStartMilestone={handleStartMilestone}
-                                        onSendReminder={handleSendReminder}
-                                        onOpenViewPicture={
-                                          handleOpenViewPicture
-                                        }
-                                        onMarkasNotRequired={
-                                          handleMarkAsNotRequired
-                                        }
-                                        onCreateVariation={
-                                          isAdmin ? setVariationFor : undefined
-                                        }
-                                      />
-                                    ))}
-                                  </ul>
-                                ) : null}
-
-                                {settled.length > 0 ? (
-                                  <>
-                                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 bg-muted/60 px-4 py-1.5 text-xs text-muted-foreground">
-                                      <span>
-                                        {rollup.done} done
-                                        {mostRecent && open.length > 0 ? (
-                                          <>
-                                            {" · last "}
-                                            {mostRecent.name}{" "}
-                                            <span className="font-mono tabular-nums">
-                                              {shortDate(
-                                                new Date(
-                                                  mostRecent.actualDate as Date,
-                                                ),
-                                              )}
-                                            </span>
-                                          </>
-                                        ) : null}
-                                        {rollup.notRequired > 0
-                                          ? ` · ${rollup.notRequired} not required`
-                                          : null}
-                                      </span>
-
-                                      <Button
-                                        size="default"
-                                        variant="ghost"
-                                        className="text-primary"
-                                        aria-expanded={isShowingDone}
-                                        onClick={() =>
-                                          toggleDone(ledgerStage.stage)
-                                        }
-                                      >
-                                        {isShowingDone ? "Hide" : "Show"}
-                                        <span className="sr-only">
-                                          done activities in {ledgerStage.label}
-                                        </span>
-                                        <ChevronDown
-                                          className={cn(
-                                            "size-4 transition-transform duration-200 motion-reduce:transition-none",
-                                            isShowingDone && "rotate-180",
-                                          )}
-                                          aria-hidden="true"
+                                  {isShowingDone ? (
+                                    <ul className="list-none px-4">
+                                      {settled.map((milestone) => (
+                                        <MilestoneCard
+                                          key={milestone.id}
+                                          isActiveStage={ledgerStage.isWorkable}
+                                          isAdmin={isAdmin}
+                                          notesViewer={notesViewer}
+                                          milestone={milestone}
+                                          project={project}
+                                          tradieAlertsByMilestone={
+                                            tradieAlertsByMilestone
+                                          }
+                                          onOpenAddUpdateModal={
+                                            handleOpenAddUpdateModal
+                                          }
+                                          onStatusUpdate={handleStatusUpdate}
+                                          onStartMilestone={
+                                            handleStartMilestone
+                                          }
+                                          onSendReminder={handleSendReminder}
+                                          onOpenViewPicture={
+                                            handleOpenViewPicture
+                                          }
+                                          onMarkasNotRequired={
+                                            handleMarkAsNotRequired
+                                          }
+                                          onCreateVariation={
+                                            isAdmin
+                                              ? setVariationFor
+                                              : undefined
+                                          }
                                         />
-                                      </Button>
-                                    </div>
+                                      ))}
+                                    </ul>
+                                  ) : null}
+                                </>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+              </TableBody>
 
-                                    {isShowingDone ? (
-                                      <ul className="list-none px-4">
-                                        {settled.map((milestone) => (
-                                          <MilestoneCard
-                                            key={milestone.id}
-                                            isActiveStage={
-                                              ledgerStage.isWorkable
-                                            }
-                                            isAdmin={isAdmin}
-                                            notesViewer={notesViewer}
-                                            milestone={milestone}
-                                            project={project}
-                                            tradieAlertsByMilestone={
-                                              tradieAlertsByMilestone
-                                            }
-                                            onOpenAddUpdateModal={
-                                              handleOpenAddUpdateModal
-                                            }
-                                            onStatusUpdate={handleStatusUpdate}
-                                            onStartMilestone={
-                                              handleStartMilestone
-                                            }
-                                            onSendReminder={handleSendReminder}
-                                            onOpenViewPicture={
-                                              handleOpenViewPicture
-                                            }
-                                            onMarkasNotRequired={
-                                              handleMarkAsNotRequired
-                                            }
-                                            onCreateVariation={
-                                              isAdmin
-                                                ? setVariationFor
-                                                : undefined
-                                            }
-                                          />
-                                        ))}
-                                      </ul>
-                                    ) : null}
-                                  </>
-                                ) : null}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ) : null}
-                      </Fragment>
-                    );
-                  })}
-                </TableBody>
-
-                {isAdmin ? (
-                  <TableFooter>
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell className="text-xs font-normal text-muted-foreground">
-                        Contract total
-                      </TableCell>
-                      <TableCell className="text-right font-mono tabular-nums">
-                        {contractTotal === null
-                          ? "—"
-                          : currency.format(contractTotal)}
-                      </TableCell>
-                      <TableCell colSpan={columnCount - 2} />
-                    </TableRow>
-                  </TableFooter>
-                ) : null}
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              {isAdmin ? (
+                <TableFooter>
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell className="text-xs font-normal text-muted-foreground">
+                      Contract total
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {contractTotal === null
+                        ? "—"
+                        : currency.format(contractTotal)}
+                    </TableCell>
+                    <TableCell colSpan={columnCount - 2} />
+                  </TableRow>
+                </TableFooter>
+              ) : null}
+            </Table>
+          </div>
+        )}
+      </TableCard>
       {isAdmin ? (
         <CreateVariationModal
           projectId={project.id}

@@ -60,7 +60,7 @@ export default async function ProjectPage({
       <PageHeader
         headingLevel="h1"
         title="Projects"
-        description={metadata.description}
+        description={`${metadata.description} Select a project for a quick view, or Details for the full project page.`}
       />
       <ProjectsClient
         projects={projectsResult.page.items}

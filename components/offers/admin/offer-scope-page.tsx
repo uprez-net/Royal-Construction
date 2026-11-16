@@ -226,7 +226,7 @@ function ScopeSection<T extends { id: string }>({
   renderItem,
 }: ScopeSectionProps<T>) {
   return (
-    <section className="rounded-xl bg-card p-5 shadow-sm ring-1 ring-foreground/4">
+    <section className="border-t border-border pt-6 first:border-t-0 first:pt-0">
       <div className="mb-4 flex items-center gap-2">
         {icon}
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>

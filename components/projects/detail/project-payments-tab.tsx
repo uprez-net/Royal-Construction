@@ -13,13 +13,11 @@ import {
 
 import { DataTable } from "@/components/common/data-table";
 import { METRIC_TONES, type MetricTone } from "@/components/common/metric-card";
-import {
-  FLUSH_TABLE_CARD_CLASS,
-  FLUSH_TABLE_CONTENT_CLASS,
-} from "@/components/ui/table-styles";
+import { FLUSH_TABLE_CONTENT_CLASS } from "@/components/ui/table-styles";
+import { TableCard } from "@/components/common/list-toolbar";
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardTitle } from "@/components/ui/card";
 import {
   countPendingInvoices,
   invoiceTone,
@@ -220,21 +218,17 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
         />
       </div>
 
-      <Card
-        className={cn(
-          "rounded-xl border-border/70 bg-card shadow-sm",
-          FLUSH_TABLE_CARD_CLASS,
-        )}
-      >
-        <CardHeader className="border-b border-border/70 pb-4">
+      <TableCard
+        header={
           <CardTitle
             as="h2"
             className="text-base font-semibold text-foreground"
           >
             Invoices
           </CardTitle>
-        </CardHeader>
-        <CardContent className={cn("pt-5", FLUSH_TABLE_CONTENT_CLASS)}>
+        }
+      >
+        <div className={cn("p-4", FLUSH_TABLE_CONTENT_CLASS)}>
           <DataTable
             flush
             mobileLayout="cards"
@@ -337,8 +331,8 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
               </div>
             }
           />
-        </CardContent>
-      </Card>
+        </div>
+      </TableCard>
     </section>
   );
 }

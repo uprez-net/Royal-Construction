@@ -34,7 +34,7 @@ export function TradieCategory({
   };
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 sm:p-5 md:grid-cols-3 lg:grid-cols-4">
       {/* A category is the trade's label as the tradies hold it. */}
       {filteredTradies.map((category) => (
         <CategoryCard
@@ -63,11 +63,12 @@ function CategoryCard({
       onClick={onClick}
       aria-label={`${name}: ${count} tradie${count === 1 ? "" : "s"}, ${totalJobs} total jobs`}
       className={cn(
-        "relative flex flex-col rounded-xl bg-card p-4 text-left shadow-sm ring-1 ring-foreground/4 transition-colors",
-        "hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+        // A tile sits inside the list's one card, so it draws a tint, not a card.
+        "relative flex flex-col rounded-lg bg-muted/40 p-4 text-left transition-colors",
+        "hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
       )}
     >
-      <span className="absolute right-3 top-3 rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-foreground">
+      <span className="absolute right-3 top-3 rounded-full bg-card px-2 py-0.5 text-xs font-medium tabular-nums text-foreground">
         {count}
       </span>
 

@@ -2,9 +2,9 @@
 
 import React from "react";
 import { DRAFTING_FILTER, type ProjectKPIs } from "@/types/project";
-import { cn } from "@/lib/utils";
 import type { ProjectStatusFilter } from "./projects-list-url";
 import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
+import { FilterChip, FilterChips } from "@/components/common/list-toolbar";
 
 interface ProjectFiltersProps {
   kpis: ProjectKPIs;
@@ -56,32 +56,21 @@ export function ProjectFilters({
           )
         }
       />
-      <div
-        className="hidden flex-wrap gap-2 md:flex"
+      <FilterChips
+        className="hidden md:flex"
         role="group"
         aria-label="Filter projects by status"
       >
-        {filters.map((filter) => {
-          const isActive = activeFilter === filter.value;
-
-          return (
-            <button
-              key={filter.label}
-              type="button"
-              aria-pressed={isActive}
-              onClick={() => onFilterChange(filter.value)}
-              className={cn(
-                "min-h-11 rounded-full border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                isActive
-                  ? "border-royal-gold-light bg-royal-gold-light font-semibold text-royal-gold-ink-text"
-                  : "border-input bg-card text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-            >
-              {filter.label} ({filter.count})
-            </button>
-          );
-        })}
-      </div>
+        {filters.map((filter) => (
+          <FilterChip
+            key={filter.label}
+            active={activeFilter === filter.value}
+            onClick={() => onFilterChange(filter.value)}
+          >
+            {filter.label} ({filter.count})
+          </FilterChip>
+        ))}
+      </FilterChips>
     </>
   );
 }

@@ -231,7 +231,7 @@ export function OfferCostScheduleScreen() {
           </div>
         </div>
 
-        <div className="max-w-full overflow-x-auto rounded-lg border border-border bg-card md:rounded-none md:border-0">
+        <div className="max-w-full overflow-x-auto">
           <Table className="admin-cost-table md:min-w-230 table-fixed text-[13px]">
             <colgroup>
               <col className="w-20" />

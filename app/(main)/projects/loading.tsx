@@ -1,15 +1,15 @@
 import { KpiBand } from "@/components/common/kpi-band";
 import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
 import {
+  TableCard,
+  TOOLBAR_BUTTON_CLASS,
+} from "@/components/common/list-toolbar";
+import {
   DataTableSkeleton,
   MetricCardSkeleton,
   PageSkeleton,
   Skeleton,
 } from "@/components/ui/skeleton";
-import {
-  FLUSH_TABLE_CARD_CLASS,
-  FLUSH_TABLE_CONTENT_CLASS,
-} from "@/components/ui/table-styles";
 import { cn } from "@/lib/utils";
 
 export default function ProjectsLoading() {
@@ -26,42 +26,39 @@ export default function ProjectsLoading() {
           <MetricCardSkeleton key={i} />
         ))}
       </KpiBand>
-      <div
-        className={cn(
-          "flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 shadow-sm ring-1 ring-foreground/4",
-          FLUSH_TABLE_CARD_CLASS,
-        )}
-      >
-        <div className="space-y-3 border-b border-border/70 px-4 pb-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-            <div className="min-w-0 space-y-2">
-              <Skeleton className="h-6 w-48" />
-              <Skeleton className="h-5 w-96" />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Skeleton className="h-11 w-24 sm:h-8" />
-              <Skeleton className="h-11 w-32 sm:h-9" />
-            </div>
+      <div>
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 pb-3">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:gap-3">
+            <Skeleton
+              className={cn("h-11 w-20 rounded-lg", TOOLBAR_BUTTON_CLASS)}
+            />
+            <Skeleton className="order-first h-11 w-full min-w-0 rounded-lg sm:order-none sm:w-55 sm:max-w-60 sm:min-w-45" />
+            <Skeleton className="h-11 w-22 rounded-lg" />
+            <Skeleton
+              className={cn("h-11 w-28 rounded-lg", TOOLBAR_BUTTON_CLASS)}
+            />
+            <Skeleton
+              className={cn("h-11 w-32 rounded-lg", TOOLBAR_BUTTON_CLASS)}
+            />
           </div>
         </div>
-        <div className={cn("px-4 pt-5", FLUSH_TABLE_CONTENT_CLASS)}>
-          <div className="space-y-4 md:pb-4">
-            <div className="space-y-4 md:px-4 md:pt-5">
-              <div className="flex flex-wrap gap-2">
+        <div className="pt-5">
+          <TableCard
+            header={
+              <div className="flex flex-wrap gap-1">
                 {Array.from({ length: 7 }, (_, i) => (
-                  <Skeleton key={i} className="h-11 w-24 rounded-full" />
+                  <Skeleton key={i} className="h-11 w-24 rounded-lg" />
                 ))}
               </div>
-              <div className="flex flex-col gap-3 md:flex-row md:justify-between">
-                <Skeleton className="h-11 w-full md:max-w-xs" />
-                <Skeleton className="h-11 w-28" />
-              </div>
+            }
+          >
+            <div className="p-4 sm:p-5 md:p-0">
+              <DataTableSkeleton columnCount={7} flush />
             </div>
-            <DataTableSkeleton columnCount={7} flush />
-            <div className="md:px-4">
-              <Skeleton className="mx-auto h-11 w-60" />
-            </div>
-          </div>
+          </TableCard>
+        </div>
+        <div className="space-y-3 pt-2">
+          <Skeleton className="mx-auto h-11 w-60" />
         </div>
       </div>
     </PageSkeleton>

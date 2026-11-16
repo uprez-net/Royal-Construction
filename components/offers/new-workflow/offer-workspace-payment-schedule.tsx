@@ -82,7 +82,7 @@ export function PaymentSchedulePanel({
         className={cn("grid gap-3 md:gap-0", FLUSH_TABLE_CONTENT_CLASS)}
       >
         <ScheduleLock locked={locked}>
-          <div className="rounded-lg border border-border md:rounded-none md:border-0">
+          <div>
             <Table className="payment-schedule-table md:min-w-[680px]">
               <TableCaption className="sr-only">
                 Payment schedule percentages and amounts seeded for Tender

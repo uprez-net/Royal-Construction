@@ -1150,7 +1150,7 @@ function PaymentStagesTable({
     onChange([...stages, { label: "", percentage: null, amount: null }]);
 
   return (
-    <div className="space-y-2 rounded-xl border border-border bg-card p-3 md:p-4">
+    <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-foreground">Payment stages</p>
         <Badge
@@ -1163,7 +1163,7 @@ function PaymentStagesTable({
 
       {stages.length > 0 ? (
         <div className="overflow-hidden rounded-lg border border-border">
-          <div className="hidden grid-cols-[1fr_100px_120px_32px] gap-2 bg-muted px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground md:grid">
+          <div className="hidden grid-cols-[1fr_100px_120px_32px] gap-2 bg-muted px-3 py-2 text-[11px]/[1.4] font-semibold tracking-[0.06em] text-muted-foreground uppercase md:grid">
             <span>Label</span>
             <span>Percent</span>
             <span>Amount</span>

@@ -1,16 +1,20 @@
 "use client";
 import { ResultStatus } from "@/components/common/result-status";
-import { CardHeader } from "@/components/ui/card";
+import { ListSortMenu } from "@/components/common/list-sort-menu";
+import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
+import {
+  FilterChip,
+  FilterChips,
+  ListToolbar,
+  TableCard,
+  ToolbarSearch,
+} from "@/components/common/list-toolbar";
 import { cn } from "@/lib/utils";
-import { Search } from "lucide-react";
-import { Input } from "../ui/input";
-import { useEffect, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { fetchOffers } from "@/lib/store/slices/offerSlice";
 import type { OfferStatusBucket } from "@/types/offer";
-import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
-import { ListSortMenu } from "@/components/common/list-sort-menu";
 import { OFFER_SORT_OPTIONS } from "@/lib/offer/offer-listing-view";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 interface OfferFilterProps {
   /**
@@ -23,14 +27,19 @@ interface OfferFilterProps {
    * it mapped each tab to a single `OfferStatus`.
    */
   initialTabCounts: Record<OfferStatusBucket, number>;
+  /** The offers table. It sits in the one card under the toolbar. */
+  children: ReactNode;
 }
 
 const TABS = ["all", "pending", "approved", "rejected", "sent"] as const;
 
 const SEARCH_DEBOUNCE_MS = 300;
 
-/** Compose client search, status and sort controls while preserving the other requested filters. */
-export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
+/**
+ * The offers toolbar (search and sort, on the page) and the one card under it:
+ * status chips in its header, then the table. Status and search compose.
+ */
+export function OfferFilter({ initialTabCounts, children }: OfferFilterProps) {
   const dispatch = useAppDispatch();
   const { offers, filters, hydrated } = useAppSelector((state) => state.offers);
   const [searchInput, setSearchInput] = useState(filters.q);
@@ -89,111 +98,104 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
   };
 
   return (
-    <CardHeader className="border-b border-border/70 px-5 py-4">
-      <div className="space-y-4">
-        <MobileFilterSelect
-          label="Offer status"
-          value={tabId}
-          options={TABS.map((tab) => ({
-            value: tab,
-            label:
-              tab === "all"
-                ? "All offers"
-                : tab.charAt(0).toUpperCase() + tab.slice(1),
-            count: initialTabCounts[tab],
-          }))}
-          onChange={(value) => handleTabChange(value as OfferStatusBucket)}
-        />
-        <div className="hidden flex-wrap items-center gap-1.5 border-b border-border/70 pb-4 md:flex">
-          {TABS.map((tab) => {
-            const active = tabId === tab;
-
-            return (
-              <button
-                key={tab}
-                type="button"
-                aria-pressed={active}
-                onClick={() => handleTabChange(tab)}
-                className={cn(
-                  "group relative inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium transition-colors duration-200 sm:min-h-9 sm:text-[12.5px]",
-                  active
-                    ? "font-semibold text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <span>
-                  {tab === "all"
-                    ? "All"
-                    : tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </span>
-
-                <span
-                  className={cn(
-                    "ml-2 inline-flex min-w-4.5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums transition-colors",
-                    active
-                      ? "bg-muted text-foreground"
-                      : "bg-muted text-muted-foreground group-hover:bg-background",
-                  )}
-                >
-                  {initialTabCounts[tab]}
-                </span>
-
-                {active && (
-                  <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-royal-gold" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-0 flex-1 sm:max-w-70">
-            <label htmlFor="search" className="sr-only">
-              Search
-            </label>
-
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-
-            <Input
-              id="search"
-              className="pl-9 text-[13px]"
-              placeholder="Search offer #, client, email, phone or suburb"
-              value={searchInput}
-              onChange={handleSearchChange}
-            />
-          </div>
-
-          <ListSortMenu
-            label="offers"
-            value={filters.sort}
-            options={OFFER_SORT_OPTIONS}
-            onChange={(sort) => {
-              if (searchTimer.current) clearTimeout(searchTimer.current);
-              dispatch(
-                fetchOffers({
-                  sort,
-                  status: tabId,
-                  q: searchInput,
-                  page: 1,
-                  limit: offers.limit || 10,
-                }),
-              );
-            }}
-          />
-
-          {/* Reflects the *current view* (filtered + searched), not the global
-              KPI total — that's what `offers.totalCount` holds after a fetch,
-              and it is what the pagination footer divides up. Hidden until the
-              store holds a result: before that it is the empty initial state,
-              and a hard reload flashed "0 results". Always mounted, so the new
-              count is announced when a search or filter changes it (#441). */}
+    <div className="space-y-5">
+      {/* Reflects the *current view* (filtered + searched), not the global
+          KPI total — that's what `offers.totalCount` holds after a fetch,
+          and it is what the pagination footer divides up. Hidden until the
+          store holds a result: before that it is the empty initial state,
+          and a hard reload flashed "0 results". Always mounted, so the new
+          count is announced when a search or filter changes it (#441). */}
+      <ListToolbar
+        start={
           <ResultStatus
             count={hydrated ? offers.totalCount : null}
             noun="result"
-            className="ml-auto whitespace-nowrap text-[12px] font-medium text-muted-foreground"
+            className="whitespace-nowrap text-[12px] font-medium text-muted-foreground"
           />
-        </div>
-      </div>
-    </CardHeader>
+        }
+      >
+        <ListSortMenu
+          label="offers"
+          value={filters.sort}
+          options={OFFER_SORT_OPTIONS}
+          onChange={(sort) => {
+            if (searchTimer.current) clearTimeout(searchTimer.current);
+            dispatch(
+              fetchOffers({
+                sort,
+                status: tabId,
+                q: searchInput,
+                page: 1,
+                limit: offers.limit || 10,
+              }),
+            );
+          }}
+        />
+        <ToolbarSearch
+          id="search"
+          aria-label="Search"
+          placeholder="Search offer #, client, email, phone or suburb"
+          value={searchInput}
+          onChange={handleSearchChange}
+        />
+      </ListToolbar>
+
+      <TableCard
+        header={
+          <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center">
+            {/* Phones keep the native picker; from md the chips show. */}
+            <MobileFilterSelect
+              label="Offer status"
+              value={tabId}
+              options={TABS.map((tab) => ({
+                value: tab,
+                label:
+                  tab === "all"
+                    ? "All offers"
+                    : tab.charAt(0).toUpperCase() + tab.slice(1),
+                count: initialTabCounts[tab],
+              }))}
+              onChange={(value) => handleTabChange(value as OfferStatusBucket)}
+            />
+            <FilterChips
+              role="group"
+              aria-label="Offer status"
+              className="hidden md:flex"
+            >
+              {TABS.map((tab) => {
+                const active = tabId === tab;
+
+                return (
+                  <FilterChip
+                    key={tab}
+                    active={active}
+                    onClick={() => handleTabChange(tab)}
+                    className="group"
+                  >
+                    <span>
+                      {tab === "all"
+                        ? "All"
+                        : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    </span>
+                    <span
+                      className={cn(
+                        "inline-flex min-w-4.5 items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums transition-colors",
+                        active
+                          ? "text-foreground"
+                          : "text-muted-foreground group-hover:bg-background",
+                      )}
+                    >
+                      {initialTabCounts[tab]}
+                    </span>
+                  </FilterChip>
+                );
+              })}
+            </FilterChips>
+          </div>
+        }
+      >
+        {children}
+      </TableCard>
+    </div>
   );
 }

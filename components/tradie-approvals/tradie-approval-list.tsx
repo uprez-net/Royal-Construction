@@ -18,6 +18,13 @@ import { UserCheck } from "lucide-react";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 
+// The rows sit inside the list's one TableCard: hairline between rows, not a
+// card each. The row root is ApprovalCard's own bordered div, so its border
+// and corners are reset here. Divider and reset use explicit selectors: Tailwind
+// v4 divide-* is :where(), zero specificity, and the reset would win. A `row` variant on ApprovalCard would drop this.
+const ROW_LIST_CLASS =
+  "[&>div]:rounded-none [&>div]:border-0 [&>div]:ring-inset [&>div:not(:last-child)]:border-b [&>div:not(:last-child)]:border-border";
+
 const createApprovalTitle = (approval: SafeTradieApproval) => {
   switch (approval.actionType) {
     case "PRICE_CHANGE":
@@ -205,25 +212,27 @@ export function TradieApprovalList() {
 
   if (loading) {
     return (
-      <PageSkeleton label="Loading approvals" className="space-y-4">
-        {Array.from({ length: 5 }).map((_, index) => (
-          <div
-            key={index}
-            className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card p-4"
-          >
-            <div className="flex min-w-0 items-center gap-4">
-              <Skeleton className="size-12 shrink-0 rounded-full" />
-              <div className="space-y-2">
-                <Skeleton className="h-5 w-48 max-w-full" />
-                <Skeleton className="h-4 w-72 max-w-full" />
+      <PageSkeleton label="Loading approvals">
+        <div className={ROW_LIST_CLASS}>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div
+              key={index}
+              className="flex flex-wrap items-center justify-between gap-4 p-4"
+            >
+              <div className="flex min-w-0 items-center gap-4">
+                <Skeleton className="size-12 shrink-0 rounded-full" />
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-48 max-w-full" />
+                  <Skeleton className="h-4 w-72 max-w-full" />
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-8 w-20 rounded-md" />
+                <Skeleton className="h-8 w-20 rounded-md" />
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-8 w-20 rounded-md" />
-              <Skeleton className="h-8 w-20 rounded-md" />
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </PageSkeleton>
     );
   }
@@ -237,9 +246,9 @@ export function TradieApprovalList() {
   }
 
   return (
-    <div className="space-y-4" key={`${approvals.length}-${activeTab}`}>
+    <div className={ROW_LIST_CLASS} key={`${approvals.length}-${activeTab}`}>
       {approvals.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 h-60 bg-card rounded-sm">
+        <div className="flex h-60 flex-col items-center justify-center gap-3">
           <div className="flex size-12 items-center justify-center">
             <UserCheck className="size-5 text-muted-foreground" />
           </div>
