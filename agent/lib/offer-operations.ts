@@ -6,6 +6,7 @@ import {
   requireCurrentAgentActor,
 } from "@/agent/lib/actor";
 import { runAuditedAgentOperation } from "@/agent/lib/audited-operation";
+import { blobStoreIdFromToken } from "@/lib/blob-url";
 import {
   agentResultEnvelopeSchema,
   type AgentResultEnvelope,
@@ -1110,7 +1111,12 @@ export async function createAuthorizedProjectFromOffer(
     result = await handOffOfferToProject(actor, input, agentDb, {
       createProject: async (projectInput) => {
         const created = await agentDb.$transaction(
-          (tx) => createProjectFromLead(principal, projectInput, tx),
+          (tx) =>
+            createProjectFromLead(principal, projectInput, tx, {
+              sourceStoreId: blobStoreIdFromToken(
+                process.env.BLOB_READ_WRITE_TOKEN,
+              ),
+            }),
           // The same ceiling the app's adapter uses: the template insert needs
           // more than the default five seconds on a cold connection.
           { timeout: 30_000 },
