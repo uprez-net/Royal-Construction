@@ -26,7 +26,7 @@ import { formatStatus } from "./project-status";
  */
 
 /** How many projects show before "Show all". */
-const VISIBLE_PROJECTS = 5;
+const VISIBLE_PROJECTS = 3;
 
 function days(count: number): string {
   return `${count} ${count === 1 ? "day" : "days"}`;
@@ -44,14 +44,14 @@ function OverdueProjectRow({
   if (!worst) return null;
 
   return (
-    <li className="rounded-[10px] border border-destructive/30 bg-destructive-light/40 px-4 py-3">
-      <div className="flex flex-wrap items-start gap-3">
+    <li className="px-4 py-2.5">
+      <div className="flex items-center gap-3">
         <AlertTriangle
-          className="mt-0.5 size-4 shrink-0 text-destructive-ink"
+          className="size-4 shrink-0 text-destructive-ink"
           aria-hidden="true"
         />
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Link
               href={href}
               className="text-sm font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -64,53 +64,54 @@ function OverdueProjectRow({
                 : formatStatus(project.status)}
             </StatusPill>
           </div>
-          <p className="text-xs text-muted-foreground">
-            {project.location} · {project.customerName}
-          </p>
-          <p className="text-sm text-foreground">
-            <span className="font-medium">{worst.name}</span> was due{" "}
-            {formatSydneyDate(new Date(worst.expectedCompletion))} —{" "}
+          <p className="truncate text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{worst.name}</span>
+            {" · due "}
+            {formatSydneyDate(new Date(worst.expectedCompletion))}
+            {" · "}
             <span className="font-semibold text-destructive-ink">
               {days(worst.daysOverdue)} overdue
             </span>
+            {" · "}
+            {project.location}
+            {project.customerName ? ` · ${project.customerName}` : ""}
           </p>
-          {others.length > 0 && expanded ? (
-            <ul
-              className="space-y-0.5 pt-1 text-xs text-muted-foreground"
-              aria-label={`Other overdue activities on ${project.name}`}
-            >
-              {others.map((activity) => (
-                <li key={activity.milestoneId}>
-                  {activity.name} — due{" "}
-                  {formatSydneyDate(new Date(activity.expectedCompletion))},{" "}
-                  {days(activity.daysOverdue)} overdue
-                </li>
-              ))}
-            </ul>
-          ) : null}
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
-          {others.length > 0 ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              aria-expanded={expanded}
-              onClick={() => setExpanded((open) => !open)}
-            >
-              {expanded ? (
-                <ChevronUp className="size-4" aria-hidden="true" />
-              ) : (
-                <ChevronDown className="size-4" aria-hidden="true" />
-              )}
-              {expanded ? "Hide" : `${others.length} more overdue`}
-            </Button>
-          ) : null}
-          <Button asChild size="sm" variant="outline">
-            <Link href={href}>Open project</Link>
+        {others.length > 0 ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((open) => !open)}
+            className="shrink-0 text-muted-foreground"
+          >
+            {expanded ? (
+              <ChevronUp className="size-4" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="size-4" aria-hidden="true" />
+            )}
+            {expanded ? "Hide" : `+${others.length} more`}
           </Button>
-        </div>
+        ) : null}
+        <Button asChild size="sm" variant="outline" className="shrink-0">
+          <Link href={href}>Open</Link>
+        </Button>
       </div>
+      {others.length > 0 && expanded ? (
+        <ul
+          className="mt-1.5 space-y-0.5 pl-7 text-xs text-muted-foreground"
+          aria-label={`Other overdue activities on ${project.name}`}
+        >
+          {others.map((activity) => (
+            <li key={activity.milestoneId}>
+              {activity.name} — due{" "}
+              {formatSydneyDate(new Date(activity.expectedCompletion))},{" "}
+              {days(activity.daysOverdue)} overdue
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </li>
   );
 }
@@ -163,7 +164,7 @@ export function ProjectOverdueAlerts({
 
   return (
     <Card className="rounded-xl border-border/70 bg-card shadow-sm">
-      <CardHeader className="border-b border-border/70 pb-4">
+      <CardHeader className="border-b border-border/70 py-3">
         <CardTitle
           as="h2"
           className="flex flex-wrap items-center gap-2 text-base font-semibold text-foreground"
@@ -176,8 +177,8 @@ export function ProjectOverdueAlerts({
           </StatusPill>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3 pt-5">
-        <ul className="space-y-2" aria-label="Overdue projects">
+      <CardContent className="p-0">
+        <ul className="divide-y divide-border/70" aria-label="Overdue projects">
           {visible.map((project) => (
             <OverdueProjectRow
               key={project.projectId}
@@ -191,6 +192,7 @@ export function ProjectOverdueAlerts({
             type="button"
             size="sm"
             variant="ghost"
+            className="m-2"
             onClick={() => setShowAll((all) => !all)}
           >
             {showAll
