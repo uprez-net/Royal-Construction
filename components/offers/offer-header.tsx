@@ -15,6 +15,7 @@ export function OfferHeader() {
       description="Manage your offers, track their status, and ensure timely follow-ups."
       actions={
         <Button
+          variant="royal"
           onClick={() => dispatch(openModal({ type: "createOfferFile" }))}
         >
           <Plus className="mr-2 size-4" />
