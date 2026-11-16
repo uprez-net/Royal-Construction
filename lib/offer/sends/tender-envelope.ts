@@ -304,8 +304,14 @@ export async function sendTenderEnvelope(
         offerId: offer.id,
         toStatus: OfferStatus.TENDER_SENT,
       });
+      // The claim already moved the offer to TENDER_SENT and the event above says
+      // so, so the screen and the lead follow the stored status. Returning no
+      // status left the screen on the pre-send one until a reload (#502).
+      effects.offerChanged(offer.id);
+      await effects.statusChanged(offer.id);
       return {
         ok: false,
+        status: OfferStatus.TENDER_SENT,
         error:
           "DocuSign did not confirm whether the Tender was sent. Do not resend — wait for reconciliation or check DocuSign before trying again.",
       };

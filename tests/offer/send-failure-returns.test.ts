@@ -97,6 +97,23 @@ for (const send of SENDS) {
     assert.match(sharedPersistence, /sent but persisting it failed:/);
   });
 
+  // The branch above passes on `unrecorded` alone, which is how this one went
+  // unpinned: an unknown outcome keeps the claim and records *_SENT too, so it
+  // owes the caller the same status and the same effects (#502).
+  test(`${send.file} reports the status an unknown outcome left behind`, () => {
+    const source = stripComments(read(send.file));
+    const start = source.indexOf('recovery.kind === "outcome-unknown"');
+    assert.ok(start >= 0, "no outcome-unknown branch");
+    const end = source.indexOf("} else {", start);
+    assert.ok(end > start, "no end of the outcome-unknown branch");
+    const branch = source.slice(start, end);
+
+    assert.match(branch, new RegExp(`status: ${send.sentStatus}`));
+    assert.match(branch, /effects\.offerChanged\(offer\.id\)/);
+    assert.match(branch, /await effects\.statusChanged\(offer\.id\)/);
+    assert.match(branch, /Do not resend/);
+  });
+
   test(`the workspace shows ${send.action.split("(")[0]}'s refusal`, () => {
     const workspace = read(
       "components/offers/new-workflow/new-offer-workspace.tsx",
