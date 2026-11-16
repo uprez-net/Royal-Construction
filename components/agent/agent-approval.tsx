@@ -73,7 +73,7 @@ export function AgentApproval({
   const isLimit = request.kind === "session-limit";
   const whatsapp = isApproval ? approvalWhatsApp(toolName, input) : null;
   const outreach = isApproval && !whatsapp ? approvalOutreach(input) : null;
-  const { names: attachmentNames, unchanged: attachmentsUnchanged } =
+  const { names: attachmentNames, verify: verifyAttachments } =
     useOutreachAttachmentNames(outreach ? input : undefined);
   // An outreach cannot be approved before the owner can see its files.
   const filesLoading = outreach !== null && attachmentNames === undefined;
@@ -121,11 +121,16 @@ export function AgentApproval({
     setSubmitting(true);
     setRespondError(null);
     try {
-      if (verifyFiles && outreach && !(await attachmentsUnchanged())) {
-        setRespondError(
-          "The files on this email changed while you were reading it. Check the list above and approve again.",
-        );
-        return;
+      if (verifyFiles && outreach) {
+        const files = await verifyAttachments();
+        if (files !== "ok") {
+          setRespondError(
+            files === "changed"
+              ? "The files on this email changed while you were reading it. Check the list above and approve again."
+              : "Could not check which files this email will carry, so it was not approved. Try again.",
+          );
+          return;
+        }
       }
       await onRespond([response]);
       setDecliningOptionId(null);
@@ -442,11 +447,16 @@ function approvalOutreach(input: unknown): AgentOutreachDetails | null {
   };
 }
 
+type OutreachFiles = {
+  readonly ids: readonly string[];
+  readonly names: readonly string[];
+};
+
 /** The server's list of files this outreach would attach now; null if unavailable. */
-async function fetchOutreachAttachmentNames(
+async function fetchOutreachFiles(
   input: unknown,
   signal?: AbortSignal,
-): Promise<readonly string[] | null> {
+): Promise<OutreachFiles | null> {
   try {
     const response = await fetch("/api/agent/approval-attachments", {
       body: JSON.stringify({ input }),
@@ -457,8 +467,11 @@ async function fetchOutreachAttachmentNames(
     if (!response.ok) return null;
     const payload = (await response.json()) as {
       attachments?: string[] | null;
+      fileIds?: string[] | null;
     };
-    return payload.attachments ?? null;
+    return Array.isArray(payload.attachments) && Array.isArray(payload.fileIds)
+      ? { ids: payload.fileIds, names: payload.attachments }
+      : null;
   } catch (error) {
     if ((error as { name?: string })?.name === "AbortError") throw error;
     return null;
@@ -473,36 +486,41 @@ async function fetchOutreachAttachmentNames(
  * Looked up from the server's own selection (never taken from the model):
  * `names` is undefined while loading and null when the lookup failed or was
  * refused. The pack can change while the card is open (a file uploaded in
- * another tab), so `unchanged()` asks again at the moment of approval and
- * reports whether the list the owner read is still the list that would go.
+ * another tab), so `verify()` asks again at the moment of approval and compares
+ * file ids, not names: a replaced file can keep its name. It fails closed, so
+ * an approval is never sent on a list nobody could check.
  */
 function useOutreachAttachmentNames(input: unknown) {
   const [resolved, setResolved] = useState<{
+    files: OutreachFiles | null;
     key: string;
-    names: readonly string[] | null;
   } | null>(null);
   const key = input === undefined ? null : JSON.stringify(input);
 
   useEffect(() => {
     if (key === null) return;
     const controller = new AbortController();
-    fetchOutreachAttachmentNames(JSON.parse(key), controller.signal)
-      .then((names) => setResolved({ key, names }))
+    fetchOutreachFiles(JSON.parse(key), controller.signal)
+      .then((files) => setResolved({ files, key }))
       .catch(() => undefined);
     return () => controller.abort();
   }, [key]);
 
-  const names =
-    key !== null && resolved?.key === key ? resolved.names : undefined;
+  const shown =
+    key !== null && resolved?.key === key ? resolved.files : undefined;
+  const names = shown === undefined ? undefined : (shown?.names ?? null);
 
-  async function unchanged(): Promise<boolean> {
-    if (key === null) return true;
-    const fresh = await fetchOutreachAttachmentNames(JSON.parse(key));
-    setResolved({ key, names: fresh });
-    return JSON.stringify(fresh) === JSON.stringify(names);
+  async function verify(): Promise<"ok" | "changed" | "unavailable"> {
+    if (key === null) return "ok";
+    const fresh = await fetchOutreachFiles(JSON.parse(key));
+    setResolved({ files: fresh, key });
+    if (!fresh || !shown) return "unavailable";
+    return JSON.stringify(fresh.ids) === JSON.stringify(shown.ids)
+      ? "ok"
+      : "changed";
   }
 
-  return { names, unchanged };
+  return { names, verify };
 }
 
 /**

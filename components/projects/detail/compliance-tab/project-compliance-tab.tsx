@@ -51,7 +51,6 @@ import {
   isOptionalForOutreach,
   isSignedCopyType,
   PARTY_LABEL,
-  outreachPackFiles,
   partyForDocumentType,
   SIGNED_COPY_DOCUMENTS,
   WASTE_MANAGEMENT_PLAN_PARTY,
@@ -67,6 +66,7 @@ import {
   sentToCertifierUrls,
   unsentRequiredDocuments,
 } from "@/lib/domain/compliance/required-pack";
+import { outreachPackFiles } from "@/lib/domain/compliance/outreach-pack";
 import {
   packSendBlockedReason,
   partyBlockedReason,

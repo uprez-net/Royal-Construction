@@ -160,11 +160,12 @@ async function previewed(
   input: SendComplianceOutreachInput,
   extras?: (args: unknown) => unknown[],
 ) {
-  return previewOutreachAttachments(
+  const files = await previewOutreachAttachments(
     adminPrincipal(),
     input,
     recordingDb(script([], extras)).db,
   );
+  return files.map((file) => file.name);
 }
 
 test("the pack is attached with no argument asking for it, and the preview says so", async () => {
@@ -241,7 +242,7 @@ test("the approval card's lookup is the same list, and only for an outreach", as
 
   assert.deepEqual(
     await describeOutreachAttachments(adminPrincipal(), outreach, db),
-    ["Certificate 10.7.pdf"],
+    [{ id: "f_cert", name: "Certificate 10.7.pdf" }],
   );
   // A follow-up carries a body and a project but no party: not an outreach.
   assert.equal(

@@ -25,12 +25,17 @@ export async function POST(request: Request) {
   } | null;
   const input = body?.input;
   if (input === null || typeof input !== "object" || Array.isArray(input))
-    return NextResponse.json({ attachments: null });
+    return NextResponse.json({ attachments: null, fileIds: null });
 
   const attachments = await describeOutreachAttachments(
     principal,
     input as Record<string, unknown>,
     prisma,
   );
-  return NextResponse.json({ attachments });
+  // Names are for reading; ids are for comparing, since two files can share a
+  // name and a re-upload under the same name is a different file.
+  return NextResponse.json({
+    attachments: attachments?.map((file) => file.name) ?? null,
+    fileIds: attachments?.map((file) => file.id) ?? null,
+  });
 }

@@ -12,11 +12,11 @@ import {
   isApprovalParty,
   isConsultantParty,
   PARTY_LABEL,
-  outreachPackFiles,
   PARTY_TRADE_LABEL,
 } from "@/constants/complianceDocuments";
 import { AREA_DEVELOPERS } from "@/constants/complianceDevelopers";
 import { COMPLIANCE_ALERT_PARTY } from "./alert-parties";
+import { outreachPackFiles } from "./outreach-pack";
 import { buildComplianceFollowUpBody } from "./party-outreach-email";
 import {
   consultantNotAskedForReason,
@@ -285,8 +285,8 @@ export async function outreachAttachments(
 }
 
 /**
- * The file names an outreach would carry, for the approval card. Names only:
- * a blob URL is a credential for the file. Authorised like the send itself.
+ * The files an outreach would carry, for the approval card: id and name, never
+ * the URL, which is a credential for the file. Authorised like the send itself.
  */
 export async function previewOutreachAttachments(
   principal: DomainPrincipal,
@@ -295,12 +295,13 @@ export async function previewOutreachAttachments(
     "extraAttachmentIds" | "omitAttachmentIds" | "party" | "projectId"
   >,
   db: DomainDb,
-): Promise<string[]> {
+): Promise<{ id: string; name: string }[]> {
   await authorizeComplianceAccess(principal, input.projectId, db);
   const engagement = await requireEngagement(input.projectId, db);
-  return (await outreachAttachments(engagement, input, db)).map(
-    (file) => file.name,
-  );
+  return (await outreachAttachments(engagement, input, db)).map((file) => ({
+    id: file.id,
+    name: file.name,
+  }));
 }
 
 /** Persist, deliver and settle one opening party email through a durable key. */

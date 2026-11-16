@@ -87,13 +87,13 @@ export async function describeApprovalTargets(
   // too, not just the web card (#366).
   const attachments = await describeOutreachAttachments(principal, input, db);
   if (attachments) {
-    labels.attachments = `Attachments: ${attachments.join(", ") || "none"}`;
+    labels.attachments = `Attachments: ${attachments.map((file) => file.name).join(", ") || "none"}`;
   }
   return labels;
 }
 
 /**
- * The names of the files a `send_compliance_outreach` approval would attach, or
+ * The files (id and name) a `send_compliance_outreach` approval would attach, or
  * null when the input is not an opening outreach or the caller may not see the
  * project. The same selection the send makes; never the model's own list.
  */
@@ -101,7 +101,7 @@ export async function describeOutreachAttachments(
   principal: DomainPrincipal,
   input: Readonly<Record<string, unknown>>,
   db: DomainDb,
-): Promise<string[] | null> {
+): Promise<{ id: string; name: string }[] | null> {
   const { party, projectId, body } = input;
   if (
     typeof projectId !== "string"
