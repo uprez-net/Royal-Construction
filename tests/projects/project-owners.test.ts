@@ -670,13 +670,13 @@ describe("creating a project from a lead", () => {
       fileId: "f2",
       fileName: "c.pdf",
       kind: "contract" as const,
-      url: "https://x/c.pdf",
+      url: "https://teststore.public.blob.vercel-storage.com/c.pdf",
     },
     tender: {
       fileId: "f1",
       fileName: "t.pdf",
       kind: "tender" as const,
-      url: "https://x/t.pdf",
+      url: "https://teststore.public.blob.vercel-storage.com/t.pdf",
     },
   };
   const baseInput = (owners: unknown[]) => ({
@@ -742,6 +742,7 @@ describe("creating a project from a lead", () => {
       adminPrincipal(),
       baseInput([jane, john]),
       recorder.db,
+      { sourceStoreId: "teststore" },
     );
 
     assert.deepEqual(
@@ -783,6 +784,7 @@ describe("creating a project from a lead", () => {
         adminPrincipal(),
         baseInput([{ ...jane, address: "" }]),
         recorder.db,
+        { sourceStoreId: "teststore" },
       ),
       (error: unknown) =>
         error instanceof DomainValidationError
@@ -795,7 +797,9 @@ describe("creating a project from a lead", () => {
     const recorder = recordingDb(script());
 
     await assert.rejects(
-      createProjectFromLead(adminPrincipal(), baseInput([]), recorder.db),
+      createProjectFromLead(adminPrincipal(), baseInput([]), recorder.db, {
+        sourceStoreId: "teststore",
+      }),
       /at least one owner/,
     );
     assert.deepEqual(recorder.writes(), []);

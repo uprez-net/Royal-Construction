@@ -11,6 +11,7 @@ import { createLeadProjectInferencePrompt } from "@/lib/agent/project-prompt";
 import { LEAD_NOTES_HISTORY_INCLUDE } from "@/lib/leads/notes-text";
 import { leadFollowup } from "@/lib/leads/followup-due";
 import { NEXT_FOLLOWUP_TASK } from "@/lib/leads/followup-resolution";
+import { blobStoreIdFromToken } from "@/lib/blob-url";
 import {
   createProjectFromLead,
   type CreateProjectFromLeadInput,
@@ -96,7 +97,11 @@ export async function createProjectWithLead(
   const principal = await currentPrincipal();
 
   const created = await prisma.$transaction(
-    (tx) => createProjectFromLead(principal, input, tx, { inferProjectSpecs }),
+    (tx) =>
+      createProjectFromLead(principal, input, tx, {
+        inferProjectSpecs,
+        sourceStoreId: blobStoreIdFromToken(process.env.BLOB_READ_WRITE_TOKEN),
+      }),
     // The conversion writes a customer, a project, its whole milestone
     // template and an activity entry, and the inference call that may precede
     // it is already done by here. The default 5s interactive timeout is not
