@@ -540,31 +540,35 @@ export class VoiceAgentSession {
         error instanceof Error ? error.message : error,
       );
     }
-    let lookupCue: string | null = null;
+    let lookup: {
+      readonly key: string;
+      readonly cue: string;
+      readonly answered: boolean;
+    } | null = null;
     if (decision?.action === "lookup") {
       const key = JSON.stringify(decision.request);
       if (this.lookupsRun.has(key)) {
         decision = null;
       } else {
-        const result = await this.runLookup(decision.request);
-        lookupCue = result.cue;
-        // Only an answered lookup is never run again. One that failed or
-        // timed out stays askable: the caller asking again must get another
-        // try, not a "let me check" followed by silence.
-        if (result.answered) this.lookupsRun.add(key);
+        lookup = { key, ...(await this.runLookup(decision.request)) };
       }
     }
     this.deskBusy = false;
     if (this.finished || this.ending) return;
-    if (lookupCue !== null) {
+    if (lookup !== null) {
       // Commentary makes her speak; a delegation is answered on its own id.
-      this.sendModel({
-        content: lookupCue,
+      const delivered = this.sendModel({
+        content: lookup.cue,
         delegation_id: delegationId,
         type: delegationId
           ? "session.thinking.append"
           : "session.commentary.append",
       });
+      // Only an answer Mili was actually handed is never run again. One that
+      // failed, timed out or never reached her stays askable: the caller
+      // asking again must get another try, not a "let me check" followed by
+      // silence.
+      if (lookup.answered && delivered) this.lookupsRun.add(lookup.key);
     } else if (delegationId) {
       this.sendModel({
         content: deskNote(decision),
@@ -636,14 +640,18 @@ export class VoiceAgentSession {
 
   // ── Ending ───────────────────────────────────────────────────────────
 
-  private sendModel(event: LiveClientEvent): void {
+  /** True once the event was handed to an open Live socket. */
+  private sendModel(event: LiveClientEvent): boolean {
+    if (!this.model) return false;
     try {
-      this.model?.send(event);
+      this.model.send(event);
+      return true;
     } catch (error) {
       this.log.warn(
         "[voice-agent] could not send to GPT-Live.",
         error instanceof Error ? error.message : error,
       );
+      return false;
     }
   }
 

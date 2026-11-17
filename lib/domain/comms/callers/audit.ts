@@ -23,8 +23,11 @@ const CLASS_COLUMN = {
   VoiceCallerClass
 >;
 
-/** At most this many ids per row: a briefing is bounded, and so is its trail. */
-const MAX_RECORD_IDS = 60;
+/**
+ * At most this many ids per row. A disclosure that read more is written as
+ * several rows of the same entry, so no id it read goes unrecorded.
+ */
+export const MAX_RECORD_IDS = 60;
 
 export async function recordCallerAccess(
   caller: VoiceCallerPrincipal,
@@ -36,15 +39,25 @@ export async function recordCallerAccess(
   },
   db: DomainDb,
 ): Promise<void> {
-  await db.callerAccessEvent.create({
-    data: {
-      callId: caller.callId,
-      callerClass: CLASS_COLUMN[caller.identity.class],
-      kind: entry.kind,
-      outcome: entry.outcome.slice(0, 60),
-      queryName: entry.queryName ?? null,
-      recordIds: [...new Set(entry.recordIds ?? [])].slice(0, MAX_RECORD_IDS),
-      verification: caller.verification,
-    },
+  const row = {
+    callId: caller.callId,
+    callerClass: CLASS_COLUMN[caller.identity.class],
+    kind: entry.kind,
+    outcome: entry.outcome.slice(0, 60),
+    queryName: entry.queryName ?? null,
+    verification: caller.verification,
+  };
+  const ids = [...new Set(entry.recordIds ?? [])];
+  if (ids.length <= MAX_RECORD_IDS) {
+    await db.callerAccessEvent.create({ data: { ...row, recordIds: ids } });
+    return;
+  }
+  // One statement, so the entry is written whole or not at all.
+  const parts: string[][] = [];
+  for (let i = 0; i < ids.length; i += MAX_RECORD_IDS) {
+    parts.push(ids.slice(i, i + MAX_RECORD_IDS));
+  }
+  await db.callerAccessEvent.createMany({
+    data: parts.map((recordIds) => ({ ...row, recordIds })),
   });
 }

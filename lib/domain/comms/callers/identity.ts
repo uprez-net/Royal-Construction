@@ -16,7 +16,9 @@ import { Role } from "@prisma/client";
 //   - Client records that are plainly one person combine: a customer, the
 //     portal account linked to it, and leads whose project that same matched
 //     customer owns. Leads with no project yet combine when they carry the
-//     same name (a repeat enquiry). That is one subject.
+//     same name (a repeat enquiry). That is one subject. Two customers never
+//     combine, not even through a project they co-own, and a lead's primary
+//     and secondary contact are two people.
 //   - Anything else that shares the number — a second person, a second role,
 //     a staff number also typed onto a lead — is AMBIGUOUS, and the caller gets
 //     message taking until a person sorts the record out.
@@ -232,7 +234,9 @@ export function classifyCallerMatches(
         break;
       }
       case "lead": {
-        const key = `lead:${match.id}`;
+        // Keyed by contact, not lead: a lead's primary and secondary person
+        // sharing one number are two people unless something joins them.
+        const key = `lead:${match.id}:${match.via}`;
         clientKeys.push(key);
         nameOf.set(key, match.personName);
         if (!match.archived) live.add(key);
@@ -261,6 +265,12 @@ export function classifyCallerMatches(
 
   const matchedKeys = new Set(clientKeys);
   for (const group of groups([...matchedKeys], edges)) {
+    // Two customer records joined only through a lead they co-own are two
+    // people on one contract, not one subject: neither may hear the other's
+    // projects.
+    if (group.filter((key) => key.startsWith("customer:")).length > 1) {
+      return unknownCaller("ambiguous");
+    }
     const grantKeys = group.filter((key) => live.has(key));
     if (grantKeys.length === 0) {
       people.push({ reason: "inactive", type: "blocked" });
@@ -272,7 +282,7 @@ export function classifyCallerMatches(
         .map((key) => key.slice("customer:".length)),
       leadIds: grantKeys
         .filter((key) => key.startsWith("lead:"))
-        .map((key) => Number(key.slice("lead:".length))),
+        .map((key) => Number(key.split(":")[1])),
       names: group.map((key) => nameOf.get(key) ?? ""),
       type: "client",
     });

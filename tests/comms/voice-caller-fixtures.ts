@@ -7,6 +7,11 @@ import {
   TradieScheduleStatus,
 } from "@prisma/client";
 
+import {
+  voiceCallAuthority,
+  type VoiceCallerPrincipal,
+} from "@/lib/domain/comms/callers/identity";
+
 import { recordingDb } from "../architecture/domain-harness";
 
 // One scripted database per caller class, for the voice-caller tests: the
@@ -192,6 +197,28 @@ export function callerDb(who: Who, overrides: Record<string, unknown> = {}) {
 export function auditRows(recorder: ReturnType<typeof recordingDb>) {
   return recorder
     .writes()
-    .filter((call) => call.operation === "callerAccessEvent.create")
-    .map((call) => (call.args as { data: Record<string, unknown> }).data);
+    .flatMap((call) =>
+      call.operation === "callerAccessEvent.create"
+        ? [(call.args as { data: Record<string, unknown> }).data]
+        : call.operation === "callerAccessEvent.createMany"
+          ? (call.args as { data: Record<string, unknown>[] }).data
+          : [],
+    );
+}
+
+/** The stream authority for the scripted inbound call. */
+export const authority = voiceCallAuthority({
+  callControlId: PROVIDER_CALL_ID,
+  callId: CALL_ID,
+});
+
+/** A caller already resolved to `identity`, on the scripted number. */
+export function principal(identity: VoiceCallerPrincipal["identity"]) {
+  return {
+    callId: CALL_ID,
+    callerNumber: CALLER,
+    identity,
+    kind: "voice-caller",
+    verification: "caller_id",
+  } satisfies VoiceCallerPrincipal;
 }
