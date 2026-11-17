@@ -61,6 +61,8 @@ function Flag({ on, label }: { on: boolean; label: string }) {
         <XCircle className="size-4 text-muted-foreground" aria-hidden="true" />
       )}
       {label}
+      {/* The icons are hidden from screen readers, so say the state too. */}
+      <span className="sr-only">{on ? ": on" : ": off"}</span>
     </span>
   );
 }

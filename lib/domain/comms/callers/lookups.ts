@@ -85,9 +85,7 @@ export const VOICE_LOOKUPS: readonly VoiceLookupDefinition[] = [
     parameters: {
       additionalProperties: false,
       properties: {
-        project: text(
-          "The project's name, client surname or suburb, as the caller said it.",
-        ),
+        project: text("The project's name or suburb, as the caller said it."),
       },
       required: ["project"],
       type: "object",
@@ -101,9 +99,7 @@ export const VOICE_LOOKUPS: readonly VoiceLookupDefinition[] = [
     parameters: {
       additionalProperties: false,
       properties: {
-        project: text(
-          "The project's name, client surname or suburb, as the caller said it.",
-        ),
+        project: text("The project's name or suburb, as the caller said it."),
       },
       required: ["project"],
       type: "object",

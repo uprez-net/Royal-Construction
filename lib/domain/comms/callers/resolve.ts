@@ -64,8 +64,10 @@ async function candidateRows(
   national: string,
 ): Promise<CandidateRow[]> {
   const suffix = `%${national}`;
+  // An extension typed after the number ("0412 345 678 ext 12") is dropped
+  // before the digits are compared, as the normaliser drops it too.
   const digits = (column: Prisma.Sql) =>
-    Prisma.sql`regexp_replace(${column}, '[^0-9]', '', 'g') LIKE ${suffix}`;
+    Prisma.sql`regexp_replace(regexp_replace(${column}, '\\s*(ext\\.?|extension|x|#).*$', '', 'i'), '[^0-9]', '', 'g') LIKE ${suffix}`;
   return db.$queryRaw<CandidateRow[]>`
     SELECT 'user' AS source, "id" AS id, "phone" AS phone, NULL AS e164
       FROM "User" WHERE ${digits(Prisma.sql`"phone"`)}

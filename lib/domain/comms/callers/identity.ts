@@ -14,8 +14,9 @@ import { Role } from "@prisma/client";
 //   - Every match is collected before anything is chosen. Never the first row,
 //     and never the union of two people's permissions.
 //   - Client records that are plainly one person combine: a customer, the
-//     portal account linked to it, leads whose project that customer owns,
-//     and leads/customers carrying the same name. That is one subject.
+//     portal account linked to it, and leads whose project that same matched
+//     customer owns. Leads with no project yet combine when they carry the
+//     same name (a repeat enquiry). That is one subject.
 //   - Anything else that shares the number — a second person, a second role,
 //     a staff number also typed onto a lead — is AMBIGUOUS, and the caller gets
 //     message taking until a person sorts the record out.
@@ -185,6 +186,20 @@ export function classifyCallerMatches(
   const edges: [string, string][] = [];
   const nameOf = new Map<string, string>();
   const live = new Set<string>();
+  // Leads with no project yet: the only records a shared name may join.
+  const projectless: string[] = [];
+  // Customers this number itself matched (directly, or by a portal account).
+  // A project owner joins a lead only when it is one of these: an owner the
+  // number did not match says nothing about who is calling.
+  const matchedCustomers = new Set(
+    matches.flatMap((m) =>
+      m.kind === "customer"
+        ? [m.id]
+        : m.kind === "user" && m.role === Role.CUSTOMER && m.customerId
+          ? [m.customerId]
+          : [],
+    ),
+  );
 
   for (const match of matches) {
     switch (match.kind) {
@@ -221,19 +236,22 @@ export function classifyCallerMatches(
         clientKeys.push(key);
         nameOf.set(key, match.personName);
         if (!match.archived) live.add(key);
-        // A lead and the owners of the project it became are one subject.
+        // A lead and a project owner the number also matched are one subject.
         for (const customerId of match.projectCustomerIds) {
-          edges.push([key, `customer:${customerId}`]);
+          if (matchedCustomers.has(customerId)) {
+            edges.push([key, `customer:${customerId}`]);
+          }
         }
+        if (match.projectId === null) projectless.push(key);
         break;
       }
     }
   }
 
-  // The same name on two client records sharing this number: one person
-  // (a repeat enquiry, or the customer their lead became).
+  // Two enquiries with no project yet, sharing this number and the same name:
+  // one person enquiring twice. Nothing else is joined on a name alone.
   const byName = new Map<string, string>();
-  for (const key of clientKeys) {
+  for (const key of projectless) {
     const name = nameKey(nameOf.get(key));
     if (!name) continue;
     const first = byName.get(name);

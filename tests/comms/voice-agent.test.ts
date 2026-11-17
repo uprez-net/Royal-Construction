@@ -1265,6 +1265,73 @@ test("a lookup that fails, or that the caller was never offered, is 'could not c
   );
 });
 
+test("a lookup that failed is tried again when the desk asks again; an answered one is not", async () => {
+  let attempts = 0;
+  const h = await started(
+    async () => ({ action: "lookup", request: STATUS }),
+    async () =>
+      adminSetup(async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("database unavailable");
+        return "Ridge Street Build: delayed.";
+      }),
+  );
+  const ask = async (id: string) => {
+    h.session.handleModelEvent({
+      delegationId: id,
+      type: "session.delegation.created",
+    });
+    await h.tick();
+    return (h.modelOut.at(-1) as { content: string }).content;
+  };
+  assert.equal(await ask("item_1"), VOICE_LOOKUP_FAILED_CUE);
+  assert.equal(
+    await ask("item_2"),
+    voiceLookupResultCue("Ridge Street Build: delayed."),
+  );
+  await ask("item_3");
+  assert.equal(attempts, 2, "the answered lookup is not run a third time");
+});
+
+test("a caller who hangs up while Live opens has it closed at once, without waiting on the resolver", async () => {
+  let finishOpen: (connection: {
+    close(): void;
+    send(): void;
+  }) => void = () => {};
+  let closed = false;
+  const session = new VoiceAgentSession({
+    carrier: { close: () => {}, send: () => {} },
+    decide: async () => null,
+    dialect: "telnyx",
+    log: quiet,
+    now: () => NOW.getTime(),
+    openModel: () =>
+      new Promise((resolve) => {
+        finishOpen = resolve;
+      }),
+    // Never resolves: the session must not wait on it to close Live.
+    prepare: () => new Promise<VoiceCallerSetup>(() => {}),
+    report: async () => {},
+    secret: SECRET,
+    setTimer: () => ({}),
+    clearTimer: () => {},
+    urlToken: token("telnyx", "v3:abc"),
+    voice: "marin",
+  });
+  session.handleCarrierText(telnyxStart());
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  session.handleCarrierClosed();
+  await session.done;
+  finishOpen({
+    close: () => {
+      closed = true;
+    },
+    send: () => {},
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(closed, true);
+});
+
 // The real resolver and briefings, on a scripted database, through the
 // session: one authorised and one denied retrieval for every class.
 for (const who of [

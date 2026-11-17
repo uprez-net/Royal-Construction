@@ -117,9 +117,11 @@ deployment with `COMMS_WEBHOOK_ORIGIN` set to it.
 
 With `COMMS_AGENT_DISCLOSURE_ENABLED=true`, Mili answers a caller that Royal's
 records recognise, from those records, read-only. It is **off by default** and
-separate from `COMMS_AGENT_ENABLED`: switching it off (and redeploying) stops
-every disclosure at once and leaves her taking messages. `/admin/comms` shows
-it as **Mili answers known callers from records**.
+separate from `COMMS_AGENT_ENABLED`: switching it off (and redeploying) leaves
+her taking messages on every **new** call. A call already connected keeps the
+briefing and lookups it started with until it ends, which is at most 270
+seconds. `/admin/comms` shows it as **Mili answers known callers from
+records**.
 
 The rules live in `lib/domain/comms/callers/`; the voice code only wires them.
 

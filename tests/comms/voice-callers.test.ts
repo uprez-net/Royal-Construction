@@ -147,20 +147,50 @@ describe("one number, one caller — or nobody", () => {
     );
   });
 
-  test("two leads sharing a project owner, or the same name, are one subject", () => {
-    const viaOwner = classifyCallerMatches([
+  test("two leads join through a project owner only when that owner matched the number too", () => {
+    const leads = [
       lead(1, "Jo Smith", { projectCustomerIds: ["c-9"], projectId: "p-1" }),
       lead(2, "Joanne Smith", {
         projectCustomerIds: ["c-9"],
         projectId: "p-2",
       }),
+    ];
+    // c-9 did not match this number: nothing says these are one person.
+    assert.deepEqual(classifyCallerMatches(leads), {
+      class: "unknown",
+      reason: "ambiguous",
+    });
+    const viaMatchedOwner = classifyCallerMatches([
+      ...leads,
+      customer("c-9", "Jo Smith"),
     ]);
-    assert.equal(viaOwner.class, "client");
+    assert.deepEqual(
+      viaMatchedOwner.class === "client" && viaMatchedOwner.leadIds,
+      [1, 2],
+    );
+  });
+
+  test("a shared name joins only enquiries with no project yet", () => {
     const repeat = classifyCallerMatches([
       lead(3, "Jo Smith"),
       lead(4, "  jo  SMITH "),
     ]);
     assert.deepEqual(repeat.class === "client" && repeat.leadIds, [3, 4]);
+    for (const matches of [
+      // Two customers, or a customer and an unrelated lead, by name alone.
+      [customer("c-1", "Jo Smith"), customer("c-2", "Jo Smith")],
+      [customer("c-1", "Jo Smith"), lead(5, "Jo Smith")],
+      // A lead whose project the number's other match does not own.
+      [
+        lead(6, "Jo Smith"),
+        lead(7, "Jo Smith", { projectCustomerIds: ["c-8"], projectId: "p" }),
+      ],
+    ]) {
+      assert.deepEqual(classifyCallerMatches(matches), {
+        class: "unknown",
+        reason: "ambiguous",
+      });
+    }
   });
 
   test("a second person or a second role fails closed — never the first row, never a union", () => {
@@ -212,7 +242,7 @@ describe("one number, one caller — or nobody", () => {
       classifyCallerMatches([tradie("t-1", true), customer("c-1")]),
       { class: "unknown", reason: "ambiguous" },
     );
-    // An archived lead of the same person grants nothing but blocks nothing.
+    // An archived enquiry of the same person grants nothing but blocks nothing.
     const sameSubject = classifyCallerMatches([
       lead(1, "Jo Smith", { archived: true }),
       lead(2, "Jo Smith"),

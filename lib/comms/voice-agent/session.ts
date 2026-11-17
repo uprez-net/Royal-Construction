@@ -325,6 +325,12 @@ export class VoiceAgentSession {
       void this.finish("failed");
       return;
     }
+    // The caller may have hung up while Live opened: close it now rather than
+    // keeping a billed session open while the caller is still being resolved.
+    if (this.finished) {
+      this.model.close();
+      return;
+    }
     this.setup = await setup;
     if (this.finished) {
       this.model.close();
@@ -537,8 +543,12 @@ export class VoiceAgentSession {
       if (this.lookupsRun.has(key)) {
         decision = null;
       } else {
-        this.lookupsRun.add(key);
-        lookupCue = await this.runLookup(decision.request);
+        const result = await this.runLookup(decision.request);
+        lookupCue = result.cue;
+        // Only an answered lookup is never run again. One that failed or
+        // timed out stays askable: the caller asking again must get another
+        // try, not a "let me check" followed by silence.
+        if (result.answered) this.lookupsRun.add(key);
       }
     }
     this.deskBusy = false;
@@ -576,17 +586,20 @@ export class VoiceAgentSession {
    * Any refusal, failure or timeout becomes "could not check" — never "found
    * nothing", and never an answer from somewhere wider.
    */
-  private async runLookup(request: VoiceLookupRequest): Promise<string> {
+  private async runLookup(
+    request: VoiceLookupRequest,
+  ): Promise<{ readonly cue: string; readonly answered: boolean }> {
+    const failed = { answered: false, cue: VOICE_LOOKUP_FAILED_CUE };
     const lookup = this.setup.lookup;
     const offered = this.setup.lookups.some((l) => l.name === request.name);
-    if (!lookup || !offered) return VOICE_LOOKUP_FAILED_CUE;
+    if (!lookup || !offered) return failed;
     try {
       const text = await this.within(lookup(request), LOOKUP_TIMEOUT_MS);
       if (text === null) {
         this.log.warn(`[voice-agent] lookup ${request.name} timed out.`);
-        return VOICE_LOOKUP_FAILED_CUE;
+        return failed;
       }
-      return voiceLookupResultCue(text);
+      return { answered: true, cue: voiceLookupResultCue(text) };
     } catch (error) {
       // The name only: what was asked and what came back stay off the logs.
       this.log.warn(
@@ -594,7 +607,7 @@ export class VoiceAgentSession {
           error instanceof Error ? error.name : "error"
         }).`,
       );
-      return VOICE_LOOKUP_FAILED_CUE;
+      return failed;
     }
   }
 

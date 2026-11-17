@@ -52,7 +52,9 @@ async function main() {
   for (const u of users) hold(u.phone, `user:${u.id}`);
   for (const c of customers) hold(c.phone, `customer:${c.id}`);
   for (const l of leads) {
-    hold(l.phoneE164 ?? l.phone, `lead:${l.id}`);
+    // Both: the resolver matches a lead on either, so either can be shared.
+    hold(l.phone, `lead:${l.id}`);
+    hold(l.phoneE164, `lead:${l.id}`);
     hold(l.secondaryPhone, `lead:${l.id}:secondary`);
   }
   for (const t of tradies) hold(t.phone, `tradie:${t.id}`);
