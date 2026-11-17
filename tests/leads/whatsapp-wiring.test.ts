@@ -148,6 +148,14 @@ test("the incoming-call poll is no quicker than every ten seconds", () => {
   assert.ok(Number(match[1].replaceAll("_", "")) >= 10_000);
 });
 
+// Paused while the poll's database cost is sorted out; Mili takes inbound
+// WhatsApp calls. Re-enabling is a deliberate change to this test as well.
+test("the incoming-call poll is switched off", () => {
+  const provider = read("components/comms/phone-provider.tsx");
+  assert.match(provider, /const WHATSAPP_INCOMING_POLL_ENABLED = false;/);
+  assert.match(provider, /if \(!WHATSAPP_INCOMING_POLL_ENABLED\) return;/);
+});
+
 test("inbound bodies are never rendered as HTML", () => {
   for (const file of [
     "components/whatsapp/whatsapp-chat.tsx",

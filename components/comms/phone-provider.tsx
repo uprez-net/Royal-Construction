@@ -47,6 +47,11 @@ import { WhatsAppCallSession } from "./dialer/whatsapp-call-session";
 // Ten seconds is still well inside the time a customer lets a call ring, and
 // it only runs at all when WhatsApp calling is switched on.
 const WHATSAPP_INCOMING_POLL_MS = 10_000;
+// OFF for now: the poll cost too much database compute. Inbound WhatsApp calls
+// are answered by Mili, so the office does not need them ringing in the
+// browser. Flip to true to bring it back; nothing else changes. Calls placed
+// from here still follow their own state (the per-call poll below).
+const WHATSAPP_INCOMING_POLL_ENABLED = false;
 // A failed check retries well inside the time a call rings, not a minute later.
 const WHATSAPP_INCOMING_RETRY_MS = 15_000;
 // Only while a WhatsApp call is on screen: ringing here, or live.
@@ -353,6 +358,7 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
   // Not at all unless this deployment has WhatsApp calling switched on.
   const whatsappCalling = useWhatsAppAvailability().calling;
   useEffect(() => {
+    if (!WHATSAPP_INCOMING_POLL_ENABLED) return;
     if (!whatsappCalling) return;
     let cancelled = false;
     let timer: number | undefined;
