@@ -303,16 +303,19 @@ export async function fetchTradieApprovals(
     if (status) whereClause.push({ status });
 
     const where = whereClause.length > 0 ? { AND: whereClause } : undefined;
-    const [approvals, totalCount] = await Promise.all([
-      prisma.tradieApproval.findMany({
-        include: { tradie: true, user: true },
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        where,
-      }),
-      prisma.tradieApproval.count({ where }),
-    ]);
+    // Count first and keep the page in range: approving the last request on
+    // the last page of "Pending" otherwise reloads an empty page and reads
+    // "No approvals found" while earlier pages still hold pending requests.
+    const totalCount = await prisma.tradieApproval.count({ where });
+    const lastPage = Math.max(1, Math.ceil(totalCount / pageSize));
+    const currentPage = Math.min(Math.max(1, page), lastPage);
+    const approvals = await prisma.tradieApproval.findMany({
+      include: { tradie: true, user: true },
+      orderBy: { createdAt: "desc" },
+      skip: (currentPage - 1) * pageSize,
+      take: pageSize,
+      where,
+    });
 
     const safeApprovals: SafeTradieApproval[] = approvals.map((approval) => ({
       ...approval,
@@ -324,7 +327,12 @@ export async function fetchTradieApprovals(
       },
       updationData: approval.updationData as unknown as TradieApprovalPayload,
     }));
-    return { approvals: safeApprovals, page, pageSize, totalCount };
+    return {
+      approvals: safeApprovals,
+      page: currentPage,
+      pageSize,
+      totalCount,
+    };
   } catch (error) {
     console.error("Error fetching tradie approvals:", error);
     throw new Error("Error fetching tradie approvals");

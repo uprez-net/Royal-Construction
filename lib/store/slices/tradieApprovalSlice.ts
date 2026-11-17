@@ -15,6 +15,7 @@ import {
   handleBulkAdminApproval,
 } from "@/lib/data/tradie-approvals";
 import { ApprovalInput } from "@/types/tradie";
+import { toast } from "sonner";
 
 interface TradieApprovalState extends PaginatedTradieApprovals {
   selectedApprovalIds: string[];
@@ -73,6 +74,40 @@ export const fetchApprovalsByQuery = createAsyncThunk<
 );
 
 type ApprovalBatch = Awaited<ReturnType<typeof handleBulkAdminApproval>>;
+
+/**
+ * The reload after a decision. It shares fetchApprovalsByQuery's result, but
+ * a failure keeps the rows on screen and says the list may be out of date:
+ * the decision itself went through, so replacing the table with an error
+ * would read as if it had not.
+ */
+const reloadAfterDecision = createAsyncThunk<
+  PaginatedTradieApprovals,
+  TradieApprovalQuery
+>("tradieApproval/reloadAfterDecision", async (query) => {
+  try {
+    return await fetchTradieApprovals(query);
+  } catch (error) {
+    console.error("Approvals reload after a decision failed", error);
+    toast.warning(
+      "Saved, but the list could not be reloaded. Refresh the page to see it.",
+    );
+    throw error;
+  }
+});
+
+/** The counts after a decision; on failure the office is told they are stale. */
+async function reloadKpi(): Promise<ApprovalKPI | null> {
+  try {
+    return await fetchApprovalKPI();
+  } catch (error) {
+    console.error("Approval counts reload after a decision failed", error);
+    toast.warning(
+      "Saved, but the counts could not be refreshed. Refresh the page to update them.",
+    );
+    return null;
+  }
+}
 type ApprovalSliceState = { tradieApproval: TradieApprovalState };
 
 /**
@@ -103,8 +138,8 @@ export const approveRequests = createAsyncThunk<
         batch.failed[0]?.error ?? "No request could be resolved",
       );
     }
-    const kpi = await fetchApprovalKPI().catch(() => null);
-    void dispatch(fetchApprovalsByQuery(getState().tradieApproval.query));
+    const kpi = await reloadKpi();
+    void dispatch(reloadAfterDecision(getState().tradieApproval.query));
     return { ...batch, kpi };
   },
 );
@@ -118,8 +153,8 @@ export const refreshApprovals = createAsyncThunk<
   void,
   { state: ApprovalSliceState }
 >("tradieApproval/refreshApprovals", async (_, { dispatch, getState }) => {
-  void dispatch(fetchApprovalsByQuery(getState().tradieApproval.query));
-  return fetchApprovalKPI().catch(() => null);
+  void dispatch(reloadAfterDecision(getState().tradieApproval.query));
+  return reloadKpi();
 });
 
 /**
@@ -146,7 +181,11 @@ export function approvalOutcomeMessage(
     failure:
       failed === 0
         ? null
-        : `${failed} request${failed === 1 ? "" : "s"} not ${verb}: ${result.failed[0].error}`,
+        : `${failed} request${failed === 1 ? "" : "s"} not ${verb}: ${[
+            ...new Set(result.failed.map((item) => item.error)),
+          ]
+            .slice(0, 3)
+            .join("; ")}`,
   };
 }
 
@@ -187,6 +226,18 @@ const tradieApprovalSlice = createSlice({
       .addCase(fetchApprovalsByQuery.pending, (state) => {
         state.loading = true;
         state.error = null;
+      })
+      .addCase(reloadAfterDecision.fulfilled, (state, action) => {
+        state.approvals = action.payload.approvals;
+        state.totalCount = action.payload.totalCount;
+        state.page = action.payload.page;
+        state.pageSize = action.payload.pageSize;
+        state.query.page = action.payload.page;
+        state.selectedApprovalIds = state.selectedApprovalIds.filter((id) =>
+          action.payload.approvals.some(
+            (approval) => approval.id === id && approval.status === "PENDING",
+          ),
+        );
       })
       .addCase(fetchApprovalsByQuery.fulfilled, (state, action) => {
         state.loading = false;
