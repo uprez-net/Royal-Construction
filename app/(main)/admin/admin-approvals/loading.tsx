@@ -12,26 +12,24 @@ import {
   Skeleton,
 } from "@/components/ui/skeleton";
 
-/** Everything under the page header: the page streams this part. */
+/**
+ * Everything under the page header, in the order the screen draws it: three
+ * figures, the two view tabs with the search, the type chips, then the table.
+ */
 export function ApprovalBodySkeleton() {
   return (
     <PageSkeleton label="Loading approvals" className="space-y-6">
-      <KpiBand
-        className={cn(
-          MOBILE_METRIC_STRIP_CLASS,
-          "sm:grid-cols-2 xl:grid-cols-7",
-        )}
-      >
-        {Array.from({ length: 7 }).map((_, index) => (
+      <KpiBand className={cn(MOBILE_METRIC_STRIP_CLASS, "sm:grid-cols-3")}>
+        {Array.from({ length: 3 }).map((_, index) => (
           <MetricCardSkeleton key={index} />
         ))}
       </KpiBand>
 
       <ListToolbar
         start={
-          <div className="hidden flex-wrap items-center gap-1.5 md:flex">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton key={index} className="h-11 w-24 rounded-md" />
+          <div className="flex flex-wrap items-center gap-1.5">
+            {Array.from({ length: 2 }).map((_, index) => (
+              <Skeleton key={index} className="h-11 w-36 rounded-md" />
             ))}
           </div>
         }
@@ -47,14 +45,14 @@ export function ApprovalBodySkeleton() {
               <Skeleton className="h-11 w-full rounded-md" />
             </div>
             <div className="hidden flex-wrap items-center gap-1 md:flex">
-              {Array.from({ length: 5 }).map((_, index) => (
+              {Array.from({ length: 7 }).map((_, index) => (
                 <Skeleton key={index} className="h-11 w-28 rounded-lg" />
               ))}
             </div>
           </>
         }
       >
-        <DataTableSkeleton columnCount={8} flush />
+        <DataTableSkeleton columnCount={9} flush />
       </TableCard>
     </PageSkeleton>
   );

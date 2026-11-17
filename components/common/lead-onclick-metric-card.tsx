@@ -14,6 +14,7 @@ export function LeadMetricCard({
   onClick,
   active = false,
   noteWraps = false,
+  toggle = true,
 }: {
   label: string;
   value: string;
@@ -22,6 +23,8 @@ export function LeadMetricCard({
   active?: boolean;
   /** Let a long note run onto a second line instead of cutting it off. */
   noteWraps?: boolean;
+  /** False for a figure that opens something rather than filtering. */
+  toggle?: boolean;
 }) {
   const content = (
     <>
@@ -66,7 +69,7 @@ export function LeadMetricCard({
           !active && "hover:bg-muted",
         )}
         onClick={onClick}
-        aria-pressed={active}
+        aria-pressed={toggle ? active : undefined}
         aria-label={`${label}: ${value}. ${note}`}
       >
         {content}

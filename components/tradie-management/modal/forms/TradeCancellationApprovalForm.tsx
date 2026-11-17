@@ -211,7 +211,7 @@ export function TradeCancellationApprovalForm({ approval, onSuccess }: Props) {
           <div className="grid gap-2 sm:flex sm:justify-end">
             <Button
               variant="outline"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || !rejectReason.trim()}
               onClick={() => submit("rejected")}
             >
               Keep tradie

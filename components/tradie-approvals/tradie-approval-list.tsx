@@ -1,6 +1,5 @@
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
-  ApprovalInput,
   SafeTradieApproval,
   ScheduleApprovalJsonPayload,
   ScheduleDeletionJsonPayload,
@@ -8,16 +7,14 @@ import {
 } from "@/types/tradie";
 import { dateFormat } from "@/utils/formatters";
 import {
-  approvalErrorMessage,
-  approvalOutcomeMessage,
-  approveRequests,
+  approvalDayLabel,
+  approvalTypeLabel,
   selectApproval,
+  selectApprovals,
 } from "@/lib/store/slices/tradieApprovalSlice";
-import { toast } from "sonner";
-import { useState } from "react";
 import { Check, Loader2, MoreVertical, UserCheck, X } from "lucide-react";
 import { openModal } from "@/lib/store/slices/uiSlice";
-import { TradieApprovalStatus, TradieApprovalActionType } from "@prisma/client";
+import { TradieApprovalStatus } from "@prisma/client";
 import { DataTable } from "@/components/common/data-table";
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
@@ -25,19 +22,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-
-const approvalTypeLabel: Record<TradieApprovalActionType, string> = {
-  PRICE_CHANGE: "Price Change",
-  INCIDENT_RESOLUTION: "Incident",
-  TRADIE_REMOVAL: "Deletion",
-  SCHEDULE_APPROVAL: "Scheduling",
-  SCHEDULE_DELETION: "Schedule Removal",
-  TRADE_CANCELLATION: "Trade Cancellation",
-};
 
 const statusPill: Record<
   TradieApprovalStatus,
@@ -78,8 +65,7 @@ const createApprovalDescription = (approval: SafeTradieApproval) => {
     case "SCHEDULE_APPROVAL":
       return `A schedule approval request has been submitted for ${approval.tradie.name}. ${approval.reason}`;
     case "SCHEDULE_DELETION": {
-      const data = approval.updationData as ScheduleDeletionJsonPayload;
-      return `Removal of ${approval.tradie.name}'s booking on ${data?.scheduledDate ?? "an unrecorded date"} has been requested. ${approval.reason}`;
+      return `Removal of ${approval.tradie.name}'s booking on ${approval.dueKind === "booking" ? approvalDayLabel(approval.decisionDue) : "an unrecorded date"} has been requested. ${approval.reason}`;
     }
     case "TRADE_CANCELLATION": {
       const data = approval.updationData as TradeCancellationJsonPayload;
@@ -132,23 +118,8 @@ const approvalProjectName = (approval: SafeTradieApproval) => {
   }
 };
 
-const handlePayload = (approval: SafeTradieApproval, resolution: string) => {
-  switch (approval.actionType) {
-    case "PRICE_CHANGE":
-      return {
-        newHourlyRate: (approval.updationData as { newHourlyRate: number })
-          .newHourlyRate,
-      };
-    case "INCIDENT_RESOLUTION":
-      return {
-        resolution,
-      };
-    default:
-      return undefined;
-  }
-};
-
 const ALIGN = [
+  "start",
   "start",
   "start",
   "start",
@@ -159,25 +130,13 @@ const ALIGN = [
   "end",
 ] as const;
 
-/**
- * The row's actions. The card's Approve, Reject and View buttons are the same
- * three items here, calling the same handlers. The spinner that the card showed
- * on its Approve button now shows on the trigger while the row is processing.
- */
+/** The row's menu. Approve and Reject are inline; the menu keeps View request. */
 function ApprovalRowMenu({
   title,
-  pending,
-  processing,
   onView,
-  onApprove,
-  onReject,
 }: {
   title: string;
-  pending: boolean;
-  processing: boolean;
   onView: () => void;
-  onApprove: () => void;
-  onReject: () => void;
 }) {
   return (
     <DropdownMenu>
@@ -188,11 +147,7 @@ function ApprovalRowMenu({
           className="size-11 md:size-8"
           aria-label={`Actions for ${title}`}
         >
-          {processing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <MoreVertical className="h-4 w-4" />
-          )}
+          <MoreVertical className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
 
@@ -200,112 +155,56 @@ function ApprovalRowMenu({
         <DropdownMenuItem onClick={onView} className="min-h-11 md:min-h-0">
           View request
         </DropdownMenuItem>
-
-        {pending && (
-          <>
-            <DropdownMenuItem
-              onClick={onApprove}
-              disabled={processing}
-              className="min-h-11 md:min-h-0"
-            >
-              <Check />
-              Approve
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={onReject}
-              className="min-h-11 md:min-h-0"
-            >
-              <X />
-              Reject
-            </DropdownMenuItem>
-          </>
-        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-export function TradieApprovalList() {
+const headerCheckbox = "grid size-11 shrink-0 place-items-center sm:size-6";
+
+export function TradieApprovalList({
+  processingIds,
+  onApprove,
+}: {
+  processingIds: ReadonlySet<string>;
+  onApprove: (rows: SafeTradieApproval[]) => Promise<void>;
+}) {
   const dispatch = useAppDispatch();
-  const [processingRequestIds, setProcessingRequestIds] = useState<Set<string>>(
-    new Set(),
+  const { approvals, selectedApprovalIds, loading, error, query } =
+    useAppSelector((state) => state.tradieApproval);
+  const decided = query.view === "decided";
+
+  // Select-all covers the pending rows on this page; decided rows cannot be
+  // selected, so they are left out of the count and the box.
+  const pendingOnPage = approvals.filter(
+    (approval) => approval.status === TradieApprovalStatus.PENDING,
   );
-  const { approvals, selectedApprovalIds, loading, error } = useAppSelector(
-    (state) => state.tradieApproval,
-  );
+  const selectedOnPage = pendingOnPage.filter((approval) =>
+    selectedApprovalIds.includes(approval.id),
+  ).length;
+  const allOnPageSelected =
+    pendingOnPage.length > 0 && selectedOnPage === pendingOnPage.length;
 
   const handleSelectApproval = (approvalId: string) => {
     dispatch(selectApproval(approvalId));
   };
 
-  const handleApprove = async (approvalId: string) => {
-    setProcessingRequestIds((prev) => new Set(prev).add(approvalId));
-    try {
-      const approval = approvals.find((a) => a.id === approvalId);
-      if (!approval) {
-        throw new Error(
-          "This approval request is no longer available. Refresh and try again.",
-        );
-      }
-      const approvalInput = {
-        approvalId: approval.id,
-        resolution: "approved",
-        type: approval.actionType,
-        payload: handlePayload(approval, "approved"),
-      } satisfies ApprovalInput;
-
-      const result = await dispatch(approveRequests([approvalInput])).unwrap();
-      const message = approvalOutcomeMessage(result, "approved");
-      if (message.success) toast.success(message.success);
-      if (message.failure) toast.error(message.failure);
-    } catch (error) {
-      console.error("Approval failed:", error);
-      toast.error(approvalErrorMessage(error));
-    } finally {
-      setProcessingRequestIds((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(approvalId);
-        return newSet;
-      });
-    }
-  };
-
   const handleReject = (approvalId: string) => {
-    try {
-      const approval = approvals.find((a) => a.id === approvalId);
-      if (!approval) {
-        throw new Error(
-          "This approval request is no longer available. Refresh and try again.",
-        );
-      }
-      dispatch(
-        openModal({
-          type: "rejectTradieApprovals",
-          payload: {
-            approvals: [approval],
-          },
-        }),
-      );
-    } catch (error) {
-      console.error("Error creating approval input:", error);
-      toast.error(
-        error instanceof Error ? error.message : "An unexpected error occurred",
-      );
-    }
+    const approval = approvals.find((a) => a.id === approvalId);
+    if (!approval) return;
+    dispatch(
+      openModal({
+        type: "rejectTradieApprovals",
+        payload: {
+          approvals: [approval],
+        },
+      }),
+    );
   };
 
   const handleClick = (approvalId: string) => {
     const approval = approvals.find((a) => a.id === approvalId);
-    if (!approval) {
-      toast.error(
-        "This approval request is no longer available. Refresh and try again.",
-      );
-      return;
-    }
+    if (!approval) return;
     dispatch(
       openModal({
         type: "adminApproval",
@@ -336,15 +235,43 @@ export function TradieApprovalList() {
         mobileLayout="cards"
         mobileTitleColumn={2}
         mobileWideColumns={[4]}
-        mobileActionsPlacement="header"
+        mobileActionsPlacement="footer"
         align={[...ALIGN]}
-        caption="Tradie approval requests, newest first."
+        caption={
+          decided
+            ? "Decided tradie approval requests, most recent first."
+            : "Tradie approval requests waiting for a decision, oldest due first."
+        }
         headers={[
-          "",
+          // The header box has no text, so the phone card does not read it
+          // as a field.
+          <label key="select-all" className={headerCheckbox}>
+            <input
+              type="checkbox"
+              aria-label="Select all pending on this page"
+              checked={allOnPageSelected}
+              disabled={pendingOnPage.length === 0}
+              ref={(input) => {
+                if (input)
+                  input.indeterminate =
+                    selectedOnPage > 0 && !allOnPageSelected;
+              }}
+              onChange={() =>
+                dispatch(
+                  selectApprovals({
+                    ids: pendingOnPage.map((approval) => approval.id),
+                    selected: !allOnPageSelected,
+                  }),
+                )
+              }
+              className="size-5"
+            />
+          </label>,
           "Type",
           "Tradie and trade",
           "Project",
           "Request",
+          "Due",
           "Submitted",
           "Status",
           <span key="actions" className="sr-only">
@@ -355,7 +282,7 @@ export function TradieApprovalList() {
           const title = createApprovalTitle(approval);
           const severity = calculateSeverity(approval);
           const pending = approval.status === TradieApprovalStatus.PENDING;
-          const processing = processingRequestIds.has(approval.id);
+          const processing = processingIds.has(approval.id);
           const selected = selectedApprovalIds.includes(approval.id);
           const status = statusPill[approval.status];
 
@@ -364,7 +291,7 @@ export function TradieApprovalList() {
             // menu are controls of their own.
             <label
               key="select"
-              className="grid size-11 shrink-0 place-items-center sm:size-6"
+              className={headerCheckbox}
               onClick={(event) => event.stopPropagation()}
             >
               <input
@@ -408,6 +335,23 @@ export function TradieApprovalList() {
               </p>
             </div>,
 
+            // A decided request has no due date any more; it shows a dash.
+            <div key="due" className="flex flex-wrap items-center gap-1.5">
+              {pending ? (
+                <>
+                  <span className="tabular-nums">
+                    {approval.dueKind === "booking" ? "Booking" : "Submitted"}{" "}
+                    {approvalDayLabel(approval.decisionDue)}
+                  </span>
+                  {approval.overdue ? (
+                    <StatusPill tone="danger">Overdue</StatusPill>
+                  ) : null}
+                </>
+              ) : (
+                "—"
+              )}
+            </div>,
+
             <div key="submitted">
               <div className="tabular-nums">
                 {dateFormat.format(approval.createdAt)}
@@ -421,20 +365,43 @@ export function TradieApprovalList() {
               {status.label}
             </StatusPill>,
 
-            // Stops the row's click from opening the request: the menu and its
-            // portalled items bubble through the row in React.
+            // Stops the row's click from opening the request: the buttons and
+            // the menu are controls of their own.
             <div
               key="actions"
-              className="flex justify-end"
+              className="flex items-center justify-end gap-1.5"
               onClick={(event) => event.stopPropagation()}
             >
+              {pending && (
+                <>
+                  <Button
+                    size="sm"
+                    className="min-h-11 md:min-h-0"
+                    disabled={processing}
+                    onClick={() => void onApprove([approval])}
+                  >
+                    {processing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Check className="h-4 w-4" />
+                    )}
+                    Approve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="min-h-11 md:min-h-0"
+                    disabled={processing}
+                    onClick={() => handleReject(approval.id)}
+                  >
+                    <X className="h-4 w-4" />
+                    Reject
+                  </Button>
+                </>
+              )}
               <ApprovalRowMenu
                 title={title}
-                pending={pending}
-                processing={processing}
                 onView={() => handleClick(approval.id)}
-                onApprove={() => handleApprove(approval.id)}
-                onReject={() => handleReject(approval.id)}
               />
             </div>,
           ];
@@ -444,7 +411,7 @@ export function TradieApprovalList() {
           const approval = approvals[index];
           return cn(
             selectedApprovalIds.includes(approval.id) && "bg-royal-gold/10",
-            processingRequestIds.has(approval.id) && "opacity-50",
+            processingIds.has(approval.id) && "opacity-50",
           );
         }}
         onRowClick={(index) => handleClick(approvals[index].id)}
@@ -456,11 +423,13 @@ export function TradieApprovalList() {
 
             <div className="space-y-1">
               <p className="text-sm font-semibold text-foreground">
-                No approvals found
+                {decided ? "Nothing decided yet" : "Nothing waiting"}
               </p>
 
               <p className="text-xs text-muted-foreground">
-                Your approvals will appear here.
+                {decided
+                  ? "Approved and rejected requests appear here."
+                  : "New requests from the team appear here."}
               </p>
             </div>
           </div>

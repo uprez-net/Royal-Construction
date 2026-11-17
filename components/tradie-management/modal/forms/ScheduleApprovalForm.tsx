@@ -19,8 +19,11 @@ import {
   Phone,
   LucideIcon,
 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   currency,
   dataTimeFormat,
@@ -75,12 +78,15 @@ export function ScheduleApprovalForm({ approval, onSuccess }: Props) {
   const scheduledDate = new Date(approvalData.scheduledDate);
   const isScheduledDateValid = !Number.isNaN(scheduledDate.getTime());
 
+  const [rejectReason, setRejectReason] = useState("");
+
   const submit = (resolution: "approved" | "rejected") => {
     mutation.mutate({
       approvalId: approval.id,
       type: TradieApprovalActionType.SCHEDULE_APPROVAL,
       resolution,
       payload: undefined,
+      rejectReason: resolution === "rejected" ? rejectReason.trim() : undefined,
     });
   };
 
@@ -200,34 +206,49 @@ export function ScheduleApprovalForm({ approval, onSuccess }: Props) {
 
         {/* Actions */}
         {approval.status === "PENDING" && (
-          <div className="grid gap-2 border-t border-border/70 pt-5 sm:flex sm:justify-end">
-            <Button
-              variant="outline"
-              disabled={mutation.isPending}
-              onClick={() => submit("rejected")}
-            >
-              Reject request
-            </Button>
+          <div className="space-y-4 border-t border-border/70 pt-5">
+            <div className="space-y-1.5">
+              <Label htmlFor="schedule-approval-reject-reason">
+                Reason for rejecting the schedule
+              </Label>
+              <Textarea
+                id="schedule-approval-reject-reason"
+                rows={2}
+                maxLength={1000}
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+              />
+            </div>
 
-            <Button
-              disabled={mutation.isPending}
-              onClick={() => submit("approved")}
-            >
-              {mutation.isPending ? (
-                <>
-                  <Loader2
-                    className="mr-2 size-4 animate-spin"
-                    aria-hidden="true"
-                  />
-                  Submitting…
-                </>
-              ) : (
-                <>
-                  <CalendarPlus className="mr-2 size-4" aria-hidden="true" />
-                  Approve schedule
-                </>
-              )}
-            </Button>
+            <div className="grid gap-2 sm:flex sm:justify-end">
+              <Button
+                variant="outline"
+                disabled={mutation.isPending || !rejectReason.trim()}
+                onClick={() => submit("rejected")}
+              >
+                Reject request
+              </Button>
+
+              <Button
+                disabled={mutation.isPending}
+                onClick={() => submit("approved")}
+              >
+                {mutation.isPending ? (
+                  <>
+                    <Loader2
+                      className="mr-2 size-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                    Submitting…
+                  </>
+                ) : (
+                  <>
+                    <CalendarPlus className="mr-2 size-4" aria-hidden="true" />
+                    Approve schedule
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         )}
       </div>

@@ -63,9 +63,9 @@ async function statusOf(
 
 function approvalsStatus(): Promise<AdminHubStatus | null> {
   return statusOf("approvals", async () => {
-    const { pendingCount } = await fetchApprovalKPI();
-    return pendingCount > 0
-      ? { label: `${pendingCount} pending`, tone: "warning" }
+    const { waiting } = await fetchApprovalKPI();
+    return waiting > 0
+      ? { label: `${waiting} pending`, tone: "warning" }
       : { label: "None pending", tone: null };
   });
 }

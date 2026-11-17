@@ -1,28 +1,15 @@
 "use client";
 
-import {
-  Check,
-  CheckCircle2,
-  Clock3,
-  Loader2,
-  X,
-  XCircle,
-  type LucideIcon,
-} from "lucide-react";
-import { useEffect, useTransition } from "react";
+import { Check, Clock3, CheckCircle2, X, type LucideIcon } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import {
-  setQuery,
-  setActiveTab,
-  fetchApprovalsByQuery,
-  approvalErrorMessage,
-  approvalOutcomeMessage,
-  approveRequests,
-} from "@/lib/store/slices/tradieApprovalSlice";
-import { ApprovalKPI, TabKey } from "@/types/tradie-approvals";
+import { setQuery } from "@/lib/store/slices/tradieApprovalSlice";
+import type {
+  ApprovalView,
+  TradieApprovalQuery,
+} from "@/types/tradie-approvals";
+import type { SafeTradieApproval } from "@/types/tradie";
+import { TradieApprovalActionType } from "@prisma/client";
 import { Button } from "../ui/button";
-import { toast } from "sonner";
-import { ApprovalInput, SafeTradieApproval } from "@/types/tradie";
 import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import {
@@ -35,224 +22,87 @@ import {
   viewTabClass,
 } from "@/components/common/list-toolbar";
 
-const handlePayload = (approval: SafeTradieApproval, resolution: string) => {
-  switch (approval.actionType) {
-    case "PRICE_CHANGE":
-      return {
-        newHourlyRate: (approval.updationData as { newHourlyRate: number })
-          .newHourlyRate,
-      };
-    case "INCIDENT_RESOLUTION":
-      return {
-        resolution,
-      };
-    default:
-      return undefined;
-  }
+const viewTabs: { view: ApprovalView; label: string; icon: LucideIcon }[] = [
+  { view: "needs-decision", label: "Needs decision", icon: Clock3 },
+  { view: "decided", label: "Decided", icon: CheckCircle2 },
+];
+
+const chipLabel: Record<TradieApprovalActionType, string> = {
+  PRICE_CHANGE: "Price Changes",
+  INCIDENT_RESOLUTION: "Incidents",
+  TRADIE_REMOVAL: "Deletions",
+  SCHEDULE_APPROVAL: "Scheduling",
+  SCHEDULE_DELETION: "Schedule Removals",
+  TRADE_CANCELLATION: "Trade Cancellations",
 };
 
-// Status views sit on the toolbar (desktop); request types are quick chips in
-// the card header. Below md one select holds all of them, as before.
-interface Tab {
-  key: TabKey;
-  label: string;
-  count: number;
-}
+const requestTypes = Object.values(TradieApprovalActionType);
 
-interface ViewTab extends Tab {
-  icon: LucideIcon;
-}
-
-const statusViews = (kpi: ApprovalKPI): ViewTab[] => [
-  {
-    key: "all",
-    label: "All",
-    count:
-      kpi.pendingCount
-      + kpi.resolvedCount.accepted
-      + kpi.resolvedCount.rejected,
-    icon: Clock3,
-  },
-  {
-    key: "pending",
-    label: "Pending",
-    count: kpi.pendingCount,
-    icon: Clock3,
-  },
-  {
-    key: "approved",
-    label: "Approved",
-    count: kpi.resolvedCount.accepted,
-    icon: CheckCircle2,
-  },
-  {
-    key: "rejected",
-    label: "Rejected",
-    count: kpi.resolvedCount.rejected,
-    icon: XCircle,
-  },
-];
-
-const requestTypes = (kpi: ApprovalKPI): Tab[] => [
-  { key: "price", label: "Price Changes", count: kpi.priceChangeCount },
-  { key: "incident", label: "Incidents", count: kpi.incidentReportCount },
-  { key: "delete", label: "Deletions", count: kpi.deletionCount },
-  { key: "schedule", label: "Scheduling", count: kpi.scheduleCount },
-  {
-    key: "scheduleDeletion",
-    label: "Schedule Removals",
-    count: kpi.scheduleDeletionCount,
-  },
-];
-
-/** The tab change: sets the active tab and the query it implies. */
-function useApprovalTabChange() {
+/**
+ * The toolbar: the two views on the left; search and bulk actions on the
+ * right. Bulk approve goes through onApprove, which confirms a cancelling batch.
+ */
+export function TradieApprovalTabs({
+  onApprove,
+  processingIds,
+}: {
+  onApprove: (rows: SafeTradieApproval[]) => Promise<void>;
+  processingIds: ReadonlySet<string>;
+}) {
   const dispatch = useAppDispatch();
-  const query = useAppSelector((state) => state.tradieApproval.query);
+  const { query, selectedApprovalIds, approvals } = useAppSelector(
+    (state) => state.tradieApproval,
+  );
 
-  return (tab: TabKey) => {
-    dispatch(setActiveTab(tab));
-
-    const updates: Partial<typeof query> = { page: 1 };
-
-    switch (tab) {
-      case "all":
-        updates.status = undefined;
-        updates.type = undefined;
-        break;
-      case "pending":
-        updates.type = undefined;
-        updates.status = "PENDING";
-        break;
-      case "approved":
-        updates.type = undefined;
-        updates.status = "APPROVED";
-        break;
-      case "rejected":
-        updates.type = undefined;
-        updates.status = "REJECTED";
-        break;
-      case "delete":
-        updates.type = "TRADIE_REMOVAL";
-        updates.status = undefined;
-        break;
-      case "incident":
-        updates.type = "INCIDENT_RESOLUTION";
-        updates.status = undefined;
-        break;
-      case "price":
-        updates.type = "PRICE_CHANGE";
-        updates.status = undefined;
-        break;
-      case "schedule":
-        updates.type = "SCHEDULE_APPROVAL";
-        updates.status = undefined;
-        break;
-      case "scheduleDeletion":
-        updates.type = "SCHEDULE_DELETION";
-        updates.status = undefined;
-        break;
-      default:
-        return;
-    }
-
+  const switchView = (view: ApprovalView) => {
+    // Due dates only mean something for requests still waiting.
     dispatch(
       setQuery({
-        ...query,
-        ...updates,
+        view,
+        page: 1,
+        ...(view === "decided" ? { due: undefined } : {}),
       }),
     );
   };
-}
-
-/** The toolbar: status view tabs on the left; search and bulk actions on the right. */
-export function TradieApprovalTabs() {
-  const dispatch = useAppDispatch();
-  const [isPending, startTransition] = useTransition();
-  const { query, activeTab, selectedApprovalIds, approvals, kpiData } =
-    useAppSelector((state) => state.tradieApproval);
-  const onTabChange = useApprovalTabChange();
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     dispatch(setQuery({ search: e.target.value, page: 1 })); // Reset to page 1 on search change
   };
 
-  useEffect(() => {
-    dispatch(fetchApprovalsByQuery(query));
-  }, [query, dispatch]);
+  const selectedRows = approvals.filter((a) =>
+    selectedApprovalIds.includes(a.id),
+  );
 
-  const handleSelectedApprove = async () => {
-    try {
-      const approvalsToApprove = approvals.filter((a) =>
-        selectedApprovalIds.includes(a.id),
-      );
-      if (!approvalsToApprove.length) {
-        throw new Error("No selected approvals found");
-      }
-
-      const approvalInputs = approvalsToApprove.map((approval) => ({
-        approvalId: approval.id,
-        resolution: "approved",
-        type: approval.actionType,
-        payload: handlePayload(approval, "approved"),
-      })) satisfies ApprovalInput[];
-
-      const result = await dispatch(approveRequests(approvalInputs)).unwrap();
-      const message = approvalOutcomeMessage(result, "approved");
-      if (message.success) toast.success(message.success);
-      if (message.failure) toast.error(message.failure);
-    } catch (error) {
-      console.error("Bulk approval failed:", error);
-      toast.error(approvalErrorMessage(error));
-    }
-  };
-
-  const handleSelectedReject = async () => {
-    try {
-      const approvalsToReject = approvals.filter((a) =>
-        selectedApprovalIds.includes(a.id),
-      );
-      if (!approvalsToReject.length) {
-        throw new Error("No selected approvals found");
-      }
-
-      dispatch(
-        openModal({
-          type: "rejectTradieApprovals",
-          payload: {
-            approvals: approvalsToReject,
-          },
-        }),
-      );
-    } catch (error) {
-      console.error("Error creating approval input:", error);
-      toast.error(
-        error instanceof Error ? error.message : "An unexpected error occurred",
-      );
-    }
+  const handleSelectedReject = () => {
+    if (!selectedRows.length) return;
+    dispatch(
+      openModal({
+        type: "rejectTradieApprovals",
+        payload: {
+          approvals: selectedRows,
+        },
+      }),
+    );
   };
 
   return (
     <ListToolbar
       start={
-        <div className="hidden flex-wrap items-center gap-1.5 md:flex">
-          {statusViews(kpiData).map((tab) => {
+        <div className="flex flex-wrap items-center gap-1.5">
+          {viewTabs.map((tab) => {
             const Icon = tab.icon;
-            const active = activeTab === tab.key;
+            const active = query.view === tab.view;
 
             return (
               <button
-                key={tab.key}
+                key={tab.view}
                 type="button"
                 aria-pressed={active}
-                onClick={() => onTabChange(tab.key)}
+                onClick={() => switchView(tab.view)}
                 className={viewTabClass(active)}
               >
                 <Icon className="size-4" aria-hidden="true" />
                 <span>{tab.label}</span>
-                <span className="tabular-nums text-muted-foreground">
-                  {tab.count}
-                </span>
                 {active && <span className={VIEW_TAB_BAR_CLASS} />}
               </button>
             );
@@ -264,47 +114,28 @@ export function TradieApprovalTabs() {
         id="search"
         aria-label="Search approvals"
         placeholder="Search approvals…"
-        value={query.search}
+        value={query.search ?? ""}
         onChange={handleSearchChange}
       />
 
-      {selectedApprovalIds.length > 0 && (
+      {selectedRows.length > 0 && (
         <>
           <Button
             variant="outline"
             className={`${TOOLBAR_BUTTON_CLASS} bg-success hover:bg-success text-white`}
-            onClick={() => startTransition(handleSelectedApprove)}
-            disabled={isPending}
+            onClick={() => void onApprove(selectedRows)}
+            disabled={selectedRows.some((row) => processingIds.has(row.id))}
           >
-            {isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Approving {selectedApprovalIds.length}...
-              </>
-            ) : (
-              <>
-                <Check className="h-4 w-4" />
-                Approve {selectedApprovalIds.length}
-              </>
-            )}
+            <Check className="h-4 w-4" />
+            Approve {selectedRows.length}
           </Button>
           <Button
             variant="destructive"
             className={TOOLBAR_BUTTON_CLASS}
-            onClick={() => startTransition(handleSelectedReject)}
-            disabled={isPending}
+            onClick={handleSelectedReject}
           >
-            {isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Rejecting {selectedApprovalIds.length}...
-              </>
-            ) : (
-              <>
-                <X className="h-4 w-4" />
-                Reject {selectedApprovalIds.length}
-              </>
-            )}
+            <X className="h-4 w-4" />
+            Reject {selectedRows.length}
           </Button>
         </>
       )}
@@ -312,36 +143,68 @@ export function TradieApprovalTabs() {
   );
 }
 
-/** The card header: request-type chips (desktop) or one select (phone). */
+/**
+ * The card header: request-type chips (desktop) or one select (phone). Counts
+ * are for the view on screen. With the due-this-week filter on, no per-type
+ * figure exists, so the counts are left off rather than shown wrong.
+ */
 export function TradieApprovalTypeFilters() {
-  const { activeTab, kpiData } = useAppSelector(
-    (state) => state.tradieApproval,
-  );
-  const onTabChange = useApprovalTabChange();
-  const [all, pending, approved, rejected] = statusViews(kpiData);
-  const types = requestTypes(kpiData);
+  const dispatch = useAppDispatch();
+  const { query, kpiData } = useAppSelector((state) => state.tradieApproval);
+  const decided = query.view === "decided";
+  const counts = decided ? kpiData.decidedByType : kpiData.waitingByType;
+  const total = decided ? kpiData.decided : kpiData.waiting;
+  // The counts are for the whole view; under a search or the due filter they
+  // would not match the rows shown, so they are hidden there.
+  const showCounts = !query.due && !query.search?.trim();
+
+  const setType = (type: TradieApprovalQuery["type"]) =>
+    dispatch(setQuery({ type, page: 1 }));
+
+  // Clicking the active type clears it, back to all types.
+  const toggleType = (type: TradieApprovalActionType) =>
+    setType(query.type === type ? undefined : type);
 
   return (
     <>
       <MobileFilterSelect
-        label="Approval status or request type"
-        value={activeTab}
-        options={[all, pending, ...types, approved, rejected].map((tab) => ({
-          value: tab.key,
-          label: tab.label,
-          count: tab.count,
-        }))}
-        onChange={(value) => onTabChange(value as TabKey)}
+        label="Request type"
+        value={query.type ?? "all"}
+        options={[
+          {
+            value: "all",
+            label: "All types",
+            count: showCounts ? total : undefined,
+          },
+          ...requestTypes.map((type) => ({
+            value: type,
+            label: chipLabel[type],
+            count: showCounts ? counts[type] : undefined,
+          })),
+        ]}
+        onChange={(value) =>
+          setType(
+            value === "all" ? undefined : (value as TradieApprovalActionType),
+          )
+        }
       />
       <FilterChips className="hidden md:flex">
-        {types.map((tab) => (
+        <FilterChip active={!query.type} onClick={() => setType(undefined)}>
+          All types
+          {showCounts && (
+            <span className="tabular-nums opacity-70">{total}</span>
+          )}
+        </FilterChip>
+        {requestTypes.map((type) => (
           <FilterChip
-            key={tab.key}
-            active={activeTab === tab.key}
-            onClick={() => onTabChange(tab.key)}
+            key={type}
+            active={query.type === type}
+            onClick={() => toggleType(type)}
           >
-            {tab.label}
-            <span className="tabular-nums opacity-70">{tab.count}</span>
+            {chipLabel[type]}
+            {showCounts && (
+              <span className="tabular-nums opacity-70">{counts[type]}</span>
+            )}
           </FilterChip>
         ))}
       </FilterChips>

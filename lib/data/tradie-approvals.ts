@@ -1,12 +1,29 @@
 "use server";
 
-import type { Prisma } from "@prisma/client";
+import {
+  TradieApprovalActionType,
+  TradieApprovalStatus,
+  type Prisma,
+} from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
 import { after } from "next/server";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 import pLimit from "p-limit";
 
 import { resolveTradieApproval } from "@/lib/domain/tradies/approvals";
+import { bookingInTradeWhere } from "@/lib/domain/tradies/trade-selection";
+import { INACTIVE_SCHEDULE_STATUSES } from "@/lib/domain/tradies/lifecycle";
+import { sydneyDateOnly, sydneyToday } from "@/lib/dates/sydney";
+import {
+  compareNeedsDecision,
+  dueFields,
+  isDueThisWeek,
+  oldestWaiting,
+  openBookingKey,
+  tradeCancellationProjectId,
+  type DueFields,
+  type DueSubject,
+} from "@/lib/tradie-approvals/queue-order";
 import { userPrincipal } from "@/lib/domain/principal";
 import { domainActionFailure } from "@/lib/http/domain-response";
 import prisma from "../prisma";
@@ -48,16 +65,8 @@ export async function fetchTradieApprovalById(
       where: { id: approvalId },
     });
     if (!approval) throw new Error("Approval request not found");
-    return {
-      ...approval,
-      requestBy: approval.user?.name ?? approval.requestSource ?? "System",
-      tradie: {
-        ...approval.tradie,
-        lastQuotedPrice: approval.tradie.lastQuotedPrice?.toString(),
-        rating: approval.tradie.rating?.toString(),
-      },
-      updationData: approval.updationData as unknown as TradieApprovalPayload,
-    };
+    const [withDue] = await withDueFields([approval]);
+    return toSafeApproval(withDue);
   } catch (error) {
     console.error("Error fetching tradie approval:", error);
     throw new Error("Error fetching tradie approval");
@@ -282,14 +291,93 @@ export async function handleBulkAdminApproval(inputs: ApprovalInput[]) {
   };
 }
 
+type ApprovalWithRelations = Prisma.TradieApprovalGetPayload<{
+  include: { tradie: true; user: true };
+}>;
+
+/**
+ * The most pending requests the needs-decision list will load and order in
+ * memory. Past this the list is cut at the oldest-asked, and the log names the
+ * ceiling. Raise it, or move the ordering into SQL, before the queue gets there.
+ */
+const PENDING_LIST_CEILING = 500;
+
+/**
+ * Adds the due date, its kind and overdue to each row. A trade cancellation's
+ * due date is the earliest open booking its tradie holds on that project, so
+ * all of them are looked up in one grouped query.
+ */
+async function withDueFields<T extends DueSubject & { tradieId: string }>(
+  rows: readonly T[],
+): Promise<Array<T & DueFields>> {
+  const today = sydneyToday();
+  // The booking a trade cancellation would cancel is found with the domain's
+  // own rule (the tradie's open bookings on the project, in that trade), so the
+  // due date names the booking that approval actually cancels. Pending trade
+  // cancellations are few; one query each.
+  const earliest = new Map<string, string>();
+  await Promise.all(
+    rows.map(async (row) => {
+      if (row.actionType !== "TRADE_CANCELLATION") return;
+      const projectId = tradeCancellationProjectId(row.updationData);
+      const trade = (row.updationData as { trade?: unknown } | null)?.trade;
+      if (!projectId || typeof trade !== "string" || !trade.trim()) return;
+      const first = await prisma.tradieSchedule.findFirst({
+        where: {
+          tradieId: row.tradieId,
+          projectId,
+          status: { notIn: INACTIVE_SCHEDULE_STATUSES },
+          ...bookingInTradeWhere(trade),
+        },
+        orderBy: { scheduledDate: "asc" },
+        select: { scheduledDate: true },
+      });
+      if (first) {
+        earliest.set(
+          openBookingKey(row.tradieId, projectId, trade),
+          sydneyDateOnly(first.scheduledDate),
+        );
+      }
+    }),
+  );
+
+  return rows.map((row) => {
+    const projectId =
+      row.actionType === "TRADE_CANCELLATION"
+        ? tradeCancellationProjectId(row.updationData)
+        : null;
+    const trade = (row.updationData as { trade?: unknown } | null)?.trade;
+    const openBooking =
+      projectId && typeof trade === "string"
+        ? (earliest.get(openBookingKey(row.tradieId, projectId, trade)) ?? null)
+        : null;
+    return { ...row, ...dueFields(row, today, openBooking) };
+  });
+}
+
+function toSafeApproval(
+  approval: ApprovalWithRelations & DueFields,
+): SafeTradieApproval {
+  return {
+    ...approval,
+    requestBy: approval.user?.name ?? approval.requestSource ?? "System",
+    tradie: {
+      ...approval.tradie,
+      lastQuotedPrice: approval.tradie.lastQuotedPrice?.toString(),
+      rating: approval.tradie.rating?.toString(),
+    },
+    updationData: approval.updationData as unknown as TradieApprovalPayload,
+  };
+}
+
 export async function fetchTradieApprovals(
   query: TradieApprovalQuery,
 ): Promise<PaginatedTradieApprovals> {
   try {
-    const { search, type, status, page, pageSize } = query;
-    const whereClause: Prisma.TradieApprovalWhereInput[] = [];
+    const { view, search, type, due, page, pageSize } = query;
+    const filters: Prisma.TradieApprovalWhereInput[] = [];
     if (search) {
-      whereClause.push({
+      filters.push({
         tradie: {
           OR: [
             { name: { contains: search, mode: "insensitive" } },
@@ -299,36 +387,75 @@ export async function fetchTradieApprovals(
         },
       });
     }
-    if (type) whereClause.push({ actionType: type });
-    if (status) whereClause.push({ status });
+    if (type) filters.push({ actionType: type });
+    const include = { tradie: true, user: true } as const;
 
-    const where = whereClause.length > 0 ? { AND: whereClause } : undefined;
-    // Count first and keep the page in range: approving the last request on
-    // the last page of "Pending" otherwise reloads an empty page and reads
-    // "No approvals found" while earlier pages still hold pending requests.
-    const totalCount = await prisma.tradieApproval.count({ where });
+    if (view === "decided") {
+      // Due dates mean nothing once decided, so the due filter does not apply.
+      const where: Prisma.TradieApprovalWhereInput = {
+        AND: [
+          ...filters,
+          {
+            status: {
+              in: [
+                TradieApprovalStatus.APPROVED,
+                TradieApprovalStatus.REJECTED,
+              ],
+            },
+          },
+        ],
+      };
+      const totalCount = await prisma.tradieApproval.count({ where });
+      const lastPage = Math.max(1, Math.ceil(totalCount / pageSize));
+      const currentPage = Math.min(Math.max(1, page), lastPage);
+      const approvals = await prisma.tradieApproval.findMany({
+        include,
+        orderBy: { updatedAt: "desc" },
+        skip: (currentPage - 1) * pageSize,
+        take: pageSize,
+        where,
+      });
+      return {
+        approvals: approvals.map((approval) =>
+          toSafeApproval({
+            ...approval,
+            decisionDue: sydneyDateOnly(approval.createdAt),
+            dueKind: "submitted",
+            overdue: false,
+          }),
+        ),
+        page: currentPage,
+        pageSize,
+        totalCount,
+      };
+    }
+
+    // Needs decision: every pending request is loaded and ordered here, because
+    // the due date comes from the booking, which the database cannot sort on.
+    const pending = await prisma.tradieApproval.findMany({
+      include,
+      orderBy: { createdAt: "asc" },
+      take: PENDING_LIST_CEILING + 1,
+      where: { AND: [...filters, { status: TradieApprovalStatus.PENDING }] },
+    });
+    if (pending.length > PENDING_LIST_CEILING) {
+      console.error(
+        `Tradie approval queue has more than ${PENDING_LIST_CEILING} pending requests; the list shows the oldest ${PENDING_LIST_CEILING}.`,
+      );
+    }
+    const today = sydneyToday();
+    const ordered = (
+      await withDueFields(pending.slice(0, PENDING_LIST_CEILING))
+    )
+      .filter((row) => due !== "week" || isDueThisWeek(row, today))
+      .sort(compareNeedsDecision);
+
+    const totalCount = ordered.length;
     const lastPage = Math.max(1, Math.ceil(totalCount / pageSize));
     const currentPage = Math.min(Math.max(1, page), lastPage);
-    const approvals = await prisma.tradieApproval.findMany({
-      include: { tradie: true, user: true },
-      orderBy: { createdAt: "desc" },
-      skip: (currentPage - 1) * pageSize,
-      take: pageSize,
-      where,
-    });
-
-    const safeApprovals: SafeTradieApproval[] = approvals.map((approval) => ({
-      ...approval,
-      requestBy: approval.user?.name ?? approval.requestSource ?? "System",
-      tradie: {
-        ...approval.tradie,
-        lastQuotedPrice: approval.tradie.lastQuotedPrice?.toString(),
-        rating: approval.tradie.rating?.toString(),
-      },
-      updationData: approval.updationData as unknown as TradieApprovalPayload,
-    }));
+    const start = (currentPage - 1) * pageSize;
     return {
-      approvals: safeApprovals,
+      approvals: ordered.slice(start, start + pageSize).map(toSafeApproval),
       page: currentPage,
       pageSize,
       totalCount,
@@ -339,48 +466,63 @@ export async function fetchTradieApprovals(
   }
 }
 
-interface KpiResult {
-  pendingCount: bigint;
-  priceChangeCount: bigint;
-  incidentReportCount: bigint;
-  deletionCount: bigint;
-  scheduleCount: bigint;
-  scheduleDeletionCount: bigint;
-  acceptedCount: bigint;
-  rejectedCount: bigint;
-}
-
 export async function fetchApprovalKPI(): Promise<ApprovalKPI> {
   try {
-    const [row] = await prisma.$queryRaw<KpiResult[]>`
-      SELECT
-        COUNT(*) FILTER (WHERE status = 'PENDING') AS "pendingCount",
-        COUNT(*) FILTER (WHERE status = 'PENDING' AND "actionType" = 'PRICE_CHANGE') AS "priceChangeCount",
-        COUNT(*) FILTER (WHERE status = 'PENDING' AND "actionType" = 'INCIDENT_RESOLUTION') AS "incidentReportCount",
-        COUNT(*) FILTER (WHERE status = 'PENDING' AND "actionType" = 'TRADIE_REMOVAL') AS "deletionCount",
-        COUNT(*) FILTER (WHERE status = 'PENDING' AND "actionType" = 'SCHEDULE_APPROVAL') AS "scheduleCount",
-        COUNT(*) FILTER (WHERE status = 'PENDING' AND "actionType" = 'SCHEDULE_DELETION') AS "scheduleDeletionCount",
-        COUNT(*) FILTER (WHERE status = 'APPROVED') AS "acceptedCount",
-        COUNT(*) FILTER (WHERE status = 'REJECTED') AS "rejectedCount"
-      FROM "TradieApproval"
-    `;
-    if (!row) throw new Error("Approval KPI query returned no row");
+    // The needs-decision list and these figures read the same pending rows
+    // through withDueFields and the queue-order module, so they cannot disagree.
+    const [pending, decidedGroups] = await Promise.all([
+      prisma.tradieApproval.findMany({
+        orderBy: { createdAt: "asc" },
+        select: {
+          actionType: true,
+          createdAt: true,
+          id: true,
+          tradieId: true,
+          updationData: true,
+        },
+        where: { status: TradieApprovalStatus.PENDING },
+      }),
+      prisma.tradieApproval.groupBy({
+        by: ["actionType"],
+        where: {
+          status: {
+            in: [TradieApprovalStatus.APPROVED, TradieApprovalStatus.REJECTED],
+          },
+        },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const waitingByType = zeroByType();
+    const decidedByType = zeroByType();
+    for (const row of pending) waitingByType[row.actionType] += 1;
+    for (const group of decidedGroups) {
+      decidedByType[group.actionType] += group._count._all;
+    }
+
+    const today = sydneyToday();
+    const dueThisWeek = (await withDueFields(pending)).filter((row) =>
+      isDueThisWeek(row, today),
+    ).length;
+
     return {
-      deletionCount: Number(row.deletionCount),
-      incidentReportCount: Number(row.incidentReportCount),
-      pendingCount: Number(row.pendingCount),
-      priceChangeCount: Number(row.priceChangeCount),
-      resolvedCount: {
-        accepted: Number(row.acceptedCount),
-        rejected: Number(row.rejectedCount),
-      },
-      scheduleCount: Number(row.scheduleCount),
-      scheduleDeletionCount: Number(row.scheduleDeletionCount),
+      decided: Object.values(decidedByType).reduce((sum, n) => sum + n, 0),
+      decidedByType,
+      dueThisWeek,
+      oldestWaiting: oldestWaiting(pending, today),
+      waiting: pending.length,
+      waitingByType,
     };
   } catch (error) {
     console.error("Error fetching approval KPI:", error);
     throw new Error("Error fetching approval KPI");
   }
+}
+
+function zeroByType(): Record<TradieApprovalActionType, number> {
+  return Object.fromEntries(
+    Object.values(TradieApprovalActionType).map((type) => [type, 0]),
+  ) as Record<TradieApprovalActionType, number>;
 }
 
 export async function fetchApprovalKPICached(): Promise<ApprovalKPI> {

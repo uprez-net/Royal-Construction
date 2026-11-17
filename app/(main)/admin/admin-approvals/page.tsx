@@ -30,6 +30,7 @@ async function AdminApprovalsRender() {
   const [kpiData, approvalsData] = await Promise.all([
     fetchApprovalKPI(),
     fetchTradieApprovals({
+      view: "needs-decision",
       page: 1,
       pageSize: 10,
     }),
@@ -46,7 +47,7 @@ export default function AdminApprovalsPage() {
       <PageHeader
         title="Approvals"
         headingLevel="h1"
-        description="Requests from the team, newest first."
+        description="Requests waiting for a decision, most urgent first."
       />
       <Suspense fallback={<ApprovalBodySkeleton />}>
         <AdminApprovalsRender />

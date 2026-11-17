@@ -37,6 +37,7 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
   // operator has left the field or tried to submit, otherwise a screen reader
   // announces "invalid" before anything has been typed.
   const [resolutionTouched, setResolutionTouched] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
 
   const mutation = useApprovalMutation(onSuccess);
 
@@ -64,6 +65,8 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
               resolution: resolution.trim(),
             }
           : undefined,
+      rejectReason:
+        resolutionStatus === "rejected" ? rejectReason.trim() : undefined,
     });
   };
 
@@ -277,31 +280,46 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
 
         {/* Actions */}
         {approval.status === "PENDING" && (
-          <div className="grid gap-2 border-t border-border/70 pt-4 sm:flex sm:justify-end">
-            <Button
-              variant="outline"
-              disabled={mutation.isPending}
-              onClick={() => submit("rejected")}
-            >
-              Reject
-            </Button>
+          <div className="space-y-4 border-t border-border/70 pt-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="incident-reject-reason">
+                Reason for rejecting this request
+              </Label>
+              <Textarea
+                id="incident-reject-reason"
+                rows={2}
+                maxLength={1000}
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+              />
+            </div>
 
-            <Button
-              disabled={mutation.isPending || !resolution.trim()}
-              onClick={() => submit("approved")}
-            >
-              {mutation.isPending ? (
-                <>
-                  <Loader2
-                    className="mr-2 size-4 animate-spin"
-                    aria-hidden="true"
-                  />
-                  Submitting…
-                </>
-              ) : (
-                "Approve resolution"
-              )}
-            </Button>
+            <div className="grid gap-2 sm:flex sm:justify-end">
+              <Button
+                variant="outline"
+                disabled={mutation.isPending || !rejectReason.trim()}
+                onClick={() => submit("rejected")}
+              >
+                Reject
+              </Button>
+
+              <Button
+                disabled={mutation.isPending || !resolution.trim()}
+                onClick={() => submit("approved")}
+              >
+                {mutation.isPending ? (
+                  <>
+                    <Loader2
+                      className="mr-2 size-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                    Submitting…
+                  </>
+                ) : (
+                  "Approve resolution"
+                )}
+              </Button>
+            </div>
           </div>
         )}
       </div>

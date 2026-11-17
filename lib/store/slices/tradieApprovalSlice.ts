@@ -6,7 +6,6 @@ import {
 import {
   ApprovalKPI,
   PaginatedTradieApprovals,
-  TabKey,
   TradieApprovalQuery,
 } from "@/types/tradie-approvals";
 import {
@@ -14,12 +13,34 @@ import {
   fetchTradieApprovals,
   handleBulkAdminApproval,
 } from "@/lib/data/tradie-approvals";
-import { ApprovalInput } from "@/types/tradie";
+import {
+  ApprovalInput,
+  SafeTradieApproval,
+  ScheduleDeletionJsonPayload,
+  TradeCancellationJsonPayload,
+} from "@/types/tradie";
+import { TradieApprovalActionType } from "@prisma/client";
 import { toast } from "sonner";
+
+const zeroByType = () =>
+  Object.fromEntries(
+    Object.values(TradieApprovalActionType).map((type) => [type, 0]),
+  ) as Record<TradieApprovalActionType, number>;
+
+const emptyKPI: ApprovalKPI = {
+  waiting: 0,
+  decided: 0,
+  dueThisWeek: 0,
+  oldestWaiting: null,
+  waitingByType: zeroByType(),
+  decidedByType: zeroByType(),
+};
 
 interface TradieApprovalState extends PaginatedTradieApprovals {
   selectedApprovalIds: string[];
-  activeTab: TabKey;
+  /** The newest list fetch. Only its response may fill the list: a slower
+   * earlier one (a search typed past, a view left) must not overwrite it. */
+  latestFetchId: string | null;
   kpiData: ApprovalKPI;
   query: TradieApprovalQuery;
   loading: boolean;
@@ -31,21 +52,11 @@ const initialState: TradieApprovalState = {
   totalCount: 0,
   page: 1,
   pageSize: 10,
-  activeTab: "all",
   selectedApprovalIds: [],
-  kpiData: {
-    pendingCount: 0,
-    priceChangeCount: 0,
-    incidentReportCount: 0,
-    deletionCount: 0,
-    scheduleCount: 0,
-    scheduleDeletionCount: 0,
-    resolvedCount: {
-      accepted: 0,
-      rejected: 0,
-    },
-  },
+  latestFetchId: null,
+  kpiData: emptyKPI,
   query: {
+    view: "needs-decision",
     search: "",
     page: 1,
     pageSize: 10,
@@ -53,6 +64,57 @@ const initialState: TradieApprovalState = {
   loading: false,
   error: null,
 };
+
+export const approvalTypeLabel: Record<TradieApprovalActionType, string> = {
+  PRICE_CHANGE: "Price Change",
+  INCIDENT_RESOLUTION: "Incident",
+  TRADIE_REMOVAL: "Deletion",
+  SCHEDULE_APPROVAL: "Scheduling",
+  SCHEDULE_DELETION: "Schedule Removal",
+  TRADE_CANCELLATION: "Trade Cancellation",
+};
+
+const dayFormat = new Intl.DateTimeFormat("en-AU", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+
+/** A stored Sydney YYYY-MM-DD as "3 Nov". UTC, so no browser zone can shift it. */
+export function approvalDayLabel(day: string): string {
+  return dayFormat.format(new Date(`${day}T00:00:00Z`));
+}
+
+/** Approving these cancels bookings, so the office confirms first. */
+export function cancelsBookings(approval: SafeTradieApproval): boolean {
+  return (
+    approval.actionType === "SCHEDULE_DELETION"
+    || approval.actionType === "TRADE_CANCELLATION"
+  );
+}
+
+/** What approving a cancelling request does, in the words the office sees. */
+export function cancellationSummary(approval: SafeTradieApproval): string {
+  const name = approval.tradie.name;
+  if (approval.actionType === "SCHEDULE_DELETION") {
+    const data = approval.updationData as ScheduleDeletionJsonPayload;
+    // The booking date falls back to the submitted date when it does not parse;
+    // say so rather than name the wrong day.
+    const when =
+      approval.dueKind === "booking"
+        ? `for ${approvalDayLabel(approval.decisionDue)}`
+        : "on an unrecorded date";
+    return `Approving deletes ${name}'s booking on ${data?.projectName ?? "the project"} ${when}.`;
+  }
+  const data = approval.updationData as TradeCancellationJsonPayload;
+  const count = data?.openBookings;
+  const bookings =
+    typeof count !== "number"
+      ? "open bookings"
+      : `${count} open ${count === 1 ? "booking" : "bookings"}`;
+  const trade = data?.trade ?? approval.tradie.trade;
+  return `Approving cancels ${name}'s ${bookings}${trade ? ` for ${trade}` : ""} on ${data?.projectName ?? "the project"}.`;
+}
 
 export const fetchApprovalsByQuery = createAsyncThunk<
   PaginatedTradieApprovals,
@@ -109,6 +171,35 @@ async function reloadKpi(): Promise<ApprovalKPI | null> {
   }
 }
 type ApprovalSliceState = { tradieApproval: TradieApprovalState };
+
+/** The approve input for one request: the payload its type needs, if any. */
+/** An incident is resolved with a written note, in its review window, never in one click. */
+export function needsReviewWindow(approval: SafeTradieApproval): boolean {
+  return approval.actionType === "INCIDENT_RESOLUTION";
+}
+
+export function approveInput(approval: SafeTradieApproval): ApprovalInput {
+  const payload = (() => {
+    switch (approval.actionType) {
+      case "PRICE_CHANGE":
+        return {
+          newHourlyRate: (approval.updationData as { newHourlyRate: number })
+            .newHourlyRate,
+        };
+      // Never sent from here: an incident is resolved in its review window,
+      // which asks for the resolution note. Sending the word "approved" here
+      // stored it as the incident's resolution.
+      default:
+        return undefined;
+    }
+  })();
+  return {
+    approvalId: approval.id,
+    resolution: "approved",
+    type: approval.actionType,
+    payload,
+  } satisfies ApprovalInput;
+}
 
 /**
  * Resolve (approve or reject) one or more requests, then reload the list and
@@ -205,9 +296,6 @@ const tradieApprovalSlice = createSlice({
       state.page = action.payload.page;
       state.pageSize = action.payload.pageSize;
     },
-    setActiveTab(state, action: PayloadAction<TabKey>) {
-      state.activeTab = action.payload;
-    },
     selectApproval(state, action: PayloadAction<string>) {
       if (!state.selectedApprovalIds.includes(action.payload)) {
         state.selectedApprovalIds.push(action.payload);
@@ -217,13 +305,24 @@ const tradieApprovalSlice = createSlice({
         );
       }
     },
+    /** Select or clear a set of ids at once: the page's select-all box. */
+    selectApprovals(
+      state,
+      action: PayloadAction<{ ids: string[]; selected: boolean }>,
+    ) {
+      const ids = new Set(action.payload.ids);
+      state.selectedApprovalIds = action.payload.selected
+        ? [...new Set([...state.selectedApprovalIds, ...ids])]
+        : state.selectedApprovalIds.filter((id) => !ids.has(id));
+    },
     clearState() {
       return initialState;
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchApprovalsByQuery.pending, (state) => {
+      .addCase(fetchApprovalsByQuery.pending, (state, action) => {
+        state.latestFetchId = action.meta.requestId;
         state.loading = true;
         state.error = null;
       })
@@ -240,6 +339,7 @@ const tradieApprovalSlice = createSlice({
         );
       })
       .addCase(fetchApprovalsByQuery.fulfilled, (state, action) => {
+        if (action.meta.requestId !== state.latestFetchId) return;
         state.loading = false;
         state.approvals = action.payload.approvals;
         // Keep only selections still on screen and still pending.
@@ -256,6 +356,7 @@ const tradieApprovalSlice = createSlice({
         state.pageSize = action.payload.pageSize;
       })
       .addCase(fetchApprovalsByQuery.rejected, (state, action) => {
+        if (action.meta.requestId !== state.latestFetchId) return;
         state.loading = false;
         state.error = action.payload as string;
       })
@@ -292,8 +393,8 @@ export const {
   setQuery,
   setKPIData,
   setApprovalData,
-  setActiveTab,
   selectApproval,
+  selectApprovals,
   clearState,
 } = tradieApprovalSlice.actions;
 export default tradieApprovalSlice.reducer;

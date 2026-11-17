@@ -1,8 +1,14 @@
 "use client";
-import { useAppDispatch } from "@/lib/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
+  approvalErrorMessage,
+  approvalOutcomeMessage,
+  approveInput,
+  approveRequests,
+  cancelsBookings,
   clearState,
-  setActiveTab,
+  needsReviewWindow,
+  fetchApprovalsByQuery,
   setApprovalData,
   setKPIData,
   setQuery,
@@ -10,9 +16,13 @@ import {
 import {
   ApprovalKPI,
   PaginatedTradieApprovals,
-  TabKey,
+  TradieApprovalQuery,
 } from "@/types/tradie-approvals";
-import { useEffect } from "react";
+import { SafeTradieApproval } from "@/types/tradie";
+import { TradieApprovalActionType } from "@prisma/client";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { openModal } from "@/lib/store/slices/uiSlice";
 import { TradieApprovalKPI } from "./tradie-approval-header";
 import {
   TradieApprovalTabs,
@@ -21,13 +31,15 @@ import {
 import { TableCard } from "@/components/common/list-toolbar";
 import { TradieApprovalPagination } from "./tradie-approval-pagination";
 import { TradieApprovalList } from "./tradie-approval-list";
+import { ApproveConfirmDialog } from "./modal/approve-confirm-dialog";
 import { useSearchParams } from "next/navigation";
-import { TradieApprovalActionType, TradieApprovalStatus } from "@prisma/client";
 
 interface TradieApprovalClientProps {
   kpiData: ApprovalKPI;
   approvalsData: PaginatedTradieApprovals;
 }
+
+const APPROVAL_TYPES: string[] = Object.values(TradieApprovalActionType);
 
 export function TradieApprovalClient({
   kpiData,
@@ -37,7 +49,12 @@ export function TradieApprovalClient({
   const searchParams = useSearchParams();
   const q = searchParams.get("q");
   const status = searchParams.get("status");
-  const type = searchParams.get("approvalType");
+  const approvalType = searchParams.get("approvalType");
+  const [processingIds, setProcessingIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [confirming, setConfirming] = useState<SafeTradieApproval[]>([]);
+  const query = useAppSelector((state) => state.tradieApproval.query);
 
   useEffect(() => {
     dispatch(setKPIData(kpiData));
@@ -48,28 +65,107 @@ export function TradieApprovalClient({
     };
   }, [kpiData, approvalsData, dispatch]);
 
+  // The one place the list is fetched: every view, chip, figure, search and
+  // page change lands in `query`, and the rows follow it.
   useEffect(() => {
-    if (q || status || type) {
-      const decodedQ = q ? decodeURIComponent(q) : undefined;
+    dispatch(fetchApprovalsByQuery(query));
+  }, [query, dispatch]);
+
+  // Notification links: status=PENDING|APPROVED|REJECTED and approvalType.
+  // An unknown approvalType is dropped, not sent to the query.
+  useEffect(() => {
+    if (!q && !status && !approvalType) return;
+    const updates: Partial<TradieApprovalQuery> = {
+      page: 1,
+      view:
+        status === "APPROVED" || status === "REJECTED"
+          ? "decided"
+          : "needs-decision",
+    };
+    if (q) updates.search = q;
+    if (approvalType && APPROVAL_TYPES.includes(approvalType)) {
+      updates.type = approvalType as TradieApprovalActionType;
+    }
+    dispatch(setQuery(updates));
+  }, [q, status, approvalType, dispatch]);
+
+  const approveNow = async (rows: SafeTradieApproval[]) => {
+    const ids = rows.map((row) => row.id);
+    setProcessingIds((prev) => new Set([...prev, ...ids]));
+    try {
+      const result = await dispatch(
+        approveRequests(rows.map(approveInput)),
+      ).unwrap();
+      const message = approvalOutcomeMessage(result, "approved");
+      if (message.success) toast.success(message.success);
+      if (message.failure) toast.error(message.failure);
+    } catch (error) {
+      console.error("Approval failed:", error);
+      toast.error(approvalErrorMessage(error));
+    } finally {
+      setProcessingIds((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+    }
+  };
+
+  // The one approve path, for the row button and the bulk button. A request
+  // that cancels bookings is confirmed first; the rest go straight through.
+  const requestApprove = async (selected: SafeTradieApproval[]) => {
+    // Incidents need a resolution note: one opens its review window; in a
+    // batch they are left out and the office is told to resolve each.
+    const incidents = selected.filter(needsReviewWindow);
+    const rows = selected.filter((row) => !needsReviewWindow(row));
+    if (incidents.length === 1 && rows.length === 0) {
       dispatch(
-        setQuery({
-          search: decodedQ,
-          status: (status ?? undefined) as TradieApprovalStatus | undefined,
-          type: (type ?? undefined) as TradieApprovalActionType | undefined,
+        openModal({
+          type: "adminApproval",
+          payload: {
+            approvalId: incidents[0].id,
+            approvalType: incidents[0].actionType,
+          },
         }),
       );
-      dispatch(setActiveTab(status ? (status.toLowerCase() as TabKey) : "all"));
+      return;
     }
-  }, [q, status, type, approvalsData, dispatch]);
+    if (incidents.length > 0) {
+      toast.info(
+        `${incidents.length} incident ${incidents.length === 1 ? "report needs" : "reports need"} a resolution note. Open ${incidents.length === 1 ? "it" : "each one"} to resolve.`,
+      );
+    }
+    if (rows.length === 0) return;
+    if (rows.some(cancelsBookings)) {
+      setConfirming(rows);
+      return;
+    }
+    await approveNow(rows);
+  };
 
   return (
     <div className="space-y-6">
       <TradieApprovalKPI />
-      <TradieApprovalTabs />
+      <TradieApprovalTabs
+        onApprove={requestApprove}
+        processingIds={processingIds}
+      />
       <TableCard header={<TradieApprovalTypeFilters />}>
-        <TradieApprovalList />
+        <TradieApprovalList
+          processingIds={processingIds}
+          onApprove={requestApprove}
+        />
       </TableCard>
       <TradieApprovalPagination />
+      <ApproveConfirmDialog
+        requests={confirming}
+        onCancel={() => setConfirming([])}
+        onConfirm={() => {
+          const rows = confirming;
+          setConfirming([]);
+          void approveNow(rows);
+        }}
+      />
     </div>
   );
 }

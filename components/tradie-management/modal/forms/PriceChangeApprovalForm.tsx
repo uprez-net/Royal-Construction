@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ArrowRight,
   Building2,
@@ -14,7 +15,9 @@ import {
 
 import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 
 import { TradieApprovalActionType } from "@prisma/client";
@@ -75,6 +78,8 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
   // reviewer can see when the two disagree.
   const storedRate = parseRate(approval.tradie.lastQuotedPrice);
 
+  const [rejectReason, setRejectReason] = useState("");
+
   const submit = (resolution: "approved" | "rejected") => {
     mutation.mutate({
       approvalId: approval.id,
@@ -83,6 +88,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
       // No fabricated zero: with no requested rate there is nothing to write,
       // and the approve action is disabled in that state anyway.
       payload: newRate === null ? undefined : { newHourlyRate: newRate },
+      rejectReason: resolution === "rejected" ? rejectReason.trim() : undefined,
     });
   };
 
@@ -354,31 +360,48 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
 
         {/* Actions */}
         {approval.status === "PENDING" && (
-          <div className="grid gap-2 border-t border-border/70 pt-4 sm:flex sm:justify-end">
-            <Button
-              variant="outline"
-              onClick={() => submit("rejected")}
-              disabled={mutation.isPending}
-            >
-              Reject
-            </Button>
+          <div className="space-y-4 border-t border-border/70 pt-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="price-change-reject-reason">
+                Reason for rejecting
+              </Label>
+              <Textarea
+                id="price-change-reject-reason"
+                rows={2}
+                maxLength={1000}
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+              />
+            </div>
 
-            <Button
-              onClick={() => submit("approved")}
-              disabled={mutation.isPending || newRate === null || newRate <= 0}
-            >
-              {mutation.isPending ? (
-                <>
-                  <Loader2
-                    className="mr-2 size-4 animate-spin"
-                    aria-hidden="true"
-                  />
-                  Submitting…
-                </>
-              ) : (
-                "Approve price change"
-              )}
-            </Button>
+            <div className="grid gap-2 sm:flex sm:justify-end">
+              <Button
+                variant="outline"
+                onClick={() => submit("rejected")}
+                disabled={mutation.isPending || !rejectReason.trim()}
+              >
+                Reject
+              </Button>
+
+              <Button
+                onClick={() => submit("approved")}
+                disabled={
+                  mutation.isPending || newRate === null || newRate <= 0
+                }
+              >
+                {mutation.isPending ? (
+                  <>
+                    <Loader2
+                      className="mr-2 size-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                    Submitting…
+                  </>
+                ) : (
+                  "Approve price change"
+                )}
+              </Button>
+            </div>
           </div>
         )}
       </div>
