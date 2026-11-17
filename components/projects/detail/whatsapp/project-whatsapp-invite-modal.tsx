@@ -230,7 +230,7 @@ export function ProjectWhatsAppInviteModal({
             <Button
               type="submit"
               disabled={!canSend}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              className="bg-primary text-primary-foreground"
             >
               {sending ? (
                 <Loader2

@@ -236,19 +236,38 @@ export async function recordManualQuote(
 
   return serializable(db, async (tx) => {
     // Once another tradie is selected for the trade a rival quote has nowhere
-    // to go: selecting it is refused until that tradie is cancelled.
-    const rival = await tx.tradeSelection.findFirst({
-      select: { tradie: { select: { name: true } } },
+    // to go: selecting it is refused until that tradie is cancelled. And this
+    // tradie's own selection waiting on a cancellation decision is not to be
+    // re-priced: approving it cancels the very bookings the quote would write.
+    const blocking = await tx.tradeSelection.findFirst({
+      select: {
+        status: true,
+        tradie: { select: { name: true } },
+        tradieId: true,
+      },
       where: {
+        OR: [
+          {
+            status: { in: [...LIVE_SELECTION_STATUSES] },
+            tradieId: { not: tradie.id },
+          },
+          {
+            status: TradeSelectionStatus.CANCELLATION_PENDING,
+            tradieId: tradie.id,
+          },
+        ],
         projectId: project.id,
-        status: { in: [...LIVE_SELECTION_STATUSES] },
         tradeKey: tradeKey(trade),
-        tradieId: { not: tradie.id },
       },
     });
-    if (rival) {
+    if (blocking?.tradieId === tradie.id) {
       throw new DomainTransitionError(
-        `${rival.tradie.name} is already selected for ${trade}. Cancel them before recording another quote.`,
+        `${tradie.name}'s cancellation for ${trade} is waiting on an admin decision. Record the quote once it has been decided.`,
+      );
+    }
+    if (blocking) {
+      throw new DomainTransitionError(
+        `${blocking.tradie.name} is already selected for ${trade}. Cancel them before recording another quote.`,
       );
     }
 

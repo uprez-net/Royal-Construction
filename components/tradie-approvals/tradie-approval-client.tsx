@@ -76,20 +76,24 @@ export function TradieApprovalClient({
   }, [query, dispatch]);
 
   // Notification links: status=PENDING|APPROVED|REJECTED and approvalType.
-  // An unknown approvalType is dropped, not sent to the query.
+  // An unknown approvalType is dropped, not sent to the query. The link
+  // replaces the filters rather than adding to them: a due chip, search or
+  // type left over from earlier would hide the request it points at.
   useEffect(() => {
     if (!q && !status && !approvalType) return;
     const updates: Partial<TradieApprovalQuery> = {
+      due: undefined,
       page: 1,
+      search: q || undefined,
+      type:
+        approvalType && APPROVAL_TYPES.includes(approvalType)
+          ? (approvalType as TradieApprovalActionType)
+          : undefined,
       view:
         status === "APPROVED" || status === "REJECTED"
           ? "decided"
           : "needs-decision",
     };
-    if (q) updates.search = q;
-    if (approvalType && APPROVAL_TYPES.includes(approvalType)) {
-      updates.type = approvalType as TradieApprovalActionType;
-    }
     dispatch(setQuery(updates));
   }, [q, status, approvalType, dispatch]);
 

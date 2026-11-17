@@ -11,9 +11,11 @@ const buttonVariants = cva(
       variant: {
         // An opaque darker gold ink, the value of --royal-gold-ink-hover (6.93:1
         // with white). The old [a]:hover only fired on a Button rendered as a
-        // link, and a translucent /90 would drop below AA.
+        // link, and a translucent /90 would drop below AA. Dark mode's primary
+        // is a light teal under dark text, where that gold would fall to about
+        // 3:1; the teal itself stays well above AA there.
         default:
-          "bg-primary text-primary-foreground hover:bg-[oklch(0.47_0.12_77.3)]",
+          "bg-primary text-primary-foreground hover:bg-[oklch(0.47_0.12_77.3)] dark:hover:bg-primary/90",
         outline:
           "border-input bg-card hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
         secondary:

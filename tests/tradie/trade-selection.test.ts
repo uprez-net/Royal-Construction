@@ -712,6 +712,35 @@ test("a manual quote from a rival of the selected tradie is refused, and no quot
   assert.deepEqual(recorder.writes(), []);
 });
 
+test("a manual quote for a tradie whose cancellation is awaiting a decision is refused, and no quote is created", async () => {
+  const recorder = recordingDb({
+    "milestone.findMany": [MILESTONE],
+    "project.findUnique": PROJECT,
+    "tradeSelection.findFirst": {
+      status: "CANCELLATION_PENDING",
+      tradie: { name: ABC.name },
+      tradieId: ABC.id,
+    },
+    "tradie.findUnique": ABC,
+  });
+  await assert.rejects(
+    recordManualQuote(adminPrincipal(), QUOTE, recorder.db),
+    (error: unknown) =>
+      error instanceof DomainTransitionError
+      && /cancellation for .* is waiting on an admin decision/.test(
+        error.message,
+      ),
+  );
+  assert.deepEqual(recorder.writes(), []);
+  const [read] = recorder.calls.filter(
+    (call) => call.operation === "tradeSelection.findFirst",
+  );
+  assert.deepEqual((read.args as { where: { OR: unknown[] } }).where.OR[1], {
+    status: "CANCELLATION_PENDING",
+    tradieId: ABC.id,
+  });
+});
+
 test("approving a cancellation ends the selection and cancels the tradie's open bookings", async () => {
   const recorder = recordingDb({
     "tradeSelection.updateMany": { count: 1 },

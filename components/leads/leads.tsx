@@ -347,6 +347,9 @@ function LeadsWorkspace() {
   // The filter the Tasks tab opens on. Its own tab button shows everything;
   // the Overdue follow-ups card opens it on what is due now.
   const [tasksFilter, setTasksFilter] = useState<"all" | "dueNow">("all");
+  // Bumped by every press of the card, so a press always reopens on "due now",
+  // even when the filter was already "due now" and changed inside the view.
+  const [overdueOpens, setOverdueOpens] = useState(0);
 
   const handleTabChange = (tab: TabType) => {
     setTasksFilter("all");
@@ -355,6 +358,7 @@ function LeadsWorkspace() {
 
   const openOverdueTasks = () => {
     setTasksFilter("dueNow");
+    setOverdueOpens((count) => count + 1);
     setActiveTab("followups");
   };
 
@@ -818,9 +822,9 @@ function LeadsWorkspace() {
             )}
             {activeTab === "followups" && (
               <FollowupsView
-                // Remounted when the opening filter changes, so pressing the
-                // card while already on the tab still switches to "due now".
-                key={tasksFilter}
+                // Remounted on every card press and filter change, so pressing
+                // the card while already on the tab reapplies "due now".
+                key={`${tasksFilter}:${overdueOpens}`}
                 initialFilter={tasksFilter}
                 loading={loadingLeads}
                 leads={leads}

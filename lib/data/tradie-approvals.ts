@@ -434,12 +434,16 @@ export async function fetchTradieApprovals(
         take: pageSize,
         where,
       });
+      // A request about one booking keeps that booking's date (the row and
+      // its description name it); only "overdue" stops meaning anything. A
+      // trade cancellation's bookings are gone once approved, so it shows
+      // when it was submitted.
+      const today = sydneyToday();
       return {
         approvals: approvals.map((approval) =>
           toSafeApproval({
             ...approval,
-            decisionDue: sydneyDateOnly(approval.createdAt),
-            dueKind: "submitted",
+            ...dueFields(approval, today, null),
             overdue: false,
           }),
         ),

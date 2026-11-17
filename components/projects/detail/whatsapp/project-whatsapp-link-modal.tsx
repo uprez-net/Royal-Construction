@@ -184,7 +184,7 @@ export function ProjectWhatsAppLinkModal({
             type="button"
             disabled={!chosen || linking}
             onClick={() => void link()}
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
+            className="bg-primary text-primary-foreground"
           >
             {linking ? (
               <Loader2

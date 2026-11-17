@@ -35,7 +35,7 @@ import { ProjectWhatsAppInviteModal } from "./project-whatsapp-invite-modal";
 import { ProjectWhatsAppLinkModal } from "./project-whatsapp-link-modal";
 
 const GREEN =
-  "h-9 rounded-lg bg-primary px-3.5 text-sm font-medium text-primary-foreground hover:bg-primary/90";
+  "h-9 rounded-lg bg-primary px-3.5 text-sm font-medium text-primary-foreground";
 const OUTLINE = "h-9 rounded-lg px-3.5 text-sm font-medium";
 
 /**

@@ -66,7 +66,7 @@ export function ProjectWhatsAppGroupSetup({
         type="button"
         onClick={() => void create()}
         disabled={creating}
-        className="rounded-full bg-primary px-5 text-primary-foreground hover:bg-primary/90"
+        className="rounded-full bg-primary px-5 text-primary-foreground"
       >
         {creating ? (
           <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />
