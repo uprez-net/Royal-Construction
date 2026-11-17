@@ -49,6 +49,7 @@ import { formatStatus } from "@/utils/formatters";
 
 import { ActivityDetail, type InvoiceActions } from "./activity-detail";
 import { ActivityPriceCell } from "./activity-price-cell";
+import { ActivityTradieFigureCell } from "./activity-tradie-figure-cell";
 import {
   formatCents,
   MoneyWithGst,
@@ -98,6 +99,7 @@ const NUMERIC = "text-right whitespace-nowrap";
 function columnsFor(
   onVariation: InvoiceActions["onVariation"],
   onPrice: InvoiceActions["onPrice"],
+  onTradieFigure: InvoiceActions["onTradieFigure"],
 ) {
   return helper.columns([
     helper.accessor((row) => row.activity.name, {
@@ -172,30 +174,24 @@ function columnsFor(
     helper.display({
       id: "quoted",
       header: "Tradie quoted",
-      cell: ({ row }) => {
-        const { figures } = row.original.activity;
-        return (
-          <MoneyWithGst
-            cents={figures.quotedCents}
-            gstCents={figures.quotedGstCents}
-            muted={figures.quotedCents === 0}
-          />
-        );
-      },
+      cell: ({ row }) => (
+        <ActivityTradieFigureCell
+          activity={row.original.activity}
+          figure="quoted"
+          onSave={onTradieFigure}
+        />
+      ),
     }),
     helper.display({
       id: "invoiced",
       header: "Total invoiced",
-      cell: ({ row }) => {
-        const { figures } = row.original.activity;
-        return (
-          <MoneyWithGst
-            cents={figures.invoicedCents}
-            gstCents={figures.invoicedGstCents}
-            muted={figures.invoicedCents === 0}
-          />
-        );
-      },
+      cell: ({ row }) => (
+        <ActivityTradieFigureCell
+          activity={row.original.activity}
+          figure="invoiced"
+          onSave={onTradieFigure}
+        />
+      ),
     }),
     helper.display({
       id: "profit",
@@ -226,17 +222,17 @@ function columnsFor(
 // a figure keeps its place whether a stage is open, closed or has long notes.
 const METRIC_WIDTH = {
   tender: "lg:w-40",
-  quoted: "lg:w-36",
-  invoiced: "lg:w-36",
+  quoted: "lg:w-40",
+  invoiced: "lg:w-40",
   profit: "lg:w-48",
   action: "lg:w-28",
 } as const;
 
 const COLUMN_CLASS: Record<string, string> = {
   activity: "min-w-64",
-  invoiced: `${NUMERIC} w-36`,
+  invoiced: `${NUMERIC} w-40`,
   profit: `${NUMERIC} w-48`,
-  quoted: `${NUMERIC} w-36`,
+  quoted: `${NUMERIC} w-40`,
   tender: `${NUMERIC} w-40`,
   variation: "w-28 text-right whitespace-nowrap",
 };
@@ -294,8 +290,9 @@ export function StageFinancialsCard({
   "use no memo";
   const data = useMemo(() => toRows(stage.activities), [stage.activities]);
   const columns = useMemo(
-    () => columnsFor(actions.onVariation, actions.onPrice),
-    [actions.onVariation, actions.onPrice],
+    () =>
+      columnsFor(actions.onVariation, actions.onPrice, actions.onTradieFigure),
+    [actions.onVariation, actions.onPrice, actions.onTradieFigure],
   );
   const table = useTable({
     features,

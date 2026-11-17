@@ -11,7 +11,10 @@ vi.mock("@/lib/observability/external", () => ({
   },
 }));
 
-import { failureReportingMiddleware } from "@/lib/observability/ai";
+import {
+  failureReportingMiddleware,
+  watchTranscriptionModel,
+} from "@/lib/observability/ai";
 
 beforeEach(() => {
   reported.calls.length = 0;
@@ -80,5 +83,39 @@ describe("failureReportingMiddleware — a failed model call, whichever call sit
     const wrapped = model({});
     assert.equal(wrapped.modelId, "test/model");
     assert.equal(wrapped.provider, "test");
+  });
+});
+
+describe("watchTranscriptionModel — a failed speech-to-text call (call recordings)", () => {
+  function transcriber(doGenerate: () => Promise<unknown>) {
+    return watchTranscriptionModel({
+      specificationVersion: "v4",
+      provider: "test",
+      modelId: "test/transcribe",
+      doGenerate,
+    } as never);
+  }
+  const audio = { audio: new Uint8Array(), mediaType: "audio/mpeg" } as never;
+
+  test("a gateway 503 is reported as the ai vendor and rethrown", async () => {
+    const failure = apiFailure(503);
+    const wrapped = transcriber(async () => {
+      throw failure;
+    });
+    const caught = await Promise.resolve(wrapped.doGenerate(audio)).catch(
+      (e: unknown) => e,
+    );
+    assert.equal(caught, failure);
+    assert.deepEqual(
+      reported.calls.map((call) => [call.service, call.operation]),
+      [["ai", "transcribe"]],
+    );
+  });
+
+  test("a transcript passes straight through, and the model keeps its identity", async () => {
+    const wrapped = transcriber(async () => ({ text: "hello" }));
+    assert.deepEqual(await wrapped.doGenerate(audio), { text: "hello" });
+    assert.equal(wrapped.modelId, "test/transcribe");
+    assert.equal(reported.calls.length, 0);
   });
 });

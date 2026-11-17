@@ -24,7 +24,7 @@ import { VOICE_AGENT_MAX_SECONDS } from "./voice-agent";
 //            → (asked for a person, or Mili unreachable) office mobile
 //            → voicemail
 // Outbound:  customer answers → greeting [+ "this call is recorded"]
-//            → staff (browser or office mobile) → if nobody picks up,
+//            → staff (browser, or the phone picked) → if nobody picks up,
 //            apologise
 //
 // An inbound call never rings a staff browser: the business number itself
@@ -77,6 +77,11 @@ export type CallForFlow = {
   readonly customerNumber: string;
   readonly recordingConsent: RecordingConsent;
   readonly staffTarget: CallStaffTarget | null;
+  /**
+   * Outbound to a phone: the one picked when the call was placed. Null means
+   * the office mobile (inbound calls, and calls placed before the team list).
+   */
+  readonly staffPhoneNumber: string | null;
   /** The identity of the staff member who placed an outbound call. */
   readonly staffIdentity: string | null;
 };
@@ -100,7 +105,7 @@ function voicemail(): FlowDecision {
 }
 
 function ringMobile(call: CallForFlow, ctx: CallFlowContext, record: boolean) {
-  const forward = ctx.channel.staffForwardNumber;
+  const forward = call.staffPhoneNumber ?? ctx.channel.staffForwardNumber;
   if (!forward) return null;
   return {
     instructions: [

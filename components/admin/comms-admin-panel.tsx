@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Loader2, XCircle } from "lucide-react";
 
+import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,8 @@ import type {
   SmsMessageDto,
 } from "@/lib/leads/comms-types";
 import { formatSydneyStamp } from "@/lib/leads/whatsapp-format";
+
+import { TeamPhonesCard } from "./team-phones-card";
 
 // Phone & SMS, for the office: what is set up, where each carrier must send
 // its webhooks, and the texts and calls from numbers no lead has. Secrets are
@@ -174,23 +177,43 @@ export function CommsAdminPanel() {
     return () => window.clearTimeout(first);
   }, [load]);
 
-  if (error) return <p className="text-sm text-destructive">{error}</p>;
+  // Same header as the other admin pages, outside the cards, so it reads the
+  // same while loading or failing.
+  const header = (
+    <PageHeader
+      headingLevel="h1"
+      title="Phone & SMS"
+      description="Which phone provider is active, the team's phones for lead calls, and texts and calls from numbers no lead has."
+    />
+  );
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <p className="text-sm text-destructive">{error}</p>
+      </div>
+    );
+  }
   if (!status) {
     return (
-      <p className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Loading…
-      </p>
+      <div className="space-y-6">
+        {header}
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />{" "}
+          Loading…
+        </p>
+      </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {header}
       <Card>
         <CardContent className="space-y-4 p-5">
           <div>
-            <h1 className="font-heading text-[1.625rem] leading-[1.2] font-semibold tracking-[-0.015em] text-foreground">
-              Phone &amp; SMS
-            </h1>
+            <h2 className="text-base font-semibold">Provider</h2>
             <p className="text-sm text-muted-foreground">
               Active provider:{" "}
               <span className="font-medium text-foreground">
@@ -277,6 +300,8 @@ export function CommsAdminPanel() {
           ) : null}
         </CardContent>
       </Card>
+
+      <TeamPhonesCard officeMobile={status.staffForwardNumber} />
 
       <Card>
         <CardContent className="p-5">

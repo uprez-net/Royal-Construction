@@ -14,7 +14,7 @@ import { GST_RATE } from "@/lib/domain/projects/variation-rules";
 import { formatCents, MoneyWithGst } from "./money";
 
 /** Dollars typed into the field, or null when it does not read as an amount. */
-function parseDollars(value: string): number | null {
+export function parseDollars(value: string): number | null {
   const cleaned = value.replace(/[$,\s]/g, "");
   if (!/^\d+(\.\d{0,2})?$/.test(cleaned)) return null;
   const amount = Number(cleaned);

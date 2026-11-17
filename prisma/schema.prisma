@@ -707,30 +707,37 @@ model ProjectCustomer {
 }
 
 model Milestone {
-  id                 String          @id @default(uuid())
-  projectId          String
-  name               String
-  order              Int
-  description        String?
-  projectStage       ProjectStage
-  targetDate         DateTime
-  startDate          DateTime?
-  actualDate         DateTime?
-  budget             Decimal         @default(10000) @db.Decimal(12, 2)
-  spend              Decimal?        @db.Decimal(12, 2)
-  status             MilestoneStatus @default(PENDING)
-  isPhotoRequired    Boolean         @default(false)
-  parentId           String?
+  id                     String          @id @default(uuid())
+  projectId              String
+  name                   String
+  order                  Int
+  description            String?
+  projectStage           ProjectStage
+  targetDate             DateTime
+  startDate              DateTime?
+  actualDate             DateTime?
+  budget                 Decimal         @default(10000) @db.Decimal(12, 2)
+  spend                  Decimal?        @db.Decimal(12, 2)
+  /// "Tradie quoted" on the Financials tab, ex GST, typed by the office in
+  /// place of what this activity's own bookings add up to. Null: the bookings
+  /// decide it. Its sub-activities still add theirs on top.
+  tradieQuotedOverride   Decimal?        @db.Decimal(12, 2)
+  /// "Total invoiced" on the Financials tab, ex GST, typed in place of the
+  /// invoices against this activity's own bookings. Null: the invoices decide.
+  tradieInvoicedOverride Decimal?        @db.Decimal(12, 2)
+  status                 MilestoneStatus @default(PENDING)
+  isPhotoRequired        Boolean         @default(false)
+  parentId               String?
   /// Calendar days the activity is expected to take, copied from the build
   /// sequence. An admin changing the build sequence's duration updates it on
   /// every activity not yet completed (`saveMilestoneTemplate`); a completed
   /// activity keeps the duration it was planned with.
-  estimatedDays      Int             @default(2)
+  estimatedDays          Int             @default(2)
   /// The build-sequence row this activity was created from. Null for an
   /// activity added by hand on the project, and when the row is removed from
   /// the build sequence -- the activity keeps its own snapshot either way.
-  templateId         String?
-  requiredTradeTypes TradeType[]     @relation("MilestoneRequiredTrades")
+  templateId             String?
+  requiredTradeTypes     TradeType[]     @relation("MilestoneRequiredTrades")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1332,6 +1339,7 @@ model User {
   smsMessages               SmsMessage[]               @relation("SmsMessageAuthor")
   smsResolved               SmsMessage[]               @relation("SmsMessageResolver")
   callsPlaced               Call[]                     @relation("CallStaffUser")
+  callsDismissed            Call[]                     @relation("CallDismissedBy")
   whatsappCallsAnswered     WhatsAppCall[]             @relation("WhatsAppCallStaffUser")
   reviews                   TradieRating[]
   approvalRequests          TradieApproval[]
@@ -2718,6 +2726,18 @@ enum RecordingConsent {
   DECLARED
 }
 
+/// A team member's own phone, added under Admin → Phone & SMS. "Call via
+/// phone" on a lead rings the customer first, then puts them through to the
+/// phone picked here, presenting the business number.
+model CommsTeamPhone {
+  id        String   @id @default(uuid())
+  /// Who carries it, as the office says it: "Raj", "Site mobile".
+  nickname  String
+  e164      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 /// One phone call with a customer. `providerCallId` is the customer's leg.
 model Call {
   id                  String           @id @default(uuid())
@@ -2733,6 +2753,12 @@ model Call {
   status              CallStatus
   flowStep            CallFlowStep
   staffTarget         CallStaffTarget?
+  /// Outbound to a phone: the number it rings once the customer answers, and
+  /// that phone's nickname. Copied when the call is placed, so editing the
+  /// team list never re-routes a call in progress. Null on older calls and on
+  /// inbound ones, which ring COMMS_STAFF_FORWARD_NUMBER.
+  staffPhoneNumber    String?
+  staffPhoneLabel     String?
   /// Who placed an outbound call.
   staffUserId         String?
   answeredBy          CallAnsweredBy?
@@ -2749,17 +2775,26 @@ model Call {
   needsReconciliation Boolean          @default(false)
   /// What the caller and Mili said, one "Speaker: text" line per turn.
   agentTranscript     String?
+  /// When someone first opened this call in the app. Only an inbound call
+  /// Mili or the voicemail took counts as unread (lib/domain/comms/unread.ts).
+  seenAt              DateTime?
+  /// An inbound call no lead owns, taken off the pending list without filing
+  /// it onto a lead. Filing sets `leadId` instead.
+  dismissedAt         DateTime?
+  dismissedById       String?
   idempotencyKey      String?          @unique
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
-  lead       Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  staffUser  User?           @relation("CallStaffUser", fields: [staffUserId], references: [id])
-  recordings CallRecording[]
+  lead        Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  staffUser   User?           @relation("CallStaffUser", fields: [staffUserId], references: [id])
+  dismissedBy User?           @relation("CallDismissedBy", fields: [dismissedById], references: [id])
+  recordings  CallRecording[]
 
   @@unique([provider, providerCallId])
   @@index([leadId, startedAt])
   @@index([status, startedAt])
+  @@index([direction, leadId, dismissedAt])
 }
 
 enum CallRecordingKind {
@@ -2774,31 +2809,49 @@ enum CallRecordingStatus {
   FAILED
 }
 
+/// PENDING → DONE | EMPTY | SKIPPED, or → FAILED once retrying cannot help.
+enum CallTranscriptStatus {
+  PENDING
+  DONE
+  /// Transcribed, and nobody said anything.
+  EMPTY
+  /// Not sent for transcription (too large); the reason is kept.
+  SKIPPED
+  FAILED
+}
+
 /// A recording copied off the provider into Blob storage. The provider copy
 /// is deleted once ours is stored (Privacy Act: keep one copy, ours).
 model CallRecording {
-  id                  String              @id @default(uuid())
+  id                  String               @id @default(uuid())
   callId              String
   provider            CommsProvider
   kind                CallRecordingKind
   providerRecordingId String
-  status              CallRecordingStatus @default(PENDING)
+  status              CallRecordingStatus  @default(PENDING)
   durationSeconds     Int?
   mimeType            String?
   byteSize            Int?
   blobUrl             String?
   blobPathname        String?
-  attempts            Int                 @default(0)
+  attempts            Int                  @default(0)
   failureReason       String?
   storedAt            DateTime?
   providerDeletedAt   DateTime?
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  /// Speech-to-text of the stored copy (lib/domain/comms/calls/transcripts.ts).
+  transcriptStatus    CallTranscriptStatus @default(PENDING)
+  transcript          String?              @db.Text
+  transcriptAttempts  Int                  @default(0)
+  transcriptFailure   String?
+  transcribedAt       DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerRecordingId])
   @@index([status, createdAt])
+  @@index([status, transcriptStatus])
 }
 
 /// Event-style provider callbacks already processed, so a retried delivery

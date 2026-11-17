@@ -2,9 +2,21 @@
 // what the header calls the screen, and the breadcrumb trail. Kept free of
 // React and path aliases so the node test runner can import it.
 
+// Screens whose name is not their slug title-cased: /admin/comms is the
+// "Phone & SMS" page, and read "Comms" in the header beside a page heading
+// that said otherwise.
+const SCREEN_TITLES: Readonly<Record<string, string>> = {
+  agent: "Operations Agent",
+  comms: "Phone & SMS",
+  whatsapp: "WhatsApp",
+  xero: "Xero Accounting",
+};
+
 export function getScreenTitle(slug: string): string {
-  if (slug === "agent") {
-    return "Operations Agent";
+  // Own keys only: a path segment like "__proto__" or "constructor" would
+  // otherwise return an inherited object, not a title.
+  if (Object.hasOwn(SCREEN_TITLES, slug)) {
+    return SCREEN_TITLES[slug];
   }
 
   // A bare number is a lead id (/leads/123, /offers/123). The offer route used

@@ -1,6 +1,9 @@
 import { createGateway, wrapLanguageModel } from "ai";
 
-import { failureReportingMiddleware } from "@/lib/observability/ai";
+import {
+  failureReportingMiddleware,
+  watchTranscriptionModel,
+} from "@/lib/observability/ai";
 
 if (!process.env.AI_GATEWAY_API_KEY) {
   throw new Error(
@@ -19,7 +22,8 @@ type GatewayModel = ReturnType<typeof baseGateway>;
 // Every model the app asks for is wrapped, so a failed call is reported with
 // the vendor and operation from whichever of the ~25 call sites made it.
 // `gateway(id)` and `gateway.languageModel(id)` / `.chat(id)` are the ways a
-// language model is asked for; everything else on the provider is untouched.
+// language model is asked for, and `.transcription(id)` a speech-to-text one;
+// everything else on the provider is untouched.
 const watched = (model: GatewayModel): GatewayModel =>
   wrapLanguageModel({ model, middleware: failureReportingMiddleware });
 
@@ -35,6 +39,19 @@ export const gateway: typeof baseGateway = new Proxy(baseGateway, {
     ) {
       return (modelId: string) =>
         watched((value as (id: string) => GatewayModel).call(target, modelId));
+    }
+    if (
+      (property === "transcription" || property === "transcriptionModel")
+      && typeof value === "function"
+    ) {
+      return (modelId: string) =>
+        watchTranscriptionModel(
+          (
+            value as (
+              id: string,
+            ) => ReturnType<typeof baseGateway.transcription>
+          ).call(target, modelId),
+        );
     }
     return value;
   },
@@ -54,3 +71,10 @@ export const gateway: typeof baseGateway = new Proxy(baseGateway, {
  * Eve's model is separate: lib/agent/model.ts.
  */
 export const TEXT_MODEL_ID = "openai/gpt-6-luna-fast";
+
+/**
+ * Speech-to-text for stored call recordings and voicemails
+ * (lib/comms/transcription.ts). Australian-English phone audio; one id, so
+ * changing model is one line.
+ */
+export const TRANSCRIPTION_MODEL_ID = "mistral/voxtral-small-transcribe-3";

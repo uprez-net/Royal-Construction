@@ -120,3 +120,24 @@ export const milestonePriceSchema = z.object({
 });
 
 export type MilestonePriceInput = z.infer<typeof milestonePriceSchema>;
+
+/**
+ * The Financials tab's inline edit of an activity's own tradie quoted or total
+ * invoiced figure, ex GST. `amount` null clears it back to what the bookings
+ * say; `previousCents` is the typed figure on screen, null when there was none.
+ */
+export const milestoneTradieFigureSchema = z.object({
+  projectId: z.string().min(1, "Project ID is required"),
+  milestoneId: z.string().min(1, "Milestone ID is required"),
+  figure: z.enum(["quoted", "invoiced"]),
+  amount: z
+    .number({ error: "Enter an amount" })
+    .nonnegative("The amount cannot be negative")
+    .refine(hasAtMostTwoDecimalPlaces, "Enter the amount to the cent")
+    .nullable(),
+  previousCents: z.number().int().nonnegative().nullable(),
+});
+
+export type MilestoneTradieFigureInput = z.infer<
+  typeof milestoneTradieFigureSchema
+>;

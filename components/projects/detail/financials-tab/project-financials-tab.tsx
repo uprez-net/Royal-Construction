@@ -48,6 +48,7 @@ import {
   dismissEmailedInvoiceAction,
   fetchProjectFinancials,
   setMilestonePriceAction,
+  setMilestoneTradieFigureAction,
   type ProjectFinancialsResult,
 } from "@/lib/data/project-financials";
 import type { EmailedTradieInvoice } from "@/lib/domain/tradies/invoice-inbox";
@@ -57,6 +58,7 @@ import type {
   FinancialInvoice,
 } from "@/lib/domain/projects/financial-report";
 import type { ProjectFinancials } from "@/lib/domain/projects/financials";
+import type { TradieFigure } from "@/lib/domain/projects/milestone-tradie-figures";
 import {
   countMatches,
   FINANCIAL_VIEW_LABELS,
@@ -351,8 +353,49 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
     }
   }
 
+  async function saveTradieFigure(
+    activity: FinancialActivity,
+    figure: TradieFigure,
+    ownCents: number | null,
+  ): Promise<boolean> {
+    const label = figure === "quoted" ? "Tradie quoted" : "Total invoiced";
+    try {
+      const result = await setMilestoneTradieFigureAction({
+        amount: ownCents === null ? null : ownCents / 100,
+        figure,
+        milestoneId: activity.id,
+        previousCents:
+          figure === "quoted"
+            ? activity.quotedOverrideCents
+            : activity.invoicedOverrideCents,
+        projectId: project.id,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        // The figure moved under the operator: show them where it went.
+        void queryClient.invalidateQueries({
+          queryKey: financialsKey(project.id),
+        });
+        return false;
+      }
+      applyResult(result);
+      toast.success(
+        ownCents === null
+          ? `${activity.name}: ${label} is back to the ${figure === "quoted" ? "bookings'" : "invoices'"} figure.`
+          : `${activity.name}: ${label} saved.`,
+      );
+      return true;
+    } catch {
+      toast.error(
+        `The ${label.toLowerCase()} figure could not be saved. Try again.`,
+      );
+      return false;
+    }
+  }
+
   const actions = {
     onPrice: savePrice,
+    onTradieFigure: saveTradieFigure,
     onRecord: (scheduleId: string) => setRecordFor(scheduleId),
     onVoid: (invoice: FinancialInvoice) => setVoiding(invoice),
     onRecheck: (scheduleId: string) => setRecheckFor(scheduleId),

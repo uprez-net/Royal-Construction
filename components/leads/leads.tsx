@@ -33,12 +33,14 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { AddLeadModal } from "@/components/leads/modal-ui/add-lead-modal";
 import { EmailCampaignModal } from "@/components/leads/modal-ui/email-campaign-modal";
 import { UnmatchedWhatsAppButton } from "@/components/leads/whatsapp/unmatched-whatsapp-review";
+import { PendingCommsButton } from "@/components/leads/comms/pending-comms";
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
 import {
   KpiBand,
   MOBILE_METRIC_STRIP_CLASS,
 } from "@/components/common/kpi-band";
 import { PageHeader } from "@/components/common/page-header";
+import { LeadStageCounts } from "./lead-stage-counts";
 import { LeadPagination } from "./lead-pagination";
 import { reloadLeadList, updateAndRefreshLeadList } from "./leads-list-refresh";
 import {
@@ -536,6 +538,7 @@ function LeadsWorkspace() {
         description="Google Ads auto-capture • Follow-up automation • Email templates"
         actions={
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+            <PendingCommsButton />
             <UnmatchedWhatsAppButton />
             <Button
               variant="outline"
@@ -584,7 +587,7 @@ function LeadsWorkspace() {
           <KpiBand
             className={cn(
               MOBILE_METRIC_STRIP_CLASS,
-              "sm:grid-cols-2 md:grid-cols-3",
+              "sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-6",
             )}
           >
             <LeadMetricCard
@@ -640,6 +643,12 @@ function LeadsWorkspace() {
               note={`${winRate.won} won · ${winRate.lost} lost`}
             />
           </KpiBand>
+          {/* Every stage's own count, under the grouped cards above. */}
+          <LeadStageCounts
+            byStage={stats.byStage}
+            activeMetric={activeMetric}
+            onSelect={handleCardClick}
+          />
         </>
       )}
 
