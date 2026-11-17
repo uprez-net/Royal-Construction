@@ -61,6 +61,8 @@ export type VoiceAgentReportBody = {
  */
 export type VoiceCallerSetup = {
   readonly instructions: string;
+  /** What makes Mili open the call: by name for a caller resolved by name. */
+  readonly greetingCue: string;
   /** The desk's lookup tools for this caller. */
   readonly lookups: readonly VoiceLookupDefinition[];
   /** Runs one lookup for this caller and resolves to what Mili may say. */
@@ -68,6 +70,7 @@ export type VoiceCallerSetup = {
 };
 
 export const MESSAGE_ONLY_SETUP: VoiceCallerSetup = {
+  greetingCue: VOICE_AGENT_GREETING_CUE,
   instructions: voiceAgentInstructions(),
   lookup: null,
   lookups: [],
@@ -398,7 +401,7 @@ export class VoiceAgentSession {
         this.ready = true;
         // Without this cue she waits for the caller to speak first.
         this.sendModel({
-          content: VOICE_AGENT_GREETING_CUE,
+          content: this.setup.greetingCue,
           delegation_id: null,
           type: "session.commentary.append",
         });

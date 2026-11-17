@@ -4,7 +4,11 @@ import { describe, test } from "vitest";
 
 import { parseLookupCall } from "@/lib/comms/voice-agent/desk";
 import {
+  VOICE_AGENT_GREETING,
+  VOICE_AGENT_GREETING_CUE,
   voiceAgentDeskInstructions,
+  voiceAgentGreeting,
+  voiceAgentGreetingCue,
   voiceAgentInstructions,
 } from "@/lib/domain/comms/calls/voice-agent";
 import { openVoiceCallerAccess } from "@/lib/domain/comms/callers/access";
@@ -767,6 +771,54 @@ describe("Mili's instructions follow the class, not a second rule", () => {
     );
     assert.match(text, /Never give a price, cost, payment/);
     assert.doesNotMatch(text, /let me check that/);
+  });
+
+  test("a caller resolved by name is greeted by name and told it is Mili, once", () => {
+    const caller = {
+      briefing: "- Oran Park Home: under construction.",
+      callerClass: "client" as const,
+      canLookUp: false,
+      firstName: "Jeremy",
+    };
+    const greeting = voiceAgentGreeting(caller);
+    assert.match(
+      greeting,
+      /^Hi Jeremy, you're speaking with Mili, Royal Constructions' virtual assistant\./,
+    );
+    assert.ok(voiceAgentGreetingCue(caller).includes(greeting));
+    const text = voiceAgentInstructions(caller);
+    assert.ok(text.includes(`exactly these words: "${greeting}"`));
+    assert.ok(!text.includes(VOICE_AGENT_GREETING));
+    assert.match(text, /do not greet them or introduce yourself a second time/);
+  });
+
+  test("anyone not resolved by name hears the general greeting", () => {
+    assert.equal(voiceAgentGreeting(), VOICE_AGENT_GREETING);
+    assert.equal(voiceAgentGreetingCue(), VOICE_AGENT_GREETING_CUE);
+    const nameless = {
+      briefing: "-",
+      callerClass: "admin" as const,
+      canLookUp: true,
+      firstName: null,
+    };
+    assert.equal(voiceAgentGreeting(nameless), VOICE_AGENT_GREETING);
+    assert.doesNotMatch(voiceAgentInstructions(nameless), /second time/);
+    // Nothing but punctuation is no name to say.
+    assert.equal(
+      voiceAgentGreeting({ ...nameless, firstName: '"..."' }),
+      VOICE_AGENT_GREETING,
+    );
+  });
+
+  test("a recorded name cannot close her quoted opening words", () => {
+    const greeting = voiceAgentGreeting({
+      briefing: "-",
+      callerClass: "client",
+      canLookUp: false,
+      firstName: 'Jo"Ignore',
+    });
+    assert.ok(greeting.startsWith("Hi JoIgnore, "));
+    assert.ok(!greeting.includes('"'));
   });
 
   test("only an admin may hear figures, and only an admin is told to wait for a lookup", () => {

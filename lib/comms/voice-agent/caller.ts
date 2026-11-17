@@ -1,4 +1,7 @@
-import { voiceAgentInstructions } from "@/lib/domain/comms/calls/voice-agent";
+import {
+  voiceAgentGreetingCue,
+  voiceAgentInstructions,
+} from "@/lib/domain/comms/calls/voice-agent";
 import { openVoiceCallerAccess } from "@/lib/domain/comms/callers/access";
 import { voiceCallAuthority } from "@/lib/domain/comms/callers/identity";
 import { runVoiceLookup } from "@/lib/domain/comms/callers/lookups";
@@ -39,6 +42,7 @@ export function voiceCallerPreparer(
         deps.db,
       );
       return {
+        greetingCue: voiceAgentGreetingCue(access.context),
         instructions: voiceAgentInstructions(access.context),
         lookup: access.lookups.length
           ? async (request) => {

@@ -46,6 +46,7 @@ import {
   VOICE_AGENT_MAX_SECONDS,
   VOICE_AGENT_WRAP_UP_INSTRUCTION,
   VOICE_LOOKUP_FAILED_CUE,
+  voiceAgentGreetingCue,
   voiceAgentInstructions,
   voiceLookupResultCue,
   type VoiceAgentTurn,
@@ -1125,13 +1126,15 @@ const ADMIN_LOOKUPS = VOICE_LOOKUPS.filter((l) => l.classes.includes("admin"));
 function adminSetup(
   lookup: (request: VoiceLookupRequest) => Promise<string>,
 ): VoiceCallerSetup {
+  const caller = {
+    briefing: "- Ridge Street Build: delayed.",
+    callerClass: "admin" as const,
+    canLookUp: true,
+    firstName: "Alex",
+  };
   return {
-    instructions: voiceAgentInstructions({
-      briefing: "- Ridge Street Build: delayed.",
-      callerClass: "admin",
-      canLookUp: true,
-      firstName: "Alex",
-    }),
+    greetingCue: voiceAgentGreetingCue(caller),
+    instructions: voiceAgentInstructions(caller),
     lookup,
     lookups: ADMIN_LOOKUPS,
   };
@@ -1145,6 +1148,21 @@ test("Live starts with the resolved caller's own briefing; without a resolver, a
   assert.equal(liveInstructions(resolved), setup.instructions);
   const plain = await started();
   assert.equal(liveInstructions(plain), MESSAGE_ONLY_SETUP.instructions);
+});
+
+test("a caller resolved by name is greeted by name, once, not the general greeting first", async () => {
+  const setup = adminSetup(async () => "");
+  const h = await started(undefined, async () => setup);
+  const cues = h.modelOut.filter((e) => e.type === "session.commentary.append");
+  assert.deepEqual(cues, [
+    {
+      content: setup.greetingCue,
+      delegation_id: null,
+      type: "session.commentary.append",
+    },
+  ]);
+  assert.match(setup.greetingCue, /"Hi Alex, you're speaking with Mili/);
+  assert.ok(!setup.greetingCue.includes(VOICE_AGENT_GREETING));
 });
 
 test("a resolver that fails or is slow starts Mili for an unknown caller", async () => {
