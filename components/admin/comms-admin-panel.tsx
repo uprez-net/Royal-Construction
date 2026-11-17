@@ -237,6 +237,10 @@ export function CommsAdminPanel() {
             <Flag on={status.browserCalling} label="Browser phone (outbound)" />
             <Flag on={status.voiceAgent} label="Mili answers inbound calls" />
             <Flag
+              on={status.voiceAgentDisclosure}
+              label="Mili answers known callers from records"
+            />
+            <Flag
               on={status.recordingMode === "consented"}
               label="Outbound recording (announced)"
             />

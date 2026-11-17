@@ -195,6 +195,11 @@ export type CommsStatusDto = CommsAvailabilityDto & {
   browserCalling: boolean;
   /** Inbound calls are answered by Mili. */
   voiceAgent: boolean;
+  /**
+   * Mili answers callers the records recognise from those records
+   * (COMMS_AGENT_DISCLOSURE_ENABLED). Off: she takes messages only.
+   */
+  voiceAgentDisclosure: boolean;
   recordingMode: "off" | "consented";
   staffForwardNumber: string | null;
   webhookOrigin: string | null;

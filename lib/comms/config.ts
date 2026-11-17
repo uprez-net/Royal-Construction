@@ -58,6 +58,13 @@ export type VoiceAgentConfig = {
   readonly enabled: boolean;
   /** Signs the token a carrier's stream must present (voice-agent/token.ts). */
   readonly secret: string | null;
+  /**
+   * Mili answers resolved callers from Royal's records (issue #528). Off
+   * unless COMMS_AGENT_DISCLOSURE_ENABLED is "true", and separate from
+   * `enabled`: switching it off stops every disclosure and leaves her taking
+   * messages.
+   */
+  readonly disclosure: boolean;
 };
 
 export type CommsConfig = {
@@ -182,15 +189,19 @@ function origin(env: Env, problems: string[]): string | null {
 
 function voiceAgent(env: Env, problems: string[]): VoiceAgentConfig {
   if (!flag(env, "COMMS_AGENT_ENABLED"))
-    return { enabled: false, secret: null };
+    return { disclosure: false, enabled: false, secret: null };
   const secret = value(env, "COMMS_AGENT_SECRET");
   if (!secret || secret.length < VOICE_AGENT_SECRET_MIN_LENGTH) {
     problems.push(
       `COMMS_AGENT_SECRET must be set to at least ${VOICE_AGENT_SECRET_MIN_LENGTH} random characters; Mili is off.`,
     );
-    return { enabled: false, secret: null };
+    return { disclosure: false, enabled: false, secret: null };
   }
-  return { enabled: true, secret };
+  return {
+    disclosure: flag(env, "COMMS_AGENT_DISCLOSURE_ENABLED"),
+    enabled: true,
+    secret,
+  };
 }
 
 export function readCommsConfig(env: Env = process.env): CommsConfig {
