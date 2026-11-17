@@ -25,6 +25,7 @@ import {
   startWhatsAppCall as startWhatsAppCallRequest,
 } from "@/lib/leads/comms-service";
 import type { CallDto, WhatsAppCallDto } from "@/lib/leads/comms-types";
+import { useWhatsAppAvailability } from "@/context/WhatsAppAvailabilityContext";
 
 import type {
   CallAudioStreams,
@@ -41,9 +42,15 @@ import { WhatsAppCallSession } from "./dialer/whatsapp-call-session";
 // short poll — Meta has no browser push — and are answered over plain WebRTC.
 // One call at a time; a second ringing call waits for the first to end.
 
-const WHATSAPP_POLL_MS = 3_000;
+// The incoming-call poll runs on every page of every open tab, so it is the
+// one that costs: each tick is a function invocation and a database read.
+// Ten seconds is still well inside the time a customer lets a call ring, and
+// it only runs at all when WhatsApp calling is switched on.
+const WHATSAPP_INCOMING_POLL_MS = 10_000;
+const WHATSAPP_INCOMING_RETRY_MS = 60_000;
+// Only while a WhatsApp call is on screen: ringing here, or live.
+const WHATSAPP_RINGING_POLL_MS = 3_000;
 const WHATSAPP_ACTIVE_POLL_MS = 2_000;
-const WHATSAPP_DISABLED_RECHECK_MS = 5 * 60_000;
 const CREDENTIAL_RETRY_MS = 60_000;
 const OUTBOUND_POLL_MS = 1_500;
 const NO_AUDIO: CallAudioStreams = { local: null, remote: null };
@@ -342,16 +349,21 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ── WhatsApp: poll for customers calling ─────────────────────────────
+  // Not at all unless this deployment has WhatsApp calling switched on.
+  const whatsappCalling = useWhatsAppAvailability().calling;
   useEffect(() => {
+    if (!whatsappCalling) return;
     let cancelled = false;
     let timer: number | undefined;
     async function poll() {
-      let delay = WHATSAPP_POLL_MS;
+      let delay = WHATSAPP_INCOMING_POLL_MS;
       if (document.visibilityState === "visible" && !activeRef.current) {
         try {
           const ringing = await fetchRingingWhatsAppCalls();
           if (cancelled) return;
-          if (!ringing.enabled) delay = WHATSAPP_DISABLED_RECHECK_MS;
+          // The server's own answer agrees with the env this page was built
+          // from; if it says off, a redeploy is the only thing that changes it.
+          if (!ringing.enabled) return;
           const first = ringing.calls[0];
           if (first && !activeRef.current) {
             setActive({
@@ -363,7 +375,7 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
             });
           }
         } catch {
-          delay = WHATSAPP_POLL_MS * 5;
+          delay = WHATSAPP_INCOMING_RETRY_MS;
         }
       }
       if (!cancelled) timer = window.setTimeout(() => void poll(), delay);
@@ -373,7 +385,7 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, []);
+  }, [whatsappCalling]);
 
   // While a WhatsApp call is live, follow its state: the customer hanging up
   // arrives as a webhook, and an outbound call's answer SDP arrives the same way.
@@ -423,7 +435,9 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
           // A missed poll is harmless; the next one catches up.
         }
       },
-      whatsappPhase === "incoming" ? WHATSAPP_POLL_MS : WHATSAPP_ACTIVE_POLL_MS,
+      whatsappPhase === "incoming"
+        ? WHATSAPP_RINGING_POLL_MS
+        : WHATSAPP_ACTIVE_POLL_MS,
     );
     return () => {
       cancelled = true;

@@ -24,7 +24,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { WhatsAppGlyph } from "@/components/whatsapp/whatsapp-logo";
-import { useProjectWhatsApp } from "@/hooks/use-project-whatsapp";
+import {
+  PROJECT_WHATSAPP_HEADER_POLL_MS,
+  useProjectWhatsApp,
+} from "@/hooks/use-project-whatsapp";
 import { cn } from "@/lib/utils";
 
 import { useCreateProjectWhatsAppGroup } from "./project-whatsapp-group-setup";
@@ -46,7 +49,9 @@ export function ProjectWhatsAppHeaderButton({
 }: {
   projectId: string;
 }) {
-  const { thread } = useProjectWhatsApp(projectId);
+  const { thread } = useProjectWhatsApp(projectId, {
+    pollMs: PROJECT_WHATSAPP_HEADER_POLL_MS,
+  });
   const { create, creating } = useCreateProjectWhatsAppGroup(projectId);
   const [inviting, setInviting] = useState(false);
   const [linking, setLinking] = useState(false);

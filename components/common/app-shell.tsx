@@ -28,6 +28,11 @@ import { Notifications } from "./notifications";
 import { PhoneDock } from "@/components/comms/phone-dock";
 import { PhoneProvider } from "@/components/comms/phone-provider";
 import { NotificationProvider } from "@/context/NotificationContext";
+import {
+  WHATSAPP_OFF,
+  WhatsAppAvailabilityProvider,
+  type WhatsAppAvailability,
+} from "@/context/WhatsAppAvailabilityContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SYDNEY_TZ, sydneyTimeZoneAbbreviation } from "@/lib/dates/sydney";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -42,6 +47,7 @@ export function AppShell({
   isAdmin,
   isSignedIn,
   phoneEnabled = false,
+  whatsapp = WHATSAPP_OFF,
   operationsAgentEnabled,
   // description,
   breadcrumbs,
@@ -55,6 +61,11 @@ export function AppShell({
    * account never asks for a calling credential or polls for calls.
    */
   phoneEnabled?: boolean;
+  /**
+   * WHATSAPP_ENABLED (and calling), read on the server. Off, no WhatsApp
+   * poller in the app starts a timer.
+   */
+  whatsapp?: WhatsAppAvailability;
   // EVE_OPERATIONS_AGENT_ENABLED. Off, the agent channel refuses every
   // request, so a nav entry would only lead to a workspace that cannot answer.
   operationsAgentEnabled: boolean;
@@ -443,14 +454,16 @@ export function AppShell({
               "[&::-webkit-scrollbar]:hidden",
             )}
           >
-            {phoneEnabled ? (
-              <PhoneProvider>
-                {children}
-                <PhoneDock />
-              </PhoneProvider>
-            ) : (
-              children
-            )}
+            <WhatsAppAvailabilityProvider value={whatsapp}>
+              {phoneEnabled ? (
+                <PhoneProvider>
+                  {children}
+                  <PhoneDock />
+                </PhoneProvider>
+              ) : (
+                children
+              )}
+            </WhatsAppAvailabilityProvider>
           </main>
         </div>
       </div>

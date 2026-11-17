@@ -116,6 +116,38 @@ test("the open thread polls while visible so an inbound reply appears", () => {
   assert.match(hook, /clearInterval\(/);
 });
 
+// Every poll is a function invocation and a database read. A deployment with
+// WHATSAPP_ENABLED off must not pay for any of them.
+test("no WhatsApp poller starts a timer unless the deployment has WhatsApp on", () => {
+  const layout = read("app/(main)/layout.tsx");
+  assert.match(layout, /readWhatsAppConfig\(\)/);
+  assert.match(layout, /whatsapp=\{\{/);
+  assert.match(
+    read("components/common/app-shell.tsx"),
+    /<WhatsAppAvailabilityProvider value=\{whatsapp\}>/,
+  );
+
+  const pollers: [string, RegExp][] = [
+    // The app-wide incoming-call poll, mounted on every page.
+    ["components/comms/phone-provider.tsx", /if \(!whatsappCalling\) return;/],
+    ["hooks/use-lead-whatsapp-thread.ts", /if \(!whatsappEnabled\)/],
+    ["hooks/use-project-whatsapp.ts", /const polling = whatsappEnabled;/],
+    ["components/leads/whatsapp/whatsapp-call-button.tsx", /calling && /],
+  ];
+  for (const [file, gate] of pollers) {
+    const source = read(file);
+    assert.match(source, /useWhatsAppAvailability\(\)/, file);
+    assert.match(source, gate, file);
+  }
+});
+
+test("the incoming-call poll is no quicker than every ten seconds", () => {
+  const provider = read("components/comms/phone-provider.tsx");
+  const match = provider.match(/const WHATSAPP_INCOMING_POLL_MS = ([\d_]+);/);
+  assert.ok(match, "WHATSAPP_INCOMING_POLL_MS is declared");
+  assert.ok(Number(match[1].replaceAll("_", "")) >= 10_000);
+});
+
 test("inbound bodies are never rendered as HTML", () => {
   for (const file of [
     "components/whatsapp/whatsapp-chat.tsx",

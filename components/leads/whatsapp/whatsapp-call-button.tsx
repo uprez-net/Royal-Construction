@@ -6,6 +6,7 @@ import { Loader2, Phone, PhoneForwarded } from "lucide-react";
 
 import { useOptionalPhone } from "@/components/comms/phone-provider";
 import { Button } from "@/components/ui/button";
+import { useWhatsAppAvailability } from "@/context/WhatsAppAvailabilityContext";
 import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import {
   fetchWhatsAppCallPermission,
@@ -17,12 +18,16 @@ import type { WhatsAppCallPermissionDto } from "@/lib/leads/comms-types";
 // call someone who tapped "Allow calls", so until they have this offers to
 // ask (inside the 24-hour window, at most once a day).
 
+/** How often an open modal re-reads the permission while it waits for one. */
+const PERMISSION_POLL_MS = 30_000;
+
 export function WhatsAppCallButton({
   lead,
 }: {
   lead: { id: number; name: string };
 }) {
   const phone = useOptionalPhone();
+  const { calling } = useWhatsAppAvailability();
   const askKey = useIdempotencyKey();
   const callKey = useIdempotencyKey();
   const [permission, setPermission] =
@@ -40,21 +45,32 @@ export function WhatsAppCallButton({
     [lead.id],
   );
 
+  // Nothing to ask, and nothing to poll, unless calling is switched on and
+  // this browser has a phone to call from.
+  const active = calling && phone !== null;
+  // The server saying calling is off is final for this page.
+  const waiting = active && permission?.enabled !== false;
   useEffect(() => {
+    if (!active) return;
     const controller = new AbortController();
     // Deferred a tick, like the WhatsApp thread: never setState in the effect body.
     const first = window.setTimeout(() => void load(controller.signal), 0);
-    // A grant arrives on the webhook while the modal is open.
-    const timer = window.setInterval(() => void load(), 15_000);
     return () => {
       window.clearTimeout(first);
       controller.abort();
-      window.clearInterval(timer);
     };
-  }, [load]);
+  }, [active, load]);
+  useEffect(() => {
+    if (!waiting) return;
+    // A grant arrives on the webhook while the modal is open.
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, PERMISSION_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [load, waiting]);
 
   // Calling isn't switched on, or this browser has no phone: show nothing.
-  if (!phone || !permission || !permission.enabled) return null;
+  if (!active || !permission || !permission.enabled) return null;
 
   async function ask() {
     setBusy(true);
