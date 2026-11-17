@@ -162,3 +162,39 @@ export function oldestWaiting<
     ),
   };
 }
+
+/**
+ * Requests resolved in their review window, never in one click: an incident
+ * needs a written resolution, and approving a tradie removal cancels every
+ * open booking that tradie holds, which the window makes the office confirm.
+ */
+export function needsReviewWindow(approval: { actionType: string }): boolean {
+  return (
+    approval.actionType === "INCIDENT_RESOLUTION"
+    || approval.actionType === "TRADIE_REMOVAL"
+  );
+}
+
+/** The parts of a list query that decide which rows it returns. */
+type ListQuery = {
+  view: string;
+  type?: string;
+  due?: string;
+  search?: string;
+  page: number;
+};
+
+/**
+ * Whether two queries ask for the same rows. A list result is applied only
+ * when it answers the query on screen now: a reload for a view the office has
+ * since left must not land under the new one.
+ */
+export function sameListQuery(a: ListQuery, b: ListQuery): boolean {
+  return (
+    a.view === b.view
+    && a.type === b.type
+    && a.due === b.due
+    && (a.search ?? "") === (b.search ?? "")
+    && a.page === b.page
+  );
+}

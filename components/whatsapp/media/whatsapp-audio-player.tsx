@@ -88,7 +88,7 @@ export function WhatsAppAudioPlayer({
         target="_blank"
         rel="noreferrer"
         download
-        className="flex min-w-60 items-center gap-2.5 rounded-md bg-black/4 px-3 py-2.5 text-[13px] text-muted-foreground hover:bg-black/7"
+        className="flex min-w-60 items-center gap-2.5 rounded-md bg-black/4 px-3 py-2.5 text-[13px] text-foreground hover:bg-black/7"
       >
         <Download className="size-4 shrink-0" aria-hidden="true" />
         This browser can&apos;t play the {voice ? "voice message" : "audio"} —
@@ -191,7 +191,7 @@ export function WhatsAppAudioPlayer({
                 if (audio.current) audio.current.playbackRate = next;
               }}
               aria-label={`Playback speed ${speed}×`}
-              className="rounded-full bg-black/6 px-1.5 py-px text-[11px] font-semibold text-muted-foreground hover:bg-black/10"
+              className="rounded-full bg-black/6 px-1.5 py-px text-[11px] font-semibold text-foreground hover:bg-black/10"
             >
               {speed}×
             </button>

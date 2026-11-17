@@ -129,7 +129,12 @@ export default function TeamManagementPage() {
 
       <Tabs
         value={tab}
-        onValueChange={(value) => setTab(value as "invite" | "members")}
+        onValueChange={(value) => {
+          // The search box is keyed by tab and empties on switch; clear the
+          // query with it, or the other list stays filtered by a hidden term.
+          setQuery("");
+          setTab(value as "invite" | "members");
+        }}
         className="w-full gap-0"
       >
         <ListToolbar

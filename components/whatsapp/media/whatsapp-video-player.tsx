@@ -98,7 +98,7 @@ export function WhatsAppVideoPlayer({
         target="_blank"
         rel="noreferrer"
         download
-        className="flex min-w-60 items-center gap-2.5 rounded-md bg-black/4 px-3 py-2.5 text-[13px] text-muted-foreground hover:bg-black/7"
+        className="flex min-w-60 items-center gap-2.5 rounded-md bg-black/4 px-3 py-2.5 text-[13px] text-foreground hover:bg-black/7"
       >
         <Download className="size-4 shrink-0" aria-hidden="true" />
         This browser can&apos;t play the video — download it instead.

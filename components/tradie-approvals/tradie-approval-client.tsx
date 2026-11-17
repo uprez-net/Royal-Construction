@@ -55,15 +55,19 @@ export function TradieApprovalClient({
   );
   const [confirming, setConfirming] = useState<SafeTradieApproval[]>([]);
   const query = useAppSelector((state) => state.tradieApproval.query);
+  // The server props seed the store once, on mount. A later server render
+  // (router.refresh, revalidation) must not reset the view the user chose; the
+  // slice reloads the list and counts itself after each decision.
+  const [seed] = useState(() => ({ kpiData, approvalsData }));
 
   useEffect(() => {
-    dispatch(setKPIData(kpiData));
-    dispatch(setApprovalData(approvalsData));
+    dispatch(setKPIData(seed.kpiData));
+    dispatch(setApprovalData(seed.approvalsData));
 
     return () => {
       dispatch(clearState());
     };
-  }, [kpiData, approvalsData, dispatch]);
+  }, [seed, dispatch]);
 
   // The one place the list is fetched: every view, chip, figure, search and
   // page change lands in `query`, and the rows follow it.
@@ -114,25 +118,27 @@ export function TradieApprovalClient({
   // The one approve path, for the row button and the bulk button. A request
   // that cancels bookings is confirmed first; the rest go straight through.
   const requestApprove = async (selected: SafeTradieApproval[]) => {
-    // Incidents need a resolution note: one opens its review window; in a
-    // batch they are left out and the office is told to resolve each.
-    const incidents = selected.filter(needsReviewWindow);
+    // Incidents (a resolution note) and removals (an impact acknowledgement)
+    // are decided in their review window: one opens it; in a batch they are
+    // left out and the office is told to open each one.
+    const reviewed = selected.filter(needsReviewWindow);
     const rows = selected.filter((row) => !needsReviewWindow(row));
-    if (incidents.length === 1 && rows.length === 0) {
+    if (reviewed.length === 1 && rows.length === 0) {
       dispatch(
         openModal({
           type: "adminApproval",
           payload: {
-            approvalId: incidents[0].id,
-            approvalType: incidents[0].actionType,
+            approvalId: reviewed[0].id,
+            approvalType: reviewed[0].actionType,
           },
         }),
       );
       return;
     }
-    if (incidents.length > 0) {
+    if (reviewed.length > 0) {
+      const one = reviewed.length === 1;
       toast.info(
-        `${incidents.length} incident ${incidents.length === 1 ? "report needs" : "reports need"} a resolution note. Open ${incidents.length === 1 ? "it" : "each one"} to resolve.`,
+        `${reviewed.length} ${one ? "request needs its" : "requests need their"} review window (incident resolutions, tradie removals). Open ${one ? "it" : "each one"} to resolve.`,
       );
     }
     if (rows.length === 0) return;

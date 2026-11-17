@@ -210,14 +210,26 @@ export function ScheduleApprovalForm({ approval, onSuccess }: Props) {
             <div className="space-y-1.5">
               <Label htmlFor="schedule-approval-reject-reason">
                 Reason for rejecting the schedule
+                <span className="text-destructive">
+                  *<span className="sr-only"> required</span>
+                </span>
               </Label>
               <Textarea
                 id="schedule-approval-reject-reason"
                 rows={2}
                 maxLength={1000}
+                required
+                aria-required="true"
+                aria-describedby="schedule-approval-reject-reason-hint"
                 value={rejectReason}
                 onChange={(event) => setRejectReason(event.target.value)}
               />
+              <p
+                id="schedule-approval-reject-reason-hint"
+                className="text-xs text-muted-foreground"
+              >
+                Required to reject. The requester sees this reason.
+              </p>
             </div>
 
             <div className="grid gap-2 sm:flex sm:justify-end">

@@ -9,6 +9,7 @@ import { dateFormat } from "@/utils/formatters";
 import {
   approvalDayLabel,
   approvalTypeLabel,
+  needsReviewWindow,
   selectApproval,
   selectApprovals,
 } from "@/lib/store/slices/tradieApprovalSlice";
@@ -385,7 +386,7 @@ export function TradieApprovalList({
                     ) : (
                       <Check className="h-4 w-4" />
                     )}
-                    Approve
+                    {needsReviewWindow(approval) ? "Review" : "Approve"}
                   </Button>
                   <Button
                     size="sm"

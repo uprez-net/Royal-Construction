@@ -230,14 +230,26 @@ export function ScheduleDeletionApprovalForm({ approval, onSuccess }: Props) {
             <div className="space-y-1.5">
               <Label htmlFor="schedule-deletion-reject-reason">
                 Reason for keeping the booking
+                <span className="text-destructive">
+                  *<span className="sr-only"> required</span>
+                </span>
               </Label>
               <Textarea
                 id="schedule-deletion-reject-reason"
                 rows={2}
                 maxLength={1000}
+                required
+                aria-required="true"
+                aria-describedby="schedule-deletion-reject-reason-hint"
                 value={rejectReason}
                 onChange={(event) => setRejectReason(event.target.value)}
               />
+              <p
+                id="schedule-deletion-reject-reason-hint"
+                className="text-xs text-muted-foreground"
+              >
+                Required to keep the booking. The requester sees this reason.
+              </p>
             </div>
 
             <div className="grid gap-2 sm:flex sm:justify-end">

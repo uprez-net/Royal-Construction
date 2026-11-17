@@ -7,7 +7,7 @@ import {
 } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
 import { after } from "next/server";
-import { cacheLife, cacheTag, revalidateTag } from "next/cache";
+import { revalidateTag } from "next/cache";
 import pLimit from "p-limit";
 
 import { resolveTradieApproval } from "@/lib/domain/tradies/approvals";
@@ -59,6 +59,7 @@ async function authorisedForApproval() {
 export async function fetchTradieApprovalById(
   approvalId: string,
 ): Promise<SafeTradieApproval> {
+  await authorisedForApproval();
   try {
     const approval = await prisma.tradieApproval.findUnique({
       include: { tradie: true, user: true },
@@ -100,8 +101,6 @@ export async function handleAdminApproval(input: ApprovalInput) {
     after(() => {
       revalidateTag(`tradie-${resolved.tradieId}`, CACHE_PROFILES.MEDIUM);
       revalidateTag("tradie-management", CACHE_PROFILES.MEDIUM);
-      revalidateTag("approval-kpi", CACHE_PROFILES.MEDIUM);
-      revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
       if (resolved.actionType === "TRADIE_REMOVAL") {
         revalidateTag("tradies", CACHE_PROFILES.MEDIUM);
         revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
@@ -373,6 +372,7 @@ function toSafeApproval(
 export async function fetchTradieApprovals(
   query: TradieApprovalQuery,
 ): Promise<PaginatedTradieApprovals> {
+  await authorisedForApproval();
   try {
     const { view, search, type, due, page, pageSize } = query;
     const filters: Prisma.TradieApprovalWhereInput[] = [];
@@ -467,6 +467,7 @@ export async function fetchTradieApprovals(
 }
 
 export async function fetchApprovalKPI(): Promise<ApprovalKPI> {
+  await authorisedForApproval();
   try {
     // The needs-decision list and these figures read the same pending rows
     // through withDueFields and the queue-order module, so they cannot disagree.
@@ -523,20 +524,4 @@ function zeroByType(): Record<TradieApprovalActionType, number> {
   return Object.fromEntries(
     Object.values(TradieApprovalActionType).map((type) => [type, 0]),
   ) as Record<TradieApprovalActionType, number>;
-}
-
-export async function fetchApprovalKPICached(): Promise<ApprovalKPI> {
-  "use cache";
-  cacheTag("approval-kpi");
-  cacheLife(CACHE_PROFILES.MEDIUM);
-  return fetchApprovalKPI();
-}
-
-export async function fetchTradieApprovalsCached(
-  query: TradieApprovalQuery,
-): Promise<PaginatedTradieApprovals> {
-  "use cache";
-  cacheTag("approval-query");
-  cacheLife(CACHE_PROFILES.MEDIUM);
-  return fetchTradieApprovals(query);
 }

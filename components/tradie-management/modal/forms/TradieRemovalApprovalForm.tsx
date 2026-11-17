@@ -208,14 +208,26 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
             <div className="space-y-1.5">
               <Label htmlFor="tradie-removal-reject-reason">
                 Reason for rejecting the removal
+                <span className="text-destructive">
+                  *<span className="sr-only"> required</span>
+                </span>
               </Label>
               <Textarea
                 id="tradie-removal-reject-reason"
                 rows={2}
                 maxLength={1000}
+                required
+                aria-required="true"
+                aria-describedby="tradie-removal-reject-reason-hint"
                 value={rejectReason}
                 onChange={(event) => setRejectReason(event.target.value)}
               />
+              <p
+                id="tradie-removal-reject-reason-hint"
+                className="text-xs text-muted-foreground"
+              >
+                Required to reject. The requester sees this reason.
+              </p>
             </div>
 
             <div className="grid gap-2 sm:flex sm:justify-end">

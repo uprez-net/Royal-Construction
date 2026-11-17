@@ -21,6 +21,10 @@ import {
 } from "@/types/tradie";
 import { TradieApprovalActionType } from "@prisma/client";
 import { toast } from "sonner";
+import {
+  needsReviewWindow,
+  sameListQuery,
+} from "@/lib/tradie-approvals/queue-order";
 
 const zeroByType = () =>
   Object.fromEntries(
@@ -41,6 +45,8 @@ interface TradieApprovalState extends PaginatedTradieApprovals {
   /** The newest list fetch. Only its response may fill the list: a slower
    * earlier one (a search typed past, a view left) must not overwrite it. */
   latestFetchId: string | null;
+  /** The newest counts request; the same rule as latestFetchId, for the KPI. */
+  latestKpiId: string | null;
   kpiData: ApprovalKPI;
   query: TradieApprovalQuery;
   loading: boolean;
@@ -54,6 +60,7 @@ const initialState: TradieApprovalState = {
   pageSize: 10,
   selectedApprovalIds: [],
   latestFetchId: null,
+  latestKpiId: null,
   kpiData: emptyKPI,
   query: {
     view: "needs-decision",
@@ -85,7 +92,8 @@ export function approvalDayLabel(day: string): string {
   return dayFormat.format(new Date(`${day}T00:00:00Z`));
 }
 
-/** Approving these cancels bookings, so the office confirms first. */
+/** Approving these cancels bookings, so the office confirms first. A removal is
+ * not here: it goes through its review window (see needsReviewWindow). */
 export function cancelsBookings(approval: SafeTradieApproval): boolean {
   return (
     approval.actionType === "SCHEDULE_DELETION"
@@ -172,12 +180,10 @@ async function reloadKpi(): Promise<ApprovalKPI | null> {
 }
 type ApprovalSliceState = { tradieApproval: TradieApprovalState };
 
-/** The approve input for one request: the payload its type needs, if any. */
-/** An incident is resolved with a written note, in its review window, never in one click. */
-export function needsReviewWindow(approval: SafeTradieApproval): boolean {
-  return approval.actionType === "INCIDENT_RESOLUTION";
-}
+// needsReviewWindow lives with the queue rules; re-exported for the screen.
+export { needsReviewWindow };
 
+/** The approve input for one request: the payload its type needs, if any. */
 export function approveInput(approval: SafeTradieApproval): ApprovalInput {
   const payload = (() => {
     switch (approval.actionType) {
@@ -326,7 +332,15 @@ const tradieApprovalSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
+      .addCase(reloadAfterDecision.pending, (state, action) => {
+        state.latestFetchId = action.meta.requestId;
+      })
       .addCase(reloadAfterDecision.fulfilled, (state, action) => {
+        // Same guard as fetchApprovalsByQuery: an older reload must not
+        // overwrite a newer view, and a reload for a view left is dropped.
+        if (action.meta.requestId !== state.latestFetchId) return;
+        state.loading = false;
+        if (!sameListQuery(action.meta.arg, state.query)) return;
         state.approvals = action.payload.approvals;
         state.totalCount = action.payload.totalCount;
         state.page = action.payload.page;
@@ -338,9 +352,15 @@ const tradieApprovalSlice = createSlice({
           ),
         );
       })
+      .addCase(reloadAfterDecision.rejected, (state, action) => {
+        if (action.meta.requestId === state.latestFetchId)
+          state.loading = false;
+      })
       .addCase(fetchApprovalsByQuery.fulfilled, (state, action) => {
         if (action.meta.requestId !== state.latestFetchId) return;
         state.loading = false;
+        // A result for a view the office has since left is not theirs.
+        if (!sameListQuery(action.meta.arg, state.query)) return;
         state.approvals = action.payload.approvals;
         // Keep only selections still on screen and still pending.
         const selectable = new Set(
@@ -360,7 +380,8 @@ const tradieApprovalSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-      .addCase(approveRequests.pending, (state) => {
+      .addCase(approveRequests.pending, (state, action) => {
+        state.latestKpiId = action.meta.requestId;
         state.error = null;
       })
       .addCase(approveRequests.fulfilled, (state, action) => {
@@ -379,12 +400,19 @@ const tradieApprovalSlice = createSlice({
         state.selectedApprovalIds = state.selectedApprovalIds.filter(
           (id) => !resolvedIds.has(id),
         );
-        if (action.payload.kpi) state.kpiData = action.payload.kpi;
+        if (action.payload.kpi && action.meta.requestId === state.latestKpiId) {
+          state.kpiData = action.payload.kpi;
+        }
       })
       // A refused approval is reported by the caller's toast. It is not a
       // list error: setting `error` replaced the whole table with a message.
+      .addCase(refreshApprovals.pending, (state, action) => {
+        state.latestKpiId = action.meta.requestId;
+      })
       .addCase(refreshApprovals.fulfilled, (state, action) => {
-        if (action.payload) state.kpiData = action.payload;
+        if (action.payload && action.meta.requestId === state.latestKpiId) {
+          state.kpiData = action.payload;
+        }
       });
   },
 });

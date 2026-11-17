@@ -19,9 +19,12 @@ export function TradieApprovalKPI() {
   const { kpiData, query } = useAppSelector((state) => state.tradieApproval);
   const oldest = kpiData.oldestWaiting;
 
+  // A search narrows the rows, so no filter tile is lit while one is typed.
+  const searching = Boolean(query.search?.trim());
   const waitingActive =
-    query.view === "needs-decision" && !query.type && !query.due;
-  const dueActive = query.view === "needs-decision" && query.due === "week";
+    query.view === "needs-decision" && !query.type && !query.due && !searching;
+  const dueActive =
+    query.view === "needs-decision" && query.due === "week" && !searching;
 
   return (
     <KpiBand className={cn(MOBILE_METRIC_STRIP_CLASS, "sm:grid-cols-3")}>
@@ -36,6 +39,7 @@ export function TradieApprovalKPI() {
               view: "needs-decision",
               type: undefined,
               due: undefined,
+              search: "",
               page: 1,
             }),
           )
@@ -80,6 +84,7 @@ export function TradieApprovalKPI() {
               view: "needs-decision",
               due: "week",
               type: undefined,
+              search: "",
               page: 1,
             }),
           )

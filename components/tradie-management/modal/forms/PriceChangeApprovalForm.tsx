@@ -364,14 +364,26 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
             <div className="space-y-1.5">
               <Label htmlFor="price-change-reject-reason">
                 Reason for rejecting
+                <span className="text-destructive">
+                  *<span className="sr-only"> required</span>
+                </span>
               </Label>
               <Textarea
                 id="price-change-reject-reason"
                 rows={2}
                 maxLength={1000}
+                required
+                aria-required="true"
+                aria-describedby="price-change-reject-reason-hint"
                 value={rejectReason}
                 onChange={(event) => setRejectReason(event.target.value)}
               />
+              <p
+                id="price-change-reject-reason-hint"
+                className="text-xs text-muted-foreground"
+              >
+                Required to reject. The requester sees this reason.
+              </p>
             </div>
 
             <div className="grid gap-2 sm:flex sm:justify-end">
