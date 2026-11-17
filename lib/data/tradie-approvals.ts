@@ -294,17 +294,14 @@ type ApprovalWithRelations = Prisma.TradieApprovalGetPayload<{
   include: { tradie: true; user: true };
 }>;
 
-/**
- * The most pending requests the needs-decision list will load and order in
- * memory. Past this the list is cut at the oldest-asked, and the log names the
- * ceiling. Raise it, or move the ordering into SQL, before the queue gets there.
- */
-const PENDING_LIST_CEILING = 500;
+// Needs decision reads every pending request, as the counts do, so the list
+// and the Waiting and Due this week figures always agree. The queue is a few
+// dozen; ordering moves into SQL if it ever grows into the thousands.
 
 /**
  * Adds the due date, its kind and overdue to each row. A trade cancellation's
- * due date is the earliest open booking its tradie holds on that project, so
- * all of them are looked up in one grouped query.
+ * due date is the earliest open booking its tradie holds on that project, in
+ * that trade, so all of them are looked up in one query.
  */
 async function withDueFields<T extends DueSubject & { tradieId: string }>(
   rows: readonly T[],
@@ -456,18 +453,10 @@ export async function fetchTradieApprovals(
     const pending = await prisma.tradieApproval.findMany({
       include,
       orderBy: { createdAt: "asc" },
-      take: PENDING_LIST_CEILING + 1,
       where: { AND: [...filters, { status: TradieApprovalStatus.PENDING }] },
     });
-    if (pending.length > PENDING_LIST_CEILING) {
-      console.error(
-        `Tradie approval queue has more than ${PENDING_LIST_CEILING} pending requests; the list shows the oldest ${PENDING_LIST_CEILING}.`,
-      );
-    }
     const today = sydneyToday();
-    const ordered = (
-      await withDueFields(pending.slice(0, PENDING_LIST_CEILING))
-    )
+    const ordered = (await withDueFields(pending))
       .filter((row) => due !== "week" || isDueThisWeek(row, today))
       .sort(compareNeedsDecision);
 
