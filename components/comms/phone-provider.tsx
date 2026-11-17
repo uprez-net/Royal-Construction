@@ -47,7 +47,8 @@ import { WhatsAppCallSession } from "./dialer/whatsapp-call-session";
 // Ten seconds is still well inside the time a customer lets a call ring, and
 // it only runs at all when WhatsApp calling is switched on.
 const WHATSAPP_INCOMING_POLL_MS = 10_000;
-const WHATSAPP_INCOMING_RETRY_MS = 60_000;
+// A failed check retries well inside the time a call rings, not a minute later.
+const WHATSAPP_INCOMING_RETRY_MS = 15_000;
 // Only while a WhatsApp call is on screen: ringing here, or live.
 const WHATSAPP_RINGING_POLL_MS = 3_000;
 const WHATSAPP_ACTIVE_POLL_MS = 2_000;
