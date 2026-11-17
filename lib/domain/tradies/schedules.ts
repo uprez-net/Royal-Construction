@@ -23,7 +23,7 @@ import {
 } from "../audit/tradie-activity-log";
 import { authorizeProject, canManageProject } from "../access/projects";
 import { assertCanReadTradieDirectory } from "../access/tradies";
-import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
+import { INACTIVE_SCHEDULE_STATUSES, requireBookableTradie } from "./lifecycle";
 import {
   notReschedulableReason,
   rescheduleOutcome,
@@ -274,7 +274,7 @@ export async function createTradieSchedule(
       transactionDb,
     );
 
-    const tradie = await requireActiveTradie(input.tradieId, transactionDb);
+    const tradie = await requireBookableTradie(input.tradieId, transactionDb);
     // Checked only when a trade is named. Booked under their primary trade,
     // a tradie the directory has no trade for can still be booked, as before.
     const asked = input.trade?.trim();

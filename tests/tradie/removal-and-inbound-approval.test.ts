@@ -304,6 +304,40 @@ test("archived tradies stay out of searches and cannot be booked or removed agai
   assert.deepEqual(archived.writes(), []);
 });
 
+test("a tradie waiting on removal cannot take new work until it is decided (#529)", async () => {
+  const pending = recordingDb({
+    "tradie.findUnique": { ...tradie, approvals: [{ id: "a_1" }] },
+    "project.findUnique": project,
+  });
+  await assert.rejects(
+    () =>
+      createTradieSchedule(
+        adminPrincipal(),
+        {
+          tradieId: "t_1",
+          projectId: "p_1",
+          scheduledDate: new Date(),
+          durationDays: 1,
+          requiresQuote: false,
+        },
+        pending.db,
+      ),
+    (error: unknown) =>
+      error instanceof DomainTransitionError
+      && /removal request waiting/.test(error.message),
+  );
+  assert.deepEqual(pending.writes(), []);
+  // The check asks for a pending removal only: a rejected one, or another
+  // kind of request, leaves the tradie bookable.
+  const read = pending.calls.find(
+    (call) => call.operation === "tradie.findUnique",
+  )?.args as { include: { approvals: { where: unknown } } };
+  assert.deepEqual(read.include.approvals.where, {
+    actionType: "TRADIE_REMOVAL",
+    status: "PENDING",
+  });
+});
+
 test("cancelled schedules cannot resume, reschedule, or email a reminder", async () => {
   const recorder = recordingDb({
     "tradieSchedule.findUnique": {

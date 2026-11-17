@@ -347,6 +347,24 @@ test("selection is refused while someone holds the trade, and nothing is written
   assert.deepEqual(recorder.writes(), []);
 });
 
+test("a tradie waiting on removal cannot be selected for a trade (#529)", async () => {
+  const recorder = recordingDb({
+    "project.findUnique": PROJECT,
+    "tradie.findUnique": { ...ABC, approvals: [{ id: "ap_remove" }] },
+  });
+  await assert.rejects(
+    selectTradeQuote(
+      adminPrincipal(),
+      { projectId: "p_1", tradieId: "t_abc" },
+      recorder.db,
+    ),
+    (error: unknown) =>
+      error instanceof DomainTransitionError
+      && /removal request waiting/.test(error.message),
+  );
+  assert.deepEqual(recorder.writes(), []);
+});
+
 test("selecting cancels the rivals' bookings on the same activities and records the selection", async () => {
   const bookings = [
     {
