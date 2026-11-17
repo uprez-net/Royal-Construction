@@ -180,6 +180,17 @@ async function reloadKpi(): Promise<ApprovalKPI | null> {
 }
 type ApprovalSliceState = { tradieApproval: TradieApprovalState };
 
+/**
+ * Reload the counts. Its own request, so the newest READ wins: two decisions
+ * finishing out of order must not let an older read's counts stick, and a
+ * later read (which sees both decisions) must not be dropped for having been
+ * started by an earlier decision.
+ */
+const reloadApprovalKpi = createAsyncThunk<ApprovalKPI | null>(
+  "tradieApproval/reloadApprovalKpi",
+  () => reloadKpi(),
+);
+
 // needsReviewWindow lives with the queue rules; re-exported for the screen.
 export { needsReviewWindow };
 
@@ -215,7 +226,7 @@ export function approveInput(approval: SafeTradieApproval): ApprovalInput {
  * says which. Rejects only when nothing resolved.
  */
 export const approveRequests = createAsyncThunk<
-  ApprovalBatch & { kpi: ApprovalKPI | null },
+  ApprovalBatch,
   ApprovalInput[],
   { state: ApprovalSliceState; rejectValue: string }
 >(
@@ -235,9 +246,9 @@ export const approveRequests = createAsyncThunk<
         batch.failed[0]?.error ?? "No request could be resolved",
       );
     }
-    const kpi = await reloadKpi();
+    void dispatch(reloadApprovalKpi());
     void dispatch(reloadAfterDecision(getState().tradieApproval.query));
-    return { ...batch, kpi };
+    return batch;
   },
 );
 
@@ -246,12 +257,12 @@ export const approveRequests = createAsyncThunk<
  * (its review window), which otherwise still showed as pending.
  */
 export const refreshApprovals = createAsyncThunk<
-  ApprovalKPI | null,
+  void,
   void,
   { state: ApprovalSliceState }
 >("tradieApproval/refreshApprovals", async (_, { dispatch, getState }) => {
+  void dispatch(reloadApprovalKpi());
   void dispatch(reloadAfterDecision(getState().tradieApproval.query));
-  return reloadKpi();
 });
 
 /**
@@ -380,8 +391,7 @@ const tradieApprovalSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-      .addCase(approveRequests.pending, (state, action) => {
-        state.latestKpiId = action.meta.requestId;
+      .addCase(approveRequests.pending, (state) => {
         state.error = null;
       })
       .addCase(approveRequests.fulfilled, (state, action) => {
@@ -400,16 +410,13 @@ const tradieApprovalSlice = createSlice({
         state.selectedApprovalIds = state.selectedApprovalIds.filter(
           (id) => !resolvedIds.has(id),
         );
-        if (action.payload.kpi && action.meta.requestId === state.latestKpiId) {
-          state.kpiData = action.payload.kpi;
-        }
       })
       // A refused approval is reported by the caller's toast. It is not a
       // list error: setting `error` replaced the whole table with a message.
-      .addCase(refreshApprovals.pending, (state, action) => {
+      .addCase(reloadApprovalKpi.pending, (state, action) => {
         state.latestKpiId = action.meta.requestId;
       })
-      .addCase(refreshApprovals.fulfilled, (state, action) => {
+      .addCase(reloadApprovalKpi.fulfilled, (state, action) => {
         if (action.payload && action.meta.requestId === state.latestKpiId) {
           state.kpiData = action.payload;
         }

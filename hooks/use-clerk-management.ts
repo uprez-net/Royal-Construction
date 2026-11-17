@@ -21,6 +21,10 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
   // publicMetadata.phone is only the fallback.
   const [phones, setPhones] = useState<Record<string, string>>({});
   const [invites, setInvites] = useState<Invitation[]>([]);
+  // Bumped after an invite, so the lists reload from the server: a search
+  // GET started before the POST could otherwise land after it and drop the
+  // new invitation.
+  const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +50,7 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
         console.log("Invite sent successfully");
         inviteKeys.rotate(`invite:${email}`);
         setInvites((prev) => [...prev, res.data.invitation]);
+        setRefreshKey((key) => key + 1);
         return;
       } else {
         throw new Error(res.data.message || "Failed to send invite");
@@ -195,7 +200,7 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, userPage, invitePage]);
+  }, [query, userPage, invitePage, refreshKey]);
 
   return {
     loading,
