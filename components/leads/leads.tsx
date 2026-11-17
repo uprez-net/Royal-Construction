@@ -9,7 +9,7 @@ import {
   useTransition,
 } from "react";
 import {
-  Clock,
+  CalendarClock,
   Mail,
   Plus,
   Table2,
@@ -80,7 +80,8 @@ type TabType = "table" | "followups" | "analytics";
 // (aria-selected) and arrow keys move between them (#442).
 const VIEW_TABS = [
   { key: "table" as TabType, label: "Leads", Icon: Table2 },
-  { key: "followups" as TabType, label: "Tasks", Icon: Clock },
+  // The lead page's "Scheduled work" tab lists the same tasks under this icon.
+  { key: "followups" as TabType, label: "Tasks", Icon: CalendarClock },
   { key: "analytics" as TabType, label: "Analytics", Icon: BarChart3 },
 ] as const;
 const VIEW_PANEL_ID = "leads-view-panel";
@@ -343,8 +344,18 @@ function LeadsWorkspace() {
 
   /* ── Handlers ── */
 
+  // The filter the Tasks tab opens on. Its own tab button shows everything;
+  // the Overdue follow-ups card opens it on what is due now.
+  const [tasksFilter, setTasksFilter] = useState<"all" | "dueNow">("all");
+
   const handleTabChange = (tab: TabType) => {
+    setTasksFilter("all");
     setActiveTab(tab);
+  };
+
+  const openOverdueTasks = () => {
+    setTasksFilter("dueNow");
+    setActiveTab("followups");
   };
 
   // Arrow/Home/End move focus and select, as the other tab strips do. Roving
@@ -633,6 +644,9 @@ function LeadsWorkspace() {
               value={String(stats.overdueTasks)}
               note="Open tasks past due · all time · on the Tasks tab"
               noteWraps
+              // It said "on the Tasks tab" and went nowhere when pressed.
+              onClick={openOverdueTasks}
+              active={activeTab === "followups" && tasksFilter === "dueNow"}
             />
             <LeadMetricCard
               label="Win rate (90 days)"
@@ -804,6 +818,10 @@ function LeadsWorkspace() {
             )}
             {activeTab === "followups" && (
               <FollowupsView
+                // Remounted when the opening filter changes, so pressing the
+                // card while already on the tab still switches to "due now".
+                key={tasksFilter}
+                initialFilter={tasksFilter}
                 loading={loadingLeads}
                 leads={leads}
                 onLeadUpdate={updateLeadInList}
