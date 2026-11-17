@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { requireAdminUser } from "@/lib/auth/require-admin";
 import { PageHeader } from "@/components/common/page-header";
 import { TableCard } from "@/components/common/list-toolbar";
 import { StatusPill } from "@/components/common/status-pill";
@@ -136,6 +138,10 @@ function AdminToolList({ statuses }: { statuses: AdminHubStatuses }) {
 async function AdminHub() {
   // Live counts and connection state; never prerendered.
   await connection();
+  // proxy.ts already sends non-admins away from /admin; this keeps the
+  // staff counts behind an admin check even if that route rule changes.
+  const guard = await requireAdminUser();
+  if (!guard.ok) redirect("/dashboard");
   const statuses = await getAdminHubStatuses();
 
   return (

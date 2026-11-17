@@ -312,33 +312,54 @@ async function withDueFields<T extends DueSubject & { tradieId: string }>(
   const today = sydneyToday();
   // The booking a trade cancellation would cancel is found with the domain's
   // own rule (the tradie's open bookings on the project, in that trade), so the
-  // due date names the booking that approval actually cancels. Pending trade
-  // cancellations are few; one query each.
+  // due date names the booking that approval actually cancels. One query for
+  // every pending trade cancellation; the earliest booking per key is kept.
+  const keys = new Map<
+    string,
+    { tradieId: string; projectId: string; trade: string }
+  >();
+  for (const row of rows) {
+    if (row.actionType !== "TRADE_CANCELLATION") continue;
+    const projectId = tradeCancellationProjectId(row.updationData);
+    const trade = (row.updationData as { trade?: unknown } | null)?.trade;
+    if (!projectId || typeof trade !== "string" || !trade.trim()) continue;
+    keys.set(openBookingKey(row.tradieId, projectId, trade), {
+      tradieId: row.tradieId,
+      projectId,
+      trade,
+    });
+  }
   const earliest = new Map<string, string>();
-  await Promise.all(
-    rows.map(async (row) => {
-      if (row.actionType !== "TRADE_CANCELLATION") return;
-      const projectId = tradeCancellationProjectId(row.updationData);
-      const trade = (row.updationData as { trade?: unknown } | null)?.trade;
-      if (!projectId || typeof trade !== "string" || !trade.trim()) return;
-      const first = await prisma.tradieSchedule.findFirst({
-        where: {
-          tradieId: row.tradieId,
-          projectId,
-          status: { notIn: INACTIVE_SCHEDULE_STATUSES },
-          ...bookingInTradeWhere(trade),
-        },
-        orderBy: { scheduledDate: "asc" },
-        select: { scheduledDate: true },
-      });
-      if (first) {
-        earliest.set(
-          openBookingKey(row.tradieId, projectId, trade),
-          sydneyDateOnly(first.scheduledDate),
-        );
+  if (keys.size > 0) {
+    const bookings = await prisma.tradieSchedule.findMany({
+      where: {
+        status: { notIn: INACTIVE_SCHEDULE_STATUSES },
+        OR: [...keys.values()].map((key) => ({
+          tradieId: key.tradieId,
+          projectId: key.projectId,
+          ...bookingInTradeWhere(key.trade),
+        })),
+      },
+      orderBy: { scheduledDate: "asc" },
+      select: {
+        tradieId: true,
+        projectId: true,
+        trade: true,
+        scheduledDate: true,
+        tradie: { select: { trade: true } },
+      },
+    });
+    for (const booking of bookings) {
+      // bookingInTradeWhere's rule in memory: the booking's own trade, else
+      // its tradie's. openBookingKey trims and lowercases, as the query's
+      // case-insensitive match does.
+      const trade = booking.trade ?? booking.tradie.trade ?? "";
+      const key = openBookingKey(booking.tradieId, booking.projectId, trade);
+      if (keys.has(key) && !earliest.has(key)) {
+        earliest.set(key, sydneyDateOnly(booking.scheduledDate));
       }
-    }),
-  );
+    }
+  }
 
   return rows.map((row) => {
     const projectId =
