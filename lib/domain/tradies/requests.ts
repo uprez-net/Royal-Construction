@@ -30,7 +30,7 @@ import type {
   TradieRequestAiPort,
   WorkDetailsDraft,
 } from "../ports/tradie-request-ai";
-import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
+import { INACTIVE_SCHEDULE_STATUSES, requireBookableTradie } from "./lifecycle";
 import {
   generateTradieRefToken,
   subjectWithTradieRef,
@@ -272,9 +272,9 @@ export async function sendTradieRequests(
 
   const project = await authorizeProject(principal, input.projectId, db);
 
-  const tradies: Awaited<ReturnType<typeof requireActiveTradie>>[] = [];
+  const tradies: Awaited<ReturnType<typeof requireBookableTradie>>[] = [];
   for (const tradieId of input.tradieIds) {
-    tradies.push(await requireActiveTradie(tradieId, db));
+    tradies.push(await requireBookableTradie(tradieId, db));
   }
   const asked = input.trade?.trim() || tradies[0].trade.trim();
   const trade = tradieTradeLabel(tradies[0], asked) ?? asked;

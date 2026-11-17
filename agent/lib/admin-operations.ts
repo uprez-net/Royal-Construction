@@ -19,6 +19,7 @@ import {
   listTradieApprovals,
   resolveTradieApproval,
 } from "@/lib/domain/tradies/approvals";
+import { getTradieRemovalImpact } from "@/lib/domain/tradies/queries";
 import { findUserByClerkId, findUserById } from "@/lib/domain/identity/users";
 import {
   AgentAuthorizationError,
@@ -156,6 +157,26 @@ export async function getAuthorizedApproval(
     input.approvalId,
     agentDb,
   );
+  // A pending removal cancels every unfinished booking; the owner reviews
+  // them, and resolve_approval sends their ids back as reviewedBookingIds.
+  const removalImpact =
+    approval.actionType === TradieApprovalActionType.TRADIE_REMOVAL
+    && approval.status === TradieApprovalStatus.PENDING
+      ? await getTradieRemovalImpact(
+          userPrincipal(actor),
+          approval.tradieId,
+          agentDb,
+        ).then(({ schedules }) => ({
+          openBookings: schedules.length,
+          bookings: schedules.map((schedule) => ({
+            id: schedule.id,
+            project: schedule.project.name,
+            milestone: schedule.milestone?.name ?? null,
+            scheduledDate: schedule.scheduledDate,
+            status: schedule.status,
+          })),
+        }))
+      : undefined;
   return result(
     "admin-summary",
     "Approval request",
@@ -171,6 +192,7 @@ export async function getAuthorizedApproval(
         requestedBy: approval.user?.name ?? approval.requestSource ?? "System",
         tradie: approval.tradie,
         payload: approval.updationData,
+        ...(removalImpact ? { removalImpact } : {}),
       },
     },
     {
@@ -187,6 +209,7 @@ export async function resolveAuthorizedApproval(
     resolution: "approved" | "rejected";
     rejectionReason?: string;
     incidentResolution?: string;
+    reviewedBookingIds?: string[];
   },
   transaction?: Prisma.TransactionClient,
 ) {
@@ -196,6 +219,7 @@ export async function resolveAuthorizedApproval(
   const resolved = await resolveTradieApproval(
     userPrincipal(actor),
     {
+      reviewedBookingIds: input.reviewedBookingIds,
       approvalId: input.approvalId,
       incidentResolution,
       rejectionReason: input.rejectionReason,

@@ -49,13 +49,24 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
   );
 
   const submit = (resolution: "approved" | "rejected") => {
-    mutation.mutate({
-      approvalId: approval.id,
-      type: TradieApprovalActionType.TRADIE_REMOVAL,
-      resolution,
-      payload: undefined,
-      rejectReason: resolution === "rejected" ? rejectReason.trim() : undefined,
-    });
+    mutation.mutate(
+      {
+        approvalId: approval.id,
+        type: TradieApprovalActionType.TRADIE_REMOVAL,
+        resolution,
+        payload: undefined,
+        rejectReason:
+          resolution === "rejected" ? rejectReason.trim() : undefined,
+        // The domain refuses the removal unless these are still exactly the
+        // tradie's unfinished bookings.
+        reviewedBookingIds:
+          resolution === "approved"
+            ? impact.data?.map((schedule) => schedule.id)
+            : undefined,
+      },
+      // A refusal (the bookings changed) shows the current list to review.
+      { onError: () => void impact.refetch() },
+    );
   };
 
   return (

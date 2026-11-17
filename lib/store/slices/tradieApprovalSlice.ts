@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import {
   needsReviewWindow,
   sameListQuery,
+  staleRowsAfterFailedReload,
 } from "@/lib/tradie-approvals/queue-order";
 
 const zeroByType = () =>
@@ -47,6 +48,8 @@ interface TradieApprovalState extends PaginatedTradieApprovals {
   latestFetchId: string | null;
   /** The newest counts request; the same rule as latestFetchId, for the KPI. */
   latestKpiId: string | null;
+  /** The query the rows on screen answer; null until a fetch has filled them. */
+  rowsQuery: TradieApprovalQuery | null;
   kpiData: ApprovalKPI;
   query: TradieApprovalQuery;
   loading: boolean;
@@ -61,6 +64,7 @@ const initialState: TradieApprovalState = {
   selectedApprovalIds: [],
   latestFetchId: null,
   latestKpiId: null,
+  rowsQuery: null,
   kpiData: emptyKPI,
   query: {
     view: "needs-decision",
@@ -145,26 +149,41 @@ export const fetchApprovalsByQuery = createAsyncThunk<
 
 type ApprovalBatch = Awaited<ReturnType<typeof handleBulkAdminApproval>>;
 
+type ApprovalSliceState = { tradieApproval: TradieApprovalState };
+
 /**
  * The reload after a decision. It shares fetchApprovalsByQuery's result, but
  * a failure keeps the rows on screen and says the list may be out of date:
  * the decision itself went through, so replacing the table with an error
- * would read as if it had not.
+ * would read as if it had not. The exception is rows from another view (a
+ * view switch this reload superseded): those are fetched again instead.
  */
 const reloadAfterDecision = createAsyncThunk<
   PaginatedTradieApprovals,
-  TradieApprovalQuery
->("tradieApproval/reloadAfterDecision", async (query) => {
-  try {
-    return await fetchTradieApprovals(query);
-  } catch (error) {
-    console.error("Approvals reload after a decision failed", error);
-    toast.warning(
-      "Saved, but the list could not be reloaded. Refresh the page to see it.",
-    );
-    throw error;
-  }
-});
+  TradieApprovalQuery,
+  { state: ApprovalSliceState }
+>(
+  "tradieApproval/reloadAfterDecision",
+  async (query, { dispatch, getState, requestId }) => {
+    try {
+      return await fetchTradieApprovals(query);
+    } catch (error) {
+      console.error("Approvals reload after a decision failed", error);
+      const state = getState().tradieApproval;
+      if (
+        state.latestFetchId === requestId
+        && staleRowsAfterFailedReload(state.rowsQuery, state.query)
+      ) {
+        void dispatch(fetchApprovalsByQuery(state.query));
+      } else {
+        toast.warning(
+          "Saved, but the list could not be reloaded. Refresh the page to see it.",
+        );
+      }
+      throw error;
+    }
+  },
+);
 
 /** The counts after a decision; on failure the office is told they are stale. */
 async function reloadKpi(): Promise<ApprovalKPI | null> {
@@ -178,7 +197,6 @@ async function reloadKpi(): Promise<ApprovalKPI | null> {
     return null;
   }
 }
-type ApprovalSliceState = { tradieApproval: TradieApprovalState };
 
 /**
  * Reload the counts. Its own request, so the newest READ wins: two decisions
@@ -352,6 +370,7 @@ const tradieApprovalSlice = createSlice({
         if (action.meta.requestId !== state.latestFetchId) return;
         state.loading = false;
         if (!sameListQuery(action.meta.arg, state.query)) return;
+        state.error = null;
         state.approvals = action.payload.approvals;
         state.totalCount = action.payload.totalCount;
         state.page = action.payload.page;
@@ -362,6 +381,7 @@ const tradieApprovalSlice = createSlice({
             (approval) => approval.id === id && approval.status === "PENDING",
           ),
         );
+        state.rowsQuery = { ...state.query };
       })
       .addCase(reloadAfterDecision.rejected, (state, action) => {
         if (action.meta.requestId === state.latestFetchId)
@@ -385,6 +405,7 @@ const tradieApprovalSlice = createSlice({
         state.totalCount = action.payload.totalCount;
         state.page = action.payload.page;
         state.pageSize = action.payload.pageSize;
+        state.rowsQuery = { ...state.query };
       })
       .addCase(fetchApprovalsByQuery.rejected, (state, action) => {
         if (action.meta.requestId !== state.latestFetchId) return;

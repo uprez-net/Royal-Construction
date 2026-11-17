@@ -1,4 +1,8 @@
-import { TradieScheduleStatus } from "@prisma/client";
+import {
+  TradieApprovalActionType,
+  TradieApprovalStatus,
+  TradieScheduleStatus,
+} from "@prisma/client";
 import type { DomainDb } from "../db";
 import { DomainNotFoundError, DomainTransitionError } from "../errors";
 import {
@@ -14,11 +18,47 @@ export const INACTIVE_SCHEDULE_STATUSES: TradieScheduleStatus[] = [
 ];
 
 export async function requireActiveTradie(tradieId: string, db: DomainDb) {
-  const tradie = await db.tradie.findUnique({ where: { id: tradieId } });
+  return activeTradie(await db.tradie.findUnique({ where: { id: tradieId } }));
+}
+
+/** The one not-found and removed check, for both reads below. */
+function activeTradie<T extends { archivedAt: Date | null }>(
+  tradie: T | null,
+): T {
   if (!tradie) throw new DomainNotFoundError("Tradie not found.");
   if (tradie.archivedAt) {
     throw new DomainTransitionError(
       "This tradie has been removed from the active directory.",
+    );
+  }
+  return tradie;
+}
+
+/**
+ * A tradie who can take new work: active, and with no removal request waiting
+ * (issue #529). Booking someone the office has asked to remove only adds a
+ * booking the removal then has to cancel, so new work waits until the removal
+ * is approved or rejected. Work already booked is not affected.
+ */
+export async function requireBookableTradie(tradieId: string, db: DomainDb) {
+  const tradie = activeTradie(
+    await db.tradie.findUnique({
+      where: { id: tradieId },
+      include: {
+        approvals: {
+          where: {
+            actionType: TradieApprovalActionType.TRADIE_REMOVAL,
+            status: TradieApprovalStatus.PENDING,
+          },
+          select: { id: true },
+          take: 1,
+        },
+      },
+    }),
+  );
+  if (tradie.approvals?.length) {
+    throw new DomainTransitionError(
+      `${tradie.name} has a removal request waiting for approval, so they cannot take new work. Approve or reject the removal first.`,
     );
   }
   return tradie;

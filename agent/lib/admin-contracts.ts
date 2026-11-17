@@ -31,6 +31,7 @@ export const resolveApprovalInputSchema = z
     resolution: z.enum(["approved", "rejected"]),
     rejectionReason: z.string().trim().max(2_000).optional(),
     incidentResolution: z.string().trim().max(10_000).optional(),
+    reviewedBookingIds: z.array(z.string().uuid()).max(500).optional(),
   })
   .refine(
     (value) =>

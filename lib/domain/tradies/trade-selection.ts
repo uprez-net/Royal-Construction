@@ -19,7 +19,11 @@ import {
 import { attributionUserId, type DomainPrincipal } from "../principal";
 import { recordTradieActivity } from "../audit/tradie-activity-log";
 import { authorizeProject } from "../access/projects";
-import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
+import {
+  INACTIVE_SCHEDULE_STATUSES,
+  requireActiveTradie,
+  requireBookableTradie,
+} from "./lifecycle";
 import {
   activityAcceptsTrade,
   bookingTrade,
@@ -471,17 +475,18 @@ export async function selectTradeQuote(
   db: DomainDb,
 ): Promise<SelectedTradeQuote> {
   const project = await authorizeProject(principal, input.projectId, db);
-  const tradie = await requireActiveTradie(input.tradieId, db);
-  const asked = input.trade?.trim() || tradie.trade.trim();
-  const trade = tradieTradeLabel(tradie, asked);
-  if (!trade) {
-    throw new DomainValidationError(
-      `${tradie.name} is not listed under ${asked}.`,
-    );
-  }
-  const key = tradeKey(trade);
 
   return serializable(db, async (tx) => {
+    // Inside the transaction, so a removal requested a moment ago is seen.
+    const tradie = await requireBookableTradie(input.tradieId, tx);
+    const asked = input.trade?.trim() || tradie.trade.trim();
+    const trade = tradieTradeLabel(tradie, asked);
+    if (!trade) {
+      throw new DomainValidationError(
+        `${tradie.name} is not listed under ${asked}.`,
+      );
+    }
+    const key = tradeKey(trade);
     const live = await tx.tradeSelection.findFirst({
       select: { status: true, tradie: { select: { name: true } } },
       where: {
