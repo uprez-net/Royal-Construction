@@ -50,7 +50,7 @@ export function ProjectHandoffPanel({
   const milestoneCount = paymentSchedule.length;
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
           description="Create the Project from the signed Contract and seed the costing report from the internal cost lines."

@@ -39,6 +39,7 @@ import {
 import { EnvelopeSendConfirm, SigningTracker } from "./offer-workspace-signing";
 import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 import { cn } from "@/lib/utils";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 
 type TenderPanelProps = {
   readonly status: OfferWorkspaceStatus;
@@ -108,7 +109,7 @@ export function TenderPanel({
         locked={isSent || isSigned || isDeclined}
       />
 
-      <Card className="border-border/70 bg-white/95 shadow-sm">
+      <Card className="border-border/70 bg-card/95 shadow-sm">
         <CardHeader className="border-b border-border/70">
           <OfferCardHeading
             description="Generate the fixed-price Tender from the agreed offer, then send it for signature via DocuSign (customer, then builder)."
@@ -463,7 +464,7 @@ function TenderPreview({
         : "Draft";
 
   return (
-    <article className="grid gap-4 rounded-lg border border-border bg-background p-4">
+    <article className="grid gap-4">
       <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border/70 pb-3">
         <div>
           <p className="font-mono text-xs text-muted-foreground">
@@ -476,16 +477,16 @@ function TenderPreview({
             {ownerNamesLine} · {job.siteAddress}
           </p>
         </div>
-        <span className="rounded-full border border-royal-gold/40 bg-royal-gold-light/40 px-2.5 py-1 text-xs font-medium text-royal-gold-dark">
+        <span className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-royal-gold-ink-text">
           {stateLabel}
         </span>
       </header>
 
-      <div className="rounded-lg bg-royal-gold-light/30 px-4 py-3">
+      <div className="rounded-lg bg-muted/50 px-4 py-3">
         <p className="text-xs uppercase tracking-wide text-muted-foreground">
           Contract value inc GST
         </p>
-        <p className="font-heading text-2xl font-semibold">
+        <p className="font-mono text-2xl font-semibold tabular-nums">
           {formatCurrency(contractValue)}
         </p>
       </div>
@@ -511,28 +512,25 @@ function TenderPreview({
 
       <div>
         <p className={cn("mb-2", GROUP_HEADING_CLASS)}>Payment schedule</p>
-        <div className="overflow-hidden rounded-lg border border-border/70">
-          <table className="w-full text-[13px]">
-            <tbody>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableBody>
               {paymentSchedule.map((row) => (
-                <tr
-                  key={row.id}
-                  className="border-b border-border/60 last:border-b-0"
-                >
-                  <td className="px-3 py-1.5 font-medium">{row.stageName}</td>
-                  <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+                <TableRow key={row.id}>
+                  <TableCell className="font-medium">{row.stageName}</TableCell>
+                  <TableCell className="text-right font-mono text-muted-foreground">
                     {formatPercent(row.percentOfContract)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono">
+                  </TableCell>
+                  <TableCell className="text-right font-mono">
                     {formatCurrency(contractValue * row.percentOfContract)}
-                  </td>
-                  <td className="px-3 py-1.5 text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="whitespace-normal text-muted-foreground">
                     {row.trigger}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </div>
 

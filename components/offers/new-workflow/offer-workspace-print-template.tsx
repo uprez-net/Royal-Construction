@@ -304,8 +304,8 @@ export function OfferWorkspacePrintTemplate(
     <div
       className={
         props.screen
-          ? "bg-white text-foreground print:hidden"
-          : "hidden bg-white text-foreground print:block"
+          ? "bg-card text-foreground print:hidden"
+          : "hidden bg-card text-foreground print:block"
       }
       data-offer-print-template={props.screen ? "screen" : "true"}
     >
@@ -358,11 +358,11 @@ function PrintCoverPage({
         <h1 className="font-sans text-4xl font-bold uppercase tracking-wide text-sidebar">
           Building Proposal
         </h1>
-        <p className="mt-2 text-xl font-semibold text-royal-gold-dark">
+        <p className="mt-2 text-xl font-semibold text-sidebar">
           {job.buildType}
         </p>
       </div>
-      <div className="mt-6 border-t border-royal-gold pt-5">
+      <div className="mt-6 border-t border-border pt-5">
         <dl className="grid grid-cols-[50mm_minmax(0,1fr)] text-sm">
           <CoverRow label={ownerLabel} value={ownerNamesLine} />
           {job.currentLocation.trim() ? (
@@ -538,7 +538,7 @@ function PrintSnapshotPage({
               key={cell.label}
               className={
                 cell.emphasis
-                  ? "bg-sidebar px-2 py-4 text-white"
+                  ? "px-2 py-4 font-semibold text-sidebar"
                   : "border-r border-border px-2 py-4 last:border-r-0"
               }
             >
@@ -631,18 +631,23 @@ function PrintInvestmentPage({
       <PrintSection eyebrow="Investment summary" title={draft.headline}>
         <p className="max-w-[155mm] text-base leading-7">{draft.introText}</p>
       </PrintSection>
-      <div className="mt-8 rounded-lg border border-border bg-royal-gold-light/60 p-6 text-center">
+      <div className="mt-8 rounded-lg border border-border bg-card p-6 text-center">
         {data.savingAmount !== null && data.savingAmount > 0 ? (
-          <p className="text-sm font-semibold text-royal-gold-dark">
-            Standard price {formatCurrency(props.standardPriceIncGst)} -{" "}
-            {props.priceAdjustmentLabel || "saving"}{" "}
-            {formatCurrency(data.savingAmount)}
+          <p className="text-sm font-semibold text-sidebar">
+            Standard price{" "}
+            <span className="font-mono tabular-nums">
+              {formatCurrency(props.standardPriceIncGst)}
+            </span>{" "}
+            - {props.priceAdjustmentLabel || "saving"}{" "}
+            <span className="font-mono tabular-nums">
+              {formatCurrency(data.savingAmount)}
+            </span>
           </p>
         ) : null}
         <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Your fixed contract price
         </p>
-        <p className="mt-1 font-heading text-5xl font-semibold text-sidebar">
+        <p className="mt-1 font-mono text-5xl font-semibold text-sidebar">
           {formatCurrency(props.customerPrice.selectedContractValueIncGst)}
         </p>
         <p className="mt-2 font-mono text-sm text-muted-foreground">
@@ -696,9 +701,13 @@ function PrintInclusionsPage({
       </PrintSection>
       <table className="mt-6 w-full border-collapse text-left text-sm">
         <thead>
-          <tr className="border-y border-border bg-muted/70 text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="w-[45mm] py-3 pr-4 font-semibold">Category</th>
-            <th className="px-4 py-3 font-semibold">Specification</th>
+          <tr className="border-t border-border bg-card text-xs uppercase tracking-wide text-sidebar">
+            <th className="w-[45mm] py-3 pr-4 font-semibold border-b border-royal-gold">
+              Category
+            </th>
+            <th className="px-4 py-3 font-semibold border-b border-royal-gold">
+              Specification
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -763,12 +772,14 @@ function PrintAllowancesPage({
       </PrintSection>
       <table className="mt-6 w-full border-collapse text-left text-sm">
         <thead>
-          <tr className="border-y border-border bg-muted/70 text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="py-3 pr-4 font-semibold">Item</th>
-            <th className="w-[30mm] px-4 py-3 text-right font-semibold">
+          <tr className="border-t border-border bg-card text-xs uppercase tracking-wide text-sidebar">
+            <th className="py-3 pr-4 font-semibold border-b border-royal-gold">
+              Item
+            </th>
+            <th className="w-[30mm] px-4 py-3 text-right font-semibold border-b border-royal-gold">
               Allowance
             </th>
-            <th className="w-[70mm] px-4 py-3 font-semibold">
+            <th className="w-[70mm] px-4 py-3 font-semibold border-b border-royal-gold">
               If the actual cost differs
             </th>
           </tr>
@@ -833,10 +844,16 @@ function PrintTermsPage({
       </PrintSection>
       <table className="mt-6 w-full border-collapse text-left text-sm">
         <thead>
-          <tr className="border-y border-border bg-muted/70 text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="py-3 pr-4 font-semibold">Stage</th>
-            <th className="px-4 py-3 font-semibold">Amount</th>
-            <th className="px-4 py-3 font-semibold">Trigger</th>
+          <tr className="border-t border-border bg-card text-xs uppercase tracking-wide text-sidebar">
+            <th className="py-3 pr-4 font-semibold border-b border-royal-gold">
+              Stage
+            </th>
+            <th className="px-4 py-3 font-semibold border-b border-royal-gold">
+              Amount
+            </th>
+            <th className="px-4 py-3 font-semibold border-b border-royal-gold">
+              Trigger
+            </th>
           </tr>
         </thead>
         <tbody>

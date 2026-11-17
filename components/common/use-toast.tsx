@@ -57,16 +57,16 @@ export function ToastContainer({
             style={{
               background:
                 toast.type === "success"
-                  ? "rgba(22,163,74,0.1)"
+                  ? "var(--success-light)"
                   : toast.type === "error"
-                    ? "rgba(220,38,38,0.1)"
-                    : "rgba(37,99,235,0.1)",
+                    ? "var(--destructive-light)"
+                    : "var(--info-light)",
               color:
                 toast.type === "success"
-                  ? "#16A34A"
+                  ? "var(--success-ink)"
                   : toast.type === "error"
-                    ? "#DC2626"
-                    : "#2563EB",
+                    ? "var(--destructive-ink)"
+                    : "var(--info-ink)",
             }}
           >
             {toast.type === "success" ? (

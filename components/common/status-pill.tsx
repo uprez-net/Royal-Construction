@@ -6,21 +6,18 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 /**
- * Status tones, on the three-role token pattern: `-light` surface + `-ink` text.
- * Every pair is verified ≥4.5:1 (see audits/impeccable-fix-spec.md §1).
+ * Status tones: a 22px tint pill with a 6px currentColor dot and a text label,
+ * so a status never rests on colour alone. Each tone is a -light surface with
+ * its -ink text.
  *
- * Previously this map was raw palette (`bg-emerald-100 text-emerald-700`, …),
- * which meant every status badge routed through this component stayed off-token
- * no matter what its call site did. `primary` also mapped to *blue*, not Site
- * Teal, so `tone="primary"` contradicted its own name.
- *
- * `primary` uses `bg-muted` rather than a primary tint deliberately: text-primary
- * on primary/10 measures 4.40:1, just under AA, while on --muted it reaches 4.55:1.
+ * `purple` has no place in the system. It keeps its name so existing callers
+ * still compile, and it renders as info.
  */
 const statusToneMap = {
-  purple: "bg-accent-purple-light text-accent-purple",
-  primary: "bg-muted text-primary",
-  neutral: "bg-muted text-muted-foreground",
+  purple: "bg-info-light text-info-ink",
+  info: "bg-info-light text-info-ink",
+  primary: "bg-royal-gold-light text-royal-gold-ink-text",
+  neutral: "bg-muted text-foreground/80",
   success: "bg-success-light text-success-ink",
   warning: "bg-warning-light text-warning-ink",
   danger: "bg-destructive-light text-destructive-ink",
@@ -37,10 +34,14 @@ export function StatusPill({
   return (
     <Badge
       className={cn(
-        "rounded-full px-3 py-1 text-xs font-medium",
+        "h-[22px] gap-1.5 px-2.5 text-[0.71875rem] font-semibold",
         statusToneMap[tone],
       )}
     >
+      <span
+        aria-hidden="true"
+        className="size-1.5 shrink-0 rounded-full bg-current"
+      />
       {children}
     </Badge>
   );

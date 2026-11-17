@@ -98,10 +98,10 @@ export function AgentOutreach({
   return (
     <section
       aria-label={`Outreach email to the ${humanizeEnum(outreach.party).toLowerCase()}`}
-      className="overflow-hidden rounded-xl border border-royal-gold/35 bg-royal-gold-light/25"
+      className="overflow-hidden rounded-lg border border-border bg-card"
     >
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-royal-gold/25 px-3 py-2.5">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-royal-gold text-royal-gold-ink">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-3 py-2.5">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-foreground/80">
           <Mail aria-hidden="true" className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
@@ -135,7 +135,7 @@ export function AgentOutreach({
         </div>
       </header>
 
-      <dl className="flex flex-col gap-1.5 border-b border-royal-gold/20 bg-background/70 px-3 py-2.5 text-xs">
+      <dl className="flex flex-col gap-1.5 border-b border-border bg-background/70 px-3 py-2.5 text-xs">
         <Row label="From">
           <span className="text-foreground/80">Royal Constructions</span>
         </Row>
@@ -196,7 +196,7 @@ export function AgentOutreach({
         ) : null}
       </dl>
 
-      <div className="flex items-center gap-1 border-b border-royal-gold/20 px-2 py-1.5">
+      <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
         <ViewTab
           active={view === "preview"}
           label="Preview"
@@ -261,7 +261,7 @@ export function AgentOutreach({
       )}
 
       {outreach.lastFollowUpAt ? (
-        <p className="border-t border-royal-gold/20 px-3 py-2 text-[11px] text-muted-foreground">
+        <p className="border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
           Last follow-up{" "}
           {formatSydneyDateTime(new Date(outreach.lastFollowUpAt))}
         </p>
@@ -341,18 +341,18 @@ function previewDocument(body: string) {
     margin: 0;
     padding: 16px;
     background: #ffffff;
-    color: #1f2937;
+    color: #343434;
     font: 400 13px/1.6 Manrope, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     word-break: break-word;
   }
   p { margin: 0 0 0.85em; }
   p:last-child { margin-bottom: 0; }
-  a { color: #8a6a1f; }
-  strong { color: #111827; }
+  a { color: #926100; }
+  strong { color: #343434; }
   table { border-collapse: collapse; width: 100%; }
-  td, th { border: 1px solid #e5e7eb; padding: 6px 8px; text-align: left; }
+  td, th { border: 1px solid #e6e2d9; padding: 6px 8px; text-align: left; }
   img { max-width: 100%; height: auto; }
   ul, ol { margin: 0 0 0.85em; padding-left: 1.25em; }
-  blockquote { margin: 0 0 0.85em; padding-left: 0.75em; border-left: 3px solid #e5e7eb; color: #4b5563; }
+  blockquote { margin: 0 0 0.85em; padding-left: 0.75em; border-left: 3px solid #e6e2d9; color: #6b675f; }
 </style></head><body>${safeBody}</body></html>`;
 }

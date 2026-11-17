@@ -33,10 +33,19 @@ const emptyHint = "Only leads that don't have a project yet appear here.";
 const tileClassName =
   "min-w-0 break-words rounded-lg border border-border/70 bg-card p-4 text-sm text-card-foreground";
 
+// Token pills: tint + ink, 22px, the status icon carries the kind of state.
+const chipClassName =
+  "mt-1.5 inline-flex h-[22px] items-center justify-center whitespace-nowrap rounded-full px-2.5 text-[11.5px] font-semibold";
+
 function LeadStatusBadge({ lead }: { lead: Lead }) {
   if (lead.stage === "Quoted") {
     return (
-      <span className="mt-1.5 inline-flex items-center justify-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800">
+      <span
+        className={cn(
+          chipClassName,
+          "bg-royal-gold-light text-royal-gold-ink-text",
+        )}
+      >
         <Send className="mr-1.5 h-4 w-4" />
         Quoted - Awaiting Feedback
       </span>
@@ -44,7 +53,12 @@ function LeadStatusBadge({ lead }: { lead: Lead }) {
   }
   if (lead.creatingOffer) {
     return (
-      <span className="mt-1.5 inline-flex items-center justify-center rounded-full bg-royal-gold-light px-2.5 py-0.5 text-xs font-medium text-royal-gold-ink">
+      <span
+        className={cn(
+          chipClassName,
+          "bg-royal-gold-light text-royal-gold-ink-text",
+        )}
+      >
         <Pencil className="mr-1.5 h-4 w-4" />
         Update Offer
       </span>
@@ -52,15 +66,15 @@ function LeadStatusBadge({ lead }: { lead: Lead }) {
   }
   if (lead.runStatus === "RUNNING") {
     return (
-      <span className="mt-1.5 inline-flex items-center justify-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-        <Sparkles className="mr-1.5 h-4 w-4 animate-pulse motion-reduce:animate-none" />
+      <span className={cn(chipClassName, "bg-info-light text-info-ink")}>
+        <Sparkles className="mr-1.5 h-4 w-4" />
         Generating Offer
       </span>
     );
   }
   if (lead.runStatus === "COMPLETED") {
     return (
-      <span className="mt-1.5 inline-flex items-center justify-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+      <span className={cn(chipClassName, "bg-success-light text-success-ink")}>
         <Sparkles className="mr-1.5 h-4 w-4" />
         Offer Generated
       </span>
@@ -68,8 +82,13 @@ function LeadStatusBadge({ lead }: { lead: Lead }) {
   }
   if (lead.runStatus === "FAILED") {
     return (
-      <span className="mt-1.5 inline-flex items-center justify-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-        <Sparkles className="mr-1.5 h-4 w-4 animate-pulse motion-reduce:animate-none" />
+      <span
+        className={cn(
+          chipClassName,
+          "bg-destructive-light text-destructive-ink",
+        )}
+      >
+        <Sparkles className="mr-1.5 h-4 w-4" />
         Offer Generation Failed
       </span>
     );

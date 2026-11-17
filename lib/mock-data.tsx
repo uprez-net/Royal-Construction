@@ -10,6 +10,7 @@ import {
   Hammer,
   LayoutDashboard,
   Megaphone,
+  Package,
   // MessagesSquare,
   // PencilRuler,
   ReceiptText,
@@ -61,7 +62,7 @@ export const navigationItems: NavItem[] = [
   {
     slug: "projects",
     label: "Projects",
-    icon: <ClipboardList className="size-4" />,
+    icon: <Package className="size-4" />,
   },
   // {
   //   slug: "milestones",

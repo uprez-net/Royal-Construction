@@ -1,4 +1,5 @@
 import {
+  Prisma,
   TradeSelectionStatus,
   TradieApprovalActionType,
   TradieApprovalStatus,
@@ -86,6 +87,14 @@ export type ResolveTradieApprovalInput = {
   readonly resolution: "approved" | "rejected";
   readonly rejectionReason?: string | null;
   readonly incidentResolution?: string | null;
+  /**
+   * A removal approve only: the ids of the unfinished bookings the approver
+   * was shown. The removal cancels every one, so it is refused without them,
+   * and refused unless they are exactly the tradie's unfinished bookings now
+   * (issue #526). Ids, not a count: one booking done and another added keeps
+   * the count and would cancel a booking nobody reviewed.
+   */
+  readonly reviewedBookingIds?: readonly string[] | null;
 };
 
 export type ResolvedTradieApproval = {
@@ -186,6 +195,30 @@ export async function resolveTradieApproval(
         }
 
         case TradieApprovalActionType.TRADIE_REMOVAL: {
+          // The same bookings getTradieRemovalImpact shows the approver.
+          const bookings = await tx.tradieSchedule.findMany({
+            where: {
+              tradieId: approval.tradieId,
+              status: { notIn: INACTIVE_SCHEDULE_STATUSES },
+            },
+            select: { id: true, projectId: true },
+          });
+          const reviewed = input.reviewedBookingIds;
+          if (!reviewed) {
+            throw new DomainValidationError(
+              "Approving a removal cancels the tradie's unfinished bookings, so it needs the bookings that were reviewed. Open the request to review them.",
+              "reviewedBookingIds",
+            );
+          }
+          const reviewedSet = new Set(reviewed);
+          if (
+            reviewedSet.size !== bookings.length
+            || bookings.some((booking) => !reviewedSet.has(booking.id))
+          ) {
+            throw new DomainTransitionError(
+              `This tradie's unfinished bookings changed since they were reviewed (${bookings.length} now). Review them again before approving.`,
+            );
+          }
           const archived = await tx.tradie.updateMany({
             where: { id: approval.tradieId, archivedAt: null },
             data: { archivedAt: new Date(), isFavourite: false },
@@ -195,13 +228,6 @@ export async function resolveTradieApproval(
               "This tradie has already been removed.",
             );
           }
-          const bookings = await tx.tradieSchedule.findMany({
-            where: {
-              tradieId: approval.tradieId,
-              status: { notIn: INACTIVE_SCHEDULE_STATUSES },
-            },
-            select: { projectId: true },
-          });
           const cancelled = await tx.tradieSchedule.updateMany({
             where: {
               tradieId: approval.tradieId,
@@ -454,7 +480,17 @@ export async function resolveTradieApproval(
     };
   };
 
-  return "$transaction" in db ? db.$transaction(run) : run(db);
+  // A removal approve (the only caller that sends reviewed bookings) runs
+  // Serializable: a booking added between the review check and the
+  // cancellation aborts the approve instead of being cancelled unreviewed.
+  // Only that one: the bulk approve runs five resolves at once, and
+  // Serializable on all of them would abort each other on these small tables.
+  if (!("$transaction" in db)) return run(db);
+  return input.reviewedBookingIds
+    ? db.$transaction(run, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      })
+    : db.$transaction(run);
 }
 
 /** An admin's decision on a booking's approval, on the tradie's history. */

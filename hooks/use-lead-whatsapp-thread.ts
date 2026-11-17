@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useWhatsAppAvailability } from "@/context/WhatsAppAvailabilityContext";
 import {
   fetchWhatsAppThread,
   markWhatsAppRead,
@@ -15,9 +16,11 @@ import type {
 /**
  * How often an open thread re-reads itself. A reply that lands while the
  * modal is open has to appear without a reload (issue #333); the webhook
- * writes it within seconds, so a short poll is the whole mechanism.
+ * writes it within seconds, so a poll is the whole mechanism. Each tick is a
+ * function invocation and a database read, and returning to the tab re-reads
+ * at once, so it need not be quick. Off entirely when WhatsApp is.
  */
-export const WHATSAPP_THREAD_POLL_MS = 12_000;
+export const WHATSAPP_THREAD_POLL_MS = 30_000;
 
 type State = {
   thread: WhatsAppThreadDto | null;
@@ -52,6 +55,7 @@ const INITIAL: State = {
 export function useLeadWhatsAppThread(leadId: number) {
   const [state, setState] = useState<State>(INITIAL);
   const inFlight = useRef<AbortController | null>(null);
+  const whatsappEnabled = useWhatsAppAvailability().enabled;
 
   const refresh = useCallback(async () => {
     inFlight.current?.abort();
@@ -148,8 +152,15 @@ export function useLeadWhatsAppThread(leadId: number) {
   }, []);
 
   useEffect(() => {
-    // The first load, then a poll only while somebody can see the page.
+    // The first load, then a poll only while somebody can see the page. With
+    // WhatsApp off the first load still says why; nothing would change after.
     const first = window.setTimeout(() => void refresh(), 0);
+    if (!whatsappEnabled) {
+      return () => {
+        window.clearTimeout(first);
+        inFlight.current?.abort();
+      };
+    }
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
     }, WHATSAPP_THREAD_POLL_MS);
@@ -163,7 +174,7 @@ export function useLeadWhatsAppThread(leadId: number) {
       document.removeEventListener("visibilitychange", onVisible);
       inFlight.current?.abort();
     };
-  }, [refresh]);
+  }, [refresh, whatsappEnabled]);
 
   const messages = mergeWhatsAppMessages(
     state.older,

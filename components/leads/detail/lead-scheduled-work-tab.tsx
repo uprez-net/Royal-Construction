@@ -50,12 +50,12 @@ export function LeadScheduledWorkTab({
           const open = event.currentTarget.open;
           if (open !== taskForm.open) setTaskForm({ ...taskForm, open });
         }}
-        className="rounded-xl border border-border/70 bg-card shadow-sm"
+        className="rounded-xl bg-card shadow-sm ring-1 ring-foreground/4"
       >
         <summary className="min-h-11 cursor-pointer px-4 py-3 font-medium md:hidden">
           Add a task
         </summary>
-        <Card className="rounded-xl border-0 bg-card shadow-none">
+        <Card className="rounded-xl border-0 bg-card shadow-none ring-0">
           <CardHeader className="border-b border-border/70 px-4 pb-4 sm:px-6">
             <CardTitle
               as="h2"
@@ -117,7 +117,7 @@ export function LeadScheduledWorkTab({
         <CardContent className="px-4 pt-4 sm:px-6 sm:pt-5">
           {openTasks.length === 0 ? (
             <div className="mx-auto flex max-w-md flex-col items-center gap-3 py-8 text-center">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
+              <div className="flex size-11 items-center justify-center rounded-lg bg-muted">
                 <CalendarClock
                   className="size-5 text-muted-foreground"
                   aria-hidden="true"

@@ -149,9 +149,9 @@ export function ComplianceSectionCard({
   children,
 }: ComplianceSectionCardProps) {
   const complete =
-    progress !== undefined &&
-    progress.total > 0 &&
-    progress.done >= progress.total;
+    progress !== undefined
+    && progress.total > 0
+    && progress.done >= progress.total;
 
   /**
    * The header, shared by both branches.
@@ -259,7 +259,7 @@ export function ComplianceSectionCard({
     return (
       <Card
         className={cn(
-          "gap-0 self-start overflow-hidden border-dashed bg-muted/20 py-0 shadow-none",
+          "gap-0 self-start overflow-hidden border border-dashed bg-muted/20 py-0 shadow-none",
           className,
         )}
       >
@@ -310,14 +310,14 @@ export function ComplianceSectionCard({
           // Self-start rather than stretch: in the grid a three-row block should
           // not inherit the height of a twelve-row one sitting beside it.
           "self-start",
-          isActive && "border-primary/50 ring-1 ring-primary/20",
+          isActive && "border border-primary/50 ring-1 ring-primary/20",
           // Ready beats "Now", because a card that is merely current is where the
           // work is and a card holding an approved certificate is where the work
           // *finishes* — across a screen of seven blocks that is the one to find.
-          ready && "border-success/50 ring-1 ring-success/25",
+          ready && "border border-success/50 ring-1 ring-success/25",
           // Overdue wins the border outright. All three can be true at once, and
           // of them the one worth finding first is the one somebody is late on.
-          overdue && "border-destructive/50 ring-1 ring-destructive/20",
+          overdue && "border border-destructive/50 ring-1 ring-destructive/20",
           className,
         )}
       >

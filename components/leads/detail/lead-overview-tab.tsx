@@ -713,7 +713,7 @@ export function LeadOverviewTab({
                     {weightedPreview.equation}
                   </span>
                 </span>
-                <span className="font-heading text-lg font-semibold tabular-nums">
+                <span className="font-mono text-lg font-semibold tabular-nums">
                   {weightedPreview.amount}
                 </span>
               </div>

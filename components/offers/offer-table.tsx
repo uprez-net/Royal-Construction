@@ -1,5 +1,4 @@
 "use client";
-import { CardContent } from "../ui/card";
 import { currency, dateFormat } from "@/utils/formatters";
 import { ChevronRight, Layers, ReceiptText } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
@@ -23,6 +22,14 @@ import { OfferStatusBadge } from "./offer-status-badge";
 import { OfferStatus } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { DataTableSkeleton, PageSkeleton, Skeleton } from "../ui/skeleton";
+import {
+  FLUSH_TABLE_CONTENT_CLASS,
+  TABLE_CELL_CLASS,
+  TABLE_HEAD_CELL_CLASS,
+  TABLE_HEAD_ROW_CLASS,
+  TABLE_ROW_CLASS,
+  TABLE_ROW_HOVER_CLASS,
+} from "../ui/table-styles";
 import { isDefaultOfferFilters } from "@/lib/offer/offer-listing-view";
 
 const money = (value: string) => {
@@ -119,16 +126,16 @@ export function OfferTable({
 
   if (loading && offers.items.length === 0) {
     return (
-      <CardContent className="px-5 py-4">
+      <div className={cn("px-4 py-4 sm:px-5", FLUSH_TABLE_CONTENT_CLASS)}>
         <PageSkeleton label="Loading offers">
-          <DataTableSkeleton columnCount={OFFER_TABLE_HEADERS.length} />
+          <DataTableSkeleton columnCount={OFFER_TABLE_HEADERS.length} flush />
         </PageSkeleton>
-      </CardContent>
+      </div>
     );
   }
 
   return (
-    <CardContent className="px-5 py-4">
+    <div className={cn("px-4 py-4 sm:px-5", FLUSH_TABLE_CONTENT_CLASS)}>
       {offers.items.length > 0 ? (
         <div className="flex flex-col gap-3 md:hidden">
           {offers.items.map((group) => (
@@ -142,25 +149,23 @@ export function OfferTable({
       ) : null}
       <div
         className={cn(
-          "overflow-x-auto rounded-lg border border-border/70 bg-background",
+          "min-w-0 overflow-x-auto",
           offers.items.length > 0 && "hidden md:block",
         )}
       >
-        <table className="w-full border-collapse text-sm">
+        <table className="w-full border-collapse text-[13px]">
           <caption className="sr-only">
             Offers grouped by client, each expandable to its version history
           </caption>
-          <thead className="bg-muted/70 text-xs uppercase tracking-wider text-muted-foreground">
+          <thead className={TABLE_HEAD_ROW_CLASS}>
             <tr>
               {OFFER_TABLE_HEADERS.map((header, index) => (
                 <th
                   key={`header-${index}`}
                   scope="col"
                   className={cn(
-                    "px-4 py-3 font-medium",
-                    header.align === "end"
-                      ? "text-right tabular-nums"
-                      : "text-left",
+                    TABLE_HEAD_CELL_CLASS,
+                    header.align === "end" && "text-right tabular-nums",
                     index === 0 && "w-10 px-2",
                   )}
                 >
@@ -226,8 +231,11 @@ export function OfferTable({
           </tbody>
         </table>
       </div>
-      <OfferPagination offers={offers} onPageChange={handlePageChange} />
-    </CardContent>
+      {/* The table runs edge to edge from md up, so the count and pages keep their gutter here. */}
+      <div className={cn(offers.totalCount > 0 && "md:px-5 md:pb-4")}>
+        <OfferPagination offers={offers} onPageChange={handlePageChange} />
+      </div>
+    </div>
   );
 }
 
@@ -287,13 +295,15 @@ function OfferMobileCard({
           {latest.sentAt ? (
             <div className="flex gap-1.5">
               <dt className="text-muted-foreground">Sent</dt>
-              <dd>{day(latest.sentAt)}</dd>
+              <dd className="font-mono tabular-nums">{day(latest.sentAt)}</dd>
             </div>
           ) : null}
           {latest.acceptedAt ? (
             <div className="flex gap-1.5">
               <dt className="text-muted-foreground">Approved</dt>
-              <dd>{day(latest.acceptedAt)}</dd>
+              <dd className="font-mono tabular-nums">
+                {day(latest.acceptedAt)}
+              </dd>
             </div>
           ) : null}
         </dl>
@@ -353,15 +363,21 @@ function OfferMobileCard({
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Created</dt>
-                    <dd>{day(revision.createdAt)}</dd>
+                    <dd className="font-mono tabular-nums">
+                      {day(revision.createdAt)}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Sent</dt>
-                    <dd>{day(revision.sentAt)}</dd>
+                    <dd className="font-mono tabular-nums">
+                      {day(revision.sentAt)}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Approved</dt>
-                    <dd>{day(revision.acceptedAt)}</dd>
+                    <dd className="font-mono tabular-nums">
+                      {day(revision.acceptedAt)}
+                    </dd>
                   </div>
                 </dl>
               </div>
@@ -403,12 +419,13 @@ function OfferGroupRows({
       <tr
         onClick={() => onOpen(group.leadId)}
         className={cn(
-          "border-t border-border/70 transition-colors",
-          "cursor-pointer hover:bg-muted/40",
+          TABLE_ROW_CLASS,
+          "cursor-pointer",
+          TABLE_ROW_HOVER_CLASS,
           expanded && "bg-muted/30",
         )}
       >
-        <td className="w-10 px-2 py-3">
+        <td className={cn(TABLE_CELL_CLASS, "w-10 px-2")}>
           {hasHistory ? (
             <button
               type="button"
@@ -435,7 +452,9 @@ function OfferGroupRows({
             </button>
           ) : null}
         </td>
-        <td className="px-4 py-3 font-medium">
+        <td
+          className={cn(TABLE_CELL_CLASS, "font-mono font-medium tabular-nums")}
+        >
           {/* stopPropagation: the row's click would push the same route again,
               and on cmd-click it would navigate this tab as well as opening
               the new one. */}
@@ -447,16 +466,16 @@ function OfferGroupRows({
             {group.reference}
           </Link>
         </td>
-        <td className="px-4 py-3">{group.lead?.name || "N/A"}</td>
-        <td className="px-4 py-3">
+        <td className={TABLE_CELL_CLASS}>{group.lead?.name || "N/A"}</td>
+        <td className={TABLE_CELL_CLASS}>
           {group.lead.type.length > 0 ? group.lead.type.join(", ") : "-"}
         </td>
-        <td className="px-4 py-3">
+        <td className={TABLE_CELL_CLASS}>
           <span
             className={cn(
               "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold",
               hasHistory
-                ? "bg-royal-gold-light text-royal-gold-ink"
+                ? "bg-muted text-foreground"
                 : "bg-muted text-muted-foreground",
             )}
           >
@@ -467,22 +486,47 @@ function OfferGroupRows({
             {versionCount === 1 ? "version" : "versions"}
           </span>
         </td>
-        <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
+        <td
+          className={cn(
+            TABLE_CELL_CLASS,
+            "whitespace-nowrap text-right font-mono tabular-nums",
+          )}
+        >
           {money(latest.amount)}
         </td>
-        <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
+        <td
+          className={cn(
+            TABLE_CELL_CLASS,
+            "whitespace-nowrap text-right font-mono tabular-nums",
+          )}
+        >
           {money(latest.gstAmount)}
         </td>
-        <td className="whitespace-nowrap px-4 py-3 text-right font-medium tabular-nums">
+        <td
+          className={cn(
+            TABLE_CELL_CLASS,
+            "whitespace-nowrap text-right font-mono font-medium tabular-nums",
+          )}
+        >
           {money(latest.totalAmount)}
         </td>
-        <td className="whitespace-nowrap px-4 py-3 tabular-nums">
+        <td
+          className={cn(
+            TABLE_CELL_CLASS,
+            "whitespace-nowrap font-mono tabular-nums",
+          )}
+        >
           {day(latest.sentAt)}
         </td>
-        <td className="whitespace-nowrap px-4 py-3 tabular-nums">
+        <td
+          className={cn(
+            TABLE_CELL_CLASS,
+            "whitespace-nowrap font-mono tabular-nums",
+          )}
+        >
           {day(latest.acceptedAt)}
         </td>
-        <td className="px-4 py-3">
+        <td className={TABLE_CELL_CLASS}>
           <OfferStatusBadge
             status={latest.offerStatus}
             onStatusChange={(newStatus) => onStatusChange(latest.id, newStatus)}
@@ -491,65 +535,50 @@ function OfferGroupRows({
       </tr>
 
       {expanded && hasHistory ? (
-        <tr id={panelId} className="border-t border-border/70 bg-muted/20">
+        <tr id={panelId} className={cn(TABLE_ROW_CLASS, "bg-muted/20")}>
           <td colSpan={OFFER_TABLE_HEADERS.length} className="px-4 py-3">
-            <div className="ml-6 border-l-2 border-royal-gold/30 pl-4">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="ml-6 border-l-2 border-border pl-4">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                 Version history
               </p>
-              <div className="overflow-x-auto rounded-md border border-border/70 bg-background">
+              <div className="overflow-x-auto">
                 <table className="w-full border-collapse text-[13px]">
                   <caption className="sr-only">
                     {`Every version of the offer for ${group.lead.name || "this client"}`}
                   </caption>
-                  <thead className="bg-muted/50 text-[10.5px] uppercase tracking-wider text-muted-foreground">
+                  <thead className={TABLE_HEAD_ROW_CLASS}>
                     <tr>
-                      <th
-                        scope="col"
-                        className="px-3 py-2 text-left font-medium"
-                      >
+                      <th scope="col" className={TABLE_HEAD_CELL_CLASS}>
                         Version
                       </th>
                       <th
                         scope="col"
-                        className="px-3 py-2 text-right font-medium"
+                        className={cn(TABLE_HEAD_CELL_CLASS, "text-right")}
                       >
                         Amount (Ex GST)
                       </th>
                       <th
                         scope="col"
-                        className="px-3 py-2 text-right font-medium"
+                        className={cn(TABLE_HEAD_CELL_CLASS, "text-right")}
                       >
                         GST
                       </th>
                       <th
                         scope="col"
-                        className="px-3 py-2 text-right font-medium"
+                        className={cn(TABLE_HEAD_CELL_CLASS, "text-right")}
                       >
                         Total
                       </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-2 text-left font-medium"
-                      >
+                      <th scope="col" className={TABLE_HEAD_CELL_CLASS}>
                         Created
                       </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-2 text-left font-medium"
-                      >
+                      <th scope="col" className={TABLE_HEAD_CELL_CLASS}>
                         Sent At
                       </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-2 text-left font-medium"
-                      >
+                      <th scope="col" className={TABLE_HEAD_CELL_CLASS}>
                         Approved At
                       </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-2 text-left font-medium"
-                      >
+                      <th scope="col" className={TABLE_HEAD_CELL_CLASS}>
                         Status
                       </th>
                     </tr>
@@ -586,7 +615,7 @@ function OfferRevisionRow({
   return (
     <tr
       className={cn(
-        "border-t border-border/70",
+        TABLE_ROW_CLASS,
         revision.isActive && "bg-royal-gold-light/60",
       )}
     >
@@ -601,7 +630,7 @@ function OfferRevisionRow({
             v{revision.revisionNumber}
           </span>
           {revision.isActive ? (
-            <span className="rounded-full bg-royal-gold-ink px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+            <span className="rounded-full bg-royal-gold-light px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-royal-gold-ink-text">
               Active
             </span>
           ) : null}
@@ -612,22 +641,22 @@ function OfferRevisionRow({
           Doc v{revision.version}
         </span>
       </td>
-      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums">
         {money(revision.amount)}
       </td>
-      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums">
         {money(revision.gstAmount)}
       </td>
-      <td className="whitespace-nowrap px-3 py-2 text-right font-medium tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 text-right font-mono font-medium tabular-nums">
         {money(revision.totalAmount)}
       </td>
-      <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums">
         {day(revision.createdAt)}
       </td>
-      <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums">
         {day(revision.sentAt)}
       </td>
-      <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums">
         {day(revision.acceptedAt)}
       </td>
       <td className="px-3 py-2">

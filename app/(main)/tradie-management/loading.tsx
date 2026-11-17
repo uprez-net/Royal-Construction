@@ -1,5 +1,10 @@
 import { cn } from "@/lib/utils";
-import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
+import {
+  KpiBand,
+  MOBILE_METRIC_STRIP_CLASS,
+} from "@/components/common/kpi-band";
+import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
+import { ListToolbar, TableCard } from "@/components/common/list-toolbar";
 import {
   DataTableSkeleton,
   MetricCardSkeleton,
@@ -10,36 +15,46 @@ import {
 export default function TradieManagementSkeleton() {
   return (
     <PageSkeleton label="Loading tradies" className="space-y-6">
-      <div className="rounded-lg border border-border/70 bg-card px-4 py-8 shadow-sm sm:px-6 sm:py-10">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0 space-y-2">
-            <Skeleton className="h-7 w-56" />
-            <Skeleton className="h-5 w-96" />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Skeleton className="h-11 w-32" />
-            <Skeleton className="h-11 w-28" />
-          </div>
+      <div className={PAGE_HEADER_CLASS}>
+        <div className="min-w-0">
+          <Skeleton className="h-8 w-56" />
+          <Skeleton className="mt-1 h-5 w-96 max-w-full" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Skeleton className="h-11 w-32" />
+          <Skeleton className="h-11 w-28" />
         </div>
       </div>
-      <div
-        className={cn(
-          MOBILE_METRIC_STRIP_CLASS,
-          "overflow-hidden sm:grid-cols-3",
-        )}
-      >
+      <KpiBand className={cn(MOBILE_METRIC_STRIP_CLASS, "sm:grid-cols-3")}>
         {Array.from({ length: 3 }, (_, i) => (
-          <MetricCardSkeleton key={i} />
+          <MetricCardSkeleton key={i} foot />
         ))}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Skeleton className="h-11 w-44" />
-        <Skeleton className="h-11 w-full sm:w-64" />
-        <Skeleton className="h-11 w-36" />
-        <Skeleton className="h-11 w-36" />
-        <Skeleton className="h-11 w-28" />
-      </div>
-      <DataTableSkeleton columnCount={7} />
+      </KpiBand>
+      <ListToolbar
+        start={
+          <div className="flex items-center gap-1.5">
+            <Skeleton className="h-11 w-24 rounded-md" />
+            <Skeleton className="h-11 w-20 rounded-md" />
+          </div>
+        }
+      >
+        <Skeleton className="h-11 w-36 rounded-lg" />
+        <Skeleton className="h-11 w-36 rounded-lg" />
+        <Skeleton className="h-11 w-28 rounded-md" />
+        <Skeleton className="h-11 w-full rounded-lg sm:w-55" />
+      </ListToolbar>
+      <TableCard
+        header={
+          <div className="flex gap-1">
+            <Skeleton className="h-11 w-28 rounded-lg" />
+            <Skeleton className="h-11 w-24 rounded-lg" />
+          </div>
+        }
+      >
+        <div className="p-4 sm:p-5 md:p-0">
+          <DataTableSkeleton columnCount={7} flush />
+        </div>
+      </TableCard>
     </PageSkeleton>
   );
 }

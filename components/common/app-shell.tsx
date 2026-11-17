@@ -21,12 +21,18 @@ import {
   getScreenTitle,
   getShellSectionSlug,
   getShellTrail,
+  type ShellCrumb,
 } from "@/utils/shell-nav";
 import Image from "next/image";
 import { Notifications } from "./notifications";
 import { PhoneDock } from "@/components/comms/phone-dock";
 import { PhoneProvider } from "@/components/comms/phone-provider";
 import { NotificationProvider } from "@/context/NotificationContext";
+import {
+  WHATSAPP_OFF,
+  WhatsAppAvailabilityProvider,
+  type WhatsAppAvailability,
+} from "@/context/WhatsAppAvailabilityContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SYDNEY_TZ, sydneyTimeZoneAbbreviation } from "@/lib/dates/sydney";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -41,6 +47,7 @@ export function AppShell({
   isAdmin,
   isSignedIn,
   phoneEnabled = false,
+  whatsapp = WHATSAPP_OFF,
   operationsAgentEnabled,
   // description,
   breadcrumbs,
@@ -54,11 +61,16 @@ export function AppShell({
    * account never asks for a calling credential or polls for calls.
    */
   phoneEnabled?: boolean;
+  /**
+   * WHATSAPP_ENABLED (and calling), read on the server. Off, no WhatsApp
+   * poller in the app starts a timer.
+   */
+  whatsapp?: WhatsAppAvailability;
   // EVE_OPERATIONS_AGENT_ENABLED. Off, the agent channel refuses every
   // request, so a nav entry would only lead to a workspace that cannot answer.
   operationsAgentEnabled: boolean;
   description?: string;
-  breadcrumbs?: string[];
+  breadcrumbs?: ShellCrumb[];
   actions?: ReactNode;
   children: ReactNode;
 }) {
@@ -139,7 +151,7 @@ export function AppShell({
     // the sandbox (where the variable is unset) the height used to drop to
     // auto. The shell then grew with its content, the window scrolled instead
     // of <main>, and the agent workspace collapsed to its composer.
-    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0px))] overflow-hidden bg-[#F7F6F2] text-foreground">
+    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0px))] overflow-hidden bg-background text-foreground">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-background focus:p-3 focus:text-foreground focus:outline-2 focus:outline-ring"
@@ -149,8 +161,8 @@ export function AppShell({
       {/* Clean Light Background matching Email Theme */}
       <div className="flex h-full">
         {/* ── Desktop Sidebar ── */}
-        <aside className="hidden w-16 shrink-0 border-r border-border bg-white text-muted-foreground shadow-sm md:flex md:flex-col md:items-center md:py-4">
-          <div className="mb-5 grid size-10 place-items-center rounded-2xl bg-[#F7F6F2]">
+        <aside className="hidden w-16 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex md:flex-col md:items-center md:py-4">
+          <div className="mb-5 grid size-10 place-items-center rounded-lg bg-background">
             <Image
               src="/favicon.ico"
               alt="Royal Constructions Logo"
@@ -167,20 +179,28 @@ export function AppShell({
                 key={item.slug}
                 href={`/${item.slug}`}
                 className={cn(
-                  "group relative grid size-10 place-items-center rounded-lg transition-colors hover:bg-muted hover:text-foreground",
+                  "group relative grid size-10 place-items-center rounded-lg text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                   item.slug === sectionSlug
-                    && "bg-royal-gold-light text-royal-gold-ink",
+                    && "bg-sidebar-accent text-sidebar-accent-foreground",
                   item.checkAdmin && !isAdmin && "hidden",
                 )}
                 aria-label={item.label}
                 aria-current={item.slug === sectionSlug ? "page" : undefined}
               >
                 {item.icon}
+                {item.slug === sectionSlug ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -left-3 inset-y-2 w-[3px] rounded-r-full bg-royal-gold"
+                  />
+                ) : null}
                 {/* Duplicate of the Link's aria-label; hide it from the a11y
-                    tree so the item is not announced twice. */}
+                    tree so the item is not announced twice. z-50 lifts it
+                    over the content column (and its z-30 top bar), which
+                    otherwise paints across it. Keyboard focus shows it too. */}
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow-xl group-hover:block"
+                  className="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow-xl group-hover:block group-focus-visible:block"
                 >
                   {item.label}
                 </span>
@@ -189,18 +209,21 @@ export function AppShell({
           </nav>
         </aside>
 
-        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {/* --topbar-h is the top bar's fixed height. The bar floats over <main>,
+            which pads its top by the same amount, so the page scrolls up under
+            frosted glass. Anything sticky inside <main> sticks at this offset. */}
+        <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden [--topbar-h:3.5rem] sm:[--topbar-h:4.25rem]">
           {/* ── Mobile Sidebar Sheet ── */}
           <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
             <SheetContent
               side="left"
               showCloseButton={false}
-              className="w-80 max-w-[calc(100vw-2rem)] border-r border-border bg-white p-0 text-foreground"
+              className="w-80 max-w-[calc(100vw-2rem)] border-r border-sidebar-border bg-sidebar p-0 text-sidebar-foreground"
             >
               <div className="flex h-full flex-col">
-                <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-4">
+                <div className="flex items-start justify-between gap-4 border-b border-sidebar-border px-4 py-4">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#F7F6F2]">
+                    <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-background">
                       <Image
                         src="/favicon.ico"
                         alt="Royal Constructions Logo"
@@ -209,7 +232,7 @@ export function AppShell({
                       />
                     </div>
                     <div className="min-w-0">
-                      <SheetTitle className="font-heading truncate text-base font-semibold text-foreground">
+                      <SheetTitle className="font-heading truncate text-base font-semibold text-sidebar-accent-foreground">
                         Royal Constructions
                       </SheetTitle>
                     </div>
@@ -219,7 +242,7 @@ export function AppShell({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="rounded-lg border border-border bg-muted text-muted-foreground hover:bg-border hover:text-foreground"
+                      className="rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-foreground hover:bg-sidebar-border hover:text-sidebar-accent-foreground"
                       aria-label="Close navigation menu"
                     >
                       <X className="size-4" aria-hidden="true" />
@@ -240,20 +263,21 @@ export function AppShell({
                           item.slug === sectionSlug ? "page" : undefined
                         }
                         className={cn(
-                          "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground",
+                          "relative flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                           item.slug === sectionSlug
-                            ? "bg-royal-gold-light text-royal-gold-ink"
-                            : "text-muted-foreground",
+                            && "bg-sidebar-accent text-sidebar-accent-foreground",
                           item.checkAdmin && !isAdmin && "hidden",
                         )}
                       >
+                        {item.slug === sectionSlug ? (
+                          <span
+                            aria-hidden="true"
+                            className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-royal-gold"
+                          />
+                        ) : null}
                         <span
                           aria-hidden="true"
-                          className={cn(
-                            "grid size-9 place-items-center rounded-lg bg-muted text-muted-foreground",
-                            item.slug === sectionSlug
-                              && "bg-royal-gold-light text-royal-gold-ink",
-                          )}
+                          className="grid size-9 place-items-center rounded-lg"
                         >
                           {item.icon}
                         </span>
@@ -264,11 +288,11 @@ export function AppShell({
                 </nav>
 
                 {!isSignedIn ? (
-                  <div className="border-t border-border px-4 py-4">
+                  <div className="border-t border-sidebar-border px-4 py-4">
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
-                        className="flex-1 rounded-lg border-border bg-white text-foreground hover:bg-muted hover:text-foreground"
+                        className="flex-1 rounded-lg border-border bg-card text-foreground hover:bg-muted hover:text-foreground"
                         asChild
                       >
                         <Link href="/sign-in">Sign in</Link>
@@ -283,17 +307,17 @@ export function AppShell({
                     </div>
                   </div>
                 ) : (
-                  <div className="border-t border-border px-4 py-4">
+                  <div className="border-t border-sidebar-border px-4 py-4">
                     <UserButton
                       showName={true}
                       appearance={{
                         elements: {
                           avatarBox: "size-9",
                           userButtonBox:
-                            "w-full! flex! flex-row-reverse!  gap-2 justify-end text-foreground",
+                            "w-full! flex! flex-row-reverse!  gap-2 justify-end text-sidebar-foreground",
                           userButtonTrigger: "w-full",
                           userButtonOuterIdentifier:
-                            "text-base text-foreground",
+                            "text-base text-sidebar-foreground!",
                           userButtonAvatarBox: "w-8 h-8",
                           rootBox: "w-full shadow-xs",
                         },
@@ -311,8 +335,10 @@ export function AppShell({
           </Sheet>
 
           {/* ── Top Header ── */}
-          <header className="shrink-0 z-30 border-b border-border bg-white text-foreground shadow-sm backdrop-blur">
-            <div className="flex w-full items-center justify-between gap-2 px-3 py-2 sm:gap-4 sm:px-6 sm:py-3 lg:px-8">
+          {/* The one piece of glass in the app (DESIGN.md §8). Without
+              backdrop-filter support the bar stays near-opaque cream. */}
+          <header className="absolute inset-x-0 top-0 z-30 h-(--topbar-h) border-b border-border/70 bg-background/95 text-foreground supports-backdrop-filter:bg-background/75 supports-backdrop-filter:backdrop-blur-md supports-backdrop-filter:backdrop-saturate-150">
+            <div className="flex h-full w-full items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6 lg:px-8">
               <div className="flex min-w-0 items-center gap-2 sm:gap-4">
                 <Button
                   variant="ghost"
@@ -324,39 +350,54 @@ export function AppShell({
                   <Menu className="size-4" aria-hidden="true" />
                 </Button>
                 <div className="min-w-0">
-                  <p className="font-heading truncate text-base font-semibold tracking-tight text-royal-gold-ink sm:text-xl">
+                  <p className="font-heading truncate text-base font-semibold tracking-tight text-foreground sm:text-xl">
                     Royal Constructions
                   </p>
-                  <p className="truncate text-xs text-muted-foreground md:hidden">
+                  <p className="truncate text-xs text-foreground/80 md:hidden">
                     {title}
                   </p>
-                  <div className="hidden items-center gap-2 text-xs text-muted-foreground md:flex">
-                    {trail.map((segment, index) => (
-                      <div key={segment} className="flex items-center gap-2">
-                        {index > 0 ? (
-                          <span
-                            className="text-muted-foreground/50"
-                            aria-hidden="true"
-                          >
-                            /
-                          </span>
-                        ) : null}
-                        <span
-                          className={cn(
-                            index === trail.length - 1
-                              && "font-medium text-foreground",
-                          )}
+                  <nav
+                    aria-label="Breadcrumb"
+                    className="hidden min-w-0 md:block"
+                  >
+                    <ol className="flex min-w-0 items-center gap-2 text-xs whitespace-nowrap text-foreground/80">
+                      {trail.map((crumb, index) => (
+                        <li
+                          key={`${crumb.label}-${index}`}
+                          className="flex min-w-0 items-center gap-2 last:shrink"
                         >
-                          {segment}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                          {index > 0 ? (
+                            <span
+                              className="text-foreground/60"
+                              aria-hidden="true"
+                            >
+                              /
+                            </span>
+                          ) : null}
+                          {crumb.href ? (
+                            <Link
+                              href={crumb.href}
+                              className="rounded-sm transition-colors hover:text-foreground hover:underline hover:underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                            >
+                              {crumb.label}
+                            </Link>
+                          ) : (
+                            <span
+                              aria-current="page"
+                              className="truncate font-medium text-foreground"
+                            >
+                              {crumb.label}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  </nav>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="hidden text-right text-xs text-muted-foreground md:block">
+                <div className="hidden text-right text-xs text-foreground/80 md:block">
                   <div className="font-medium text-foreground">
                     {time || "--:--:--"}
                   </div>
@@ -374,7 +415,7 @@ export function AppShell({
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
-                        className="rounded-lg border-border bg-white text-foreground hover:bg-muted hover:text-foreground"
+                        className="rounded-lg border-border bg-card text-foreground hover:bg-muted hover:text-foreground"
                         asChild
                       >
                         <Link href="/sign-in">Sign in</Link>
@@ -406,21 +447,23 @@ export function AppShell({
                 ? // The workspace is its own full-height card; on a phone the
                   // gutter around it only takes room from the transcript, and
                   // the composer pads for the home indicator itself.
-                  "grid h-0 grid-rows-[minmax(0,1fr)] overflow-hidden p-0 sm:px-6 sm:py-4 lg:px-8 lg:py-6"
-                : "flex flex-col overflow-y-auto px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-6",
+                  "grid h-0 grid-rows-[minmax(0,1fr)] overflow-hidden px-0 pt-(--topbar-h) pb-0 sm:px-6 sm:pt-[calc(var(--topbar-h)+1rem)] sm:pb-4 lg:px-8 lg:pt-[calc(var(--topbar-h)+1.5rem)] lg:pb-6"
+                : "flex scroll-pt-(--topbar-h) flex-col overflow-y-auto px-3 pt-[calc(var(--topbar-h)+1rem)] pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:pt-[calc(var(--topbar-h)+1.5rem)] lg:pb-6",
               "scrollbar-none",
               "[-ms-overflow-style:none]",
               "[&::-webkit-scrollbar]:hidden",
             )}
           >
-            {phoneEnabled ? (
-              <PhoneProvider>
-                {children}
-                <PhoneDock />
-              </PhoneProvider>
-            ) : (
-              children
-            )}
+            <WhatsAppAvailabilityProvider value={whatsapp}>
+              {phoneEnabled ? (
+                <PhoneProvider>
+                  {children}
+                  <PhoneDock />
+                </PhoneProvider>
+              ) : (
+                children
+              )}
+            </WhatsAppAvailabilityProvider>
           </main>
         </div>
       </div>

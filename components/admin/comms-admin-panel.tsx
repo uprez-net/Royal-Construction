@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Loader2, XCircle } from "lucide-react";
 
+import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -55,11 +56,13 @@ function Flag({ on, label }: { on: boolean; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-sm">
       {on ? (
-        <CheckCircle2 className="size-4 text-emerald-600" aria-hidden="true" />
+        <CheckCircle2 className="size-4 text-success-ink" aria-hidden="true" />
       ) : (
         <XCircle className="size-4 text-muted-foreground" aria-hidden="true" />
       )}
       {label}
+      {/* The icons are hidden from screen readers, so say the state too. */}
+      <span className="sr-only">{on ? ": on" : ": off"}</span>
     </span>
   );
 }
@@ -179,15 +182,11 @@ export function CommsAdminPanel() {
   // Same header as the other admin pages, outside the cards, so it reads the
   // same while loading or failing.
   const header = (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-        Phone &amp; SMS
-      </h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Which phone provider is active, the team&apos;s phones for lead calls,
-        and texts and calls from numbers no lead has.
-      </p>
-    </div>
+    <PageHeader
+      headingLevel="h1"
+      title="Phone & SMS"
+      description="Which phone provider is active, the team's phones for lead calls, and texts and calls from numbers no lead has."
+    />
   );
 
   if (error) {
@@ -240,6 +239,10 @@ export function CommsAdminPanel() {
             <Flag on={status.browserCalling} label="Browser phone (outbound)" />
             <Flag on={status.voiceAgent} label="Mili answers inbound calls" />
             <Flag
+              on={status.voiceAgentDisclosure}
+              label="Mili answers known callers from records"
+            />
+            <Flag
               on={status.recordingMode === "consented"}
               label="Outbound recording (announced)"
             />
@@ -249,7 +252,7 @@ export function CommsAdminPanel() {
             />
           </div>
           {status.problems.length > 0 ? (
-            <ul className="space-y-1 rounded-md bg-amber-50 p-3 text-sm text-amber-900">
+            <ul className="space-y-1 rounded-md bg-warning-light p-3 text-sm text-warning-ink">
               {status.problems.map((problem) => (
                 <li key={problem} className="flex gap-2">
                   <AlertTriangle

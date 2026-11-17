@@ -4,12 +4,14 @@ import { useMemo } from "react";
 import { HardHat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ResultStatus } from "@/components/common/result-status";
+import { TableCard } from "@/components/common/list-toolbar";
 import type { TradieRow, TradieTableQuery } from "@/types/tradie";
 import { TradieCategory } from "./tabs/tradie-category";
 import { TradieTable } from "./tabs/tradie-table";
 import {
   CLEARED_TRADIE_QUERY,
   TRADIE_VIEW_PANEL_ID,
+  TradieStatusFilters,
   hasActiveTradieFilters,
   tradieViewTabId,
 } from "./tradie-tabs";
@@ -75,8 +77,9 @@ export function TradieBody() {
 
   const filtersActive = hasActiveTradieFilters(query);
 
+  // Sits inside the list's one card, so it draws no surface of its own.
   const groupedEmptyState = (
-    <div className="flex flex-col items-center gap-3 rounded-lg border border-border/70 bg-card px-4 py-16 text-center shadow-sm">
+    <div className="flex flex-col items-center gap-3 px-4 py-16 text-center">
       <HardHat className="size-5 text-muted-foreground" aria-hidden="true" />
 
       <div className="space-y-1">
@@ -124,6 +127,8 @@ export function TradieBody() {
   // directory with no tradies at all shows its own empty state instead.
   const visibleCount = tradies.length === 0 ? null : filteredTradies.length;
 
+  // The one card for both views: the status chips in its header strip, the
+  // table (or the category grid) edge to edge beneath, as on Leads.
   return (
     <div
       role="tabpanel"
@@ -133,7 +138,7 @@ export function TradieBody() {
       className="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       <ResultStatus count={visibleCount} noun="tradie" className="sr-only" />
-      {panel}
+      <TableCard header={<TradieStatusFilters />}>{panel}</TableCard>
     </div>
   );
 }

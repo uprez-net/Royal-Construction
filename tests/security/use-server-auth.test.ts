@@ -133,8 +133,6 @@ const SIGNED_IN_ONLY: Record<string, string> = {};
 // writes offers, leads, files or envelopes, but some return project data: the
 // tradie schedule reads include each schedule's whole project row. Every entry
 // is a follow-up, and the last test fails once one is fixed or removed.
-const TRADIE_APPROVALS =
-  "tradie approvals, called from the browser; tradie domain, outside this pass (follow-up)";
 const TRADIES =
   "tradie records, some called from the browser; tradie domain, outside this pass (follow-up)";
 const TRADIE_SCHEDULES =
@@ -156,11 +154,6 @@ const ALLOWLIST: Record<string, string> = {
   // signed-in caller who posted an id at them. Phase 4 of issue #301 dropped
   // the `"use server"` directive from both, so the surface is gone rather than
   // guarded — the same fix phase 7 applied to lib/data/user.ts.
-  "lib/data/tradie-approvals.ts#fetchApprovalKPI": TRADIE_APPROVALS,
-  "lib/data/tradie-approvals.ts#fetchApprovalKPICached": TRADIE_APPROVALS,
-  "lib/data/tradie-approvals.ts#fetchTradieApprovalById": TRADIE_APPROVALS,
-  "lib/data/tradie-approvals.ts#fetchTradieApprovals": TRADIE_APPROVALS,
-  "lib/data/tradie-approvals.ts#fetchTradieApprovalsCached": TRADIE_APPROVALS,
   "lib/data/tradie-management.ts#exportTradies": TRADIES,
   "lib/data/tradie-management.ts#fetchFilteredTradies": TRADIES,
   "lib/data/tradie-management.ts#fetchTradieKPIData": TRADIES,

@@ -11,6 +11,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  FLUSH_TABLE_CARD_CLASS,
+  FLUSH_TABLE_CONTENT_CLASS,
+} from "@/components/ui/table-styles";
+import {
   Table,
   TableBody,
   TableCell,
@@ -41,6 +45,7 @@ import { FormulaVariablesPanel } from "./shared/formula-variables-panel";
 import { SaveChangesButton } from "./shared/save-changes-button";
 import { COST_SCHEDULE_UNDO_TOAST_ID } from "./shared/undo-toast-ids";
 import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
+import { cn } from "@/lib/utils";
 
 function newRow(phase: string): CostScheduleRow {
   return {
@@ -173,7 +178,12 @@ export function OfferCostScheduleScreen() {
   };
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card
+      className={cn(
+        "border-border/70 bg-card/95 shadow-sm",
+        FLUSH_TABLE_CARD_CLASS,
+      )}
+    >
       <CardHeader className="border-b border-border/70">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <OfferCardHeading
@@ -195,55 +205,51 @@ export function OfferCostScheduleScreen() {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 pt-4">
-        <MobileFilterSelect
-          label="Cost phase to edit"
-          value={selectedMobilePhase ?? "all"}
-          options={[
-            { value: "all", label: "All phases", count: rows.length },
-            ...phases.map(({ phase, items }) => ({
-              value: phase,
-              label: phase || "Unnamed phase",
-              count: items.length,
-            })),
-          ]}
-          onChange={setMobilePhase}
-        />
-        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <OfferSummaryBadge label="total" value={counts.total} />
-          <OfferSummaryBadge label="unpriced" value={counts.none} />
-          <OfferSummaryBadge label="fixed" value={counts.fixed} />
-          <OfferSummaryBadge label="formula" value={counts.formula} />
-          <OfferSummaryBadge label="included" value={counts.included} />
+      <CardContent
+        className={cn("space-y-4 pt-4 md:space-y-0", FLUSH_TABLE_CONTENT_CLASS)}
+      >
+        <div className="space-y-4 md:border-b md:border-border/70 md:px-4 md:py-3">
+          <MobileFilterSelect
+            label="Cost phase to edit"
+            value={selectedMobilePhase ?? "all"}
+            options={[
+              { value: "all", label: "All phases", count: rows.length },
+              ...phases.map(({ phase, items }) => ({
+                value: phase,
+                label: phase || "Unnamed phase",
+                count: items.length,
+              })),
+            ]}
+            onChange={setMobilePhase}
+          />
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            <OfferSummaryBadge label="total" value={counts.total} />
+            <OfferSummaryBadge label="unpriced" value={counts.none} />
+            <OfferSummaryBadge label="fixed" value={counts.fixed} />
+            <OfferSummaryBadge label="formula" value={counts.formula} />
+            <OfferSummaryBadge label="included" value={counts.included} />
+          </div>
         </div>
 
-        <div className="max-w-full overflow-x-auto rounded-lg border border-border bg-card">
-          <Table className="admin-cost-table md:min-w-230 table-fixed border-separate border-spacing-0 text-[13px]">
+        <div className="max-w-full overflow-x-auto">
+          <Table className="admin-cost-table md:min-w-230 table-fixed text-[13px]">
             <colgroup>
               <col className="w-20" />
               <col className="w-72" />
               <col className="w-lg" />
               <col className="w-12" />
             </colgroup>
-            <TableHeader className="bg-muted/60">
+            <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="border-r border-border/70 text-xs uppercase tracking-wide text-muted-foreground">
-                  MAP #
-                </TableHead>
-                <TableHead className="border-r border-border/70 text-xs uppercase tracking-wide text-muted-foreground">
-                  Task / phase
-                </TableHead>
-                <TableHead className="border-r border-border/70 text-xs uppercase tracking-wide text-muted-foreground">
-                  Price / included
-                </TableHead>
-                <TableHead className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Remove
-                </TableHead>
+                <TableHead className="px-2">MAP #</TableHead>
+                <TableHead>Task / phase</TableHead>
+                <TableHead>Price / included</TableHead>
+                <TableHead className="px-2">Remove</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {phases.length === 0 && (
-                <TableRow className="hover:bg-transparent">
+                <TableRow>
                   <TableCell
                     colSpan={4}
                     className="h-32 text-center text-sm text-muted-foreground"
@@ -279,25 +285,27 @@ export function OfferCostScheduleScreen() {
           </Table>
         </div>
 
-        <FormulaVariablesPanel
-          variables={rateConstants}
-          onChange={(key, value) =>
-            dispatch(rateConstantChanged({ key, value }))
-          }
-        />
+        <div className="space-y-4 md:border-t md:border-border/70 md:px-4 md:py-4">
+          <FormulaVariablesPanel
+            variables={rateConstants}
+            onChange={(key, value) =>
+              dispatch(rateConstantChanged({ key, value }))
+            }
+          />
 
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
-        {anyFormulaInvalid && (
-          <p role="alert" className="text-sm text-destructive">
-            {`Save is blocked: ${invalidFormulaCount} formula ${
-              invalidFormulaCount === 1 ? "row needs" : "rows need"
-            } a valid expression.`}
-          </p>
-        )}
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          {anyFormulaInvalid && (
+            <p role="alert" className="text-sm text-destructive">
+              {`Save is blocked: ${invalidFormulaCount} formula ${
+                invalidFormulaCount === 1 ? "row needs" : "rows need"
+              } a valid expression.`}
+            </p>
+          )}
+        </div>
       </CardContent>
       <CardFooter className="justify-end">
         <SaveChangesButton
@@ -343,7 +351,7 @@ function PhaseGroup({
     <>
       <TableRow
         data-mobile-hidden={mobileHidden}
-        className="admin-cost-phase bg-muted/40 hover:bg-muted/40"
+        className="admin-cost-phase bg-muted/40"
       >
         <TableCell colSpan={4} className="py-2">
           <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-2 md:flex md:flex-wrap">
@@ -391,10 +399,7 @@ function PhaseGroup({
             data-mobile-hidden={mobileHidden}
             className="admin-cost-data"
           >
-            <TableCell
-              data-label="Map number"
-              className="border-r border-border/70"
-            >
+            <TableCell data-label="Map number" className="px-2">
               <Input
                 value={row.mapId === undefined ? "" : String(row.mapId)}
                 onChange={(e) => {
@@ -410,10 +415,7 @@ function PhaseGroup({
                 className="h-8 w-16"
               />
             </TableCell>
-            <TableCell
-              data-label="Task description"
-              className="border-r border-border/70"
-            >
+            <TableCell data-label="Task description">
               <Input
                 value={row.task}
                 onChange={(e) => onUpdateRow({ ...row, task: e.target.value })}
@@ -421,10 +423,7 @@ function PhaseGroup({
                 className="h-8"
               />
             </TableCell>
-            <TableCell
-              data-label="Pricing and inclusion"
-              className="border-r border-border/70"
-            >
+            <TableCell data-label="Pricing and inclusion">
               <PriceModeCell
                 row={row}
                 onChange={onUpdateRow}
@@ -435,7 +434,7 @@ function PhaseGroup({
                 }
               />
             </TableCell>
-            <TableCell data-label="Actions">
+            <TableCell data-label="Actions" className="px-2">
               <button
                 type="button"
                 aria-label="Remove task"

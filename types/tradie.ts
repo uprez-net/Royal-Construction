@@ -134,6 +134,8 @@ export interface ApprovalInput {
   type: TradieApprovalActionType;
   payload?: UpdatePriceApprovalPayload | IncidentReportApprovalPayload;
   rejectReason?: string;
+  /** A removal approve: the unfinished bookings its review window showed. */
+  reviewedBookingIds?: string[];
 }
 
 export interface ScheduleApprovalJsonPayload {
@@ -198,6 +200,13 @@ export type TradieApprovalPayload =
   | IncidentReportJsonPayload
   | undefined;
 
+/**
+ * What the queue sorts and counts a request by. "booking" means the date is the
+ * booking's own date, so the request is overdue once that date has passed;
+ * "submitted" means no booking date applies, so the date is when it was asked.
+ */
+export type ApprovalDueKind = "booking" | "submitted";
+
 export interface SafeTradieApproval extends Omit<
   TradieApproval,
   "requestedBy" | "updationData"
@@ -205,4 +214,9 @@ export interface SafeTradieApproval extends Omit<
   tradie: SafeTradie;
   requestBy: string;
   updationData: TradieApprovalPayload;
+  /** Sydney calendar date (YYYY-MM-DD) the request should be decided by. */
+  decisionDue: string;
+  dueKind: ApprovalDueKind;
+  /** A booking-based due date earlier than Sydney today. */
+  overdue: boolean;
 }

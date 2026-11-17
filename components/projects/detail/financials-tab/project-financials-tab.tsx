@@ -16,18 +16,24 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   Plus,
-  Search,
 } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { SectionCard } from "@/components/common/section-card";
+import {
+  FilterChip,
+  FilterChips,
+  ListToolbar,
+  TOOLBAR_BUTTON_CLASS,
+  TOOLBAR_SELECT_TRIGGER_CLASS,
+  ToolbarSearch,
+} from "@/components/common/list-toolbar";
 import { CreateVariationModal } from "@/components/projects/create-variation-modal";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -36,7 +42,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   allocateTradieInvoiceAction,
@@ -504,109 +509,107 @@ function FinancialsTab({ project }: { project: ProjectDetail }) {
         </dl>
       </Card>
 
-      {/* The filter for every stage at once. */}
-      <Card className="gap-3 bg-card p-3 shadow-sm sm:p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="relative min-w-0 flex-1">
-            <Search
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              type="search"
-              value={searchBox}
-              onChange={(event) => {
-                const next = event.target.value;
-                // A search reaches into collapsed parents, so open them
-                // as it starts.
-                if (next.trim() && !searchBox.trim()) setExpanded(true);
-                setSearchBox(next);
-              }}
-              placeholder="Search activities, tradies or invoice numbers"
-              aria-label="Search activities, tradies or invoice numbers"
-              className="pl-9"
-            />
-          </div>
-          <Select
-            value={filter.tradieId ?? "all"}
-            onValueChange={(value) => {
-              writeParams({ tradie: value === "all" ? null : value });
-              if (value !== "all") setExpanded(true);
-            }}
+      {/* The filter for every stage at once. A toolbar on the tab, not a card:
+          the stage cards below are the list it filters. */}
+      <ListToolbar
+        start={
+          <>
+            <FilterChips role="group" aria-label="Show">
+              {FINANCIAL_VIEWS.map((view) => {
+                const selected = filter.view === view;
+                return (
+                  <FilterChip
+                    key={view}
+                    active={selected}
+                    onClick={() => {
+                      // A chip cannot be switched off, as the toggle group
+                      // before it could not: clicking the active one does nothing.
+                      if (selected) return;
+                      writeParams({ view: view === "all" ? null : view });
+                      if (view !== "all") setExpanded(true);
+                    }}
+                  >
+                    {FINANCIAL_VIEW_LABELS[view]}
+                  </FilterChip>
+                );
+              })}
+            </FilterChips>
+            {active ? (
+              <p className="text-sm text-muted-foreground" role="status">
+                Showing {counts.shown} of {counts.total} activities
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  onClick={() => {
+                    setSearchBox("");
+                    writeParams({ search: null, tradie: null, view: null });
+                  }}
+                >
+                  Clear filters
+                </Button>
+              </p>
+            ) : null}
+          </>
+        }
+      >
+        <ToolbarSearch
+          value={searchBox}
+          onChange={(event) => {
+            const next = event.target.value;
+            // A search reaches into collapsed parents, so open them
+            // as it starts.
+            if (next.trim() && !searchBox.trim()) setExpanded(true);
+            setSearchBox(next);
+          }}
+          placeholder="Search activities, tradies or invoice numbers"
+          aria-label="Search activities, tradies or invoice numbers"
+        />
+        <Select
+          value={filter.tradieId ?? "all"}
+          onValueChange={(value) => {
+            writeParams({ tradie: value === "all" ? null : value });
+            if (value !== "all") setExpanded(true);
+          }}
+        >
+          <SelectTrigger
+            className={`${TOOLBAR_SELECT_TRIGGER_CLASS} sm:w-56`}
+            aria-label="Tradie"
           >
-            <SelectTrigger className="w-full lg:w-56" aria-label="Tradie">
-              <SelectValue placeholder="All tradies" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All tradies</SelectItem>
-              {tradies.map((tradie) => (
-                <SelectItem key={tradie.id} value={tradie.id}>
-                  {tradie.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setExpanded(allExpanded ? {} : true)}
-            >
-              {allExpanded ? (
-                <ChevronsDownUp className="size-4" aria-hidden="true" />
-              ) : (
-                <ChevronsUpDown className="size-4" aria-hidden="true" />
-              )}
-              {allExpanded ? "Collapse all" : "Expand all"}
-            </Button>
-            <Button
-              type="button"
-              onClick={() => setRecordFor(null)}
-              disabled={options.length === 0}
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              Record invoice
-            </Button>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            size="sm"
-            value={filter.view}
-            onValueChange={(value) => {
-              if (!value) return;
-              writeParams({ view: value === "all" ? null : value });
-              if (value !== "all") setExpanded(true);
-            }}
-            aria-label="Show"
-            className="flex-wrap"
-          >
-            {FINANCIAL_VIEWS.map((view) => (
-              <ToggleGroupItem key={view} value={view}>
-                {FINANCIAL_VIEW_LABELS[view]}
-              </ToggleGroupItem>
+            <SelectValue placeholder="All tradies" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All tradies</SelectItem>
+            {tradies.map((tradie) => (
+              <SelectItem key={tradie.id} value={tradie.id}>
+                {tradie.name}
+              </SelectItem>
             ))}
-          </ToggleGroup>
-          {active ? (
-            <p className="text-sm text-muted-foreground" role="status">
-              Showing {counts.shown} of {counts.total} activities
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                onClick={() => {
-                  setSearchBox("");
-                  writeParams({ search: null, tradie: null, view: null });
-                }}
-              >
-                Clear filters
-              </Button>
-            </p>
-          ) : null}
-        </div>
-      </Card>
+          </SelectContent>
+        </Select>
+        <Button
+          type="button"
+          variant="outline"
+          className={TOOLBAR_BUTTON_CLASS}
+          onClick={() => setExpanded(allExpanded ? {} : true)}
+        >
+          {allExpanded ? (
+            <ChevronsDownUp className="size-4" aria-hidden="true" />
+          ) : (
+            <ChevronsUpDown className="size-4" aria-hidden="true" />
+          )}
+          {allExpanded ? "Collapse all" : "Expand all"}
+        </Button>
+        <Button
+          type="button"
+          className={TOOLBAR_BUTTON_CLASS}
+          onClick={() => setRecordFor(null)}
+          disabled={options.length === 0}
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          Record invoice
+        </Button>
+      </ListToolbar>
 
       {report.emailedInvoices.length > 0 ? (
         <EmailedInvoices
@@ -770,21 +773,19 @@ function FinancialsSkeleton() {
       role="status"
       aria-label="Loading the project's profit and loss"
     >
-      <Card className="gap-3 bg-card p-3 shadow-sm sm:p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <Skeleton className="h-9 flex-1" />
-          <Skeleton className="h-9 w-full lg:w-56" />
-          <div className="flex gap-2">
-            <Skeleton className="h-9 w-32" />
-            <Skeleton className="h-9 w-36" />
-          </div>
-        </div>
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 pb-3">
+        <div className="flex gap-1">
           {Array.from({ length: 4 }, (_, index) => (
             <Skeleton key={index} className="h-8 w-24" />
           ))}
         </div>
-      </Card>
+        <div className="flex w-full flex-wrap items-center gap-2 pt-2 sm:ml-auto sm:w-auto sm:gap-3 sm:pt-0">
+          <Skeleton className="h-11 w-full sm:w-55" />
+          <Skeleton className="h-11 w-full sm:w-56" />
+          <Skeleton className="h-11 w-32" />
+          <Skeleton className="h-11 w-36" />
+        </div>
+      </div>
       {Array.from({ length: 2 }, (_, stage) => (
         <Card
           key={stage}

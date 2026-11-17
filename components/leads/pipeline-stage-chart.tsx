@@ -81,7 +81,7 @@ export function PipelineStageChart({ metrics }: PipelineStageChartProps) {
               );
             })}
 
-            <div className="mt-3 flex flex-wrap justify-between gap-3 border-t-2 border-foreground pt-3 text-[12.5px]">
+            <div className="mt-3 flex flex-wrap justify-between gap-3 border-t border-border pt-3 text-[12.5px]">
               <span>
                 {metrics.openCount} open{" "}
                 {metrics.openCount === 1 ? "lead" : "leads"}

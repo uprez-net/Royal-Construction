@@ -15,18 +15,22 @@ import {
   Mail,
   AlertCircle,
   Check,
-  Eye,
+  ClipboardCheck,
   ChevronDown,
   ChevronRight,
   RotateCcw,
   Trash2,
-  MessageCircle,
 } from "lucide-react";
 import { Lead } from "@/lib/leads/types";
+import { fetchLead } from "@/lib/leads/leads-service";
 import { EmailFlowModal } from "@/components/leads/modal-ui/email-flow-modal";
+import { LeadCommsModal } from "@/components/leads/comms/lead-comms-modal";
 import { LeadWhatsAppModal } from "@/components/leads/whatsapp/lead-whatsapp-modal";
+import { WhatsAppGlyph } from "@/components/whatsapp/whatsapp-logo";
+import { useCommsAvailability } from "@/hooks/use-comms-availability";
 import { normaliseLeadPhone } from "@/lib/domain/leads/whatsapp/phone";
-import { dialablePhone } from "@/lib/leads/lead-helpers";
+import { STAGE_STYLES, dialablePhone } from "@/lib/leads/lead-helpers";
+import { cn } from "@/lib/utils";
 import { LEAD_TASK_TYPES } from "@/lib/leads/task-presets";
 import {
   completeTask,
@@ -39,6 +43,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
+import {
+  FilterChip,
+  FilterChips,
+  TableCard,
+} from "@/components/common/list-toolbar";
 import { DataTableSkeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -137,62 +146,8 @@ interface FollowupsViewProps {
   onLeadUpdate: (lead: Lead) => void;
   onLeadDelete: (leadId: number) => void;
   showToast: (message: string, type?: "success" | "info" | "error") => void;
-}
-
-const STAGE_CONFIG: Record<string, { bg: string; color: string; dot: string }> =
-  {
-    New: {
-      bg: "var(--royal-gold-light)",
-      color: "var(--royal-gold)",
-      dot: "var(--royal-gold)",
-    },
-    Contacted: {
-      bg: "var(--royal-orange-light)",
-      color: "var(--royal-orange)",
-      dot: "var(--royal-orange)",
-    },
-    Qualified: {
-      bg: "var(--success-light)",
-      color: "var(--success)",
-      dot: "var(--success)",
-    },
-    Quoted: {
-      bg: "var(--accent-purple-light)",
-      color: "var(--accent-purple)",
-      dot: "var(--accent-purple)",
-    },
-    Negotiating: {
-      bg: "var(--info-light)",
-      color: "var(--info)",
-      dot: "var(--info)",
-    },
-    Won: {
-      bg: "var(--success-light)",
-      color: "var(--success)",
-      dot: "var(--success)",
-    },
-    Lost: {
-      bg: "var(--destructive-light)",
-      color: "var(--destructive)",
-      dot: "var(--destructive)",
-    },
-    // Cancelled is now selectable, and without an entry it fell through to a
-    // muted grey pill that read as neutral rather than closed-unsuccessful.
-    Cancelled: {
-      bg: "var(--destructive-light)",
-      color: "var(--destructive)",
-      dot: "var(--destructive)",
-    },
-  };
-
-function getStageConfig(stage: string) {
-  return (
-    STAGE_CONFIG[stage] || {
-      bg: "var(--muted)",
-      color: "var(--muted-foreground)",
-      dot: "var(--muted-foreground)",
-    }
-  );
+  /** The filter the tab opens on: "due now" from the Overdue card. */
+  initialFilter?: "all" | "dueNow";
 }
 
 function getAustralianDate(offsetDays = 0): Date {
@@ -221,8 +176,13 @@ function isDue(t: LeadTaskRow, today: Date): boolean {
 
 interface FollowupItemProps {
   task: LeadTaskRow;
-  /** Only needed to open the email modal, which wants a whole Lead. */
+  /**
+   * The whole Lead the email modal wants, when it is on the page of leads
+   * already loaded. Otherwise it is fetched when Email is pressed.
+   */
   lead: Lead | undefined;
+  /** Calls go through the phone provider (the Phone & SMS window). */
+  callsInApp: boolean;
   onLeadUpdate: (lead: Lead) => void;
   onDone: (taskId: number) => void;
   onReview: (task: LeadTaskRow) => void;
@@ -232,25 +192,52 @@ interface FollowupItemProps {
 function FollowupItem({
   task,
   lead,
+  callsInApp,
   onLeadUpdate,
   onDone,
   onReview,
   showToast,
 }: FollowupItemProps) {
-  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailLead, setEmailLead] = useState<Lead | null>(null);
+  const [loadingEmail, setLoadingEmail] = useState(false);
+  const [showPhone, setShowPhone] = useState(false);
   const [showWhatsApp, setShowWhatsApp] = useState(false);
   const [closing, setClosing] = useState(false);
   // The same phone rule the lead list and the send use. A WhatsApp task on a
   // lead without a usable number says why instead of opening a dead composer.
   const whatsappPhone = normaliseLeadPhone(task.lead.phone);
+  const dial = dialablePhone(task.lead.phone ?? "");
+  // The Leads table's rule: through the phone provider when one is set up, so
+  // the call is placed, logged and recorded; otherwise the device's dialler.
   const handleCall = () => {
-    const dial = dialablePhone(task.lead.phone ?? "");
-    if (dial) window.location.href = `tel:${dial}`;
+    if (callsInApp) {
+      setShowPhone(true);
+      return;
+    }
+    if (dial) window.location.assign(`tel:${dial}`);
+  };
+  // The Tasks tab lists every open task, not just the leads on the table's
+  // current page, so the Lead the email modal needs is fetched when missing
+  // rather than leaving Email disabled on most rows.
+  const handleEmail = async () => {
+    if (lead) {
+      setEmailLead(lead);
+      return;
+    }
+    setLoadingEmail(true);
+    try {
+      const fetched = await fetchLead(task.leadId);
+      if (fetched) setEmailLead(fetched);
+      else showToast("Could not open this lead's email.", "error");
+    } catch {
+      showToast("Could not open this lead's email.", "error");
+    } finally {
+      setLoadingEmail(false);
+    }
   };
 
   const typeLabel =
     LEAD_TASK_TYPES.find((t) => t.value === task.type)?.label ?? task.type;
-  const stageConfig = getStageConfig(task.lead.stage);
   const todayStr = getAustralianDate(0);
   const isToday = task.dueDate
     ? isSameDay(parseISO(task.dueDate), todayStr)
@@ -265,13 +252,22 @@ function FollowupItem({
 
   return (
     <>
-      {showEmailModal && lead
+      {emailLead
         ? createPortal(
             <EmailFlowModal
-              lead={lead}
-              onClose={() => setShowEmailModal(false)}
+              lead={emailLead}
+              onClose={() => setEmailLead(null)}
               onLeadUpdate={onLeadUpdate}
               showToast={showToast}
+            />,
+            document.body,
+          )
+        : null}
+      {showPhone
+        ? createPortal(
+            <LeadCommsModal
+              lead={{ id: task.leadId, name: task.lead.name }}
+              onClose={() => setShowPhone(false)}
             />,
             document.body,
           )
@@ -285,14 +281,14 @@ function FollowupItem({
             document.body,
           )
         : null}
+      {/* Overdue and due-today rows take the Leads table's urgent-row tint
+          (.leads-table tr.urgent-row), so they stand out in the list. */}
       <TableRow
         data-task-row
         className={
-          isOverdue
-            ? "bg-(--destructive-light)/40"
-            : isToday
-              ? "bg-(--warning-light)/70"
-              : undefined
+          isOverdue || isToday
+            ? "bg-[color-mix(in_oklab,var(--warning)_6%,transparent)]"
+            : undefined
         }
       >
         <TableCell data-label="Lead" className="max-w-56">
@@ -309,11 +305,10 @@ function FollowupItem({
           </Link>
           <Badge
             variant="secondary"
-            className="mt-1 border-transparent"
-            style={{
-              backgroundColor: stageConfig.bg,
-              color: stageConfig.color,
-            }}
+            className={cn(
+              "mt-1 border-transparent",
+              STAGE_STYLES[task.lead.stage],
+            )}
           >
             {task.lead.stage}
           </Badge>
@@ -323,13 +318,17 @@ function FollowupItem({
         </TableCell>
         <TableCell
           data-label="Due"
-          className={
-            isOverdue
-              ? "font-medium tabular-nums text-destructive-ink"
-              : "tabular-nums text-muted-foreground"
-          }
+          className="tabular-nums text-muted-foreground"
         >
-          {dueLabel}
+          {isOverdue || isToday ? (
+            // Overdue and due today both carry the warning tone. Orange, not
+            // red: red is reserved for lost, cancelled and declined.
+            <span className="inline-flex h-[22px] items-center rounded-full bg-warning-light px-2.5 text-[11.5px] font-semibold whitespace-nowrap text-warning-ink">
+              {dueLabel}
+            </span>
+          ) : (
+            dueLabel
+          )}
         </TableCell>
         <TableCell
           data-label="Assigned"
@@ -352,8 +351,13 @@ function FollowupItem({
               variant="ghost"
               size="sm"
               className="cursor-pointer"
-              title={`Call ${task.lead.name}`}
+              title={
+                callsInApp || dial
+                  ? `Call ${task.lead.name}`
+                  : "This lead has no phone number."
+              }
               aria-label={`Call ${task.lead.name}`}
+              disabled={!callsInApp && !dial}
               onClick={handleCall}
             >
               <Phone aria-hidden="true" />
@@ -365,13 +369,13 @@ function FollowupItem({
               size="sm"
               className="cursor-pointer"
               title={
-                lead
+                task.lead.email
                   ? `Send follow-up email to ${task.lead.name}`
-                  : "Open the lead to email from here"
+                  : "This lead has no email address."
               }
               aria-label={`Send follow-up email to ${task.lead.name}`}
-              disabled={!lead}
-              onClick={() => setShowEmailModal(true)}
+              disabled={!task.lead.email || loadingEmail}
+              onClick={() => void handleEmail()}
             >
               <Mail aria-hidden="true" />
               <span className="md:sr-only">Email</span>
@@ -379,7 +383,7 @@ function FollowupItem({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="sm"
               className="cursor-pointer"
               title={
                 whatsappPhone.usable
@@ -390,7 +394,8 @@ function FollowupItem({
               disabled={!whatsappPhone.usable}
               onClick={() => setShowWhatsApp(true)}
             >
-              <MessageCircle aria-hidden="true" />
+              <WhatsAppGlyph brand={whatsappPhone.usable} className="size-4" />
+              <span className="md:sr-only">WhatsApp</span>
             </Button>
             <Button
               type="button"
@@ -427,7 +432,7 @@ function FollowupItem({
               aria-label={`Review ${task.lead.name}`}
               onClick={() => onReview(task)}
             >
-              <Eye aria-hidden="true" />
+              <ClipboardCheck aria-hidden="true" />
               Review
             </Button>
           </div>
@@ -462,8 +467,10 @@ function FollowupsView({
   leads,
   onLeadUpdate,
   showToast,
+  initialFilter = "all",
 }: FollowupsViewProps) {
   const dispatch = useAppDispatch();
+  const comms = useCommsAvailability();
 
   // Tasks, not leads with dates. The old buckets read followupDate and
   // meetingDate off the Lead, which allowed one follow-up and one meeting per
@@ -476,7 +483,7 @@ function FollowupsView({
   const [tasksError, setTasksError] = useState(false);
   const [taskFilter, setTaskFilter] = useState<
     "all" | "dueNow" | "dueLater" | "unscheduled" | "nonMeeting" | "meeting"
-  >("all");
+  >(initialFilter);
   const busy = loading || tasksLoading;
 
   // showToast is rebuilt on every render of the component that owns the hook,
@@ -706,49 +713,48 @@ function FollowupsView({
 
   return (
     <div className="followups-view">
-      <MobileFilterSelect
-        label="Task filter"
-        value={taskFilter}
-        options={filterChips.map(({ key, count, label }) => ({
-          value: key,
-          count,
-          label,
-        }))}
-        onChange={(value) => setTaskFilter(value as TaskFilter)}
-      />
-      {/* One list, full width. Summary chips are real filters — each count
-          matches what the list shows when that chip is pressed. */}
-      <div
-        className="mb-2 hidden flex-wrap gap-1.5 md:flex"
-        role="toolbar"
-        aria-label="Filter tasks"
-      >
-        {filterChips.map(({ key, count, label }) => {
-          const pressed = taskFilter === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={pressed}
-              className={
-                pressed
-                  ? "inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary"
-                  : "inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              }
-              onClick={() => setTaskFilter(key)}
+      {/* One list, full width, in one card. The summary chips are real
+          filters: each count matches what the list shows when it is pressed.
+          On a phone the same choice is a dropdown. */}
+      <TableCard
+        header={
+          <div className="flex flex-col gap-2">
+            <MobileFilterSelect
+              label="Task filter"
+              value={taskFilter}
+              options={filterChips.map(({ key, count, label }) => ({
+                value: key,
+                count,
+                label,
+              }))}
+              onChange={(value) => setTaskFilter(value as TaskFilter)}
+            />
+            <FilterChips
+              className="hidden md:flex"
+              role="toolbar"
+              aria-label="Filter tasks"
             >
-              <strong className="tabular-nums">{count}</strong> {label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="fu-card">
-        <div className="fu-list">
+              {filterChips.map(({ key, count, label }) => (
+                <FilterChip
+                  key={key}
+                  active={taskFilter === key}
+                  onClick={() => setTaskFilter(key)}
+                >
+                  <strong className="tabular-nums">{count}</strong> {label}
+                </FilterChip>
+              ))}
+            </FilterChips>
+          </div>
+        }
+      >
+        {/* fu-list's padding is unlayered CSS, so a plain md:p-0 would lose to
+            it: the task table runs edge to edge in the card from md up. */}
+        <div className="fu-list md:p-0!">
           {busy ? (
             <div role="status" aria-busy="true">
               <span className="sr-only">Loading tasks…</span>
               <DataTableSkeleton
+                flush
                 rowCount={3}
                 columnCount={6}
                 mobileColumns={1}
@@ -788,6 +794,7 @@ function FollowupsView({
                   key={task.id}
                   task={task}
                   lead={leadsById.get(task.leadId)}
+                  callsInApp={comms.calls}
                   onLeadUpdate={onLeadUpdate}
                   onDone={handleTaskDone}
                   onReview={handleReview}
@@ -799,7 +806,7 @@ function FollowupsView({
                 <TableRow className="hover:bg-transparent">
                   <TableCell
                     colSpan={6}
-                    className="bg-muted/40 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                    className="bg-muted py-2 text-[13px] font-semibold text-foreground"
                   >
                     <span className="flex items-center justify-between">
                       Due later
@@ -815,6 +822,7 @@ function FollowupsView({
                   key={task.id}
                   task={task}
                   lead={leadsById.get(task.leadId)}
+                  callsInApp={comms.calls}
                   onLeadUpdate={onLeadUpdate}
                   onDone={handleTaskDone}
                   onReview={handleReview}
@@ -829,6 +837,7 @@ function FollowupsView({
                   key={task.id}
                   task={task}
                   lead={leadsById.get(task.leadId)}
+                  callsInApp={comms.calls}
                   onLeadUpdate={onLeadUpdate}
                   onDone={handleTaskDone}
                   onReview={handleReview}
@@ -847,7 +856,7 @@ function FollowupsView({
                 type="button"
                 aria-expanded={showDone}
                 onClick={() => setShowDone((open) => !open)}
-                className="flex w-full items-center gap-2 border-t border-border/60 px-4 py-2 text-left text-xs font-semibold tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground"
+                className="flex w-full items-center gap-2 border-t border-border/60 bg-muted px-4 py-2 text-left text-[13px] font-semibold text-foreground transition-colors hover:bg-border/50"
               >
                 {showDone ? (
                   <ChevronDown className="size-3.5" aria-hidden="true" />
@@ -869,7 +878,7 @@ function FollowupsView({
             </>
           )}
         </div>
-      </div>
+      </TableCard>
     </div>
   );
 }

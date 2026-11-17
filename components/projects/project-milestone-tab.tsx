@@ -47,7 +47,7 @@ const MILESTONE_STATUS_CONFIG: Record<string, MilestoneStatusConfig> = {
     label: "In progress",
     icon: Play,
     dotClass: "bg-primary text-primary-foreground ring-4 ring-primary/15",
-    badgeClass: "bg-primary/10 text-primary",
+    badgeClass: "bg-royal-gold-light text-royal-gold-ink-text",
     titleClass: "text-foreground",
   },
   PENDING: {
@@ -141,7 +141,7 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuetext={`${project.completedMilestoneCount} of ${project.milestoneCount} activities completed`}
-        className="h-3 overflow-hidden rounded-full bg-muted"
+        className="h-1.5 overflow-hidden rounded-full bg-muted"
       >
         <div
           className="h-full bg-primary transition-[width] duration-200 ease-out motion-reduce:transition-none"
@@ -176,9 +176,9 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
                 className={cn(
                   "rounded-lg border bg-card transition-colors",
                   isStageComplete
-                    ? "border-emerald-500/30 bg-emerald-500/5"
+                    ? "border-success/50 bg-success/5"
                     : hasActiveMilestone
-                      ? "border-primary/40 bg-primary/5"
+                      ? "border-royal-gold/40 bg-royal-gold-light/30"
                       : "border-border/70",
                 )}
               >
@@ -187,10 +187,10 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
                     "group flex w-full flex-col items-stretch justify-between gap-2 px-3 py-3 sm:flex-row sm:items-center sm:px-4",
                     "transition-colors hover:bg-muted/40",
                     "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
-                    isStageComplete && "hover:bg-emerald-500/10",
+                    isStageComplete && "hover:bg-success/10",
                     hasActiveMilestone
                       && !isStageComplete
-                      && "hover:bg-primary/10",
+                      && "hover:bg-royal-gold-light/60",
                   )}
                 >
                   <div className="flex flex-wrap items-center gap-2">
@@ -203,7 +203,7 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
                     {isStageComplete && (
                       <Badge
                         variant="default"
-                        className="flex items-center gap-1.5 rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-medium hover:bg-emerald-600"
+                        className="flex items-center gap-1.5 rounded-full bg-success-light px-2.5 py-1 text-xs font-medium text-success-ink hover:bg-success-light"
                       >
                         <Check className="size-3.5" aria-hidden="true" />
                         Complete
@@ -213,7 +213,7 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
                     {hasActiveMilestone && (
                       <Badge
                         variant="secondary"
-                        className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+                        className="flex items-center gap-1.5 rounded-full border border-royal-gold/40 bg-royal-gold-light px-2.5 py-1 text-xs font-medium text-royal-gold-ink-text"
                       >
                         <ListChecks className="size-3.5" aria-hidden="true" />
                         Active

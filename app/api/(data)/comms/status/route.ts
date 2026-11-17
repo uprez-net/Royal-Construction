@@ -45,6 +45,8 @@ export async function GET() {
     smsEnabled: config.smsEnabled,
     staffForwardNumber: config.staffForwardNumber,
     voiceAgent: channel?.voiceAgent ?? false,
+    voiceAgentDisclosure:
+      (channel?.voiceAgent ?? false) && config.voiceAgent.disclosure,
     webhookOrigin: config.webhookOrigin,
   });
 }

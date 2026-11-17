@@ -38,8 +38,8 @@ export function AssignedModal({
       }
 
       const assignedUserName =
-        availableUsers.find((u) => u.id === selectedUserId)?.name ||
-        "Unassigned";
+        availableUsers.find((u) => u.id === selectedUserId)?.name
+        || "Unassigned";
 
       onLeadUpdate(updated);
       showToast(`Assigned ${assignedUserName} to ${updated.name}`, "success");
@@ -94,7 +94,7 @@ export function AssignedModal({
         <div className="flex flex-wrap gap-2 pt-2">
           <button
             type="button"
-            className={`inline-flex items-center justify-center gap-2 rounded-full bg-[color:var(--royal-gold)] px-4 py-2 text-xs font-medium text-primary-foreground transition hover:bg-[color:var(--royal-gold-dark)] ${selectedUserId ? "" : "cursor-not-allowed opacity-50"}`}
+            className={`inline-flex items-center justify-center gap-2 rounded-full bg-royal-gold-ink px-4 py-2 text-xs font-medium text-primary-foreground transition hover:bg-royal-gold-ink-hover ${selectedUserId ? "" : "cursor-not-allowed opacity-50"}`}
             onClick={handleSave}
             disabled={!selectedUserId || saving}
             aria-describedby={!selectedUserId ? helperId : undefined}

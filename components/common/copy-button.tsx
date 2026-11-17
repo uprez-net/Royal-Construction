@@ -63,7 +63,7 @@ export function CopyButton({
         className={cn(
           "size-3.5",
           !iconOnly && "mr-1.5",
-          copied && "text-emerald-600",
+          copied && "text-success-ink",
         )}
         aria-hidden="true"
       />

@@ -4,7 +4,10 @@ import { RatingStars } from "../common/rating-stars";
 import { UserCell } from "../common/user-table-cell";
 
 import { Button } from "../ui/button";
-import { Card, CardContent, CardHeader } from "../ui/card";
+import {
+  TableCard,
+  TOOLBAR_BUTTON_CLASS,
+} from "@/components/common/list-toolbar";
 import { useRouter } from "next/navigation";
 
 export interface SiteManagerPerformance {
@@ -27,22 +30,26 @@ export function DashboardSiteManagerTable({
 }: DashboardSiteManagerTableProps) {
   const router = useRouter();
   return (
-    <Card>
-      <CardHeader className="flex items-center justify-between border-b border-border/60 pb-4">
-        <h4 className="uppercase font-bold text-muted-foreground">
-          Site Manager Performance
-        </h4>
+    <TableCard
+      header={
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-heading text-[1.0625rem] leading-[1.3] font-semibold tracking-[-0.01em] text-foreground">
+            Site Manager Performance
+          </h2>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => router.push("/team")}
-        >
-          Manage
-        </Button>
-      </CardHeader>
-      <CardContent>
+          <Button
+            variant="outline"
+            className={TOOLBAR_BUTTON_CLASS}
+            onClick={() => router.push("/team")}
+          >
+            Manage
+          </Button>
+        </div>
+      }
+    >
+      <div className="p-4 md:p-0">
         <DataTable
+          flush
           mobileLayout="cards"
           mobileColumns={1}
           headers={[
@@ -81,7 +88,7 @@ export function DashboardSiteManagerTable({
             </div>
           }
         />
-      </CardContent>
-    </Card>
+      </div>
+    </TableCard>
   );
 }

@@ -20,21 +20,19 @@ import {
   ChevronRight,
   FileDiff,
   FileText,
-  Gift,
   Loader2,
   Mail,
   Plus,
-  ReceiptText,
   RotateCw,
-  Wallet,
 } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
-  MetricCard,
+  KpiBand,
   MOBILE_METRIC_STRIP_CLASS,
-} from "@/components/common/metric-card";
+} from "@/components/common/kpi-band";
+import { MetricCard } from "@/components/common/metric-card";
 import { StatusPill } from "@/components/common/status-pill";
 import { CreateVariationModal } from "@/components/projects/create-variation-modal";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -49,8 +47,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+  TableCard,
+  TOOLBAR_BUTTON_CLASS,
+} from "@/components/common/list-toolbar";
+import { DataTableSkeleton, Skeleton } from "@/components/ui/skeleton";
+import {
+  TABLE_CELL_CLASS,
+  TABLE_HEAD_CELL_CLASS,
+  TABLE_HEAD_ROW_CLASS,
+  TABLE_ROW_CLASS,
+} from "@/components/ui/table-styles";
 import {
   fetchProjectVariations,
   issueVariationAction,
@@ -527,7 +534,7 @@ function VariationsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      <div
+      <KpiBand
         className={cn(
           MOBILE_METRIC_STRIP_CLASS,
           "sm:grid-cols-2 xl:grid-cols-4",
@@ -536,32 +543,24 @@ function VariationsTab({ projectId }: { projectId: string }) {
         <MetricCard
           title="Variations raised"
           value={summary.count}
-          Icon={FileDiff}
-          tone="primary"
           caption={`${money(summary.chargeable.cents + summary.promotional.cents)} in price changes`}
         />
         <MetricCard
           title="Billed to the client"
           value={money(summary.chargeable.cents)}
-          Icon={ReceiptText}
-          tone="success"
           caption={`${summary.chargeable.count} paid by the client · ex GST`}
         />
         <MetricCard
           title="Cost borne by the builder"
           value={money(summary.promotional.cents)}
-          Icon={Gift}
-          tone="danger"
           caption={`${summary.promotional.count} promotional · ex GST`}
         />
         <MetricCard
           title="Awaiting payment"
           value={money(summary.awaitingPaymentCents)}
-          Icon={Wallet}
-          tone="warning"
           caption="Invoiced in Xero, inc GST"
         />
-      </div>
+      </KpiBand>
 
       {summary.needsAttention > 0 ? (
         <Alert variant="destructive">
@@ -578,22 +577,28 @@ function VariationsTab({ projectId }: { projectId: string }) {
         </Alert>
       ) : null}
 
-      <Card className="gap-0 overflow-hidden bg-card py-0 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-3 sm:px-5">
-          <div>
-            <h3 className="font-heading text-lg font-semibold text-foreground">
-              Variation log
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Prices are ex GST. What the client pays includes GST.
-            </p>
+      <TableCard
+        header={
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-heading text-lg font-semibold text-foreground">
+                Variation log
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Prices are ex GST. What the client pays includes GST.
+              </p>
+            </div>
+            <Button
+              type="button"
+              className={TOOLBAR_BUTTON_CLASS}
+              onClick={() => setCreating(true)}
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              Create variation
+            </Button>
           </div>
-          <Button type="button" onClick={() => setCreating(true)}>
-            <Plus className="size-4" aria-hidden="true" />
-            Create variation
-          </Button>
-        </div>
-
+        }
+      >
         {variations.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
             <FileDiff
@@ -608,19 +613,19 @@ function VariationsTab({ projectId }: { projectId: string }) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full caption-bottom text-sm">
+            <table className="w-full caption-bottom text-[13px]">
               <caption className="sr-only">
                 Variations, grouped by who pays for them
               </caption>
-              <thead className="bg-muted/40">
+              <thead className={TABLE_HEAD_ROW_CLASS}>
                 {table.getHeaderGroups().map((group) => (
-                  <tr key={group.id} className="border-b border-border/70">
+                  <tr key={group.id}>
                     {group.headers.map((header) => (
                       <th
                         key={header.id}
                         scope="col"
                         className={cn(
-                          "h-10 px-3 text-left align-middle text-xs font-medium uppercase tracking-wide text-muted-foreground",
+                          TABLE_HEAD_CELL_CLASS,
                           COLUMN_CLASS[header.column.id],
                         )}
                       >
@@ -641,17 +646,14 @@ function VariationsTab({ projectId }: { projectId: string }) {
                     return (
                       <tr
                         key={row.id}
-                        className={cn(
-                          "border-b border-border/70 transition-colors",
-                          style.header,
-                        )}
+                        className={cn(TABLE_ROW_CLASS, style.header)}
                       >
                         <td colSpan={columns.length} className="p-0">
                           <button
                             type="button"
                             onClick={row.getToggleExpandedHandler()}
                             aria-expanded={open}
-                            className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                            className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                           >
                             {open ? (
                               <ChevronDown
@@ -680,7 +682,7 @@ function VariationsTab({ projectId }: { projectId: string }) {
                     <Fragment key={row.id}>
                       <tr
                         className={cn(
-                          "border-b border-border/70 transition-colors hover:bg-muted/40",
+                          TABLE_ROW_CLASS,
                           GROUP[original.variation.kind].row,
                           original.variation.needsAttention
                             && "bg-destructive-light/30",
@@ -690,7 +692,8 @@ function VariationsTab({ projectId }: { projectId: string }) {
                           <td
                             key={cell.id}
                             className={cn(
-                              "px-3 py-2.5 align-top",
+                              TABLE_CELL_CLASS,
+                              "align-top",
                               COLUMN_CLASS[cell.column.id],
                             )}
                           >
@@ -705,7 +708,7 @@ function VariationsTab({ projectId }: { projectId: string }) {
             </table>
           </div>
         )}
-      </Card>
+      </TableCard>
 
       <CreateVariationModal
         projectId={projectId}
@@ -762,24 +765,17 @@ function VariationsSkeleton() {
           <Skeleton key={index} className="h-[76px] rounded-lg" />
         ))}
       </div>
-      <Card className="gap-0 overflow-hidden py-0">
-        <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
-          <Skeleton className="h-6 w-40" />
-          <Skeleton className="h-9 w-36" />
-        </div>
-        {Array.from({ length: 5 }, (_, index) => (
-          <div
-            key={index}
-            className="flex items-center gap-4 border-b border-border/70 px-4 py-3 last:border-b-0"
-          >
-            <Skeleton className="h-4 w-12" />
-            <Skeleton className="h-4 flex-1" />
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-6 w-16 rounded-full" />
+      <TableCard
+        header={
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-9 w-36" />
           </div>
-        ))}
-      </Card>
+        }
+      >
+        {/* Mirrors the variation table: nine columns, a band, flush in the card. */}
+        <DataTableSkeleton columnCount={9} mobileLayout="scroll" flush />
+      </TableCard>
     </div>
   );
 }

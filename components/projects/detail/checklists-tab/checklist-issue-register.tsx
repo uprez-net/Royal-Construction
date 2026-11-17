@@ -1,9 +1,9 @@
 "use client";
 
 import { ClipboardList } from "lucide-react";
+import { FilterChip, FilterChips } from "@/components/common/list-toolbar";
 import { useMemo, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { ChecklistDetail } from "@/lib/domain/projects/checklists";
 
@@ -48,24 +48,24 @@ export function IssueRegister({
           </span>
         </h3>
         {checklist.issues.length > 0 ? (
-          <div className="flex gap-1" role="group" aria-label="Filter issues">
-            <Button
-              size="sm"
-              variant={filter === "all" ? "secondary" : "ghost"}
-              aria-pressed={filter === "all"}
+          <FilterChips
+            role="group"
+            aria-label="Filter issues"
+            className="flex-none"
+          >
+            <FilterChip
+              active={filter === "all"}
               onClick={() => setFilter("all")}
             >
               All
-            </Button>
-            <Button
-              size="sm"
-              variant={filter === "blocking" ? "secondary" : "ghost"}
-              aria-pressed={filter === "blocking"}
+            </FilterChip>
+            <FilterChip
+              active={filter === "blocking"}
               onClick={() => setFilter("blocking")}
             >
               Not yet verified
-            </Button>
-          </div>
+            </FilterChip>
+          </FilterChips>
         ) : null}
       </div>
       {checklist.issues.length === 0 ? (

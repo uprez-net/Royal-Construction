@@ -41,7 +41,7 @@ export function LeadTaskCell({
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
         next
           ? "rounded-md px-1 py-0.5 hover:bg-muted"
-          : "rounded-full border border-dashed border-border px-2.5 py-1 text-muted-foreground hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold",
+          : "rounded-full border border-dashed border-border px-2.5 py-1 text-muted-foreground hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold-ink-text",
         disabled && "cursor-not-allowed opacity-50",
       )}
       aria-haspopup="dialog"

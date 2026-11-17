@@ -20,7 +20,6 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { LeadAnalyticsData } from "@/types/lead";
-import { randomColourHexGenerator } from "@/utils/generator";
 
 interface AnalyticsViewProps {
   analytics: LeadAnalyticsData;
@@ -30,23 +29,33 @@ import { ForecastPanel } from "@/components/leads/forecast-panel";
 import { PipelineKpi } from "@/components/leads/pipeline-kpi";
 import { PipelineStageChart } from "@/components/leads/pipeline-stage-chart";
 
-/* ── BuildPro chart tokens ─────── */
+/* ── Chart tokens (warm, fixed order; no hashed hues) ─────── */
 const CHART = {
-  lead: "var(--royal-gold)",
-  success: "var(--success)",
-  warning: "var(--warning)",
+  lead: "var(--chart-1)",
+  success: "var(--chart-2)",
+  warning: "var(--chart-3)",
   info: "var(--info)",
-  purple: "var(--accent-purple)",
+  accent: "var(--chart-5)",
   muted: "var(--muted-foreground)",
   foreground: "var(--foreground)",
   border: "var(--border)",
 };
 
+/** Lost reasons take these in order, so each reason keeps its colour. */
+const LOST_REASON_SERIES = [
+  CHART.lead,
+  CHART.success,
+  CHART.warning,
+  CHART.accent,
+  CHART.info,
+  CHART.muted,
+];
+
 const SOURCE_COLORS: Record<string, string> = {
   "Google Ads": CHART.lead,
   Referral: CHART.success,
   "Facebook Ads": CHART.warning,
-  "Walk-in": CHART.purple,
+  "Walk-in": CHART.accent,
   Website: CHART.muted,
   "Repeat Client": CHART.foreground,
   Personal: CHART.info,
@@ -77,10 +86,10 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
   };
 
   const lostChartConfig: ChartConfig = {};
-  analytics.lostReasons.forEach((d) => {
+  analytics.lostReasons.forEach((d, index) => {
     lostChartConfig[d.name] = {
       label: d.name,
-      color: randomColourHexGenerator(d.name), // You can replace this with a fixed color if you want consistent colors for lost reasons
+      color: LOST_REASON_SERIES[index % LOST_REASON_SERIES.length],
     };
   });
 
@@ -180,44 +189,6 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
               style={{ height: 280 }}
             >
               <AreaChart data={analytics.monthlyTrend}>
-                <defs>
-                  <linearGradient
-                    id="leadsGradient"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop
-                      offset="0%"
-                      stopColor={CHART.lead}
-                      stopOpacity={0.15}
-                    />
-                    <stop
-                      offset="100%"
-                      stopColor={CHART.lead}
-                      stopOpacity={0.02}
-                    />
-                  </linearGradient>
-                  <linearGradient
-                    id="convertedGradient"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop
-                      offset="0%"
-                      stopColor={CHART.success}
-                      stopOpacity={0.15}
-                    />
-                    <stop
-                      offset="100%"
-                      stopColor={CHART.success}
-                      stopOpacity={0.02}
-                    />
-                  </linearGradient>
-                </defs>
                 <CartesianGrid vertical={false} stroke={CHART.border} />
                 <XAxis
                   dataKey="month"
@@ -241,7 +212,7 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                   dataKey="leads"
                   stroke={CHART.lead}
                   strokeWidth={2.5}
-                  fill="url(#leadsGradient)"
+                  fill="none"
                   dot={{ r: 4, fill: CHART.lead, stroke: CHART.lead }}
                   activeDot={{ r: 5, strokeWidth: 2 }}
                 />
@@ -250,7 +221,7 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                   dataKey="converted"
                   stroke={CHART.success}
                   strokeWidth={2.5}
-                  fill="url(#convertedGradient)"
+                  fill="none"
                   dot={{ r: 4, fill: CHART.success, stroke: CHART.success }}
                   activeDot={{ r: 5, strokeWidth: 2 }}
                 />

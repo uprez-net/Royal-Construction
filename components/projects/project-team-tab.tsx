@@ -120,7 +120,7 @@ export function TeamTab({ project }: TeamTabProps) {
       */}
       <Card className="border border-dashed border-border/70 shadow-sm ring-0">
         <CardContent className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+          <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-muted">
             <Users
               aria-hidden="true"
               className="h-6 w-6 text-muted-foreground"

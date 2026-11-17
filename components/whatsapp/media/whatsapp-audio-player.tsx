@@ -88,7 +88,7 @@ export function WhatsAppAudioPlayer({
         target="_blank"
         rel="noreferrer"
         download
-        className="flex min-w-60 items-center gap-2.5 rounded-md bg-black/4 px-3 py-2.5 text-[13px] text-[#54656f] hover:bg-black/7"
+        className="flex min-w-60 items-center gap-2.5 rounded-md bg-black/4 px-3 py-2.5 text-[13px] text-foreground hover:bg-black/7"
       >
         <Download className="size-4 shrink-0" aria-hidden="true" />
         This browser can&apos;t play the {voice ? "voice message" : "audio"} —
@@ -103,7 +103,7 @@ export function WhatsAppAudioPlayer({
         aria-hidden="true"
         className={cn(
           "relative inline-flex size-11 shrink-0 items-center justify-center rounded-full text-white",
-          voice ? "bg-[#00a884]" : "bg-[#ff8a3d]",
+          voice ? "bg-royal-gold-ink" : "bg-warning",
         )}
       >
         {voice ? <Mic className="size-5" /> : <Headphones className="size-5" />}
@@ -115,7 +115,7 @@ export function WhatsAppAudioPlayer({
         aria-label={
           playing ? "Pause" : voice ? "Play voice message" : "Play audio"
         }
-        className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-[#54656f] transition hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-[#00a884]"
+        className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-royal-gold-ink"
       >
         {loading ? (
           <Loader2 className="size-5 animate-spin" aria-hidden="true" />
@@ -155,7 +155,7 @@ export function WhatsAppAudioPlayer({
             else return;
             event.preventDefault();
           }}
-          className="relative flex h-8 cursor-pointer touch-none items-center gap-[2px] rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00a884]"
+          className="relative flex h-8 cursor-pointer touch-none items-center gap-[2px] rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-royal-gold-ink"
         >
           {peaks.map((peak, index) => {
             const played = (index + 0.5) / peaks.length <= progress;
@@ -165,7 +165,7 @@ export function WhatsAppAudioPlayer({
                 aria-hidden="true"
                 className={cn(
                   "min-w-0 flex-1 rounded-full transition-colors duration-150",
-                  played ? "bg-[#00a884]" : "bg-[#8696a0]/45",
+                  played ? "bg-royal-gold-ink" : "bg-muted-foreground/45",
                 )}
                 style={{ height: `${Math.round(peak * 100)}%` }}
               />
@@ -173,11 +173,11 @@ export function WhatsAppAudioPlayer({
           })}
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#00a884] shadow-sm"
+            className="pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-royal-gold-ink shadow-sm"
             style={{ left: `${progress * 100}%` }}
           />
         </div>
-        <div className="mt-0.5 flex items-center justify-between text-[11px] tabular-nums text-[#667781]">
+        <div className="mt-0.5 flex items-center justify-between text-[11px] tabular-nums text-muted-foreground">
           <span>
             {formatMediaDuration(playing || current > 0 ? current : duration)}
           </span>
@@ -191,7 +191,7 @@ export function WhatsAppAudioPlayer({
                 if (audio.current) audio.current.playbackRate = next;
               }}
               aria-label={`Playback speed ${speed}×`}
-              className="rounded-full bg-black/6 px-1.5 py-px text-[11px] font-semibold text-[#54656f] hover:bg-black/10"
+              className="rounded-full bg-black/6 px-1.5 py-px text-[11px] font-semibold text-foreground hover:bg-black/10"
             >
               {speed}×
             </button>

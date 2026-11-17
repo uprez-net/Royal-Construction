@@ -11,7 +11,7 @@ export default function OfferWorkspaceSkeleton() {
       label="Loading offer workspace"
       className={OFFER_WORKSPACE_FRAME_CLASS}
     >
-      <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border/70 bg-white px-3 py-2 md:flex-nowrap md:gap-x-2.5 md:px-4 md:py-2.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border/70 bg-card px-3 py-2 md:flex-nowrap md:gap-x-2.5 md:px-4 md:py-2.5">
         <Skeleton className="h-5 min-w-0 flex-1 basis-0 md:order-2 md:w-56 md:flex-none" />
         <div className="flex shrink-0 items-center gap-2 md:order-6">
           <Skeleton className="size-11 md:h-8 md:w-9" />
@@ -32,7 +32,7 @@ export default function OfferWorkspaceSkeleton() {
           <Skeleton className="h-11 flex-1" />
           <Skeleton className="size-11 shrink-0" />
         </div>
-        <div className="hidden w-14 shrink-0 flex-col border-r border-border/70 bg-white/60 md:flex lg:w-60">
+        <div className="hidden w-14 shrink-0 flex-col border-r border-border/70 bg-card/60 md:flex lg:w-60">
           <div className="flex-1 overflow-hidden py-2">
             {OFFER_WORKFLOW_PHASES.map((phase) => (
               <div key={phase.id}>
@@ -74,7 +74,7 @@ export default function OfferWorkspaceSkeleton() {
           </div>
         </div>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/70 bg-white px-3 py-1 md:gap-x-6 md:px-5 md:py-2.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/70 bg-card px-3 py-1 md:gap-x-6 md:px-5 md:py-2.5">
         <Skeleton className="h-11 w-24 md:hidden" />
         <div className="hidden flex-wrap gap-x-6 gap-y-2 md:flex">
           {Array.from({ length: 5 }, (_, i) => (

@@ -2786,15 +2786,67 @@ model Call {
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
-  lead        Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  staffUser   User?           @relation("CallStaffUser", fields: [staffUserId], references: [id])
-  dismissedBy User?           @relation("CallDismissedBy", fields: [dismissedById], references: [id])
-  recordings  CallRecording[]
+  lead         Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  staffUser    User?               @relation("CallStaffUser", fields: [staffUserId], references: [id])
+  dismissedBy  User?               @relation("CallDismissedBy", fields: [dismissedById], references: [id])
+  recordings   CallRecording[]
+  /// Who Mili took the caller to be, and what she was allowed to tell them.
+  callerAccess CallerAccessEvent[]
 
   @@unique([provider, providerCallId])
   @@index([leadId, startedAt])
   @@index([status, startedAt])
   @@index([direction, leadId, dismissedAt])
+}
+
+/// Who an inbound caller was resolved to (lib/domain/comms/callers).
+enum VoiceCallerClass {
+  ADMIN
+  SITE_MANAGER
+  /// A customer or a lead: one class, scoped to their own records.
+  CLIENT
+  TRADIE
+  /// Withheld, unmatched, ambiguous, unsupported or switched off: message
+  /// taking only.
+  UNKNOWN
+}
+
+enum CallerAccessKind {
+  /// The caller's number was resolved to a class (or to UNKNOWN, with why).
+  RESOLVED
+  /// The role-scoped briefing Mili was started with.
+  BRIEFING
+  /// One catalogue lookup the call desk ran during the call.
+  LOOKUP
+  /// A lookup the caller's class may not run, or that failed closed.
+  REFUSED
+}
+
+/// The audit trail for what Mili disclosed on a call (issue #528).
+///
+/// Metadata only: the class, how the caller was identified, the query's name
+/// and the ids of the records it read. Never what was said, never the
+/// returned values, never the caller's number.
+model CallerAccessEvent {
+  id           String           @id @default(uuid())
+  callId       String
+  kind         CallerAccessKind
+  callerClass  VoiceCallerClass
+  /// "caller_id" today: the carrier-provided number matched a record. A
+  /// possession challenge would record its own method here.
+  verification String?
+  /// Why the caller resolved as they did ("matched", "ambiguous", …), or
+  /// "ok" / a refusal reason for a briefing or lookup.
+  outcome      String
+  /// The catalogue name of a LOOKUP or REFUSED query.
+  queryName    String?
+  /// "project:<id>", "lead:<id>", "booking:<id>", … that the read returned.
+  recordIds    String[]         @default([])
+  createdAt    DateTime         @default(now())
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@index([callId, createdAt])
 }
 
 enum CallRecordingKind {

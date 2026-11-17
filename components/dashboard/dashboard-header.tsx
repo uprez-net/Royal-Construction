@@ -1,6 +1,6 @@
 "use client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/common/page-header";
 import { normalizeTypes } from "@/lib/leads/lead-helpers";
 import { fetchAllLeads } from "@/lib/leads/leads-service";
 import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
@@ -12,18 +12,11 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 interface DashboardHeaderProps {
-  name: string;
-  newLeadsCount: number;
-  newProjectsCount: number;
-  followUpsCount: number;
+  /** Today in Sydney, e.g. "Mon 16 Nov 2026". */
+  today: string;
 }
 
-export function DashboardHeader({
-  name,
-  newLeadsCount,
-  newProjectsCount,
-  followUpsCount,
-}: DashboardHeaderProps) {
+export function DashboardHeader({ today }: DashboardHeaderProps) {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const [isExporting, setIsExporting] = useState(false);
@@ -103,75 +96,44 @@ export function DashboardHeader({
   };
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
-      <CardContent className="p-4 sm:p-5 lg:p-6">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-            <div className="min-w-0 space-y-1">
-              <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                Operations today
-              </p>
-              <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                Sat Sri Akal, {name}!
-              </h2>
-            </div>
+    <PageHeader
+      headingLevel="h1"
+      title="Dashboard"
+      description={today}
+      actions={
+        <>
+          <Button onClick={() => dispatch(openModal({ type: "createLead" }))}>
+            <Plus className="mr-2 size-4" />
+            Add Lead
+          </Button>
 
-            <dl className="grid grid-cols-3 gap-3 text-left sm:min-w-90 sm:text-right">
-              <div>
-                <dt className="text-xs text-muted-foreground">Leads</dt>
-                <dd className="font-mono text-sm font-semibold text-foreground">
-                  {newLeadsCount}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Projects</dt>
-                <dd className="font-mono text-sm font-semibold text-foreground">
-                  {newProjectsCount}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Follow-ups</dt>
-                <dd className="font-mono text-sm font-semibold text-foreground">
-                  {followUpsCount}
-                </dd>
-              </div>
-            </dl>
-          </div>
+          <Button
+            variant="outline"
+            onClick={() => void handleExport()}
+            disabled={isExporting}
+          >
+            {isExporting ? (
+              <span className="flex items-center">
+                <RotateCw className="mr-2 size-4 animate-spin" /> Exporting...
+              </span>
+            ) : (
+              <span className="flex items-center">
+                <Download className="mr-2 size-4" /> Export Leads
+              </span>
+            )}
+          </Button>
 
-          <div className="flex flex-wrap gap-2 lg:justify-end">
-            <Button onClick={() => dispatch(openModal({ type: "createLead" }))}>
-              <Plus className="mr-2 size-4" />
-              Add Lead
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={() => void handleExport()}
-              disabled={isExporting}
-            >
-              {isExporting ? (
-                <span className="flex items-center">
-                  <RotateCw className="mr-2 size-4 animate-spin" /> Exporting...
-                </span>
-              ) : (
-                <span className="flex items-center">
-                  <Download className="mr-2 size-4" /> Export Leads
-                </span>
-              )}
-            </Button>
-
-            <Button
-              variant="outline"
-              size="icon"
-              className="items-center justify-center"
-              onClick={() => router.refresh()}
-              aria-label="Refresh dashboard"
-            >
-              <RotateCw className="size-4" />
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+          <Button
+            variant="outline"
+            size="icon"
+            className="items-center justify-center"
+            onClick={() => router.refresh()}
+            aria-label="Refresh dashboard"
+          >
+            <RotateCw className="size-4" />
+          </Button>
+        </>
+      }
+    />
   );
 }

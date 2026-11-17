@@ -147,7 +147,7 @@ export function OverviewTab({
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuetext={`${progressPercent}% complete`}
-          className="h-3 overflow-hidden rounded-full bg-muted"
+          className="h-1.5 overflow-hidden rounded-full bg-muted"
         >
           <div
             className="h-full bg-primary transition-[width] duration-200 ease-out motion-reduce:transition-none"

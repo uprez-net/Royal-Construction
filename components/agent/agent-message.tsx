@@ -103,7 +103,7 @@ export function AgentMessage({
         {message.role === "user" && annotations?.length ? (
           <div
             aria-label="Message annotations"
-            className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-blue-600 dark:text-blue-400"
+            className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-info-ink"
           >
             {annotations.map((annotation) => (
               <span key={`${annotation.type}:${annotation.id}`}>

@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 
 import { TradieApprovalActionType } from "@prisma/client";
 import { SafeTradieApproval } from "@/types/tradie";
@@ -41,18 +42,31 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
   // acknowledge the named tradie first.
   const confirmId = useId();
   const [confirmed, setConfirmed] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
   const impact = useTradieRemovalImpact(
     approval.tradieId,
     approval.status === "PENDING",
   );
 
   const submit = (resolution: "approved" | "rejected") => {
-    mutation.mutate({
-      approvalId: approval.id,
-      type: TradieApprovalActionType.TRADIE_REMOVAL,
-      resolution,
-      payload: undefined,
-    });
+    mutation.mutate(
+      {
+        approvalId: approval.id,
+        type: TradieApprovalActionType.TRADIE_REMOVAL,
+        resolution,
+        payload: undefined,
+        rejectReason:
+          resolution === "rejected" ? rejectReason.trim() : undefined,
+        // The domain refuses the removal unless these are still exactly the
+        // tradie's unfinished bookings.
+        reviewedBookingIds:
+          resolution === "approved"
+            ? impact.data?.map((schedule) => schedule.id)
+            : undefined,
+      },
+      // A refusal (the bookings changed) shows the current list to review.
+      { onError: () => void impact.refetch() },
+    );
   };
 
   return (
@@ -201,40 +215,67 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
 
         {/* Actions */}
         {approval.status === "PENDING" && (
-          <div className="grid gap-2 border-t border-border/70 pt-4 sm:flex sm:justify-end">
-            <Button
-              variant="outline"
-              disabled={mutation.isPending}
-              onClick={() => submit("rejected")}
-            >
-              Reject request
-            </Button>
+          <div className="space-y-4 border-t border-border/70 pt-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="tradie-removal-reject-reason">
+                Reason for rejecting the removal
+                <span className="text-destructive">
+                  *<span className="sr-only"> required</span>
+                </span>
+              </Label>
+              <Textarea
+                id="tradie-removal-reject-reason"
+                rows={2}
+                maxLength={1000}
+                required
+                aria-required="true"
+                aria-describedby="tradie-removal-reject-reason-hint"
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+              />
+              <p
+                id="tradie-removal-reject-reason-hint"
+                className="text-xs text-muted-foreground"
+              >
+                Required to reject. The requester sees this reason.
+              </p>
+            </div>
 
-            <Button
-              variant="destructive"
-              disabled={
-                mutation.isPending
-                || !confirmed
-                || !impact.isSuccess
-                || impact.isFetching
-              }
-              onClick={() => submit("approved")}
-            >
-              {mutation.isPending ? (
-                <>
-                  <Loader2
-                    className="mr-2 size-4 animate-spin"
-                    aria-hidden="true"
-                  />
-                  Removing…
-                </>
-              ) : (
-                <>
-                  <Trash2 className="mr-2 size-4" aria-hidden="true" />
-                  Remove tradie
-                </>
-              )}
-            </Button>
+            <div className="grid gap-2 sm:flex sm:justify-end">
+              <Button
+                variant="outline"
+                disabled={mutation.isPending || !rejectReason.trim()}
+                onClick={() => submit("rejected")}
+              >
+                Reject request
+              </Button>
+
+              <Button
+                variant="destructive"
+                disabled={
+                  mutation.isPending
+                  || !confirmed
+                  || !impact.isSuccess
+                  || impact.isFetching
+                }
+                onClick={() => submit("approved")}
+              >
+                {mutation.isPending ? (
+                  <>
+                    <Loader2
+                      className="mr-2 size-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                    Removing…
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 size-4" aria-hidden="true" />
+                    Remove tradie
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         )}
       </div>

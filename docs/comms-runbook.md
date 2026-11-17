@@ -75,7 +75,8 @@ Mili answers every inbound call on either carrier, after the recording
 declaration. She takes the caller's name, number, suburb and what they need,
 and never quotes a price, a date or a commitment (the rules are in
 `lib/domain/comms/calls/voice-agent.ts`). She can end the call or hand the
-caller to the office mobile.
+caller to the office mobile. With disclosure switched on she also answers
+callers the records recognise, within their role (below).
 
 Two models on AI Gateway, and nothing else:
 
@@ -111,6 +112,72 @@ To try her without a phone, the session tests in
 Only a Vercel deployment can upgrade the WebSocket. Under `next dev` the stream
 is refused and calls go to the mobile, then voicemail — test Mili on a preview
 deployment with `COMMS_WEBHOOK_ORIGIN` set to it.
+
+### Answering known callers from Royal's records (issue #528)
+
+With `COMMS_AGENT_DISCLOSURE_ENABLED=true`, Mili answers a caller that Royal's
+records recognise, from those records, read-only. It is **off by default** and
+separate from `COMMS_AGENT_ENABLED`: switching it off (and redeploying) leaves
+her taking messages on every **new** call. A call already connected keeps the
+briefing and lookups it started with until it ends, which is at most 270
+seconds. `/admin/comms` shows it as **Mili answers known callers from
+records**.
+
+The rules live in `lib/domain/comms/callers/`; the voice code only wires them.
+
+| Caller | What Mili may tell them | Never |
+| --- | --- | --- |
+| **Admin** | An overview at the start (live projects, the week's trade bookings, the pipeline, today's and tomorrow's meetings). Anything else through the call desk's lookups: a project's status, a project's money (contract value, trade costs, forecast profit, progress claims paid and outstanding), a lead, a tradie and their bookings, the bookings for a period, the pipeline. | Passwords, tokens, keys, bank details, anything outside those lookups, and any change. |
+| **Site manager** | Projects assigned to them: status, stages in progress and coming up with the current schedule's dates, and the trades booked over the next three weeks. | Other projects, prices, costs, payments, contracts (#158). |
+| **Customer / lead** | Their own projects (the stage as "under construction" and the like, never an internal flag such as "delayed"; current and next stages with the current schedule's dates) and their enquiries with no project yet (where it is up to, a booked meeting). | Other people's records, prices, payments, notes, staff. |
+| **Tradie** | Their own bookings from two weeks back to three months ahead: the activity, trade, project name and site address, the date, and the booking's status. | Prices, other trades, the customer's details, notes. |
+| **Unknown** | Message taking, exactly as before. She never says whether a number or a name has a record. | Everything else. |
+
+Dates are said as "the current schedule shows…", never as a promise. A blank or
+missing fact is "I don't have that in front of me — I'll have the team follow
+up." She cannot change anything. Lookups are for admins only: the call desk is
+offered them only on an admin's call, and the domain refuses any other class.
+
+**How a caller is identified.** By the carrier-provided number on the call
+(`Call.customerNumber`, from a signed webhook) alone, matched against
+`User.phone`, `Customer.phone`, `Lead.phone`/`phoneE164`, `Lead.secondaryPhone`
+and `Tradie.phone`, after normalising each to E.164. A team phone
+(`CommsTeamPhone`) is not a source. **There is no second check that the caller
+holds that phone.** That was a deliberate decision for this business, and it
+differs from #528's "no protected answer from caller ID alone": anyone who can
+spoof a recognised number hears that caller's briefing. Weigh that before
+switching it on, and switch it off if a spoofed call is ever suspected. Every
+resolution records `verification = "caller_id"`, so a possession check (an SMS
+code, a call-back) can be added later without changing the reads.
+
+**Shared numbers fail closed.** Every match is collected before anything is
+chosen. A customer, their portal account and the lead their project came from
+are one person; so are client records sharing the number under the same name
+(a repeat enquiry). Anything else — two people, a staff number also typed on a
+lead, a tradie who is also a client — is ambiguous, and the caller gets
+message taking. A GUEST account or an archived tradie or lead grants nothing.
+Before switching it on, run:
+
+```
+pnpm comms:audit-caller-phones
+```
+
+It lists every number more than one record holds, masked, with what a call
+from it would get (AMBIGUOUS, UNSUPPORTED, INACTIVE or COMBINED). It picks no
+winners: correct or merge the records in the app. (On Node 25 here, `tsx`
+fails to load libphonenumber's metadata — `whatsapp:backfill-phones` fails the
+same way — so run it where that script runs.)
+
+**Fail closed.** If resolving the caller or building their briefing fails or
+takes longer than 4 s, Mili starts as for an unknown caller and the failure is
+reported. A lookup that fails, is refused or takes longer than 6 s is told to
+her as "I couldn't check that just now", never as "nothing found". Nothing ever
+falls back to wider access.
+
+**Audit.** Each call's resolution, briefing and lookups leave a
+`CallerAccessEvent` row: the class, the outcome or refusal reason, the
+verification method, the lookup's name and the record ids read. No contents,
+no numbers, nothing the caller said.
 
 ## WhatsApp calling
 
@@ -160,6 +227,7 @@ fixture:
 - [ ] Ring the business number: hear the declaration, then Mili. Leave a message and say goodbye; the call shows "answered by Mili" with a transcript and a recording on the lead.
 - [ ] Ask Mili for a person: the office mobile rings. Don't answer: voicemail is stored and plays on the lead.
 - [ ] With `COMMS_AGENT_ENABLED=false`: the declaration, then the office mobile, then voicemail. No browser rings.
+- [ ] Known callers (`COMMS_AGENT_DISCLOSURE_ENABLED=true`), on both carriers: `pnpm comms:audit-caller-phones` shows nothing unexpected. Ring from a test customer's number: she can say their project's current stage and dates, and refuses a price. From a test tradie's number: only their bookings. From a site manager's: only assigned projects. From an admin's: ask "how's the <project> job going?" and "what's been paid on <project>?" — she says she'll check, then answers. From an unknown number, and with caller ID withheld: message taking only, and she won't say whether a name has a project. Ask for a person mid-answer: transferred. Set the flag back to `false`, redeploy, and ring from the admin's number: message taking only. Each call's `CallerAccessEvent` rows match what was asked.
 - [ ] With `COMMS_RECORDING_MODE=consented`, on an outbound call: the recording announcement plays, the call is put straight through, and the conversation is recorded. Check the carrier's console shows the recording deleted after the copy.
 - [ ] WhatsApp: ask permission, allow it on the phone, call from the chat; call the business on WhatsApp and answer in the dock.
 - [ ] Next morning, the `comms-sweep` cron log shows no stale calls.

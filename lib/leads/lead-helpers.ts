@@ -176,22 +176,53 @@ export function stageOptionsFor(current: LeadStage): LeadStage[] {
     : [...LEAD_STAGE_OPTIONS, current];
 }
 
-export const STAGE_STYLES: Record<LeadStage, string> = {
-  New: "stage-badge-info",
-  Contacted: "stage-badge-warning",
-  Discovery: "stage-badge-info",
-  Qualified: "stage-badge-purple",
-  Quoted: "stage-badge-accent",
-  Negotiating: "stage-badge-pink",
-  Won: "stage-badge-success",
-  Lost: "stage-badge-danger",
-  "Meeting Scheduled": "stage-badge-info",
-  "In Follow-up": "stage-badge-warning",
-  "No Response": "stage-badge-danger",
-  Converted: "stage-badge-success",
-  Cancelled: "stage-badge-danger",
-  Disqualified: "stage-badge-danger",
+/**
+ * The one colour map for lead stages. The table badge, the header picker, the
+ * follow-ups badge and the picker dots all read from here, so a stage has one
+ * tone everywhere. Converted stays Converted; it is never relabelled as Won.
+ */
+export type StageTone = "neutral" | "info" | "gold" | "success" | "danger";
+
+export const STAGE_TONE: Record<LeadStage, StageTone> = {
+  New: "neutral",
+  Contacted: "info",
+  Discovery: "info",
+  Qualified: "info",
+  "Meeting Scheduled": "info",
+  "In Follow-up": "info",
+  Quoted: "gold",
+  Negotiating: "gold",
+  Won: "success",
+  Converted: "success",
+  "No Response": "neutral",
+  Lost: "danger",
+  Cancelled: "danger",
+  Disqualified: "danger",
 };
+
+/** Pill classes (tint, ink, 6px dot) defined once in app/globals.css. */
+export const STAGE_STYLES: Record<LeadStage, string> = Object.fromEntries(
+  Object.entries(STAGE_TONE).map(([stage, tone]) => [
+    stage,
+    `stage-badge-${tone}`,
+  ]),
+) as Record<LeadStage, string>;
+
+const STAGE_INK: Record<StageTone, string> = {
+  neutral: "text-foreground/80",
+  info: "text-info-ink",
+  gold: "text-royal-gold-ink-text",
+  success: "text-success-ink",
+  danger: "text-destructive-ink",
+};
+
+/**
+ * Text colour for a bare stage dot. The dot itself is `bg-current`, so it
+ * matches its tone without a second colour map.
+ */
+export function stageInkClass(stage: LeadStage): string {
+  return STAGE_INK[STAGE_TONE[stage]];
+}
 
 /* ── Types ────────────────────────────────────────────── */
 

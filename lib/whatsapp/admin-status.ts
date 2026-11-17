@@ -267,3 +267,21 @@ export async function checkWhatsAppWithMeta(
     subscribedAppsError,
   };
 }
+
+/**
+ * The headline state the WhatsApp page and the Admin hub both show: off,
+ * connected (on, numbered, every secret set, no config problem), or needing
+ * attention. One rule, so the two never disagree.
+ */
+export function whatsappAdminHealth(
+  config: WhatsAppAdminConfig,
+): "off" | "connected" | "needs-attention" {
+  if (!config.enabled) return "off";
+  const healthy =
+    config.numbers.length > 0
+    && Boolean(config.secrets.accessToken)
+    && Boolean(config.secrets.appSecret)
+    && Boolean(config.secrets.verifyToken)
+    && config.problems.length === 0;
+  return healthy ? "connected" : "needs-attention";
+}

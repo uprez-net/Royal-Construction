@@ -122,7 +122,7 @@ function PartiesSection({
       {job.owners.map((o) => (
         <div
           key={o.id}
-          className="grid gap-3 rounded-lg border border-border/70 bg-white/95 p-4 @2xl/pane:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_auto] @2xl/pane:items-end"
+          className="grid gap-3 rounded-lg border border-border/70 bg-card/95 p-4 @2xl/pane:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_auto] @2xl/pane:items-end"
         >
           <Labelled label="Owner name">
             {(id) => (
@@ -201,7 +201,7 @@ function SiteSection({
 }) {
   return (
     <div className="grid gap-4">
-      <div className="grid gap-4 rounded-lg border border-border/70 bg-white/95 p-4">
+      <div className="grid gap-4 rounded-lg border border-border/70 bg-card/95 p-4">
         <div className="grid gap-3 @2xl/pane:grid-cols-2">
           <Labelled label="Site location" className="@2xl/pane:col-span-2">
             {(id) => (
@@ -264,7 +264,7 @@ function SiteSection({
         </p>
       </div>
 
-      <div className="grid gap-3 rounded-lg border border-border/70 bg-white/95 p-4 @2xl/pane:grid-cols-2">
+      <div className="grid gap-3 rounded-lg border border-border/70 bg-card/95 p-4 @2xl/pane:grid-cols-2">
         <Labelled label="Valid until">
           {(id) => (
             <Input
@@ -426,7 +426,7 @@ function DocumentPreview({ job }: { readonly job: PrototypeJob }) {
       <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
         Proposal snapshot · live
       </p>
-      <article className="rounded-lg border border-border/70 bg-white p-5 shadow-sm">
+      <article className="rounded-xl bg-card p-5 shadow-sm ring-1 ring-foreground/4">
         <p className="font-mono text-[0.625rem] uppercase tracking-[0.1em] text-muted-foreground">
           {job.reference}-{job.revision}
         </p>
@@ -490,7 +490,7 @@ function DocumentPreview({ job }: { readonly job: PrototypeJob }) {
           <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
             Contract value inc GST
           </p>
-          <p className="font-heading text-xl font-semibold">
+          <p className="font-mono tabular-nums text-xl font-semibold">
             {formatCurrency(PRICING.contractValueIncGst)}
           </p>
         </div>
@@ -562,7 +562,7 @@ function SummaryStrip({ job }: { readonly job: PrototypeJob }) {
     ],
   ] as const;
   return (
-    <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border-t border-border/70 bg-white px-5 py-2.5">
+    <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border-t border-border/70 bg-card px-5 py-2.5">
       {cells.map(([label, value]) => (
         <div key={label} className="flex items-baseline gap-2">
           <span className="text-xs text-muted-foreground">{label}</span>
@@ -575,7 +575,7 @@ function SummaryStrip({ job }: { readonly job: PrototypeJob }) {
         <span className="inline-flex items-center gap-1.5 rounded-full bg-success-light px-2.5 py-0.5 text-xs font-medium text-success-ink">
           Margin at target · 20%
         </span>
-        <span className="font-heading text-lg font-semibold">
+        <span className="font-mono tabular-nums text-lg font-semibold">
           {formatCurrency(PRICING.contractValueIncGst)}
         </span>
       </div>

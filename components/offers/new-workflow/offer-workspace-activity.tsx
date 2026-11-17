@@ -147,7 +147,7 @@ export function OfferWorkspaceActivity({
   const items = mergeTimeline(sends, events, now);
 
   return (
-    <div className="grid gap-3 rounded-lg border border-border/70 bg-white/95 p-3">
+    <div className="grid gap-3 rounded-lg border border-border/70 bg-card/95 p-3">
       <div className="flex items-center justify-between gap-2">
         <p className={GROUP_HEADING_CLASS}>Negotiation activity</p>
         <Button
@@ -208,7 +208,7 @@ export function OfferWorkspaceActivity({
           Log a change request from the customer&apos;s reply
         </label>
         <textarea
-          className="min-h-15 w-full rounded-md border border-border bg-white px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+          className="min-h-15 w-full rounded-md border border-border bg-card px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
           id="offer-change-request"
           onChange={(event) => setNote(event.target.value)}
           placeholder="e.g. Client asked to drop the pool from exclusions and upgrade the stone benchtop."
@@ -362,17 +362,17 @@ function ReplyThread({
           {reply.subject ? (
             <p className="font-medium text-foreground">{reply.subject}</p>
           ) : null}
-          <p className="max-h-72 overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-md border border-border/60 bg-white px-2.5 py-2 leading-relaxed text-foreground">
+          <p className="max-h-72 overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-md border border-border/60 bg-card px-2.5 py-2 leading-relaxed text-foreground">
             {reply.text || (
               <span className="text-muted-foreground">(No message text)</span>
             )}
           </p>
           {reply.fullText ? (
             <details>
-              <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground marker:text-royal-gold">
+              <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground marker:text-royal-gold-ink-text">
                 Show the full email, with the quoted thread
               </summary>
-              <p className="mt-1.5 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-border/60 bg-white px-2.5 py-2 leading-relaxed text-muted-foreground">
+              <p className="mt-1.5 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-border/60 bg-card px-2.5 py-2 leading-relaxed text-muted-foreground">
                 {reply.fullText}
               </p>
             </details>
@@ -407,7 +407,7 @@ function ReplyAttachment({
       <span className="min-w-0 flex-1 break-words">
         {attachment.url ? (
           <a
-            className="font-medium text-royal-gold-dark hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+            className="font-medium text-royal-gold-ink-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
             href={attachment.url}
             rel="noopener noreferrer"
             target="_blank"

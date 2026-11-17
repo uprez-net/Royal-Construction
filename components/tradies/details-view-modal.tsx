@@ -86,7 +86,8 @@ function getDaysBadge(daysLeft: number) {
 
   if (daysLeft <= 7) {
     return {
-      className: "border-transparent bg-primary/15 text-primary",
+      className:
+        "border-transparent bg-royal-gold-light text-royal-gold-ink-text",
       label: `${daysLeft}d`,
     };
   }
@@ -474,7 +475,6 @@ export function TradieScheduleDetailsModal({
                         "bg-primary px-3.5 py-1.75",
                         "text-[12.5px] font-semibold text-primary-foreground",
                         "transition-all duration-200",
-                        "hover:-translate-y-px",
                         "hover:bg-primary/90",
                       )}
                     >
@@ -488,11 +488,10 @@ export function TradieScheduleDetailsModal({
                       onClick={() => onRequestDelete(item)}
                       className={cn(
                         "h-auto rounded-[7px]",
-                        "bg-red-500 px-3.5 py-1.75",
+                        "bg-destructive px-3.5 py-1.75",
                         "text-[12.5px] font-semibold text-primary-foreground",
                         "transition-all duration-200",
-                        "hover:-translate-y-px",
-                        "hover:bg-red-600/90",
+                        "hover:bg-destructive/90",
                       )}
                     >
                       <Trash2 className="mr-1.5 h-3.5 w-3.5" />
@@ -513,7 +512,6 @@ export function TradieScheduleDetailsModal({
                     "bg-warning px-3.5 py-1.75",
                     "text-[12.5px] font-semibold text-primary-foreground",
                     "transition-all duration-200",
-                    "hover:-translate-y-px",
                     "hover:bg-warning/90",
                   )}
                 >

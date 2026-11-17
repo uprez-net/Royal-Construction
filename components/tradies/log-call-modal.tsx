@@ -245,8 +245,8 @@ export function LogCallModal({
               .filter(([status]) => availableOutcomes.includes(status))
               .map(([status, config]) => {
                 const isLoading =
-                  activeLoading === status ||
-                  (pendingIds.includes(schedule.id) && isPending);
+                  activeLoading === status
+                  || (pendingIds.includes(schedule.id) && isPending);
 
                 return (
                   <button
@@ -256,7 +256,6 @@ export function LogCallModal({
                     onClick={() => submit(status)}
                     className={cn(
                       "group flex w-full items-center gap-[10px] rounded-[10px] border-2 bg-card px-4 py-[14px] text-left transition-all",
-                      "hover:-translate-y-[2px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]",
                       "disabled:pointer-events-none disabled:opacity-60",
                       config.border,
                       schedule.status === status && "border-primary shadow-sm",

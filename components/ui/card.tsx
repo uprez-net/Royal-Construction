@@ -12,12 +12,11 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        // Edge is a real border, not `ring-1 ring-foreground/10`. Tailwind v4
-        // preflight sets `border-width: 0` globally, so the `border-border/70`
-        // that ~75 call sites (and DESIGN.md §6, "Do use border-border/70 on
-        // cards") pass was setting a colour on a zero-width border — a silent
-        // no-op. With a width set here, those call sites finally apply.
-        "group/card flex flex-col gap-4 overflow-hidden rounded-lg border border-border/70 bg-card py-4 text-sm text-card-foreground has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg",
+        // The edge is a 1px ring, not a border, so a card reads as one soft
+        // surface (DESIGN.md §4: 11px corners, warm shadow, hairline).
+        // A call site that wants a coloured edge sets `border` and its colour;
+        // `border-border/70` alone, as many still pass, now draws nothing.
+        "group/card flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 text-sm text-card-foreground shadow-sm ring-1 ring-foreground/4 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
         className,
       )}
       {...props}
@@ -30,7 +29,7 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-header"
       className={cn(
-        "group/card-header @container/card-header grid auto-rows-min items-start gap-1 rounded-t-lg px-4 group-data-[size=sm]/card:px-3 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-4 group-data-[size=sm]/card:[.border-b]:pb-3",
+        "group/card-header @container/card-header grid auto-rows-min items-start gap-1 rounded-t-xl px-4 group-data-[size=sm]/card:px-3 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-4 group-data-[size=sm]/card:[.border-b]:pb-3",
         className,
       )}
       {...props}
@@ -105,7 +104,7 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-footer"
       className={cn(
-        "flex items-center rounded-b-lg border-t bg-muted/50 p-4 group-data-[size=sm]/card:p-3",
+        "flex items-center rounded-b-xl border-t bg-muted/50 p-4 group-data-[size=sm]/card:p-3",
         className,
       )}
       {...props}

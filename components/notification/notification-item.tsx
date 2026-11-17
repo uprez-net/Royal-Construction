@@ -204,18 +204,17 @@ export function NotificationItem({
       onClick={openNotification}
       key={n.id}
       className={cn(
-        "group max-w-86 rounded-2xl border p-3 transition-colors",
-        "border-[#E2E8F0] bg-white hover:bg-[#F7F4EE]",
-        !n.isRead
-          && "border-[#C6923A]/25 shadow-[0_0_0_1px_rgba(198,146,58,0.08)]",
+        "group max-w-86 rounded-lg border p-3 transition-colors",
+        "border-border bg-card hover:bg-muted",
+        !n.isRead && "border-royal-gold/25",
       )}
     >
       <div className="flex items-start gap-3">
-        <div className="mt-1 grid h-9 w-9 place-items-center rounded-xl border border-[#E2E8F0] bg-[#FAF8F3]">
+        <div className="mt-1 grid h-9 w-9 place-items-center rounded-xl border border-border bg-muted">
           <Bell
             className={cn(
               "size-5",
-              n.isRead ? "text-slate-400" : "text-[#C6923A]",
+              n.isRead ? "text-muted-foreground" : "text-royal-gold-ink-text",
               isBusy && "animate-pulse",
             )}
           />
@@ -227,7 +226,7 @@ export function NotificationItem({
               {hasDestination ? (
                 <button
                   type="button"
-                  className="rounded-sm text-left text-sm font-semibold text-slate-900 wrap-break-word hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="rounded-sm text-left text-sm font-semibold text-foreground wrap-break-word hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   onClick={(e) => {
                     e.stopPropagation();
                     openNotification();
@@ -236,12 +235,12 @@ export function NotificationItem({
                   {title}
                 </button>
               ) : (
-                <p className="text-sm font-semibold text-slate-900 wrap-break-word">
+                <p className="text-sm font-semibold text-foreground wrap-break-word">
                   {title}
                 </p>
               )}
               {createdAt && (
-                <p className="mt-0.5 text-[11px] text-slate-500">
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
                   {formatDistanceToNowStrict(createdAt, {
                     addSuffix: true,
                   })}
@@ -263,7 +262,7 @@ export function NotificationItem({
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-8 w-8 rounded-xl text-slate-500 hover:bg-[#F7F4EE] hover:text-slate-900"
+                    className="h-8 w-8 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
                     onClick={() => handleMarkOne(n.id)}
                     disabled={isBusy || n.isRead}
                     aria-label="Mark as read"
@@ -271,11 +270,11 @@ export function NotificationItem({
                     {isBusy ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <CheckCheck className="h-4 w-4 text-[#C6923A]" />
+                      <CheckCheck className="h-4 w-4 text-royal-gold-ink-text" />
                     )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent className="border border-[#E2E8F0] bg-white text-slate-900 shadow-lg">
+                <TooltipContent className="border border-border bg-card text-foreground shadow-lg">
                   Mark read
                 </TooltipContent>
               </Tooltip>
@@ -285,7 +284,7 @@ export function NotificationItem({
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-8 w-8 rounded-xl text-slate-500 hover:bg-[#F7F4EE] hover:text-slate-900"
+                    className="h-8 w-8 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
                     onClick={() => handleArchive(n.id)}
                     disabled={isBusy}
                     aria-label="Archive"
@@ -293,31 +292,31 @@ export function NotificationItem({
                     {isBusy ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <Archive className="h-4 w-4 text-slate-500" />
+                      <Archive className="h-4 w-4 text-muted-foreground" />
                     )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent className="border border-[#E2E8F0] bg-white text-slate-900 shadow-lg">
+                <TooltipContent className="border border-border bg-card text-foreground shadow-lg">
                   Archive
                 </TooltipContent>
               </Tooltip>
             </div>
           </div>
           {body && (
-            <p className="mt-2 text-sm text-slate-600 wrap-break-word">
+            <p className="mt-2 text-sm text-muted-foreground wrap-break-word">
               {body}
             </p>
           )}
 
           {(url || (n as NotificationItemExtended)?.payload) && (
             <div className="mt-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs text-slate-400">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 {!n.isRead ? (
-                  <span className="rounded-full border border-[#C6923A]/20 bg-[#C6923A]/10 px-2 py-0.5 text-[#8B6420]">
+                  <span className="rounded-full border border-royal-gold/20 bg-royal-gold-light px-2 py-0.5 text-royal-gold-ink-text">
                     Unread
                   </span>
                 ) : (
-                  <span className="rounded-full border border-[#E2E8F0] bg-[#FAF8F3] px-2 py-0.5 text-slate-500">
+                  <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-muted-foreground">
                     Read
                   </span>
                 )}
@@ -325,7 +324,7 @@ export function NotificationItem({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="rounded-sm border-[#C6923A] text-[#C6923A] hover:bg-[#F7F4EE] hover:text-[#8B6420] flex items-center gap-1"
+                    className="rounded-sm border-royal-gold text-royal-gold-ink-text hover:bg-muted hover:text-royal-gold-ink-text flex items-center gap-1"
                     onClick={(e) => {
                       e.stopPropagation(); // Prevent the click from propagating to the parent div
                       handleAdminApprovalAction();
@@ -339,7 +338,7 @@ export function NotificationItem({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="rounded-sm border-[#C6923A] text-[#C6923A] hover:bg-[#F7F4EE] hover:text-[#8B6420] flex items-center gap-1"
+                    className="rounded-sm border-royal-gold text-royal-gold-ink-text hover:bg-muted hover:text-royal-gold-ink-text flex items-center gap-1"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleLeadAction();
@@ -353,7 +352,7 @@ export function NotificationItem({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="rounded-sm border-[#C6923A] text-[#C6923A] hover:bg-[#F7F4EE] hover:text-[#8B6420] flex items-center gap-1"
+                    className="rounded-sm border-royal-gold text-royal-gold-ink-text hover:bg-muted hover:text-royal-gold-ink-text flex items-center gap-1"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleCertifierExtract();

@@ -35,7 +35,7 @@ export function WhatsAppPhoto({
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          "relative block w-full min-w-50 max-w-82.5 overflow-hidden rounded-md focus-visible:outline-2 focus-visible:outline-[#00a884]",
+          "relative block w-full min-w-50 max-w-82.5 overflow-hidden rounded-md focus-visible:outline-2 focus-visible:outline-royal-gold-ink",
           !loaded && "min-h-40 animate-pulse bg-black/6",
         )}
         aria-label={caption ? `Open photo: ${caption}` : "Open photo"}

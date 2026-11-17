@@ -200,12 +200,12 @@ export function AgentToolCall({
       // bar scroll to. Without it both looked for an element that never existed.
       data-approval-id={request?.requestId}
       className={cn(
-        "overflow-hidden rounded-xl border",
+        "overflow-hidden rounded-lg border bg-card",
         failed
-          ? "border-destructive/35 bg-destructive/5"
+          ? "border-destructive/35"
           : awaitingApproval
-            ? "border-royal-gold/45 bg-royal-gold-light/25"
-            : "border-border/70 bg-muted/25",
+            ? "border-warning/40"
+            : "border-border",
       )}
     >
       <header className="flex items-center gap-2.5 px-3 py-2.5">
@@ -213,9 +213,9 @@ export function AgentToolCall({
           className={cn(
             "grid size-7 shrink-0 place-items-center rounded-md bg-background",
             failed
-              ? "text-destructive"
+              ? "text-destructive-ink"
               : complete && !partial
-                ? "text-emerald-600"
+                ? "text-success-ink"
                 : "text-muted-foreground",
           )}
         >

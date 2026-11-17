@@ -51,7 +51,7 @@ export function CustomTemplateCreation({
       <div className="space-y-6">
         {/* Describe */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">
+          <label className="mb-1.5 block text-sm font-medium text-foreground">
             Describe what the email should cover
           </label>
           <Textarea
@@ -63,16 +63,16 @@ export function CustomTemplateCreation({
             }}
             placeholder="e.g. Write a follow-up email for a client named Kuldeep regarding his Double Storey project in Wilton, asking him to book a meeting..."
             className={cn(
-              "min-h-[120px] resize-none border-slate-200",
+              "min-h-[120px] resize-none border-border",
               "focus-visible:border-[var(--primary-color)]",
               "focus-visible:ring-0",
               "focus-visible:outline-none",
-              hook.errors.description &&
-                "border-red-500 !focus-visible:border-red-500 !focus-visible:ring-0",
+              hook.errors.description
+                && "border-destructive-ink focus-visible:!border-destructive-ink focus-visible:!ring-0",
             )}
           />
           {hook.errors.description && (
-            <p className="mt-1 text-xs text-red-500 font-medium">
+            <p className="mt-1 text-xs text-destructive-ink font-medium">
               {hook.errors.description}
             </p>
           )}
@@ -80,8 +80,8 @@ export function CustomTemplateCreation({
 
         {/* Links */}
         <div>
-          <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
-            <Link2 className="size-4 text-slate-400" />
+          <label className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
+            <Link2 className="size-4 text-muted-foreground" />
             Links (Displayed as Buttons)
           </label>
           <div className="space-y-3">
@@ -97,11 +97,11 @@ export function CustomTemplateCreation({
                         hook.updateLink(link.id, "label", e.target.value)
                       }
                       className={cn(
-                        "min-w-0 flex-1 border-slate-200",
+                        "min-w-0 flex-1 border-border",
                         "focus-visible:border-[var(--primary-color)]",
                         "focus-visible:ring-0",
                         "focus-visible:outline-none",
-                        linkError?.label && "border-red-500",
+                        linkError?.label && "border-destructive-ink",
                       )}
                     />
                     <Input
@@ -111,24 +111,24 @@ export function CustomTemplateCreation({
                         hook.updateLink(link.id, "url", e.target.value)
                       }
                       className={cn(
-                        "min-w-0 flex-[2] border-slate-200",
+                        "min-w-0 flex-[2] border-border",
                         "focus-visible:border-[var(--primary-color)]",
                         "focus-visible:ring-0",
                         "focus-visible:outline-none",
-                        linkError?.url && "border-red-500",
+                        linkError?.url && "border-destructive-ink",
                       )}
                     />
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => hook.removeLink(link.id)}
-                      className="shrink-0 text-slate-400 hover:text-red-500"
+                      className="shrink-0 text-muted-foreground hover:text-destructive-ink"
                     >
                       <Trash2 className="size-4" />
                     </Button>
                   </div>
                   {(linkError?.label || linkError?.url) && (
-                    <p className="text-[11px] text-red-500 font-medium">
+                    <p className="text-[11px] text-destructive-ink font-medium">
                       {linkError.label && linkError.url
                         ? "Label & URL are required"
                         : linkError.label || linkError.url}
@@ -140,7 +140,7 @@ export function CustomTemplateCreation({
             <Button
               variant="outline"
               onClick={hook.addLink}
-              className="border-dashed border-slate-300 text-slate-600 hover:border-[var(--primary-color)] hover:text-[var(--primary-color)]"
+              className="border-dashed border-border text-muted-foreground hover:border-[var(--primary-color)] hover:text-[var(--primary-color)]"
             >
               <Plus className="mr-2 size-4" /> Add Link
             </Button>
@@ -149,8 +149,8 @@ export function CustomTemplateCreation({
 
         {/* Attachments */}
         <div>
-          <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
-            <Paperclip className="size-4 text-slate-400" />
+          <label className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
+            <Paperclip className="size-4 text-muted-foreground" />
             Files / Attachments
           </label>
           <div className="space-y-3">
@@ -159,7 +159,7 @@ export function CustomTemplateCreation({
               return (
                 <div
                   key={file.id}
-                  className="flex flex-col gap-2 rounded-md border border-slate-200 p-3"
+                  className="flex flex-col gap-2 rounded-md border border-border p-3"
                 >
                   {/* Row 1: Label & Delete */}
                   <div className="flex items-center gap-2">
@@ -170,16 +170,16 @@ export function CustomTemplateCreation({
                         hook.updateAttachment(file.id, "label", e.target.value)
                       }
                       className={cn(
-                        "min-w-0 flex-1 border-slate-200",
+                        "min-w-0 flex-1 border-border",
                         "focus-visible:border-[var(--primary-color)]",
                         "focus-visible:ring-0",
                         "focus-visible:outline-none",
-                        fileError?.label && "border-red-500",
+                        fileError?.label && "border-destructive-ink",
                       )}
                     />
 
                     {/* Mode Toggle */}
-                    <div className="flex h-9 shrink-0 items-center overflow-hidden rounded-md border border-slate-200">
+                    <div className="flex h-9 shrink-0 items-center overflow-hidden rounded-md border border-border">
                       <button
                         type="button"
                         onClick={() =>
@@ -189,7 +189,7 @@ export function CustomTemplateCreation({
                           "flex h-full items-center gap-1.5 px-3 text-xs font-medium transition-colors",
                           file.mode === "upload"
                             ? "bg-[var(--primary-bg)]/10 text-[var(--primary-color)]"
-                            : "bg-white text-slate-500 hover:bg-slate-50",
+                            : "bg-card text-muted-foreground hover:bg-muted",
                         )}
                       >
                         <Upload className="size-3.5" /> Upload
@@ -200,10 +200,10 @@ export function CustomTemplateCreation({
                           hook.updateAttachment(file.id, "mode", "url")
                         }
                         className={cn(
-                          "flex h-full items-center gap-1.5 border-l border-slate-200 px-3 text-xs font-medium transition-colors",
+                          "flex h-full items-center gap-1.5 border-l border-border px-3 text-xs font-medium transition-colors",
                           file.mode === "url"
                             ? "bg-[var(--primary-bg)]/10 text-[var(--primary-color)]"
-                            : "bg-white text-slate-500 hover:bg-slate-50",
+                            : "bg-card text-muted-foreground hover:bg-muted",
                         )}
                       >
                         <LinkIcon className="size-3.5" /> URL
@@ -214,7 +214,7 @@ export function CustomTemplateCreation({
                       variant="ghost"
                       size="icon"
                       onClick={() => hook.removeAttachment(file.id)}
-                      className="shrink-0 text-slate-400 hover:text-red-500"
+                      className="shrink-0 text-muted-foreground hover:text-destructive-ink"
                     >
                       <Trash2 className="size-4" />
                     </Button>
@@ -240,7 +240,7 @@ export function CustomTemplateCreation({
                         variant="outline"
                         onClick={() => fileInputRefs.current[file.id]?.click()}
                         disabled={file.isUploading}
-                        className="border-dashed border-slate-300 text-slate-600 hover:border-[var(--primary-color)] hover:text-[var(--primary-color)]"
+                        className="border-dashed border-border text-muted-foreground hover:border-[var(--primary-color)] hover:text-[var(--primary-color)]"
                       >
                         {file.isUploading ? (
                           <Loader2 className="mr-2 size-4 animate-spin" />
@@ -254,7 +254,7 @@ export function CustomTemplateCreation({
                             : "Choose File"}
                       </Button>
                       {file.url && !file.isUploading && (
-                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-green-600">
+                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-success-ink">
                           File uploaded successfully
                         </span>
                       )}
@@ -267,18 +267,18 @@ export function CustomTemplateCreation({
                         hook.updateAttachment(file.id, "url", e.target.value)
                       }
                       className={cn(
-                        "min-w-0 border-slate-200",
+                        "min-w-0 border-border",
                         "focus-visible:border-[var(--primary-color)]",
                         "focus-visible:ring-0",
                         "focus-visible:outline-none",
-                        fileError?.url && "border-red-500",
+                        fileError?.url && "border-destructive-ink",
                       )}
                     />
                   )}
 
                   {/* Errors */}
                   {(fileError?.label || fileError?.url) && (
-                    <p className="text-[11px] text-red-500 font-medium">
+                    <p className="text-[11px] text-destructive-ink font-medium">
                       {fileError.label && fileError.url
                         ? "File name & URL are required"
                         : fileError.label || fileError.url}
@@ -290,7 +290,7 @@ export function CustomTemplateCreation({
             <Button
               variant="outline"
               onClick={hook.addAttachment}
-              className="border-dashed border-slate-300 text-slate-600 hover:border-[var(--primary-color)] hover:text-[var(--primary-color)]"
+              className="border-dashed border-border text-muted-foreground hover:border-[var(--primary-color)] hover:text-[var(--primary-color)]"
             >
               <Plus className="mr-2 size-4" /> Add Attachment
             </Button>
@@ -299,7 +299,7 @@ export function CustomTemplateCreation({
       </div>
 
       {/* Footer */}
-      <div className="-mx-6 -mb-6 mt-6 flex justify-end border-t border-[#E2E8F0] bg-slate-50/50 px-6 py-4">
+      <div className="-mx-6 -mb-6 mt-6 flex justify-end border-t border-border bg-muted/50 px-6 py-4">
         <Button
           onClick={hook.handleGenerate}
           disabled={hook.isGenerating}

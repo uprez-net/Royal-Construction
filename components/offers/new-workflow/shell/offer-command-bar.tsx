@@ -64,7 +64,7 @@ export function OfferCommandBar({
     // the badges and save state — instead of three. The contract value is left
     // to the summary strip there, which already shows it at the bottom of the
     // same frame. From md up every item sits on one line via `md:contents`.
-    <header className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border/70 bg-white px-3 py-2 md:flex-nowrap md:gap-x-2.5 md:px-4 md:py-2.5">
+    <header className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border/70 bg-card px-3 py-2 md:flex-nowrap md:gap-x-2.5 md:px-4 md:py-2.5">
       {/* The page's only h1. Screen readers get the offer's identity here;
           sighted users get it from the badge and address. */}
       <h1
@@ -98,7 +98,7 @@ export function OfferCommandBar({
       </div>
 
       <div className="flex w-full min-w-0 flex-wrap items-center gap-2 md:contents">
-        <Badge className="shrink-0 bg-royal-gold-ink font-mono text-white md:order-1">
+        <Badge className="shrink-0 bg-royal-gold-light font-mono text-royal-gold-ink-text md:order-1">
           {awaitingOffer
             ? "Loading…"
             : formatOfferReference(job.reference, job.revision)}

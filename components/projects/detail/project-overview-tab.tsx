@@ -1150,7 +1150,7 @@ function PaymentStagesTable({
     onChange([...stages, { label: "", percentage: null, amount: null }]);
 
   return (
-    <div className="space-y-2 rounded-xl border border-border bg-card p-3 md:p-4">
+    <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-foreground">Payment stages</p>
         <Badge
@@ -1163,7 +1163,7 @@ function PaymentStagesTable({
 
       {stages.length > 0 ? (
         <div className="overflow-hidden rounded-lg border border-border">
-          <div className="hidden grid-cols-[1fr_100px_120px_32px] gap-2 bg-muted px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground md:grid">
+          <div className="hidden grid-cols-[1fr_100px_120px_32px] gap-2 bg-muted px-3 py-2 text-[11px]/[1.4] font-semibold tracking-[0.06em] text-muted-foreground uppercase md:grid">
             <span>Label</span>
             <span>Percent</span>
             <span>Amount</span>
@@ -1993,7 +1993,7 @@ export function ProjectOverviewTab({
           `sticky` a no-op: it stuck inside a box that never scrolls. Unclipped,
           Save stays on screen down a form several screens long. */}
       <Card className="overflow-visible border-border/70 bg-card pt-0 shadow-sm">
-        <CardHeader className="sticky top-0 z-20 flex flex-row flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-card px-4 pt-3 shadow-sm [.border-b]:pb-3 sm:gap-3 sm:px-6 sm:pt-4 sm:[.border-b]:pb-4">
+        <CardHeader className="sticky top-(--topbar-h) z-20 flex flex-row flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-card px-4 pt-3 shadow-sm [.border-b]:pb-3 sm:gap-3 sm:px-6 sm:pt-4 sm:[.border-b]:pb-4">
           <div className="min-w-0 flex-1">
             {/* The page <h1> is the project name in project-header.tsx and
                 nothing between here and it is an <h2>, so this panel title is

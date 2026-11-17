@@ -1,5 +1,7 @@
 "use client";
 
+import { StatusPill } from "@/components/common/status-pill";
+
 import { useId, useState, useTransition, type SubmitEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -15,7 +17,7 @@ import {
 import { toast } from "sonner";
 
 import { DataTable } from "@/components/common/data-table";
-import { SectionCard } from "@/components/common/section-card";
+import { ListToolbar, TableCard } from "@/components/common/list-toolbar";
 import { TradeIconGlyph } from "@/components/tradie-management/trade-icon";
 import {
   AlertDialog,
@@ -27,7 +29,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -128,23 +129,20 @@ export function TradeTypesAdmin({
             {row.tradieCount}
           </span>,
           row.archived ? (
-            <Badge key={`status-${row.id}`} variant="secondary">
+            <StatusPill key={`status-${row.id}`} tone="neutral">
               Archived
-            </Badge>
+            </StatusPill>
           ) : (
-            <Badge
-              key={`status-${row.id}`}
-              variant="outline"
-              className="border-success/40 text-success-ink"
-            >
+            <StatusPill key={`status-${row.id}`} tone="success">
               In use
-            </Badge>
+            </StatusPill>
           ),
           <div key={`actions-${row.id}`} className="flex justify-end gap-1">
             <Button
               type="button"
               variant="ghost"
               size="sm"
+              className="min-h-11 md:min-h-0"
               disabled={isPending}
               onClick={() => setEditingId(row.id)}
               aria-label={`Edit ${row.label}`}
@@ -157,6 +155,7 @@ export function TradeTypesAdmin({
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="min-h-11 md:min-h-0"
                 disabled={isPending}
                 onClick={() =>
                   void submit(
@@ -178,6 +177,7 @@ export function TradeTypesAdmin({
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="min-h-11 md:min-h-0"
                 disabled={isPending || row.locked}
                 title={row.locked ? LOCKED_REASON : undefined}
                 onClick={() =>
@@ -209,7 +209,7 @@ export function TradeTypesAdmin({
                 disabled={isPending}
                 onClick={() => setPendingDelete(row)}
                 aria-label={`Delete ${row.label}`}
-                className="text-destructive hover:text-destructive"
+                className="min-h-11 text-destructive hover:text-destructive md:min-h-0"
               >
                 <Trash2 className="size-4" aria-hidden="true" />
               </Button>
@@ -247,12 +247,10 @@ export function TradeTypesAdmin({
 
   return (
     <TooltipProvider>
-      <SectionCard
-        title="Trades"
-        description="Archiving takes a trade off the pickers; tradies already under it keep it. Only a trade with no tradies can be deleted."
-        action={
-          archivedCount > 0 ? (
-            <div className="flex items-center gap-2">
+      <div className="space-y-5">
+        {archivedCount > 0 ? (
+          <ListToolbar>
+            <div className="flex min-h-11 items-center gap-2">
               <Switch
                 id="show-archived-trades"
                 checked={showArchived}
@@ -262,30 +260,35 @@ export function TradeTypesAdmin({
                 Show archived ({archivedCount})
               </Label>
             </div>
-          ) : undefined
-        }
-      >
-        <div className="space-y-4">
-          <AddTradeType
-            disabled={isPending}
-            onAdd={(label, icon) =>
-              submit(
-                () => createTradeTypeAction({ label, icon }),
-                () => `${label} added.`,
-              )
-            }
-          />
+          </ListToolbar>
+        ) : null}
 
-          <DataTable
-            mobileLayout="cards"
-            mobileColumns={1}
-            mobileTitleColumn={1}
-            headers={["", "Trade", "Tradies", "Status", ""]}
-            align={["start", "start", "end", "start", "end"]}
-            caption="Trades a tradie can be listed under, with how many tradies each holds."
-            rows={rows}
-          />
-        </div>
+        <TableCard
+          header={
+            <AddTradeType
+              disabled={isPending}
+              onAdd={(label, icon) =>
+                submit(
+                  () => createTradeTypeAction({ label, icon }),
+                  () => `${label} added.`,
+                )
+              }
+            />
+          }
+        >
+          <div className="p-4 sm:p-5 md:p-0">
+            <DataTable
+              flush
+              mobileLayout="cards"
+              mobileColumns={1}
+              mobileTitleColumn={1}
+              headers={["", "Trade", "Tradies", "Status", ""]}
+              align={["start", "start", "end", "start", "end"]}
+              caption="Trades a tradie can be listed under, with how many tradies each holds."
+              rows={rows}
+            />
+          </div>
+        </TableCard>
 
         <AlertDialog
           open={pendingDelete !== null}
@@ -321,7 +324,7 @@ export function TradeTypesAdmin({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </SectionCard>
+      </div>
     </TooltipProvider>
   );
 }
@@ -349,7 +352,7 @@ function AddTradeType({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3 sm:flex-row sm:items-end"
+      className="flex flex-col gap-2 sm:flex-row sm:items-end"
     >
       <div className="flex-1 space-y-1.5">
         <Label htmlFor={inputId}>New trade</Label>
@@ -363,7 +366,11 @@ function AddTradeType({
         />
       </div>
       <IconPicker value={icon} onChange={setIcon} disabled={disabled} />
-      <Button type="submit" disabled={disabled || !label.trim()}>
+      <Button
+        type="submit"
+        disabled={disabled || !label.trim()}
+        className="min-h-11 md:min-h-0"
+      >
         <Plus className="size-4" aria-hidden="true" />
         Add trade
       </Button>
@@ -413,6 +420,7 @@ function EditTradeType({
       <Button
         type="submit"
         size="sm"
+        className="min-h-11 md:min-h-0"
         disabled={disabled || !label.trim()}
         aria-label="Save"
       >
@@ -422,6 +430,7 @@ function EditTradeType({
       <Button
         type="button"
         size="sm"
+        className="min-h-11 md:min-h-0"
         variant="ghost"
         onClick={onCancel}
         disabled={disabled}

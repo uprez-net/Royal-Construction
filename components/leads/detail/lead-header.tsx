@@ -129,7 +129,7 @@ function LeadDealValuePanel({
   return (
     <section
       aria-labelledby={headingId}
-      className="rounded-xl border border-border/70 bg-card p-4 shadow-sm"
+      className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/4"
     >
       <div className="flex items-center justify-between gap-3">
         <h2
@@ -141,7 +141,7 @@ function LeadDealValuePanel({
       </div>
 
       <p className="mt-2 flex flex-wrap items-baseline gap-x-2">
-        <span className="font-heading text-3xl font-semibold tracking-tight text-foreground tabular-nums">
+        <span className="font-mono text-3xl font-semibold tracking-tight text-foreground tabular-nums">
           {compactCurrency.format(deal.amount)}
         </span>
         <span className="text-xs text-muted-foreground">{deal.caption}</span>
@@ -156,7 +156,7 @@ function LeadDealValuePanel({
             className="h-2 flex-1 overflow-hidden rounded-full bg-muted"
           >
             <div
-              className="h-full rounded-full bg-linear-to-r from-amber-400 to-orange-500"
+              className="h-full rounded-full bg-royal-gold"
               style={{ width: `${fillPercent}%` }}
             />
           </div>
@@ -274,7 +274,7 @@ export function LeadHeader({
   };
 
   return (
-    <section className="rounded-xl border border-border/70 bg-card p-4 shadow-sm sm:p-6 sm:px-7">
+    <header>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 space-y-2 [&_a]:break-words">
           <Link
@@ -286,7 +286,7 @@ export function LeadHeader({
           </Link>
 
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-heading break-words text-xl leading-tight font-semibold tracking-tight text-foreground sm:text-2xl">
+            <h1 className="font-heading break-words text-[1.625rem] leading-[1.2] font-semibold tracking-[-0.015em] text-foreground">
               {lead.name}
             </h1>
             <StageBadgeSelect
@@ -295,10 +295,10 @@ export function LeadHeader({
               disabled={isUpdatingStage}
             />
             {lead.urgent ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive-light px-3 py-1 text-xs font-medium text-destructive-ink">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-light px-3 py-1 text-xs font-medium text-warning-ink">
                 <span
                   aria-hidden="true"
-                  className="inline-block size-2 animate-pulse rounded-full bg-rose-600"
+                  className="inline-block size-1.5 rounded-full bg-current"
                 />
                 Urgent
               </span>
@@ -437,7 +437,7 @@ export function LeadHeader({
                 className="h-9 rounded-lg px-3.5 text-sm font-medium"
               >
                 <MessageCircle
-                  className="mr-1.5 size-4 text-emerald-600"
+                  className="mr-1.5 size-4 text-success-ink"
                   aria-hidden="true"
                 />
                 WhatsApp
@@ -505,6 +505,6 @@ export function LeadHeader({
           </span>
         </div>
       ) : null}
-    </section>
+    </header>
   );
 }

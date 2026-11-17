@@ -19,6 +19,7 @@ import {
 import {
   DomainAuthorizationError,
   DomainTransitionError,
+  DomainValidationError,
 } from "@/lib/domain/errors";
 import { systemPrincipal, anonymousPrincipal } from "@/lib/domain/principal";
 import type { DomainDb } from "@/lib/domain/db";
@@ -107,12 +108,19 @@ test("cancelled bookings contribute no spend while completed quoted and hourly w
 test("approved removal archives identity and cancels only unfinished bookings, retaining all history", async () => {
   const recorder = recordingDb({
     "tradieApproval.findUnique": removal,
-    "tradieSchedule.findMany": [{ projectId: "p_1" }, { projectId: "p_1" }],
+    "tradieSchedule.findMany": [
+      { id: "s_1", projectId: "p_1" },
+      { id: "s_2", projectId: "p_1" },
+    ],
     "tradieSchedule.updateMany": { count: 2 },
   });
   const result = await resolveTradieApproval(
     adminPrincipal(),
-    { approvalId: "a_1", resolution: "approved" },
+    {
+      approvalId: "a_1",
+      resolution: "approved",
+      reviewedBookingIds: ["s_2", "s_1"],
+    },
     recorder.db,
   );
   assert.deepEqual(result.affected, {
@@ -148,6 +156,58 @@ test("approved removal archives identity and cancels only unfinished bookings, r
   assert.equal(closure.data.status, "REJECTED");
   assert.equal(closure.data.pendingDeletionKey, null);
   assert.deepEqual(closure.where.actionType, { not: "INCIDENT_RESOLUTION" });
+});
+
+test("a removal approve is refused unless it names the bookings it was shown (#526)", async () => {
+  const bookings = [
+    { id: "s_1", projectId: "p_1" },
+    { id: "s_2", projectId: "p_2" },
+  ];
+  const attempt = async (reviewedBookingIds?: string[]) => {
+    const recorder = recordingDb({
+      "tradieApproval.findUnique": removal,
+      "tradieSchedule.findMany": bookings,
+    });
+    const outcome = await resolveTradieApproval(
+      adminPrincipal(),
+      { approvalId: "a_1", resolution: "approved", reviewedBookingIds },
+      recorder.db,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    // Refused inside the transaction, before anything is archived or
+    // cancelled: the only write is the claim, which the database rolls back.
+    assert.deepEqual(
+      recorder.writes().map((call) => call.operation),
+      ["tradieApproval.updateMany"],
+    );
+    return outcome;
+  };
+  // No review: the bulk approve, or a bare server-action call.
+  assert.ok((await attempt()) instanceof DomainValidationError);
+  // A review from before a booking was added.
+  assert.ok((await attempt(["s_1"])) instanceof DomainTransitionError);
+  // s_1 done and s_3 added since: the count matches, the bookings do not.
+  assert.ok((await attempt(["s_1", "s_3"])) instanceof DomainTransitionError);
+});
+
+test("an incident approve is refused without a resolution note (#526)", async () => {
+  const recorder = recordingDb({
+    "tradieApproval.findUnique": {
+      ...removal,
+      actionType: TradieApprovalActionType.INCIDENT_RESOLUTION,
+      updationData: { incidentId: "i_1" },
+    },
+  });
+  await assert.rejects(
+    resolveTradieApproval(
+      adminPrincipal(),
+      { approvalId: "a_1", resolution: "approved", incidentResolution: "  " },
+      recorder.db,
+    ),
+    DomainValidationError,
+  );
 });
 
 test("requesting and rejecting removal never change directory or bookings", async () => {
@@ -242,6 +302,40 @@ test("archived tradies stay out of searches and cannot be booked or removed agai
     DomainTransitionError,
   );
   assert.deepEqual(archived.writes(), []);
+});
+
+test("a tradie waiting on removal cannot take new work until it is decided (#529)", async () => {
+  const pending = recordingDb({
+    "tradie.findUnique": { ...tradie, approvals: [{ id: "a_1" }] },
+    "project.findUnique": project,
+  });
+  await assert.rejects(
+    () =>
+      createTradieSchedule(
+        adminPrincipal(),
+        {
+          tradieId: "t_1",
+          projectId: "p_1",
+          scheduledDate: new Date(),
+          durationDays: 1,
+          requiresQuote: false,
+        },
+        pending.db,
+      ),
+    (error: unknown) =>
+      error instanceof DomainTransitionError
+      && /removal request waiting/.test(error.message),
+  );
+  assert.deepEqual(pending.writes(), []);
+  // The check asks for a pending removal only: a rejected one, or another
+  // kind of request, leaves the tradie bookable.
+  const read = pending.calls.find(
+    (call) => call.operation === "tradie.findUnique",
+  )?.args as { include: { approvals: { where: unknown } } };
+  assert.deepEqual(read.include.approvals.where, {
+    actionType: "TRADIE_REMOVAL",
+    status: "PENDING",
+  });
 });
 
 test("cancelled schedules cannot resume, reschedule, or email a reminder", async () => {

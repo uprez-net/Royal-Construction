@@ -35,9 +35,9 @@ test("an admin screen is named as its page is, not by its slug", () => {
   assert.equal(getScreenTitle("__proto__"), "__proto__");
   assert.equal(getScreenTitle("constructor"), "Constructor");
   assert.deepEqual(getShellTrail("/admin/comms", getScreenTitle("comms")), [
-    "Home",
-    "Admin",
-    "Phone & SMS",
+    { label: "Home", href: "/dashboard" },
+    { label: "Admin", href: "/admin" },
+    { label: "Phone & SMS" },
   ]);
 });
 
@@ -45,18 +45,34 @@ test("a slug that only starts with a digit is not a lead", () => {
   assert.equal(getScreenTitle("2fa-settings"), "2fa Settings");
 });
 
-test("the trail names the section above a nested screen", () => {
+const HOME = { label: "Home", href: "/dashboard" };
+
+test("the trail names the section above a nested screen, as links", () => {
   assert.deepEqual(getShellTrail("/offers/123", "Lead #123"), [
-    "Home",
-    "Offers",
-    "Lead #123",
+    HOME,
+    { label: "Offers", href: "/offers" },
+    { label: "Lead #123" },
   ]);
-  assert.deepEqual(getShellTrail("/offers", "Offers"), ["Home", "Offers"]);
-  assert.deepEqual(getShellTrail("/", "Dashboard"), ["Home", "Dashboard"]);
+  assert.deepEqual(getShellTrail("/admin/admin-approvals", "Admin Approvals"), [
+    HOME,
+    { label: "Admin", href: "/admin" },
+    { label: "Admin Approvals" },
+  ]);
+  assert.deepEqual(getShellTrail("/offers", "Offers"), [
+    HOME,
+    { label: "Offers" },
+  ]);
+  assert.deepEqual(getShellTrail("/", "Dashboard"), [
+    HOME,
+    { label: "Dashboard" },
+  ]);
 });
 
 test("the section is not repeated when the screen is the section", () => {
-  assert.deepEqual(getShellTrail("/offers/", "Offers"), ["Home", "Offers"]);
+  assert.deepEqual(getShellTrail("/offers/", "Offers"), [
+    HOME,
+    { label: "Offers" },
+  ]);
 });
 
 // The helper alone does not stop the shell drifting back to its own last-segment

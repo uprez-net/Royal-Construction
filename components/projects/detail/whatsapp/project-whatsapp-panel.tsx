@@ -116,9 +116,9 @@ export function ProjectWhatsAppPanel({
   ];
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/70 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
       {/* Phone: the chat list as chips. */}
-      <div className="flex gap-2 overflow-x-auto border-b border-black/5 bg-[#f0f2f5] p-2 md:hidden">
+      <div className="flex gap-2 overflow-x-auto border-b border-black/5 bg-muted p-2 md:hidden">
         {chats.map((chat) => (
           <button
             key={chat.key}
@@ -128,8 +128,8 @@ export function ProjectWhatsAppPanel({
             className={cn(
               "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium",
               open === chat.key
-                ? "bg-[#d9fdd3] text-[#005c4b]"
-                : "bg-white text-[#54656f]",
+                ? "bg-royal-gold-light text-royal-gold-ink-text"
+                : "bg-card text-muted-foreground",
             )}
           >
             {chat.key === "group" ? (
@@ -139,7 +139,7 @@ export function ProjectWhatsAppPanel({
             )}
             <span className="max-w-[160px] truncate">{chat.title}</span>
             {chat.unread > 0 ? (
-              <span className="rounded-full bg-[#25d366] px-1.5 text-[11px] text-white">
+              <span className="rounded-full bg-info px-1.5 text-[11px] text-white">
                 {chat.unread}
               </span>
             ) : null}
@@ -149,9 +149,9 @@ export function ProjectWhatsAppPanel({
 
       <div className="grid h-[min(78dvh,760px)] min-h-[520px] md:grid-cols-[300px_1fr] lg:grid-cols-[340px_1fr]">
         <aside className="hidden min-h-0 flex-col border-r border-black/5 md:flex">
-          <div className="flex h-[60px] shrink-0 items-center gap-2 bg-[#f0f2f5] px-4">
+          <div className="flex h-[60px] shrink-0 items-center gap-2 bg-muted px-4">
             <WhatsAppGlyph brand className="size-5" />
-            <p className="text-[15px] font-semibold text-[#111b21]">Chats</p>
+            <p className="text-[15px] font-semibold text-foreground">Chats</p>
           </div>
           <ul
             className="min-h-0 flex-1 overflow-y-auto"
@@ -164,14 +164,14 @@ export function ProjectWhatsAppPanel({
                   onClick={() => setOpen(chat.key)}
                   aria-current={open === chat.key ? "true" : undefined}
                   className={cn(
-                    "flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-[#f5f6f6]",
-                    open === chat.key && "bg-[#f0f2f5]",
+                    "flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/60",
+                    open === chat.key && "bg-muted",
                   )}
                 >
                   {chat.avatar}
                   <span className="min-w-0 flex-1 border-b border-black/5 pb-3 -mb-3">
                     <span className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-[15px] text-[#111b21]">
+                      <span className="truncate text-[15px] text-foreground">
                         {chat.title}
                       </span>
                       {chat.time ? (
@@ -179,8 +179,8 @@ export function ProjectWhatsAppPanel({
                           className={cn(
                             "shrink-0 text-[12px]",
                             chat.unread > 0
-                              ? "text-[#1fa855]"
-                              : "text-[#667781]",
+                              ? "text-info-ink"
+                              : "text-muted-foreground",
                           )}
                         >
                           {chat.time}
@@ -188,11 +188,11 @@ export function ProjectWhatsAppPanel({
                       ) : null}
                     </span>
                     <span className="mt-0.5 flex items-center justify-between gap-2">
-                      <span className="truncate text-[13px] text-[#667781]">
+                      <span className="truncate text-[13px] text-muted-foreground">
                         {chat.preview}
                       </span>
                       {chat.unread > 0 ? (
-                        <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-[#25d366] px-1.5 text-[12px] font-medium text-white">
+                        <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-info px-1.5 text-[12px] font-medium text-white">
                           {chat.unread}
                         </span>
                       ) : null}
@@ -202,7 +202,7 @@ export function ProjectWhatsAppPanel({
               </li>
             ))}
           </ul>
-          <p className="shrink-0 border-t border-black/5 px-4 py-3 text-[12px] leading-snug text-[#667781]">
+          <p className="shrink-0 border-t border-black/5 px-4 py-3 text-[12px] leading-snug text-muted-foreground">
             The group is where the owners, the office and site talk. The 1:1
             chat is the conversation from before the contract.
           </p>
@@ -230,14 +230,14 @@ export function ProjectWhatsAppPanel({
                 }
               >
                 <div className="flex h-full items-center justify-center p-6">
-                  <div className="space-y-2 rounded-lg bg-white/95 px-5 py-4 text-center shadow-sm">
+                  <div className="space-y-2 rounded-lg bg-card/95 px-5 py-4 text-center shadow-sm">
                     <p role="alert" className="text-sm text-destructive-ink">
                       {error}
                     </p>
                     <button
                       type="button"
                       onClick={() => void refresh()}
-                      className="text-sm font-medium text-[#008069] hover:underline"
+                      className="text-sm font-medium text-royal-gold-ink-text hover:underline"
                     >
                       Try again
                     </button>
@@ -307,7 +307,7 @@ function Loading() {
       header={<WhatsAppChatHeader avatar={<ChatAvatar />} title="Loading…" />}
     >
       <div className="flex h-full items-center justify-center">
-        <p className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm text-[#54656f] shadow-sm">
+        <p className="inline-flex items-center gap-2 rounded-full bg-card/90 px-4 py-2 text-sm text-muted-foreground shadow-sm">
           <Loader2 className="size-4 animate-spin" aria-hidden="true" />
           Loading…
         </p>

@@ -275,6 +275,32 @@ test("each tradie gets one stored email covering every activity, and a quote boo
   );
 });
 
+test("a request is refused, before any email, when a tradie in it is waiting on removal (#529)", async () => {
+  const recorder = database({
+    "tradie.findUnique": (args: unknown) => {
+      const id = (args as { where: { id: string } }).where.id;
+      const tradie = TRADIES[id] ?? null;
+      return tradie && id === "t_abc"
+        ? { ...tradie, approvals: [{ id: "ap_remove" }] }
+        : tradie;
+    },
+  });
+  const { ports, sent } = mail();
+  await assert.rejects(
+    sendTradieRequests(
+      adminPrincipal(),
+      REQUEST,
+      recorder.transactionalDb,
+      ports,
+    ),
+    (error: unknown) =>
+      error instanceof DomainTransitionError
+      && /ABC Plumbing Co\. has a removal request waiting/.test(error.message),
+  );
+  assert.deepEqual(recorder.writes(), []);
+  assert.equal(sent.length, 0);
+});
+
 test("a clearly-unsent failure is scheduled for an automatic retry; the bookings stay", async () => {
   const recorder = database();
   const { ports, sent } = mail({ estimating: "transient" });

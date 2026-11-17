@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useWhatsAppAvailability } from "@/context/WhatsAppAvailabilityContext";
 import {
   fetchProjectWhatsApp,
   markProjectWhatsAppRead,
@@ -12,9 +13,15 @@ import type {
   ProjectWhatsAppThreadDto,
 } from "@/lib/projects/whatsapp-types";
 
-/** How often an open group re-reads itself; quicker while it is being made. */
-export const PROJECT_WHATSAPP_POLL_MS = 12_000;
-const CREATING_POLL_MS = 5_000;
+/**
+ * How often an open group re-reads itself; quicker while it is being made.
+ * Each tick is a function invocation and a database read, and returning to
+ * the tab re-reads at once. Off entirely when WhatsApp is.
+ */
+export const PROJECT_WHATSAPP_POLL_MS = 30_000;
+/** The header only shows the group's state and unread count. */
+export const PROJECT_WHATSAPP_HEADER_POLL_MS = 60_000;
+const CREATING_POLL_MS = 10_000;
 
 function mergeMessages(
   ...lists: readonly (readonly ProjectWhatsAppMessageDto[])[]
@@ -57,11 +64,20 @@ const INITIAL: State = {
  */
 export function useProjectWhatsApp(
   projectId: string,
-  options: { readonly markRead?: boolean; readonly enabled?: boolean } = {},
+  options: {
+    readonly markRead?: boolean;
+    readonly enabled?: boolean;
+    readonly pollMs?: number;
+  } = {},
 ) {
-  const { markRead = false, enabled = true } = options;
+  const {
+    markRead = false,
+    enabled = true,
+    pollMs = PROJECT_WHATSAPP_POLL_MS,
+  } = options;
   const [state, setState] = useState<State>(INITIAL);
   const inFlight = useRef<AbortController | null>(null);
+  const whatsappEnabled = useWhatsAppAvailability().enabled;
 
   const refresh = useCallback(async () => {
     inFlight.current?.abort();
@@ -149,13 +165,18 @@ export function useProjectWhatsApp(
 
   useEffect(() => {
     if (!enabled) return;
+    // With WhatsApp off the first load still says why (the header shows it);
+    // nothing would change after, so there is no timer to run.
+    const polling = whatsappEnabled;
     const first = window.setTimeout(() => void refresh(), 0);
-    const timer = window.setInterval(
-      () => {
-        if (document.visibilityState === "visible") void refresh();
-      },
-      creating ? CREATING_POLL_MS : PROJECT_WHATSAPP_POLL_MS,
-    );
+    const timer = polling
+      ? window.setInterval(
+          () => {
+            if (document.visibilityState === "visible") void refresh();
+          },
+          creating ? CREATING_POLL_MS : pollMs,
+        )
+      : undefined;
     const onVisible = () => {
       if (document.visibilityState === "visible") void refresh();
     };
@@ -163,7 +184,7 @@ export function useProjectWhatsApp(
       const detail = (event as CustomEvent<{ projectId: string }>).detail;
       if (detail?.projectId === projectId) void refresh();
     };
-    document.addEventListener("visibilitychange", onVisible);
+    if (polling) document.addEventListener("visibilitychange", onVisible);
     window.addEventListener(PROJECT_WHATSAPP_CHANGED, onChanged);
     return () => {
       window.clearTimeout(first);
@@ -172,7 +193,7 @@ export function useProjectWhatsApp(
       window.removeEventListener(PROJECT_WHATSAPP_CHANGED, onChanged);
       inFlight.current?.abort();
     };
-  }, [creating, enabled, projectId, refresh]);
+  }, [creating, enabled, pollMs, projectId, refresh, whatsappEnabled]);
 
   return {
     addLocal,

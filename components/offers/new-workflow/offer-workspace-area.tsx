@@ -102,7 +102,7 @@ export function AreaCalculatorPanel({
   // on, so say so instead. The offer's own stored numbers are untouched.
   if (!isSupportedCalcVersion(calcVersion)) {
     return (
-      <Card className="border-border/70 bg-white/95 shadow-sm">
+      <Card className="border-border/70 bg-card/95 shadow-sm">
         <CardHeader className="border-b border-border/70">
           <OfferCardHeading
             description="This offer was priced under newer calculation rules than this version of the app carries, so the estimating aid is unavailable. The offer's own figures are unaffected."
@@ -127,7 +127,7 @@ export function AreaCalculatorPanel({
   const calculatedTiles = calculateTiles(basis, totalBathrooms);
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <OfferCardHeading

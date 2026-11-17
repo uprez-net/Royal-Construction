@@ -3,20 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  CircleDot,
-  ClipboardList,
-  Download,
-  Loader2,
-  Plus,
-} from "lucide-react";
+import { Download, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
+import { cn } from "@/lib/utils";
 import { DataTable } from "@/components/common/data-table";
+import { KpiBand } from "@/components/common/kpi-band";
 import { MetricCard } from "@/components/common/metric-card";
-import { SectionCard } from "@/components/common/section-card";
 import {
   Pagination,
   PaginationContent,
@@ -28,6 +21,10 @@ import {
 } from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  TableCard,
+  TOOLBAR_BUTTON_CLASS,
+} from "@/components/common/list-toolbar";
 import { useDebounce } from "@/hooks/use-debounce";
 import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
@@ -407,6 +404,206 @@ function ProjectsWorkspace({
     }
   };
 
+  // The grid view's cards sit on the page. The table view's table, chips and
+  // states sit in one card.
+  const isGrid = view === "grid";
+  // Empty and error states keep their dashed box on the page (grid), and lose
+  // the border inside the card (table).
+  const emptyBoxClass = isGrid
+    ? "rounded-lg border-2 border-dashed border-border bg-muted/30 px-6 py-12 text-center"
+    : "px-6 py-12 text-center";
+  const errorBoxClass = isGrid
+    ? "rounded-lg border-2 border-dashed border-destructive/40 bg-muted/30 px-6 py-12 text-center"
+    : "px-6 py-12 text-center";
+
+  const statusFilters = (
+    <ProjectFilters
+      kpis={kpis}
+      activeFilter={list.status}
+      onFilterChange={(status) => updateListParams({ status, page: null })}
+    />
+  );
+
+  // The list stays mounted while a refresh is in flight. Dimming keeps scroll
+  // position, focus and context instead of replacing the content with a loading
+  // bar on every keystroke.
+  const listBody = (
+    <div
+      aria-busy={isPageLoading}
+      className={cn(
+        isPageLoading
+          ? "opacity-60 transition-opacity motion-reduce:transition-none"
+          : "transition-opacity motion-reduce:transition-none",
+      )}
+    >
+      {visibleProjects.length === 0 && listFailed ? (
+        <div role="alert" className={errorBoxClass}>
+          <p className="text-sm font-medium text-foreground">
+            Couldn&apos;t load projects
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            The list could not be read, so it may not be empty. Try again in a
+            moment.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setReloadNonce((nonce) => nonce + 1)}
+            className="mt-3"
+          >
+            Try again
+          </Button>
+        </div>
+      ) : visibleProjects.length === 0 ? (
+        <div className={emptyBoxClass}>
+          <div className="text-muted-foreground">
+            <p className="text-sm font-medium text-foreground">
+              {hasActiveFilters
+                ? "No projects match these filters"
+                : "No projects yet"}
+            </p>
+            <p className="mt-1 text-xs">
+              {hasActiveFilters
+                ? "Widen the status filter or clear the search to see more."
+                : "Projects appear here once a signed offer is handed over to delivery."}
+            </p>
+          </div>
+          {hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={clearFilters}
+              className="mt-3"
+            >
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+      ) : view === "grid" ? (
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          {visibleProjects.map((project) => (
+            <EnhancedProjectCard
+              key={project.id}
+              role={role}
+              project={project}
+              detailsHref={projectDetailHref(
+                project.id,
+                searchParams.toString(),
+              )}
+              onDetailsClick={() => openQuickView(project, role === "ADMIN")}
+            />
+          ))}
+        </div>
+      ) : (
+        /* No emptyState prop: this branch only renders when
+                 visibleProjects.length > 0, so the table can never be empty.
+                 The page-level empty state above covers both "no data" and
+                 "no matches", and it offers Clear filters. */
+        <div className="p-4 sm:p-5 md:p-0">
+          <DataTable
+            flush
+            mobileLayout="cards"
+            headers={
+              showAttentionColumn
+                ? [...TABLE_HEADERS, ATTENTION_HEADER]
+                : TABLE_HEADERS
+            }
+            align={
+              showAttentionColumn ? [...TABLE_ALIGN, "start"] : [...TABLE_ALIGN]
+            }
+            caption="Active projects, with budget, spend, progress and delivery status. Select a row to open its quick view."
+            rowLabel={(rowIndex) =>
+              `Open ${visibleProjects[rowIndex]?.name ?? "project"}`
+            }
+            rows={visibleProjects.map((project) => {
+              const budget = Number(project.totalBudget);
+              const spent = Number(project.spent);
+              const progress = Math.max(
+                0,
+                Math.min(100, project.progressPercent ?? 0),
+              );
+              const status = projectStatusConfig(project.status);
+
+              return [
+                <Link
+                  key={`name-${project.id}`}
+                  href={projectDetailHref(project.id, searchParams.toString())}
+                  className="font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {project.name}
+                </Link>,
+                <span key={`client-${project.id}`}>
+                  {project.customer.name}
+                </span>,
+                <span key={`loc-${project.id}`}>{project.location}</span>,
+                <span
+                  key={`budget-${project.id}`}
+                  className="font-mono tabular-nums"
+                >
+                  {Number.isFinite(budget)
+                    ? compactCurrency.format(budget)
+                    : "—"}
+                </span>,
+                <span
+                  key={`spent-${project.id}`}
+                  className="font-mono tabular-nums"
+                >
+                  {Number.isFinite(spent) ? compactCurrency.format(spent) : "—"}
+                </span>,
+                <span
+                  key={`prog-${project.id}`}
+                  className="inline-flex items-center justify-end gap-2"
+                >
+                  <span
+                    className="h-1.5 w-16 overflow-hidden rounded-full bg-muted"
+                    role="progressbar"
+                    aria-valuenow={progress}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`${project.name} progress`}
+                  >
+                    <span
+                      className="block h-full bg-primary"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </span>
+                  <span className="font-mono font-semibold tabular-nums">
+                    {progress}%
+                  </span>
+                </span>,
+                <Badge
+                  key={`status-${project.id}`}
+                  className={`whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ${status.badge}`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="mr-1.5 inline-block size-1.5 rounded-full bg-current"
+                  />
+                  {formatStatus(project.status)}
+                </Badge>,
+                ...(showAttentionColumn
+                  ? [
+                      <ProjectAttentionReasons
+                        key={`attention-${project.id}`}
+                        attention={project.attention}
+                      />,
+                    ]
+                  : []),
+              ];
+            })}
+            onRowClick={(rowIndex) => {
+              const project = visibleProjects[rowIndex];
+              if (project) openQuickView(project, role === "ADMIN");
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="grid gap-6">
       <ProjectOverdueAlerts
@@ -417,330 +614,122 @@ function ProjectsWorkspace({
           projectDetailHref(projectId, searchParams.toString())
         }
       />
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <MetricCard
-          title="Total active"
-          value={String(kpis.totalActive)}
-          Icon={ClipboardList}
-          tone="info"
-        />
-        <MetricCard
-          title="On track"
-          value={String(kpis.onTrack)}
-          Icon={CheckCircle2}
-          tone="success"
-        />
+      <KpiBand className="grid-cols-2 xl:grid-cols-4">
+        <MetricCard title="Total active" value={String(kpis.totalActive)} />
+        <MetricCard title="On track" value={String(kpis.onTrack)} />
         <MetricCard
           title="Needs attention"
           value={String(kpis.needsAttention)}
-          Icon={AlertTriangle}
-          tone="warning"
         />
-        <MetricCard
-          title="Delayed"
-          value={String(kpis.delayed)}
-          Icon={CircleDot}
-          tone="danger"
-        />
-      </div>
+        <MetricCard title="Delayed" value={String(kpis.delayed)} />
+      </KpiBand>
 
-      <SectionCard
-        title="Active projects"
-        description="Select a project for a quick view, or Details for the full project page."
-        action={
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void handleExport()}
-              disabled={isExporting}
-              aria-busy={isExporting}
-              className="gap-2"
-            >
-              {isExporting ? (
-                <Loader2
-                  className="h-4 w-4 animate-spin motion-reduce:animate-none"
-                  aria-hidden="true"
-                />
-              ) : (
-                <Download className="h-4 w-4" aria-hidden="true" />
-              )}
-              {isExporting ? "Exporting…" : "Export"}
-            </Button>
-            <Button
-              type="button"
-              onClick={() => dispatch(openModal({ type: "createProject" }))}
-              className="gap-2"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              New project
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <ProjectFilters
-            kpis={kpis}
-            activeFilter={list.status}
-            onFilterChange={(status) =>
-              updateListParams({ status, page: null })
-            }
-          />
-          <ProjectToolbar
-            searchTerm={searchTerm}
-            onSearchTermChange={setSearchTerm}
-            sort={list.sort}
-            onSortChange={(sort) =>
-              updateListParams({
-                sort: sort === "name" ? null : sort,
-                page: null,
-              })
-            }
-          />
-
-          {/* The list stays mounted while a refresh is in flight — dimming keeps
-              scroll position, focus and context instead of replacing the
-              content with a loading bar on every keystroke. */}
-          <div
-            aria-busy={isPageLoading}
-            className={
-              isPageLoading
-                ? "opacity-60 transition-opacity motion-reduce:transition-none"
-                : "transition-opacity motion-reduce:transition-none"
-            }
+      <div>
+        <ProjectToolbar
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          sort={list.sort}
+          onSortChange={(sort) =>
+            updateListParams({
+              sort: sort === "name" ? null : sort,
+              page: null,
+            })
+          }
+        >
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void handleExport()}
+            disabled={isExporting}
+            aria-busy={isExporting}
+            className={cn(TOOLBAR_BUTTON_CLASS, "gap-2")}
           >
-            {visibleProjects.length === 0 && listFailed ? (
-              <div
-                role="alert"
-                className="rounded-lg border-2 border-dashed border-destructive/40 bg-muted/30 px-6 py-12 text-center"
-              >
-                <p className="text-sm font-medium text-foreground">
-                  Couldn&apos;t load projects
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  The list could not be read, so it may not be empty. Try again
-                  in a moment.
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setReloadNonce((nonce) => nonce + 1)}
-                  className="mt-3"
-                >
-                  Try again
-                </Button>
-              </div>
-            ) : visibleProjects.length === 0 ? (
-              <div className="rounded-lg border-2 border-dashed border-border bg-muted/30 px-6 py-12 text-center">
-                <div className="text-muted-foreground">
-                  <p className="text-sm font-medium text-foreground">
-                    {hasActiveFilters
-                      ? "No projects match these filters"
-                      : "No projects yet"}
-                  </p>
-                  <p className="mt-1 text-xs">
-                    {hasActiveFilters
-                      ? "Widen the status filter or clear the search to see more."
-                      : "Projects appear here once a signed offer is handed over to delivery."}
-                  </p>
-                </div>
-                {hasActiveFilters ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={clearFilters}
-                    className="mt-3"
-                  >
-                    Clear filters
-                  </Button>
-                ) : null}
-              </div>
-            ) : view === "grid" ? (
-              <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                {visibleProjects.map((project) => (
-                  <EnhancedProjectCard
-                    key={project.id}
-                    role={role}
-                    project={project}
-                    detailsHref={projectDetailHref(
-                      project.id,
-                      searchParams.toString(),
-                    )}
-                    onDetailsClick={() =>
-                      openQuickView(project, role === "ADMIN")
-                    }
-                  />
-                ))}
-              </div>
-            ) : (
-              /* No emptyState prop: this branch only renders when
-                 visibleProjects.length > 0, so the table can never be empty.
-                 The page-level empty state above covers both "no data" and
-                 "no matches", and it offers Clear filters. */
-              <DataTable
-                mobileLayout="cards"
-                headers={
-                  showAttentionColumn
-                    ? [...TABLE_HEADERS, ATTENTION_HEADER]
-                    : TABLE_HEADERS
-                }
-                align={
-                  showAttentionColumn
-                    ? [...TABLE_ALIGN, "start"]
-                    : [...TABLE_ALIGN]
-                }
-                caption="Active projects, with budget, spend, progress and delivery status. Select a row to open its quick view."
-                rowLabel={(rowIndex) =>
-                  `Open ${visibleProjects[rowIndex]?.name ?? "project"}`
-                }
-                rows={visibleProjects.map((project) => {
-                  const budget = Number(project.totalBudget);
-                  const spent = Number(project.spent);
-                  const progress = Math.max(
-                    0,
-                    Math.min(100, project.progressPercent ?? 0),
-                  );
-                  const status = projectStatusConfig(project.status);
-
-                  return [
-                    <Link
-                      key={`name-${project.id}`}
-                      href={projectDetailHref(
-                        project.id,
-                        searchParams.toString(),
-                      )}
-                      className="font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      {project.name}
-                    </Link>,
-                    <span key={`client-${project.id}`}>
-                      {project.customer.name}
-                    </span>,
-                    <span key={`loc-${project.id}`}>{project.location}</span>,
-                    <span
-                      key={`budget-${project.id}`}
-                      className="font-mono tabular-nums"
-                    >
-                      {Number.isFinite(budget)
-                        ? compactCurrency.format(budget)
-                        : "—"}
-                    </span>,
-                    <span
-                      key={`spent-${project.id}`}
-                      className="font-mono tabular-nums"
-                    >
-                      {Number.isFinite(spent)
-                        ? compactCurrency.format(spent)
-                        : "—"}
-                    </span>,
-                    <span
-                      key={`prog-${project.id}`}
-                      className="inline-flex items-center justify-end gap-2"
-                    >
-                      <span
-                        className="h-2 w-16 overflow-hidden rounded-full bg-muted"
-                        role="progressbar"
-                        aria-valuenow={progress}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-label={`${project.name} progress`}
-                      >
-                        <span
-                          className="block h-full bg-primary"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </span>
-                      <span className="font-mono font-semibold tabular-nums">
-                        {progress}%
-                      </span>
-                    </span>,
-                    <Badge
-                      key={`status-${project.id}`}
-                      className={`whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ${status.badge}`}
-                    >
-                      {formatStatus(project.status)}
-                    </Badge>,
-                    ...(showAttentionColumn
-                      ? [
-                          <ProjectAttentionReasons
-                            key={`attention-${project.id}`}
-                            attention={project.attention}
-                          />,
-                        ]
-                      : []),
-                  ];
-                })}
-                onRowClick={(rowIndex) => {
-                  const project = visibleProjects[rowIndex];
-                  if (project) openQuickView(project, role === "ADMIN");
-                }}
+            {isExporting ? (
+              <Loader2
+                className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
               />
+            ) : (
+              <Download className="h-4 w-4" aria-hidden="true" />
             )}
-          </div>
+            {isExporting ? "Exporting…" : "Export"}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => dispatch(openModal({ type: "createProject" }))}
+            className={cn(TOOLBAR_BUTTON_CLASS, "gap-2")}
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            New project
+          </Button>
+        </ProjectToolbar>
 
-          {pageInfo.totalCount > 0 ? (
-            <div className="space-y-3 pt-2">
-              <div
-                className="text-center text-xs text-muted-foreground"
-                aria-live="polite"
-              >
-                Showing {visibleProjects.length} of {pageInfo.totalCount}{" "}
-                projects
-              </div>
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      href="#"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        goToPage(Math.max(1, currentPage - 1));
-                      }}
-                      aria-disabled={currentPage === 1}
-                    />
-                  </PaginationItem>
-                  {paginationItems.map((item, index) =>
-                    item === "ellipsis" ? (
-                      <PaginationItem key={`ellipsis-${index}`}>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                    ) : (
-                      <PaginationItem key={item}>
-                        <PaginationLink
-                          href="#"
-                          isActive={item === currentPage}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            goToPage(item);
-                          }}
-                        >
-                          {item}
-                        </PaginationLink>
-                      </PaginationItem>
-                    ),
-                  )}
-                  <PaginationItem>
-                    <PaginationNext
-                      href="#"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        goToPage(
-                          Math.min(pageInfo.totalPages, currentPage + 1),
-                        );
-                      }}
-                      aria-disabled={currentPage >= pageInfo.totalPages}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
+        {isGrid ? (
+          <div className="grid gap-4 pt-5">
+            {statusFilters}
+            {listBody}
+          </div>
+        ) : (
+          <div className="pt-5">
+            <TableCard header={statusFilters}>{listBody}</TableCard>
+          </div>
+        )}
+
+        {pageInfo.totalCount > 0 ? (
+          <div className="space-y-3 pt-2">
+            <div
+              className="text-center text-xs text-muted-foreground"
+              aria-live="polite"
+            >
+              Showing {visibleProjects.length} of {pageInfo.totalCount} projects
             </div>
-          ) : null}
-        </div>
-      </SectionCard>
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      goToPage(Math.max(1, currentPage - 1));
+                    }}
+                    aria-disabled={currentPage === 1}
+                  />
+                </PaginationItem>
+                {paginationItems.map((item, index) =>
+                  item === "ellipsis" ? (
+                    <PaginationItem key={`ellipsis-${index}`}>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  ) : (
+                    <PaginationItem key={item}>
+                      <PaginationLink
+                        href="#"
+                        isActive={item === currentPage}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          goToPage(item);
+                        }}
+                      >
+                        {item}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ),
+                )}
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      goToPage(Math.min(pageInfo.totalPages, currentPage + 1));
+                    }}
+                    aria-disabled={currentPage >= pageInfo.totalPages}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

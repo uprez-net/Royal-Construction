@@ -9,17 +9,13 @@ import {
   useTransition,
 } from "react";
 import {
-  UserPlus,
-  CircleCheckBig,
-  Clock,
+  CalendarClock,
   Mail,
   Plus,
   Table2,
   BarChart3,
   Search,
   Download,
-  Sparkles,
-  FileText,
 } from "lucide-react";
 import { normalizeTypes } from "@/lib/leads/lead-helpers";
 import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
@@ -39,7 +35,11 @@ import { EmailCampaignModal } from "@/components/leads/modal-ui/email-campaign-m
 import { UnmatchedWhatsAppButton } from "@/components/leads/whatsapp/unmatched-whatsapp-review";
 import { PendingCommsButton } from "@/components/leads/comms/pending-comms";
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
-import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
+import {
+  KpiBand,
+  MOBILE_METRIC_STRIP_CLASS,
+} from "@/components/common/kpi-band";
+import { PageHeader } from "@/components/common/page-header";
 import { LeadStageCounts } from "./lead-stage-counts";
 import { LeadPagination } from "./lead-pagination";
 import { reloadLeadList, updateAndRefreshLeadList } from "./leads-list-refresh";
@@ -53,7 +53,6 @@ import {
   type LeadsListParamChanges,
 } from "./leads-list-url";
 import { nextTabIndex } from "@/lib/a11y/tab-keys";
-import { Card, CardContent } from "@/components/ui/card";
 import { ListSortMenu } from "@/components/common/list-sort-menu";
 import type { LeadListSort } from "@/lib/leads/list-sort";
 import { Button } from "@/components/ui/button";
@@ -81,7 +80,8 @@ type TabType = "table" | "followups" | "analytics";
 // (aria-selected) and arrow keys move between them (#442).
 const VIEW_TABS = [
   { key: "table" as TabType, label: "Leads", Icon: Table2 },
-  { key: "followups" as TabType, label: "Tasks", Icon: Clock },
+  // The lead page's "Scheduled work" tab lists the same tasks under this icon.
+  { key: "followups" as TabType, label: "Tasks", Icon: CalendarClock },
   { key: "analytics" as TabType, label: "Analytics", Icon: BarChart3 },
 ] as const;
 const VIEW_PANEL_ID = "leads-view-panel";
@@ -344,8 +344,22 @@ function LeadsWorkspace() {
 
   /* ── Handlers ── */
 
+  // The filter the Tasks tab opens on. Its own tab button shows everything;
+  // the Overdue follow-ups card opens it on what is due now.
+  const [tasksFilter, setTasksFilter] = useState<"all" | "dueNow">("all");
+  // Bumped by every press of the card, so a press always reopens on "due now",
+  // even when the filter was already "due now" and changed inside the view.
+  const [overdueOpens, setOverdueOpens] = useState(0);
+
   const handleTabChange = (tab: TabType) => {
+    setTasksFilter("all");
     setActiveTab(tab);
+  };
+
+  const openOverdueTasks = () => {
+    setTasksFilter("dueNow");
+    setOverdueOpens((count) => count + 1);
+    setActiveTab("followups");
   };
 
   // Arrow/Home/End move focus and select, as the other tab strips do. Roving
@@ -533,40 +547,30 @@ function LeadsWorkspace() {
     <div className="leads-container space-y-6">
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-      {/* Header card */}
-      <Card className="overflow-hidden border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
-        <CardContent className="relative p-4 sm:p-6">
-          <div className="absolute -right-12 -top-10 h-40 w-40 rounded-full bg-teal-500/10" />
-          <div className="absolute -bottom-14 right-20 h-32 w-32 rounded-full bg-teal-700/10" />
-          <div className="relative flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h1 className="text-lg font-extrabold text-slate-900">
-                Lead Pipeline
-              </h1>
-              <p className="hidden text-sm text-slate-600 sm:block">
-                Google Ads auto-capture • Follow-up automation • Email templates
-              </p>
-            </div>
-            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
-              <PendingCommsButton />
-              <UnmatchedWhatsAppButton />
-              <Button
-                variant="outline"
-                onClick={() => setShowEmailCampaign(true)}
-              >
-                <Mail className="mr-2 size-4" />
-                <span className="sm:hidden">Email</span>
-                <span className="hidden sm:inline">Email Campaign</span>
-              </Button>
-              <Button onClick={() => setShowAddLead(true)}>
-                <Plus className="mr-2 size-4" />
-                <span className="sm:hidden">Add Lead</span>
-                <span className="hidden sm:inline">Add Lead Manually</span>
-              </Button>
-            </div>
+      <PageHeader
+        headingLevel="h1"
+        title="Lead Pipeline"
+        description="Google Ads auto-capture • Follow-up automation • Email templates"
+        actions={
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+            <PendingCommsButton />
+            <UnmatchedWhatsAppButton />
+            <Button
+              variant="outline"
+              onClick={() => setShowEmailCampaign(true)}
+            >
+              <Mail className="mr-2 size-4" />
+              <span className="sm:hidden">Email</span>
+              <span className="hidden sm:inline">Email Campaign</span>
+            </Button>
+            <Button onClick={() => setShowAddLead(true)}>
+              <Plus className="mr-2 size-4" />
+              <span className="sm:hidden">Add Lead</span>
+              <span className="hidden sm:inline">Add Lead Manually</span>
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        }
+      />
 
       {loading ? <LeadsContentSkeleton /> : null}
 
@@ -595,7 +599,7 @@ function LeadsWorkspace() {
               </button>
             </p>
           ) : null}
-          <div
+          <KpiBand
             className={cn(
               MOBILE_METRIC_STRIP_CLASS,
               "sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-6",
@@ -605,8 +609,6 @@ function LeadsWorkspace() {
               label="Open leads"
               value={String(stats.open)}
               note="Not won, lost or archived"
-              tone="primary"
-              icon={UserPlus}
               onClick={() => handleCardClick("open")}
               active={activeMetric === "open"}
             />
@@ -614,8 +616,6 @@ function LeadsWorkspace() {
               label="Offers out"
               value={String(stats.offersOut)}
               note={`${currency.format(Number(stats.offersOutValue))} · quoted or negotiating`}
-              tone="badge"
-              icon={FileText}
               onClick={() => handleCardClick(OFFER_OUT_STAGE_LABELS.join(","))}
               active={activeMetric === OFFER_OUT_STAGE_LABELS.join(",")}
               noteWraps
@@ -628,16 +628,12 @@ function LeadsWorkspace() {
                   ? ` · ${stats.unvaluedCount} of ${stats.open} open leads have no value`
                   : ""
               }`}
-              tone="warning"
-              icon={BarChart3}
               noteWraps
             />
             <LeadMetricCard
               label="New leads this month"
               value={String(stats.newThisMonth)}
               note={`${stats.newLastMonth} last month`}
-              tone="info"
-              icon={Sparkles}
               // Opens this month's leads in the table: the card counts the same
               // working list (not archived, not Lost), always by calendar month.
               onClick={() =>
@@ -651,9 +647,10 @@ function LeadsWorkspace() {
               label="Overdue follow-ups"
               value={String(stats.overdueTasks)}
               note="Open tasks past due · all time · on the Tasks tab"
-              tone="danger"
-              icon={Clock}
               noteWraps
+              // It said "on the Tasks tab" and went nowhere when pressed.
+              onClick={openOverdueTasks}
+              active={activeTab === "followups" && tasksFilter === "dueNow"}
             />
             <LeadMetricCard
               label="Win rate (90 days)"
@@ -662,10 +659,8 @@ function LeadsWorkspace() {
               // timeframe above says.
               value={winRate.percent === null ? "—" : `${winRate.percent}%`}
               note={`${winRate.won} won · ${winRate.lost} lost`}
-              tone="success"
-              icon={CircleCheckBig}
             />
-          </div>
+          </KpiBand>
           {/* Every stage's own count, under the grouped cards above. */}
           <LeadStageCounts
             byStage={stats.byStage}
@@ -675,10 +670,12 @@ function LeadsWorkspace() {
         </>
       )}
 
-      {/* Main card */}
+      {/* The tabs and toolbar sit on the page. Each view draws its own card
+          (the table's .table-card, a follow-up's .fu-card, the analytics
+          panels), so wrapping them in another one made a card in a card. */}
       {loading ? null : (
-        <Card className="border-border/70 bg-white/95 shadow-sm">
-          <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-4 py-3 sm:px-5">
+        <div>
+          <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 pb-3">
             <div
               role="tablist"
               aria-label="Leads views"
@@ -699,16 +696,16 @@ function LeadsWorkspace() {
                   onClick={() => handleTabChange(key)}
                   onKeyDown={(event) => handleViewTabKeyDown(event, index)}
                   className={cn(
-                    "group relative inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-colors duration-200 sm:text-[12.5px]",
+                    "group relative inline-flex min-h-11 items-center gap-1.5 px-3 text-sm font-medium transition-colors duration-200 sm:text-[12.5px]",
                     activeTab === key
-                      ? "bg-royal-gold/15 text-royal-gold-ink shadow-sm"
-                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                      ? "font-semibold text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   <Icon className="size-4" aria-hidden="true" />
                   <span>{label}</span>
                   {activeTab === key && (
-                    <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-royal-gold-ink" />
+                    <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-royal-gold" />
                   )}
                 </button>
               ))}
@@ -731,12 +728,12 @@ function LeadsWorkspace() {
               >
                 <SelectTrigger
                   aria-label="Filter by date created"
-                  className="data-[size=default]:h-11 flex-1 rounded-lg border-border bg-background text-sm font-medium text-foreground shadow-none hover:bg-muted sm:flex-none"
+                  className="data-[size=default]:h-11 flex-1 rounded-lg border-input bg-card text-sm font-medium text-foreground shadow-none hover:bg-muted sm:flex-none"
                 >
                   <span className="text-muted-foreground">Created</span>
                   <SelectValue placeholder="Select timeframe" />
                 </SelectTrigger>
-                <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">
+                <SelectContent className="w-auto min-w-40 rounded-md border border-border bg-card shadow-lg">
                   <SelectItem value="today">Today</SelectItem>
                   <SelectItem value="this_week">This Week</SelectItem>
                   <SelectItem value="this_month">This Month</SelectItem>
@@ -787,7 +784,7 @@ function LeadsWorkspace() {
             </div>
           </div>
 
-          <CardContent
+          <div
             role="tabpanel"
             id={VIEW_PANEL_ID}
             aria-labelledby={viewTabId(activeTab)}
@@ -825,6 +822,10 @@ function LeadsWorkspace() {
             )}
             {activeTab === "followups" && (
               <FollowupsView
+                // Remounted on every card press and filter change, so pressing
+                // the card while already on the tab reapplies "due now".
+                key={`${tasksFilter}:${overdueOpens}`}
+                initialFilter={tasksFilter}
                 loading={loadingLeads}
                 leads={leads}
                 onLeadUpdate={updateLeadInList}
@@ -849,8 +850,8 @@ function LeadsWorkspace() {
                 onPageChange={handlePageChange}
               />
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Modals */}

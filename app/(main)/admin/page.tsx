@@ -1,157 +1,165 @@
-import { PageHeroCard } from "@/components/common/page-hero-card";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
+import { redirect } from "next/navigation";
+import { requireAdminUser } from "@/lib/auth/require-admin";
+import { PageHeader } from "@/components/common/page-header";
+import { TableCard } from "@/components/common/list-toolbar";
+import { StatusPill } from "@/components/common/status-pill";
 import {
-  ArrowRight,
-  CheckSquare,
-  HardHat,
-  LucideIcon,
-  PenLine,
-  Phone,
-  Plug,
-  Sparkles,
-  Users,
-} from "lucide-react";
+  getAdminHubStatuses,
+  type AdminHubStatus,
+  type AdminHubStatuses,
+  type AdminHubTool,
+} from "@/lib/data/admin-hub";
+import { ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { connection } from "next/server";
 import type { Metadata } from "next";
-import type { ComponentType } from "react";
+import { Suspense } from "react";
 
-import { WhatsAppGlyph } from "@/components/whatsapp/whatsapp-logo";
+import AdminHubSkeleton from "./loading";
 
 export const metadata: Metadata = {
-  title: "Admin Dashboard",
-  description: "Manage offer pre-fill content and review task approvals.",
+  title: "Admin",
+  description: "Eight tools for the office.",
 };
 
-export default function AdminPage() {
-  const adminAction: {
-    label: string;
-    description: string;
-    icon: LucideIcon | ComponentType<{ className?: string }>;
-    href: string;
-  }[] = [
-    {
-      label: "Manage Build Sequence",
-      description:
-        "Plan project activities, sub-activities, estimated days and required trades.",
-      icon: CheckSquare,
-      href: "/admin/build-sequence",
-    },
-    {
-      label: "Manage Offer Pre-Fill Content",
-      description:
-        "Edit and update the pre-fill content that powers every generated offer.",
-      icon: PenLine,
-      href: "/admin/offer-content",
-    },
-    {
-      label: "Manage Task Approvals",
-      description: "Review submitted tasks and approve them for the team.",
-      icon: CheckSquare,
-      href: "/admin/admin-approvals",
-    },
-    {
-      label: "Manage Team Members",
-      description: "Add, remove, and manage team members and their roles.",
-      icon: Users,
-      href: "/admin/manage-team",
-    },
-    {
-      label: "Manage Trade Types",
-      description:
-        "Add, rename and archive the trades tradies are listed under.",
-      icon: HardHat,
-      href: "/admin/trade-types",
-    },
-    {
-      label: "Xero Accounting",
-      description:
-        "Connect the Xero organisation that progress claims are raised in.",
-      icon: Plug,
-      href: "/admin/xero",
-    },
-    {
-      label: "WhatsApp",
-      description:
-        "See the connected WhatsApp number, where its webhook points, and which features are on.",
-      icon: WhatsAppGlyph,
-      href: "/admin/whatsapp",
-    },
-    {
-      label: "Phone & SMS",
-      description:
-        "See which phone provider is active, its numbers and webhooks, and file texts and calls from unknown numbers.",
-      icon: Phone,
-      href: "/admin/comms",
-    },
-  ];
+const TOOLS: {
+  id: AdminHubTool;
+  label: string;
+  description: string;
+  href: string;
+}[] = [
+  {
+    id: "approvals",
+    label: "Approvals",
+    description: "Review submitted tasks and approve them for the team.",
+    href: "/admin/admin-approvals",
+  },
+  {
+    id: "team",
+    label: "Team",
+    description: "Add, remove, and manage team members and their roles.",
+    href: "/admin/manage-team",
+  },
+  {
+    id: "build-sequence",
+    label: "Build sequence",
+    description: "The order of build stages and the milestones inside each.",
+    href: "/admin/build-sequence",
+  },
+  {
+    id: "trade-types",
+    label: "Trade types",
+    description: "Add, rename and archive the trades tradies are listed under.",
+    href: "/admin/trade-types",
+  },
+  {
+    id: "offer-content",
+    label: "Offer content",
+    description: "Edit the pre-fill content that powers every generated offer.",
+    href: "/admin/offer-content",
+  },
+  {
+    id: "xero",
+    label: "Xero",
+    description:
+      "Connect the Xero organisation that progress claims are raised in.",
+    href: "/admin/xero",
+  },
+  {
+    id: "whatsapp",
+    label: "WhatsApp",
+    description:
+      "The connected number, its webhook, and which features are on.",
+    href: "/admin/whatsapp",
+  },
+  {
+    id: "phone-sms",
+    label: "Phone & SMS",
+    description:
+      "The active phone provider, its numbers, and texts and calls from unknown numbers.",
+    href: "/admin/comms",
+  },
+];
 
-  const accentStyles = {
-    icon: "bg-royal-gold-light text-royal-gold-ink group-hover:bg-royal-gold-ink group-hover:text-white",
-    ring: "group-hover:border-royal-gold/40",
-    glow: "bg-royal-gold/10",
-  };
+function StatusCell({ status }: { status: AdminHubStatus | null }) {
+  if (!status) {
+    return (
+      <>
+        <span aria-hidden="true" className="text-muted-foreground">
+          —
+        </span>
+        <span className="sr-only">No status</span>
+      </>
+    );
+  }
+  if (status.tone === null) {
+    return (
+      <span className="text-sm text-muted-foreground tabular-nums">
+        {status.label}
+      </span>
+    );
+  }
+  return <StatusPill tone={status.tone}>{status.label}</StatusPill>;
+}
+
+function AdminToolList({ statuses }: { statuses: AdminHubStatuses }) {
+  return (
+    <TableCard>
+      <ul className="divide-y divide-border/70">
+        {TOOLS.map((tool) => (
+          <li key={tool.id}>
+            <Link
+              href={tool.href}
+              className="flex items-center justify-between gap-4 px-4 py-4 transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none sm:px-5"
+            >
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="font-medium text-foreground">
+                  {tool.label}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  {tool.description}
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-3">
+                <StatusCell status={statuses[tool.id]} />
+                <ChevronRight
+                  aria-hidden="true"
+                  className="size-4 text-muted-foreground"
+                />
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </TableCard>
+  );
+}
+
+async function AdminHub() {
+  // Live counts and connection state; never prerendered.
+  await connection();
+  // proxy.ts already sends non-admins away from /admin; this keeps the
+  // staff counts behind an admin check even if that route rule changes.
+  const guard = await requireAdminUser();
+  if (!guard.ok) redirect("/dashboard");
+  const statuses = await getAdminHubStatuses();
 
   return (
     <div className="space-y-6 min-h-[85vh]">
-      <PageHeroCard
+      <PageHeader
         headingLevel="h1"
-        title="Admin Dashboard"
-        description="Manage offer pre-fill content and review task approvals, all from one place."
-        eyebrow={
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-card/70 px-3 py-1 text-xs font-semibold text-royal-gold-ink shadow-sm ring-1 ring-royal-gold/20">
-            <Sparkles className="size-3.5" aria-hidden="true" />
-            Admin controls
-          </span>
-        }
-        aside={
-          <div className="rounded-2xl bg-card/60 px-4 py-3 text-center shadow-sm ring-1 ring-royal-gold/20">
-            <p className="text-2xl font-bold text-royal-gold-ink">
-              {adminAction.length}
-            </p>
-            <p className="text-xs font-medium text-muted-foreground">
-              Tools available
-            </p>
-          </div>
-        }
+        title="Admin"
+        description="Eight tools for the office."
       />
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {adminAction.map((action, index) => (
-          <Card
-            key={index}
-            className={`group relative overflow-hidden border border-slate-200 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${accentStyles.ring}`}
-          >
-            <div
-              aria-hidden="true"
-              className={`pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full transition-transform duration-300 group-hover:scale-125 ${accentStyles.glow}`}
-            />
-            <CardContent className="relative p-6">
-              <div
-                className={`inline-flex rounded-full p-2.5 transition-colors duration-200 ${accentStyles.icon}`}
-              >
-                <action.icon className="size-5" />
-              </div>
-              <h2 className="mt-4 font-semibold text-slate-900">
-                {action.label}
-              </h2>
-              <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                {action.description}
-              </p>
-              <Button
-                asChild
-                variant="outline"
-                className="mt-5 group/btn w-full justify-between"
-              >
-                <Link href={action.href}>
-                  Manage
-                  <ArrowRight className="size-4 transition-transform duration-200 group-hover/btn:translate-x-0.5" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <AdminToolList statuses={statuses} />
     </div>
+  );
+}
+
+export default function AdminPage() {
+  return (
+    <Suspense fallback={<AdminHubSkeleton />}>
+      <AdminHub />
+    </Suspense>
   );
 }

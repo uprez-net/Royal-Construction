@@ -66,12 +66,12 @@ export function PrintPage({
     <section
       className={
         breakAfter
-          ? "mx-auto flex min-h-[297mm] w-[210mm] flex-col bg-white px-[18mm] py-[13mm] print:break-after-page"
-          : "mx-auto flex min-h-[297mm] w-[210mm] flex-col bg-white px-[18mm] py-[13mm]"
+          ? "mx-auto flex min-h-[297mm] w-[210mm] flex-col bg-card px-[18mm] py-[13mm] print:break-after-page"
+          : "mx-auto flex min-h-[297mm] w-[210mm] flex-col bg-card px-[18mm] py-[13mm]"
       }
     >
       {children}
-      <p className="mt-auto whitespace-nowrap border-t border-royal-gold pt-2 font-mono text-[8px] text-muted-foreground">
+      <p className="mt-auto whitespace-nowrap border-t border-border pt-2 font-mono text-[8px] text-muted-foreground">
         {footerText}
       </p>
     </section>
@@ -89,7 +89,7 @@ export function ProposalMasthead() {
 export function PrintSection({ children, eyebrow, title }: PrintSectionProps) {
   return (
     <section className="mt-8">
-      <p className="font-mono text-xs font-semibold uppercase tracking-wide text-royal-gold-dark">
+      <p className="font-sans text-xs font-semibold uppercase tracking-wide text-sidebar">
         {eyebrow}
       </p>
       <h1 className="mt-2 font-heading text-3xl font-semibold text-sidebar">
@@ -103,20 +103,12 @@ export function PrintSection({ children, eyebrow, title }: PrintSectionProps) {
 export function CoverRow({ emphasis = false, label, value }: LabelValueProps) {
   return (
     <>
-      <dt
-        className={
-          emphasis
-            ? "bg-royal-gold-ink px-3 py-3 font-semibold text-white"
-            : "bg-sidebar px-3 py-3 font-semibold text-white"
-        }
-      >
-        {label}
-      </dt>
+      <dt className="bg-card px-3 py-3 font-semibold text-sidebar">{label}</dt>
       <dd
         className={
           emphasis
-            ? "bg-sidebar px-4 py-3 font-semibold text-white"
-            : "bg-muted/70 px-4 py-3"
+            ? "bg-card px-4 py-3 font-semibold text-sidebar"
+            : "bg-card px-4 py-3"
         }
       >
         {value}
@@ -142,7 +134,7 @@ export function PrintBulletList({
           <li key={item} className="flex gap-2">
             {/* A glyph, not a background square: window.print() with
                 "Background graphics" off dropped the bullet entirely. */}
-            <span aria-hidden="true" className="shrink-0 text-royal-gold">
+            <span aria-hidden="true" className="shrink-0 text-sidebar">
               &#9642;
             </span>
             <span>{item}</span>

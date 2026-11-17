@@ -57,9 +57,9 @@ export type VariantId = (typeof VARIANTS)[number]["id"];
 
 export function CommandBar({ job }: { readonly job: PrototypeJob }) {
   return (
-    <header className="flex h-13 shrink-0 items-center gap-3 border-b border-border/70 bg-white px-4">
+    <header className="flex h-13 shrink-0 items-center gap-3 border-b border-border/70 bg-card px-4">
       <div className="flex min-w-0 items-center gap-2.5">
-        <span className="rounded-md bg-royal-gold px-2 py-0.5 font-mono text-xs font-semibold text-white">
+        <span className="rounded-md bg-royal-gold-light px-2 py-0.5 font-mono text-xs font-semibold text-royal-gold-ink-text">
           {job.reference}-{job.revision}
         </span>
         <p className="truncate text-sm font-medium">{job.siteAddress}</p>
@@ -82,7 +82,7 @@ export function CommandBar({ job }: { readonly job: PrototypeJob }) {
         </Button>
         <Button
           size="sm"
-          className="h-8 bg-royal-gold hover:bg-royal-gold-dark"
+          className="h-8 bg-royal-gold-ink hover:bg-royal-gold-ink-hover"
         >
           <Send className="size-3.5" aria-hidden="true" />
           Send offer
@@ -122,7 +122,7 @@ export function StepRail({
     <nav
       aria-label="Offer workflow"
       className={cn(
-        "flex shrink-0 flex-col border-r border-border/70 bg-white/60 transition-[width]",
+        "flex shrink-0 flex-col border-r border-border/70 bg-card/60 transition-[width]",
         collapsed ? "w-14" : "w-60",
       )}
     >
@@ -242,7 +242,7 @@ export function StepFooter({
   const prev = i > 0 ? STEPS[i - 1] : null;
   const next = i < STEPS.length - 1 ? STEPS[i + 1] : null;
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-border/70 bg-white/80 px-5 py-3">
+    <div className="flex items-center justify-between gap-3 border-t border-border/70 bg-card/80 px-5 py-3">
       <Button
         variant="ghost"
         size="sm"
@@ -257,7 +257,7 @@ export function StepFooter({
       </p>
       <Button
         size="sm"
-        className="bg-royal-gold hover:bg-royal-gold-dark"
+        className="bg-royal-gold-ink hover:bg-royal-gold-ink-hover"
         disabled={!next}
         onClick={() => next && onSelect(next.id)}
       >
@@ -276,7 +276,7 @@ export function VariantBar({ active }: { readonly active: VariantId }) {
     // fixed bar covered whichever bottom-edge control each variant is being
     // judged on.
     <div className="mt-3 flex justify-center">
-      <div className="flex items-center gap-1 rounded-full border border-border bg-white p-1 shadow-sm">
+      <div className="flex items-center gap-1 rounded-full border border-border bg-card p-1 shadow-sm">
         <span className="px-3 text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
           Prototype
         </span>
@@ -289,7 +289,7 @@ export function VariantBar({ active }: { readonly active: VariantId }) {
             className={cn(
               "rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors",
               v.id === active
-                ? "bg-royal-gold text-white"
+                ? "bg-royal-gold-light text-royal-gold-ink-text"
                 : "text-muted-foreground hover:bg-muted",
             )}
           >

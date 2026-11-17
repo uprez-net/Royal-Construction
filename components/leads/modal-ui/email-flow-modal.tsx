@@ -49,9 +49,9 @@ export function EmailFlowModal({
     null,
   );
   const aiReady = !!(
-    hook.templateName &&
-    hook.generatedHtml &&
-    hook.emailSubject
+    hook.templateName
+    && hook.generatedHtml
+    && hook.emailSubject
   );
   if (aiReady && prevGeneratedHtml !== hook.generatedHtml) {
     setPrevGeneratedHtml(hook.generatedHtml);
@@ -184,7 +184,7 @@ export function EmailFlowModal({
               <button
                 type="button"
                 onClick={() => setStep("custom")}
-                className="group flex flex-col items-center justify-center rounded-[10px] border-2 border-dashed border-border bg-card p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[color:var(--royal-gold)] hover:bg-[color:var(--royal-gold)]/5"
+                className="group flex flex-col items-center justify-center rounded-[10px] border-2 border-dashed border-border bg-card p-6 text-left shadow-sm transition hover:border-[color:var(--royal-gold)] hover:bg-[color:var(--royal-gold)]/5"
               >
                 <div className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/25 bg-muted/50 transition group-hover:border-[color:var(--royal-gold)] group-hover:bg-[color:var(--royal-gold)]/10">
                   <svg
@@ -197,13 +197,13 @@ export function EmailFlowModal({
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="text-muted-foreground/50 transition group-hover:text-[color:var(--royal-gold)]"
+                    className="text-muted-foreground/50 transition group-hover:text-royal-gold-ink-text"
                   >
                     <path d="M12 5v14" />
                     <path d="M5 12h14" />
                   </svg>
                 </div>
-                <div className="mt-3 text-[15px] font-medium text-foreground transition group-hover:text-[color:var(--royal-gold)]">
+                <div className="mt-3 text-[15px] font-medium text-foreground transition group-hover:text-royal-gold-ink-text">
                   Custom Template
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
@@ -215,7 +215,7 @@ export function EmailFlowModal({
                   key={template.id}
                   type="button"
                   onClick={() => handleTemplateSelect(template)}
-                  className="group rounded-[10px] border border-border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[color:var(--royal-gold)]"
+                  className="group rounded-[10px] border border-border bg-card p-4 text-left shadow-sm transition hover:border-[color:var(--royal-gold)]"
                 >
                   <div className="text-[11px] font-medium uppercase tracking-[0.048px] text-muted-foreground">
                     {template.category}
@@ -247,8 +247,8 @@ export function EmailFlowModal({
       >
         <CustomTemplateCreation
           hook={hook}
-          backgroundColor="#C6923A"
-          borderColor="#C6923A"
+          backgroundColor="var(--royal-gold-ink)"
+          borderColor="var(--royal-gold-ink)"
         />
       </ModalShell>
     );
@@ -316,10 +316,10 @@ export function EmailFlowModal({
           <p className="text-xs font-medium text-muted-foreground">
             Email Preview
           </p>
-          {selectedTemplate &&
-          selectedTemplate.id !== -1 &&
-          selectedTemplate.category !== "custom" &&
-          !hook.generatedHtml ? (
+          {selectedTemplate
+          && selectedTemplate.id !== -1
+          && selectedTemplate.category !== "custom"
+          && !hook.generatedHtml ? (
             <div className="mt-2">
               <ReactEmailIframe
                 ref={emailIframeRef}
@@ -327,10 +327,10 @@ export function EmailFlowModal({
                 lead={lead}
               />
             </div>
-          ) : selectedTemplate &&
-            selectedTemplate.id === -1 &&
-            selectedTemplate.category === "custom" &&
-            hook.generatedHtml ? (
+          ) : selectedTemplate
+            && selectedTemplate.id === -1
+            && selectedTemplate.category === "custom"
+            && hook.generatedHtml ? (
             <div className="mt-2">
               <div
                 className="overflow-hidden rounded-lg"
@@ -355,7 +355,7 @@ export function EmailFlowModal({
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-[color:var(--royal-gold)] px-4 py-2 text-xs font-medium text-primary-foreground transition hover:bg-[color:var(--royal-gold-dark)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-royal-gold-ink px-4 py-2 text-xs font-medium text-primary-foreground transition hover:bg-royal-gold-ink-hover disabled:cursor-not-allowed disabled:opacity-50"
             onClick={handleSend}
             disabled={!emailSubject.trim() || sending}
             aria-describedby={

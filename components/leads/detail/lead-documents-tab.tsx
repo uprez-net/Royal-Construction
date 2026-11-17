@@ -2,13 +2,14 @@
 
 import { useMemo, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
-import { CalendarDays, Files, Loader2, Search, Upload, X } from "lucide-react";
+import { CalendarDays, Files, Loader2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/common/data-table";
+import { TableCard, ToolbarSearch } from "@/components/common/list-toolbar";
 import { FilterSelect } from "@/components/common/filter-select";
 import {
   FILE_KIND_ICON,
@@ -363,116 +364,112 @@ export function LeadDocumentsTab({
         </CardContent>
       </Card>
 
-      <Card className="rounded-xl border-border/70 bg-card shadow-sm">
-        <CardHeader className="space-y-3 border-b border-border/70 px-4 pb-4 sm:px-6">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <CardTitle
-              as="h2"
-              className="text-base font-semibold text-foreground"
-            >
-              Uploaded files
-            </CardTitle>
-            <p
-              className="text-sm text-muted-foreground tabular-nums"
-              aria-live="polite"
-            >
-              {isFiltered
-                ? `${visibleFiles.length} of ${files.length}`
-                : `${files.length} ${files.length === 1 ? "file" : "files"}`}
-            </p>
-          </div>
+      <TableCard
+        header={
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <CardTitle
+                as="h2"
+                className="text-base font-semibold text-foreground"
+              >
+                Uploaded files
+              </CardTitle>
+              <p
+                className="text-sm text-muted-foreground tabular-nums"
+                aria-live="polite"
+              >
+                {isFiltered
+                  ? `${visibleFiles.length} of ${files.length}`
+                  : `${files.length} ${files.length === 1 ? "file" : "files"}`}
+              </p>
+            </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-56 flex-1">
-              <Search
-                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                type="search"
+            <div className="flex flex-wrap items-center gap-2">
+              <ToolbarSearch
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search files"
-                className="h-9 rounded-lg pl-9 text-sm"
                 aria-label="Search files"
               />
+              <FilterSelect
+                hideLabel
+                label="File type"
+                allLabel="All types"
+                icon={Files}
+                value={filters.fileType}
+                onChange={(fileType) => setFilters({ fileType })}
+                options={options.kinds}
+                className="w-[calc(50%-0.25rem)] sm:w-36"
+              />
+              <FilterSelect
+                hideLabel
+                label="Uploaded"
+                allLabel="Any date"
+                icon={CalendarDays}
+                value={uploadedWindow ?? ""}
+                onChange={(fileUploaded) =>
+                  setFilters(
+                    fileUploaded === "custom"
+                      ? { fileUploaded }
+                      : { fileUploaded, fileFrom: null, fileTo: null },
+                  )
+                }
+                options={TIME_WINDOWS.map((window) => ({
+                  value: window,
+                  label: TIME_WINDOW_LABEL[window],
+                  icon: TIME_WINDOW_ICON[window],
+                  iconClassName: TIME_WINDOW_ICON_CLASS,
+                }))}
+                className="w-[calc(50%-0.25rem)] sm:w-40"
+              />
+              {isFiltered ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-11 text-xs"
+                  onClick={clearFilters}
+                >
+                  <X data-icon="inline-start" aria-hidden="true" />
+                  Clear
+                </Button>
+              ) : null}
             </div>
-            <FilterSelect
-              hideLabel
-              label="File type"
-              allLabel="All types"
-              icon={Files}
-              value={filters.fileType}
-              onChange={(fileType) => setFilters({ fileType })}
-              options={options.kinds}
-              className="w-[calc(50%-0.25rem)] sm:w-36"
-            />
-            <FilterSelect
-              hideLabel
-              label="Uploaded"
-              allLabel="Any date"
-              icon={CalendarDays}
-              value={uploadedWindow ?? ""}
-              onChange={(fileUploaded) =>
-                setFilters(
-                  fileUploaded === "custom"
-                    ? { fileUploaded }
-                    : { fileUploaded, fileFrom: null, fileTo: null },
-                )
-              }
-              options={TIME_WINDOWS.map((window) => ({
-                value: window,
-                label: TIME_WINDOW_LABEL[window],
-                icon: TIME_WINDOW_ICON[window],
-                iconClassName: TIME_WINDOW_ICON_CLASS,
-              }))}
-              className="w-[calc(50%-0.25rem)] sm:w-40"
-            />
-            {isFiltered ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-9 text-xs"
-                onClick={clearFilters}
-              >
-                <X data-icon="inline-start" aria-hidden="true" />
-                Clear
-              </Button>
+
+            {uploadedWindow === "custom" ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <label className="flex items-center gap-2">
+                  From
+                  <Input
+                    type="date"
+                    value={filters.fileFrom}
+                    max={filters.fileTo || undefined}
+                    onChange={(event) =>
+                      setFilters({ fileFrom: event.target.value })
+                    }
+                    className="h-11 w-40"
+                  />
+                </label>
+                <label className="flex items-center gap-2">
+                  to
+                  <Input
+                    type="date"
+                    value={filters.fileTo}
+                    min={filters.fileFrom || undefined}
+                    onChange={(event) =>
+                      setFilters({ fileTo: event.target.value })
+                    }
+                    className="h-11 w-40"
+                  />
+                </label>
+              </div>
             ) : null}
           </div>
-
-          {uploadedWindow === "custom" ? (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <label className="flex items-center gap-2">
-                From
-                <Input
-                  type="date"
-                  value={filters.fileFrom}
-                  max={filters.fileTo || undefined}
-                  onChange={(event) =>
-                    setFilters({ fileFrom: event.target.value })
-                  }
-                  className="h-8 w-40"
-                />
-              </label>
-              <label className="flex items-center gap-2">
-                to
-                <Input
-                  type="date"
-                  value={filters.fileTo}
-                  min={filters.fileFrom || undefined}
-                  onChange={(event) =>
-                    setFilters({ fileTo: event.target.value })
-                  }
-                  className="h-8 w-40"
-                />
-              </label>
-            </div>
-          ) : null}
-        </CardHeader>
-        <CardContent className="p-4">
+        }
+      >
+        <div className="p-4 md:p-0">
           <DataTable
+            flush
             mobileLayout="cards"
             mobileTitleColumn={0}
             onRowClick={openPreview}
@@ -525,7 +522,7 @@ export function LeadDocumentsTab({
             })}
             emptyState={
               <div className="mx-auto flex max-w-md flex-col items-center gap-3">
-                <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
+                <div className="flex size-11 items-center justify-center rounded-lg bg-muted">
                   <Files
                     className="size-5 text-muted-foreground"
                     aria-hidden="true"
@@ -549,8 +546,8 @@ export function LeadDocumentsTab({
               </div>
             }
           />
-        </CardContent>
-      </Card>
+        </div>
+      </TableCard>
     </section>
   );
 }

@@ -3,11 +3,25 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  FLUSH_TABLE_CARD_CLASS,
+  FLUSH_TABLE_CONTENT_CLASS,
+} from "@/components/ui/table-styles";
+import {
   getPaymentScheduleTotalPct,
   type OfferPaymentScheduleRow,
 } from "@/lib/offer/workspace-payment-schedule";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
+import { cn } from "@/lib/utils";
 import { CalendarClock, Lock } from "lucide-react";
 import type { ReactNode } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
@@ -42,7 +56,12 @@ export function PaymentSchedulePanel({
   }
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card
+      className={cn(
+        "border-border/70 bg-card/95 shadow-sm",
+        FLUSH_TABLE_CARD_CLASS,
+      )}
+    >
       <CardHeader className="border-b border-border/70">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <OfferCardHeading
@@ -59,28 +78,28 @@ export function PaymentSchedulePanel({
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className="grid gap-3">
+      <CardContent
+        className={cn("grid gap-3 md:gap-0", FLUSH_TABLE_CONTENT_CLASS)}
+      >
         <ScheduleLock locked={locked}>
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="payment-schedule-table w-full text-sm md:min-w-[680px]">
-              <caption className="sr-only">
+          <div>
+            <Table className="payment-schedule-table md:min-w-[680px]">
+              <TableCaption className="sr-only">
                 Payment schedule percentages and amounts seeded for Tender
                 review.
-              </caption>
-              <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium">Stage</th>
-                  <th className="w-28 px-3 py-2 text-right font-medium">%</th>
-                  <th className="w-36 px-3 py-2 text-right font-medium">
-                    Amount
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium">Trigger</th>
-                </tr>
-              </thead>
-              <tbody>
+              </TableCaption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Stage</TableHead>
+                  <TableHead className="w-28 text-right">%</TableHead>
+                  <TableHead className="w-36 text-right">Amount</TableHead>
+                  <TableHead>Trigger</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {rows.map((row) => (
-                  <tr key={row.id} className="border-t border-border">
-                    <td className="px-3 py-2">
+                  <TableRow key={row.id}>
+                    <TableCell>
                       <span className="mb-1 block text-xs text-muted-foreground md:hidden">
                         Payment stage
                       </span>
@@ -91,8 +110,8 @@ export function PaymentSchedulePanel({
                           updateRow(row.id, { stageName: event.target.value })
                         }
                       />
-                    </td>
-                    <td className="px-3 py-2">
+                    </TableCell>
+                    <TableCell>
                       <span className="mb-1 block text-xs text-muted-foreground md:hidden">
                         Contract percentage
                       </span>
@@ -117,8 +136,8 @@ export function PaymentSchedulePanel({
                           }
                         }}
                       />
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono">
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
                       <span className="mb-1 block font-sans text-xs text-muted-foreground md:hidden">
                         Amount including GST
                       </span>
@@ -126,8 +145,8 @@ export function PaymentSchedulePanel({
                         customerPrice.selectedContractValueIncGst
                           * row.percentOfContract,
                       )}
-                    </td>
-                    <td className="px-3 py-2">
+                    </TableCell>
+                    <TableCell>
                       <span className="mb-1 block text-xs text-muted-foreground md:hidden">
                         Payment trigger
                       </span>
@@ -138,15 +157,15 @@ export function PaymentSchedulePanel({
                           updateRow(row.id, { trigger: event.target.value })
                         }
                       />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </ScheduleLock>
         <div
-          className={`flex flex-wrap justify-between gap-3 rounded-lg border p-3 text-sm ${
+          className={`flex flex-wrap justify-between gap-3 rounded-lg border p-3 text-sm md:mx-4 md:mt-3 md:mb-4 ${
             totalPct === 1
               ? "border-border bg-background/70"
               : "border-destructive/50 bg-destructive-light"

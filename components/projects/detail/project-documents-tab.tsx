@@ -9,7 +9,6 @@ import {
   Layers,
   Loader2,
   Receipt,
-  Search,
   ShieldCheck,
   Trash2,
   TriangleAlert,
@@ -20,10 +19,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardTitle } from "@/components/ui/card";
+import { TableCard, ToolbarSearch } from "@/components/common/list-toolbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/common/data-table";
+import { FLUSH_TABLE_CONTENT_CLASS } from "@/components/ui/table-styles";
+import { cn } from "@/lib/utils";
 import { FilterSelect } from "@/components/common/filter-select";
 import {
   FILE_KIND_ICON,
@@ -90,24 +92,24 @@ const SOURCE_ICON: Record<
   ProjectDocumentSource,
   { icon: LucideIcon; className: string }
 > = {
-  project: { icon: FolderUp, className: "text-primary" },
-  milestone: { icon: Flag, className: "text-orange-600 dark:text-orange-400" },
+  project: { icon: FolderUp, className: "text-muted-foreground" },
+  milestone: { icon: Flag, className: "text-warning-ink" },
   compliance: {
     icon: ShieldCheck,
-    className: "text-emerald-600 dark:text-emerald-400",
+    className: "text-muted-foreground",
   },
-  lead: { icon: UserRound, className: "text-sky-600 dark:text-sky-400" },
+  lead: { icon: UserRound, className: "text-info-ink" },
   incident: {
     icon: TriangleAlert,
-    className: "text-amber-600 dark:text-amber-400",
+    className: "text-muted-foreground",
   },
   "tradie-invoice": {
     icon: Receipt,
-    className: "text-violet-600 dark:text-violet-400",
+    className: "text-muted-foreground",
   },
   variation: {
     icon: PencilRuler,
-    className: "text-pink-600 dark:text-pink-400",
+    className: "text-muted-foreground",
   },
 };
 
@@ -235,7 +237,7 @@ export function ProjectDocumentsTab({
         value,
         label: value,
         count,
-        iconClassName: "text-orange-600 dark:text-orange-400",
+        iconClassName: "text-muted-foreground",
       })),
     }),
     [indexed],
@@ -347,136 +349,134 @@ export function ProjectDocumentsTab({
   };
 
   return (
-    <Card className="rounded-xl border-border/70 bg-card shadow-sm">
-      <CardHeader className="space-y-3 border-b border-border/70 pb-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <CardTitle
-            as="h2"
-            className="text-base font-semibold text-foreground"
-          >
-            Project documents
-          </CardTitle>
-          <p
-            className="text-sm text-muted-foreground tabular-nums"
-            aria-live="polite"
-          >
-            {isFiltered
-              ? `${visible.length} of ${documents.length}`
-              : `${documents.length} ${documents.length === 1 ? "document" : "documents"}`}
-          </p>
-        </div>
+    <TableCard
+      header={
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <CardTitle
+              as="h2"
+              className="text-base font-semibold text-foreground"
+            >
+              Project documents
+            </CardTitle>
+            <p
+              className="text-sm text-muted-foreground tabular-nums"
+              aria-live="polite"
+            >
+              {isFiltered
+                ? `${visible.length} of ${documents.length}`
+                : `${documents.length} ${documents.length === 1 ? "document" : "documents"}`}
+            </p>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-56 flex-1">
-            <Search
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              type="search"
+          <div className="flex flex-wrap items-center gap-2">
+            <ToolbarSearch
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search documents"
-              className="h-9 rounded-lg pl-9 text-sm"
               aria-label="Search documents"
             />
-          </div>
-          <FilterSelect
-            hideLabel
-            label="File type"
-            allLabel="All types"
-            icon={Files}
-            value={filters.docType}
-            onChange={(docType) => setFilters({ docType })}
-            options={options.kinds}
-            className="w-[calc(50%-0.25rem)] sm:w-36"
-          />
-          <FilterSelect
-            hideLabel
-            label="Uploaded"
-            allLabel="Any date"
-            icon={CalendarDays}
-            value={uploadedWindow ?? ""}
-            onChange={(docUploaded) =>
-              setFilters(
-                docUploaded === "custom"
-                  ? { docUploaded }
-                  : { docUploaded, docFrom: null, docTo: null },
-              )
-            }
-            options={TIME_WINDOWS.map((window) => ({
-              value: window,
-              label: TIME_WINDOW_LABEL[window],
-              icon: TIME_WINDOW_ICON[window],
-              iconClassName: TIME_WINDOW_ICON_CLASS,
-            }))}
-            className="w-[calc(50%-0.25rem)] sm:w-40"
-          />
-          <FilterSelect
-            hideLabel
-            label="Source"
-            allLabel="All sources"
-            icon={Layers}
-            value={filters.docSource}
-            onChange={(docSource) => setFilters({ docSource })}
-            options={options.sources}
-            className="w-[calc(50%-0.25rem)] sm:w-40"
-          />
-          {options.milestones.length > 0 || filters.docMilestone ? (
             <FilterSelect
               hideLabel
-              label="Milestone"
-              allLabel="All milestones"
-              icon={Flag}
-              value={filters.docMilestone}
-              onChange={(docMilestone) => setFilters({ docMilestone })}
-              options={options.milestones}
-              className="w-[calc(50%-0.25rem)] sm:w-44"
+              label="File type"
+              allLabel="All types"
+              icon={Files}
+              value={filters.docType}
+              onChange={(docType) => setFilters({ docType })}
+              options={options.kinds}
+              className="w-[calc(50%-0.25rem)] sm:w-36"
             />
-          ) : null}
-          {isFiltered ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-9 text-xs"
-              onClick={clearFilters}
-            >
-              <X data-icon="inline-start" aria-hidden="true" />
-              Clear
-            </Button>
+            <FilterSelect
+              hideLabel
+              label="Uploaded"
+              allLabel="Any date"
+              icon={CalendarDays}
+              value={uploadedWindow ?? ""}
+              onChange={(docUploaded) =>
+                setFilters(
+                  docUploaded === "custom"
+                    ? { docUploaded }
+                    : { docUploaded, docFrom: null, docTo: null },
+                )
+              }
+              options={TIME_WINDOWS.map((window) => ({
+                value: window,
+                label: TIME_WINDOW_LABEL[window],
+                icon: TIME_WINDOW_ICON[window],
+                iconClassName: TIME_WINDOW_ICON_CLASS,
+              }))}
+              className="w-[calc(50%-0.25rem)] sm:w-40"
+            />
+            <FilterSelect
+              hideLabel
+              label="Source"
+              allLabel="All sources"
+              icon={Layers}
+              value={filters.docSource}
+              onChange={(docSource) => setFilters({ docSource })}
+              options={options.sources}
+              className="w-[calc(50%-0.25rem)] sm:w-40"
+            />
+            {options.milestones.length > 0 || filters.docMilestone ? (
+              <FilterSelect
+                hideLabel
+                label="Milestone"
+                allLabel="All milestones"
+                icon={Flag}
+                value={filters.docMilestone}
+                onChange={(docMilestone) => setFilters({ docMilestone })}
+                options={options.milestones}
+                className="w-[calc(50%-0.25rem)] sm:w-44"
+              />
+            ) : null}
+            {isFiltered ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 text-xs"
+                onClick={clearFilters}
+              >
+                <X data-icon="inline-start" aria-hidden="true" />
+                Clear
+              </Button>
+            ) : null}
+          </div>
+
+          {uploadedWindow === "custom" ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <label className="flex items-center gap-2">
+                From
+                <Input
+                  type="date"
+                  value={filters.docFrom}
+                  max={filters.docTo || undefined}
+                  onChange={(event) =>
+                    setFilters({ docFrom: event.target.value })
+                  }
+                  className="h-8 w-40"
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                to
+                <Input
+                  type="date"
+                  value={filters.docTo}
+                  min={filters.docFrom || undefined}
+                  onChange={(event) =>
+                    setFilters({ docTo: event.target.value })
+                  }
+                  className="h-8 w-40"
+                />
+              </label>
+            </div>
           ) : null}
         </div>
-
-        {uploadedWindow === "custom" ? (
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <label className="flex items-center gap-2">
-              From
-              <Input
-                type="date"
-                value={filters.docFrom}
-                max={filters.docTo || undefined}
-                onChange={(event) =>
-                  setFilters({ docFrom: event.target.value })
-                }
-                className="h-8 w-40"
-              />
-            </label>
-            <label className="flex items-center gap-2">
-              to
-              <Input
-                type="date"
-                value={filters.docTo}
-                min={filters.docFrom || undefined}
-                onChange={(event) => setFilters({ docTo: event.target.value })}
-                className="h-8 w-40"
-              />
-            </label>
-          </div>
-        ) : null}
-      </CardHeader>
-      <CardContent className="p-4">
+      }
+    >
+      <div className={cn("p-4", FLUSH_TABLE_CONTENT_CLASS)}>
         <DataTable
+          flush
           mobileLayout="cards"
           mobileTitleColumn={0}
           onRowClick={openPreview}
@@ -587,7 +587,7 @@ export function ProjectDocumentsTab({
           })}
           emptyState={
             <div className="mx-auto flex max-w-md flex-col items-center gap-3">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
+              <div className="flex size-11 items-center justify-center rounded-lg bg-muted">
                 <Files
                   className="size-5 text-muted-foreground"
                   aria-hidden="true"
@@ -614,7 +614,7 @@ export function ProjectDocumentsTab({
             </div>
           }
         />
-      </CardContent>
+      </div>
       <AlertDialog
         open={fileToDelete !== null}
         onOpenChange={(open) => {
@@ -661,6 +661,6 @@ export function ProjectDocumentsTab({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </TableCard>
   );
 }

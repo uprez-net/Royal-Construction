@@ -71,14 +71,8 @@ export function TradeCancellationApprovalForm({ approval, onSuccess }: Props) {
   const data = approval.updationData as TradeCancellationJsonPayload;
   const mutation = useApprovalMutation(onSuccess);
   const [rejectReason, setRejectReason] = useState("");
-  const [reasonError, setReasonError] = useState<string | null>(null);
 
   const submit = (resolution: "approved" | "rejected") => {
-    // The requester is told why their cancellation was turned down.
-    if (resolution === "rejected" && !rejectReason.trim()) {
-      setReasonError("Say why the tradie is being kept.");
-      return;
-    }
     mutation.mutate({
       approvalId: approval.id,
       type: TradieApprovalActionType.TRADE_CANCELLATION,
@@ -180,30 +174,27 @@ export function TradeCancellationApprovalForm({ approval, onSuccess }: Props) {
         {approval.status === "PENDING" && (
           <div className="space-y-1.5 border-t border-border/70 pt-5">
             <Label htmlFor="trade-cancellation-reject-reason">
-              Reason, if you keep the tradie
+              Reason for keeping the tradie
+              <span className="text-destructive">
+                *<span className="sr-only"> required</span>
+              </span>
             </Label>
             <Textarea
               id="trade-cancellation-reject-reason"
               rows={2}
               maxLength={1000}
+              required
+              aria-required="true"
+              aria-describedby="trade-cancellation-reject-reason-hint"
               value={rejectReason}
-              aria-invalid={Boolean(reasonError)}
-              aria-describedby={
-                reasonError ? "trade-cancellation-reject-error" : undefined
-              }
-              onChange={(event) => {
-                setRejectReason(event.target.value);
-                setReasonError(null);
-              }}
+              onChange={(event) => setRejectReason(event.target.value)}
             />
-            {reasonError ? (
-              <p
-                id="trade-cancellation-reject-error"
-                className="text-xs font-medium text-destructive-ink"
-              >
-                {reasonError}
-              </p>
-            ) : null}
+            <p
+              id="trade-cancellation-reject-reason-hint"
+              className="text-xs text-muted-foreground"
+            >
+              Required to keep the tradie. The requester sees this reason.
+            </p>
           </div>
         )}
 
@@ -211,7 +202,7 @@ export function TradeCancellationApprovalForm({ approval, onSuccess }: Props) {
           <div className="grid gap-2 sm:flex sm:justify-end">
             <Button
               variant="outline"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || !rejectReason.trim()}
               onClick={() => submit("rejected")}
             >
               Keep tradie

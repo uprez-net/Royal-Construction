@@ -45,11 +45,7 @@ export function EnhancedProjectCard({
   const openQuickView = () => onDetailsClick?.(project.id);
 
   return (
-    <div className="group overflow-hidden rounded-lg border border-border bg-card shadow-sm transition-colors hover:bg-muted/40">
-      {/* Status accent stripe. Colour alone carries no meaning here — the badge
-          below states the status in words. */}
-      <div className={`h-1 ${config.stripe}`} aria-hidden="true" />
-
+    <div className="group overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4 transition-colors hover:bg-muted/40">
       {/* The card body is a mouse convenience only: the project-name button
           below performs the same action, so keyboard users have full parity
           without turning the whole card (which contains its own links) into a
@@ -76,8 +72,12 @@ export function EnhancedProjectCard({
             </p>
           </div>
           <Badge
-            className={`whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ${config.badge}`}
+            className={`h-[22px] shrink-0 gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[11.5px] font-semibold ${config.badge}`}
           >
+            <span
+              aria-hidden="true"
+              className="size-1.5 rounded-full bg-current"
+            />
             {formatStatus(project.status)}
           </Badge>
         </div>
@@ -114,7 +114,7 @@ export function EnhancedProjectCard({
             >
               Progress
             </span>
-            <span className="font-mono text-xs font-semibold tabular-nums text-foreground">
+            <span className="text-xs font-semibold tabular-nums text-foreground">
               {progress}%
             </span>
           </div>
@@ -122,7 +122,7 @@ export function EnhancedProjectCard({
               signal, so the bar states the quantity and the status badge above
               carries the judgement. */}
           <div
-            className="h-2 overflow-hidden rounded-full bg-muted"
+            className="h-1.5 overflow-hidden rounded-full bg-muted"
             role="progressbar"
             aria-valuenow={progress}
             aria-valuemin={0}

@@ -24,14 +24,14 @@ import type { FileKind, TimeWindow } from "@/lib/files/file-filters";
 export const FILE_KIND_ICON: Readonly<
   Record<FileKind, { icon: LucideIcon; className: string }>
 > = {
-  pdf: { icon: FileText, className: "text-red-600 dark:text-red-400" },
-  image: { icon: FileImage, className: "text-violet-600 dark:text-violet-400" },
-  word: { icon: FileType, className: "text-blue-600 dark:text-blue-400" },
+  pdf: { icon: FileText, className: "text-destructive-ink" },
+  image: { icon: FileImage, className: "text-info-ink" },
+  word: { icon: FileType, className: "text-info-ink" },
   spreadsheet: {
     icon: FileSpreadsheet,
-    className: "text-emerald-600 dark:text-emerald-400",
+    className: "text-success-ink",
   },
-  text: { icon: FileCode, className: "text-amber-600 dark:text-amber-400" },
+  text: { icon: FileCode, className: "text-warning-ink" },
   other: { icon: FileQuestionMark, className: "text-muted-foreground" },
 };
 
@@ -46,4 +46,4 @@ export const TIME_WINDOW_ICON: Readonly<Record<TimeWindow, LucideIcon>> = {
 };
 
 /** Every date choice shares one colour; the icon is what tells them apart. */
-export const TIME_WINDOW_ICON_CLASS = "text-sky-600 dark:text-sky-400";
+export const TIME_WINDOW_ICON_CLASS = "text-info-ink";

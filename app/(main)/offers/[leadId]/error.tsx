@@ -20,7 +20,7 @@ export default function OfferDetailError({
   return (
     <div className="flex min-h-[calc(100svh-96px)] w-full flex-col items-center justify-center bg-background p-4">
       <div className="mx-auto flex w-full max-w-110 flex-col items-center text-center">
-        <div className="mb-6 flex size-20 items-center justify-center rounded-2xl bg-destructive-light text-destructive ring-8 ring-destructive/10">
+        <div className="mb-6 flex size-20 items-center justify-center rounded-lg bg-destructive-light text-destructive ring-8 ring-destructive/10">
           <AlertTriangle className="size-10" />
         </div>
 

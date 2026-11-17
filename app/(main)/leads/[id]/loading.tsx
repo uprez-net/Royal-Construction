@@ -3,13 +3,13 @@ import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 export default function LeadDetailLoading() {
   return (
     <PageSkeleton label="Loading lead details" className="space-y-4 pb-4">
-      {/* Header Action Center skeleton — mirrors lead-header.tsx */}
-      <section className="rounded-xl border border-border/70 bg-card p-4 shadow-sm sm:p-6 sm:px-7">
+      {/* Mirrors lead-header.tsx: the title sits on the page, with no card. */}
+      <header>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 space-y-2">
             <Skeleton className="h-4 w-32" />
             <div className="flex flex-wrap items-center gap-3">
-              <Skeleton className="h-8 w-56" />
+              <Skeleton className="h-[1.95rem] w-56" />
               <Skeleton className="h-6 w-24 rounded-full" />
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -31,7 +31,7 @@ export default function LeadDetailLoading() {
             <Skeleton className="h-9 w-28 rounded-lg" />
           </div>
         </div>
-      </section>
+      </header>
 
       {/* Tabs layout skeleton */}
       <section className="space-y-4">
@@ -46,7 +46,7 @@ export default function LeadDetailLoading() {
         </div>
 
         {/* Overview tab structure: one card holding six collapsed sections */}
-        <div className="rounded-xl border border-border/70 bg-card shadow-sm">
+        <div className="rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
           <div className="border-b border-border/70 p-6 pb-4">
             <Skeleton className="h-5 w-40" />
             <Skeleton className="mt-2 h-3.5 w-80" />

@@ -104,7 +104,7 @@ export function OfferSummaryStrip({
     // landmark so the totals are reachable by region navigation.
     <aside
       aria-label="Offer totals"
-      className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/70 bg-white px-3 py-1 md:gap-x-6 md:px-5 md:py-2.5"
+      className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/70 bg-card px-3 py-1 md:gap-x-6 md:px-5 md:py-2.5"
     >
       {/* On a phone the toggle shares the price's row, and the breakdown
           opens as a row of its own below it. A full-width <details> spent a
@@ -159,7 +159,7 @@ export function OfferSummaryStrip({
           // the margin badge grades a placeholder markup, and the contract
           // value is the largest number on the screen. None of it is this
           // offer's until it has loaded.
-          <p className="font-heading text-lg font-semibold tabular-nums text-muted-foreground">
+          <p className="font-mono text-lg font-semibold tabular-nums text-muted-foreground">
             <span className="sr-only">Contract value including GST: </span>—
           </p>
         ) : (
@@ -198,7 +198,7 @@ export function OfferSummaryStrip({
                 ? ` · ${formatPercent(effectiveMargin.effectiveMarkupPct)}`
                 : null}
             </span>
-            <p className="font-heading text-lg font-semibold tabular-nums">
+            <p className="font-mono text-lg font-semibold tabular-nums">
               <span className="sr-only">Contract value including GST: </span>
               {formatCurrency(selected)}
             </p>

@@ -30,14 +30,14 @@ export function UnresolvedIncidentsCard() {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/70 bg-destructive-light p-4 shadow-sm">
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-warning/40 bg-warning-light p-4 shadow-sm">
       <AlertTriangle
-        className="size-5 shrink-0 text-destructive-ink"
+        className="size-5 shrink-0 text-warning-ink"
         aria-hidden="true"
       />
 
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-destructive-ink">
+        <p className="text-sm font-medium text-warning-ink">
           {count} unresolved incident{count !== 1 ? "s" : ""}
         </p>
 

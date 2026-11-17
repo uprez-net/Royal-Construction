@@ -12,7 +12,7 @@ import { forModel } from "@/agent/lib/model-output";
 export function createResolveApprovalTool(operations: AdminOperations) {
   return defineTool({
     description:
-      "Approve or reject a pending admin approval request after reviewing it; rejection requires a reason and incident approvals require a resolution note.",
+      "Approve or reject a pending admin approval request after reviewing it; rejection requires a reason and incident approvals require a resolution note. Approving a tradie removal requires reviewedBookingIds: the ids of removalImpact.bookings from get_approval, after naming those bookings to the owner, because approval cancels every one.",
     inputSchema: resolveApprovalInputSchema,
     outputSchema: agentResultEnvelopeSchema,
     toModelOutput: forModel,

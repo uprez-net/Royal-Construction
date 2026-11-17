@@ -1,3 +1,5 @@
+import { ListToolbar, TableCard } from "@/components/common/list-toolbar";
+import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
 import {
   DataTableSkeleton,
   PageSkeleton,
@@ -8,25 +10,42 @@ export default function ManageTeamSkeleton() {
   return (
     <PageSkeleton
       label="Loading team management"
-      className="container py-4 sm:py-10"
+      className="container space-y-6 py-4 sm:py-10"
     >
-      <div className="mb-8 w-full rounded-lg border border-border/70 bg-card py-4 shadow-sm">
-        <div className="space-y-2 px-6">
-          <Skeleton className="h-5 w-40" />
-          <Skeleton className="h-5 w-72" />
+      {/* Same layout and title height as PageHeader, so the swap does not jump. */}
+      <div className={PAGE_HEADER_CLASS}>
+        <div className="min-w-0 flex-1">
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="mt-1 h-4 w-96 max-w-full" />
         </div>
-        <div className="mt-4 space-y-4 px-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:gap-2">
-            <Skeleton className="h-11 w-full sm:flex-1" />
-            <Skeleton className="h-11 w-full sm:w-45" />
-            <Skeleton className="h-11 w-full sm:w-24" />
+      </div>
+
+      <ListToolbar
+        start={
+          <div className="flex gap-1.5">
+            <Skeleton className="h-11 w-28 rounded-md" />
+            <Skeleton className="h-11 w-24 rounded-md" />
           </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-11 w-28 sm:h-9" />
-            <Skeleton className="h-11 w-24 sm:h-9" />
+        }
+      >
+        <Skeleton className="h-11 w-full rounded-lg sm:w-55" />
+      </ListToolbar>
+
+      <div className="pt-5">
+        <TableCard
+          header={
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_11.25rem_auto] md:items-center">
+              <Skeleton className="h-11 w-full md:h-[2.125rem]" />
+              <Skeleton className="h-11 w-full sm:w-45 md:h-[2.125rem]" />
+              <Skeleton className="h-11 w-full md:h-[2.125rem] md:w-24" />
+            </div>
+          }
+        >
+          <div className="p-4 sm:p-5 md:p-0">
+            <DataTableSkeleton columnCount={4} mobileColumns={1} flush />
           </div>
-          <Skeleton className="h-11 w-full" />
-          <DataTableSkeleton columnCount={5} mobileColumns={1} />
+        </TableCard>
+        <div className="space-y-3 pt-2">
           <Skeleton className="mx-auto h-11 w-60" />
         </div>
       </div>

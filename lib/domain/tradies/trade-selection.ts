@@ -19,7 +19,11 @@ import {
 import { attributionUserId, type DomainPrincipal } from "../principal";
 import { recordTradieActivity } from "../audit/tradie-activity-log";
 import { authorizeProject } from "../access/projects";
-import { INACTIVE_SCHEDULE_STATUSES, requireActiveTradie } from "./lifecycle";
+import {
+  INACTIVE_SCHEDULE_STATUSES,
+  requireActiveTradie,
+  requireBookableTradie,
+} from "./lifecycle";
 import {
   activityAcceptsTrade,
   bookingTrade,
@@ -83,7 +87,9 @@ function money(amount: number): string {
 }
 
 /** `bookingTrade` as a query: the booking's trade, else its tradie's. */
-function bookingInTradeWhere(trade: string): Prisma.TradieScheduleWhereInput {
+export function bookingInTradeWhere(
+  trade: string,
+): Prisma.TradieScheduleWhereInput {
   return {
     OR: [
       { trade: { equals: trade.trim(), mode: "insensitive" } },
@@ -230,19 +236,38 @@ export async function recordManualQuote(
 
   return serializable(db, async (tx) => {
     // Once another tradie is selected for the trade a rival quote has nowhere
-    // to go: selecting it is refused until that tradie is cancelled.
-    const rival = await tx.tradeSelection.findFirst({
-      select: { tradie: { select: { name: true } } },
+    // to go: selecting it is refused until that tradie is cancelled. And this
+    // tradie's own selection waiting on a cancellation decision is not to be
+    // re-priced: approving it cancels the very bookings the quote would write.
+    const blocking = await tx.tradeSelection.findFirst({
+      select: {
+        status: true,
+        tradie: { select: { name: true } },
+        tradieId: true,
+      },
       where: {
+        OR: [
+          {
+            status: { in: [...LIVE_SELECTION_STATUSES] },
+            tradieId: { not: tradie.id },
+          },
+          {
+            status: TradeSelectionStatus.CANCELLATION_PENDING,
+            tradieId: tradie.id,
+          },
+        ],
         projectId: project.id,
-        status: { in: [...LIVE_SELECTION_STATUSES] },
         tradeKey: tradeKey(trade),
-        tradieId: { not: tradie.id },
       },
     });
-    if (rival) {
+    if (blocking?.tradieId === tradie.id) {
       throw new DomainTransitionError(
-        `${rival.tradie.name} is already selected for ${trade}. Cancel them before recording another quote.`,
+        `${tradie.name}'s cancellation for ${trade} is waiting on an admin decision. Record the quote once it has been decided.`,
+      );
+    }
+    if (blocking) {
+      throw new DomainTransitionError(
+        `${blocking.tradie.name} is already selected for ${trade}. Cancel them before recording another quote.`,
       );
     }
 
@@ -469,17 +494,18 @@ export async function selectTradeQuote(
   db: DomainDb,
 ): Promise<SelectedTradeQuote> {
   const project = await authorizeProject(principal, input.projectId, db);
-  const tradie = await requireActiveTradie(input.tradieId, db);
-  const asked = input.trade?.trim() || tradie.trade.trim();
-  const trade = tradieTradeLabel(tradie, asked);
-  if (!trade) {
-    throw new DomainValidationError(
-      `${tradie.name} is not listed under ${asked}.`,
-    );
-  }
-  const key = tradeKey(trade);
 
   return serializable(db, async (tx) => {
+    // Inside the transaction, so a removal requested a moment ago is seen.
+    const tradie = await requireBookableTradie(input.tradieId, tx);
+    const asked = input.trade?.trim() || tradie.trade.trim();
+    const trade = tradieTradeLabel(tradie, asked);
+    if (!trade) {
+      throw new DomainValidationError(
+        `${tradie.name} is not listed under ${asked}.`,
+      );
+    }
+    const key = tradeKey(trade);
     const live = await tx.tradeSelection.findFirst({
       select: { status: true, tradie: { select: { name: true } } },
       where: {
@@ -681,7 +707,8 @@ export async function requestTradeCancellation(
   });
   if (
     !selection
-    || (input.projectId !== undefined && selection.projectId !== input.projectId)
+    || (input.projectId !== undefined
+      && selection.projectId !== input.projectId)
   ) {
     throw new DomainNotFoundError("Selection not found.");
   }

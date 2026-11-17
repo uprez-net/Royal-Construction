@@ -24,7 +24,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { WhatsAppGlyph } from "@/components/whatsapp/whatsapp-logo";
-import { useProjectWhatsApp } from "@/hooks/use-project-whatsapp";
+import {
+  PROJECT_WHATSAPP_HEADER_POLL_MS,
+  useProjectWhatsApp,
+} from "@/hooks/use-project-whatsapp";
 import { cn } from "@/lib/utils";
 
 import { useCreateProjectWhatsAppGroup } from "./project-whatsapp-group-setup";
@@ -32,7 +35,7 @@ import { ProjectWhatsAppInviteModal } from "./project-whatsapp-invite-modal";
 import { ProjectWhatsAppLinkModal } from "./project-whatsapp-link-modal";
 
 const GREEN =
-  "h-9 rounded-lg bg-[#00a884] px-3.5 text-sm font-medium text-white hover:bg-[#008f72]";
+  "h-9 rounded-lg bg-primary px-3.5 text-sm font-medium text-primary-foreground";
 const OUTLINE = "h-9 rounded-lg px-3.5 text-sm font-medium";
 
 /**
@@ -46,7 +49,9 @@ export function ProjectWhatsAppHeaderButton({
 }: {
   projectId: string;
 }) {
-  const { thread } = useProjectWhatsApp(projectId);
+  const { thread } = useProjectWhatsApp(projectId, {
+    pollMs: PROJECT_WHATSAPP_HEADER_POLL_MS,
+  });
   const { create, creating } = useCreateProjectWhatsAppGroup(projectId);
   const [inviting, setInviting] = useState(false);
   const [linking, setLinking] = useState(false);
@@ -165,7 +170,7 @@ export function ProjectWhatsAppHeaderButton({
             <WhatsAppGlyph brand className="size-4" />
             <span className="ml-1.5 hidden sm:inline">Chat</span>
             {unread > 0 ? (
-              <span className="absolute -right-1.5 -top-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-[#25d366] px-1 text-[11px] font-semibold text-white">
+              <span className="absolute -right-1.5 -top-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-info px-1 text-[12px] font-semibold text-white">
                 {unread}
               </span>
             ) : null}
@@ -193,7 +198,7 @@ export function ProjectWhatsAppHeaderButton({
         onClick={openChat}
         className={OUTLINE}
       >
-        <WhatsAppGlyph className="mr-1.5 size-4 text-amber-600" />
+        <WhatsAppGlyph className="mr-1.5 size-4 text-warning-ink" />
         Group suspended
       </Button>
     );

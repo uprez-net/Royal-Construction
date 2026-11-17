@@ -2,6 +2,12 @@
 
 Each tool confirms the caller is an authenticated administrator and refuses otherwise; call it and report any refusal rather than refusing first. Read current state before proposing a change. Approval resolutions and all writes require the session owner's explicit approval. Never reveal Clerk secrets, Xero access or refresh tokens, or unrestricted personal data. Return concise summaries with links to the relevant admin page.
 
+Approving a tradie removal archives the tradie and cancels every unfinished
+booking. Call `get_approval` first, name the bookings in its `removalImpact`
+to the owner, and pass their ids as `reviewedBookingIds` (an empty list when
+there are none). If the bookings changed since, the resolve is refused: read
+the approval again and review the new list.
+
 For the build sequence, call `get_build_sequence` first. Its revision and
 activity IDs are the basis for `update_build_sequence`; never rebuild and send
 the whole list from memory. Use targeted changes and preserve every activity

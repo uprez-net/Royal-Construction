@@ -83,7 +83,7 @@ function Stat({
     <div className="flex items-start gap-3 rounded-lg border border-border/70 bg-card px-3 py-3">
       <span
         aria-hidden="true"
-        className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-muted text-muted-foreground"
+        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
       >
         {icon}
       </span>
@@ -146,7 +146,7 @@ function QuoteCard({
         <div className="flex min-w-0 items-center gap-3">
           <span
             aria-hidden="true"
-            className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-muted text-xs font-semibold text-muted-foreground"
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold text-muted-foreground"
           >
             {initials(tradie.name)}
           </span>
@@ -847,7 +847,7 @@ export function TradeList({
           >
             <span
               aria-hidden="true"
-              className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-muted text-muted-foreground"
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
             >
               <TradeIcon trade={trade} className="size-4" />
             </span>

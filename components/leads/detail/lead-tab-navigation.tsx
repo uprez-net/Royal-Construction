@@ -134,8 +134,8 @@ export function LeadTabNavigation({
             tabIndex={isActive ? 0 : -1}
             onClick={() => onTabChange(key)}
             className={cn(
-              "relative -mb-0.5 inline-flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border-b-2 border-transparent px-1 py-2 text-center text-xs font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-11 md:flex-row md:gap-1.5 md:px-4 md:text-left md:text-sm md:whitespace-nowrap",
-              isActive && "border-primary font-semibold text-primary",
+              "relative -mb-0.5 inline-flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border-b-2 border-transparent px-1 py-2 text-center text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-11 md:flex-row md:gap-1.5 md:px-4 md:text-left md:text-sm md:whitespace-nowrap",
+              isActive && "border-royal-gold font-semibold text-foreground",
             )}
           >
             <Icon className="size-4" aria-hidden="true" />

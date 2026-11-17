@@ -347,6 +347,24 @@ test("selection is refused while someone holds the trade, and nothing is written
   assert.deepEqual(recorder.writes(), []);
 });
 
+test("a tradie waiting on removal cannot be selected for a trade (#529)", async () => {
+  const recorder = recordingDb({
+    "project.findUnique": PROJECT,
+    "tradie.findUnique": { ...ABC, approvals: [{ id: "ap_remove" }] },
+  });
+  await assert.rejects(
+    selectTradeQuote(
+      adminPrincipal(),
+      { projectId: "p_1", tradieId: "t_abc" },
+      recorder.db,
+    ),
+    (error: unknown) =>
+      error instanceof DomainTransitionError
+      && /removal request waiting/.test(error.message),
+  );
+  assert.deepEqual(recorder.writes(), []);
+});
+
 test("selecting cancels the rivals' bookings on the same activities and records the selection", async () => {
   const bookings = [
     {
@@ -694,6 +712,35 @@ test("a manual quote from a rival of the selected tradie is refused, and no quot
   assert.deepEqual(recorder.writes(), []);
 });
 
+test("a manual quote for a tradie whose cancellation is awaiting a decision is refused, and no quote is created", async () => {
+  const recorder = recordingDb({
+    "milestone.findMany": [MILESTONE],
+    "project.findUnique": PROJECT,
+    "tradeSelection.findFirst": {
+      status: "CANCELLATION_PENDING",
+      tradie: { name: ABC.name },
+      tradieId: ABC.id,
+    },
+    "tradie.findUnique": ABC,
+  });
+  await assert.rejects(
+    recordManualQuote(adminPrincipal(), QUOTE, recorder.db),
+    (error: unknown) =>
+      error instanceof DomainTransitionError
+      && /cancellation for .* is waiting on an admin decision/.test(
+        error.message,
+      ),
+  );
+  assert.deepEqual(recorder.writes(), []);
+  const [read] = recorder.calls.filter(
+    (call) => call.operation === "tradeSelection.findFirst",
+  );
+  assert.deepEqual((read.args as { where: { OR: unknown[] } }).where.OR[1], {
+    status: "CANCELLATION_PENDING",
+    tradieId: ABC.id,
+  });
+});
+
 test("approving a cancellation ends the selection and cancels the tradie's open bookings", async () => {
   const recorder = recordingDb({
     "tradeSelection.updateMany": { count: 1 },
@@ -748,13 +795,17 @@ test("removing a tradie ends their selections, including one waiting on a cancel
       updationData: {},
     },
     "tradieApproval.updateMany": { count: 1 },
-    "tradieSchedule.findMany": [{ projectId: "p_1" }],
+    "tradieSchedule.findMany": [{ id: "s_1", projectId: "p_1" }],
     "tradieSchedule.updateMany": { count: 1 },
     "tradeSelection.updateMany": { count: 1 },
   });
   const resolved = await resolveTradieApproval(
     adminPrincipal(),
-    { approvalId: "ap_remove", resolution: "approved" },
+    {
+      approvalId: "ap_remove",
+      resolution: "approved",
+      reviewedBookingIds: ["s_1"],
+    },
     recorder.db,
   );
 
