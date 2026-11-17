@@ -61,6 +61,8 @@ function Flag({ on, label }: { on: boolean; label: string }) {
         <XCircle className="size-4 text-muted-foreground" aria-hidden="true" />
       )}
       {label}
+      {/* The icons are hidden from screen readers, so say the state too. */}
+      <span className="sr-only">{on ? ": on" : ": off"}</span>
     </span>
   );
 }
@@ -236,6 +238,10 @@ export function CommsAdminPanel() {
             />
             <Flag on={status.browserCalling} label="Browser phone (outbound)" />
             <Flag on={status.voiceAgent} label="Mili answers inbound calls" />
+            <Flag
+              on={status.voiceAgentDisclosure}
+              label="Mili answers known callers from records"
+            />
             <Flag
               on={status.recordingMode === "consented"}
               label="Outbound recording (announced)"

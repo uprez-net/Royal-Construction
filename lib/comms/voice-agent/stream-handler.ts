@@ -8,6 +8,7 @@ import { CommsError, type CommsProviderName } from "@/lib/domain/ports/comms";
 import type { CommsRuntime } from "../factory";
 import { providerFromPath } from "../factory";
 import { COMMS_WEBHOOK_PRINCIPAL } from "../webhook-handler";
+import { voiceCallerPreparer } from "./caller";
 import { decideCallMove } from "./desk";
 import { openLiveSession } from "./live";
 import { VoiceAgentSession, type VoiceAgentReportBody } from "./session";
@@ -21,6 +22,11 @@ import { voiceAgentVoice } from "./settings";
 // conversation runs inside this one request: the platform upgrades it to a
 // WebSocket and keeps the function alive until the session settles, which is
 // why VOICE_AGENT_MAX_SECONDS sits inside the route's maxDuration.
+//
+// Who is calling, and what Mili may tell them, is the domain's
+// (lib/domain/comms/callers, wired in caller.ts). This route's own principal
+// is never the caller's authority: the carrier-webhook principal below only
+// records how the conversation ended.
 //
 // When the conversation ends, the outcome and transcript go through the same
 // domain command as a carrier callback (`call.agentEnded`), and the carrier's
@@ -120,6 +126,10 @@ export async function handleVoiceAgentStream(
       decide: deps.decide ?? decideCallMove,
       dialect: provider,
       log,
+      prepare: voiceCallerPreparer({
+        db: deps.db,
+        disclosure: config.voiceAgent.disclosure,
+      }),
       openModel: () =>
         open(
           (event) => session.handleModelEvent(event),

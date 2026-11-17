@@ -2,9 +2,15 @@ import {
   VOICE_AGENT_GREETING_CUE,
   VOICE_AGENT_WRAP_UP_INSTRUCTION,
   VOICE_AGENT_WRAP_UP_SECONDS,
+  VOICE_LOOKUP_FAILED_CUE,
   voiceAgentInstructions,
+  voiceLookupResultCue,
   type VoiceAgentTurn,
 } from "@/lib/domain/comms/calls/voice-agent";
+import type {
+  VoiceLookupDefinition,
+  VoiceLookupRequest,
+} from "@/lib/domain/comms/callers/lookups";
 import type { AgentOutcome, CommsProviderName } from "@/lib/domain/ports/comms";
 
 import type { DeskDecision } from "./desk";
@@ -17,11 +23,14 @@ import { verifyStreamToken, type StreamTokenClaims } from "./token";
 // on AI Gateway on the other (stream-handler.ts wires the sockets), and the
 // call desk (desk.ts) deciding when the call moves on.
 //
-//   carrier opens the socket → "start" frame → token checked → Live opened
+//   carrier opens the socket → "start" frame → token checked
+//   → caller resolved (who they are, their briefing, their lookups) while
+//     Live opens → Live started as Mili for that caller
 //   → session started → greeting cue sent → Mili greets first
 //   → μ-law audio both ways, transcripts kept
 //   → after each thing she says (or a Live delegation) the desk is asked
-//   → desk: end_call / transfer_to_team, caller hangs up, time, or a failure
+//   → desk: a lookup (admins only), whose answer Mili then reads out, or
+//     end_call / transfer_to_team; caller hangs up, time, or a failure
 //   → outcome reported (the call router decides what the caller hears next)
 //   → sockets closed
 //
@@ -44,6 +53,26 @@ export type VoiceAgentReportBody = {
   readonly turns: readonly VoiceAgentTurn[];
 };
 
+/**
+ * What Mili is given about this caller, decided once before her session
+ * starts (lib/domain/comms/callers/access.ts). A resolver that fails or is
+ * slow leaves her with MESSAGE_ONLY_SETUP: message taking, no briefing, no
+ * lookups. Nothing ever falls back to more.
+ */
+export type VoiceCallerSetup = {
+  readonly instructions: string;
+  /** The desk's lookup tools for this caller. */
+  readonly lookups: readonly VoiceLookupDefinition[];
+  /** Runs one lookup for this caller and resolves to what Mili may say. */
+  readonly lookup: ((request: VoiceLookupRequest) => Promise<string>) | null;
+};
+
+export const MESSAGE_ONLY_SETUP: VoiceCallerSetup = {
+  instructions: voiceAgentInstructions(),
+  lookup: null,
+  lookups: [],
+};
+
 export type VoiceAgentSessionDeps = {
   readonly dialect: CommsProviderName;
   /** Telnyx carries the token on the URL; Twilio in its "start" frame. */
@@ -53,8 +82,16 @@ export type VoiceAgentSessionDeps = {
   readonly carrier: TextSocket;
   /** Open the Live socket; its frames come back through `handleModelEvent`. */
   readonly openModel: () => Promise<LiveConnection>;
-  /** The call desk: should the call move on, given what has been said? */
-  readonly decide: (turns: readonly VoiceAgentTurn[]) => Promise<DeskDecision>;
+  /**
+   * Who is calling and what Mili may use. Absent: every caller is unknown
+   * (message taking only).
+   */
+  readonly prepare?: (claims: StreamTokenClaims) => Promise<VoiceCallerSetup>;
+  /** The call desk: should the call move on, or is Mili waiting on a lookup? */
+  readonly decide: (
+    turns: readonly VoiceAgentTurn[],
+    lookups: readonly VoiceLookupDefinition[],
+  ) => Promise<DeskDecision>;
   readonly report: (body: VoiceAgentReportBody) => Promise<void>;
   readonly log?: Pick<Console, "info" | "warn" | "error">;
   readonly now?: () => number;
@@ -66,6 +103,10 @@ export type VoiceAgentSessionDeps = {
 export const START_TIMEOUT_MS = 10_000;
 /** Live must be ready by then, or the caller goes to a person. */
 export const MODEL_STARTUP_TIMEOUT_MS = 15_000;
+/** Without the caller resolved by then, Mili starts as for an unknown caller. */
+export const PREPARE_TIMEOUT_MS = 4_000;
+/** A lookup slower than this is told to Mili as one that could not be done. */
+export const LOOKUP_TIMEOUT_MS = 6_000;
 /** No speech from Mili for this long: she has finished what she was saying. */
 export const TURN_QUIET_MS = 700;
 /**
@@ -87,7 +128,10 @@ const PLAYBACK_TAIL_MS = 600;
 const MAX_PLAYBACK_WAIT_MS = 15_000;
 
 /** The first frame on the Live socket: who Mili is and how she sounds. */
-export function voiceAgentLiveStart(voice: string): LiveClientEvent {
+export function voiceAgentLiveStart(
+  voice: string,
+  instructions: string = MESSAGE_ONLY_SETUP.instructions,
+): LiveClientEvent {
   return {
     session: {
       audio: {
@@ -95,7 +139,7 @@ export function voiceAgentLiveStart(voice: string): LiveClientEvent {
         output: { voice },
       },
       delegation: { type: "client" },
-      instructions: voiceAgentInstructions(),
+      instructions,
       model: VOICE_AGENT_MODEL,
       store: false,
     },
@@ -161,6 +205,9 @@ export class VoiceAgentSession {
   private deskAgain = false;
   private pendingDelegation: string | null = null;
   private readonly spoken: SpokenTurn[] = [];
+  private setup: VoiceCallerSetup = MESSAGE_ONLY_SETUP;
+  /** Lookups already answered on this call, so the desk never repeats one. */
+  private readonly lookupsRun = new Set<string>();
 
   /** In the order spoken. */
   get turns(): VoiceAgentTurn[] {
@@ -266,6 +313,8 @@ export class VoiceAgentSession {
         void this.finish("failed");
       }
     });
+    // Who is calling is worked out while Live opens, so it costs no time.
+    const setup = this.prepareCaller(claims);
     try {
       this.model = await this.deps.openModel();
     } catch (error) {
@@ -276,11 +325,62 @@ export class VoiceAgentSession {
       void this.finish("failed");
       return;
     }
+    // The caller may have hung up while Live opened: close it now rather than
+    // keeping a billed session open while the caller is still being resolved.
     if (this.finished) {
       this.model.close();
       return;
     }
-    this.sendModel(voiceAgentLiveStart(this.deps.voice));
+    this.setup = await setup;
+    if (this.finished) {
+      this.model.close();
+      return;
+    }
+    this.sendModel(
+      voiceAgentLiveStart(this.deps.voice, this.setup.instructions),
+    );
+  }
+
+  /** The caller's setup, or message taking if it fails or is slow. */
+  private async prepareCaller(
+    claims: StreamTokenClaims,
+  ): Promise<VoiceCallerSetup> {
+    const prepare = this.deps.prepare;
+    if (!prepare) return MESSAGE_ONLY_SETUP;
+    try {
+      return (
+        (await this.within(prepare(claims), PREPARE_TIMEOUT_MS))
+        ?? MESSAGE_ONLY_SETUP
+      );
+    } catch (error) {
+      this.log.warn(
+        `[voice-agent] the caller could not be resolved (${
+          error instanceof Error ? error.name : "error"
+        }); taking a message.`,
+      );
+      return MESSAGE_ONLY_SETUP;
+    }
+  }
+
+  /** The promise's value, or null if it takes longer than `ms`. */
+  private within<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+    return new Promise<T | null>((resolve, reject) => {
+      const timer = this.after(ms, () => resolve(null));
+      const settled = () => {
+        this.clearTimer(timer);
+        this.timers.delete(timer);
+      };
+      promise.then(
+        (value) => {
+          settled();
+          resolve(value);
+        },
+        (error: unknown) => {
+          settled();
+          reject(error);
+        },
+      );
+    });
   }
 
   private forwardCallerAudio(payload: string): void {
@@ -428,7 +528,7 @@ export class VoiceAgentSession {
     this.deskBusy = true;
     let decision: DeskDecision = null;
     try {
-      decision = await this.deps.decide([...this.turns]);
+      decision = await this.deps.decide([...this.turns], this.setup.lookups);
     } catch (error) {
       // The caller can still hang up, and the time limit still ends the
       // call; the next thing Mili says asks again.
@@ -437,16 +537,39 @@ export class VoiceAgentSession {
         error instanceof Error ? error.message : error,
       );
     }
+    let lookupCue: string | null = null;
+    if (decision?.action === "lookup") {
+      const key = JSON.stringify(decision.request);
+      if (this.lookupsRun.has(key)) {
+        decision = null;
+      } else {
+        const result = await this.runLookup(decision.request);
+        lookupCue = result.cue;
+        // Only an answered lookup is never run again. One that failed or
+        // timed out stays askable: the caller asking again must get another
+        // try, not a "let me check" followed by silence.
+        if (result.answered) this.lookupsRun.add(key);
+      }
+    }
     this.deskBusy = false;
     if (this.finished || this.ending) return;
-    if (delegationId) {
+    if (lookupCue !== null) {
+      // Commentary makes her speak; a delegation is answered on its own id.
+      this.sendModel({
+        content: lookupCue,
+        delegation_id: delegationId,
+        type: delegationId
+          ? "session.thinking.append"
+          : "session.commentary.append",
+      });
+    } else if (delegationId) {
       this.sendModel({
         content: deskNote(decision),
         delegation_id: delegationId,
         type: "session.thinking.append",
       });
     }
-    if (decision) {
+    if (decision && decision.action !== "lookup") {
       this.moveOn(decision.action === "end" ? "completed" : "transfer");
       return;
     }
@@ -455,6 +578,36 @@ export class VoiceAgentSession {
       this.deskAgain = false;
       this.pendingDelegation = null;
       void this.askDesk(next);
+    }
+  }
+
+  /**
+   * Run a lookup the desk asked for, as the domain allows it for this caller.
+   * Any refusal, failure or timeout becomes "could not check" — never "found
+   * nothing", and never an answer from somewhere wider.
+   */
+  private async runLookup(
+    request: VoiceLookupRequest,
+  ): Promise<{ readonly cue: string; readonly answered: boolean }> {
+    const failed = { answered: false, cue: VOICE_LOOKUP_FAILED_CUE };
+    const lookup = this.setup.lookup;
+    const offered = this.setup.lookups.some((l) => l.name === request.name);
+    if (!lookup || !offered) return failed;
+    try {
+      const text = await this.within(lookup(request), LOOKUP_TIMEOUT_MS);
+      if (text === null) {
+        this.log.warn(`[voice-agent] lookup ${request.name} timed out.`);
+        return failed;
+      }
+      return { answered: true, cue: voiceLookupResultCue(text) };
+    } catch (error) {
+      // The name only: what was asked and what came back stay off the logs.
+      this.log.warn(
+        `[voice-agent] lookup ${request.name} failed (${
+          error instanceof Error ? error.name : "error"
+        }).`,
+      );
+      return failed;
     }
   }
 
