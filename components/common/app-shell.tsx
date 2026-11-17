@@ -21,6 +21,7 @@ import {
   getScreenTitle,
   getShellSectionSlug,
   getShellTrail,
+  type ShellCrumb,
 } from "@/utils/shell-nav";
 import Image from "next/image";
 import { Notifications } from "./notifications";
@@ -58,7 +59,7 @@ export function AppShell({
   // request, so a nav entry would only lead to a workspace that cannot answer.
   operationsAgentEnabled: boolean;
   description?: string;
-  breadcrumbs?: string[];
+  breadcrumbs?: ShellCrumb[];
   actions?: ReactNode;
   children: ReactNode;
 }) {
@@ -344,31 +345,43 @@ export function AppShell({
                   <p className="truncate text-xs text-foreground/80 md:hidden">
                     {title}
                   </p>
-                  <div className="hidden min-w-0 items-center gap-2 text-xs whitespace-nowrap text-foreground/80 md:flex">
-                    {trail.map((segment, index) => (
-                      <div
-                        key={segment}
-                        className="flex min-w-0 items-center gap-2 last:shrink"
-                      >
-                        {index > 0 ? (
-                          <span
-                            className="text-foreground/60"
-                            aria-hidden="true"
-                          >
-                            /
-                          </span>
-                        ) : null}
-                        <span
-                          className={cn(
-                            index === trail.length - 1
-                              && "truncate font-medium text-foreground",
-                          )}
+                  <nav
+                    aria-label="Breadcrumb"
+                    className="hidden min-w-0 md:block"
+                  >
+                    <ol className="flex min-w-0 items-center gap-2 text-xs whitespace-nowrap text-foreground/80">
+                      {trail.map((crumb, index) => (
+                        <li
+                          key={`${crumb.label}-${index}`}
+                          className="flex min-w-0 items-center gap-2 last:shrink"
                         >
-                          {segment}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                          {index > 0 ? (
+                            <span
+                              className="text-foreground/60"
+                              aria-hidden="true"
+                            >
+                              /
+                            </span>
+                          ) : null}
+                          {crumb.href ? (
+                            <Link
+                              href={crumb.href}
+                              className="rounded-sm transition-colors hover:text-foreground hover:underline hover:underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                            >
+                              {crumb.label}
+                            </Link>
+                          ) : (
+                            <span
+                              aria-current="page"
+                              className="truncate font-medium text-foreground"
+                            >
+                              {crumb.label}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  </nav>
                 </div>
               </div>
 

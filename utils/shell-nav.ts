@@ -27,11 +27,18 @@ export function getShellSectionSlug(path: string): string {
   return path.split("/").filter(Boolean)[0] ?? "dashboard";
 }
 
-export function getShellTrail(path: string, title: string): string[] {
+/** One breadcrumb. The current screen has no href: it is where you are. */
+export type ShellCrumb = { label: string; href?: string };
+
+const HOME: ShellCrumb = { label: "Home", href: "/dashboard" };
+
+export function getShellTrail(path: string, title: string): ShellCrumb[] {
   const segments = path.split("/").filter(Boolean);
   if (segments.length <= 1) {
-    return ["Home", title];
+    return [HOME, { label: title }];
   }
   const section = getScreenTitle(segments[0]);
-  return section === title ? ["Home", title] : ["Home", section, title];
+  return section === title
+    ? [HOME, { label: title }]
+    : [HOME, { label: section, href: `/${segments[0]}` }, { label: title }];
 }
