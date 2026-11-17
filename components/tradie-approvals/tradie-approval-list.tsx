@@ -1,5 +1,4 @@
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { ApprovalCard } from "./tradie-approval-card";
 import {
   ApprovalInput,
   SafeTradieApproval,
@@ -9,21 +8,45 @@ import {
 } from "@/types/tradie";
 import { dateFormat } from "@/utils/formatters";
 import {
+  approvalErrorMessage,
+  approvalOutcomeMessage,
   approveRequests,
   selectApproval,
 } from "@/lib/store/slices/tradieApprovalSlice";
 import { toast } from "sonner";
 import { useState } from "react";
-import { UserCheck } from "lucide-react";
+import { Check, Loader2, MoreVertical, UserCheck, X } from "lucide-react";
 import { openModal } from "@/lib/store/slices/uiSlice";
-import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
+import { TradieApprovalStatus, TradieApprovalActionType } from "@prisma/client";
+import { DataTable } from "@/components/common/data-table";
+import { StatusPill } from "@/components/common/status-pill";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
-// The rows sit inside the list's one TableCard: hairline between rows, not a
-// card each. The row root is ApprovalCard's own bordered div, so its border
-// and corners are reset here. Divider and reset use explicit selectors: Tailwind
-// v4 divide-* is :where(), zero specificity, and the reset would win. A `row` variant on ApprovalCard would drop this.
-const ROW_LIST_CLASS =
-  "[&>div]:rounded-none [&>div]:border-0 [&>div]:ring-inset [&>div:not(:last-child)]:border-b [&>div:not(:last-child)]:border-border";
+const approvalTypeLabel: Record<TradieApprovalActionType, string> = {
+  PRICE_CHANGE: "Price Change",
+  INCIDENT_RESOLUTION: "Incident",
+  TRADIE_REMOVAL: "Deletion",
+  SCHEDULE_APPROVAL: "Scheduling",
+  SCHEDULE_DELETION: "Schedule Removal",
+  TRADE_CANCELLATION: "Trade Cancellation",
+};
+
+const statusPill: Record<
+  TradieApprovalStatus,
+  { tone: "warning" | "success" | "danger"; label: string }
+> = {
+  PENDING: { tone: "warning", label: "Pending" },
+  APPROVED: { tone: "success", label: "Approved" },
+  REJECTED: { tone: "danger", label: "Rejected" },
+};
 
 const createApprovalTitle = (approval: SafeTradieApproval) => {
   switch (approval.actionType) {
@@ -89,8 +112,10 @@ const calculateSeverity = (approval: SafeTradieApproval) => {
   }
 };
 
-/** Only the schedule-shaped requests carry a project; the card footer stays
- *  empty for the rest, as it did before. */
+const severityLabel = (severity: ReturnType<typeof calculateSeverity>) =>
+  severity === "HIGH" ? "High" : severity === "MEDIUM" ? "Medium" : "Low";
+
+/** Only the schedule-shaped requests carry a project; the cell stays empty for the rest. */
 const approvalProjectName = (approval: SafeTradieApproval) => {
   switch (approval.actionType) {
     case "SCHEDULE_APPROVAL":
@@ -123,13 +148,95 @@ const handlePayload = (approval: SafeTradieApproval, resolution: string) => {
   }
 };
 
+const ALIGN = [
+  "start",
+  "start",
+  "start",
+  "start",
+  "start",
+  "start",
+  "start",
+  "end",
+] as const;
+
+/**
+ * The row's actions. The card's Approve, Reject and View buttons are the same
+ * three items here, calling the same handlers. The spinner that the card showed
+ * on its Approve button now shows on the trigger while the row is processing.
+ */
+function ApprovalRowMenu({
+  title,
+  pending,
+  processing,
+  onView,
+  onApprove,
+  onReject,
+}: {
+  title: string;
+  pending: boolean;
+  processing: boolean;
+  onView: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-11 md:size-8"
+          aria-label={`Actions for ${title}`}
+        >
+          {processing ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <MoreVertical className="h-4 w-4" />
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem onClick={onView} className="min-h-11 md:min-h-0">
+          View request
+        </DropdownMenuItem>
+
+        {pending && (
+          <>
+            <DropdownMenuItem
+              onClick={onApprove}
+              disabled={processing}
+              className="min-h-11 md:min-h-0"
+            >
+              <Check />
+              Approve
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={onReject}
+              className="min-h-11 md:min-h-0"
+            >
+              <X />
+              Reject
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function TradieApprovalList() {
   const dispatch = useAppDispatch();
   const [processingRequestIds, setProcessingRequestIds] = useState<Set<string>>(
     new Set(),
   );
-  const { approvals, activeTab, selectedApprovalIds, loading, error } =
-    useAppSelector((state) => state.tradieApproval);
+  const { approvals, selectedApprovalIds, loading, error } = useAppSelector(
+    (state) => state.tradieApproval,
+  );
 
   const handleSelectApproval = (approvalId: string) => {
     dispatch(selectApproval(approvalId));
@@ -151,13 +258,13 @@ export function TradieApprovalList() {
         payload: handlePayload(approval, "approved"),
       } satisfies ApprovalInput;
 
-      await dispatch(approveRequests([approvalInput])).unwrap();
-      toast.success("Approval request approved successfully");
+      const result = await dispatch(approveRequests([approvalInput])).unwrap();
+      const message = approvalOutcomeMessage(result, "approved");
+      if (message.success) toast.success(message.success);
+      if (message.failure) toast.error(message.failure);
     } catch (error) {
-      console.error("Error creating approval input:", error);
-      toast.error(
-        error instanceof Error ? error.message : "An unexpected error occurred",
-      );
+      console.error("Approval failed:", error);
+      toast.error(approvalErrorMessage(error));
     } finally {
       setProcessingRequestIds((prev) => {
         const newSet = new Set(prev);
@@ -210,33 +317,6 @@ export function TradieApprovalList() {
     );
   };
 
-  if (loading) {
-    return (
-      <PageSkeleton label="Loading approvals">
-        <div className={ROW_LIST_CLASS}>
-          {Array.from({ length: 5 }).map((_, index) => (
-            <div
-              key={index}
-              className="flex flex-wrap items-center justify-between gap-4 p-4"
-            >
-              <div className="flex min-w-0 items-center gap-4">
-                <Skeleton className="size-12 shrink-0 rounded-full" />
-                <div className="space-y-2">
-                  <Skeleton className="h-5 w-48 max-w-full" />
-                  <Skeleton className="h-4 w-72 max-w-full" />
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-8 w-20 rounded-md" />
-                <Skeleton className="h-8 w-20 rounded-md" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </PageSkeleton>
-    );
-  }
-
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-16 text-muted-foreground">
@@ -246,51 +326,146 @@ export function TradieApprovalList() {
   }
 
   return (
-    <div className={ROW_LIST_CLASS} key={`${approvals.length}-${activeTab}`}>
-      {approvals.length === 0 ? (
-        <div className="flex h-60 flex-col items-center justify-center gap-3">
-          <div className="flex size-12 items-center justify-center">
-            <UserCheck className="size-5 text-muted-foreground" />
-          </div>
+    // The table sits in the list's one TableCard, so it is flush. Phones keep
+    // their padding around the cards, as the trade types table does.
+    <div className="p-4 sm:p-5 md:p-0">
+      <DataTable
+        flush
+        loading={loading}
+        loadingLabel="Loading approvals"
+        mobileLayout="cards"
+        mobileTitleColumn={2}
+        mobileWideColumns={[4]}
+        mobileActionsPlacement="header"
+        align={[...ALIGN]}
+        caption="Tradie approval requests, newest first."
+        headers={[
+          "",
+          "Type",
+          "Tradie and trade",
+          "Project",
+          "Request",
+          "Submitted",
+          "Status",
+          <span key="actions" className="sr-only">
+            Actions
+          </span>,
+        ]}
+        rows={approvals.map((approval) => {
+          const title = createApprovalTitle(approval);
+          const severity = calculateSeverity(approval);
+          const pending = approval.status === TradieApprovalStatus.PENDING;
+          const processing = processingRequestIds.has(approval.id);
+          const selected = selectedApprovalIds.includes(approval.id);
+          const status = statusPill[approval.status];
 
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-foreground">
-              No approvals found
-            </p>
+          return [
+            // Stops the row's click from opening the request: the box and the
+            // menu are controls of their own.
+            <label
+              key="select"
+              className="grid size-11 shrink-0 place-items-center sm:size-6"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <input
+                type="checkbox"
+                aria-label={`Select ${title}`}
+                checked={selected}
+                disabled={processing || !pending}
+                onChange={() => handleSelectApproval(approval.id)}
+                className="size-5"
+              />
+            </label>,
 
-            <p className="text-xs text-muted-foreground">
-              Your approvals will appear here.
-            </p>
+            <div key="type">
+              <div className="font-medium">
+                {approvalTypeLabel[approval.actionType]}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {severityLabel(severity)} priority
+              </div>
+            </div>,
+
+            <div key="tradie" className="min-w-0">
+              <div className="font-medium [overflow-wrap:anywhere]">
+                {approval.tradie.name}
+              </div>
+              {approval.tradie.trade ? (
+                <div className="text-xs text-muted-foreground">
+                  {approval.tradie.trade}
+                </div>
+              ) : null}
+            </div>,
+
+            <span key="project" className="[overflow-wrap:anywhere]">
+              {approvalProjectName(approval) ?? "—"}
+            </span>,
+
+            <div key="request" className="min-w-0 max-w-xl">
+              <div className="font-medium">{title}</div>
+              <p className="mt-0.5 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                {createApprovalDescription(approval)}
+              </p>
+            </div>,
+
+            <div key="submitted">
+              <div className="tabular-nums">
+                {dateFormat.format(approval.createdAt)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {approval.requestBy}
+              </div>
+            </div>,
+
+            <StatusPill key="status" tone={status.tone}>
+              {status.label}
+            </StatusPill>,
+
+            // Stops the row's click from opening the request: the menu and its
+            // portalled items bubble through the row in React.
+            <div
+              key="actions"
+              className="flex justify-end"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <ApprovalRowMenu
+                title={title}
+                pending={pending}
+                processing={processing}
+                onView={() => handleClick(approval.id)}
+                onApprove={() => handleApprove(approval.id)}
+                onReject={() => handleReject(approval.id)}
+              />
+            </div>,
+          ];
+        })}
+        rowLabel={(index) => `Open ${createApprovalTitle(approvals[index])}`}
+        rowClassName={(index) => {
+          const approval = approvals[index];
+          return cn(
+            selectedApprovalIds.includes(approval.id) && "bg-royal-gold/10",
+            processingRequestIds.has(approval.id) && "opacity-50",
+          );
+        }}
+        onRowClick={(index) => handleClick(approvals[index].id)}
+        emptyState={
+          <div className="flex h-60 flex-col items-center justify-center gap-3">
+            <div className="flex size-12 items-center justify-center">
+              <UserCheck className="size-5 text-muted-foreground" />
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">
+                No approvals found
+              </p>
+
+              <p className="text-xs text-muted-foreground">
+                Your approvals will appear here.
+              </p>
+            </div>
           </div>
-        </div>
-      ) : (
-        approvals.map((approval) => (
-          <ApprovalCard
-            key={approval.id}
-            type={approval.actionType}
-            title={createApprovalTitle(approval)}
-            description={createApprovalDescription(approval)}
-            status={approval.status}
-            severity={calculateSeverity(approval)}
-            severityLabel={
-              calculateSeverity(approval) === "HIGH"
-                ? "High"
-                : calculateSeverity(approval) === "MEDIUM"
-                  ? "Medium"
-                  : "Low"
-            }
-            projectName={approvalProjectName(approval)}
-            requestedBy={approval.requestBy}
-            createdAt={dateFormat.format(approval.createdAt)}
-            selected={selectedApprovalIds.includes(approval.id)}
-            disabled={processingRequestIds.has(approval.id)}
-            onSelect={() => handleSelectApproval(approval.id)}
-            onApprove={() => handleApprove(approval.id)}
-            onReject={() => handleReject(approval.id)}
-            onClick={() => handleClick(approval.id)}
-          />
-        ))
-      )}
+        }
+      />
     </div>
   );
 }

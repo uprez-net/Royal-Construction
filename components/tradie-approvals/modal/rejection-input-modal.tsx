@@ -22,7 +22,11 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 import { useAppDispatch } from "@/lib/store/hooks";
-import { approveRequests } from "@/lib/store/slices/tradieApprovalSlice";
+import {
+  approvalErrorMessage,
+  approvalOutcomeMessage,
+  approveRequests,
+} from "@/lib/store/slices/tradieApprovalSlice";
 
 import { AlertTriangle, Hammer, Loader2, User, X } from "lucide-react";
 
@@ -166,15 +170,14 @@ export function TradieApprovalRejectionModal({
         rejectReason: reason,
       })) satisfies ApprovalInput[];
 
-      await dispatch(approveRequests(approvalInputs)).unwrap();
-
-      toast.success(`${approvals.length} approval request(s) rejected`);
+      const result = await dispatch(approveRequests(approvalInputs)).unwrap();
+      const message = approvalOutcomeMessage(result, "rejected");
+      if (message.success) toast.success(message.success);
+      if (message.failure) toast.error(message.failure);
 
       handleClose();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to reject approvals",
-      );
+      toast.error(approvalErrorMessage(error));
     }
   };
 

@@ -238,24 +238,48 @@ export async function handleAdminApproval(input: ApprovalInput) {
   }
 }
 
+/**
+ * Resolve several approvals. Each one commits on its own, so a refusal on one
+ * (say a booking that now overlaps) must not hide the others that went
+ * through: the result names what resolved and what did not, and why.
+ * Throwing for the whole batch used to report a failure for requests that had
+ * in fact been approved, and the screen never learned they had.
+ */
 export async function handleBulkAdminApproval(inputs: ApprovalInput[]) {
-  try {
-    await authorisedForApproval();
-    const limit = pLimit(5);
-    return await Promise.all(
-      inputs.map((input) =>
-        limit(async () => {
+  await authorisedForApproval();
+  const limit = pLimit(5);
+  const outcomes = await Promise.all(
+    inputs.map((input) =>
+      limit(async () => {
+        try {
           const result = await handleAdminApproval(input);
-          if ("ok" in result && result.ok === false)
-            throw new Error(result.error);
-          return result as Exclude<typeof result, { ok: false }>;
-        }),
-      ),
-    );
-  } catch (error) {
-    console.error("Error handling bulk admin approvals:", error);
-    throw new Error("Failed to handle bulk admin approvals");
-  }
+          if ("ok" in result && result.ok === false) {
+            return { approvalId: input.approvalId, error: result.error };
+          }
+          return { resolved: result as Exclude<typeof result, { ok: false }> };
+        } catch (error) {
+          console.error("Bulk admin approval item failed", error);
+          return {
+            approvalId: input.approvalId,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to handle admin approval",
+          };
+        }
+      }),
+    ),
+  );
+  return {
+    resolved: outcomes.flatMap((outcome) =>
+      "resolved" in outcome && outcome.resolved ? [outcome.resolved] : [],
+    ),
+    failed: outcomes.flatMap((outcome) =>
+      "error" in outcome
+        ? [{ approvalId: outcome.approvalId, error: outcome.error }]
+        : [],
+    ),
+  };
 }
 
 export async function fetchTradieApprovals(

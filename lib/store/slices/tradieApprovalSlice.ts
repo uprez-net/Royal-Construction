@@ -10,6 +10,7 @@ import {
   TradieApprovalQuery,
 } from "@/types/tradie-approvals";
 import {
+  fetchApprovalKPI,
   fetchTradieApprovals,
   handleBulkAdminApproval,
 } from "@/lib/data/tradie-approvals";
@@ -71,21 +72,83 @@ export const fetchApprovalsByQuery = createAsyncThunk<
   },
 );
 
-export const approveRequests = createAsyncThunk<
-  Awaited<ReturnType<typeof handleBulkAdminApproval>>,
-  ApprovalInput[]
->("tradieApproval/approveRequests", async (inputs, { rejectWithValue }) => {
-  try {
-    const res = await handleBulkAdminApproval(inputs);
+type ApprovalBatch = Awaited<ReturnType<typeof handleBulkAdminApproval>>;
+type ApprovalSliceState = { tradieApproval: TradieApprovalState };
 
-    return res;
-  } catch (error) {
-    console.error("Error approving requests:", error);
-    return rejectWithValue(
-      error instanceof Error ? error.message : "Failed to approve requests",
-    );
-  }
+/**
+ * Resolve (approve or reject) one or more requests, then reload the list and
+ * the counts from the server, so a row that left the current view (approved
+ * while "Pending" is shown) goes, and the counts are the server's, not a
+ * local tally. Fulfils even when some failed: the caller reads `failed` and
+ * says which. Rejects only when nothing resolved.
+ */
+export const approveRequests = createAsyncThunk<
+  ApprovalBatch & { kpi: ApprovalKPI | null },
+  ApprovalInput[],
+  { state: ApprovalSliceState; rejectValue: string }
+>(
+  "tradieApproval/approveRequests",
+  async (inputs, { dispatch, getState, rejectWithValue }) => {
+    let batch: ApprovalBatch;
+    try {
+      batch = await handleBulkAdminApproval(inputs);
+    } catch (error) {
+      console.error("Error approving requests:", error);
+      return rejectWithValue(
+        error instanceof Error ? error.message : "Failed to approve requests",
+      );
+    }
+    if (batch.resolved.length === 0) {
+      return rejectWithValue(
+        batch.failed[0]?.error ?? "No request could be resolved",
+      );
+    }
+    const kpi = await fetchApprovalKPI().catch(() => null);
+    void dispatch(fetchApprovalsByQuery(getState().tradieApproval.query));
+    return { ...batch, kpi };
+  },
+);
+
+/**
+ * Reload the list and the counts. For a request resolved outside the list
+ * (its review window), which otherwise still showed as pending.
+ */
+export const refreshApprovals = createAsyncThunk<
+  ApprovalKPI | null,
+  void,
+  { state: ApprovalSliceState }
+>("tradieApproval/refreshApprovals", async (_, { dispatch, getState }) => {
+  void dispatch(fetchApprovalsByQuery(getState().tradieApproval.query));
+  return fetchApprovalKPI().catch(() => null);
 });
+
+/**
+ * The message in a failed approveRequests: `unwrap()` throws the rejected
+ * value, which is a string, not an Error, so an `instanceof Error` check fell
+ * through to "An unexpected error occurred" and hid the real reason.
+ */
+export function approvalErrorMessage(error: unknown): string {
+  if (typeof error === "string" && error) return error;
+  if (error instanceof Error) return error.message;
+  return "An unexpected error occurred";
+}
+
+/** What to tell the office after a batch: how many went, and why any did not. */
+export function approvalOutcomeMessage(
+  result: ApprovalBatch,
+  verb: "approved" | "rejected",
+): { success: string | null; failure: string | null } {
+  const done = result.resolved.length;
+  const failed = result.failed.length;
+  return {
+    success:
+      done === 0 ? null : `${done} request${done === 1 ? "" : "s"} ${verb}`,
+    failure:
+      failed === 0
+        ? null
+        : `${failed} request${failed === 1 ? "" : "s"} not ${verb}: ${result.failed[0].error}`,
+  };
+}
 
 const tradieApprovalSlice = createSlice({
   name: "tradieApproval",
@@ -128,6 +191,15 @@ const tradieApprovalSlice = createSlice({
       .addCase(fetchApprovalsByQuery.fulfilled, (state, action) => {
         state.loading = false;
         state.approvals = action.payload.approvals;
+        // Keep only selections still on screen and still pending.
+        const selectable = new Set(
+          action.payload.approvals
+            .filter((approval) => approval.status === "PENDING")
+            .map((approval) => approval.id),
+        );
+        state.selectedApprovalIds = state.selectedApprovalIds.filter((id) =>
+          selectable.has(id),
+        );
         state.totalCount = action.payload.totalCount;
         state.page = action.payload.page;
         state.pageSize = action.payload.pageSize;
@@ -140,41 +212,27 @@ const tradieApprovalSlice = createSlice({
         state.error = null;
       })
       .addCase(approveRequests.fulfilled, (state, action) => {
-        for (const approval of action.payload) {
-          const index = state.approvals.findIndex(
-            (a) => a.id === approval.approvalId,
-          );
-          if (index !== -1) {
-            state.approvals[index].status =
+        const resolvedIds = new Set<string>();
+        for (const approval of action.payload.resolved) {
+          resolvedIds.add(approval.approvalId);
+          const row = state.approvals.find((a) => a.id === approval.approvalId);
+          if (row) {
+            row.status =
               approval.resolution === "approved" ? "APPROVED" : "REJECTED";
-            state.approvals[index].rejectionReason =
-              approval.rejectReason ?? null;
-            state.kpiData.resolvedCount[
-              approval.resolution === "approved" ? "accepted" : "rejected"
-            ] += 1;
-            state.kpiData.pendingCount -= 1;
-            switch (approval.actionType) {
-              case "PRICE_CHANGE":
-                state.kpiData.priceChangeCount -= 1;
-                break;
-              case "INCIDENT_RESOLUTION":
-                state.kpiData.incidentReportCount -= 1;
-                break;
-              case "TRADIE_REMOVAL":
-                state.kpiData.deletionCount -= 1;
-                break;
-              case "SCHEDULE_APPROVAL":
-                state.kpiData.scheduleCount -= 1;
-                break;
-              case "SCHEDULE_DELETION":
-                state.kpiData.scheduleDeletionCount -= 1;
-                break;
-            }
+            row.rejectionReason = approval.rejectReason ?? null;
           }
         }
+        // A resolved request can no longer be selected; leaving it in the
+        // selection kept "Approve N" on screen for requests already done.
+        state.selectedApprovalIds = state.selectedApprovalIds.filter(
+          (id) => !resolvedIds.has(id),
+        );
+        if (action.payload.kpi) state.kpiData = action.payload.kpi;
       })
-      .addCase(approveRequests.rejected, (state, action) => {
-        state.error = action.payload as string;
+      // A refused approval is reported by the caller's toast. It is not a
+      // list error: setting `error` replaced the whole table with a message.
+      .addCase(refreshApprovals.fulfilled, (state, action) => {
+        if (action.payload) state.kpiData = action.payload;
       });
   },
 });

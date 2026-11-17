@@ -15,6 +15,8 @@ import {
   setQuery,
   setActiveTab,
   fetchApprovalsByQuery,
+  approvalErrorMessage,
+  approvalOutcomeMessage,
   approveRequests,
 } from "@/lib/store/slices/tradieApprovalSlice";
 import { ApprovalKPI, TabKey } from "@/types/tradie-approvals";
@@ -195,13 +197,13 @@ export function TradieApprovalTabs() {
         payload: handlePayload(approval, "approved"),
       })) satisfies ApprovalInput[];
 
-      await dispatch(approveRequests(approvalInputs)).unwrap();
-      toast.success("Approval request approved successfully");
+      const result = await dispatch(approveRequests(approvalInputs)).unwrap();
+      const message = approvalOutcomeMessage(result, "approved");
+      if (message.success) toast.success(message.success);
+      if (message.failure) toast.error(message.failure);
     } catch (error) {
-      console.error("Error creating approval input:", error);
-      toast.error(
-        error instanceof Error ? error.message : "An unexpected error occurred",
-      );
+      console.error("Bulk approval failed:", error);
+      toast.error(approvalErrorMessage(error));
     }
   };
 

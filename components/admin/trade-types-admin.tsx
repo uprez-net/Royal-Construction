@@ -1,5 +1,7 @@
 "use client";
 
+import { StatusPill } from "@/components/common/status-pill";
+
 import { useId, useState, useTransition, type SubmitEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -27,7 +29,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -128,23 +129,20 @@ export function TradeTypesAdmin({
             {row.tradieCount}
           </span>,
           row.archived ? (
-            <Badge key={`status-${row.id}`} variant="secondary">
+            <StatusPill key={`status-${row.id}`} tone="neutral">
               Archived
-            </Badge>
+            </StatusPill>
           ) : (
-            <Badge
-              key={`status-${row.id}`}
-              variant="outline"
-              className="border-success/40 text-success-ink"
-            >
+            <StatusPill key={`status-${row.id}`} tone="success">
               In use
-            </Badge>
+            </StatusPill>
           ),
           <div key={`actions-${row.id}`} className="flex justify-end gap-1">
             <Button
               type="button"
               variant="ghost"
               size="sm"
+              className="min-h-11 md:min-h-0"
               disabled={isPending}
               onClick={() => setEditingId(row.id)}
               aria-label={`Edit ${row.label}`}
@@ -157,6 +155,7 @@ export function TradeTypesAdmin({
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="min-h-11 md:min-h-0"
                 disabled={isPending}
                 onClick={() =>
                   void submit(
@@ -178,6 +177,7 @@ export function TradeTypesAdmin({
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="min-h-11 md:min-h-0"
                 disabled={isPending || row.locked}
                 title={row.locked ? LOCKED_REASON : undefined}
                 onClick={() =>
@@ -209,7 +209,7 @@ export function TradeTypesAdmin({
                 disabled={isPending}
                 onClick={() => setPendingDelete(row)}
                 aria-label={`Delete ${row.label}`}
-                className="text-destructive hover:text-destructive"
+                className="min-h-11 text-destructive hover:text-destructive md:min-h-0"
               >
                 <Trash2 className="size-4" aria-hidden="true" />
               </Button>
@@ -248,21 +248,6 @@ export function TradeTypesAdmin({
   return (
     <TooltipProvider>
       <div className="space-y-5">
-        <p className="text-sm text-muted-foreground">
-          Archiving takes a trade off the pickers; tradies already under it keep
-          it. Only a trade with no tradies can be deleted.
-        </p>
-
-        <AddTradeType
-          disabled={isPending}
-          onAdd={(label, icon) =>
-            submit(
-              () => createTradeTypeAction({ label, icon }),
-              () => `${label} added.`,
-            )
-          }
-        />
-
         {archivedCount > 0 ? (
           <ListToolbar>
             <div className="flex min-h-11 items-center gap-2">
@@ -278,7 +263,19 @@ export function TradeTypesAdmin({
           </ListToolbar>
         ) : null}
 
-        <TableCard>
+        <TableCard
+          header={
+            <AddTradeType
+              disabled={isPending}
+              onAdd={(label, icon) =>
+                submit(
+                  () => createTradeTypeAction({ label, icon }),
+                  () => `${label} added.`,
+                )
+              }
+            />
+          }
+        >
           <div className="p-4 sm:p-5 md:p-0">
             <DataTable
               flush
@@ -369,7 +366,11 @@ function AddTradeType({
         />
       </div>
       <IconPicker value={icon} onChange={setIcon} disabled={disabled} />
-      <Button type="submit" disabled={disabled || !label.trim()}>
+      <Button
+        type="submit"
+        disabled={disabled || !label.trim()}
+        className="min-h-11 md:min-h-0"
+      >
         <Plus className="size-4" aria-hidden="true" />
         Add trade
       </Button>
@@ -419,6 +420,7 @@ function EditTradeType({
       <Button
         type="submit"
         size="sm"
+        className="min-h-11 md:min-h-0"
         disabled={disabled || !label.trim()}
         aria-label="Save"
       >
@@ -428,6 +430,7 @@ function EditTradeType({
       <Button
         type="button"
         size="sm"
+        className="min-h-11 md:min-h-0"
         variant="ghost"
         onClick={onCancel}
         disabled={disabled}

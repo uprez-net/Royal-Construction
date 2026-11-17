@@ -1,6 +1,6 @@
 "use client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SectionCard } from "@/components/common/section-card";
+import { PageHeader } from "@/components/common/page-header";
 import {
   ListToolbar,
   TableCard,
@@ -47,7 +47,7 @@ import { formatAuPhone } from "@/utils/phone";
 export default function TeamManagementPage() {
   const [emailAddress, setEmailAddress] = useState("");
   const [selectedRole, setSelectedRole] = useState<Role | undefined>(undefined);
-  const [tab, setTab] = useState<"invite" | "members">("invite");
+  const [tab, setTab] = useState<"invite" | "members">("members");
   const [isPending, startTransition] = useTransition();
   const {
     loading,
@@ -94,7 +94,12 @@ export default function TeamManagementPage() {
 
   if (error) {
     return (
-      <div className="container py-10">
+      <div className="container space-y-6 py-4 sm:py-10">
+        <PageHeader
+          headingLevel="h1"
+          title="Team"
+          description="Who can sign in to the shared office login, and invitations still waiting."
+        />
         <div className="flex flex-col items-center justify-center gap-3">
           <div className="flex size-12 items-center justify-center">
             <X className="size-5 text-destructive-ink" />
@@ -115,42 +120,12 @@ export default function TeamManagementPage() {
   }
 
   return (
-    <div className="container py-4 sm:py-10">
-      <div className="mb-8">
-        <SectionCard
-          title="Invite Members"
-          description="Send invitations to new organization members"
-        >
-          <form
-            className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:gap-2"
-            onSubmit={onSubmit}
-          >
-            <Input
-              type="email"
-              placeholder="Email address"
-              aria-label="Invitation email address"
-              value={emailAddress}
-              onChange={(e) => setEmailAddress(e.target.value)}
-              className="flex-1"
-              name="email"
-              required
-            />
-            <SelectRole
-              fieldName={"role"}
-              onValueChange={setSelectedRole}
-              selectedRole={selectedRole}
-            />
-            <Button
-              type="submit"
-              disabled={isPending}
-              className="w-full sm:w-auto"
-            >
-              <Mail className="mr-2 h-4 w-4" />
-              Invite
-            </Button>
-          </form>
-        </SectionCard>
-      </div>
+    <div className="container space-y-6 py-4 sm:py-10">
+      <PageHeader
+        headingLevel="h1"
+        title="Team"
+        description="Who can sign in to the shared office login, and invitations still waiting."
+      />
 
       <Tabs
         value={tab}
@@ -164,11 +139,11 @@ export default function TeamManagementPage() {
               variant="line"
               className={VIEW_TABS_LIST_CLASS}
             >
-              <TabsTrigger value="invite" className={VIEW_TABS_TRIGGER_CLASS}>
-                Invitations
-              </TabsTrigger>
               <TabsTrigger value="members" className={VIEW_TABS_TRIGGER_CLASS}>
                 Members
+              </TabsTrigger>
+              <TabsTrigger value="invite" className={VIEW_TABS_TRIGGER_CLASS}>
+                Invitations
               </TabsTrigger>
             </TabsList>
           }
@@ -187,18 +162,6 @@ export default function TeamManagementPage() {
           />
         </ListToolbar>
 
-        <TabsContent value="invite" className="pt-5">
-          <InviteList
-            items={invites}
-            isLoaded={loading === false}
-            page={invitePage}
-            count={inviteCount}
-            total={inviteTotal}
-            onPageChange={setInvitePage}
-            handleAction={(arg) => handleRevokeInvite(arg.invitationId)}
-          />
-        </TabsContent>
-
         <TabsContent value="members" className="pt-5">
           <UserList
             items={users}
@@ -212,6 +175,52 @@ export default function TeamManagementPage() {
               handleUpdateUserRole(arg.userId, arg.newRole)
             }
             onSaveProfile={handleUpdateUserProfile}
+            header={
+              <form
+                className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_11.25rem_auto] md:items-center"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void onSubmit();
+                }}
+              >
+                <h2 className="sr-only">Invite someone</h2>
+                <Input
+                  type="email"
+                  placeholder="Email address"
+                  aria-label="Invitation email address"
+                  value={emailAddress}
+                  onChange={(e) => setEmailAddress(e.target.value)}
+                  className="min-h-11 min-w-0 md:min-h-0"
+                  name="email"
+                  required
+                />
+                <SelectRole
+                  fieldName={"role"}
+                  onValueChange={setSelectedRole}
+                  selectedRole={selectedRole}
+                />
+                <Button
+                  type="submit"
+                  disabled={isPending}
+                  className="min-h-11 w-full md:min-h-0 md:w-auto"
+                >
+                  <Mail className="mr-2 h-4 w-4" />
+                  Invite
+                </Button>
+              </form>
+            }
+          />
+        </TabsContent>
+
+        <TabsContent value="invite" className="pt-5">
+          <InviteList
+            items={invites}
+            isLoaded={loading === false}
+            page={invitePage}
+            count={inviteCount}
+            total={inviteTotal}
+            onPageChange={setInvitePage}
+            handleAction={(arg) => handleRevokeInvite(arg.invitationId)}
           />
         </TabsContent>
       </Tabs>
@@ -316,12 +325,15 @@ function UserList({
   handleAction,
   phones,
   onSaveProfile,
+  header,
 }: ListTabProps<User, { userId: string; newRole: Role }> & {
   phones: Record<string, string>;
   onSaveProfile: (
     userId: string,
     profile: { name: string; phone: string },
   ) => Promise<void>;
+  /** The invite row, drawn as the first part of the members card. */
+  header?: ReactNode;
 }) {
   // One row at a time is edited in place. Name and phone only: the email is
   // the sign-in identity, so changing it is Clerk's verification flow, not a
@@ -397,7 +409,7 @@ function UserList({
 
   return (
     <>
-      <TableCard>
+      <TableCard header={header}>
         <div className="p-4 sm:p-5 md:p-0">
           <DataTable
             mobileLayout="cards"

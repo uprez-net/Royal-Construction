@@ -16,6 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { XeroConnectionStatus } from "@/lib/data/xero-connection";
+import { xeroConnectionExpiry } from "@/lib/xero/connection-expiry";
 import { dateFormat } from "@/utils/formatters";
 
 interface XeroConnectionPanelProps {
@@ -44,17 +45,6 @@ const ERROR_COPY: Record<string, string> = {
   failed: "Could not complete the Xero connection. Check the server logs.",
 };
 
-/** Warn while there is still time to act, rather than on the day it dies. */
-const EXPIRY_WARNING_DAYS = 14;
-
-function daysUntil(date: Date | null): number | null {
-  if (!date) {
-    return null;
-  }
-
-  return Math.ceil((new Date(date).getTime() - Date.now()) / 86_400_000);
-}
-
 const Detail = ({ label, value }: { label: string; value: string }) => (
   <div className="rounded-lg border border-border/70 bg-muted/40 p-4">
     <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
@@ -72,10 +62,10 @@ export function XeroConnectionPanel({
   const [isPending, startTransition] = useTransition();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
 
-  const daysLeft = daysUntil(status.refreshTokenExpiresAt);
-  const isExpiring =
-    daysLeft !== null && daysLeft <= EXPIRY_WARNING_DAYS && daysLeft > 0;
-  const hasExpired = daysLeft !== null && daysLeft <= 0;
+  const expiry = xeroConnectionExpiry(status.refreshTokenExpiresAt);
+  const daysLeft = expiry.daysLeft;
+  const isExpiring = expiry.state === "expiring";
+  const hasExpired = expiry.state === "expired";
 
   const disconnect = async () => {
     setIsDisconnecting(true);

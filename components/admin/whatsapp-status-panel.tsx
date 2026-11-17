@@ -16,6 +16,7 @@ import { WhatsAppBadgeIcon } from "@/components/whatsapp/whatsapp-logo";
 import { formatE164ForDisplay } from "@/lib/domain/leads/whatsapp/phone";
 import type { WhatsAppOperationalCounts } from "@/lib/domain/integrations/whatsapp";
 import { cn } from "@/lib/utils";
+import { whatsappAdminHealth } from "@/lib/whatsapp/admin-status";
 import type {
   WhatsAppAdminConfig,
   WhatsAppMetaHealth,
@@ -120,24 +121,19 @@ export function WhatsAppStatusPanel({
   config: WhatsAppAdminConfig;
   counts: WhatsAppOperationalCounts;
 }) {
-  const healthy =
-    config.enabled
-    && config.numbers.length > 0
-    && config.secrets.accessToken
-    && config.secrets.appSecret
-    && config.secrets.verifyToken
-    && config.problems.length === 0;
-  const status = !config.enabled
-    ? { label: "Off", tone: "bg-muted text-muted-foreground" }
-    : healthy
-      ? {
-          label: "Connected",
-          tone: "bg-success-light text-success-ink",
-        }
-      : {
-          label: "Needs attention",
-          tone: "bg-warning-light text-warning-ink",
-        };
+  const health = whatsappAdminHealth(config);
+  const status =
+    health === "off"
+      ? { label: "Off", tone: "bg-muted text-muted-foreground" }
+      : health === "connected"
+        ? {
+            label: "Connected",
+            tone: "bg-success-light text-success-ink",
+          }
+        : {
+            label: "Needs attention",
+            tone: "bg-warning-light text-warning-ink",
+          };
   const defaultNumber = config.numbers.find((number) => number.isDefault);
 
   return (
