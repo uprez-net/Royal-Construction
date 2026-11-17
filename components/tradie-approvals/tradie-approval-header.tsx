@@ -1,105 +1,95 @@
 "use client";
-import {
-  Clock7Icon,
-  Tag,
-  AlertTriangle,
-  Trash2,
-  CalendarDays,
-  CalendarX,
-  CheckCircle,
-} from "lucide-react";
-import {
-  KPIListItem,
-  MetricCard,
-  MOBILE_METRIC_STRIP_CLASS,
-} from "../common/metric-card";
+import { KpiBand, MOBILE_METRIC_STRIP_CLASS } from "../common/kpi-band";
+import { LeadMetricCard } from "../common/lead-onclick-metric-card";
 import { cn } from "@/lib/utils";
-import { useAppSelector } from "@/lib/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import {
+  approvalTypeLabel,
+  setQuery,
+} from "@/lib/store/slices/tradieApprovalSlice";
+import { openModal } from "@/lib/store/slices/uiSlice";
 
+/**
+ * The three figures above the list. Waiting and Due this week are filters;
+ * Oldest waiting opens that request's review window. None of them is a count
+ * the list does not show: each click lands on the rows it counts.
+ */
 export function TradieApprovalKPI() {
-  const { kpiData } = useAppSelector((state) => state.tradieApproval);
-  const allKPIs: KPIListItem[] = [
-    {
-      title: "Pending Approvals",
-      dataPoint: {
-        total: kpiData.pendingCount,
-        trendDelta: 0, // Placeholder for trend delta calculation
-      },
-      Icon: Clock7Icon,
-      iconTone: "bg-yellow-600",
-    },
-    {
-      title: "Price Changes",
-      dataPoint: {
-        total: kpiData.priceChangeCount,
-        trendDelta: 0, // Placeholder for trend delta calculation
-      },
-      Icon: Tag,
-      iconTone: "bg-blue-600",
-      isInverse: true,
-    },
-    {
-      title: "Incident",
-      dataPoint: {
-        total: kpiData.incidentReportCount,
-        trendDelta: 0, // Placeholder for trend delta calculation
-      },
-      Icon: AlertTriangle,
-      iconTone: "bg-red-600",
-    },
-    {
-      title: "Deletions",
-      dataPoint: {
-        total: kpiData.deletionCount,
-        trendDelta: 0, // Placeholder for trend delta calculation
-      },
-      Icon: Trash2,
-      iconTone: "bg-amber-600",
-    },
-    {
-      title: "Scheduling",
-      dataPoint: {
-        total: kpiData.scheduleCount,
-        trendDelta: 0, // Placeholder for trend delta calculation
-      },
-      Icon: CalendarDays,
-      iconTone: "bg-purple-600",
-    },
-    {
-      title: "Schedule Removals",
-      dataPoint: {
-        total: kpiData.scheduleDeletionCount,
-        trendDelta: 0, // Placeholder for trend delta calculation
-      },
-      Icon: CalendarX,
-      iconTone: "bg-rose-600",
-    },
-    {
-      title: "Resolved Approvals",
-      dataPoint: {
-        total: kpiData.resolvedCount.accepted + kpiData.resolvedCount.rejected,
-        trendDelta: 0, // Placeholder for trend delta calculation
-      },
-      Icon: CheckCircle,
-      iconTone: "bg-green-600",
-    },
-  ];
+  const dispatch = useAppDispatch();
+  const { kpiData, query } = useAppSelector((state) => state.tradieApproval);
+  const oldest = kpiData.oldestWaiting;
+
+  // A search narrows the rows, so no filter tile is lit while one is typed.
+  const searching = Boolean(query.search?.trim());
+  const waitingActive =
+    query.view === "needs-decision" && !query.type && !query.due && !searching;
+  const dueActive =
+    query.view === "needs-decision" && query.due === "week" && !searching;
 
   return (
-    <div
-      className={cn(MOBILE_METRIC_STRIP_CLASS, "sm:grid-cols-2 xl:grid-cols-7")}
-    >
-      {allKPIs.map((kpi, index) => (
-        <MetricCard
-          key={index}
-          title={kpi.title}
-          value={kpi.dataPoint.total}
-          trendDelta={kpi.dataPoint.trendDelta}
-          Icon={kpi.Icon}
-          iconTone={kpi.iconTone}
-          isInverse={kpi.isInverse}
-        />
-      ))}
-    </div>
+    <KpiBand className={cn(MOBILE_METRIC_STRIP_CLASS, "sm:grid-cols-3")}>
+      <LeadMetricCard
+        label="Waiting"
+        value={String(kpiData.waiting)}
+        note="Need a decision"
+        active={waitingActive}
+        onClick={() =>
+          dispatch(
+            setQuery({
+              view: "needs-decision",
+              type: undefined,
+              due: undefined,
+              search: "",
+              page: 1,
+            }),
+          )
+        }
+      />
+      <LeadMetricCard
+        label="Oldest waiting"
+        toggle={false}
+        value={
+          oldest
+            ? `${oldest.days} ${oldest.days === 1 ? "day" : "days"}`
+            : "None"
+        }
+        note={
+          oldest
+            ? `${approvalTypeLabel[oldest.actionType]} request`
+            : "Nothing waiting"
+        }
+        onClick={
+          oldest
+            ? () =>
+                dispatch(
+                  openModal({
+                    type: "adminApproval",
+                    payload: {
+                      approvalId: oldest.approvalId,
+                      approvalType: oldest.actionType,
+                    },
+                  }),
+                )
+            : undefined
+        }
+      />
+      <LeadMetricCard
+        label="Due this week"
+        value={String(kpiData.dueThisWeek)}
+        note="Booked within 7 days, or overdue"
+        active={dueActive}
+        onClick={() =>
+          dispatch(
+            setQuery({
+              view: "needs-decision",
+              due: "week",
+              type: undefined,
+              search: "",
+              page: 1,
+            }),
+          )
+        }
+      />
+    </KpiBand>
   );
 }

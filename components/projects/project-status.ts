@@ -5,56 +5,32 @@
  * `enhanced-project-card.tsx`, which meant the two views could (and did) drift.
  * Both now import from here.
  *
- * Token roles follow DESIGN.md §2 (the three-role rule) — they are not
- * interchangeable:
- *   `badge`  — `-light` surface + `-ink` text (the only pairing that clears AA)
- *   `stripe` — base fill, used only for the solid accent bar
+ * `badge` is the one token pairing a status pill uses: a `-light` surface with
+ * `-ink` text, which clears AA. The 6px status dot inside the pill is
+ * `bg-current`, so it takes the pill's ink colour.
  */
 export interface ProjectStatusConfig {
   /** Tinted badge surface + ink text. */
   badge: string;
-  /** Solid fill for the card's top accent stripe. */
-  stripe: string;
 }
 
 const PROJECT_STATUS_CONFIG: Record<string, ProjectStatusConfig> = {
-  // Pre-construction statuses use the pipeline ramp so they read as a
-  // progression toward breaking ground, rather than falling back to a
-  // generic neutral badge.
-  DRAFT: {
-    badge: "bg-[var(--stage-1)] text-foreground",
-    stripe: "bg-[var(--stage-1)]",
-  },
-  COMPLIANCE_STARTED: {
-    badge: "bg-[var(--stage-2)] text-foreground",
-    stripe: "bg-[var(--stage-2)]",
-  },
-  COMPLIANCE_COMPLETED: {
-    badge: "bg-[var(--stage-3)] text-foreground",
-    stripe: "bg-[var(--stage-3)]",
-  },
-  ACTIVE: { badge: "bg-info-light text-info-ink", stripe: "bg-info" },
-  ON_TRACK: {
-    badge: "bg-success-light text-success-ink",
-    stripe: "bg-success",
-  },
-  COMPLETED: {
-    badge: "bg-success-light text-success-ink",
-    stripe: "bg-success",
-  },
-  NEEDS_ATTENTION: {
-    badge: "bg-warning-light text-warning-ink",
-    stripe: "bg-warning",
-  },
-  DELAYED: {
-    badge: "bg-destructive-light text-destructive-ink",
-    stripe: "bg-destructive",
-  },
+  // Pre-construction is neutral: a project not yet building is not a health
+  // signal, so it takes no colour.
+  DRAFT: { badge: "bg-muted text-foreground/80" },
+  COMPLIANCE_STARTED: { badge: "bg-muted text-foreground/80" },
+  COMPLIANCE_COMPLETED: { badge: "bg-muted text-foreground/80" },
+  ACTIVE: { badge: "bg-info-light text-info-ink" },
+  ON_TRACK: { badge: "bg-success-light text-success-ink" },
+  COMPLETED: { badge: "bg-success-light text-success-ink" },
+  NEEDS_ATTENTION: { badge: "bg-warning-light text-warning-ink" },
+  // Delayed is the one project status that is red. Owner decision: it may be
+  // warning orange instead, since overdue is a warning elsewhere.
+  DELAYED: { badge: "bg-destructive-light text-destructive-ink" },
 };
 
 const FALLBACK_STATUS_CONFIG: ProjectStatusConfig = {
   badge: "bg-muted text-muted-foreground",
-  stripe: "bg-muted-foreground",
 };
 
 /**

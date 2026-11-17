@@ -14,10 +14,7 @@ import type { DashboardGraphData } from "@/lib/data/dashboard";
 
 interface DashboardHomeProps {
   isAdmin: boolean;
-  userFirstName: string;
-  newLeadsCount: number;
-  newProjectsCount: number;
-  followUpsCount: number;
+  today: string;
   kpiData: DashboardKPIType;
   projectsData: PaginatedProjectsResult;
   followUpItems: FollowUpItem[];
@@ -27,10 +24,7 @@ interface DashboardHomeProps {
 
 export function DashboardHome({
   isAdmin,
-  userFirstName,
-  newLeadsCount,
-  newProjectsCount,
-  followUpsCount,
+  today,
   kpiData,
   projectsData,
   followUpItems,
@@ -56,12 +50,7 @@ export function DashboardHome({
         </div>
       )}
       <section className="flex flex-col gap-4 lg:gap-5">
-        <DashboardHeader
-          name={userFirstName}
-          newLeadsCount={newLeadsCount}
-          newProjectsCount={newProjectsCount}
-          followUpsCount={followUpsCount}
-        />
+        <DashboardHeader today={today} />
         <DashboardKPI
           newLeadsThisMonth={kpiData.newLeadsThisMonth}
           newLeadsConvertedThisMonth={kpiData.newLeadsConvertedThisMonth}

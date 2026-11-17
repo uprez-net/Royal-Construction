@@ -53,11 +53,11 @@ export function WorkbookImportControl({
   return (
     <section
       aria-labelledby="offer-workbook-import-title"
-      className="grid gap-3 rounded-lg border border-royal-gold/25 bg-royal-gold-light/40 p-3"
+      className="grid gap-3 rounded-lg border border-border bg-muted/50 p-3"
     >
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,280px)] md:items-start">
         <div className="flex min-w-0 items-start gap-2">
-          <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-royal-gold shadow-sm">
+          <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-card text-royal-gold-ink-text shadow-sm">
             <FileSpreadsheet className="size-4" aria-hidden="true" />
           </span>
           <div className="min-w-0">
@@ -78,7 +78,7 @@ export function WorkbookImportControl({
           <span className={FIELD_LABEL_CLASS}>Workbook file</span>
           <Input
             accept=".xlsx,.xlsm"
-            className="bg-white/95"
+            className="bg-card/95"
             id="offer-workbook-import"
             type="file"
             onChange={handleFileChange}
@@ -105,7 +105,7 @@ function ImportSummary({
   return (
     <div className="grid gap-3 rounded-lg border border-border bg-background/70 p-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge className="bg-royal-gold-ink text-white">
+        <Badge className="bg-royal-gold-light text-royal-gold-ink-text">
           {importResult.costLines.length} Offer rows
         </Badge>
         <Badge variant="outline">{importResult.sourceName}</Badge>

@@ -23,7 +23,7 @@ export function SandboxBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="flex h-[var(--sandbox-banner-height)] w-full shrink-0 items-center justify-center gap-2 border-b border-amber-900/20 bg-warning px-4 text-center text-xs font-semibold tracking-wide text-amber-950"
+      className="flex h-[var(--sandbox-banner-height)] w-full shrink-0 items-center justify-center gap-2 border-b border-warning-ink/20 bg-warning px-4 text-center text-xs font-semibold tracking-wide text-white"
     >
       <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
       <span>Sandbox Environment — dummy data, not production</span>

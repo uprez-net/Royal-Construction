@@ -98,7 +98,7 @@ export function WhatsAppVideoPlayer({
         target="_blank"
         rel="noreferrer"
         download
-        className="flex min-w-60 items-center gap-2.5 rounded-md bg-black/4 px-3 py-2.5 text-[13px] text-[#54656f] hover:bg-black/7"
+        className="flex min-w-60 items-center gap-2.5 rounded-md bg-black/4 px-3 py-2.5 text-[13px] text-foreground hover:bg-black/7"
       >
         <Download className="size-4 shrink-0" aria-hidden="true" />
         This browser can&apos;t play the video — download it instead.
@@ -129,7 +129,7 @@ export function WhatsAppVideoPlayer({
         }
       }}
       className={cn(
-        "group/video relative overflow-hidden bg-black focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00a884]",
+        "group/video relative overflow-hidden bg-black focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-royal-gold-ink",
         fullscreen
           ? "flex size-full items-center justify-center"
           : "w-full min-w-55 max-w-82.5 rounded-md",
@@ -177,7 +177,7 @@ export function WhatsAppVideoPlayer({
           type="button"
           onClick={toggle}
           aria-label={ended ? "Replay video" : "Play video"}
-          className="absolute left-1/2 top-1/2 inline-flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition hover:scale-105 hover:bg-black/60 focus-visible:outline-2 focus-visible:outline-white"
+          className="absolute left-1/2 top-1/2 inline-flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition hover:bg-black/60 focus-visible:outline-2 focus-visible:outline-white"
         >
           {ended ? (
             <RotateCcw className="size-6" aria-hidden="true" />
@@ -199,7 +199,7 @@ export function WhatsAppVideoPlayer({
       ) : (
         <div
           className={cn(
-            "absolute inset-x-0 bottom-0 flex items-center gap-2 bg-linear-to-t from-black/70 to-transparent px-2.5 pb-1.5 pt-6 text-white transition-opacity duration-200",
+            "absolute inset-x-0 bottom-0 flex items-center gap-2 bg-black/60 px-2.5 pb-1.5 pt-2 text-white transition-opacity duration-200",
             showChrome ? "opacity-100" : "pointer-events-none opacity-0",
           )}
         >
@@ -232,7 +232,7 @@ export function WhatsAppVideoPlayer({
               setCurrent(time);
               wake();
             }}
-            className="h-1 min-w-0 flex-1 cursor-pointer accent-[#25d366]"
+            className="h-1 min-w-0 flex-1 cursor-pointer accent-success-ink"
           />
           <span className="shrink-0 text-[11px] tabular-nums text-white/80">
             {formatMediaDuration(duration)}

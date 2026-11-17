@@ -28,8 +28,8 @@ export default function PrototypePage() {
   // and the staging preview only (APP_ENV=staging, the same signal the sandbox
   // banner uses). This gate is what makes keeping the prototype safe.
   if (
-    process.env.NODE_ENV === "production" &&
-    process.env.APP_ENV !== "staging"
+    process.env.NODE_ENV === "production"
+    && process.env.APP_ENV !== "staging"
   ) {
     notFound();
   }
@@ -37,7 +37,7 @@ export default function PrototypePage() {
   return (
     <Suspense
       fallback={
-        <div className="h-[calc(100dvh-6.5rem)] animate-pulse rounded-lg border border-border/70 bg-white/60" />
+        <div className="h-[calc(100dvh-6.5rem)] animate-pulse rounded-lg border border-border/70 bg-card/60" />
       }
     >
       <PrototypeScreen />

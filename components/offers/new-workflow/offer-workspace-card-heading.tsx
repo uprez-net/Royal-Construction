@@ -18,7 +18,7 @@ export function OfferCardHeading({
 }: OfferCardHeadingProps) {
   return (
     <div className="flex min-w-0 items-start gap-3">
-      <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-royal-gold-light text-royal-gold">
+      <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-royal-gold-light text-royal-gold-ink-text">
         {icon}
       </span>
       <div className="min-w-0">

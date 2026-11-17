@@ -9,7 +9,7 @@ import { PlateContainer, PlateContent } from "platejs/react";
 import { cn } from "@/lib/utils";
 
 const editorContainerVariants = cva(
-  "relative w-full cursor-text select-text caret-[#0D9488] focus-visible:outline-none",
+  "relative w-full cursor-text select-text caret-primary focus-visible:outline-none",
   {
     defaultVariants: {
       variant: "leadNote",
@@ -37,7 +37,7 @@ const editorVariants = cva(
       },
       variant: {
         leadNote:
-          "min-h-[180px] px-3 py-3 text-sm leading-6 text-[#0c0a09] [&_li]:ml-5 [&_li]:list-disc [&_p]:my-0",
+          "min-h-[180px] px-3 py-3 text-sm leading-6 text-foreground [&_li]:ml-5 [&_li]:list-disc [&_p]:my-0",
       },
     },
   },

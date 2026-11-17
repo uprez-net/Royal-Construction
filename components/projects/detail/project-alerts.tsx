@@ -262,7 +262,7 @@ function TradieAlertRow({
     <li className="flex flex-wrap items-center gap-3 rounded-[10px] border border-border/70 bg-card p-3.5">
       <div
         className={cn(
-          "flex size-10 shrink-0 items-center justify-center rounded-2xl",
+          "flex size-10 shrink-0 items-center justify-center rounded-lg",
           isDanger
             ? "bg-destructive-light text-destructive"
             : "bg-warning-light text-warning-ink",

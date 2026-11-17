@@ -680,7 +680,7 @@ export function HbcfClaimCard({
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="rounded-xl border border-border/70 bg-card shadow-sm"
+      className="rounded-xl bg-card shadow-sm ring-1 ring-foreground/4"
     >
       <div className="flex flex-wrap items-start justify-between gap-3 p-4">
         <div className="min-w-0">

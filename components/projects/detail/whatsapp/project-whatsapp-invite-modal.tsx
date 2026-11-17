@@ -160,7 +160,7 @@ export function ProjectWhatsAppInviteModal({
                       className={cn(
                         "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition",
                         on
-                          ? "border-[#00a884] bg-[#e7fce3] text-[#005c4b]"
+                          ? "border-primary bg-royal-gold-light text-foreground"
                           : "border-border text-muted-foreground hover:bg-muted/60",
                       )}
                     >
@@ -230,7 +230,7 @@ export function ProjectWhatsAppInviteModal({
             <Button
               type="submit"
               disabled={!canSend}
-              className="bg-[#00a884] text-white hover:bg-[#008f72]"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {sending ? (
                 <Loader2

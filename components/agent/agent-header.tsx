@@ -52,7 +52,7 @@ export function AgentHeader({
   usage: AgentSessionUsage;
 }) {
   return (
-    <header className="flex items-center justify-between gap-3 border-b border-border/70 bg-white px-3 py-2.5 sm:px-4">
+    <header className="flex items-center justify-between gap-3 border-b border-border/70 bg-card px-3 py-2.5 sm:px-4">
       <div className="flex min-w-0 items-center gap-2.5">
         <Button
           aria-controls="agent-conversation-history"
@@ -69,7 +69,7 @@ export function AgentHeader({
         >
           <PanelLeft />
         </Button>
-        <span className="hidden size-8 shrink-0 place-items-center rounded-lg bg-royal-gold-light text-royal-gold-ink sm:grid">
+        <span className="hidden size-8 shrink-0 place-items-center rounded-lg bg-muted text-foreground/80 sm:grid">
           <Bot aria-hidden="true" className="size-4" />
         </span>
         <div className="min-w-0">
@@ -92,7 +92,7 @@ export function AgentHeader({
                 ? "animate-pulse bg-royal-gold"
                 : agentStatus === "error"
                   ? "bg-destructive"
-                  : "bg-emerald-600",
+                  : "bg-success",
             )}
           />
           <span className="sr-only sm:not-sr-only">{statusLabel}</span>

@@ -16,6 +16,7 @@ import { WhatsAppBadgeIcon } from "@/components/whatsapp/whatsapp-logo";
 import { formatE164ForDisplay } from "@/lib/domain/leads/whatsapp/phone";
 import type { WhatsAppOperationalCounts } from "@/lib/domain/integrations/whatsapp";
 import { cn } from "@/lib/utils";
+import { whatsappAdminHealth } from "@/lib/whatsapp/admin-status";
 import type {
   WhatsAppAdminConfig,
   WhatsAppMetaHealth,
@@ -41,12 +42,12 @@ function Section({
   return (
     <section
       className={cn(
-        "rounded-2xl border border-border/70 bg-card p-5 shadow-sm sm:p-6",
+        "rounded-xl bg-card p-5 shadow-sm ring-1 ring-foreground/4 sm:p-6",
         className,
       )}
     >
       <div className="mb-4 flex items-start gap-3">
-        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#e7fce3] text-[#008069]">
+        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-success-light text-success-ink">
           <Icon className="size-4.5" aria-hidden="true" />
         </span>
         <div className="min-w-0">
@@ -71,15 +72,11 @@ function SetFlag({ set, label }: { set: boolean; label: string }) {
         className={cn(
           "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
           set
-            ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
-            : "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
+            ? "bg-success-light text-success-ink"
+            : "bg-warning-light text-warning-ink",
         )}
       >
-        {set ? (
-          <CheckCircle2 className="size-3.5" aria-hidden="true" />
-        ) : (
-          <CircleSlash className="size-3.5" aria-hidden="true" />
-        )}
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
         {set ? "Set" : "Not set"}
       </span>
     </li>
@@ -100,9 +97,9 @@ function Stat({
   return (
     <div
       className={cn(
-        "rounded-xl border px-4 py-3",
+        "rounded-md border px-4 py-3",
         tone === "warning" && Number(value) > 0
-          ? "border-amber-200 bg-amber-50/60"
+          ? "border-warning/40 bg-warning-light"
           : "border-border/70 bg-background",
       )}
     >
@@ -124,30 +121,25 @@ export function WhatsAppStatusPanel({
   config: WhatsAppAdminConfig;
   counts: WhatsAppOperationalCounts;
 }) {
-  const healthy =
-    config.enabled
-    && config.numbers.length > 0
-    && config.secrets.accessToken
-    && config.secrets.appSecret
-    && config.secrets.verifyToken
-    && config.problems.length === 0;
-  const status = !config.enabled
-    ? { label: "Off", tone: "bg-muted text-muted-foreground ring-border" }
-    : healthy
-      ? {
-          label: "Connected",
-          tone: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-        }
-      : {
-          label: "Needs attention",
-          tone: "bg-amber-50 text-amber-800 ring-amber-200",
-        };
+  const health = whatsappAdminHealth(config);
+  const status =
+    health === "off"
+      ? { label: "Off", tone: "bg-muted text-muted-foreground" }
+      : health === "connected"
+        ? {
+            label: "Connected",
+            tone: "bg-success-light text-success-ink",
+          }
+        : {
+            label: "Needs attention",
+            tone: "bg-warning-light text-warning-ink",
+          };
   const defaultNumber = config.numbers.find((number) => number.isDefault);
 
   return (
     <div className="space-y-6">
-      <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
-        <div className="relative flex flex-wrap items-center gap-4 bg-linear-to-br from-[#f0fdf4] via-white to-[#ecfdf5] p-6">
+      <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
+        <div className="flex flex-wrap items-center gap-4 p-6">
           <WhatsAppBadgeIcon className="size-12" />
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
@@ -163,10 +155,14 @@ export function WhatsAppStatusPanel({
           </div>
           <span
             className={cn(
-              "inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1",
+              "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold",
               status.tone,
             )}
           >
+            <span
+              aria-hidden="true"
+              className="size-1.5 rounded-full bg-current"
+            />
             {status.label}
           </span>
         </div>
@@ -202,7 +198,7 @@ export function WhatsAppStatusPanel({
       {config.problems.length > 0 ? (
         <div
           role="alert"
-          className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+          className="rounded-lg border border-warning/40 bg-warning-light p-4 text-sm text-warning-ink"
         >
           <p className="flex items-center gap-2 font-semibold">
             <AlertTriangle className="size-4" aria-hidden="true" />
@@ -223,7 +219,7 @@ export function WhatsAppStatusPanel({
           description="The numbers customers and owners see. Outreach starts from the default."
         >
           {config.numbers.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+            <p className="rounded-md border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
               No numbers configured. Set WHATSAPP_PHONE_NUMBERS.
             </p>
           ) : (
@@ -237,7 +233,7 @@ export function WhatsAppStatusPanel({
                     <p className="flex items-center gap-2 font-medium text-foreground">
                       {number.label}
                       {number.isDefault ? (
-                        <span className="rounded-full bg-[#e7fce3] px-2 py-0.5 text-[11px] font-semibold text-[#008069]">
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-foreground/80">
                           Default
                         </span>
                       ) : null}
@@ -293,7 +289,7 @@ export function WhatsAppStatusPanel({
                 {config.webhook.fields.map((field) => (
                   <code
                     key={field}
-                    className="rounded-full bg-[#e7fce3] px-2.5 py-1 font-mono text-[11px] text-[#005c4b]"
+                    className="rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] text-foreground/80"
                   >
                     {field}
                   </code>
@@ -336,15 +332,15 @@ export function WhatsAppStatusPanel({
               <li
                 key={feature.key}
                 className={cn(
-                  "flex gap-3 rounded-xl border p-4",
+                  "flex gap-3 rounded-md border p-4",
                   feature.enabled
-                    ? "border-emerald-200 bg-emerald-50/40"
+                    ? "border-border/70 bg-card"
                     : "border-border/70 bg-muted/30",
                 )}
               >
                 {feature.enabled ? (
                   <CheckCircle2
-                    className="mt-0.5 size-4.5 shrink-0 text-emerald-600"
+                    className="mt-0.5 size-4.5 shrink-0 text-success-ink"
                     aria-hidden="true"
                   />
                 ) : (
@@ -385,9 +381,9 @@ export function WhatsAppStatusPanel({
 }
 
 const QUALITY_TONE: Record<string, string> = {
-  GREEN: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  RED: "bg-rose-50 text-rose-700 ring-rose-200",
-  YELLOW: "bg-amber-50 text-amber-800 ring-amber-200",
+  GREEN: "bg-success-light text-success-ink",
+  RED: "bg-destructive-light text-destructive-ink",
+  YELLOW: "bg-warning-light text-warning-ink",
 };
 
 export function WhatsAppMetaHealthPanel({
@@ -406,7 +402,7 @@ export function WhatsAppMetaHealthPanel({
       }
     >
       {!health ? (
-        <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-md border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
           Nothing to check yet.
         </p>
       ) : (
@@ -415,7 +411,7 @@ export function WhatsAppMetaHealthPanel({
             {health.numbers.map((number) => (
               <li
                 key={number.phoneNumberId}
-                className="rounded-xl border border-border/70 p-4"
+                className="rounded-lg border border-border/70 p-4"
               >
                 {number.ok ? (
                   <>
@@ -426,9 +422,9 @@ export function WhatsAppMetaHealthPanel({
                       {number.qualityRating ? (
                         <span
                           className={cn(
-                            "rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1",
+                            "rounded-full px-2.5 py-0.5 text-xs font-semibold",
                             QUALITY_TONE[number.qualityRating]
-                              ?? "bg-muted text-muted-foreground ring-border",
+                              ?? "bg-muted text-muted-foreground",
                           )}
                         >
                           Quality {number.qualityRating.toLowerCase()}
@@ -447,8 +443,8 @@ export function WhatsAppMetaHealthPanel({
                           className={cn(
                             "font-medium",
                             number.officialBusinessAccount
-                              ? "text-emerald-700"
-                              : "text-amber-800",
+                              ? "text-success-ink"
+                              : "text-warning-ink",
                           )}
                         >
                           {number.officialBusinessAccount === null
@@ -498,7 +494,7 @@ export function WhatsAppMetaHealthPanel({
               </li>
             ))}
           </ul>
-          <div className="flex items-start gap-3 rounded-xl bg-muted/40 p-4 text-sm">
+          <div className="flex items-start gap-3 rounded-md bg-muted/40 p-4 text-sm">
             <Link2
               className="mt-0.5 size-4 shrink-0 text-muted-foreground"
               aria-hidden="true"
@@ -528,17 +524,17 @@ export function WhatsAppMetaHealthPanel({
 
 export function WhatsAppMetaHealthSkeleton() {
   return (
-    <div className="rounded-2xl border border-border/70 bg-card p-6 shadow-sm">
+    <div className="rounded-xl bg-card p-6 shadow-sm ring-1 ring-foreground/4">
       <div className="mb-4 flex items-center gap-3">
-        <Skeleton className="size-9 rounded-xl" />
+        <Skeleton className="size-9 rounded-md" />
         <div className="space-y-1.5">
           <Skeleton className="h-4 w-40" />
           <Skeleton className="h-3 w-64" />
         </div>
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
-        <Skeleton className="h-36 w-full rounded-xl" />
-        <Skeleton className="h-36 w-full rounded-xl" />
+        <Skeleton className="h-36 w-full rounded-md" />
+        <Skeleton className="h-36 w-full rounded-md" />
       </div>
     </div>
   );

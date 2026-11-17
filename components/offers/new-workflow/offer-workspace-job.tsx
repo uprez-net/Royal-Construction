@@ -88,7 +88,7 @@ export function JobSetupPanel({
 
   return (
     <div className="grid gap-4">
-      <Card className="border-border/70 bg-white/95 shadow-sm">
+      <Card className="border-border/70 bg-card/95 shadow-sm">
         <CardHeader className="border-b border-border/70">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <OfferCardHeading
@@ -296,7 +296,7 @@ export function JobSetupPanel({
                 value={job.balconySqm}
                 onChange={(balconySqm) => onJobChange({ balconySqm })}
               />
-              <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
+              <div className="rounded-lg border border-border bg-muted/50 p-3">
                 <p className={FIELD_LABEL_CLASS}>Total building area</p>
                 <p className="font-mono text-lg font-semibold tabular-nums">
                   {formatArea(totalArea)}
@@ -313,7 +313,7 @@ export function JobSetupPanel({
       {/* Room counts get a card per dwelling: a build with a granny home carries
           a second set of bed/bath/garage counts, and holding both sets in one
           grid left no way to tell which dwelling a number described. */}
-      <Card className="border-border/70 bg-white/95 shadow-sm">
+      <Card className="border-border/70 bg-card/95 shadow-sm">
         <CardHeader className="border-b border-border/70">
           <OfferCardHeading
             description="Room counts for the main dwelling. These print on the Offer snapshot and the Tender's Project Particulars."
@@ -350,7 +350,7 @@ export function JobSetupPanel({
       </Card>
 
       {job.hasGrannyHome ? (
-        <Card className="border-border/70 bg-white/95 shadow-sm">
+        <Card className="border-border/70 bg-card/95 shadow-sm">
           <CardHeader className="border-b border-border/70">
             <OfferCardHeading
               description="Room counts for the granny home (secondary dwelling), listed separately on the Offer and Tender documents."
@@ -727,7 +727,7 @@ function OwnersSection({
                   onClick={() => setKind(index, kind)}
                   className={`rounded px-2.5 py-1 text-xs font-medium capitalize ${
                     owner.kind === kind
-                      ? "bg-royal-gold-ink text-white"
+                      ? "bg-royal-gold-light text-royal-gold-ink-text"
                       : "text-muted-foreground"
                   }`}
                 >
@@ -930,10 +930,10 @@ function PrefillBanner({
     );
   }
   return (
-    <div className="grid gap-1.5 rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 p-3 text-xs">
+    <div className="grid gap-1.5 rounded-lg border border-border bg-muted/50 p-3 text-xs">
       <p className="flex items-center gap-2 font-medium text-foreground">
         <Sparkles
-          className="size-3.5 text-royal-gold-dark"
+          className="size-3.5 text-royal-gold-ink-text"
           aria-hidden="true"
         />
         Drafted from {result.sources.join(", ")}

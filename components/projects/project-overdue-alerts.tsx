@@ -47,7 +47,7 @@ function OverdueProjectRow({
     <li className="px-4 py-2.5">
       <div className="flex items-center gap-3">
         <AlertTriangle
-          className="size-4 shrink-0 text-destructive-ink"
+          className="size-4 shrink-0 text-warning-ink"
           aria-hidden="true"
         />
         <div className="min-w-0 flex-1">
@@ -69,7 +69,7 @@ function OverdueProjectRow({
             {" · due "}
             {formatSydneyDate(new Date(worst.expectedCompletion))}
             {" · "}
-            <span className="font-semibold text-destructive-ink">
+            <span className="font-semibold text-warning-ink">
               {days(worst.daysOverdue)} overdue
             </span>
             {" · "}
@@ -137,10 +137,10 @@ export function ProjectOverdueAlerts({
     return (
       <div
         role="alert"
-        className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-destructive-light/40 px-4 py-3"
+        className="flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning-light/60 px-4 py-3"
       >
         <AlertTriangle
-          className="size-4 shrink-0 text-destructive-ink"
+          className="size-4 shrink-0 text-warning-ink"
           aria-hidden="true"
         />
         <p className="flex-1 text-sm text-foreground">
@@ -169,9 +169,9 @@ export function ProjectOverdueAlerts({
           as="h2"
           className="flex flex-wrap items-center gap-2 text-base font-semibold text-foreground"
         >
-          <Bell className="size-4 text-destructive-ink" aria-hidden="true" />
+          <Bell className="size-4 text-warning-ink" aria-hidden="true" />
           Alerts
-          <StatusPill tone="danger">
+          <StatusPill tone="warning">
             {overdue.length} {overdue.length === 1 ? "project" : "projects"}{" "}
             overdue
           </StatusPill>

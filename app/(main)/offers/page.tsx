@@ -3,7 +3,6 @@ import { OfferFollowUpAlerts } from "@/components/offers/offer-follow-up-alerts"
 import { OfferHeader } from "@/components/offers/offer-header";
 import { OfferKPI } from "@/components/offers/offer-kpi";
 import { OfferTable } from "@/components/offers/offer-table";
-import { Card } from "@/components/ui/card";
 import {
   emptyOfferGroupResult,
   emptyOfferKPIs,
@@ -64,19 +63,18 @@ async function OfferPageClient() {
         sentOffers={offerKPIs.sentOffers}
         totalVersions={offerKPIs.totalVersions}
       />
-      <Card className="border-border/70 bg-white/95 shadow-sm">
-        <OfferFilter
-          initialTabCounts={{
-            // Every offer not rejected: what the All tab lists (issue #450).
-            all: offerKPIs.openOffers,
-            pending: offerKPIs.pendingOffers.total,
-            approved: offerKPIs.approvedOffers.total,
-            rejected: offerKPIs.rejectedOffers.total,
-            sent: offerKPIs.sentOffers.total,
-          }}
-        />
+      <OfferFilter
+        initialTabCounts={{
+          // Every offer not rejected: what the All tab lists (issue #450).
+          all: offerKPIs.openOffers,
+          pending: offerKPIs.pendingOffers.total,
+          approved: offerKPIs.approvedOffers.total,
+          rejected: offerKPIs.rejectedOffers.total,
+          sent: offerKPIs.sentOffers.total,
+        }}
+      >
         <OfferTable serverOffers={offers} />
-      </Card>
+      </OfferFilter>
     </div>
   );
 }

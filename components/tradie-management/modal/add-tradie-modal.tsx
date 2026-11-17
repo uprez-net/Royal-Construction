@@ -186,8 +186,11 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3 text-xl">
-            <div className="rounded-lg bg-primary/10 p-2">
-              <PlusCircle className="h-5 w-5 text-primary" aria-hidden="true" />
+            <div className="rounded-lg bg-muted p-2">
+              <PlusCircle
+                className="h-5 w-5 text-muted-foreground"
+                aria-hidden="true"
+              />
             </div>
             Add new tradie
           </DialogTitle>

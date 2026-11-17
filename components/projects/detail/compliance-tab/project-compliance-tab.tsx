@@ -2047,7 +2047,7 @@ export function ProjectComplianceTab({
           Header — what this section is, and the one control that is not
           tied to a single block.
       --------------------------------------------------------------- */}
-      <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border/70 bg-card px-4 py-3.5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-card px-4 py-3.5 shadow-sm ring-1 ring-foreground/4">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 font-heading text-base font-medium text-foreground">
             <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
@@ -2133,7 +2133,7 @@ export function ProjectComplianceTab({
           look like one thing with parts. The send bar and the vault sit on it
           too, for the same reason.
       --------------------------------------------------------------- */}
-      <div className="space-y-4 rounded-2xl border border-border/70 bg-gradient-to-br from-muted/60 via-background to-primary/[0.035] p-3 sm:p-4">
+      <div className="space-y-4 rounded-lg border border-border/70 bg-background p-3 sm:p-4">
         {/* -------------------------------------------------------------
             Two columns, and the checklist across both.
 
@@ -2236,7 +2236,7 @@ export function ProjectComplianceTab({
               <AlertDialogFooter>
                 <AlertDialogCancel>Keep it</AlertDialogCancel>
                 <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  className="bg-destructive text-white hover:bg-destructive/90"
                   onClick={() => {
                     if (dismissTarget) void handleDismiss(dismissTarget.id);
                     setDismissTarget(null);

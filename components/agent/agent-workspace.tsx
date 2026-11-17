@@ -666,7 +666,7 @@ export function AgentWorkspace({
     // which throw without a provider above them; the app shell only provides
     // one around its notifications.
     <TooltipProvider>
-      <section className="flex h-full max-h-full min-h-full w-full flex-col overflow-hidden bg-white sm:rounded-xl sm:border sm:border-border/70 sm:shadow-sm">
+      <section className="flex h-full max-h-full min-h-full w-full flex-col overflow-hidden bg-card sm:rounded-lg sm:border sm:border-border/70">
         <AgentHeader
           agentStatus={agent.status}
           busy={busy}

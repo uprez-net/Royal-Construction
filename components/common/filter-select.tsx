@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TOOLBAR_SELECT_TRIGGER_CLASS } from "@/components/common/list-toolbar";
 import { cn } from "@/lib/utils";
 
 const ALL = "__all__";
@@ -87,7 +88,12 @@ export function FilterSelect({
       >
         <SelectTrigger
           id={id}
-          className={cn("h-9 w-full", value ? "border-primary/50" : null)}
+          // The toolbar select, so a filter row lines up with the search beside it.
+          className={cn(
+            TOOLBAR_SELECT_TRIGGER_CLASS,
+            "w-full",
+            value ? "border-primary/50" : null,
+          )}
         >
           <SelectValue placeholder={allLabel} />
         </SelectTrigger>

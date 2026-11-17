@@ -46,7 +46,7 @@ export function OfferLockBanner({
       ? "This offer has been sent. You can still refine the offer document and scope during negotiation — those edits save automatically. Job setup, cost schedule and pricing are locked so the quoted price can't change in place; to change the price, create a new revision."
       : "This offer has been issued, so job setup, cost schedule, pricing, scope and the offer document are locked to preserve the issued record. To change any of them, create a new revision.";
   return (
-    <div className="grid gap-2 rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 px-4 py-3">
+    <div className="grid gap-2 rounded-lg border border-border bg-muted/50 px-4 py-3">
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         {/* flex-1, and a measure well past DESIGN.md's 68ch body rule: that
             rule is for sustained reading, and this is a two-sentence notice in
@@ -54,7 +54,7 @@ export function OfferLockBanner({
             while ~500px of the row sat empty before the button. */}
         <p className="flex min-w-0 flex-1 items-start gap-2 text-sm text-foreground">
           <Lock
-            className="mt-0.5 size-4 shrink-0 text-royal-gold-dark"
+            className="mt-0.5 size-4 shrink-0 text-royal-gold-ink-text"
             aria-hidden="true"
           />
           <span className="max-w-5xl">{message}</span>

@@ -159,7 +159,7 @@ export function OfferWorkspaceImages({
         </div>
         {dropboxConfigured ? (
           <button
-            className="inline-flex shrink-0 items-center rounded-md border border-royal-gold bg-white px-3 py-1.5 text-xs font-semibold text-royal-gold-dark hover:bg-royal-gold-light/40 disabled:opacity-50"
+            className="inline-flex shrink-0 items-center rounded-md border border-royal-gold bg-card px-3 py-1.5 text-xs font-semibold text-royal-gold-ink-text hover:bg-royal-gold-light/40 disabled:opacity-50"
             disabled={!dropboxReady || dropboxBusy}
             onClick={() => void handleDropbox()}
             type="button"
@@ -183,7 +183,7 @@ export function OfferWorkspaceImages({
               key={slot.key}
               className="flex flex-col gap-2 rounded-lg border border-border p-3"
             >
-              <div className="relative aspect-[4/3] w-full overflow-hidden rounded-md border border-dashed border-royal-gold/50 bg-royal-gold-light/20">
+              <div className="relative aspect-[4/3] w-full overflow-hidden rounded-md border border-dashed border-border bg-muted/40">
                 {url ? (
                   <Image
                     alt={slot.caption}
@@ -232,7 +232,7 @@ export function OfferWorkspaceImages({
                   />
                 </label>
                 <button
-                  className="rounded-md border border-royal-gold px-2 py-1 text-xs font-medium text-royal-gold-dark hover:bg-royal-gold-light/40 disabled:opacity-50"
+                  className="rounded-md border border-royal-gold px-2 py-1 text-xs font-medium text-royal-gold-ink-text hover:bg-royal-gold-light/40 disabled:opacity-50"
                   disabled={aiPending}
                   onClick={() => void handleGenerate(slot.key)}
                   type="button"

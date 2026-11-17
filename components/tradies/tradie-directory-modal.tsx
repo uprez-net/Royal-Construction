@@ -64,7 +64,7 @@ export function TradieDirectoryModal({
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
-                  className="animate-pulse rounded-2xl border border-border bg-background p-4"
+                  className="animate-pulse rounded-lg border border-border bg-background p-4"
                 >
                   <div className="h-4 w-3/4 rounded bg-muted" />
                   <div className="mt-3 space-y-1">
@@ -79,20 +79,20 @@ export function TradieDirectoryModal({
               {tradieSearch.items.map((tradie) => (
                 <div
                   key={tradie.id}
-                  className="rounded-2xl border border-border bg-background p-4 shadow-sm"
+                  className="rounded-lg border border-border bg-background p-4 shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-medium text-slate-950">
+                      <p className="font-medium text-foreground">
                         {tradie.name}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {tradie.company ?? "Independent"}
                       </p>
                     </div>
-                    <List className="size-4 text-teal-700" />
+                    <List className="size-4 text-muted-foreground" />
                   </div>
-                  <div className="mt-3 space-y-1 text-sm text-slate-700">
+                  <div className="mt-3 space-y-1 text-sm text-foreground">
                     <p>{tradie.tradeType}</p>
                     <p>{tradie.phone}</p>
                     <p>{tradie.email}</p>

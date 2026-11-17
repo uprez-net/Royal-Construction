@@ -183,7 +183,13 @@ export function StepGlyph({
   }
   if (state === "active") {
     return (
-      <span className={cn(base, "bg-royal-gold text-white", className)}>
+      <span
+        className={cn(
+          base,
+          "bg-royal-gold-light text-royal-gold-ink-text",
+          className,
+        )}
+      >
         {index}
       </span>
     );
@@ -281,8 +287,8 @@ export function DwellingBoard({
                   "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold-ink focus-visible:ring-offset-2",
                   d.id === activeId
-                    ? "bg-white text-foreground shadow-sm"
-                    : "text-muted-foreground hover:bg-white/60",
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-card/60",
                 )}
               >
                 <Building2 className="size-3.5" aria-hidden="true" />
@@ -295,7 +301,7 @@ export function DwellingBoard({
             <button
               type="button"
               onClick={addDwelling}
-              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold-ink focus-visible:ring-offset-2"
+              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-card/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold-ink focus-visible:ring-offset-2"
             >
               <Plus className="size-3.5" aria-hidden="true" />
               Add dwelling
@@ -330,7 +336,7 @@ function BuildKindRow({
   const expected = kind?.seedsDwellings ?? job.dwellings.length;
   const mismatched = job.dwellings.length !== expected;
   return (
-    <div className="grid gap-3 rounded-lg border border-border/70 bg-white/95 p-4 @2xl/pane:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] @2xl/pane:items-start">
+    <div className="grid gap-3 rounded-lg border border-border/70 bg-card/95 p-4 @2xl/pane:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] @2xl/pane:items-start">
       <Labelled label="Build type">
         {(id) => (
           <Select
@@ -426,7 +432,7 @@ function DwellingEditor({
     // Its own container: side by side, a dwelling card is roughly half the
     // pane, so keying its internal grids off /pane collapsed them to 3 and 4
     // columns inside a ~565px card at 1440px.
-    <section className="@container/dwelling rounded-lg border border-border/70 bg-white/95">
+    <section className="@container/dwelling rounded-lg border border-border/70 bg-card/95">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
         <Input
           value={dwelling.name}
@@ -617,12 +623,12 @@ function DuplexParticulars({
   ] as const;
 
   return (
-    <section className="rounded-lg border border-border/70 bg-white/95">
+    <section className="rounded-lg border border-border/70 bg-card/95">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
         <h3 className="font-heading text-base font-semibold">
           Duplex particulars
         </h3>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-royal-gold-light px-2.5 py-0.5 text-xs font-medium text-royal-gold-ink">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-royal-gold-light px-2.5 py-0.5 text-xs font-medium text-royal-gold-ink-text">
           <TriangleAlert className="size-3" aria-hidden="true" />
           Proposed fields — confirm before build
         </span>
@@ -706,12 +712,12 @@ export function PricingRail({
 }) {
   const perSqm = totalSqm > 0 ? PRICING.contractValueIncGst / totalSqm : 0;
   return (
-    <div className="grid gap-4 rounded-lg border border-border/70 bg-white/95 p-4">
+    <div className="grid gap-4 rounded-lg border border-border/70 bg-card/95 p-4">
       <div>
         <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
           Contract value inc GST
         </p>
-        <p className="font-heading text-[1.75rem] font-semibold leading-tight tracking-[-0.02em]">
+        <p className="font-mono text-[1.75rem] font-semibold leading-tight tabular-nums">
           {formatCurrency(PRICING.contractValueIncGst)}
         </p>
         <p className="font-mono text-sm text-muted-foreground tabular-nums">
@@ -748,14 +754,14 @@ export function BlockerRail({ job }: { readonly job: PrototypeJob }) {
   const blockers = sendBlockers(job);
   if (blockers.length === 0) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-white/95 p-4 text-sm">
+      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-card/95 p-4 text-sm">
         <Check className="size-4 text-success-ink" aria-hidden="true" />
         Nothing blocks sending this offer.
       </div>
     );
   }
   return (
-    <div className="grid gap-2.5 rounded-lg border border-border/70 bg-white/95 p-4">
+    <div className="grid gap-2.5 rounded-lg border border-border/70 bg-card/95 p-4">
       <h3 className="flex items-center gap-2 text-sm font-semibold">
         <TriangleAlert className="size-4 text-warning-ink" aria-hidden="true" />
         {blockers.length}{" "}

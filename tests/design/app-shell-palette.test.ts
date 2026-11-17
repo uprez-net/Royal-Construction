@@ -14,9 +14,10 @@ const text = readFileSync(
   "utf8",
 );
 
-test("the shell's gold is the ink token, not a hex", () => {
+test("the shell's gold is a fill token, not a hex or gold text", () => {
   assert.doesNotMatch(text, /#C6923A/i);
-  assert.match(text, /text-royal-gold-ink/);
+  assert.match(text, /bg-royal-gold(?!-)/);
+  assert.doesNotMatch(text, /text-royal-gold/);
 });
 
 test("the shell's borders are the border token, not a hex", () => {

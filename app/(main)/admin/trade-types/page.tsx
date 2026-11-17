@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 
 import { TradeTypesAdmin } from "@/components/admin/trade-types-admin";
+import { PageHeader } from "@/components/common/page-header";
 import { getTradeTypesForAdmin } from "@/lib/data/trade-types";
 
 export const metadata: Metadata = {
@@ -16,15 +17,11 @@ export default async function TradeTypesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Trade Types
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          The trades a tradie can be listed under. New ones show up in every
-          trade picker and filter straight away.
-        </p>
-      </div>
+      <PageHeader
+        title="Trade types"
+        headingLevel="h1"
+        description="The trades a tradie can be listed under. New ones show up in every trade picker and filter straight away. Archiving takes a trade off the pickers; tradies already under it keep it. Only a trade with no tradies can be deleted."
+      />
       <TradeTypesAdmin tradeTypes={tradeTypes} />
     </div>
   );

@@ -45,7 +45,7 @@ const severityConfig = {
   },
   CRITICAL: {
     dot: "bg-destructive",
-    chip: "border-transparent bg-destructive text-destructive-foreground",
+    chip: "border-transparent bg-destructive text-white",
   },
 } as const;
 

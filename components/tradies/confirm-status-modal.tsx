@@ -325,12 +325,11 @@ export function ConfirmStatusModal({
                   disabled={isLoading}
                   onClick={() => updateStatus(option.value)}
                   className={cn(
-                    "group flex w-full items-center gap-2.5 rounded-[10px] border-2 bg-card px-4 py-3.5 text-left transition-all",
-                    "hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]",
+                    "group flex w-full items-center gap-2.5 rounded-[10px] border-2 bg-card px-4 py-3.5 text-left transition-colors",
                     "disabled:pointer-events-none disabled:opacity-60",
                     selected
                       ? "border-(--active-border) bg-(--active-bg)"
-                      : "border-border/70",
+                      : "border-border/70 hover:bg-muted",
                   )}
                   style={
                     selected

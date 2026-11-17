@@ -5,8 +5,9 @@ import {
 } from "@/lib/data/tradie-approvals";
 import { Metadata } from "next";
 import { Suspense } from "react";
-import ApprovalDashboardSkeleton from "./loading";
+import { ApprovalBodySkeleton } from "./loading";
 import { connection } from "next/server";
+import { PageHeader } from "@/components/common/page-header";
 
 export const metadata: Metadata = {
   title: "Admin Tradie Approvals",
@@ -29,6 +30,7 @@ async function AdminApprovalsRender() {
   const [kpiData, approvalsData] = await Promise.all([
     fetchApprovalKPI(),
     fetchTradieApprovals({
+      view: "needs-decision",
       page: 1,
       pageSize: 10,
     }),
@@ -41,8 +43,15 @@ async function AdminApprovalsRender() {
 
 export default function AdminApprovalsPage() {
   return (
-    <Suspense fallback={<ApprovalDashboardSkeleton />}>
-      <AdminApprovalsRender />
-    </Suspense>
+    <div className="space-y-6">
+      <PageHeader
+        title="Approvals"
+        headingLevel="h1"
+        description="Requests waiting for a decision, most urgent first."
+      />
+      <Suspense fallback={<ApprovalBodySkeleton />}>
+        <AdminApprovalsRender />
+      </Suspense>
+    </div>
   );
 }

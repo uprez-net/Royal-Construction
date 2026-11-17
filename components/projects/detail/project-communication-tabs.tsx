@@ -69,7 +69,9 @@ export function ProjectCommunicationTabs({
     },
     {
       hint: `${emails.length} email${emails.length === 1 ? "" : "s"}`,
-      icon: <Mail className="size-4 text-royal-gold-ink" aria-hidden="true" />,
+      icon: (
+        <Mail className="size-4 text-royal-gold-ink-text" aria-hidden="true" />
+      ),
       key: "email",
       label: "Email",
     },
@@ -80,7 +82,7 @@ export function ProjectCommunicationTabs({
       <div
         role="tablist"
         aria-label="Channel"
-        className="inline-flex w-full gap-1 rounded-2xl border border-border/70 bg-card p-1 shadow-sm sm:w-auto"
+        className="inline-flex w-full gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-foreground/4 sm:w-auto"
       >
         {channels.map((item) => {
           const active = channel === item.key;
@@ -102,7 +104,7 @@ export function ProjectCommunicationTabs({
                 className={cn(
                   "inline-flex size-8 items-center justify-center rounded-full",
                   item.key === "whatsapp"
-                    ? "bg-[#e7fce3]"
+                    ? "bg-success-light"
                     : "bg-royal-gold-light",
                 )}
               >

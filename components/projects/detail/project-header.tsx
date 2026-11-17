@@ -100,7 +100,7 @@ export function ProjectHeader({
       : [];
 
   return (
-    <section className="rounded-xl border border-border/70 bg-card p-4 shadow-sm sm:p-6 sm:px-7">
+    <header>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 space-y-2 [&_a]:break-words">
           <Link
@@ -111,14 +111,14 @@ export function ProjectHeader({
             Back to all projects
           </Link>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-heading break-words text-xl font-semibold leading-tight tracking-tight text-foreground sm:text-2xl">
+            <h1 className="font-heading break-words text-[1.625rem] leading-[1.2] font-semibold tracking-[-0.015em] text-foreground">
               {project.name}
             </h1>
             <span
               className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${statusTone.badge}`}
             >
               <span
-                className={`mr-1.5 inline-block size-2.5 rounded-full ${statusTone.stripe}`}
+                className="mr-1.5 inline-block size-1.5 rounded-full bg-current"
                 aria-hidden="true"
               />
               {formatStatus(project.status)}
@@ -334,6 +334,6 @@ export function ProjectHeader({
           </Button>
         </div>
       </div>
-    </section>
+    </header>
   );
 }

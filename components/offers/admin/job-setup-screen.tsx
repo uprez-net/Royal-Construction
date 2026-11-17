@@ -24,7 +24,7 @@ export function JobSetupScreen() {
   const error = useAppSelector((s) => s.adminOfferContent.error.buildScope);
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
           description="Default scope-of-works lines pre-filled onto every new offer. One line per row."

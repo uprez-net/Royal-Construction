@@ -211,7 +211,7 @@ export function MentionElement(props: PlateElementProps) {
     <PlateElement
       {...props}
       as="span"
-      className="inline-flex rounded bg-[#ccfbf1] px-1.5 py-0.5 text-xs font-medium text-[#115e59]"
+      className="inline-flex rounded bg-info-light px-1.5 py-0.5 text-xs font-medium text-info-ink"
       data-mention-key={element.key}
     >
       @{element.value}
@@ -311,7 +311,7 @@ export function MentionInputElement(props: PlateElementProps) {
     menuPosition
     && createPortal(
       <span
-        className="fixed z-[10000] flex max-h-64 flex-col overflow-y-auto rounded-[6px] border border-[#d6d3d1] bg-white py-1 text-left shadow-xl"
+        className="fixed z-[10000] flex max-h-64 flex-col overflow-y-auto rounded-[6px] border border-border bg-card py-1 text-left shadow-xl"
         style={{
           left: menuPosition.left,
           top: menuPosition.top,
@@ -323,25 +323,25 @@ export function MentionInputElement(props: PlateElementProps) {
             <button
               key={user.id}
               type="button"
-              className="flex w-full flex-col px-3 py-2 text-left hover:bg-[#f0fdfa]"
+              className="flex w-full flex-col px-3 py-2 text-left hover:bg-muted"
               onMouseDown={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 selectUser(user);
               }}
             >
-              <span className="text-sm font-medium leading-5 text-[#0c0a09]">
+              <span className="text-sm font-medium leading-5 text-foreground">
                 {user.name}
               </span>
               {user.email && (
-                <span className="truncate text-xs leading-4 text-[#78716c]">
+                <span className="truncate text-xs leading-4 text-muted-foreground">
                   {user.email}
                 </span>
               )}
             </button>
           ))
         ) : (
-          <span className="px-3 py-2 text-xs text-[#78716c]">
+          <span className="px-3 py-2 text-xs text-muted-foreground">
             No users found
           </span>
         )}
@@ -358,7 +358,7 @@ export function MentionInputElement(props: PlateElementProps) {
       <span
         ref={triggerRef}
         contentEditable={false}
-        className="relative inline-flex rounded bg-[#f0fdfa] px-1.5 py-0.5 text-xs text-[#0f766e]"
+        className="relative inline-flex rounded bg-info-light px-1.5 py-0.5 text-xs text-info-ink"
       >
         @
         <span className="relative min-w-2">
@@ -367,7 +367,7 @@ export function MentionInputElement(props: PlateElementProps) {
           </span>
           <input
             ref={inputRef}
-            className="absolute inset-0 size-full min-w-2 bg-transparent p-0 text-xs text-[#0f766e] outline-none"
+            className="absolute inset-0 size-full min-w-2 bg-transparent p-0 text-xs text-info-ink outline-none"
             value={search}
             aria-label="Mention team member"
             onChange={(event) => setSearch(event.target.value)}
@@ -405,9 +405,9 @@ export function ToolbarButton({
   return (
     <button
       type="button"
-      className={`inline-flex size-11 items-center justify-center rounded-[5px] border text-[#44403c] transition-colors hover:border-[#d6d3d1] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 md:size-8 ${
+      className={`inline-flex size-11 items-center justify-center rounded-[5px] border text-foreground/80 transition-colors hover:border-border hover:bg-card disabled:cursor-not-allowed disabled:opacity-50 md:size-8 ${
         isActive
-          ? "border-[#99f6e4] bg-[#ccfbf1] text-[#0f766e]"
+          ? "border-royal-gold/50 bg-royal-gold-light text-royal-gold-ink-text"
           : "border-transparent bg-transparent"
       }`}
       onMouseDown={(event) => {
@@ -543,8 +543,8 @@ export function EditorToolbar({
   };
 
   return (
-    <div className="relative z-20 flex min-h-12 flex-wrap items-center gap-2 border-b border-[#e7e5e4] bg-[#fafaf9] px-3 py-2">
-      <div className="flex items-center gap-1 rounded-[6px] border border-[#e7e5e4] bg-white p-1">
+    <div className="relative z-20 flex min-h-12 flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-3 py-2">
+      <div className="flex items-center gap-1 rounded-[6px] border border-border bg-card p-1">
         <ToolbarButton
           title="Bold"
           isActive={isBoldActive}
@@ -578,7 +578,7 @@ export function EditorToolbar({
           <Strikethrough className="size-4" />
         </ToolbarButton>
       </div>
-      <div className="flex items-center gap-1 rounded-[6px] border border-[#e7e5e4] bg-white p-1">
+      <div className="flex items-center gap-1 rounded-[6px] border border-border bg-card p-1">
         <ToolbarButton title="Bulleted list" onClick={toggleBullets}>
           <List className="size-4" />
         </ToolbarButton>
@@ -586,9 +586,9 @@ export function EditorToolbar({
           <Link className="size-4" />
         </ToolbarButton>
       </div>
-      <div className="flex items-center gap-1 rounded-[6px] border border-[#e7e5e4] bg-white p-1">
+      <div className="flex items-center gap-1 rounded-[6px] border border-border bg-card p-1">
         <select
-          className="h-8 rounded-[5px] border border-transparent bg-transparent px-2 text-xs font-medium text-[#44403c] outline-none hover:border-[#d6d3d1] disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-8 rounded-[5px] border border-transparent bg-transparent px-2 text-xs font-medium text-foreground/80 outline-none hover:border-border disabled:cursor-not-allowed disabled:opacity-50"
           value={aiAction}
           onChange={(event) => setAiAction(event.target.value as AiNoteAction)}
           disabled={isAiWorking}
@@ -608,11 +608,11 @@ export function EditorToolbar({
         />
       </div>
       {!hideMentionInfo && (
-        <div className="ml-auto flex items-center gap-1 rounded-[6px] border border-[#ccfbf1] bg-white px-2 py-1 text-xs text-[#0f766e]">
+        <div className="ml-auto flex items-center gap-1 rounded-[6px] border border-info/25 bg-card px-2 py-1 text-xs text-info-ink">
           <AtSign className="size-3.5" />
           <span>Type @ to mention</span>
           {mentionedUserIds.length > 0 && (
-            <span className="ml-1 border-l border-[#ccfbf1] pl-2">
+            <span className="ml-1 border-l border-border pl-2">
               {mentionedUserIds.length} mention
               {mentionedUserIds.length === 1 ? "" : "s"}
             </span>
@@ -684,7 +684,7 @@ export function LeadRichTextEditor({
   };
 
   return (
-    <div className="relative z-10 mt-1 overflow-visible rounded-[6px] border border-[#d6d3d1] bg-white focus-within:border-[#0D9488] focus-within:ring-2 focus-within:ring-[#CCFBF1]">
+    <div className="relative z-10 mt-1 overflow-visible rounded-[6px] border border-border bg-card focus-within:border-royal-gold-ink focus-within:ring-2 focus-within:ring-royal-gold-ink/40">
       <EditorToolbar
         editor={editor}
         onReplaceNoteText={replaceNoteText}
@@ -714,7 +714,7 @@ export function LeadRichTextEditor({
       </Plate>
 
       {!hideSaveButton ? (
-        <div className="flex items-center justify-end border-t border-[#e7e5e4] bg-[#f8fafc] px-3 py-2">
+        <div className="flex items-center justify-end border-t border-border bg-muted/40 px-3 py-2">
           <button
             type="button"
             className="inline-flex min-h-11 w-full items-center justify-center gap-1 rounded bg-royal-gold-ink px-3 text-sm font-medium text-white hover:bg-royal-gold-ink-hover disabled:cursor-not-allowed disabled:opacity-50 md:min-h-8 md:w-auto md:text-xs"

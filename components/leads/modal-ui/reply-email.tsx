@@ -17,7 +17,7 @@ interface ReplyBannerProps {
 export function ReplyBanner({ email, onCancel }: ReplyBannerProps) {
   const plainBody = stripEmailBody(email.body);
   return (
-    <div className="mx-3 mt-2.5 flex items-start gap-2.5 rounded-xl border-l-2 border-royal-gold bg-royal-gold-light/40 px-3 py-2">
+    <div className="mx-3 mt-2.5 flex items-start gap-2.5 rounded-xl border-l border-royal-gold bg-royal-gold-light/40 px-3 py-2">
       <Reply
         className="mt-0.5 size-3.5 shrink-0 text-royal-gold-ink"
         aria-hidden="true"

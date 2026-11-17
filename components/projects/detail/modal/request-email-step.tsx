@@ -43,8 +43,8 @@ function useFitZoom() {
 
 /** How the preview shows which text can be edited. Preview only, never sent. */
 const EDITABLE_STYLE = `[data-copy]{outline:none;border-radius:2px;cursor:text}
-[data-copy]:hover{box-shadow:0 0 0 1px rgba(201,162,39,.6)}
-[data-copy]:focus{box-shadow:0 0 0 2px #c9a227;background:rgba(201,162,39,.08)}`;
+[data-copy]:hover{box-shadow:0 0 0 1px oklch(0.53 0.12 77.3 / 0.6)}
+[data-copy]:focus{box-shadow:0 0 0 2px oklch(0.53 0.12 77.3);background:oklch(0.53 0.12 77.3 / 0.08)}`;
 
 /**
  * An edited region's text, back in the form the email template writes it:
@@ -472,7 +472,7 @@ export function RequestEmailStep({
             title="Request email preview"
             sandbox="allow-same-origin"
             onLoad={attachEditor}
-            className="h-[28rem] w-full flex-1 rounded-lg border border-border/70 bg-white lg:h-auto lg:min-h-[32rem]"
+            className="h-[28rem] w-full flex-1 rounded-lg border border-border/70 bg-card lg:h-auto lg:min-h-[32rem]"
           />
         </div>
       </section>

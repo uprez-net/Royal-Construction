@@ -29,8 +29,8 @@ function useAutoSize(value: string) {
     node.style.height = "auto";
     const styles = window.getComputedStyle(node);
     const borders =
-      Number.parseFloat(styles.borderTopWidth) +
-      Number.parseFloat(styles.borderBottomWidth);
+      Number.parseFloat(styles.borderTopWidth)
+      + Number.parseFloat(styles.borderBottomWidth);
     node.style.height = `${node.scrollHeight + borders}px`;
   }, [value]);
   return ref;
@@ -43,11 +43,11 @@ function useAutoSize(value: string) {
 // Focus draws the ink border plus a ring. The old 60% gold border measured
 // about 1.8:1 against the white field, too faint to find while tabbing.
 const EDITABLE_CHROME =
-  "block w-full resize-none overflow-hidden rounded-sm border border-transparent " +
-  "bg-transparent px-1.5 py-0.5 transition-colors " +
-  "hover:border-border/70 hover:bg-muted/40 " +
-  "focus:border-royal-gold-ink focus:ring-2 focus:ring-royal-gold/40 " +
-  "focus:bg-white focus:outline-none";
+  "block w-full resize-none overflow-hidden rounded-sm border border-transparent "
+  + "bg-transparent px-1.5 py-0.5 transition-colors "
+  + "hover:border-border/70 hover:bg-muted/40 "
+  + "focus:border-royal-gold-ink focus:ring-2 focus:ring-royal-gold/40 "
+  + "focus:bg-card focus:outline-none";
 
 export function EditableText({
   ariaLabel,

@@ -1,7 +1,6 @@
 "use client";
 
-import { BarChart3, CalendarCheck, CheckCircle2, Scale } from "lucide-react";
-
+import { KpiBand } from "@/components/common/kpi-band";
 import { MetricCard } from "@/components/common/metric-card";
 import type { SafeForecast, SafePipelineMetrics } from "@/lib/data/leads";
 
@@ -21,20 +20,16 @@ export function PipelineKpi({ metrics, forecast }: PipelineKpiProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <KpiBand className="md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           title="Open Pipeline Value"
           value={metrics.totalValue}
           isCurrency
-          Icon={BarChart3}
-          tone="accent"
         />
         <MetricCard
           title="Weighted Pipeline"
           value={metrics.weightedValue}
           isCurrency
-          Icon={Scale}
-          tone="primary"
         />
         <MetricCard
           // An em dash, never 0% — "no deals closed" and "we lost everything"
@@ -42,8 +37,6 @@ export function PipelineKpi({ metrics, forecast }: PipelineKpiProps) {
           title={`Win Rate (${winRate.windowDays} days)`}
           value={winRate.percent === null ? "—" : `${winRate.percent}%`}
           caption={`${winRate.won} won · ${winRate.lost} lost`}
-          Icon={CheckCircle2}
-          tone="success"
         />
         <MetricCard
           title={
@@ -53,10 +46,8 @@ export function PipelineKpi({ metrics, forecast }: PipelineKpiProps) {
           }
           value={forecast.bankedValue}
           isCurrency
-          Icon={CalendarCheck}
-          tone="info"
         />
-      </div>
+      </KpiBand>
 
       {winRate.estimatedDates ? (
         <p className="px-0.5 text-[11.5px] text-muted-foreground">

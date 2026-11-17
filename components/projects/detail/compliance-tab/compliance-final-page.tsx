@@ -232,15 +232,15 @@ export function ComplianceFinalPage({
       ...division,
       documents: documents.filter(
         (document) =>
-          division.types.includes(document.documentType) &&
-          document.files.length > 0,
+          division.types.includes(document.documentType)
+          && document.files.length > 0,
       ),
     })).filter((division) => division.documents.length > 0);
 
     const unplaced = documents.filter(
       (document) =>
-        document.files.length > 0 &&
-        !SECTIONED_DOCUMENT_TYPES.has(document.documentType),
+        document.files.length > 0
+        && !SECTIONED_DOCUMENT_TYPES.has(document.documentType),
     );
 
     return unplaced.length > 0
@@ -261,12 +261,12 @@ export function ComplianceFinalPage({
     (document) => document.files.length > 0,
   ).length;
   const threadMessageCount =
-    emails.length +
-    outreaches.reduce((total, outreach) => total + outreach.emails.length, 0);
+    emails.length
+    + outreaches.reduce((total, outreach) => total + outreach.emails.length, 0);
 
   return (
     <div className="space-y-5">
-      <div className="overflow-hidden rounded-2xl border border-success/30 bg-success-light/70 shadow-sm">
+      <div className="overflow-hidden rounded-lg border border-success/30 bg-success-light/70 shadow-sm">
         <div className="flex flex-wrap items-start gap-4 px-5 py-5">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-success text-success-foreground shadow-sm">
             <CheckCircle2 className="size-6" aria-hidden="true" />

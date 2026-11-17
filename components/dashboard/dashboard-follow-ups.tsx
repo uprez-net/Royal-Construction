@@ -19,21 +19,24 @@ interface DashboardFollowUpsProps {
   followUpItems: FollowUpItem[];
 }
 
+// Positive is success, neutral is muted, and overdue is the warning tone.
+// Red is reserved for lost, cancelled and declined, so it never appears here.
 const statusConfig: Record<
   "positive" | "neutral" | "negative",
-  { bg: string; text: string; ring: string }
+  { pill: string; ink: string }
 > = {
   positive: {
-    bg: "bg-emerald-100",
-    text: "text-emerald-700",
-    ring: "ring-emerald-500",
+    pill: "bg-success-light text-success-ink",
+    ink: "text-success-ink",
   },
   neutral: {
-    bg: "bg-slate-100",
-    text: "text-slate-700",
-    ring: "ring-slate-500",
+    pill: "bg-muted text-foreground/80",
+    ink: "text-muted-foreground",
   },
-  negative: { bg: "bg-red-100", text: "text-red-700", ring: "ring-red-500" },
+  negative: {
+    pill: "bg-warning-light text-warning-ink",
+    ink: "text-warning-ink",
+  },
 };
 
 export function calculateFollowUpBadgeLabel(dueAt: Date): string {
@@ -60,12 +63,16 @@ export function DashboardFollowUps({
   return (
     <Card>
       <CardHeader className="flex items-center justify-between border-b border-border/60 pb-4">
-        <h4 className="uppercase font-bold text-muted-foreground">
+        <h2 className="font-heading text-[1.0625rem] leading-[1.3] font-semibold tracking-[-0.01em] text-foreground">
           Follow-ups Due Today
-        </h4>
+        </h2>
         <Badge
-          className={`whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold ${(statusConfig[followUpTone] ?? statusConfig.neutral).bg} ${(statusConfig[followUpTone] ?? statusConfig.neutral).text}`}
+          className={`h-[22px] gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[11.5px] font-semibold ${(statusConfig[followUpTone] ?? statusConfig.neutral).pill}`}
         >
+          <span
+            aria-hidden="true"
+            className="size-1.5 rounded-full bg-current"
+          />
           {pendingFollowUpCount} Pending
         </Badge>
       </CardHeader>
@@ -91,9 +98,10 @@ export function DashboardFollowUps({
             {followUpItems.map((item) => (
               <article key={item.id} className="relative pb-5 last:pb-0">
                 <div
-                  className={`absolute left-[-27.5px] top-1 size-2.5 rounded-full border-2 border-white ring-2 ring-offset-background z-10 ${(statusConfig[item.status] ?? statusConfig.neutral).bg} ${(statusConfig[item.status] ?? statusConfig.neutral).ring}`}
+                  aria-hidden="true"
+                  className={`absolute left-[-27.5px] top-1 z-10 size-2.5 rounded-full bg-current ${(statusConfig[item.status] ?? statusConfig.neutral).ink}`}
                 />
-                <p className="text-[13px] font-bold text-slate-900">
+                <p className="text-[13px] font-bold text-foreground">
                   <span className="font-semibold">{item.customerName}</span> -{" "}
                   <span className="text-sm text-muted-foreground">
                     {item.projectName}
@@ -103,13 +111,17 @@ export function DashboardFollowUps({
                   {item.description}
                 </p>
                 <p
-                  className={`mt-1.5 text-[11px] font-medium ${(statusConfig[item.status] ?? statusConfig.neutral).text}`}
+                  className={`mt-1.5 text-[11px] font-medium ${(statusConfig[item.status] ?? statusConfig.neutral).ink}`}
                 >
                   {timeFormat.format(new Date(item.dueAt))}
                 </p>
                 <Badge
-                  className={`absolute right-4 top-4 whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold ${(statusConfig[item.status] ?? statusConfig.neutral).bg} ${(statusConfig[item.status] ?? statusConfig.neutral).text}`}
+                  className={`absolute right-4 top-4 h-[22px] gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[11.5px] font-semibold ${(statusConfig[item.status] ?? statusConfig.neutral).pill}`}
                 >
+                  <span
+                    aria-hidden="true"
+                    className="size-1.5 rounded-full bg-current"
+                  />
                   {calculateFollowUpBadgeLabel(new Date(item.dueAt))}
                 </Badge>
               </article>

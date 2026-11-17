@@ -19,7 +19,7 @@ export default function ErrorPage({ retry }: { retry: () => void }) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-widest text-royal-gold-ink">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Project planning
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">

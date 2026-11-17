@@ -38,6 +38,12 @@ import {
   type FinancialFilter,
 } from "@/lib/projects/financial-filters";
 import { cn } from "@/lib/utils";
+import {
+  TABLE_CELL_CLASS,
+  TABLE_HEAD_CELL_CLASS,
+  TABLE_HEAD_ROW_CLASS,
+  TABLE_ROW_CLASS,
+} from "@/components/ui/table-styles";
 import { PROJECT_STAGE_LABELS } from "@/types/project";
 import { formatStatus } from "@/utils/formatters";
 
@@ -317,7 +323,7 @@ export function StageFinancialsCard({
           <button
             type="button"
             aria-controls={contentId}
-            className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 text-left hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:pl-5 sm:pr-3"
+            className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 text-left hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:pl-5 sm:pr-4"
           >
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="flex min-w-0 flex-wrap items-center gap-2">
@@ -412,20 +418,20 @@ export function StageFinancialsCard({
         </CollapsibleTrigger>
         <CollapsibleContent id={contentId}>
           <div className="overflow-x-auto border-t border-border/70">
-            <table className="w-full min-w-[64rem] table-fixed caption-bottom text-sm">
+            <table className="w-full min-w-[64rem] table-fixed caption-bottom text-[13px]">
               <caption className="sr-only">
                 {label} activities: quoted price, tradie quotes, invoices and
                 profit or loss
               </caption>
-              <thead className="bg-muted/40">
+              <thead className={TABLE_HEAD_ROW_CLASS}>
                 {table.getHeaderGroups().map((group) => (
-                  <tr key={group.id} className="border-b border-border/70">
+                  <tr key={group.id}>
                     {group.headers.map((header) => (
                       <th
                         key={header.id}
                         scope="col"
                         className={cn(
-                          "h-10 px-3 text-left align-middle text-xs font-medium uppercase tracking-wide text-muted-foreground",
+                          TABLE_HEAD_CELL_CLASS,
                           COLUMN_CLASS[header.column.id],
                         )}
                       >
@@ -448,17 +454,16 @@ export function StageFinancialsCard({
                     <Fragment key={row.id}>
                       <tr
                         className={cn(
-                          "border-b border-border/70 transition-colors",
+                          TABLE_ROW_CLASS,
                           outcomeRowClass(activity.figures.outcome),
-                          !outcomeRowClass(activity.figures.outcome)
-                            && "hover:bg-muted/40",
                         )}
                       >
                         {row.getAllCells().map((cell) => (
                           <td
                             key={cell.id}
                             className={cn(
-                              "px-3 py-2.5 align-top",
+                              TABLE_CELL_CLASS,
+                              "align-top",
                               COLUMN_CLASS[cell.column.id],
                             )}
                           >
@@ -467,7 +472,7 @@ export function StageFinancialsCard({
                         ))}
                       </tr>
                       {showDetail ? (
-                        <tr className="border-b border-border/70 bg-muted/30">
+                        <tr className={cn(TABLE_ROW_CLASS, "bg-muted/30")}>
                           <td
                             colSpan={columns.length}
                             className="px-3 py-3"

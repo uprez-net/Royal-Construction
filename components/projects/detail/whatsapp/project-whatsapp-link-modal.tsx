@@ -93,7 +93,7 @@ export function ProjectWhatsAppLinkModal({
       maxWidthClass="max-w-[560px]"
     >
       <div className="space-y-4">
-        <p className="flex gap-2 rounded-xl bg-[#fff5c4]/70 px-3 py-2.5 text-[13px] text-[#54656f]">
+        <p className="flex gap-2 rounded-xl bg-warning-light px-3 py-2.5 text-[13px] text-foreground">
           <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />A group
           someone made on their phone can&apos;t be linked — WhatsApp
           doesn&apos;t let apps read those. Create a new group for the project
@@ -142,11 +142,11 @@ export function ProjectWhatsAppLinkModal({
                     className={cn(
                       "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition",
                       selected
-                        ? "border-[#00a884] bg-[#e7fce3]"
+                        ? "border-primary bg-royal-gold-light"
                         : "border-border/70 hover:bg-muted/50",
                     )}
                   >
-                    <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-[#dfe5e7] text-[#54656f]">
+                    <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                       <Users className="size-5" aria-hidden="true" />
                     </span>
                     <span className="min-w-0 flex-1">
@@ -165,7 +165,7 @@ export function ProjectWhatsAppLinkModal({
                       className={cn(
                         "size-4.5 shrink-0 rounded-full border-2",
                         selected
-                          ? "border-[#00a884] bg-[#00a884] shadow-[inset_0_0_0_3px_white]"
+                          ? "border-primary bg-primary shadow-[inset_0_0_0_3px_white]"
                           : "border-muted-foreground/40",
                       )}
                     />
@@ -184,7 +184,7 @@ export function ProjectWhatsAppLinkModal({
             type="button"
             disabled={!chosen || linking}
             onClick={() => void link()}
-            className="bg-[#00a884] text-white hover:bg-[#008f72]"
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
             {linking ? (
               <Loader2

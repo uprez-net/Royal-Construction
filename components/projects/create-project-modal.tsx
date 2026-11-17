@@ -852,9 +852,9 @@ export function CreateProjectModal({
         ) : null}
 
         {stage === "extracting" ? (
-          <div className="space-y-4 rounded-2xl border border-border/70 bg-slate-50/80 p-5">
+          <div className="space-y-4 rounded-lg border border-border/70 bg-muted/80 p-5">
             <div className="flex items-center gap-3">
-              <Loader2 className="size-5 animate-spin text-teal-600" />
+              <Loader2 className="size-5 animate-spin text-primary" />
               <div>
                 <p className="text-sm font-semibold text-foreground">
                   Extracting project data
@@ -868,10 +868,10 @@ export function CreateProjectModal({
               {EXTRACTION_PROGRESS.map((label, index) => (
                 <div
                   key={label}
-                  className="flex items-center gap-3 rounded-xl border border-border/70 bg-white px-3 py-2"
+                  className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2"
                 >
                   <span
-                    className={`inline-flex size-5 items-center justify-center rounded-full text-[11px] font-bold ${index <= progressStep ? "bg-royal-gold-ink text-white" : "bg-muted text-muted-foreground"}`}
+                    className={`inline-flex size-5 items-center justify-center rounded-full text-[11px] font-bold ${index <= progressStep ? "bg-royal-gold-light text-royal-gold-ink-text" : "bg-muted text-muted-foreground"}`}
                   >
                     {index < progressStep ? (
                       <CheckCircle2 className="size-3.5" />
@@ -887,12 +887,12 @@ export function CreateProjectModal({
         ) : null}
 
         {stage === "error" ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-900">
+          <div className="rounded-lg border border-destructive/30 bg-destructive-light p-5 text-destructive-ink">
             <div className="flex items-center gap-3">
               <ShieldCheck className="size-5" />
               <div>
                 <p className="text-sm font-semibold">Extraction failed</p>
-                <p className="text-sm text-red-800">
+                <p className="text-sm text-destructive-ink">
                   {extractionError
                     || "The OCR/extraction pipeline could not read one or both PDFs."}
                 </p>
@@ -920,7 +920,7 @@ export function CreateProjectModal({
             />
 
             <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-              <div className="rounded-2xl border border-border/70 bg-slate-50/80 p-5">
+              <div className="rounded-lg border border-border/70 bg-muted/80 p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-foreground">
@@ -937,7 +937,7 @@ export function CreateProjectModal({
                   </div>
                 </div>
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
-                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
+                  <div className="rounded-xl border border-border/70 bg-card p-3 md:col-span-3">
                     <FieldErrorBoundaryShell
                       field="projectName"
                       error={fieldErrorMap.projectName}
@@ -961,7 +961,7 @@ export function CreateProjectModal({
                       />
                     </FieldErrorBoundaryShell>
                   </div>
-                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
+                  <div className="rounded-xl border border-border/70 bg-card p-3 md:col-span-3">
                     <FieldErrorBoundaryShell
                       field="siteLocation"
                       error={fieldErrorMap.siteLocation}
@@ -999,7 +999,7 @@ export function CreateProjectModal({
                       />
                     </FieldErrorBoundaryShell>
                   </div>
-                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
+                  <div className="rounded-xl border border-border/70 bg-card p-3 md:col-span-3">
                     <FieldErrorBoundaryShell
                       field="siteManager"
                       error={fieldErrorMap.siteManager}
@@ -1030,7 +1030,7 @@ export function CreateProjectModal({
                       />
                     </FieldErrorBoundaryShell>
                   </div>
-                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
+                  <div className="rounded-xl border border-border/70 bg-card p-3 md:col-span-3">
                     <FieldErrorBoundaryShell
                       field="startDate"
                       error={fieldErrorMap.startDate}
@@ -1057,7 +1057,7 @@ export function CreateProjectModal({
                     </FieldErrorBoundaryShell>
                   </div>
                 </div>
-                <div className="mt-4 rounded-xl border border-border/70 bg-white p-4">
+                <div className="mt-4 rounded-xl border border-border/70 bg-card p-4">
                   <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                     Extraction notes
                   </Label>
@@ -1068,11 +1068,11 @@ export function CreateProjectModal({
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-                <p className="text-sm font-semibold text-emerald-950">
+              <div className="rounded-lg border border-success/30 bg-success-light p-5">
+                <p className="text-sm font-semibold text-success-ink">
                   Review summary
                 </p>
-                <p className="mt-1 text-xs text-emerald-900/80">
+                <p className="mt-1 text-xs text-success-ink/80">
                   Blank fields stay blank. Any unexpected non-primitive values
                   are rendered as empty strings.
                 </p>
@@ -1089,8 +1089,8 @@ export function CreateProjectModal({
                           sectionErrorCount > 0
                             ? "border-destructive/50 bg-destructive-light text-destructive-ink hover:bg-destructive-light/80"
                             : index === activeSectionIndex
-                              ? "border-emerald-400 bg-white text-emerald-950"
-                              : "border-emerald-200 bg-emerald-50 text-emerald-900/80 hover:bg-white/80"
+                              ? "border-success/50 bg-card text-success-ink"
+                              : "border-success/30 bg-success-light text-success-ink/80 hover:bg-card/80"
                         }`}
                       >
                         <span className="min-w-0 flex-1 truncate">
@@ -1137,7 +1137,7 @@ export function CreateProjectModal({
               }}
             />
 
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-slate-50/80 p-4">
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/80 p-4">
               <Button
                 variant="outline"
                 onClick={() =>
@@ -1202,7 +1202,7 @@ export function CreateProjectModal({
             </div>
 
             {dateConfirmPrompt ? (
-              <div className="rounded-2xl border border-warning/40 bg-warning-light p-5">
+              <div className="rounded-lg border border-warning/40 bg-warning-light p-5">
                 <div className="flex items-start gap-3">
                   <AlertTriangle
                     className="mt-0.5 size-5 shrink-0 text-warning-ink"
@@ -1264,9 +1264,9 @@ export function CreateProjectModal({
         ) : null}
 
         {stage === "submitting" ? (
-          <div className="rounded-2xl border border-border/70 bg-slate-50/80 p-5">
+          <div className="rounded-lg border border-border/70 bg-muted/80 p-5">
             <div className="flex items-center gap-3">
-              <Loader2 className="size-5 animate-spin text-teal-600" />
+              <Loader2 className="size-5 animate-spin text-primary" />
               <div>
                 <p className="text-sm font-semibold text-foreground">
                   Creating project
@@ -1340,7 +1340,7 @@ function CreateProjectErrorBanner({
     <div
       role="alert"
       aria-live="assertive"
-      className="rounded-2xl border border-destructive/40 bg-destructive-light p-4"
+      className="rounded-lg border border-destructive/40 bg-destructive-light p-4"
     >
       <div className="flex items-start gap-3">
         <AlertCircle
@@ -1362,7 +1362,7 @@ function CreateProjectErrorBanner({
                   <button
                     type="button"
                     onClick={() => onGoToField(entry.field, entry.owner)}
-                    className="group flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-destructive-ink transition hover:bg-white/70 focus-visible:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50"
+                    className="group flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-destructive-ink transition hover:bg-card/70 focus-visible:bg-card/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50"
                   >
                     <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-destructive-ink/70" />
                     <span className="min-w-0 flex-1">

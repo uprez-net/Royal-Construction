@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/common/page-header";
 import { ProjectsClient } from "@/components/projects/projects-client";
 import {
   getProjectKPIs,
@@ -55,11 +56,12 @@ export default async function ProjectPage({
   ]);
 
   return (
-    <>
-      {/* The app shell renders the page name only as a breadcrumb, so the
-          document has no h1 of its own. Visually hidden keeps the existing
-          layout while giving assistive tech the page's top-level heading. */}
-      <h1 className="sr-only">Projects</h1>
+    <div className="grid gap-6">
+      <PageHeader
+        headingLevel="h1"
+        title="Projects"
+        description={`${metadata.description} Select a project for a quick view, or Details for the full project page.`}
+      />
       <ProjectsClient
         projects={projectsResult.page.items}
         pagination={projectsResult.page}
@@ -69,6 +71,6 @@ export default async function ProjectPage({
         attention={attention}
         role={user!.role}
       />
-    </>
+    </div>
   );
 }

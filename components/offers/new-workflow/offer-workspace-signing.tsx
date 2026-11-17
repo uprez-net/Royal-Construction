@@ -135,7 +135,7 @@ export function EnvelopeSendConfirm({
   readonly onCancel: () => void;
 }) {
   return (
-    <div className="grid gap-2 rounded-lg border border-royal-gold/40 bg-royal-gold-light/40 p-3">
+    <div className="grid gap-2 rounded-lg border border-border bg-muted/50 p-3">
       <p className="text-sm font-medium text-foreground">
         Send the {documentName} for signature?
       </p>

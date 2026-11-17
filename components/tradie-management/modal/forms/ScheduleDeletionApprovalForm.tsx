@@ -20,8 +20,11 @@ import {
   Phone,
   LucideIcon,
 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { dataTimeFormat, formatStatus } from "@/utils/formatters";
 import { cn } from "@/lib/utils";
 
@@ -67,12 +70,15 @@ export function ScheduleDeletionApprovalForm({ approval, onSuccess }: Props) {
 
   const mutation = useApprovalMutation(onSuccess);
 
+  const [rejectReason, setRejectReason] = useState("");
+
   const submit = (resolution: "approved" | "rejected") => {
     mutation.mutate({
       approvalId: approval.id,
       type: TradieApprovalActionType.SCHEDULE_DELETION,
       resolution,
       payload: undefined,
+      rejectReason: resolution === "rejected" ? rejectReason.trim() : undefined,
     });
   };
 
@@ -220,35 +226,62 @@ export function ScheduleDeletionApprovalForm({ approval, onSuccess }: Props) {
 
         {/* Actions */}
         {approval.status === "PENDING" && (
-          <div className="grid gap-2 border-t border-border/70 pt-5 sm:flex sm:justify-end">
-            <Button
-              variant="outline"
-              disabled={mutation.isPending}
-              onClick={() => submit("rejected")}
-            >
-              Keep booking
-            </Button>
+          <div className="space-y-4 border-t border-border/70 pt-5">
+            <div className="space-y-1.5">
+              <Label htmlFor="schedule-deletion-reject-reason">
+                Reason for keeping the booking
+                <span className="text-destructive">
+                  *<span className="sr-only"> required</span>
+                </span>
+              </Label>
+              <Textarea
+                id="schedule-deletion-reject-reason"
+                rows={2}
+                maxLength={1000}
+                required
+                aria-required="true"
+                aria-describedby="schedule-deletion-reject-reason-hint"
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+              />
+              <p
+                id="schedule-deletion-reject-reason-hint"
+                className="text-xs text-muted-foreground"
+              >
+                Required to keep the booking. The requester sees this reason.
+              </p>
+            </div>
 
-            <Button
-              variant="destructive"
-              disabled={mutation.isPending}
-              onClick={() => submit("approved")}
-            >
-              {mutation.isPending ? (
-                <>
-                  <Loader2
-                    className="mr-2 size-4 animate-spin"
-                    aria-hidden="true"
-                  />
-                  Submitting…
-                </>
-              ) : (
-                <>
-                  <CalendarX className="mr-2 size-4" aria-hidden="true" />
-                  Approve removal
-                </>
-              )}
-            </Button>
+            <div className="grid gap-2 sm:flex sm:justify-end">
+              <Button
+                variant="outline"
+                disabled={mutation.isPending || !rejectReason.trim()}
+                onClick={() => submit("rejected")}
+              >
+                Keep booking
+              </Button>
+
+              <Button
+                variant="destructive"
+                disabled={mutation.isPending}
+                onClick={() => submit("approved")}
+              >
+                {mutation.isPending ? (
+                  <>
+                    <Loader2
+                      className="mr-2 size-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                    Submitting…
+                  </>
+                ) : (
+                  <>
+                    <CalendarX className="mr-2 size-4" aria-hidden="true" />
+                    Approve removal
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         )}
       </div>

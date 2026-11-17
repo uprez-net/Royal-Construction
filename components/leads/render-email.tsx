@@ -13,7 +13,7 @@ interface ReactEmailPreviewProps {
 
 const Spinner = () => (
   <div className="flex h-120 items-center justify-center rounded-lg border border-border bg-muted/10">
-    <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-teal-600" />
+    <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-royal-gold-ink" />
   </div>
 );
 
@@ -22,7 +22,9 @@ function addEditableBody(html: string) {
     <style>
       body.editable-email-preview:focus,
       body.editable-email-preview:focus-visible {
-        outline: 3px solid #0D9488;
+        /* Gold ink (--royal-gold-ink). This CSS is injected into the preview
+           document, which cannot read the app's custom properties. */
+        outline: 3px solid #926100;
         outline-offset: -3px;
       }
     </style>

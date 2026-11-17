@@ -342,9 +342,9 @@ function BookingContent() {
             <div className="mt-8 rounded-md border border-border bg-muted px-5 py-4">
               <div className="flex items-center justify-center gap-2.5">
                 {inPerson ? (
-                  <MapPin className="h-4 w-4 shrink-0 text-royal-gold" />
+                  <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
                 ) : (
-                  <Video className="h-4 w-4 shrink-0 text-royal-gold" />
+                  <Video className="h-4 w-4 shrink-0 text-muted-foreground" />
                 )}
                 <span className="text-[13px] text-muted-foreground">
                   {!inPerson
@@ -389,7 +389,6 @@ function BookingContent() {
             </span>
           </div>
         </div>
-        <div className="h-0.75 bg-royal-gold" />
       </div>
 
       {/* ── Main Content ── */}
@@ -397,20 +396,20 @@ function BookingContent() {
         <div className="mb-10 text-center">
           <Badge
             variant="outline"
-            className="mb-5 gap-2 rounded-full border-border bg-card px-4 py-1.5 text-xs font-semibold tracking-wide text-royal-gold-ink"
+            className="mb-5 gap-2 rounded-full border-transparent bg-royal-gold-light px-4 py-1.5 text-xs font-semibold tracking-wide text-royal-gold-ink-text"
           >
             <CalendarIcon className="h-3.5 w-3.5" />
             SCHEDULE MEETING
           </Badge>
-          <h1 className="mb-2 font-condensed text-[42px] font-medium uppercase leading-none tracking-tighter text-foreground">
+          <h1 className="mb-2 font-condensed text-[1.75rem] font-medium uppercase leading-[1.2] tracking-wide text-foreground">
             Schedule Your
             <br />
             Consultation Meeting
           </h1>
           {!TeammateName ? (
-            <p className="text-sm font-light text-muted-foreground">
+            <p className="text-sm font-normal text-muted-foreground">
               Welcome,{" "}
-              <strong className="font-semibold text-royal-gold-ink">
+              <strong className="font-semibold text-foreground">
                 {displayName}
               </strong>
               . Please choose a convenient date and time below.
@@ -420,7 +419,7 @@ function BookingContent() {
 
         {loading ? (
           <div className="py-16 text-center">
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-royal-gold" />
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
             <p className="mt-4 text-sm text-muted-foreground">
               Loading availability...
             </p>
@@ -451,13 +450,10 @@ function BookingContent() {
             {/* ═══ CONTACT DETAILS ═══ */}
             <Card className="border-border shadow-sm">
               <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-royal-gold" />
-                  <CardTitle className="font-condensed text-[17px] font-medium uppercase tracking-wide">
-                    {TeammateName ? "Client Details" : "Your Details"}
-                  </CardTitle>
-                </div>
-                <CardDescription className="text-[13px] font-light">
+                <CardTitle className="text-[17px] font-semibold">
+                  {TeammateName ? "Client Details" : "Your Details"}
+                </CardTitle>
+                <CardDescription className="text-[13px] font-normal">
                   Confirm your contact details so we can send the invite.
                 </CardDescription>
               </CardHeader>
@@ -504,13 +500,10 @@ function BookingContent() {
             {/* ═══ NOTES ═══ */}
             <Card className="border-border shadow-sm">
               <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-royal-gold" />
-                  <CardTitle className="font-condensed text-[17px] font-medium uppercase tracking-wide">
-                    {TeammateName ? "Agenda" : "Project Notes"}
-                  </CardTitle>
-                </div>
-                <CardDescription className="text-[13px] font-light">
+                <CardTitle className="text-[17px] font-semibold">
+                  {TeammateName ? "Agenda" : "Project Notes"}
+                </CardTitle>
+                <CardDescription className="text-[13px] font-normal">
                   {NOTES_HELPER}
                 </CardDescription>
               </CardHeader>
@@ -546,13 +539,10 @@ function BookingContent() {
             {/* ═══ MEETING TYPE ═══ */}
             <Card className="border-border shadow-sm">
               <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-royal-gold" />
-                  <CardTitle className="font-condensed text-[17px] font-medium uppercase tracking-wide">
-                    Meeting Type
-                  </CardTitle>
-                </div>
-                <CardDescription className="text-[13px] font-light">
+                <CardTitle className="text-[17px] font-semibold">
+                  Meeting Type
+                </CardTitle>
+                <CardDescription className="text-[13px] font-normal">
                   Meetings are held online over Microsoft Teams unless you
                   choose to meet in person.
                 </CardDescription>
@@ -598,12 +588,12 @@ function BookingContent() {
             <Card className="border-border shadow-sm">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
-                  <CalendarIcon className="h-4 w-4 text-royal-gold" />
-                  <CardTitle className="font-condensed text-[17px] font-medium uppercase tracking-wide">
+                  <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle className="text-[17px] font-semibold">
                     Select Date &amp; Time
                   </CardTitle>
                 </div>
-                <CardDescription className="text-[13px] font-light">
+                <CardDescription className="text-[13px] font-normal">
                   Choose a date from tomorrow onwards, then pick an available
                   time slot.
                 </CardDescription>
@@ -632,10 +622,10 @@ function BookingContent() {
                           aria-checked={isSelected}
                           onClick={() => chooseDuration(minutes)}
                           className={cn(
-                            "rounded-md border px-3.5 py-2 font-condensed text-sm font-medium transition-colors",
+                            "rounded-md border px-3.5 py-2 text-sm font-medium transition-colors",
                             isSelected
-                              ? "border-royal-gold-ink bg-royal-gold-ink text-card"
-                              : "border-border bg-card text-foreground hover:border-royal-gold",
+                              ? "border-royal-gold-ink bg-royal-gold-light text-royal-gold-ink-text"
+                              : "border-border bg-card text-foreground hover:bg-muted",
                           )}
                         >
                           {consultationDurationLabel(minutes)}
@@ -666,12 +656,12 @@ function BookingContent() {
                     {selectedDate ? (
                       <>
                         <div className="mb-2 flex items-center gap-2">
-                          <Clock className="h-3.5 w-3.5 text-royal-gold" />
+                          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                           <span className="text-xs font-medium text-muted-foreground">
                             {formatDateLong(selectedDate)}
                           </span>
                         </div>
-                        <div className="mb-4 rounded-md border border-border bg-royal-gold-light px-2.5 py-1.5">
+                        <div className="mb-4 rounded-md border border-border bg-muted px-2.5 py-1.5">
                           <p className="text-[11px] font-medium text-foreground">
                             {selectedDate.getDay() === 0
                             || selectedDate.getDay() === 6
@@ -700,31 +690,31 @@ function BookingContent() {
                                 className={cn(
                                   "flex flex-col items-center justify-center rounded-md border px-2 py-3 transition-colors",
                                   busy
-                                    ? "cursor-not-allowed border-border bg-muted opacity-50"
+                                    ? "cursor-not-allowed border-border bg-muted"
                                     : isSelected
-                                      ? "border-royal-gold-ink bg-royal-gold-ink cursor-pointer"
-                                      : "border-border bg-card cursor-pointer hover:border-royal-gold",
+                                      ? "border-royal-gold-ink bg-royal-gold-light cursor-pointer"
+                                      : "border-border bg-card cursor-pointer hover:bg-muted",
                                 )}
                               >
                                 <span
                                   className={cn(
-                                    "font-condensed text-sm font-medium",
+                                    "text-sm font-medium",
                                     busy
                                       ? "text-muted-foreground"
                                       : isSelected
-                                        ? "text-card"
+                                        ? "text-royal-gold-ink-text"
                                         : "text-foreground",
                                   )}
                                 >
                                   {formatTimeDisplay(time)}
                                 </span>
                                 {busy && (
-                                  <span className="mt-1 text-[9px] font-semibold uppercase text-destructive">
+                                  <span className="mt-1 text-[9px] font-semibold uppercase text-muted-foreground">
                                     Booked
                                   </span>
                                 )}
                                 {isSelected && !busy && (
-                                  <span className="mt-1 text-[9px] font-semibold uppercase text-card">
+                                  <span className="mt-1 text-[9px] font-semibold uppercase text-royal-gold-ink-text">
                                     Selected
                                   </span>
                                 )}
@@ -748,21 +738,21 @@ function BookingContent() {
 
             {/* ═══ SUMMARY & CONFIRM ═══ */}
             {selectedDate && selectedTime && (
-              <Card className="border-border border-t-[3px] border-t-royal-gold shadow-sm">
+              <Card className="border-border shadow-sm">
                 <CardContent className="pt-6">
                   <div className="mb-5 flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-royal-gold-light">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
                       {inPerson ? (
-                        <MapPin className="h-5 w-5 text-royal-gold" />
+                        <MapPin className="h-5 w-5 text-muted-foreground" />
                       ) : (
-                        <Video className="h-5 w-5 text-royal-gold" />
+                        <Video className="h-5 w-5 text-muted-foreground" />
                       )}
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-condensed text-[17px] font-medium uppercase text-foreground">
+                      <h4 className="text-[17px] font-semibold text-foreground">
                         Consultation Summary
                       </h4>
-                      <p className="mt-0.5 text-xs font-light text-muted-foreground">
+                      <p className="mt-0.5 text-xs font-normal text-muted-foreground">
                         {/* "2-hour", as the old "1-hour" read. */}
                         {consultationDurationLabel(durationMinutes).replace(
                           / hours?$/,
@@ -817,7 +807,7 @@ function BookingContent() {
                   <Button
                     onClick={handleBook}
                     disabled={submitting}
-                    className="w-full gap-2 bg-royal-gold-ink py-6 font-condensed text-[15px] font-medium uppercase tracking-wide text-card hover:bg-royal-gold-ink-hover"
+                    className="w-full gap-2 bg-royal-gold-ink py-6 text-[15px] font-semibold text-card hover:bg-royal-gold-ink-hover"
                   >
                     {submitting ? (
                       <>
@@ -840,7 +830,7 @@ function BookingContent() {
 
       {/* ── Footer ── */}
       <div className="border-t border-border bg-card px-6 py-5 text-center">
-        <p className="text-xs font-light text-muted-foreground">
+        <p className="text-xs font-normal text-muted-foreground">
           © {new Date().getFullYear()} Royal Constructions NSW · 38/62 Turner
           Rd, Smeaton Grange NSW 2567 · 1300 832 355
         </p>
@@ -853,9 +843,9 @@ export default function BookConsultationPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background font-sans text-royal-gold">
+        <div className="flex min-h-screen items-center justify-center bg-background font-sans text-muted-foreground">
           <div className="text-center">
-            <Loader2 className="mx-auto h-8 w-8 animate-spin" />
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
             <p className="mt-4 text-sm text-muted-foreground">
               Loading booking page...
             </p>

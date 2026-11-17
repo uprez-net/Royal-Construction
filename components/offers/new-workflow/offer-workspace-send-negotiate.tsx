@@ -149,7 +149,7 @@ export function SendNegotiatePanel({
     });
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
           description="Email the Offer document to the client, capture their change requests as a new revision, then record the outcome."
@@ -491,7 +491,7 @@ function RecipientList({
       {recipients.map((recipient, index) => (
         <li
           key={`${recipient.label}-${recipient.email}-${index}`}
-          className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 rounded-md border border-border bg-white px-3 py-1.5 text-sm"
+          className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm"
         >
           <span className="min-w-0 truncate font-medium text-foreground">
             {recipient.label}
@@ -527,7 +527,7 @@ function SendConfirm({
 }) {
   const multiple = recipients.length > 1;
   return (
-    <div className="grid gap-2 rounded-lg border border-royal-gold/40 bg-royal-gold-light/40 p-3">
+    <div className="grid gap-2 rounded-lg border border-border bg-muted/50 p-3">
       <p className="text-sm font-medium text-foreground">
         {multiple
           ? `Send this offer to all ${recipients.length} signatories?`

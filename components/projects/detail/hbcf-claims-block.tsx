@@ -106,7 +106,7 @@ export function HbcfClaimsBlock({
     );
 
   return (
-    <div className="space-y-4 rounded-xl border border-border bg-muted/40 p-4">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h4 className="text-sm font-semibold text-foreground">HBCF claim</h4>
         <p className="text-xs text-muted-foreground">

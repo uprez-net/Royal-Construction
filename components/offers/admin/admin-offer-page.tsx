@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { PageHeroCard } from "@/components/common/page-hero-card";
+import { PageHeader } from "@/components/common/page-header";
 import { Badge } from "@/components/ui/badge";
 import { OfferContentHeader } from "./offer-content-header";
 import {
@@ -18,7 +18,6 @@ import { OfferContentPage } from "./offer-content-page";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { hydrated } from "@/lib/store/slices/adminOfferContentSlice";
 import type { AdminOfferContent } from "@/types/admin-offer-content";
-import { Settings2 } from "lucide-react";
 import { HBCFClaimPage } from "./hbcf-claim-page";
 import { OfferInclusionsPage } from "./offer-inclusion-page";
 
@@ -40,12 +39,15 @@ export function AdminOfferPage({ initialContent }: AdminOfferPageProps) {
 
   return (
     <div className="space-y-6">
-      <PageHeroCard
+      <PageHeader
         headingLevel="h1"
         title="Offer Pre-Fill Content"
         description="Define the reusable boilerplate content pre-filled onto every new construction offer — build scope, cost schedule, allowances, exclusions, and document copy."
-        icon={<Settings2 />}
-        badge={<Badge className="bg-royal-gold-ink text-white">Admin</Badge>}
+        badge={
+          <Badge className="bg-royal-gold-light text-royal-gold-ink-text">
+            Admin
+          </Badge>
+        }
       />
 
       <OfferContentHeader

@@ -6,6 +6,14 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DataTableSkeleton, PageSkeleton } from "@/components/ui/skeleton";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import {
+  TABLE_CELL_CLASS,
+  TABLE_HEAD_CELL_CLASS,
+  TABLE_HEAD_ROW_CLASS,
+  TABLE_ROW_CLASS,
+  TABLE_ROW_HOVER_CLASS,
+  TABLE_SURFACE_CLASS,
+} from "@/components/ui/table-styles";
 
 export type ColumnAlign = "start" | "end";
 
@@ -45,6 +53,12 @@ interface DataTableProps {
   rowLabel?: (rowIndex: number) => string;
   /** Extra classes for one row, on the desktop row and the phone card alike. */
   rowClassName?: (rowIndex: number) => string | undefined;
+  /**
+   * The table already sits in a card: draw no surface of its own and run edge
+   * to edge, as the Leads table does. Pair it with FLUSH_TABLE_CARD_CLASS and
+   * FLUSH_TABLE_CONTENT_CLASS on that card. Without it the table is its own card.
+   */
+  flush?: boolean;
 }
 
 export function DataTable({
@@ -63,6 +77,7 @@ export function DataTable({
   mobileActionsPlacement = "footer",
   loading = false,
   loadingLabel = "Loading records",
+  flush = false,
 }: DataTableProps) {
   // Mount one set of controls: duplicated editors can steal focus and repeat IDs.
   const isMobile = useMediaQuery("(max-width: 767px)");
@@ -74,6 +89,7 @@ export function DataTable({
           columnCount={headers.length}
           mobileLayout={mobileLayout}
           mobileColumns={mobileColumns}
+          flush={flush}
         />
       </PageSkeleton>
     );
@@ -120,7 +136,7 @@ export function DataTable({
                 role="listitem"
                 key={`mobile-row-${rowIndex}`}
                 className={cn(
-                  "min-w-0 rounded-lg border border-border/70 bg-background",
+                  "min-w-0 rounded-xl bg-card shadow-sm ring-1 ring-foreground/4",
                   onRowClick
                     && "cursor-pointer transition-colors active:bg-muted/40",
                   rowClassName?.(rowIndex),
@@ -207,15 +223,16 @@ export function DataTable({
       {!showMobileCards || rows.length === 0 ? (
         <div
           className={cn(
-            "min-w-0 overflow-x-auto rounded-lg border border-border/70 bg-background",
+            flush ? "min-w-0" : TABLE_SURFACE_CLASS,
+            "overflow-x-auto",
             mobileLayout === "cards" && rows.length > 0 && "hidden md:block",
           )}
         >
-          <table className="w-full border-collapse text-sm">
+          <table className="w-full border-collapse text-[13px]">
             {caption ? <caption className="sr-only">{caption}</caption> : null}
             <thead
               className={cn(
-                "bg-muted/70 text-xs uppercase tracking-wider text-muted-foreground",
+                TABLE_HEAD_ROW_CLASS,
                 rows.length === 0 && "hidden md:table-header-group",
               )}
             >
@@ -224,7 +241,7 @@ export function DataTable({
                   <th
                     key={`header-${index}`}
                     scope="col"
-                    className={cn("px-4 py-3 font-medium", alignClass(index))}
+                    className={cn(TABLE_HEAD_CELL_CLASS, alignClass(index))}
                   >
                     {header}
                   </th>
@@ -238,9 +255,10 @@ export function DataTable({
                   <tr
                     key={`row-${rowIndex}`}
                     className={cn(
-                      "border-t border-border/70 transition-colors",
+                      TABLE_ROW_CLASS,
+                      onRowClick && TABLE_ROW_HOVER_CLASS,
                       onRowClick
-                        && "cursor-pointer hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+                        && "cursor-pointer focus-visible:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
                       rowClassName?.(rowIndex),
                     )}
                     // The row is a mouse shortcut only. role=button here would hide
@@ -253,7 +271,7 @@ export function DataTable({
                     {row.map((cell, cellIndex) => (
                       <td
                         key={`cell-${rowIndex}-${cellIndex}`}
-                        className={cn("px-4 py-3", alignClass(cellIndex))}
+                        className={cn(TABLE_CELL_CLASS, alignClass(cellIndex))}
                       >
                         {cell}
                       </td>

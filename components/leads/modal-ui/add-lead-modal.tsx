@@ -152,11 +152,11 @@ export function AddLeadModal({
     }));
 
   const isFormValid =
-    form.name.trim() &&
-    form.phone.trim() &&
-    form.location.trim() &&
-    form.assignedId.trim() &&
-    form.email.trim();
+    form.name.trim()
+    && form.phone.trim()
+    && form.location.trim()
+    && form.assignedId.trim()
+    && form.email.trim();
   const missingRequiredFields = [
     !form.name.trim() && "primary client name",
     !form.phone.trim() && "phone",
@@ -553,7 +553,7 @@ export function AddLeadModal({
                 className={cn(
                   "inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all",
                   form.type.includes(option)
-                    ? "border-royal-gold bg-royal-gold-light text-royal-gold"
+                    ? "border-royal-gold bg-royal-gold-light text-royal-gold-ink-text"
                     : "border-border bg-background text-muted-foreground hover:border-royal-gold hover:bg-royal-gold-light",
                 )}
               >

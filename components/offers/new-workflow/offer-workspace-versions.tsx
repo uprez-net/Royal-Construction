@@ -164,7 +164,7 @@ function VersionRow({
               {version.reference}
             </span>
             {isActive ? (
-              <Badge className="shrink-0 bg-royal-gold-ink text-white">
+              <Badge className="shrink-0 bg-royal-gold-light text-royal-gold-ink-text">
                 Current
               </Badge>
             ) : null}
@@ -215,7 +215,7 @@ function PdfLink({
 }) {
   return (
     <a
-      className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-xs font-medium text-royal-gold-dark transition-colors hover:bg-royal-gold-light/40"
+      className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-xs font-medium text-royal-gold-ink-text transition-colors hover:bg-royal-gold-light/40"
       href={href}
       rel="noopener noreferrer"
       target="_blank"

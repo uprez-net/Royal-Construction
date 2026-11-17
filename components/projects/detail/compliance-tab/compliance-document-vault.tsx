@@ -177,7 +177,8 @@ export function ComplianceDocumentVault({
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        // The sections share the card: hairlines between them, not a box each.
+        <div className="-mx-4 -my-4 divide-y divide-border/70">
           {sections.map((section, index) => {
             const isSectionOpen = openSections[section.heading] ?? index === 0;
 
@@ -191,9 +192,8 @@ export function ComplianceDocumentVault({
                     [section.heading]: open,
                   }))
                 }
-                className="overflow-hidden rounded-xl border border-border/70 bg-background"
               >
-                <CollapsibleTrigger className="flex w-full items-center gap-3 px-3.5 py-3 text-left transition hover:bg-primary/[0.035] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+                <CollapsibleTrigger className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-primary/[0.035] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <VaultSectionIcon index={index} />
                   </span>
@@ -218,8 +218,12 @@ export function ComplianceDocumentVault({
                 </CollapsibleTrigger>
 
                 <CollapsibleContent className="overflow-hidden data-open:animate-collapsible-down data-closed:animate-collapsible-up">
-                  <div className="border-t border-border/70 bg-muted/15 p-2">
+                  {/* The collapsible is the card: from md up the table runs
+                      edge to edge inside it, and the phone cards keep the tint
+                      and padding. */}
+                  <div className="border-t border-border/70 bg-muted/15 p-2 md:bg-transparent md:p-0">
                     <DataTable
+                      flush
                       mobileLayout="cards"
                       mobileTitleColumn={1}
                       onRowClick={(rowIndex) =>

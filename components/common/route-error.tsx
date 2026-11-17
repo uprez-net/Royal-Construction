@@ -68,7 +68,7 @@ export function RouteError({
   return (
     <div
       role="alert"
-      className="rounded-lg border border-border/70 bg-card p-8 shadow-sm md:p-12"
+      className="rounded-xl bg-card p-8 shadow-sm ring-1 ring-foreground/4 md:p-12"
     >
       <div className="mx-auto max-w-lg">
         <div className="mb-4 flex items-center gap-3">

@@ -32,7 +32,7 @@ export function OfferInclusionsPage() {
   const error = useAppSelector((s) => s.adminOfferContent.error.offerContent);
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
           description="Edit each Offer inclusion, its category and optional Tender Text."

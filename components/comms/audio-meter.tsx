@@ -142,7 +142,7 @@ export function AudioMeter({
               muted
                 ? "bg-muted-foreground/30"
                 : tone === "emerald"
-                  ? "bg-emerald-500"
+                  ? "bg-success"
                   : "bg-primary",
             )}
             style={{ transform: `scaleY(${MIN_SCALE})` }}

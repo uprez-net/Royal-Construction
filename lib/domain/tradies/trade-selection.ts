@@ -83,7 +83,9 @@ function money(amount: number): string {
 }
 
 /** `bookingTrade` as a query: the booking's trade, else its tradie's. */
-function bookingInTradeWhere(trade: string): Prisma.TradieScheduleWhereInput {
+export function bookingInTradeWhere(
+  trade: string,
+): Prisma.TradieScheduleWhereInput {
   return {
     OR: [
       { trade: { equals: trade.trim(), mode: "insensitive" } },
@@ -681,7 +683,8 @@ export async function requestTradeCancellation(
   });
   if (
     !selection
-    || (input.projectId !== undefined && selection.projectId !== input.projectId)
+    || (input.projectId !== undefined
+      && selection.projectId !== input.projectId)
   ) {
     throw new DomainNotFoundError("Selection not found.");
   }

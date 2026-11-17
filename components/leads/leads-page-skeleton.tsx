@@ -1,4 +1,8 @@
-import { MOBILE_METRIC_STRIP_CLASS } from "@/components/common/metric-card";
+import {
+  KpiBand,
+  MOBILE_METRIC_STRIP_CLASS,
+} from "@/components/common/kpi-band";
+import { PAGE_HEADER_CLASS } from "@/components/common/page-header";
 import { cn } from "@/lib/utils";
 import {
   DataTableSkeleton,
@@ -10,19 +14,19 @@ import {
 export function LeadsContentSkeleton() {
   return (
     <PageSkeleton label="Loading leads" className="space-y-6">
-      <div
+      <KpiBand
         className={cn(
           MOBILE_METRIC_STRIP_CLASS,
           "sm:grid-cols-2 md:grid-cols-3",
         )}
       >
         {Array.from({ length: 6 }).map((_, index) => (
-          <MetricCardSkeleton key={index} compact />
+          <MetricCardSkeleton key={index} foot />
         ))}
-      </div>
+      </KpiBand>
 
-      <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
-        <div className="flex flex-wrap items-center gap-2 border-b border-border/70 px-4 py-3 sm:px-5">
+      <div>
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/70 pb-3">
           <Skeleton className="h-11 w-20 rounded-md" />
           <Skeleton className="h-11 w-20 rounded-md" />
           <Skeleton className="h-11 w-24 rounded-md" />
@@ -32,7 +36,9 @@ export function LeadsContentSkeleton() {
             <Skeleton className="h-11 w-24 rounded-md sm:order-3" />
           </div>
         </div>
-        <LeadsTableSkeleton />
+        <div className="mt-5 overflow-hidden rounded-xl bg-card shadow-sm">
+          <LeadsTableSkeleton />
+        </div>
       </div>
     </PageSkeleton>
   );
@@ -40,8 +46,8 @@ export function LeadsContentSkeleton() {
 
 function LeadsTableSkeleton() {
   return (
-    <div className="p-4 sm:p-5">
-      <DataTableSkeleton columnCount={8} rowCount={5} />
+    <div className="p-4 sm:p-5 md:p-0">
+      <DataTableSkeleton columnCount={8} rowCount={5} flush />
     </div>
   );
 }
@@ -49,16 +55,14 @@ function LeadsTableSkeleton() {
 export function LeadsPageSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="overflow-hidden rounded-lg border border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 px-4 py-8 shadow-sm sm:px-6 sm:py-10">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-2">
-            <Skeleton className="h-6 w-40" />
-            <Skeleton className="h-4 w-80 max-w-full" />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Skeleton className="h-11 w-36 rounded-md" />
-            <Skeleton className="h-11 w-40 rounded-md" />
-          </div>
+      <div className={PAGE_HEADER_CLASS}>
+        <div className="min-w-0">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="mt-1 h-5 w-80 max-w-full" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Skeleton className="h-11 w-36 rounded-md" />
+          <Skeleton className="h-11 w-40 rounded-md" />
         </div>
       </div>
       <LeadsContentSkeleton />

@@ -43,10 +43,12 @@ import {
 // styling (tiny + grey, present for AutoPlace) can never drift between documents.
 import { anchor } from "./offer-tender-html";
 
-const NAVY = "#1e2b4d";
-const GOLD = "#b8873b";
-const GOLD_DARK = "#8f6a24";
-const GOLD_LIGHT = "#f6efe0";
+const INK = "#343434";
+const GOLD = "#c6923a";
+// Money and IDs use the mono stack; the eyebrow label uses the Manrope stack.
+// Neither web font loads in the PDF renderer, so the fallbacks are what print.
+const MONO_STACK = "'IBM Plex Mono', Menlo, Consolas, monospace";
+const SANS_STACK = "Manrope, 'Segoe UI', Helvetica, Arial, sans-serif";
 const BORDER = "#e3e3e0";
 const MUTED = "#6b6b6b";
 
@@ -245,53 +247,53 @@ export function buildProposalHtml(
   /* Keep the intended colours when the PDF is produced by a path that would
      otherwise drop backgrounds (browser print, printBackground:false). */
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #222; }
+  body { font-family: Arial, Helvetica, sans-serif; color: ${INK}; }
   .page { width: 210mm; min-height: 297mm; padding: 13mm 18mm; display: flex; flex-direction: column; page-break-after: always; }
   .page:last-child { page-break-after: auto; }
-  .masthead { border-bottom: 1px solid ${GOLD}; padding-bottom: 6px; font-size: 11px; font-weight: 700; color: ${NAVY}; }
-  .foot { margin-top: auto; border-top: 1px solid ${GOLD}; padding-top: 6px; font-family: monospace; font-size: 8px; color: ${MUTED}; }
-  .eyebrow { font-family: monospace; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: ${GOLD_DARK}; margin-top: 26px; }
-  h1.title { font-size: 26px; color: ${NAVY}; margin-top: 6px; }
+  .masthead { border-bottom: 1px solid ${GOLD}; padding-bottom: 6px; font-size: 11px; font-weight: 700; color: ${INK}; }
+  .foot { margin-top: auto; border-top: 1px solid ${BORDER}; padding-top: 6px; font-family: ${MONO_STACK}; font-size: 8px; color: ${MUTED}; }
+  .eyebrow { font-family: ${SANS_STACK}; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: ${INK}; margin-top: 26px; }
+  h1.title { font-size: 26px; color: ${INK}; margin-top: 6px; }
   p { line-height: 1.55; font-size: 13px; }
   .muted { color: ${MUTED}; }
-  .hero, .slot { border: 1px dashed ${GOLD}; background: ${GOLD_LIGHT}; display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
+  .hero, .slot { border: 1px dashed ${BORDER}; background: #fff; display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
   .hero img, .slot img { width: 100%; height: 100%; object-fit: cover; }
   .hero { height: 95mm; margin-top: 20px; }
   .caption { text-align: center; font-size: 10px; font-style: italic; color: ${MUTED}; margin-top: 4px; }
   .cover-title { text-align: center; margin-top: 18px; }
-  .cover-title h1 { font-size: 34px; text-transform: uppercase; letter-spacing: 2px; color: ${NAVY}; }
-  .cover-title .sub { font-size: 18px; font-weight: 700; color: ${GOLD_DARK}; margin-top: 4px; }
+  .cover-title h1 { font-size: 34px; text-transform: uppercase; letter-spacing: 2px; color: ${INK}; }
+  .cover-title .sub { font-size: 18px; font-weight: 700; color: ${INK}; margin-top: 4px; }
   table { width: 100%; border-collapse: collapse; margin-top: 22px; font-size: 13px; }
   .cover-table td { padding: 9px 12px; }
-  .cover-table .lbl { background: ${NAVY}; color: #fff; font-weight: 700; width: 50mm; }
-  .cover-table .val { background: #f4f5f7; }
-  .cover-table .lbl.hi { background: ${GOLD}; }
-  .cover-table .val.hi { background: ${NAVY}; color: #fff; font-weight: 700; }
+  .cover-table .lbl { background: #f7f6f2; color: ${INK}; font-weight: 700; width: 50mm; }
+  .cover-table .val { background: #fff; }
+  .cover-table .lbl.hi { background: #f7f6f2; }
+  .cover-table .val.hi { background: #fff; color: ${INK}; font-weight: 700; }
   .tagline { margin-top: auto; text-align: center; font-size: 16px; font-style: italic; font-weight: 700; color: ${MUTED}; padding-top: 18px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 22px; }
   .gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 22px; }
   .gallery .slot { height: 46mm; }
   .box { border: 1px solid ${BORDER}; padding: 16px; }
   .box .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: ${MUTED}; }
-  .box .big { font-weight: 700; color: ${NAVY}; margin-top: 6px; }
+  .box .big { font-weight: 700; color: ${INK}; margin-top: 6px; }
   /* Column flow, not a fixed 5: void and granny flat add cells only when present. */
   .areatable { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid ${BORDER}; margin-top: 26px; text-align: center; }
   .areatable > div { padding: 14px 6px; border-right: 1px solid ${BORDER}; font-size: 12px; }
-  .areatable > div:last-child { border-right: none; background: ${NAVY}; color: #fff; }
+  .areatable > div:last-child { border-right: none; background: #fff; color: ${INK}; }
   .areatable .cap { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: ${MUTED}; }
-  .areatable > div:last-child .cap { color: #cfd6e6; }
-  .areatable .num { font-family: monospace; font-weight: 700; margin-top: 6px; white-space: nowrap; }
-  .spechead { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: ${NAVY}; margin-top: 22px; }
+  .areatable > div:last-child .cap { color: ${MUTED}; }
+  .areatable .num { font-family: ${MONO_STACK}; font-weight: 700; margin-top: 6px; white-space: nowrap; }
+  .spechead { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: ${INK}; margin-top: 22px; }
   .spectable { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid ${BORDER}; margin-top: 8px; text-align: center; }
   .spectable > div { padding: 12px 6px; border-right: 1px solid ${BORDER}; font-size: 12px; }
   .spectable > div:last-child { border-right: none; }
   .spectable .cap { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: ${MUTED}; }
-  .spectable .num { font-family: monospace; font-weight: 700; margin-top: 6px; }
-  .pricebox { border: 1px solid ${BORDER}; background: ${GOLD_LIGHT}; padding: 24px; text-align: center; margin-top: 26px; }
-  .pricebox .save { font-size: 13px; font-weight: 700; color: ${GOLD_DARK}; }
-  .pricebox .big { font-size: 46px; font-weight: 700; color: ${NAVY}; margin-top: 4px; }
+  .spectable .num { font-family: ${MONO_STACK}; font-weight: 700; margin-top: 6px; }
+  .pricebox { border: 1px solid ${BORDER}; background: #fff; padding: 24px; text-align: center; margin-top: 26px; }
+  .pricebox .save { font-size: 13px; font-weight: 700; color: ${INK}; }
+  .pricebox .big { font-family: ${MONO_STACK}; font-size: 46px; font-weight: 700; color: ${INK}; margin-top: 4px; }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 26px; }
-  .cols h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: ${NAVY}; }
+  .cols h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: ${INK}; }
   .cols ul { list-style: none; margin-top: 12px; }
   .cols li { position: relative; padding-left: 16px; margin-bottom: 10px; font-size: 13px; line-height: 1.5; }
   /* The includes list grows with the offer, and page 4 has a fixed height. At
@@ -305,23 +307,23 @@ export function buildProposalHtml(
      meant it vanished entirely on any print path with "Background graphics"
      off — the client received a bare indented list with no bullets at all.
      Text always prints. */
-  .cols li:before { content: "\\25AA"; position: absolute; left: 0; top: 0; color: ${GOLD}; font-size: inherit; line-height: inherit; }
+  .cols li:before { content: "\\25AA"; position: absolute; left: 0; top: 0; color: ${INK}; font-size: inherit; line-height: inherit; }
   .inc { width: 100%; border-collapse: collapse; margin-top: 22px; font-size: 13px; }
-  .inc th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: #f2f3f5; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; padding: 10px; }
+  .inc th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${INK}; background: #fff; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${GOLD}; padding: 10px; }
   .inc td { border-bottom: 1px solid ${BORDER}; padding: 10px; vertical-align: top; }
-  .inc td.cat { font-weight: 700; color: ${NAVY}; width: 45mm; }
+  .inc td.cat { font-weight: 700; color: ${INK}; width: 45mm; }
   .inc th.amt, .inc td.amt { text-align: right; width: 30mm; white-space: nowrap; }
   .inc .sub { font-weight: 400; color: ${MUTED}; font-size: 11px; margin-top: 3px; line-height: 1.45; }
   .inc.alw td.cat { width: auto; }
   .inc.alw th:last-child, .inc.alw td:last-child { width: 70mm; }
-  .inc td.amt { font-family: monospace; color: ${NAVY}; }
-  .pay th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: #f2f3f5; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; padding: 10px; }
+  .inc td.amt { font-family: ${MONO_STACK}; color: ${INK}; }
+  .pay th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${INK}; background: #fff; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${GOLD}; padding: 10px; }
   .pay td { border-bottom: 1px solid ${BORDER}; padding: 12px 10px; font-size: 13px; }
   .pay td.stage { font-weight: 700; }
-  .pay td.amt { font-family: monospace; }
+  .pay td.amt { font-family: ${MONO_STACK}; }
   .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 30px; font-size: 13px; }
   .sig { break-inside: avoid; }
-  .sig h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: ${NAVY}; margin-bottom: 14px; }
+  .sig h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: ${INK}; margin-bottom: 14px; }
   .sig p { margin-bottom: 14px; }
 </style></head><body>${pages.join("")}</body></html>`;
 }
@@ -398,7 +400,7 @@ function welcomePage(
     <h1 class="title">Dear ${esc(greeting)},</h1>
     <div style="margin-top:16px;max-width:155mm;">${paragraphs}</div>
     <div style="margin-top:26px;">
-      <p style="font-weight:700;color:${NAVY};">${esc(job.preparedBy)}</p>
+      <p style="font-weight:700;color:${INK};">${esc(job.preparedBy)}</p>
       <p class="muted" style="font-size:12px;">Lic. 383992C | MBA Accredited</p>
     </div>
     ${foot}
@@ -527,7 +529,7 @@ function investmentPage(
       ${saving}
       <div class="lbl" style="text-transform:uppercase;font-size:11px;letter-spacing:1px;color:${MUTED};margin-top:6px;">Your fixed contract price</div>
       <div class="big">${money(customerPrice.selectedContractValueIncGst)}</div>
-      <div class="muted" style="font-family:monospace;font-size:13px;margin-top:6px;">Including GST | MBA fixed price contract | Valid until ${esc(data.validUntilLabel)}</div>
+      <div class="muted" style="font-family:${MONO_STACK};font-size:13px;margin-top:6px;">Including GST | MBA fixed price contract | Valid until ${esc(data.validUntilLabel)}</div>
     </div>
     <div class="cols ${investmentListDensity(data.summaryInclusions, data.exclusionBullets)}">
       <div><h2>This price includes</h2><ul>${includes}</ul></div>

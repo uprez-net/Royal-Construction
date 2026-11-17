@@ -24,22 +24,26 @@ import { useState, useMemo } from "react";
 import { isWithinInterval, startOfYear, subMonths } from "date-fns";
 
 // ─── Shared tokens ────────────────────────────────────────────────────────────
-const TEAL = "#1D9E75";
-// const TEAL_DARK = "#0F6E56";
-const ORANGE = "#EF9F27";
-const GREEN_LIGHT = "#97C459";
+// Chart series are the warm chart tokens, in a fixed order: gold is series 1.
+const SERIES_GOLD = "var(--chart-1)";
+const SERIES_GREEN = "var(--chart-2)";
+const SERIES_ORANGE = "var(--chart-3)";
+const AXIS_TICK = "var(--muted-foreground)";
+const GRID_LINE = "var(--border)";
+const SLICE_SEPARATOR = "var(--card)";
+const TOOLTIP_BORDER = "1px solid var(--border)";
 const NON_CONVERSION_COLORS = [
-  "#E24B4A",
-  "#EF9F27",
-  "#1D9E75",
-  "#7F77DD",
-  "#888780",
+  SERIES_GOLD,
+  SERIES_GREEN,
+  SERIES_ORANGE,
+  "var(--chart-5)",
+  AXIS_TICK,
 ];
 const CONVERSION_COLORS = {
-  CONVERTED: "#1D9E75",
-  PENDING: "#EF9F27",
-  LOST: "#E24B4A",
-  NURTURE: "#0F6E56",
+  CONVERTED: "var(--success)",
+  PENDING: "var(--warning)",
+  LOST: "var(--destructive)",
+  NURTURE: SERIES_GOLD,
 };
 
 const formatCurrency = (v: number) =>
@@ -67,19 +71,19 @@ function LeadsRevenueChart({
         data={formatted}
         margin={{ top: 8, right: 24, left: 0, bottom: 0 }}
       >
-        <CartesianGrid vertical={false} stroke="rgba(0,0,0,0.06)" />
+        <CartesianGrid vertical={false} stroke={GRID_LINE} />
         <XAxis
           dataKey="month"
           axisLine={false}
           tickLine={false}
-          tick={{ fontSize: 12, fill: "#888780" }}
+          tick={{ fontSize: 12, fill: AXIS_TICK }}
         />
         {/* Left axis — lead counts */}
         <YAxis
           yAxisId="left"
           axisLine={false}
           tickLine={false}
-          tick={{ fontSize: 12, fill: "#888780" }}
+          tick={{ fontSize: 12, fill: AXIS_TICK }}
           domain={[0, "dataMax + 10"]}
         />
         {/* Right axis — revenue */}
@@ -88,7 +92,7 @@ function LeadsRevenueChart({
           orientation="right"
           axisLine={false}
           tickLine={false}
-          tick={{ fontSize: 12, fill: "#888780" }}
+          tick={{ fontSize: 12, fill: AXIS_TICK }}
           tickFormatter={formatCurrency}
         />
         <Tooltip
@@ -98,7 +102,7 @@ function LeadsRevenueChart({
             return [value, name];
           }}
           contentStyle={{
-            border: "0.5px solid rgba(0,0,0,0.12)",
+            border: TOOLTIP_BORDER,
             borderRadius: 8,
             fontSize: 12,
           }}
@@ -112,7 +116,7 @@ function LeadsRevenueChart({
           yAxisId="left"
           dataKey="leads"
           name="New Leads"
-          fill={TEAL}
+          fill={SERIES_GOLD}
           radius={[3, 3, 0, 0]}
           barSize={22}
         />
@@ -120,7 +124,7 @@ function LeadsRevenueChart({
           yAxisId="left"
           dataKey="converted"
           name="Converted"
-          fill={GREEN_LIGHT}
+          fill={SERIES_GREEN}
           radius={[3, 3, 0, 0]}
           barSize={22}
         />
@@ -129,9 +133,9 @@ function LeadsRevenueChart({
           type="monotone"
           dataKey="revenue"
           name="Revenue ($K)"
-          stroke={ORANGE}
+          stroke={SERIES_ORANGE}
           strokeWidth={2}
-          dot={{ r: 3, fill: ORANGE, strokeWidth: 0 }}
+          dot={{ r: 3, fill: SERIES_ORANGE, strokeWidth: 0 }}
           activeDot={{ r: 5 }}
         />
       </ComposedChart>
@@ -182,10 +186,13 @@ function ConversionBreakdownChart({
             innerRadius={60}
             outerRadius={90}
             strokeWidth={2}
-            stroke="#fff"
+            stroke={SLICE_SEPARATOR}
           >
             {data.map((entry) => (
-              <Cell key={entry.stage} fill={colorMap[entry.stage] ?? TEAL} />
+              <Cell
+                key={entry.stage}
+                fill={colorMap[entry.stage] ?? SERIES_GOLD}
+              />
             ))}
           </Pie>
           <Tooltip
@@ -194,7 +201,7 @@ function ConversionBreakdownChart({
               labelMap[name as string] ?? name,
             ]}
             contentStyle={{
-              border: "0.5px solid rgba(0,0,0,0.12)",
+              border: TOOLTIP_BORDER,
               borderRadius: 8,
               fontSize: 12,
             }}
@@ -211,7 +218,7 @@ function ConversionBreakdownChart({
           >
             <span
               className="inline-block h-2.5 w-2.5 rounded-sm"
-              style={{ background: colorMap[entry.stage] ?? TEAL }}
+              style={{ background: colorMap[entry.stage] ?? SERIES_GOLD }}
             />
             {labelMap[entry.stage] ?? entry.stage} (
             {((entry.value / total) * 100).toFixed(0)}%)
@@ -222,7 +229,7 @@ function ConversionBreakdownChart({
       {/* KPI row */}
       <div className="grid grid-cols-2 divide-x divide-border rounded-lg border">
         <div className="flex flex-col items-center py-3">
-          <span className="text-xl font-semibold" style={{ color: TEAL }}>
+          <span className="text-xl font-semibold text-foreground">
             {convPct}%
           </span>
           <span className="text-xs text-muted-foreground">Conversion Rate</span>
@@ -259,7 +266,7 @@ function NonConversionChart({
             innerRadius={60}
             outerRadius={100}
             strokeWidth={2}
-            stroke="#fff"
+            stroke={SLICE_SEPARATOR}
           >
             {data.map((entry, index) => (
               <Cell
@@ -276,7 +283,7 @@ function NonConversionChart({
               name,
             ]}
             contentStyle={{
-              border: "0.5px solid rgba(0,0,0,0.12)",
+              border: TOOLTIP_BORDER,
               borderRadius: 8,
               fontSize: 12,
             }}
@@ -324,17 +331,17 @@ function EstVsSpendChart({
         data={formatted}
         margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
       >
-        <CartesianGrid vertical={false} stroke="rgba(0,0,0,0.06)" />
+        <CartesianGrid vertical={false} stroke={GRID_LINE} />
         <XAxis
           dataKey="project"
           axisLine={false}
           tickLine={false}
-          tick={{ fontSize: 12, fill: "#888780" }}
+          tick={{ fontSize: 12, fill: AXIS_TICK }}
         />
         <YAxis
           axisLine={false}
           tickLine={false}
-          tick={{ fontSize: 12, fill: "#888780" }}
+          tick={{ fontSize: 12, fill: AXIS_TICK }}
           tickFormatter={formatProjectCurrency}
         />
         <Tooltip
@@ -343,7 +350,7 @@ function EstVsSpendChart({
             name,
           ]}
           contentStyle={{
-            border: "0.5px solid rgba(0,0,0,0.12)",
+            border: TOOLTIP_BORDER,
             borderRadius: 8,
             fontSize: 12,
           }}
@@ -356,14 +363,14 @@ function EstVsSpendChart({
         <Bar
           dataKey="estimated"
           name="Estimated ($K)"
-          fill={TEAL}
+          fill={SERIES_GOLD}
           radius={[3, 3, 0, 0]}
           barSize={20}
         />
         <Bar
           dataKey="actual"
           name="Actual ($K)"
-          fill={GREEN_LIGHT}
+          fill={SERIES_GREEN}
           radius={[3, 3, 0, 0]}
           barSize={20}
         />
@@ -400,16 +407,17 @@ export function DashboardGraphCards({ data }: { data: DashboardGraphData }) {
         <GraphCard
           title="Leads & Revenue Overview"
           actionNode={
-            <div className="rounded-md bg-muted px-2 py-1 text-xs font-medium gap-2">
+            <div className="rounded-md bg-muted p-0.5 text-xs font-medium gap-2">
               {(["6M", "12M", "YTD"] as const).map((period) => (
                 <Button
                   key={period}
                   variant="ghost"
                   size="sm"
                   className={cn(
-                    "px-2 hover:bg-transparent",
-                    selectedPeriod === period &&
-                      "bg-white text-black hover:bg-white/90",
+                    "px-2",
+                    selectedPeriod === period
+                      ? "bg-royal-gold-light text-royal-gold-ink hover:bg-royal-gold-light"
+                      : "text-muted-foreground hover:bg-transparent hover:text-foreground",
                   )}
                   onClick={() => setSelectedPeriod(period)}
                 >

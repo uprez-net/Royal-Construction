@@ -5,9 +5,14 @@ import { Badge } from "../ui/badge";
 import { formatStatus } from "@/utils/formatters";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { ResultStatus } from "@/components/common/result-status";
-import { Search, ToolCaseIcon } from "lucide-react";
+import { ToolCaseIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardHeader } from "../ui/card";
+import {
+  TableCard,
+  TOOLBAR_BUTTON_CLASS,
+  ToolbarSearch,
+} from "@/components/common/list-toolbar";
+import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
 import { useRouter } from "next/navigation";
 import {
@@ -35,17 +40,13 @@ interface LoadedProjects {
   result: PaginatedProjectsResult;
 }
 
-const statusConfig: Record<string, { bg: string; text: string }> = {
-  ON_TRACK: {
-    bg: "bg-emerald-100",
-    text: "text-emerald-700",
-  },
-  NEEDS_ATTENTION: {
-    bg: "bg-amber-100",
-    text: "text-amber-700",
-  },
-  DELAYED: { bg: "bg-red-100", text: "text-red-700" },
-  ACTIVE: { bg: "bg-blue-100", text: "text-blue-700" },
+// Status tones on the token pair (tint + ink). Red is for delayed only, and
+// attention is orange: a warning, not an alarm.
+const statusConfig: Record<string, { pill: string }> = {
+  ON_TRACK: { pill: "bg-success-light text-success-ink" },
+  NEEDS_ATTENTION: { pill: "bg-warning-light text-warning-ink" },
+  DELAYED: { pill: "bg-destructive-light text-destructive-ink" },
+  ACTIVE: { pill: "bg-info-light text-info-ink" },
 };
 
 export function DashboardProjectTable({
@@ -139,40 +140,38 @@ export function DashboardProjectTable({
   }, [currentPage, totalPages]);
 
   return (
-    <Card className="border-border/70 bg-white/95">
-      <CardHeader className="grid gap-4 border-b border-border/60 pb-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-        <div className="space-y-1">
-          <h4 className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            Active Project Overview
-          </h4>
-          <p className="text-sm text-muted-foreground">
-            Jobs currently moving through delivery.
-          </p>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:justify-end">
-          <div className="relative min-w-0 flex-1 sm:w-72 sm:flex-none">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
+    <TableCard
+      header={
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 space-y-1">
+            <h2 className="font-heading text-[1.0625rem] leading-[1.3] font-semibold tracking-[-0.01em] text-foreground">
+              Active Project Overview
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Jobs currently moving through delivery.
+            </p>
+          </div>
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:gap-3">
+            <ToolbarSearch
               aria-label="Search projects or clients"
-              type="text"
               placeholder="Search projects, clients..."
               value={searchQuery}
               onChange={(e) => {
                 handleSearch(e.target.value);
               }}
-              className="w-full rounded-lg border border-border bg-background pl-9 pr-3 py-2 text-sm placeholder-muted-foreground focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:ring-opacity-20"
             />
+            <Button
+              variant="outline"
+              className={TOOLBAR_BUTTON_CLASS}
+              onClick={() => router.push("/projects")}
+            >
+              View All
+            </Button>
           </div>
-
-          <Button
-            className="sm:shrink-0"
-            onClick={() => router.push("/projects")}
-          >
-            View All
-          </Button>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      }
+    >
+      <div className="space-y-4 p-4 md:p-0">
         <div
           aria-busy={loading}
           className={
@@ -180,6 +179,7 @@ export function DashboardProjectTable({
           }
         >
           <DataTable
+            flush
             mobileLayout="cards"
             headers={[
               "Project",
@@ -194,7 +194,7 @@ export function DashboardProjectTable({
               <div key={`name-${project.id}`}>
                 <Link
                   href={`/projects/${project.id}`}
-                  className="font-medium text-teal-600 hover:text-teal-700 hover:underline"
+                  className="font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   onClick={(event) => event.stopPropagation()}
                 >
                   {project.name}
@@ -212,7 +212,7 @@ export function DashboardProjectTable({
                 <div className="flex items-center gap-2">
                   <div className="h-2 w-16 overflow-hidden rounded-full bg-muted">
                     <div
-                      className="h-full bg-teal-500"
+                      className="h-full bg-primary"
                       style={{ width: `${project.progressPercent}%` }}
                     />
                   </div>
@@ -223,8 +223,12 @@ export function DashboardProjectTable({
               </div>,
               <div key={`status-${project.id}`}>
                 <Badge
-                  className={`whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold ${(statusConfig[project.status] ?? statusConfig.ACTIVE).bg} ${(statusConfig[project.status] ?? statusConfig.ACTIVE).text}`}
+                  className={`h-[22px] gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[11.5px] font-semibold ${(statusConfig[project.status] ?? statusConfig.ACTIVE).pill}`}
                 >
+                  <span
+                    aria-hidden="true"
+                    className="size-1.5 rounded-full bg-current"
+                  />
                   {formatStatus(project.status)}
                 </Badge>
               </div>,
@@ -260,7 +264,10 @@ export function DashboardProjectTable({
           />
         </div>
 
-        <div className={totalCount > 0 ? "space-y-3 pt-2" : undefined}>
+        {/* The table is flush from md up, so the footer keeps the header's inset. */}
+        <div
+          className={cn("md:px-4 md:pb-4", totalCount > 0 && "space-y-3 pt-2")}
+        >
           {loadError ? (
             <div
               role="alert"
@@ -332,7 +339,7 @@ export function DashboardProjectTable({
             </Pagination>
           ) : null}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </TableCard>
   );
 }

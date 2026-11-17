@@ -61,7 +61,7 @@ export function TenderGatePanel({
   const gatePassed = status !== "agreed" && gateStatus === "unlocked";
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
           description="Decide whether tender access unlocks immediately or is held pending an architectural-plan fee and upload."

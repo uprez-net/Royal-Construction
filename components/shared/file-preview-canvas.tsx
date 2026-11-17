@@ -154,14 +154,13 @@ function detectFileKind(
   const mime = fileType?.toLowerCase() ?? "";
   if (mime === "application/pdf") return "pdf";
   if (
-    mime ===
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    mime
+    === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
   )
     return "docx";
   if (
-    mime ===
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-    mime === "application/vnd.ms-excel.sheet.macroenabled.12"
+    mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    || mime === "application/vnd.ms-excel.sheet.macroenabled.12"
   )
     return "xlsx";
   const path = (fileName || url).split("?")[0].split("#")[0];
@@ -202,17 +201,17 @@ const FILE_META: Record<
 > = {
   pdf: {
     label: "PDF",
-    accent: "text-red-600 dark:text-red-400",
+    accent: "text-destructive-ink",
     Icon: FileText,
   },
   docx: {
     label: "DOCX",
-    accent: "text-blue-600 dark:text-blue-400",
+    accent: "text-info-ink",
     Icon: FileText,
   },
   xlsx: {
     label: "XLSX",
-    accent: "text-emerald-600 dark:text-emerald-400",
+    accent: "text-success-ink",
     Icon: FileSpreadsheet,
   },
   unsupported: {

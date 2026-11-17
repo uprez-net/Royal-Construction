@@ -66,7 +66,7 @@ export function ProjectWhatsAppGroupSetup({
         type="button"
         onClick={() => void create()}
         disabled={creating}
-        className="rounded-full bg-[#00a884] px-5 text-white hover:bg-[#008f72]"
+        className="rounded-full bg-primary px-5 text-primary-foreground hover:bg-primary/90"
       >
         {creating ? (
           <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />
@@ -79,7 +79,7 @@ export function ProjectWhatsAppGroupSetup({
         type="button"
         variant="outline"
         onClick={onLink}
-        className="rounded-full bg-white px-5"
+        className="rounded-full bg-card px-5"
       >
         <Link2 className="mr-1.5 size-4" aria-hidden="true" />
         Link existing group
@@ -89,7 +89,7 @@ export function ProjectWhatsAppGroupSetup({
 
   if (!thread.availability.available) {
     icon = (
-      <span className="inline-flex size-14 items-center justify-center rounded-full bg-[#dfe5e7] text-[#54656f]">
+      <span className="inline-flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
         <Users className="size-7" aria-hidden="true" />
       </span>
     );
@@ -98,13 +98,13 @@ export function ProjectWhatsAppGroupSetup({
       thread.availability.reason
       ?? "Groups are turned off for this deployment.";
     actions = (
-      <Button asChild variant="outline" className="rounded-full bg-white px-5">
+      <Button asChild variant="outline" className="rounded-full bg-card px-5">
         <Link href="/admin/whatsapp">See WhatsApp settings</Link>
       </Button>
     );
   } else if (group?.status === "CREATING") {
     icon = (
-      <span className="inline-flex size-14 items-center justify-center rounded-full bg-[#d9fdd3] text-[#008069]">
+      <span className="inline-flex size-14 items-center justify-center rounded-full bg-success-light text-success-ink">
         <Loader2 className="size-7 animate-spin" aria-hidden="true" />
       </span>
     );
@@ -115,7 +115,7 @@ export function ProjectWhatsAppGroupSetup({
     actions = <></>;
   } else if (group?.status === "FAILED") {
     icon = (
-      <span className="inline-flex size-14 items-center justify-center rounded-full bg-[#fde8ec] text-[#ea0038]">
+      <span className="inline-flex size-14 items-center justify-center rounded-full bg-destructive-light text-destructive-ink">
         <AlertTriangle className="size-7" aria-hidden="true" />
       </span>
     );
@@ -125,10 +125,12 @@ export function ProjectWhatsAppGroupSetup({
 
   return (
     <div className="flex h-full min-h-[320px] items-center justify-center p-6">
-      <div className="max-w-md rounded-2xl bg-white/95 px-6 py-7 text-center shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]">
+      <div className="max-w-md rounded-lg bg-card/95 px-6 py-7 text-center shadow-sm">
         <div className="mb-4 flex justify-center">{icon}</div>
-        <h3 className="text-[17px] font-semibold text-[#111b21]">{title}</h3>
-        <p className="mt-1.5 text-sm leading-relaxed text-[#667781]">{body}</p>
+        <h3 className="text-[17px] font-semibold text-foreground">{title}</h3>
+        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+          {body}
+        </p>
         <div className="mt-5 flex flex-wrap justify-center gap-2">
           {actions}
         </div>

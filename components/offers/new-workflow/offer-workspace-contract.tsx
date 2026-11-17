@@ -3,6 +3,14 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   ContractPreviewTerms,
@@ -103,7 +111,7 @@ export function ContractPanel({
   const hasContract = isDraft || isSent || isSigned || isDeclined;
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
           description="Generate the building Contract from the signed Tender, capture the BC4 particulars, then send it for signature via DocuSign (customer, then builder)."
@@ -312,7 +320,7 @@ function ContractParticularsForm({
                   <span className="mb-1 block text-xs font-medium text-foreground">
                     {field.label}
                     {field.recommendedBeforeSend ? (
-                      <span className="ml-1 text-royal-gold-dark">
+                      <span className="ml-1 text-royal-gold-ink-text">
                         · recommended
                       </span>
                     ) : null}
@@ -569,38 +577,35 @@ function ContractScheduleToSend({
           <span>{terms.refusal}</span>
         </p>
       ) : null}
-      <div className="overflow-hidden rounded-lg border border-border/70">
-        <table className="w-full text-[13px]">
+      <div className="overflow-x-auto">
+        <Table>
           {/* The rows carry no visible header, so a screen reader had nothing
               to tie each value to. */}
-          <thead className="sr-only">
-            <tr>
-              <th scope="col">Stage</th>
-              <th scope="col">Percent of contract</th>
-              <th scope="col">Amount</th>
-              <th scope="col">Trigger</th>
-            </tr>
-          </thead>
-          <tbody>
+          <TableHeader className="sr-only">
+            <TableRow>
+              <TableHead scope="col">Stage</TableHead>
+              <TableHead scope="col">Percent of contract</TableHead>
+              <TableHead scope="col">Amount</TableHead>
+              <TableHead scope="col">Trigger</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {terms.paymentSchedule.map((row, index) => (
-              <tr
-                key={`${index}-${row.id}`}
-                className="border-b border-border/60 last:border-b-0"
-              >
-                <td className="px-3 py-1.5 font-medium">{row.stageName}</td>
-                <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+              <TableRow key={`${index}-${row.id}`}>
+                <TableCell className="font-medium">{row.stageName}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
                   {formatPercent(row.percentOfContract)}
-                </td>
-                <td className="px-3 py-1.5 text-right font-mono">
+                </TableCell>
+                <TableCell className="text-right font-mono">
                   {formatContractMoney(row.amount)}
-                </td>
-                <td className="px-3 py-1.5 text-muted-foreground">
+                </TableCell>
+                <TableCell className="whitespace-normal text-muted-foreground">
                   {row.trigger}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
       <p className="text-xs text-muted-foreground">
         Deposit:{" "}
@@ -629,32 +634,29 @@ function SentContractSchedule({
 }) {
   return (
     <div className="grid gap-2">
-      <div className="overflow-hidden rounded-lg border border-border/70">
-        <table className="w-full text-[13px]">
-          <thead className="sr-only">
-            <tr>
-              <th scope="col">Stage</th>
-              <th scope="col">Percent of contract</th>
-              <th scope="col">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader className="sr-only">
+            <TableRow>
+              <TableHead scope="col">Stage</TableHead>
+              <TableHead scope="col">Percent of contract</TableHead>
+              <TableHead scope="col">Amount</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {terms.paymentSchedule.map((row, index) => (
-              <tr
-                key={`${index}-${row.stageName}`}
-                className="border-b border-border/60 last:border-b-0"
-              >
-                <td className="px-3 py-1.5 font-medium">{row.stageName}</td>
-                <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+              <TableRow key={`${index}-${row.stageName}`}>
+                <TableCell className="font-medium">{row.stageName}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
                   {row.percent}
-                </td>
-                <td className="px-3 py-1.5 text-right font-mono">
+                </TableCell>
+                <TableCell className="text-right font-mono">
                   {row.amount}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
       <p className="text-xs text-muted-foreground">
         Deposit:{" "}
@@ -702,7 +704,7 @@ function ContractPreview({
         : "Draft";
 
   return (
-    <article className="grid gap-4 rounded-lg border border-border bg-background p-4">
+    <article className="grid gap-4">
       <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border/70 pb-3">
         <div>
           <p className="font-mono text-xs text-muted-foreground">
@@ -715,7 +717,7 @@ function ContractPreview({
             Incorporates the executed Tender for {job.siteAddress}.
           </p>
         </div>
-        <span className="rounded-full border border-royal-gold/40 bg-royal-gold-light/40 px-2.5 py-1 text-xs font-medium text-royal-gold-dark">
+        <span className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-royal-gold-ink-text">
           {stateLabel}
         </span>
       </header>
@@ -730,11 +732,11 @@ function ContractPreview({
         <PartyBlock label="Prepared by" value={job.preparedBy} />
       </dl>
 
-      <div className="rounded-lg bg-royal-gold-light/30 px-4 py-3">
+      <div className="rounded-lg bg-muted/50 px-4 py-3">
         <p className="text-xs uppercase tracking-wide text-muted-foreground">
           Contract sum inc GST
         </p>
-        <p className="font-heading text-2xl font-semibold">
+        <p className="font-mono text-2xl font-semibold tabular-nums">
           {formatCurrency(contractSum)}
         </p>
       </div>

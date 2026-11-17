@@ -61,9 +61,7 @@ export function AgentInspector({
       className="flex min-h-0 min-w-0 flex-col overflow-hidden border-l border-border/70 bg-muted/20"
     >
       <div className="flex items-center justify-between gap-2 border-b border-border/70 px-3 py-2.5">
-        <p className="font-heading text-sm font-semibold text-foreground">
-          This session
-        </p>
+        <p className="text-sm font-semibold text-foreground">This session</p>
         <Button
           aria-label="Hide the session inspector"
           onClick={onClose}
@@ -87,7 +85,7 @@ export function AgentInspector({
           ) : (
             data.pendingApprovals.map((approval) => (
               <button
-                className="w-full rounded-lg border border-royal-gold/50 bg-royal-gold-light/50 px-2.5 py-2 text-left transition-colors hover:bg-royal-gold-light"
+                className="w-full rounded-lg border border-border bg-royal-gold-light/50 px-2.5 py-2 text-left transition-colors hover:bg-royal-gold-light"
                 key={approval.requestId}
                 onClick={() => scrollTo(approval.requestId)}
                 type="button"
@@ -120,10 +118,10 @@ export function AgentInspector({
             <>
               {running.map((run) => (
                 <div
-                  className="flex items-center gap-2 rounded-lg border border-blue-200/80 bg-blue-50/60 px-2.5 py-2 text-xs"
+                  className="flex items-center gap-2 rounded-lg border border-info/25 bg-info-light/50 px-2.5 py-2 text-xs"
                   key={run.callId}
                 >
-                  <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-blue-500" />
+                  <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-info" />
                   <span className="min-w-0 flex-1 truncate font-medium text-foreground">
                     {humanize(run.name || run.toolName || "Specialist")}
                   </span>
@@ -140,9 +138,7 @@ export function AgentInspector({
                   <span
                     className={cn(
                       "size-1.5 shrink-0 rounded-full",
-                      run.status === "failed"
-                        ? "bg-destructive"
-                        : "bg-emerald-600",
+                      run.status === "failed" ? "bg-destructive" : "bg-success",
                     )}
                   />
                   <span className="min-w-0 flex-1 truncate text-foreground/85">
@@ -216,7 +212,7 @@ function Section({
       <h2 className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
         <Icon
           aria-hidden="true"
-          className={cn("size-3.5", urgent && "text-royal-gold-ink")}
+          className={cn("size-3.5", urgent && "text-warning-ink")}
         />
         {title}
         {count ? (
@@ -224,7 +220,7 @@ function Section({
             className={cn(
               "ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
               urgent
-                ? "bg-royal-gold text-royal-gold-ink"
+                ? "bg-warning-light text-warning-ink"
                 : "bg-muted text-muted-foreground",
             )}
           >
@@ -282,8 +278,8 @@ function Meter({
             ratio >= 0.9
               ? "bg-destructive"
               : ratio >= 0.6
-                ? "bg-royal-gold"
-                : "bg-emerald-600",
+                ? "bg-warning"
+                : "bg-success",
           )}
           style={{ width: `${Math.round(ratio * 100)}%` }}
         />
