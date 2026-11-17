@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * A row of figures on one white surface with hairlines between them, not a row
- * of tiles (docs/design-demo .kpis). No "use client": loading.tsx skeletons
+ * of tiles (DESIGN.md §5, KPI band). No "use client": loading.tsx skeletons
  * render it on the server.
  *
  * Each cell draws a hairline on its own left and top edge. The grid sits 1px up

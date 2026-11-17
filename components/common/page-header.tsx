@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 // The one page title a route opens on: the title sits straight on the page
-// background, with no card around it, as in docs/design-demo. Skeletons that
+// background, with no card around it, as DESIGN.md §4 says. Skeletons that
 // stand in for it reuse PAGE_HEADER_CLASS so the swap does not jump.
 export const PAGE_HEADER_CLASS =
   "flex flex-wrap items-end justify-between gap-4";

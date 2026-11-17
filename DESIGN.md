@@ -1,69 +1,84 @@
 ---
-name: BuildPro
-description: Construction management for the people who build things
+name: Royal Constructions
+description: Operations software for a residential builder, in the Royal Constructions brand
 colors:
-  site-teal: "oklch(0.584 0.118 183.6)"
-  tradie-amber: "oklch(0.726 0.165 54.6)"
-  site-red: "oklch(0.592 0.23 28.5)"
-  slate-veil: "oklch(0.979 0.006 248.4)"
-  card-white: "oklch(1 0 0)"
-  night-slate: "oklch(0.232 0.032 253.7)"
-  mid-slate: "oklch(0.498 0.03 253.3)"
-  cool-border: "oklch(0.905 0.02 248.7)"
-  sidebar-void: "oklch(0.16 0.03 249.8)"
-  sidebar-hover: "oklch(0.221 0.03 250.1)"
-  royal-gold: "oklch(0.694 0.12 77.3)"
-  royal-gold-dark: "oklch(0.609 0.106 77.7)"
-  royal-gold-light: "oklch(0.947 0.029 89.6)"
-  royal-orange: "oklch(0.68 0.172 51.9)"
-  royal-orange-light: "oklch(0.969 0.028 79.5)"
-  success: "oklch(0.627 0.17 149.2)"
-  warning: "oklch(0.769 0.165 70.1)"
-  info: "oklch(0.546 0.215 262.9)"
-  accent-purple: "oklch(0.541 0.247 293)"
+  royal-gold: "#c6923a"
+  royal-gold-ink: "#926100"
+  royal-gold-ink-hover: "#7f4f00"
+  royal-gold-light: "#f6ebd6"
+  royal-gold-wash: "#fbf6ec"
+  cream-canvas: "#f7f6f2"
+  card-white: "#ffffff"
+  surface-sunk: "#f1efe9"
+  row-hover: "#f4f1ea"
+  ink: "#2b2a27"
+  ink-2: "#4a4741"
+  muted: "#6b675f"
+  subtle: "#8c877d"
+  hairline: "#e6e2d9"
+  border-strong: "#d3cec3"
+  rail-charcoal: "#262523"
+  rail-hover: "#33312e"
+  rail-text: "#d9d5cc"
+  rail-muted: "#9c978c"
+  ok: "#1e7a45"
+  ok-bg: "#e6f4ec"
+  warn: "#b54708"
+  warn-bg: "#fef0e2"
+  danger: "#ac0f0f"
+  danger-bg: "#fbeaea"
+  info: "#2456a6"
+  info-bg: "#e8effa"
 typography:
   display:
     fontFamily: "Fraunces, Georgia, serif"
-    fontSize: "clamp(2rem, 5vw, 3.5rem)"
+    fontSize: "clamp(1.75rem, 4vw, 2.5rem)"
     fontWeight: 600
     lineHeight: 1.1
     letterSpacing: "-0.02em"
   headline:
     fontFamily: "Fraunces, Georgia, serif"
-    fontSize: "1.75rem"
+    fontSize: "1.625rem"
     fontWeight: 600
     lineHeight: 1.2
     letterSpacing: "-0.015em"
-  title:
-    fontFamily: "Manrope, sans-serif"
-    fontSize: "1.25rem"
+  section:
+    fontFamily: "Fraunces, Georgia, serif"
+    fontSize: "1.0625rem"
     fontWeight: 600
     lineHeight: 1.3
-    letterSpacing: "-0.01em"
+  title:
+    fontFamily: "Manrope, sans-serif"
+    fontSize: "0.9375rem"
+    fontWeight: 600
+    lineHeight: 1.3
   body:
     fontFamily: "Manrope, sans-serif"
     fontSize: "0.875rem"
     fontWeight: 400
-    lineHeight: 1.6
+    lineHeight: 1.55
   label:
     fontFamily: "Manrope, sans-serif"
-    fontSize: "0.75rem"
-    fontWeight: 500
-    lineHeight: 1.5
-    letterSpacing: "0.02em"
+    fontSize: "0.6875rem"
+    fontWeight: 600
+    lineHeight: 1.4
+    letterSpacing: "0.06em"
   mono:
     fontFamily: "IBM Plex Mono, monospace"
     fontSize: "0.8125rem"
     fontWeight: 400
     lineHeight: 1.5
+  booking-heading:
+    fontFamily: "IBM Plex Sans Condensed, sans-serif"
+    fontSize: "1.75rem"
+    fontWeight: 600
+    lineHeight: 1.15
+    letterSpacing: "0.02em"
 rounded:
-  sm: "0.325rem"
-  md: "0.425rem"
-  lg: "0.5rem"
-  xl: "0.675rem"
-  2xl: "0.9rem"
-  3xl: "1.1rem"
-  4xl: "1.4rem"
+  sm: "4px"
+  md: "8px"
+  lg: "11px"
+  pill: "999px"
 spacing:
   xs: "4px"
   sm: "8px"
@@ -72,227 +87,316 @@ spacing:
   xl: "32px"
   2xl: "48px"
 components:
-  metric-card:
-    backgroundColor: "{colors.card-white}"
-    rounded: "{rounded.lg}"
-    padding: "16px 24px"
-  metric-card-icon-primary:
-    backgroundColor: "{colors.site-teal}"
-    textColor: "{colors.card-white}"
-    rounded: "{rounded.2xl}"
-    size: "44px"
-  metric-card-icon-accent:
-    backgroundColor: "oklch(0.648 0.208 37.1)"
-    textColor: "{colors.card-white}"
-    rounded: "{rounded.2xl}"
-    size: "44px"
-  section-card:
-    backgroundColor: "{colors.card-white}"
-    rounded: "{rounded.lg}"
-    padding: "16px 24px"
   button-primary:
-    backgroundColor: "{colors.site-teal}"
-    textColor: "{colors.card-white}"
-    rounded: "{rounded.lg}"
-    padding: "10px 20px"
-  button-ghost:
-    backgroundColor: "transparent"
-    textColor: "{colors.night-slate}"
-    rounded: "{rounded.lg}"
-    padding: "10px 20px"
-  sidebar:
-    backgroundColor: "{colors.sidebar-void}"
-    textColor: "{colors.slate-veil}"
-    width: "240px"
-  sidebar-item-active:
-    backgroundColor: "{colors.sidebar-hover}"
+    backgroundColor: "{colors.royal-gold-ink}"
     textColor: "{colors.card-white}"
     rounded: "{rounded.md}"
-    padding: "8px 12px"
+    height: "34px"
+    padding: "0 14px"
+  button-secondary:
+    backgroundColor: "{colors.card-white}"
+    textColor: "{colors.ink}"
+    borderColor: "{colors.border-strong}"
+    rounded: "{rounded.md}"
+  card:
+    backgroundColor: "{colors.card-white}"
+    rounded: "{rounded.lg}"
+    padding: "18px 20px"
+  list-row:
+    minHeight: "40px"
+    padding: "6px 16px"
+    borderTop: "1px solid {colors.hairline}"
+  kpi-band:
+    backgroundColor: "{colors.card-white}"
+    rounded: "{rounded.lg}"
+    columns: 4
+  sidebar:
+    backgroundColor: "{colors.rail-charcoal}"
+    textColor: "{colors.rail-text}"
+    width: "232px"
+  sidebar-item-active:
+    backgroundColor: "{colors.rail-hover}"
+    indicator: "3px {colors.royal-gold} bar on the left edge"
 ---
 
-# Design System: BuildPro
+# Design System: Royal Constructions
+
+> **The one design document.** It is both the visual direction and the guide to
+> building UI here (§10). It replaces `docs/design.md`, which described the
+> retired teal theme. The app moved to this system in PR #525 (17 Nov 2026).
+> When this file and the code disagree, this file is the intent and the code is
+> the debt. A static page-by-page demo exists but stays out of the repo for now,
+> because it shows real client names.
 
 ## 1. Overview
 
-**Creative North Star: "The Site Office"**
+**Creative North Star: "The Site Office, in our own colours"**
 
-The Site Office is where the whole project lives. Plans on the desk, schedules on the wall. It is organized and purposeful, not sterile. Every screen in BuildPro carries that energy: information is dense because the work demands it, but the layout is never chaotic. The dark navigation rail is the building's steel frame. The white card surfaces are the work desk. The teal instruments are the controls you reach for without thinking.
+Royal Constructions builds homes in south-west Sydney. The software is the
+office: leads on the desk, offers going out, builds on the wall, tradies on the
+phone. It should feel like the company's own tool. It should not look like a
+generic SaaS product with a builder's logo pasted on top. So it takes the
+brand straight from
+[royalconstructions.com.au](https://royalconstructions.com.au): **Royal Gold
+`#C6923A`, charcoal `#343434`, warm cream `#F7F6F2`.**
 
-This is a light-theme system. That is a permanent, deliberate choice, not a default. The physical scene: a construction business owner checking project status at 8am on a laptop in a bright site office, morning light coming through the window, coffee on the desk. That scene demands a light canvas. Dark mode is not a future direction, not a "we'll add it later" feature, and not an aspiration. The dark sidebar rail provides the structural contrast the eye needs without switching the entire system to a low-ambient aesthetic.
+Who uses it: two or three office staff on a shared admin login, between site
+visits, on a laptop or a phone. Clients never see the app. They see what it
+sends out: emails, the offer PDF, DocuSign envelopes, the public booking page.
+Those outputs carry the brand most strictly, because a wrong number or a
+cheap-looking page in front of a homeowner is the expensive kind of mistake.
 
-This system explicitly rejects three failure modes. Generic SaaS: pastel cards, bouncy micro-interactions, startup-template layouts. Old-school construction software: grey, dense, utilitarian enterprise chrome. Finance and banking dark mode: terminal-native precision with neon accents, a trading-floor aesthetic that carries the wrong register entirely. BuildPro is none of those. It is an operations centre for people who build things, running in daylight.
+**What it looks like:** a light, warm canvas. One charcoal navigation rail.
+White cards with a hairline shadow. One gold action colour. Dense single-line
+lists. Numbers in mono. Every screen gives its visual weight to the data.
 
-**Key Characteristics:**
-- Light canvas (near-white with a faint cool tint) for work surfaces; dark navy rail for structure
-- Site Teal as the single decisive action colour; Tradie Amber as the warm secondary for warnings and energy
-- Three-layer elevation: background flat, cards at shadow-sm, modals at shadow-lg
-- Sharper rounding (0.9rem on icon containers, 0.5rem on cards) so the app feels precise rather than soft
-- Fraunces for editorial gravity; Manrope for operational speed; IBM Plex Mono for data precision
+**What it rejects:**
+- Generic SaaS like Asana or Monday: pastel cards, bouncy motion, icon-tile grids.
+- Old construction software like Procore or BuilderTrend: grey enterprise chrome.
+- Dark finance and crypto UIs: neon on black.
 
-## 2. Colors: The Site Office Palette
+**References:** Linear (lists, grouping, density), Stripe Dashboard (record
+pages, money, invoices), Attio (CRM record layout), Calendly (booking).
+Mobbin screens for each page are listed in §7.
 
-Restrained-to-Committed strategy. The operational core uses Site Teal as its action signal, carrying 10–20% of any given screen; Tradie Amber appears in chart data, warning states, and the subtle body-background gradient. The leads and sales surfaces swap that action signal for Royal Gold (see Sales Accent below). The rest, everywhere, is the neutral slate family.
+## 2. Colour
 
-### Primary
-- **Site Teal** (oklch(0.584 0.118 183.6)): Primary actions, focus rings, sidebar active states, the ring token, chart-1. The one colour that means "act here." Used at mid-saturation so it reads clearly without dominating.
+### Brand
+- **Royal Gold `#c6923a`** is a *fill*, not a text colour. It goes on the rail's active-item bar, the brand mark, chart series 1, progress bars and the timeline's "current" dot. White text on it is only 2.77:1, so it never carries white text. Dark ink on it is 5.18:1 and is allowed for small badges.
+- **Royal Gold Ink `#926100`** is gold as something you *act on or read*: primary button fill (white 5.34:1), links, focus rings, the active label in segmented controls. Hover is **`#7f4f00`** (white 6.95:1). These are the app's existing contrast-tested `--royal-gold-ink` oklch(0.53 0.12 77.3) and `--royal-gold-ink-hover` oklch(0.47 0.12 77.3), written as hex. They are not new values.
+- **Gold Light `#f6ebd6`** is for selected rows, active chips and gold status pills (gold-ink on it 4.52:1). **Gold Wash `#fbf6ec`** is the quietest gold tint, used for notice strips.
 
-### Secondary
-- **Tradie Amber** (oklch(0.726 0.165 54.6)): Warm secondary energy. Used in chart-3, the body background gradient, warning icon containers (bg-amber-500), and anywhere time-sensitive information needs a warmer register than red. Not a status colour; an energy colour.
+### Warm neutrals
+These are re-derived on the brand's warm hue, so the cream canvas and the
+charcoal rail do not clash with cool blue-grey borders.
 
-### Tertiary
-- **Site Red** (oklch(0.592 0.23 28.5)): Destructive actions, error states, urgent indicators. High chroma. Reserved strictly for things going wrong.
+| Token | Hex | Use | Contrast |
+|---|---|---|---|
+| cream-canvas | `#f7f6f2` | App background | — |
+| card-white | `#ffffff` | Cards, lists, popovers | — |
+| surface-sunk | `#f1efe9` | Group headers, table heads, inset wells | — |
+| row-hover | `#f4f1ea` | Row and ghost-button hover | — |
+| ink | `#2b2a27` | Body text | 13.3:1 on canvas |
+| ink-2 | `#4a4741` | Secondary text | — |
+| muted | `#6b675f` | Labels, metadata | 5.2:1 on canvas |
+| subtle | `#8c877d` | Icons, placeholders, disabled. **Not body text** | 3.6:1 |
+| hairline | `#e6e2d9` | Row dividers, card heads | — |
+| border-strong | `#d3cec3` | Inputs, secondary buttons | — |
+| rail-charcoal | `#262523` | Sidebar | rail-text 10.5:1 |
 
-### Neutral
-- **Slate Veil** (oklch(0.979 0.006 248.4)): App background. Near-white with a near-invisible cool tint. Sits under card surfaces.
-- **Card White** (oklch(1 0 0)): Card and popover surfaces. The work desk. Slight luminance above the background creates the depth layer.
-- **Night Slate** (oklch(0.232 0.032 253.7)): Primary text and foreground. Deep, slightly blue-tinted. Not pure black.
-- **Mid Slate** (oklch(0.498 0.03 253.3)): Secondary text, descriptions, muted labels.
-- **Cool Border** (oklch(0.905 0.02 248.7)): Dividers, card borders, input strokes. Light, cool, structural.
-- **Sidebar Void** (oklch(0.16 0.03 249.8)): The navigation rail. Very dark navy. The steel frame.
-- **Sidebar Hover** (oklch(0.221 0.03 250.1)): Sidebar item hover. One step lighter than the rail.
+### Status
+Status is **always a tint plus a text label**, never colour alone.
 
-### Sales Accent (Royal Constructions)
+| Status | Text | Background | Means |
+|---|---|---|---|
+| ok | `#1e7a45` | `#e6f4ec` | Done, confirmed, signed, Converted |
+| warn | `#b54708` | `#fef0e2` | Overdue, awaiting approval, needs attention |
+| danger | `#ac0f0f` | `#fbeaea` | Declined, lost, cancelled, destructive actions (site red) |
+| info | `#2456a6` | `#e8effa` | Sent, in review, informational |
+| neutral | `ink-2` | `#efece5` | Draft, pending, archived |
+| gold | `gold-ink` | `gold-light` | Active sales stage (Negotiating, Tender sent) |
 
-The leads and sales surfaces carry the **Royal Constructions** brand: a warm gold, not Site Teal. This is deliberate and permanent. The operational core of the app (dashboard, projects, tradies, financials, milestones) runs on Site Teal as its action signal; the lead-management and sales-facing surfaces run on Royal Gold. The two never appear as competing primaries on the same screen because they live on different surfaces.
+### Named rules
+**The One Gold Rule.** Gold is the only action colour, on every page. Teal is retired. One primary (gold-ink) button per view. Gold never decorates: no gold borders on static cards, no gold headings, no gold gradients.
 
-- **Royal Gold** (oklch(0.694 0.12 77.3)): Primary action and selection colour on leads/sales surfaces. The leads equivalent of Site Teal. Buttons, active pipeline stages, focus rings, links.
-- **Royal Gold Dark** (oklch(0.609 0.106 77.7)): Hover/pressed state for gold actions.
-- **Royal Gold Light** (oklch(0.947 0.029 89.6)): Tinted gold backgrounds, selected-row fills, soft highlights.
-- **Royal Orange** (oklch(0.68 0.172 51.9)): Warm secondary energy on sales surfaces. Accent chips, time-pressure cues. The sales-surface cousin of Tradie Amber.
-- **Royal Orange Light** (oklch(0.969 0.028 79.5)): Tinted orange backgrounds.
+**The Warning-Is-Orange Rule.** Warnings use `#b54708` (orange-brown) plus an icon or a text label, so a warning never reads as a gold button.
 
-These are real `:root` tokens (`--royal-gold`, `--royal-gold-dark`, `--royal-gold-light`, `--royal-orange`, `--royal-orange-light`). The `.leads-container` CSS aliases them through its `--leads-*` variables; it no longer defines its own colour values.
-
-### Semantic Status
-
-A shared status scale, available app-wide as `:root` tokens, each with a tinted `-light` companion for backgrounds:
-
-- **Success** (oklch(0.627 0.17 149.2)) / `--success-light`: completed, confirmed, healthy.
-- **Warning** (oklch(0.769 0.165 70.1)) / `--warning-light`: caution, pending attention.
-- **Info** (oklch(0.546 0.215 262.9)) / `--info-light`: neutral informational state.
-- **Accent Purple** (oklch(0.541 0.247 293)) / `--accent-purple-light`: categorical/secondary tagging only, never an action colour.
-- Destructive reuses **Site Red** (`--destructive`) with `--destructive-light` for tinted error backgrounds.
-
-Status is always paired with a label or icon, never colour alone.
-
-### Named Rules
-**The One Signal Rule.** Each surface has exactly one action colour, used for interactive affordances only: it means "you can act here" or "this is selected." On the operational core that colour is Site Teal; on leads/sales surfaces it is Royal Gold. Using the action colour decoratively, on static backgrounds or ornamental borders, erodes the signal. Never mix teal and gold as competing primaries on the same surface. When in doubt, keep it neutral.
-
-**The Amber-Not-Orange Rule.** The warm secondary is Tradie Amber (oklch(0.726 0.165 54.6) / chart-3), not an arbitrary orange. The body background gradient uses `rgba(232, 115, 12, 0.08)` which maps to this anchor. Keep warm secondary choices within this OKLCH family.
-
-**The Light Canvas Rule.** The app background is always Slate Veil. Dark backgrounds are prohibited on content surfaces. The sidebar rail is structural chrome, not a content surface, and is the only exception. Do not introduce dark-themed sections, panels, or feature areas that break the light-canvas system.
+**The Light Canvas Rule.** The cream canvas is permanent and there is no dark mode. The charcoal rail is the only dark surface, and it is structure, not content. The `/guest` page's dark gradient goes.
 
 ## 3. Typography
 
-**Display Font:** Fraunces (variable optical serif, Georgia, serif fallback)
-**Body Font:** Manrope (humanist geometric sans-serif)
-**Mono Font:** IBM Plex Mono (weights 400, 500)
+The app keeps its three voices. The website uses Belleza and Raleway. Both
+are too airy for dense tables, so the app does not use them. Belleza is an
+option for the brand mark only, if the owner wants it.
 
-**Character:** Fraunces brings editorial authority without formality — a typeface with opinions that commands attention at section level without shouting. Manrope is the professional who gets things done: clean, legible at small sizes, slightly warm. IBM Plex Mono is the data layer: unambiguous, grid-aligned, instantly readable as a number or code. The three voices never compete because their roles are distinct.
+- **Fraunces** (600): page titles (26px), section titles (17px), headline KPI counts. Never in nav, buttons, table cells or form labels.
+- **Manrope** (400/500/600): everything operational. 14px body, 13px controls, 11px uppercase labels.
+- **IBM Plex Mono** (400/500): money, dates, reference codes (`RC-Q-…`), phone numbers, durations. **Not for counts.** Counts use Manrope with tabular figures.
+- **IBM Plex Sans Condensed** (600): the public booking page heading only. The size comes down from 42px to 28px (owner decision, 16 Nov 2026). Its uppercase condensed style stays.
 
-### Hierarchy
-- **Display** (Fraunces, 600, clamp(2rem, 5vw, 3.5rem), lh 1.1, ls -0.02em): Page-level KPI values, hero numbers, editorial moments. High impact, used deliberately.
-- **Headline** (Fraunces, 600, 1.75rem, lh 1.2, ls -0.015em): Section headings, milestone titles, feature page anchors, any header where editorial weight helps the user orient. More broadly used than Display, but still intentional.
-- **Title** (Manrope, 600, 1.25rem, lh 1.3, ls -0.01em): Subsection headers, card titles (text-xl font-semibold in SectionCard). Operational, not editorial.
-- **Body** (Manrope, 400, 0.875rem, lh 1.6): Descriptive copy, table cell content, form text, instructions. Max line length 68ch.
-- **Label** (Manrope, 500, 0.75rem, lh 1.5, ls 0.02em): UI labels, column headers, status chips, CardDescription. Uppercase where structural (table headers); sentence case elsewhere.
-- **Mono** (IBM Plex Mono, 400/500, 0.8125rem, lh 1.5): Project IDs, timestamps, phone numbers, reference codes, financial figures in dense tables. Never for headings or nav.
+**The Fraunces Gate.** If the text guides someone through a task, it is Manrope. If it names the page or a section, it may be Fraunces.
 
-### Named Rules
-**The Fraunces Gate.** Fraunces (`--font-heading`) is used wherever content needs editorial weight: KPI values, milestone titles, section headings, page anchors, and any moment where the user needs to feel the authority of what they're reading. The gate is Manrope territory: nav items, form labels, table cells, button copy, running instructions, any copy that is operational rather than authoritative. If it guides a user through a workflow, it's Manrope. If it commands their attention at a section level, it can be Fraunces.
+**The Mono Precision Rule.** Mono means "this is an exact fact": money, dates, IDs, phones. It is never used for style.
 
-**The Mono Precision Rule.** IBM Plex Mono appears only where ambiguity is dangerous: financial figures, date strings, IDs, phone numbers, codes. It signals "this is a fact, not a label." Using it for stylistic reasons breaks the signal.
+## 4. Layout and elevation
 
-## 4. Elevation
-
-Structural layering. Three defined planes, each with a consistent shadow assignment. The system does not use flat-only or shadows-everywhere; shadows encode the layer stack so users always know where they are.
-
-| Layer | Surface | Shadow |
-|---|---|---|
-| Ground | App background (`--background`) | None |
-| Raised | Cards, section panels, table containers | `shadow-sm` always |
-| Floating | Modals, drawers, popovers, toasts | `shadow-lg` (toasts: `0 24px 56px -28px rgba(15,23,42,0.32)`) |
-
-The sidebar is structural chrome, outside the layering stack. It uses its own dark token (`sidebar-void`) and needs no shadow.
-
-### Named Rules
-**The Three-Layer Rule.** BuildPro uses exactly three elevation planes. Do not introduce intermediate layers (shadow-md on content cards, shadow-xl on sub-modals). Every surface belongs to Ground, Raised, or Floating.
-
-**The Flat-at-Rest Rule.** Cards do not acquire additional shadow on hover. Hover state is expressed through `bg-muted/40` background tints or border-colour shifts, not shadow amplification. Shadow signals layer, not interactivity.
+- **Shell:** a 232px charcoal rail with the brand mark and nav (Dashboard, Leads, Offers, Operations Agent, Projects, Tradie Management, Admin). The top bar shows breadcrumbs and Sydney time. Every crumb but the last is a link (`getShellTrail` in `utils/shell-nav.ts`). The top bar is the one frosted-glass surface: the page scrolls under it. Below 760px the rail becomes a slide-over sheet.
+- **Page header:** one Fraunces title, a one-line count or status beneath it, one primary action on the right. No hero cards, gradients or decorative circles.
+- **Three planes only:** canvas (flat), raised (cards and lists, `shadow-sm`), floating (modals, drawers, toasts, `shadow-lg`). **Flat at rest:** hover is a background tint, never a lift or a bigger shadow.
+- **Radii:** 4px for tags, 8px for controls, 11px for cards, pill for status.
+- **Width:** content maxes at 1360px. Gutter is 24px, or 16px on phones. No horizontal page scroll; wide tables scroll inside their card.
 
 ## 5. Components
 
+### The one list (every index page)
+Reference: [Linear grouped list](https://mobbin.com/screens/be6c4ee4-aa93-42b4-89b3-dcfc8386f022).
+- Group headers on `surface-sunk`, with the name, a count, and optionally a summed value on the right in mono. Headers stick under the top bar.
+- Rows are single-line, at least 40px, with a hairline between them. The primary text is 600 weight, metadata is muted, and dates and money are right-aligned in mono.
+- Hover is `row-hover` and a selected row is `gold-light`. The whole row is the link.
+- On phones, columns marked `hide-sm` drop out. Rows never wrap into cards.
+
+### List pages, as built
+Every index page has the Leads list's shape, from shared parts in
+`components/common/list-toolbar.tsx` and `components/ui/table-styles.ts`:
+`PageHeader`, then a `KpiBand`, then one `ListToolbar` (view tabs on the left;
+sort, filter selects, `ToolbarSearch` and Export on the right), then one
+`TableCard` holding chips in its header and a `flush` table. A section-level
+list (a detail tab, a dashboard widget) is one `TableCard` whose header holds
+the title and the same controls. **Never put a card around a `TableCard`.**
+Tables take their header, row and cell classes from `table-styles.ts`, so
+every table matches. Grouping rows by stage or status is still the target
+above; most lists are not grouped yet.
+
+### KPI band
+3–4 figures in one white band divided by hairlines, each with a label, a value and an optional delta chip. This **replaces** the grids of coloured icon tiles. Money values use mono and counts use Fraunces. In code: `KpiBand` and its cell classes in `components/common/kpi-band.tsx`. A figure that filters the list is a toggle button with `aria-pressed`; the active one gets a gold-light fill and a gold bar along its foot.
+
+### Record page (lead, offer, project, tradie)
+A record header (name, status pill, key attributes inline) above two columns.
+The main column holds sections, tabs and the activity timeline. A **right
+rail** (320px, sticky) holds labelled key-value facts and the next action.
+References: [Attio](https://mobbin.com/screens/297adfeb-8312-496b-8acf-41839a6cf775), [Stripe](https://mobbin.com/screens/1a4aa88b-e0be-49b2-a87f-1264e0b5e786).
+
 ### Buttons
+- **Primary:** gold-ink with white text, 34px high, radius 8.
+- **Secondary:** white with a strong border.
+- **Ghost:** transparent, `row-hover` on hover.
+- **Danger:** site red. Only for irreversible actions.
 
-Confident and direct. No ambiguity about what is clickable.
+### Tabs and segmented controls
+- **Tabs:** muted labels, and the active tab gets ink text with a **2px gold underline**. Five tabs at most. A count, if shown, is Manrope with tabular figures.
+- **Segmented:** the active segment is `gold-light` with gold-ink text.
 
-- **Shape:** Sharply rounded (0.5rem, `--radius-lg`). Substantial but not pill-shaped.
-- **Primary:** Site Teal background (`--primary`), white foreground. Padding 10px 20px. Manrope 500, 0.875rem.
-- **Hover / Focus:** Subtle darken on hover. Focus ring: `outline-ring/50` using the ring token (site-teal at 50% opacity), 2px offset.
-- **Ghost:** Transparent background, night-slate text. Border appears on hover only.
-- **Destructive:** Site Red background. Reserved for irreversible actions only.
+### Status pill
+22px high, a pill shape, a tint plus a 6px dot plus a text label. The labels come from the app's own maps (`lib/leads/pipeline-stages.ts`, `OFFER_STATUS_LABEL`). **Converted is never shown as "Won".**
 
-### Metric Cards
+### Timeline
+A 1px rail with a dot per event. Done is ok-green, current is gold, needs attention is warn, upcoming is hollow. Dates are in mono and date headers group events by day.
 
-The KPI summary pattern. Four across the top of dashboard-style pages.
+### Forms
+- Labels sit above fields in 13px/600. Hints go under the field in muted text.
+- Fields have a strong border and a gold-ink focus ring.
+- Long forms get a **sticky save bar**, and ordered lists get **grip handles**.
 
-- **Surface:** Card White, `shadow-sm`, `border-border/70`.
-- **Icon container:** 44×44px, `rounded-2xl` (0.9rem). Tonal colours: teal (primary), orange (accent), emerald (success), amber (warning), red (danger).
-- **Value:** Fraunces at display or headline scale, `text-3xl font-semibold tracking-tight`. Night Slate.
-- **Label:** CardDescription, Manrope body, mid-slate.
-- **Supporting note:** `text-sm text-muted-foreground` below the value.
+### Notices
+- **Warn strip:** an icon plus a sentence, on warn-bg.
+- **Gold wash:** for "your move" prompts such as an approval waiting above the agent's message box. No loud gold panels.
 
-### Section Cards
+### Client documents (emails, offer PDF, DocuSign)
+These leave the building, so they follow the brand most strictly.
+- **Colour:** charcoal text (`#343434`) on white. Gold `#c6923a` only for the logo, a thin rule under the letterhead, and table header underlines. Gold-ink `#926100` for links. No other colours, except a status word where one is needed.
+- **Type:** email clients and PDF renderers may not load web fonts. Body uses `Manrope, "Segoe UI", Helvetica, Arial, sans-serif`. Headings use `Georgia, "Times New Roman", serif` as the Fraunces fallback. Money uses `"IBM Plex Mono", Menlo, Consolas, monospace`, or tabular figures in the body face where mono isn't available.
+- **Money:** always AUD, always labelled `inc GST` or `ex GST`. State the contract price once, inc GST. The payment-schedule amounts must add up to it.
+- **Dates:** written as `16 November 2026`, with Sydney time wherever a time is shown.
+- **Never:** internal IDs, staff-only notes, or placeholder text.
 
-The standard content panel. Wraps most feature-level content.
+## 6. Motion
+Motion is purposeful only: around 150ms colour and background transitions, and the mobile sheet slide. There is no hover lift, translate or glow, no bouncing, and no skeleton that runs longer than the data takes. `prefers-reduced-motion` turns transitions off.
 
-- **Surface:** `bg-white/95`, `shadow-sm`, `border-border/70`.
-- **Header:** `border-b border-border/70`, `pb-4`. Title at `text-xl font-semibold` (Manrope title scale) or Fraunces headline scale for pages that benefit from editorial weight. Optional description. Optional right-aligned action slot.
-- **Body:** `pt-5`. Feature code owns internal layout; the card does not impose padding on its children.
+## 7. Page patterns
+Every link below is a real Mobbin screen (verified 16 Nov 2026). Use the
+**pattern**, not the source app's colours.
 
-### Inputs / Fields
+| Page | Pattern | Mobbin references |
+|---|---|---|
+| **Dashboard** `/dashboard` | A "Needs attention today" list first: overdue and due follow-ups, approvals waiting, offers out for signature. Each group shows at most 3 rows plus "View all N", so the KPI band stays above the fold. Then a 4-figure KPI band, then pipeline by stage, then active builds. *Proposed, owner to confirm:* drop the site-manager table, because nobody holds the role yet. | [Linear](https://mobbin.com/screens/610d34b6-6ad8-45ab-80fb-2107b31ed01e), [Stripe](https://mobbin.com/screens/de7497ad-db87-4d21-a3a8-825f9207c7d4), [Fresha](https://mobbin.com/screens/510e25d1-0df7-4fbe-aaae-cdd959473efb) |
+| **Leads** `/leads` | List grouped by stage, with count and summed budget per group. A one-row toolbar with search, stage, source and List/Board. No gradient hero. | [Linear](https://mobbin.com/screens/be6c4ee4-aa93-42b4-89b3-dcfc8386f022), [Pipedrive](https://mobbin.com/screens/fa0efe82-ea90-4864-ae99-ca3dd822c77b) |
+| **Lead detail** `/leads/[id]` | Record header with stage, budget and next follow-up. The main column holds the activity timeline grouped by day. The right rail holds contact facts and open tasks, overdue first. | [Attio](https://mobbin.com/screens/297adfeb-8312-496b-8acf-41839a6cf775), [Apollo](https://mobbin.com/screens/0c8b1452-13a4-420f-ae00-ec8d6ff2c897) |
+| **Offers** `/offers` | List grouped by status (Pending, Sent, Tender sent, Contract, Project), with the reference in mono and the inc-GST total right-aligned. | [Linear](https://mobbin.com/screens/be6c4ee4-aa93-42b4-89b3-dcfc8386f022) |
+| **Offer workbench** `/offers/[leadId]` | Built like an invoice. The header shows the reference, status and client. The main column holds the cost schedule by stage, the totals block and the payment schedule. The right rail holds the contract price, signers in order, and send/sign events. | [Stripe](https://mobbin.com/screens/6d5a72ea-9800-4749-bfd8-4fa4a3a838bd), [Square](https://mobbin.com/screens/84f13f8a-fd51-4e0b-b151-ad27d420bffa), [Contractbook](https://mobbin.com/screens/d86c7d8a-e51b-4dd7-87a6-2a9f7c65c7f8) |
+| **Projects** `/projects` | List grouped by status, with budget and dates in mono. No coloured top stripes and no uniform card grid. | [Linear](https://mobbin.com/screens/be6c4ee4-aa93-42b4-89b3-dcfc8386f022) |
+| **Project detail** `/projects/[id]` | The main column holds a milestone timeline grouped by build stage (Deposit, Slab, Frame…), then tradie bookings. The right rail holds properties, budget and progress. The schedule is a tradie-by-day grid with neutral blocks and a warn flag only for conflicts or approvals. | [Linear](https://mobbin.com/screens/74320f37-d2e8-4646-ae43-9235f2f30399), [Upwork](https://mobbin.com/screens/852b67eb-ff9d-4033-a119-222c98bed469), [Deputy](https://mobbin.com/screens/d653e9fc-79e5-4a3f-90e6-1e2b6a22adf5) |
+| **Tradies** `/tradie-management` | A left filter column (search, trade, favourites) beside a list grouped by trade. | [Glassdoor](https://mobbin.com/screens/e2e4cb3c-ac40-4dbc-9d07-2fa99d3bfcd5) |
+| **Tradie profile** `/tradie-management/[id]` | Fact fields grouped under small uppercase headings (Contact, Work, System), with tabs capped at five. | [Attio](https://mobbin.com/screens/f5a0eb36-47fe-4f4d-9bd6-d4d1b11a8ef5), [Twenty](https://mobbin.com/screens/9393b3fd-e5f3-40d3-87fd-dcfa9b4b3a66) |
+| **Operations Agent** `/agent` | A session list beside the transcript. Tool calls are compact rows that expand on click. Approvals sit in a gold-wash strip above the message box with two labelled choices. There are no raw IDs anywhere. | [Chatbase](https://mobbin.com/screens/b7ee8823-3fde-42ea-b0b4-26053b62cde4), [Zapier](https://mobbin.com/screens/cb65c41e-e7b6-4bd9-af40-cd92d768e90d), [Linear](https://mobbin.com/screens/9ec39891-cdbb-4d57-b0c6-de43f82c5f4e) |
+| **Admin** `/admin/*` | The hub is a list of tools with their status, not 8 tiles. The approvals queue is a table with a menu on each row. Team is a single table with an invite row. Build sequence and trade types use reorder lists with grips and a sticky save bar. | [Remote](https://mobbin.com/screens/68c88a4c-0241-4007-928d-41f2a85f311f), [Rows](https://mobbin.com/screens/8808750f-9991-4817-95d1-8eafcc747f7e), [Fresha](https://mobbin.com/screens/c303fa1c-01df-4330-b5bd-f6db02b9371b) |
+| **Book consultation** (public) | A summary rail on the left (service, length, venue, chosen slot), then a calendar, then a column of time slots. Gold marks the selection. The condensed heading is 28px. | [Calendly](https://mobbin.com/screens/57876292-340c-408a-9563-fe0ab9f5dcbd), [Jobber](https://mobbin.com/screens/10811e3a-9605-4105-9600-6eca7c27b79c) |
+| **Sign-in / Guest** | One plain centred card on cream, with no gradient. Guest shows a status timeline (Submitted, In review, Approved). | [Stripe](https://mobbin.com/screens/46b46f0f-6cb5-4f1e-85a3-bb0606894379), [Mercury](https://mobbin.com/screens/c9e6999a-303b-4026-89f5-0d64934f9ab4) |
 
-- **Style:** `border border-input` (cool-border), `bg-background` or `bg-white/95`. Radius `--radius-md` (~0.425rem).
-- **Focus:** Border shifts to `--ring` (site-teal); `outline-ring/50` glow.
-- **Error:** Border shifts to `--destructive`. Error text at label scale, site-red, below the field.
-- **Disabled:** 50% opacity. No other treatment.
+## 8. Do's and don'ts
 
-### Navigation (Sidebar)
+**Do**
+- Do use one primary gold-ink action per view.
+- Do use the one list component for every index page, grouped and counted.
+- Do show money as AUD with `inc GST` / `ex GST` stated wherever a client could see the number.
+- Do show dates in Sydney time.
+- Do hide a control that doesn't work yet. A search box wired to `console.log` looks live and is not.
+- Do give icon-only buttons an `aria-label`. Keep focus rings visible.
 
-- **Rail:** Sidebar Void (`oklch(0.16 0.03 249.8)`), full-height, ~240px wide on desktop. This is the one dark surface in the system and it is structural, not a content area.
-- **Default item:** Sidebar Foreground text, Manrope 500, 0.875rem. Transparent background.
-- **Hover:** Sidebar Hover background (`oklch(0.221 0.03 250.1)`), `rounded-md`.
-- **Active:** Site Teal background, Sidebar Primary Foreground text. The one bright element in the dark rail.
-- **Mobile:** Rail hidden. Sheet-based or top-header navigation.
+**Don't**
+- Don't use teal anywhere. It is retired.
+- Don't add gradient heroes, coloured top stripes, icon-tile grids, hover lift or corner glows.
+- Don't put white text on base gold, or use base gold as text on cream.
+- Don't add dark panels or a dark mode.
+- Don't use mono for counts, or Fraunces in tables, nav or buttons.
+- Don't show mock data on an operational screen. *Proposed, owner to confirm:* remove the dashboard's `siteManagersMock` table.
+- Don't put a coloured `border-left` stripe wider than 1px on cards or callouts. Don't use gradient text or Inter. Glass is allowed in one place only: the app's top bar, frosted over the page scrolling under it (owner, 17 Nov 2026). Nowhere else: no glass cards, panels, dialogs or overlays.
 
-### Status Chips / Badges
+## 9. Decisions
 
-- **Shape:** Rounded pill (`rounded-full`) for status badges; `rounded-md` for stage labels in tables.
-- **Pattern:** 8% opacity tinted background of the status colour, full-saturation matching text. Example: success = emerald bg/8 + emerald-600 text.
-- **Scale:** Label size (0.75rem, Manrope 500, slight letter-spacing).
+**Decisions (owner, 16 Nov 2026)**
+1. Royal Gold is the accent for the **whole app**, not only sales surfaces. Teal (`--primary`, `--ring`, `--sidebar-primary`, `--chart-1`) is retired. That includes Clerk's primary colour on sign-in and sign-up.
+2. Colours follow royalconstructions.com.au: gold `#C6923A`, charcoal, cream. The navy rail becomes charcoal and the cool slate neutrals become warm.
+3. The booking page heading comes down to 28px and keeps its condensed uppercase style.
+4. Mobbin page patterns (§7) are the reference for each page.
+5. Glass is allowed in the top bar only (owner, 17 Nov 2026).
 
-## 6. Do's and Don'ts
+**Done (PR #525, 17 Nov 2026):** the tokens in `app/globals.css` (names kept,
+values swapped, pinned by `tests/design/brand-contrast.test.ts`), the page
+header, the KPI band, the shared list toolbar and table styles, every page
+moved to them, and `docs/design.md` folded into this file.
 
-### Do:
-- **Do** use Fraunces for KPI values, section headings, milestone titles, page anchors, and anywhere editorial gravity helps the user orient.
-- **Do** use IBM Plex Mono for all financial figures, project IDs, timestamps, and reference codes.
-- **Do** apply `rounded-2xl` (0.9rem) to icon containers, avatar shapes, and interactive targets that benefit from a softer shape.
-- **Do** assign `shadow-sm` to all raised card surfaces and `shadow-lg` to all floating surfaces, consistently and always.
-- **Do** use `border-border/70` and `bg-white/95` on cards to maintain translucency against the body gradient.
-- **Do** express hover states on list items and cards through background tints (`bg-muted/40`), not shadow amplification.
-- **Do** keep Site Teal exclusive to interactive affordances: buttons, focus rings, active nav items, selected chips.
-- **Do** carry Tradie Amber through chart data, warning icon containers, and time-pressure indicators.
-- **Do** treat the light canvas as a permanent commitment. The sidebar dark rail provides structural contrast; it is not an invitation to introduce dark content surfaces.
+**Still open:** grouped lists (§5), the record-page right rail, and the
+dashboard's `siteManagersMock` table (§8, owner to confirm).
 
-### Don't:
-- **Don't** make it look like Asana or Monday.com: no pastel card grids, no bouncy transitions, no startup-template layouts.
-- **Don't** make it look like Procore or BuilderTrend: no dense grey utilitarian chrome, no enterprise-2015 typography.
-- **Don't** make it look like a finance or banking dark-mode product: no terminal-native aesthetics, no neon accents, no dark content surfaces, no crypto-adjacent chrome. BuildPro runs in daylight. Precision is correct; that aesthetic register is wrong.
-- **Don't** introduce dark-themed panels, sections, or feature areas outside the sidebar rail. The light canvas is not a default that gets overridden; it is the system.
-- **Don't** use Inter. Manrope is the only body/UI font (`var(--font-sans)`). The `.leads-container` Inter usage has been removed; do not reintroduce it.
-- **Don't** give the `.leads-container` CSS its own colour, font, or radius values. The parallel token set has been dissolved: `--leads-*` now alias the canonical `:root` tokens (`--royal-gold`, `--success`, `--foreground`, etc.), radii alias the global radius scale, and `font-family` inherits Manrope. Keep it that way. Prefer Tailwind utility classes over extending this hand-written CSS block at all; new sales/leads UI should consume the system tokens directly. (Shadow values in the block remain bespoke px values, pending a future pass onto the token scale.)
-- **Don't** use `border-left` wider than 1px as a coloured accent stripe on cards, list items, or callouts. The follow-up notes block has one; it is the pattern to eliminate, not repeat.
-- **Don't** use gradient text (`background-clip: text` combined with a gradient background). No exceptions.
-- **Don't** introduce identical card grids: same-sized cards with icon + heading + body text, repeated. MetricCard is a purposeful exception with strict data binding. Generic icon grids are prohibited.
-- **Don't** use glassmorphism decoratively. Backdrop blur belongs on modal backdrops. It should not appear on cards, panels, or navigation elements.
+## 10. Building UI in this repo
+
+### Shared parts
+Compose these before writing new UI. They are thin: they fix layout and tone,
+not feature behaviour.
+
+| Part | Use |
+| --- | --- |
+| `components/common/app-shell.tsx` | The rail, the glass top bar, breadcrumbs, page framing |
+| `components/common/page-header.tsx` | Page title, its one-line count, the primary action |
+| `components/common/kpi-band.tsx` | A row of figures (§5 KPI band) |
+| `components/common/list-toolbar.tsx` | `ListToolbar`, `ToolbarSearch`, `FilterChips`, `TableCard`, view-tab classes |
+| `components/ui/table-styles.ts` | The one table look: head, row, cell, flush card |
+| `components/common/data-table.tsx` | A table with loading and empty states; `flush` inside a `TableCard` |
+| `components/common/section-card.tsx` | A titled content panel on a record page |
+| `components/common/status-pill.tsx` | Status: a tint, a dot and a label |
+| `components/ui/*` | shadcn primitives: button, card, dialog, sheet, tabs, input, select |
+
+### Styling
+- Tailwind utilities on the CSS variables in `app/globals.css`, mapped through `@theme inline`. No hex in feature code, and never a second token set inside a feature folder.
+- Compose classes with `cn()`. It runs tailwind-merge, which drops a `leading-*` placed before a font-size class: write `text-sm/[1.4]` instead.
+- A file that a server `loading.tsx` imports takes no `"use client"`: `kpi-band.tsx`, `list-toolbar.tsx` and `table-styles.ts` are kept server-safe for that reason.
+
+### Modals
+Global modal state lives in `components/modals/modal-manager.tsx`. The body of
+each modal lives in its feature folder. Keep the open state in Redux or the
+feature's slice, and make destructive or status-changing actions plain in both
+the copy and the button.
+
+### Forms
+React Hook Form with Zod, on the shadcn inputs. Labels above fields, the error
+beside the field that failed, a submit button that shows it is working. A
+required field says so: a red `*` with a screen-reader "required", plus
+`required` and `aria-required` on the control.
+
+### Loading, empty and error states
+- Each route has a `loading.tsx` whose skeleton has the page's real shape, built from the same server-safe parts.
+- An empty state says what is missing and offers the next step or a reset.
+- An error state is short, in plain words, with a retry where a retry can help.
+
+### Toasts and notifications
+Sonner, mounted in `app/layout.tsx` and themed in `app/globals.css`. Keep
+toasts short and operational. A partial success says how many went through
+and why the rest did not; a success toast never covers a failure. The bell in
+the top bar is a light in-app feed, not a notification centre.
+
+### Accessibility
+- Icon-only buttons have an `aria-label`. Focus rings stay visible.
+- Status is never colour alone: always a text label.
+- A toggle (a filter chip, a filtering KPI) sets `aria-pressed`.
+- Breadcrumbs are a `<nav aria-label="Breadcrumb">` list.
+- Dialogs and sheets keep keyboard navigation and close on Escape.
