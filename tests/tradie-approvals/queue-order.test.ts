@@ -9,6 +9,7 @@ import {
   dueFields,
   isDueThisWeek,
   oldestWaiting,
+  staleRowsAfterFailedReload,
   type DueSubject,
   type Queued,
 } from "@/lib/tradie-approvals/queue-order";
@@ -252,5 +253,21 @@ describe("oldest waiting", () => {
 
   test("is null when nothing is waiting", () => {
     assert.equal(oldestWaiting([], TODAY), null);
+  });
+});
+
+describe("staleRowsAfterFailedReload (#527)", () => {
+  const pending = { view: "needs-decision", search: "", page: 1 };
+  test("rows from the view the office left are refetched", () => {
+    assert.equal(
+      staleRowsAfterFailedReload({ ...pending, view: "decided" }, pending),
+      true,
+    );
+  });
+  test("rows nobody fetched yet (the server seed) are refetched", () => {
+    assert.equal(staleRowsAfterFailedReload(null, pending), true);
+  });
+  test("rows that answer the current query stay, with the warning", () => {
+    assert.equal(staleRowsAfterFailedReload({ ...pending }, pending), false);
   });
 });

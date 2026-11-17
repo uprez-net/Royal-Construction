@@ -134,6 +134,8 @@ export interface ApprovalInput {
   type: TradieApprovalActionType;
   payload?: UpdatePriceApprovalPayload | IncidentReportApprovalPayload;
   rejectReason?: string;
+  /** A removal approve: the unfinished bookings its review window showed. */
+  reviewedBookingIds?: string[];
 }
 
 export interface ScheduleApprovalJsonPayload {

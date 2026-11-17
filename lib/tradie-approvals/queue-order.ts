@@ -198,3 +198,16 @@ export function sameListQuery(a: ListQuery, b: ListQuery): boolean {
     && a.page === b.page
   );
 }
+
+/**
+ * After the newest list request fails: true when the rows on screen answer a
+ * different query (or none recorded), so the list must be fetched again.
+ * Otherwise a view switch superseded by a failed reload left the old view's
+ * rows under the new view's tabs (issue #527).
+ */
+export function staleRowsAfterFailedReload(
+  rowsQuery: ListQuery | null,
+  query: ListQuery,
+): boolean {
+  return rowsQuery === null || !sameListQuery(rowsQuery, query);
+}

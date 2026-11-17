@@ -89,6 +89,7 @@ export async function handleAdminApproval(input: ApprovalInput) {
     const resolved = await resolveTradieApproval(
       userPrincipal(user),
       {
+        reviewedBookingIds: input.reviewedBookingIds,
         actionType: input.type,
         approvalId: input.approvalId,
         incidentResolution,

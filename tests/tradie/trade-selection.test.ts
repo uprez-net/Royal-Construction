@@ -748,13 +748,17 @@ test("removing a tradie ends their selections, including one waiting on a cancel
       updationData: {},
     },
     "tradieApproval.updateMany": { count: 1 },
-    "tradieSchedule.findMany": [{ projectId: "p_1" }],
+    "tradieSchedule.findMany": [{ id: "s_1", projectId: "p_1" }],
     "tradieSchedule.updateMany": { count: 1 },
     "tradeSelection.updateMany": { count: 1 },
   });
   const resolved = await resolveTradieApproval(
     adminPrincipal(),
-    { approvalId: "ap_remove", resolution: "approved" },
+    {
+      approvalId: "ap_remove",
+      resolution: "approved",
+      reviewedBookingIds: ["s_1"],
+    },
     recorder.db,
   );
 
