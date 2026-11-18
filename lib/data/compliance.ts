@@ -69,6 +69,11 @@ import { resolveComplianceDocument as resolveComplianceDocumentDomain } from "@/
 import { setComplianceDocumentNotRequired as setComplianceDocumentNotRequiredDomain } from "@/lib/domain/compliance/documents";
 import { ensureDevelopmentApplicationDocuments as ensureDevelopmentApplicationDocumentsDomain } from "@/lib/domain/compliance/documents";
 import { startComplianceEngagement } from "@/lib/domain/compliance/engagements";
+import {
+  activateAfterPriorCompliance,
+  openPriorComplianceFile,
+} from "@/lib/domain/compliance/prior-compliance";
+import type { PriorComplianceDocumentType } from "@/lib/domain/compliance/recorded-outside";
 import { dismissUnidentifiedComplianceDocument } from "@/lib/domain/compliance/dismiss-arrival";
 import { vercelBlobDelete } from "@/lib/blob-port";
 import { userPrincipal, type DomainPrincipal } from "@/lib/domain/principal";
@@ -197,6 +202,48 @@ export async function startCertifierEngagement(
   });
 
   return engagement;
+}
+
+/**
+ * Files one document of compliance done before the CRM, and moves the job to
+ * ACTIVE once its certificate and HBCF cover are both held.
+ *
+ * Three steps, in this order: open (or reuse) the no-certifier file, attach
+ * the upload through the same `attachComplianceDocumentFile` every other
+ * compliance upload uses — so a replaced copy is reclaimed, the upload is
+ * logged and an HBCF certificate is mirrored onto the Overview — and then ask
+ * whether the job is now complete. The rules are in `prior-compliance.ts`.
+ */
+export async function recordPriorComplianceDocument(
+  principal: DomainPrincipal,
+  input: {
+    projectId: string;
+    documentType: PriorComplianceDocumentType;
+    fileId: string;
+  },
+) {
+  const { engagementId } = await openPriorComplianceFile(
+    principal,
+    { projectId: input.projectId },
+    prisma,
+  );
+  await attachComplianceDocumentFile({
+    engagementId,
+    projectId: input.projectId,
+    documentType: input.documentType,
+    fileId: input.fileId,
+  });
+  const outcome = await activateAfterPriorCompliance(
+    principal,
+    { projectId: input.projectId },
+    prisma,
+  );
+
+  after(async () => {
+    revalidateEngagement(input.projectId);
+  });
+
+  return outcome;
 }
 
 /**

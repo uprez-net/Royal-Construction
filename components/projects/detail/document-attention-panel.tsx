@@ -31,11 +31,13 @@ function guideFor(
   id: ProjectDocumentGapId,
   hasComplianceFile: boolean,
 ): GapGuide {
-  // A certificate needs a compliance file to be uploaded to.
+  // A certificate needs a compliance file to be uploaded to. With none yet,
+  // either the job was certified before the CRM (upload what it holds) or it
+  // still has a certifier to engage.
   const uploadOnCompliance = (what: string) =>
     hasComplianceFile
       ? `Upload ${what} on the Compliance tab.`
-      : `Press Connect with Certifier on the Compliance tab to start the compliance file, then upload ${what}.`;
+      : `If the job was certified before it came into the CRM, upload ${what} under Compliance already done on the Compliance tab. Otherwise press Connect with Certifier there to start the compliance file.`;
   switch (id) {
     case "signed_date_unparseable":
       return {
