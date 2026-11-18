@@ -14,10 +14,12 @@ import {
   documentPassage,
   documentTitle,
   loadFileSources,
+  loadFileSourceSet,
   offerReference,
   type FileSource,
 } from "./file-sources";
 import { lexicalBoost, queryTerms } from "./ranking";
+import { withRefreshLock } from "./refresh-lock";
 import {
   CONTEXT_EMBEDDING_DIMENSIONS,
   EMBED_BATCH,
@@ -124,9 +126,35 @@ export async function refreshAgentFiles(
   } = {},
 ): Promise<RefreshAgentFilesResult> {
   requireAdminPrincipal(principal);
+  // The live set is loaded inside the lock, so a run queued behind another
+  // sees what that run left, not what was live when it was queued.
+  return withRefreshLock(db, input.deadline, () =>
+    refreshLocked(input, db, ports),
+  );
+}
+
+async function refreshLocked(
+  input: {
+    readonly now?: Date;
+    readonly deadline?: Date;
+    readonly maxExtractions?: number;
+  },
+  db: DomainDb,
+  ports: {
+    readonly embedding?: EmbeddingPort;
+    readonly documentText?: DocumentTextPort;
+  },
+): Promise<RefreshAgentFilesResult> {
   const now = input.now ?? new Date();
   const maxExtractions = input.maxExtractions ?? DEFAULT_MAX_EXTRACTIONS;
-  const sources = await loadFileSources(db, now);
+  const { sources, superseded } = await loadFileSourceSet(db, now);
+  const supersededByHash = new Map<string, string[]>();
+  for (const source of superseded) {
+    supersededByHash.set(source.urlHash, [
+      ...(supersededByHash.get(source.urlHash) ?? []),
+      source.sourceKey,
+    ]);
+  }
 
   // Documents that left the live set, or whose record went: their passages
   // stop answering now, and their cached text goes with them. This runs
@@ -135,12 +163,22 @@ export async function refreshAgentFiles(
   // archived lead, an attachment dropped from a reply), and it must not wait
   // behind OCR and embedding that can fail or run out of time — a document
   // someone removed would keep answering until a run got all the way through.
+  //
+  // A row that only lost the one-per-blob choice to a newer copy of the same
+  // document is still live, so it is not swept here: its passages answer until
+  // the copy's are written (retired below), and a failed write cannot leave
+  // the document with none.
   const removedPassages = await db.agentFileChunk.deleteMany({
-    where: { sourceKey: { notIn: sources.map((source) => source.sourceKey) } },
+    where: {
+      sourceKey: {
+        notIn: [...sources, ...superseded].map((source) => source.sourceKey),
+      },
+    },
   });
   const removedTexts = await db.agentFileText.deleteMany({
     where: { urlHash: { notIn: sources.map((source) => source.urlHash) } },
   });
+  let retired = 0;
 
   let extracted = 0;
   let unsupported = 0;
@@ -215,15 +253,16 @@ export async function refreshAgentFiles(
 
     const confirmed: string[] = [];
     const obsolete: string[] = [];
+    const replaced: string[] = [];
     for (const source of batch) {
       const rows = bySource.get(source.sourceKey) ?? [];
       const text = cached.get(source.urlHash);
       const pages = text?.status === "EXTRACTED" ? pagesOf(text.pages) : null;
-      if (
+      const isPending =
         !text
-        || (text.status === "FAILED" && text.attempts < MAX_EXTRACTION_ATTEMPTS)
-      )
-        pending += 1;
+        || (text.status === "FAILED"
+          && text.attempts < MAX_EXTRACTION_ATTEMPTS);
+      if (isPending) pending += 1;
       const drafts = pages ? chunkPages(pages) : [];
       passages += drafts.length;
       const byIndex = new Map(rows.map((row) => [row.chunkIndex, row]));
@@ -240,6 +279,17 @@ export async function refreshAgentFiles(
       for (const row of rows) {
         if (row.chunkIndex >= drafts.length) obsolete.push(row.id);
       }
+      // Every write for this document has succeeded by here (a failure throws),
+      // so the older copies' passages have been replaced. A document still
+      // waiting to be read keeps them.
+      if (!isPending)
+        replaced.push(...(supersededByHash.get(source.urlHash) ?? []));
+    }
+    if (replaced.length) {
+      const dropped = await db.agentFileChunk.deleteMany({
+        where: { sourceKey: { in: replaced } },
+      });
+      retired += dropped.count;
     }
     if (confirmed.length) {
       await db.agentFileChunk.updateMany({
@@ -267,7 +317,7 @@ export async function refreshAgentFiles(
     passages,
     pending,
     readerUnavailable,
-    removed: removedPassages.count + removedTexts.count,
+    removed: removedPassages.count + removedTexts.count + retired,
     unsupported,
   };
 }

@@ -96,6 +96,20 @@ export async function loadFileSources(
   db: DomainDb,
   now: Date,
 ): Promise<FileSource[]> {
+  return (await loadFileSourceSet(db, now)).sources;
+}
+
+/**
+ * The live documents, plus the rows that lost the one-per-blob choice.
+ *
+ * A superseded row is still a live record of a document the index holds: its
+ * passages must keep answering until the winner's passages are written, or a
+ * failed write would leave the document with none.
+ */
+export async function loadFileSourceSet(
+  db: DomainDb,
+  now: Date,
+): Promise<{ sources: FileSource[]; superseded: FileSource[] }> {
   const [leads, projects] = await Promise.all([
     db.lead.findMany({
       select: {
@@ -169,7 +183,9 @@ export async function loadFileSources(
   }
   const leadIds = [...leadInfo.keys()];
   const projectIds = [...projectInfo.keys()];
-  if (!leadIds.length && !projectIds.length) return [];
+  if (!leadIds.length && !projectIds.length) {
+    return { sources: [], superseded: [] };
+  }
 
   const [files, replies] = await Promise.all([
     db.file.findMany({
@@ -324,11 +340,16 @@ export async function loadFileSources(
       || a.sourceKey.localeCompare(b.sourceKey),
   );
   const seen = new Set<string>();
-  return sources.filter((source) => {
-    if (seen.has(source.urlHash)) return false;
-    seen.add(source.urlHash);
-    return true;
-  });
+  const kept: FileSource[] = [];
+  const superseded: FileSource[] = [];
+  for (const source of sources) {
+    if (seen.has(source.urlHash)) superseded.push(source);
+    else {
+      seen.add(source.urlHash);
+      kept.push(source);
+    }
+  }
+  return { sources: kept, superseded };
 }
 
 /** What a passage is titled in search results: the document and its record. */
