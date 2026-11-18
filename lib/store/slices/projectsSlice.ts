@@ -705,6 +705,49 @@ export const recordPriorComplianceDocument = createAsyncThunk<
   },
 );
 
+/**
+ * Asks whether prior compliance is now complete, filing nothing. Dispatched
+ * after the Overview tab saves an HBCF certificate on a job whose compliance
+ * was recorded as done before the CRM.
+ */
+export const activatePriorCompliance = createAsyncThunk<
+  {
+    projectId: string;
+    engagement: CertifierEngagementDetail | null;
+    projectStatus: ProjectStatus;
+    activated: boolean;
+  },
+  { projectId: string },
+  { rejectValue: string }
+>("projects/activatePriorCompliance", async ({ projectId }, thunkApi) => {
+  const fallback = "Unable to check the job's compliance";
+  try {
+    const checked = await fetchJson<{
+      projectStatus: ProjectStatus;
+      activated: boolean;
+    }>(
+      `/api/projects/${projectId}/compliance/prior/activate`,
+      { method: "POST" },
+      fallback,
+    );
+    const refreshed = await fetchJson<CertifierEngagementDetail | null>(
+      `/api/projects/${projectId}/compliance`,
+      { method: "GET" },
+      fallback,
+    );
+    return {
+      projectId,
+      engagement: reviveComplianceEngagementDates(refreshed.data),
+      projectStatus: checked.data.projectStatus,
+      activated: checked.data.activated,
+    };
+  } catch (error) {
+    return thunkApi.rejectWithValue(
+      error instanceof Error ? error.message : fallback,
+    );
+  }
+});
+
 export const sendCertifierOutreach = createAsyncThunk<
   { projectId: string; engagement: CertifierEngagementDetail | null },
   { projectId: string },
@@ -1479,6 +1522,7 @@ const complianceOperations = [
     recordPriorComplianceDocument,
     (arg) => `prior:${arg.documentType}`,
   ),
+  complianceOperation(activatePriorCompliance, () => "prior:activate"),
   complianceOperation(sendCertifierOutreach, () => complianceScope.outreach),
   complianceOperation(sendCertifierReply, () => complianceScope.reply),
   complianceOperation(resolveComplianceDocument, complianceScope.document),
@@ -2205,11 +2249,27 @@ const projectsSlice = createSlice({
             ?? "Unable to add photos to milestone",
         };
       })
-      // The one compliance answer that moves the project as well as the file:
+      // The compliance answers that move the project as well as the file:
       // prior compliance complete makes the job Active, and the header reads
       // the status from here. The file itself lands through the matcher below.
+      //
+      // Only from the call that made the move. Two rows can upload at once,
+      // and the one that finishes second may carry the status from before the
+      // other activated the job; the move is one-way and a call that did not
+      // make it changed nothing, so its status is not news.
       .addCase(recordPriorComplianceDocument.fulfilled, (state, action) => {
-        if (state.activeProject?.id === action.payload.projectId) {
+        if (
+          action.payload.activated
+          && state.activeProject?.id === action.payload.projectId
+        ) {
+          state.activeProject.status = action.payload.projectStatus;
+        }
+      })
+      .addCase(activatePriorCompliance.fulfilled, (state, action) => {
+        if (
+          action.payload.activated
+          && state.activeProject?.id === action.payload.projectId
+        ) {
           state.activeProject.status = action.payload.projectStatus;
         }
       })

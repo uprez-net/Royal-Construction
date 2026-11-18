@@ -190,3 +190,35 @@ test("a photo that is evidence for a checklist issue is kept with the issue", as
   assert.deepEqual(recorder.writes(), []);
   assert.equal(deleted, false);
 });
+
+test("the project's HBCF certificate is removed from the HBCF block, not here", async () => {
+  // Referenced from the project's requirements rather than by a relation, so a
+  // delete here would leave the job counting as insured with no certificate.
+  const recorder = recordingDb({
+    ...reads,
+    "project.findUnique": {
+      id: "p_1",
+      siteManagerId: null,
+      requirements: {
+        legalAdministration: {
+          hbcfInsuranceDocument: {
+            fileId: "f_1",
+            fileName: "HBCF.pdf",
+            url: file.url,
+            kind: "hbcfInsurance",
+          },
+        },
+      },
+    },
+  });
+  let deleted = false;
+  await assert.rejects(
+    () =>
+      deleteProjectFile(admin, input, recorder.transactionalDb, async () => {
+        deleted = true;
+      }),
+    /HBCF certificate/,
+  );
+  assert.deepEqual(recorder.writes(), []);
+  assert.equal(deleted, false);
+});

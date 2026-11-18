@@ -51,6 +51,7 @@ export async function POST(
       documentId: body.data.documentId,
       documentType: body.data.documentType,
       fileId: body.data.fileId,
+      onlyIfEmpty: body.data.ifEmpty,
     });
 
     return successResponse({ projectId, document }, { status: 201 });

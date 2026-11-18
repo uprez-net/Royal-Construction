@@ -143,6 +143,22 @@ describe("Needs Attention", () => {
     ]);
   });
 
+  test("the expected day is counted on Sydney's calendar across a daylight-saving change", () => {
+    // Planned from Sydney midnight on 1 Apr 2026 (AEDT), ten days: due 11 Apr,
+    // after daylight saving ended on the 5th. Ten days added to the instant
+    // lands at 11pm on the 10th in Sydney, a day off the count beside it.
+    const late = project({
+      milestones: [
+        milestone({
+          targetDate: new Date("2026-03-31T13:00:00Z"),
+          estimatedDays: 10,
+        }),
+      ],
+    });
+    const [overdue] = assessProjectAttention(late, NOW).conditions;
+    assert.match(overdue.label, /\(expected 11 Apr\)$/);
+  });
+
   test("a date from another year says which year, and a long list names only the worst few", () => {
     const backlog = project({
       milestones: Array.from({ length: 5 }, (_, index) =>

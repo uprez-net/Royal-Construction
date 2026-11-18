@@ -80,9 +80,9 @@ export function normalizeDateString(input: string): string | null {
     const date = new Date(Date.UTC(year, month - 1, day));
 
     if (
-      date.getUTCFullYear() !== year ||
-      date.getUTCMonth() + 1 !== month ||
-      date.getUTCDate() !== day
+      date.getUTCFullYear() !== year
+      || date.getUTCMonth() + 1 !== month
+      || date.getUTCDate() !== day
     ) {
       return null;
     }

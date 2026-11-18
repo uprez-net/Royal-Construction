@@ -74,6 +74,7 @@ import {
   openPriorComplianceFile,
 } from "@/lib/domain/compliance/prior-compliance";
 import type { PriorComplianceDocumentType } from "@/lib/domain/compliance/recorded-outside";
+import { requireProjectComplianceFile } from "@/lib/domain/compliance/file-ownership";
 import { dismissUnidentifiedComplianceDocument } from "@/lib/domain/compliance/dismiss-arrival";
 import { vercelBlobDelete } from "@/lib/blob-port";
 import { userPrincipal, type DomainPrincipal } from "@/lib/domain/principal";
@@ -222,6 +223,13 @@ export async function recordPriorComplianceDocument(
     fileId: string;
   },
 ) {
+  // Before the file is opened: a missing or foreign file must not leave an
+  // empty no-certifier file behind, which would shut Connect with Certifier
+  // off for this project.
+  await requireProjectComplianceFile(
+    { projectId: input.projectId, fileId: input.fileId },
+    prisma,
+  );
   const { engagementId } = await openPriorComplianceFile(
     principal,
     { projectId: input.projectId },
@@ -243,6 +251,31 @@ export async function recordPriorComplianceDocument(
     revalidateEngagement(input.projectId);
   });
 
+  return outcome;
+}
+
+/**
+ * Asks whether compliance done before the CRM is now complete, without
+ * filing anything.
+ *
+ * For an HBCF certificate saved on the Overview tab: the project holding it
+ * counts (`missingBuildStartDocuments`), so a job whose CDC was already
+ * recorded here becomes Active on that save, not on some later upload.
+ */
+export async function activatePriorCompliance(
+  principal: DomainPrincipal,
+  projectId: string,
+) {
+  const outcome = await activateAfterPriorCompliance(
+    principal,
+    { projectId },
+    prisma,
+  );
+  if (outcome.activated) {
+    after(async () => {
+      revalidateEngagement(projectId);
+    });
+  }
   return outcome;
 }
 
@@ -722,19 +755,25 @@ export async function attachComplianceDocumentFile(params: {
   documentId?: string;
   documentType?: ComplianceDocumentType;
   fileId: string;
+  /**
+   * Attach only if the row holds no file yet, and otherwise leave it alone.
+   * For an automatic filing (the Overview's HBCF upload copying its
+   * certificate across), which must never replace what is already there: the
+   * attach replaces, and a replaced file is deleted. The explicit Replace
+   * controls leave this unset.
+   */
+  onlyIfEmpty?: boolean;
 }) {
-  const file = await prisma.file.findUnique({
-    where: { id: params.fileId },
-    // `url` is read for the re-supply email below, which attaches the
-    // replacement rather than telling the certifier one exists somewhere.
-    select: { id: true, filename: true, url: true },
-  });
-  if (!file) {
-    throw new Error(`File ${params.fileId} not found.`);
-  }
+  // This project's file, or a refusal, before anything is written. `url` is
+  // read for the re-supply email below, which attaches the replacement rather
+  // than telling the certifier one exists somewhere.
+  const file = await requireProjectComplianceFile(
+    { projectId: params.projectId, fileId: params.fileId },
+    prisma,
+  );
 
-  const { document, sentBackFor, superseded } = await prisma.$transaction(
-    async (tx) => {
+  const { document, sentBackFor, superseded, skipped } =
+    await prisma.$transaction(async (tx) => {
       let target = params.documentId
         ? await tx.complianceDocument.findFirst({
             where: { id: params.documentId, engagementId: params.engagementId },
@@ -766,6 +805,23 @@ export async function attachComplianceDocumentFile(params: {
             order: nextOrder,
           },
         });
+      }
+
+      // An automatic filing that finds the row already filled stops here,
+      // inside the transaction that would otherwise have replaced it: the
+      // caller's view of the row may be stale.
+      if (params.onlyIfEmpty) {
+        const occupied = await tx.file.count({
+          where: { complianceDocumentId: target.id, id: { not: file.id } },
+        });
+        if (occupied > 0) {
+          return {
+            document: target,
+            sentBackFor: null,
+            superseded: [],
+            skipped: true,
+          };
+        }
       }
 
       // Every upload control on the tab is a single-file "Replace": one row
@@ -806,9 +862,11 @@ export async function attachComplianceDocumentFile(params: {
         },
       });
 
-      return { document, sentBackFor, superseded };
-    },
-  );
+      return { document, sentBackFor, superseded, skipped: false };
+    });
+
+  // Nothing was written, so nothing follows on.
+  if (skipped) return document;
 
   const documentLabel = complianceDocumentLabel(
     document.documentType,

@@ -66,9 +66,11 @@ import {
 } from "lucide-react";
 import { useAppDispatch } from "@/lib/store/hooks";
 import {
+  activatePriorCompliance,
   setActiveProject,
   uploadComplianceDocument,
 } from "@/lib/store/slices/projectsSlice";
+import { isRecordedOutsideCrm } from "@/lib/domain/compliance/recorded-outside";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { useParams } from "next/navigation";
 import { format, parse } from "date-fns";
@@ -293,8 +295,24 @@ function toDateInputValue(value: unknown) {
   if (typeof value !== "string" || value.trim() === "") return "";
 
   const [datePart] = value.split("T");
-  if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
+  // A real calendar day, not just the shape of one: the picker shows
+  // "2026-02-31" as empty, and the field would then read as unset rather
+  // than as holding something that is not a date.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(datePart) && isCalendarDay(datePart)) {
+    return datePart;
+  }
   return normalizeDateString(value) ?? "";
+}
+
+/** `yyyy-MM-dd` that names a day that exists. */
+function isCalendarDay(isoDay: string) {
+  const [year, month, day] = isoDay.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+  );
 }
 
 /** The element id a field is scrolled to from the document attention panel. */
@@ -1539,6 +1557,12 @@ export function ProjectOverviewTab({
     claimDate: string;
   } | null>(null);
 
+  // A tab the attention panel would open while the form holds unsaved edits.
+  // Switching tabs unmounts this one and its draft with it, so the panel asks
+  // first: stay (and save), or discard and go.
+  const [leaveForTab, setLeaveForTab] =
+    useState<VisibleProjectDetailTabKey | null>(null);
+
   // Every edit path goes through this so `dirty` can never drift from `draft`.
   const editDraft = (
     updater: (current: RequirementsData) => RequirementsData,
@@ -1945,6 +1969,29 @@ export function ProjectOverviewTab({
     // Only when an engagement exists to file it against, and never fatal: the
     // documents are already saved above, and the project's own copy counts as
     // held (`missingBuildStartDocuments`). A failure is said, not just logged.
+    //
+    // Compliance done before the CRM is the other case: the certificate on the
+    // project already counts there, so nothing is copied, but a job whose CDC
+    // was already recorded becomes Active on this save — and is asked now,
+    // not on some later upload. Never fatal either.
+    if (isRecordedOutsideCrm(project.certifierEngagement)) {
+      try {
+        const checked = await dispatch(
+          activatePriorCompliance({ projectId: project.id }),
+        ).unwrap();
+        if (checked.activated) {
+          toast.success(
+            "Compliance is complete and the project is now Active.",
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Saved the HBCF document, but could not check the job's prior compliance",
+          error,
+        );
+      }
+      return;
+    }
     const homeInsuranceFiled = (
       project.certifierEngagement?.documents ?? []
     ).some(
@@ -1959,6 +2006,10 @@ export function ProjectOverviewTab({
             projectId: project.id,
             fileId: primary.fileId,
             documentType: ComplianceDocumentType.HOME_INSURANCE,
+            // Checked again server side, inside the write: this tab's copy of
+            // the row may be stale, and attaching would replace a certificate
+            // somebody filed there since.
+            ifEmpty: true,
           }),
         ).unwrap();
       } catch (error) {
@@ -2042,10 +2093,18 @@ export function ProjectOverviewTab({
    * cursor in it. A collapsed section is given time to expand first, or the
    * browser scrolls to where the field will be before it is there.
    */
+  const openTab = (tab: VisibleProjectDetailTabKey) => {
+    onOpenTab(tab);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const goToDocumentGap = (target: DocumentGapTarget) => {
     if (target.kind === "tab") {
-      onOpenTab(target.tab);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      if (dirty) {
+        setLeaveForTab(target.tab);
+        return;
+      }
+      openTab(target.tab);
       return;
     }
     const alreadyOpen = openSection === target.section;
@@ -2479,6 +2538,35 @@ export function ProjectOverviewTab({
           </Accordion>
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={leaveForTab !== null}
+        onOpenChange={(open) => {
+          if (!open) setLeaveForTab(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave without saving?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This tab has changes that are not saved. Stay to save them, or
+              discard them and open the Compliance tab.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Stay and save</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const tab = leaveForTab;
+                setLeaveForTab(null);
+                if (tab) openTab(tab);
+              }}
+            >
+              Discard and open
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={claimDateConfirm !== null}

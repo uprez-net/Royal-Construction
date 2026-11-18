@@ -203,12 +203,36 @@ function quote(text: string): string {
 }
 
 /**
- * "9 Nov" on Sydney's calendar, with the year when it is not this year's: an
- * activity three years late read "expected 13 Oct", which says the wrong
- * October.
+ * An activity's timing moved onto Sydney's wall clock, which is what both the
+ * overdue count and the day it was expected are worked out on.
  */
-function sydneyDay(iso: string, now: Date): string {
-  const day = toZonedTime(new Date(iso), SYDNEY_TZ);
+function sydneyTiming(milestone: AttentionSource["milestones"][number]) {
+  return {
+    status: milestone.status,
+    estimatedDays: milestone.estimatedDays,
+    targetDate: toZonedTime(milestone.targetDate, SYDNEY_TZ),
+    startDate: milestone.startDate
+      ? toZonedTime(milestone.startDate, SYDNEY_TZ)
+      : null,
+  };
+}
+
+/**
+ * The day an activity was expected to finish, as "9 Nov", with the year when
+ * it is not this year's: an activity three years late read "expected 13 Oct",
+ * which says the wrong October.
+ *
+ * Worked out with the same calendar arithmetic as the overdue count
+ * (`milestoneEndDate` on Sydney's wall clock), not from the end instant
+ * converted afterwards: adding days to the instant drifts by an hour across a
+ * daylight-saving change, and a midnight end then printed as the day before,
+ * a day off the count beside it.
+ */
+function sydneyExpectedDay(
+  milestone: AttentionSource["milestones"][number],
+  now: Date,
+): string {
+  const day = milestoneEndDate(sydneyTiming(milestone));
   const thisYear = toZonedTime(now, SYDNEY_TZ).getFullYear();
   return format(day, day.getFullYear() === thisYear ? "d MMM" : "d MMM yyyy");
 }
@@ -245,17 +269,7 @@ function sydneyOverdueDays(
   milestone: AttentionSource["milestones"][number],
   now: Date,
 ): number | null {
-  return openOverdueDays(
-    {
-      status: milestone.status,
-      estimatedDays: milestone.estimatedDays,
-      targetDate: toZonedTime(milestone.targetDate, SYDNEY_TZ),
-      startDate: milestone.startDate
-        ? toZonedTime(milestone.startDate, SYDNEY_TZ)
-        : null,
-    },
-    toZonedTime(now, SYDNEY_TZ),
-  );
+  return openOverdueDays(sydneyTiming(milestone), toZonedTime(now, SYDNEY_TZ));
 }
 
 function legalAdministration(requirements: Prisma.JsonValue) {
@@ -313,9 +327,14 @@ export function assessProjectAttention(
     })
     .sort((a, b) => b.daysOverdue - a.daysOverdue);
   if (overdue.length > 0) {
+    const milestoneById = new Map(
+      project.milestones.map((milestone) => [milestone.id, milestone]),
+    );
+    const expected = (activity: OverdueActivity) =>
+      sydneyExpectedDay(milestoneById.get(activity.milestoneId)!, now);
     const late = overdue.map(
       (activity) =>
-        `${activity.name} — ${plural(activity.daysOverdue, "day", "days")} overdue (expected ${sydneyDay(activity.expectedCompletion, now)})`,
+        `${activity.name} — ${plural(activity.daysOverdue, "day", "days")} overdue (expected ${expected(activity)})`,
     );
     conditions.push({
       ...condition(
@@ -323,7 +342,7 @@ export function assessProjectAttention(
         late,
         () => {
           const [only] = overdue;
-          return `${only.name} is ${plural(only.daysOverdue, "day", "days")} overdue (expected ${sydneyDay(only.expectedCompletion, now)})`;
+          return `${only.name} is ${plural(only.daysOverdue, "day", "days")} overdue (expected ${expected(only)})`;
         },
         (count) => `${plural(count, "activity", "activities")} overdue`,
       ),

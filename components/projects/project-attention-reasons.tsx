@@ -105,6 +105,9 @@ function ConditionChip({ condition }: { condition: Condition }) {
         align="start"
         sideOffset={4}
         className="block max-w-80 px-3 py-2 text-left leading-snug"
+        // Portalled out of the row in the DOM, but React still bubbles its
+        // events to the row and the card, which open the quick view.
+        onClick={(event) => event.stopPropagation()}
       >
         <p className="font-semibold">{condition.label}</p>
         {details.length > 0 ? (
