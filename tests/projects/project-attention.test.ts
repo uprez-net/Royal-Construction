@@ -299,6 +299,40 @@ describe("Needs Attention", () => {
     );
   });
 
+  test("an HBCF certificate uploaded on the Overview tab is not reported missing", () => {
+    // Uploaded in the HBCF claim block before the compliance file was opened,
+    // so the compliance file's Home Insurance row never got it.
+    const started = project({
+      status: "ACTIVE",
+      requirements: {
+        legalAdministration: {
+          signedDate: "2026-10-01",
+          pcaInspector: "Jane Certifier",
+          hbcfInsuranceNumber: "HBCF-1",
+          hbcfInsuranceDocument: {
+            fileId: "file-hbcf",
+            fileName: "HBCF.pdf",
+            url: "https://blob.example/hbcf.pdf",
+            kind: "hbcfInsurance",
+          },
+        },
+      },
+      milestones: [milestone({ status: "ACTIVE", startDate: NOW })],
+      certifierEngagement: {
+        alerts: [],
+        documents: [{ documentType: "HOME_INSURANCE", _count: { files: 0 } }],
+      },
+    });
+    // The construction certificate is still missing: it is a different
+    // document, uploaded on the Compliance tab.
+    assert.equal(
+      assessProjectAttention(started, NOW).conditions.find(
+        (c) => c.kind === "MISSING_DOCUMENT",
+      )?.label,
+      "No construction certificate (or CDC) on file, but work has started",
+    );
+  });
+
   test("the readiness gaps count once work has started", () => {
     const started = project({
       status: "ACTIVE",

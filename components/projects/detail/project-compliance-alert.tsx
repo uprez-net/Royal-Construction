@@ -7,12 +7,9 @@ import { DOCUMENT_ATTENTION_ID } from "@/components/projects/detail/document-att
 import { projectDocumentGaps } from "@/lib/domain/projects/document-gaps";
 import { hasWorkStarted } from "@/lib/domain/projects/milestone-schedule";
 import type { ProjectDetail } from "@/types/project";
+import type { ProjectLegalAdministrationSection } from "@/types/project-flow";
 
-type LegalRequirements = {
-  signedDate?: string | null;
-  pcaInspector?: string | null;
-  hbcfInsuranceNumber?: string | null;
-};
+type LegalRequirements = Partial<ProjectLegalAdministrationSection>;
 
 /**
  * The document gaps that keep this job in Needs attention, summarised above
@@ -43,6 +40,8 @@ export function ProjectComplianceAlert({
       signedDate: legal?.signedDate,
       pcaInspector: legal?.pcaInspector,
       hbcfInsuranceNumber: legal?.hbcfInsuranceNumber,
+      hbcfInsuranceDocument: legal?.hbcfInsuranceDocument,
+      hbcfClaimDocuments: legal?.hbcfClaimDocuments,
     },
     heldDocuments: new Set(
       (project.certifierEngagement?.documents ?? [])

@@ -77,9 +77,15 @@ function guideFor(
       };
     case "hbcf_certificate_missing":
       return {
-        hint: uploadOnCompliance("the HBCF certificate against Home Insurance"),
-        action: "Open Compliance tab",
-        target: { kind: "tab", tab: "compliance" },
+        // Either upload counts. The Overview one is here, needs no compliance
+        // file, and reads the number and cover date off the certificate.
+        hint: "Upload the HBCF certificate in the HBCF claim block under Legal and administration. It is also accepted against Home Insurance on the Compliance tab.",
+        action: "Go to HBCF claim",
+        target: {
+          kind: "field",
+          section: "legalAdministration",
+          field: "hbcfInsuranceNumber",
+        },
       };
   }
 }

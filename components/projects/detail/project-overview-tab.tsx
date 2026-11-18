@@ -1932,14 +1932,27 @@ export function ProjectOverviewTab({
       }
     }
 
-    // The first certificate on the project is also filed on the compliance
-    // checklist, which asks for home insurance too; without this the same PDF
-    // had to be uploaded a second time over there. Additional documents are
-    // not: the checklist line wants the certificate, not every claim.
+    // The project's certificate is also filed on the compliance file's Home
+    // Insurance row, which the certifier is sent; without this the same PDF had
+    // to be uploaded a second time over there. Additional claim documents are
+    // not: the row wants the certificate, not every claim.
+    //
+    // Whenever that row is still empty, not only on the project's first HBCF
+    // upload: a certificate uploaded before the compliance file was opened was
+    // never filed, and a later upload skipped it for not being the first. Never
+    // over a file already there — attaching replaces, and would delete it.
     //
     // Only when an engagement exists to file it against, and never fatal: the
-    // documents are already saved above.
-    if (project.certifierEngagement && previous.length === 0 && primary) {
+    // documents are already saved above, and the project's own copy counts as
+    // held (`missingBuildStartDocuments`). A failure is said, not just logged.
+    const homeInsuranceFiled = (
+      project.certifierEngagement?.documents ?? []
+    ).some(
+      (document) =>
+        document.documentType === ComplianceDocumentType.HOME_INSURANCE
+        && document.files.length > 0,
+    );
+    if (project.certifierEngagement && !homeInsuranceFiled && primary) {
       try {
         await dispatch(
           uploadComplianceDocument({
@@ -1952,6 +1965,9 @@ export function ProjectOverviewTab({
         console.error(
           "Saved the HBCF document, but could not file it on the compliance checklist",
           error,
+        );
+        toast.warning(
+          "The HBCF certificate is saved on the project, but could not be added to the compliance file. Upload it against Home Insurance on the Compliance tab.",
         );
       }
     }
@@ -1996,13 +2012,7 @@ export function ProjectOverviewTab({
   // is saved, which is when it leaves the list too.
   const documentGaps = useMemo(() => {
     const savedLegal = (project.requirements as RequirementsData | null)
-      ?.legalAdministration as
-      | {
-          signedDate?: string | null;
-          pcaInspector?: string | null;
-          hbcfInsuranceNumber?: string | null;
-        }
-      | undefined;
+      ?.legalAdministration;
     return projectDocumentGaps({
       status: project.status,
       started: hasWorkStarted(project.milestones),
@@ -2010,6 +2020,9 @@ export function ProjectOverviewTab({
         signedDate: savedLegal?.signedDate,
         pcaInspector: savedLegal?.pcaInspector,
         hbcfInsuranceNumber: savedLegal?.hbcfInsuranceNumber,
+        // A certificate uploaded in the HBCF claim block counts as held.
+        hbcfInsuranceDocument: savedLegal?.hbcfInsuranceDocument,
+        hbcfClaimDocuments: savedLegal?.hbcfClaimDocuments,
       },
       heldDocuments: new Set(
         (project.certifierEngagement?.documents ?? [])

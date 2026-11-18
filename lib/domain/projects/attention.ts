@@ -14,6 +14,10 @@ import { toZonedTime } from "date-fns-tz";
 
 import { COMPLIANCE_ALERT_COPY } from "@/constants/complianceAlerts";
 import { SYDNEY_TZ } from "@/lib/dates/sydney";
+import type {
+  HbcfClaimDocument,
+  ProjectSourceDocumentReference,
+} from "@/types/project-flow";
 import { openOverdueDays } from "@/lib/projects/milestone-ledger";
 
 import { projectReadScope } from "../access/projects";
@@ -258,14 +262,25 @@ function legalAdministration(requirements: Prisma.JsonValue) {
   if (!requirements || typeof requirements !== "object") return null;
   const legal = (requirements as Record<string, unknown>).legalAdministration;
   if (!legal || typeof legal !== "object") return null;
+  const fields = legal as Record<string, unknown>;
   const read = (key: string) => {
-    const value = (legal as Record<string, unknown>)[key];
+    const value = fields[key];
     return typeof value === "string" ? value : null;
   };
   return {
     signedDate: read("signedDate"),
     pcaInspector: read("pcaInspector"),
     hbcfInsuranceNumber: read("hbcfInsuranceNumber"),
+    // The certificate an Overview-tab upload records on the project, which
+    // counts as held as much as one on the compliance file.
+    hbcfInsuranceDocument:
+      fields.hbcfInsuranceDocument
+      && typeof fields.hbcfInsuranceDocument === "object"
+        ? (fields.hbcfInsuranceDocument as ProjectSourceDocumentReference)
+        : null,
+    hbcfClaimDocuments: Array.isArray(fields.hbcfClaimDocuments)
+      ? (fields.hbcfClaimDocuments as HbcfClaimDocument[])
+      : undefined,
   };
 }
 

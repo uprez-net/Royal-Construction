@@ -1,10 +1,23 @@
 import type { ComplianceDocumentType, ProjectStatus } from "@prisma/client";
 
 import { missingBuildStartDocuments } from "../compliance/lifecycle";
+import { projectHbcfCertificateFileId } from "../insurance/hbcf-claims";
 import {
   collectProjectDateBlockers,
   readinessWarningsApply,
 } from "./readiness";
+
+/**
+ * The HBCF certificate the project holds of its own, as the legal block
+ * records it. An Overview-tab upload lands here and counts as held, wherever
+ * else it did or did not reach (`missingBuildStartDocuments`).
+ */
+type HbcfCertificateReference = Partial<
+  Pick<
+    NonNullable<Parameters<typeof projectHbcfCertificateFileId>[0]>,
+    "hbcfInsuranceDocument" | "hbcfClaimDocuments"
+  >
+>;
 
 // The documents a project is missing, one entry each.
 //
@@ -41,11 +54,13 @@ export type ProjectDocumentGapsInput = {
   readonly status: ProjectStatus | string;
   /** Any activity has started on site (`hasWorkStarted`). */
   readonly started: boolean;
-  readonly legal: {
-    readonly signedDate: string | null | undefined;
-    readonly pcaInspector: string | null | undefined;
-    readonly hbcfInsuranceNumber: string | null | undefined;
-  } | null;
+  readonly legal:
+    | ({
+        readonly signedDate: string | null | undefined;
+        readonly pcaInspector: string | null | undefined;
+        readonly hbcfInsuranceNumber: string | null | undefined;
+      } & HbcfCertificateReference)
+    | null;
   /** Compliance document types with at least one file on them. */
   readonly heldDocuments: ReadonlySet<ComplianceDocumentType>;
 };
@@ -61,7 +76,7 @@ const BUILD_START_GAP = {
     id: "hbcf_certificate_missing",
     title: "No HBCF certificate on file, but work has started",
     detail:
-      "Work has started on site, but no HBCF home-warranty certificate has been uploaded to the compliance file.",
+      "Work has started on site, but no HBCF home-warranty certificate has been uploaded, on the Overview tab or the compliance file.",
   },
 } as const;
 
@@ -108,7 +123,12 @@ export function projectDocumentGaps({
   const gaps: ProjectDocumentGap[] = [];
 
   if (started) {
-    for (const missing of missingBuildStartDocuments(heldDocuments)) {
+    const projectHoldsHbcfCertificate =
+      projectHbcfCertificateFileId(legal) !== null;
+    for (const missing of missingBuildStartDocuments(
+      heldDocuments,
+      projectHoldsHbcfCertificate,
+    )) {
       gaps.push({
         ...BUILD_START_GAP[missing],
         fieldPath: "certifierEngagement.documents",
