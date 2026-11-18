@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Role } from "@prisma/client";
 import { test } from "vitest";
+
+import { REPO_ROOT } from "../support/repo-root";
 
 import {
   MAX_EXTRACTION_ATTEMPTS,
@@ -564,7 +568,21 @@ test("a document already read is not read or embedded again", async () => {
   const ports = { documentText: read.port, embedding: embedding.port };
 
   await refreshAgentFiles(cron, { now }, db, ports);
-  const second = await refreshAgentFiles(cron, { now }, db, ports);
+  // Later nights, as the cron really runs: nothing in a passage depends on the
+  // clock, so the same document hashes the same however long it has been.
+  const night = 24 * 60 * 60 * 1000;
+  const second = await refreshAgentFiles(
+    cron,
+    { now: new Date(now.getTime() + night) },
+    db,
+    ports,
+  );
+  const third = await refreshAgentFiles(
+    cron,
+    { now: new Date(now.getTime() + 30 * night) },
+    db,
+    ports,
+  );
 
   assert.equal(read.reads.length, 1, "OCR runs once per document");
   assert.equal(
@@ -572,8 +590,10 @@ test("a document already read is not read or embedded again", async () => {
     1,
     "unchanged passages keep their vectors",
   );
-  assert.equal(second.extracted, 0);
-  assert.equal(second.embedded, 0);
+  for (const run of [second, third]) {
+    assert.equal(run.extracted, 0);
+    assert.equal(run.embedded, 0);
+  }
 });
 
 test("an unsupported document is not retried; a failed one is, a bounded number of times", async () => {
@@ -641,6 +661,61 @@ test("a document that left the live set loses its passages and its cached text",
   assert.equal(chunks.size, 0);
   assert.equal(texts.size, 0);
   assert.ok(result.removed > 0);
+});
+
+test("a removed document stops answering even when the rest of the run fails", async () => {
+  const survey = fileRow({ id: "survey", projectId: PROJECT_ID });
+  const files = [survey];
+  const { chunks, db, texts } = memoryDb(files);
+  const documentText = reader({
+    [survey.url]: surveyText,
+    "https://blob.example/plans.pdf": surveyText,
+  }).port;
+  await refreshAgentFiles(cron, { now }, db, {
+    documentText,
+    embedding: keywordEmbedding().port,
+  });
+  assert.ok(chunks.size > 0);
+
+  // The survey goes and a new document arrives; writing the new one's
+  // passages fails. The survey must already be gone by then.
+  files.splice(0, files.length, fileRow({ id: "plans", projectId: PROJECT_ID }));
+  const failing = {
+    ...db,
+    agentFileChunk: {
+      ...(db as unknown as { agentFileChunk: object }).agentFileChunk,
+      upsert: async () => {
+        throw new Error("database unavailable");
+      },
+    },
+  } as unknown as DomainDb;
+  await assert.rejects(
+    refreshAgentFiles(cron, { now }, failing, {
+      documentText,
+      embedding: keywordEmbedding().port,
+    }),
+    /database unavailable/,
+  );
+
+  assert.equal(chunks.size, 0, "the removed survey's passages are gone");
+  assert.equal(texts.has(urlHash(survey.url)), false, "so is its cached text");
+});
+
+test("a document's passages are deleted with it by the database, not only by the nightly sweep", () => {
+  // The in-memory database above cannot cascade, so pin the promise where it
+  // lives: deleting a File or an offer reply must delete its passages, and
+  // their vectors with them, at once. Without it a deleted document would
+  // keep answering the agent until the next nightly run.
+  const schema = readFileSync(join(REPO_ROOT, "prisma/schema.prisma"), "utf8");
+  const model = schema.match(/model AgentFileChunk \{[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.match(
+    model,
+    /file\s+File\?\s+@relation\(fields: \[fileId\], references: \[id\], onDelete: Cascade\)/,
+  );
+  assert.match(
+    model,
+    /offerReply\s+OfferDocumentReply\?\s+@relation\(fields: \[offerReplyId\], references: \[id\], onDelete: Cascade\)/,
+  );
 });
 
 test("an embedding outage keeps the passages, says so, and the next run embeds them", async () => {

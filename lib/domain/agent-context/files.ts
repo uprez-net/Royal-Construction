@@ -128,6 +128,20 @@ export async function refreshAgentFiles(
   const maxExtractions = input.maxExtractions ?? DEFAULT_MAX_EXTRACTIONS;
   const sources = await loadFileSources(db, now);
 
+  // Documents that left the live set, or whose record went: their passages
+  // stop answering now, and their cached text goes with them. This runs
+  // before the slow part on purpose. Deleting a File already removes its
+  // passages through the foreign key; this sweep is what catches the rest (an
+  // archived lead, an attachment dropped from a reply), and it must not wait
+  // behind OCR and embedding that can fail or run out of time — a document
+  // someone removed would keep answering until a run got all the way through.
+  const removedPassages = await db.agentFileChunk.deleteMany({
+    where: { sourceKey: { notIn: sources.map((source) => source.sourceKey) } },
+  });
+  const removedTexts = await db.agentFileText.deleteMany({
+    where: { urlHash: { notIn: sources.map((source) => source.urlHash) } },
+  });
+
   let extracted = 0;
   let unsupported = 0;
   let failed = 0;
@@ -237,15 +251,6 @@ export async function refreshAgentFiles(
       await db.agentFileChunk.deleteMany({ where: { id: { in: obsolete } } });
     }
   }
-
-  // Documents that left the live set, or whose record went: their passages
-  // stop answering now, and their cached text goes with them.
-  const removedPassages = await db.agentFileChunk.deleteMany({
-    where: { sourceKey: { notIn: sources.map((source) => source.sourceKey) } },
-  });
-  const removedTexts = await db.agentFileText.deleteMany({
-    where: { urlHash: { notIn: sources.map((source) => source.urlHash) } },
-  });
 
   const { embedded, embeddingFailed } = await embedMissingPassages(
     db,
