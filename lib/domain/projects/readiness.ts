@@ -33,9 +33,10 @@ export type CollectProjectDateBlockersInput = {
  * Block entries (abort creation / reject PATCH):
  * - `start_before_signed` — the on-site start date is before the contract
  *   execution date, an impossible pair for a real build.
- * - `signed_far_before_start` — the signed date is more than
- *   `SIGNED_START_TOLERANCE_DAYS` before the start date, almost certainly a
- *   data-entry error rather than a genuine long lead time.
+ *
+ * A start long after the signing is not a blocker, nor a warning: contracts
+ * are signed first and started once the cover and certificate are in place
+ * (see `compareSignedAndStartDates`).
  *
  * Warn entries (create as `NEEDS_ATTENTION`, surface in the header):
  * - `pca_missing` — the PCA inspector is empty and the project is (or would
@@ -61,13 +62,6 @@ export function collectProjectDateBlockers({
     blockers.push({
       id: "start_before_signed",
       label: `The start date (${comparison.normalizedStartDate ?? "?"}) is before the signed date (${comparison.normalizedSignedDate ?? "?"}). On-site work cannot begin before the contract is executed.`,
-      fieldPath: "requirements.legalAdministration.signedDate",
-      severity: "block",
-    });
-  } else if (comparison.state === "signed_far_before_start") {
-    blockers.push({
-      id: "signed_far_before_start",
-      label: `The signed date (${comparison.normalizedSignedDate}) is more than a year before the start date (${comparison.normalizedStartDate}). This is almost certainly a data-entry error — confirm or correct the dates.`,
       fieldPath: "requirements.legalAdministration.signedDate",
       severity: "block",
     });

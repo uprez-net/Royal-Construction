@@ -1,6 +1,7 @@
 import {
   ChecklistIssueStatus,
   ComplianceAlertStatus,
+  type ComplianceAlertType,
   type ComplianceDocumentType,
   type MilestoneStatus,
   Prisma,
@@ -8,25 +9,25 @@ import {
   type TradieScheduleStatus,
   VariationStatus,
 } from "@prisma/client";
+import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 
+import { COMPLIANCE_ALERT_COPY } from "@/constants/complianceAlerts";
 import { SYDNEY_TZ } from "@/lib/dates/sydney";
 import { openOverdueDays } from "@/lib/projects/milestone-ledger";
 
 import { projectReadScope } from "../access/projects";
-import {
-  BUILD_START_DOCUMENT_TYPES,
-  missingBuildStartDocuments,
-} from "../compliance/lifecycle";
+import { BUILD_START_DOCUMENT_TYPES } from "../compliance/lifecycle";
 import type { DomainDb } from "../db";
 import type { DomainPrincipal } from "../principal";
+import { projectDocumentGaps } from "./document-gaps";
 import {
   hasWorkStarted,
   milestoneEndDate,
   STARTED_MILESTONE_STATUSES,
 } from "./milestone-schedule";
-import { collectProjectDateBlockers } from "./readiness";
 import { missingMilestoneTrades } from "./tradie-dependencies";
+import { formatVariationNumber } from "./variation-rules";
 
 // What on a project needs somebody, and whether it has started on site yet
 // (issues #451 and #452).
@@ -48,9 +49,10 @@ import { missingMilestoneTrades } from "./tradie-dependencies";
 //   - open compliance alert  `ComplianceAlert.status = OPEN` — the project page's Alerts card
 //   - unresolved issue       a checklist defect still OPEN or IN_PROGRESS
 //   - variation pending      `Variation.status = PENDING` — awaiting the client
-//   - missing documents      the readiness warns (PCA, HBCF number) from day
-//                            one, and `missingBuildStartDocuments` once work
-//                            has started on site
+//   - missing documents      `projectDocumentGaps` — the readiness warns (PCA,
+//                            HBCF number) from day one, and
+//                            `missingBuildStartDocuments` once work has
+//                            started on site
 //   - dependency breach      `missingMilestoneTrades` — the project page's
 //                            "No confirmed … booking" alert; it only looks at
 //                            activities under way, so a booking not yet due is
@@ -59,6 +61,12 @@ import { missingMilestoneTrades } from "./tradie-dependencies";
 // **Drafting** is the stage before any of that work: no activity has started.
 // `hasWorkStarted` is the same test that freezes a project's start date, so the
 // two can never disagree about whether a job is under way.
+//
+// **Every condition names what it is about.** "2 activities overdue" sent the
+// office into the project to find out which two; the label now says which
+// activity, which alert, which variation, which document, and by how much. A
+// condition over a single thing is one sentence naming it; over several it is
+// a count with each one listed in `details`.
 
 export type AttentionKind =
   | "OVERDUE"
@@ -70,11 +78,30 @@ export type AttentionKind =
 
 export type AttentionCondition = {
   readonly kind: AttentionKind;
-  /** One line an operator can act on: "2 activities overdue". */
+  /**
+   * One line an operator can act on. Names the thing when there is one
+   * ("Slab is 3 days overdue (expected 9 Nov)"); a count when there are
+   * several ("2 activities overdue"), with each one in `details`.
+   */
   readonly label: string;
   /** How many things of this kind are outstanding. */
   readonly count: number;
+  /**
+   * The outstanding things, named, when there is more than one: the first
+   * `ATTENTION_DETAIL_LIMIT`, most urgent first, so `count` minus this
+   * length is how many more there are. Empty when the label already names the
+   * only one.
+   */
+  // Mutable: it travels through the Redux store with the list rows.
+  readonly details: string[];
 };
+
+/**
+ * How many things one condition names. Every project on the list carries its
+ * conditions, and a test job had 83 overdue activities: listing them all made
+ * the payload grow with the backlog, for a column that has room for a few.
+ */
+export const ATTENTION_DETAIL_LIMIT = 3;
 
 export type OverdueActivity = {
   readonly milestoneId: string;
@@ -125,12 +152,24 @@ export type AttentionSource = {
     readonly trade: string | null;
     readonly tradie: { readonly trade: string };
   }[];
-  readonly variations: readonly { readonly status: VariationStatus }[];
+  readonly variations: readonly {
+    readonly status: VariationStatus;
+    readonly number: number | null;
+    readonly description: string;
+  }[];
   readonly checklists: readonly {
-    readonly issues: readonly { readonly status: ChecklistIssueStatus }[];
+    readonly title: string;
+    readonly issues: readonly {
+      readonly status: ChecklistIssueStatus;
+      readonly number: number;
+      readonly description: string;
+    }[];
   }[];
   readonly certifierEngagement: {
-    readonly alerts: readonly { readonly status: ComplianceAlertStatus }[];
+    readonly alerts: readonly {
+      readonly status: ComplianceAlertStatus;
+      readonly type: ComplianceAlertType;
+    }[];
     readonly documents: readonly {
       readonly documentType: ComplianceDocumentType;
       readonly _count: { readonly files: number };
@@ -143,15 +182,51 @@ const UNRESOLVED_ISSUE_STATUSES: readonly ChecklistIssueStatus[] = [
   ChecklistIssueStatus.IN_PROGRESS,
 ];
 
-/** The readiness warns, in the words the attention list uses. */
-const READINESS_GAP_LABEL: Record<string, string> = {
-  pca_missing: "PCA inspector",
-  hbcf_missing: "HBCF insurance number",
-  signed_date_unparseable: "a valid signed date",
-};
+/** Longest free text (a variation's reason, an issue's description) quoted. */
+const QUOTE_LIMIT = 60;
 
 function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
+}
+
+/** Free text cut to one short line, on a word where it can be. */
+function quote(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  if (flat.length <= QUOTE_LIMIT) return flat;
+  const cut = flat.slice(0, QUOTE_LIMIT);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > QUOTE_LIMIT / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
+/**
+ * "9 Nov" on Sydney's calendar, with the year when it is not this year's: an
+ * activity three years late read "expected 13 Oct", which says the wrong
+ * October.
+ */
+function sydneyDay(iso: string, now: Date): string {
+  const day = toZonedTime(new Date(iso), SYDNEY_TZ);
+  const thisYear = toZonedTime(now, SYDNEY_TZ).getFullYear();
+  return format(day, day.getFullYear() === thisYear ? "d MMM" : "d MMM yyyy");
+}
+
+/**
+ * One condition over `items`: the item itself when there is one, otherwise a
+ * count with the first few named.
+ */
+function condition(
+  kind: AttentionKind,
+  items: readonly string[],
+  single: (item: string) => string,
+  summary: (count: number) => string,
+): AttentionCondition {
+  return items.length === 1
+    ? { kind, count: 1, label: single(items[0]), details: [] }
+    : {
+        kind,
+        count: items.length,
+        label: summary(items.length),
+        details: items.slice(0, ATTENTION_DETAIL_LIMIT),
+      };
 }
 
 /**
@@ -223,92 +298,113 @@ export function assessProjectAttention(
     })
     .sort((a, b) => b.daysOverdue - a.daysOverdue);
   if (overdue.length > 0) {
+    const late = overdue.map(
+      (activity) =>
+        `${activity.name} — ${plural(activity.daysOverdue, "day", "days")} overdue (expected ${sydneyDay(activity.expectedCompletion, now)})`,
+    );
     conditions.push({
-      kind: "OVERDUE",
-      count: overdue.length,
-      label: `${plural(overdue.length, "activity", "activities")} overdue`,
+      ...condition(
+        "OVERDUE",
+        late,
+        () => {
+          const [only] = overdue;
+          return `${only.name} is ${plural(only.daysOverdue, "day", "days")} overdue (expected ${sydneyDay(only.expectedCompletion, now)})`;
+        },
+        (count) => `${plural(count, "activity", "activities")} overdue`,
+      ),
     });
   }
 
-  const openAlerts = (project.certifierEngagement?.alerts ?? []).filter(
-    (alert) => alert.status === ComplianceAlertStatus.OPEN,
-  ).length;
-  if (openAlerts > 0) {
-    conditions.push({
-      kind: "COMPLIANCE_ALERT",
-      count: openAlerts,
-      label: `${plural(openAlerts, "open compliance alert", "open compliance alerts")}`,
-    });
+  const openAlerts = (project.certifierEngagement?.alerts ?? [])
+    .filter((alert) => alert.status === ComplianceAlertStatus.OPEN)
+    .map((alert) => COMPLIANCE_ALERT_COPY[alert.type].title);
+  if (openAlerts.length > 0) {
+    conditions.push(
+      condition(
+        "COMPLIANCE_ALERT",
+        openAlerts,
+        (title) => `Open compliance alert: ${title}`,
+        (count) =>
+          `${plural(count, "open compliance alert", "open compliance alerts")}`,
+      ),
+    );
   }
 
-  const issues = project.checklists
-    .flatMap((checklist) => checklist.issues)
-    .filter((issue) => UNRESOLVED_ISSUE_STATUSES.includes(issue.status)).length;
-  if (issues > 0) {
-    conditions.push({
-      kind: "ISSUE",
-      count: issues,
-      label: `${plural(issues, "unresolved checklist issue", "unresolved checklist issues")}`,
-    });
+  const issues = project.checklists.flatMap((checklist) =>
+    checklist.issues
+      .filter((issue) => UNRESOLVED_ISSUE_STATUSES.includes(issue.status))
+      .map(
+        (issue) =>
+          `${checklist.title} #${issue.number}: ${quote(issue.description)}`,
+      ),
+  );
+  if (issues.length > 0) {
+    conditions.push(
+      condition(
+        "ISSUE",
+        issues,
+        (issue) => `Unresolved checklist issue — ${issue}`,
+        (count) =>
+          `${plural(count, "unresolved checklist issue", "unresolved checklist issues")}`,
+      ),
+    );
   }
 
-  const variations = project.variations.filter(
-    (variation) => variation.status === VariationStatus.PENDING,
-  ).length;
-  if (variations > 0) {
-    conditions.push({
-      kind: "VARIATION",
-      count: variations,
-      label: `${plural(variations, "variation", "variations")} awaiting approval`,
-    });
+  const variations = project.variations
+    .filter((variation) => variation.status === VariationStatus.PENDING)
+    .map(
+      (variation) =>
+        `${formatVariationNumber(variation.number)}: ${quote(variation.description)}`,
+    );
+  if (variations.length > 0) {
+    conditions.push(
+      condition(
+        "VARIATION",
+        variations,
+        (variation) => `Variation awaiting client approval — ${variation}`,
+        (count) =>
+          `${plural(count, "variation", "variations")} awaiting client approval`,
+      ),
+    );
   }
 
-  // Documents follow the stage: before anything has started on site, chasing
-  // the certificate and the HBCF cover is the compliance file's job, and its
-  // own overdue alerts say when one is late. Once work has started they are
-  // documents the build is going on without.
-  const missing: string[] = [];
-  if (started) {
-    const held = new Set(
+  // The same entries the project page lists one by one.
+  const missing = projectDocumentGaps({
+    status: project.status,
+    started,
+    legal: legalAdministration(project.requirements),
+    heldDocuments: new Set(
       (project.certifierEngagement?.documents ?? [])
         .filter((document) => document._count.files > 0)
         .map((document) => document.documentType),
-    );
-    missing.push(...missingBuildStartDocuments(held));
-  }
-  const legal = legalAdministration(project.requirements);
-  const warns = collectProjectDateBlockers({
-    signedDate: legal?.signedDate ?? null,
-    startDate: null,
-    pcaInspector: legal?.pcaInspector ?? null,
-    hbcfInsuranceNumber: legal?.hbcfInsuranceNumber ?? null,
-    // Asked as ACTIVE whatever the stage, as creation always asked it: the
-    // gate is what stands between this job and going on site, and a missing
-    // PCA or HBCF number on a drafting job is exactly that. A completed
-    // project is never read here (`readinessWarningsApply`).
-    status: ProjectStatus.ACTIVE,
-  }).filter((blocker) => blocker.severity === "warn");
-  for (const warn of warns) {
-    const label = READINESS_GAP_LABEL[warn.id];
-    if (label) missing.push(label);
-  }
+    ),
+  }).map((gap) => gap.title);
   if (missing.length > 0) {
-    conditions.push({
-      kind: "MISSING_DOCUMENT",
-      count: missing.length,
-      label: `Missing ${missing.join(", ")}`,
-    });
+    conditions.push(
+      condition(
+        "MISSING_DOCUMENT",
+        missing,
+        (gap) => gap,
+        (count) => `${count} required documents or details missing`,
+      ),
+    );
   }
 
   const missingTrades = project.milestones.flatMap((milestone) =>
-    missingMilestoneTrades(milestone, project.tradieSchedules),
-  ).length;
-  if (missingTrades > 0) {
-    conditions.push({
-      kind: "DEPENDENCY",
-      count: missingTrades,
-      label: `${plural(missingTrades, "required trade", "required trades")} not booked for work under way`,
-    });
+    missingMilestoneTrades(milestone, project.tradieSchedules).map(
+      (trade) => `No confirmed ${trade} booking for ${milestone.name}`,
+    ),
+  );
+  if (missingTrades.length > 0) {
+    conditions.push(
+      condition(
+        "DEPENDENCY",
+        missingTrades,
+        (trade) => `${trade}, which has started`,
+        (count) =>
+          `${plural(count, "required trade", "required trades")} not booked for work under way`,
+      ),
+    );
   }
 
   return {
@@ -352,13 +448,17 @@ export const attentionSourceSelect = {
   },
   variations: {
     where: { status: VariationStatus.PENDING },
-    select: { status: true },
+    orderBy: [{ number: "asc" }, { requestedDate: "asc" }],
+    select: { status: true, number: true, description: true },
   },
   checklists: {
+    orderBy: { number: "asc" },
     select: {
+      title: true,
       issues: {
         where: { status: { in: [...UNRESOLVED_ISSUE_STATUSES] } },
-        select: { status: true },
+        orderBy: { number: "asc" },
+        select: { status: true, number: true, description: true },
       },
     },
   },
@@ -366,7 +466,8 @@ export const attentionSourceSelect = {
     select: {
       alerts: {
         where: { status: ComplianceAlertStatus.OPEN },
-        select: { status: true },
+        orderBy: { createdAt: "asc" },
+        select: { status: true, type: true },
       },
       documents: {
         where: { documentType: { in: [...BUILD_START_DOCUMENT_TYPES] } },

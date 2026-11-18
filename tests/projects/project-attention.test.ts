@@ -3,6 +3,7 @@ import { describe, test } from "vitest";
 
 import {
   assessProjectAttention,
+  ATTENTION_DETAIL_LIMIT,
   needingAttention,
   type AttentionSource,
 } from "@/lib/domain/projects/attention";
@@ -110,6 +111,57 @@ describe("Needs Attention", () => {
       attention.overdue[0].expectedCompletion,
       new Date("2026-11-02T13:00:00Z").toISOString(),
     );
+    // The line on the projects list names the activity, by how much and since
+    // when, rather than "1 activity overdue".
+    assert.equal(
+      attention.conditions[0].label,
+      "Slab is 10 days overdue (expected 3 Nov)",
+    );
+    assert.deepEqual(attention.conditions[0].details, []);
+  });
+
+  test("several overdue activities are counted and each one named, worst first", () => {
+    const late = project({
+      milestones: [
+        milestone({
+          id: "a",
+          name: "Slab",
+          targetDate: new Date("2026-11-08T13:00:00Z"),
+        }),
+        milestone({
+          id: "b",
+          name: "Frame",
+          targetDate: new Date("2026-10-31T13:00:00Z"),
+        }),
+      ],
+    });
+    const [overdue] = assessProjectAttention(late, NOW).conditions;
+    assert.equal(overdue.label, "2 activities overdue");
+    assert.deepEqual(overdue.details, [
+      "Frame — 10 days overdue (expected 3 Nov)",
+      "Slab — 2 days overdue (expected 11 Nov)",
+    ]);
+  });
+
+  test("a date from another year says which year, and a long list names only the worst few", () => {
+    const backlog = project({
+      milestones: Array.from({ length: 5 }, (_, index) =>
+        milestone({
+          id: `m${index}`,
+          name: `Step ${index}`,
+          // Sydney midnight on 1 Oct 2024 onward, a day apart.
+          targetDate: new Date(Date.UTC(2024, 8, 30 + index, 14)),
+        }),
+      ),
+    });
+    const [overdue] = assessProjectAttention(backlog, NOW).conditions;
+    assert.equal(overdue.label, "5 activities overdue");
+    assert.equal(overdue.count, 5);
+    assert.equal(overdue.details.length, ATTENTION_DETAIL_LIMIT);
+    assert.match(
+      overdue.details[0],
+      /^Step 0 — \d+ days overdue \(expected 3 Oct 2024\)$/,
+    );
   });
 
   test("overdue is judged on Sydney's calendar, not the server's UTC one", () => {
@@ -151,11 +203,29 @@ describe("Needs Attention", () => {
   test("open compliance alerts, unresolved issues and pending variations each count", () => {
     const busy = project({
       certifierEngagement: {
-        alerts: [{ status: "OPEN" }, { status: "OPEN" }],
+        alerts: [
+          { status: "OPEN", type: "STALE_TITLE_SEARCH" },
+          { status: "OPEN", type: "DA_APPROVAL_REQUIRED" },
+        ],
         documents: [],
       },
-      checklists: [{ issues: [{ status: "OPEN" }, { status: "IN_PROGRESS" }] }],
-      variations: [{ status: "PENDING" }],
+      checklists: [
+        {
+          title: "Pre-handover",
+          issues: [
+            { status: "OPEN", number: 3, description: "Chipped benchtop" },
+            {
+              status: "IN_PROGRESS",
+              number: 4,
+              description:
+                "Laundry tap leaking at the base where it meets the splashback tiles",
+            },
+          ],
+        },
+      ],
+      variations: [
+        { status: "PENDING", number: 2, description: "Extra window in bed 3" },
+      ],
     });
     const attention = assessProjectAttention(busy, NOW);
     assert.deepEqual(
@@ -166,15 +236,37 @@ describe("Needs Attention", () => {
         ["VARIATION", 1],
       ],
     );
+    // Each names what it is about.
+    const [alerts, issues, variation] = attention.conditions;
+    assert.deepEqual(alerts.details, [
+      "Title search does not name the owners",
+      "Development approval required",
+    ]);
+    assert.deepEqual(issues.details, [
+      "Pre-handover #3: Chipped benchtop",
+      "Pre-handover #4: Laundry tap leaking at the base where it meets the…",
+    ]);
+    assert.equal(
+      variation.label,
+      "Variation awaiting client approval — V-002: Extra window in bed 3",
+    );
     // Drafting and needing attention at once: neither replaces the other.
     assert.equal(attention.drafting, true);
   });
 
   test("resolved things clear their condition", () => {
     const resolved = project({
-      certifierEngagement: { alerts: [{ status: "RESOLVED" }], documents: [] },
-      checklists: [{ issues: [{ status: "VERIFIED" }] }],
-      variations: [{ status: "APPROVED" }],
+      certifierEngagement: {
+        alerts: [{ status: "RESOLVED", type: "STALE_TITLE_SEARCH" }],
+        documents: [],
+      },
+      checklists: [
+        {
+          title: "Pre-handover",
+          issues: [{ status: "VERIFIED", number: 1, description: "Fixed" }],
+        },
+      ],
+      variations: [{ status: "APPROVED", number: 1, description: "Done" }],
     });
     assert.deepEqual(kinds(resolved), []);
   });
@@ -201,7 +293,10 @@ describe("Needs Attention", () => {
     const missing = assessProjectAttention(started, NOW).conditions.find(
       (c) => c.kind === "MISSING_DOCUMENT",
     );
-    assert.equal(missing?.label, "Missing HBCF certificate");
+    assert.equal(
+      missing?.label,
+      "No HBCF certificate on file, but work has started",
+    );
   });
 
   test("the readiness gaps count once work has started", () => {
@@ -220,10 +315,11 @@ describe("Needs Attention", () => {
     const missing = assessProjectAttention(started, NOW).conditions.find(
       (c) => c.kind === "MISSING_DOCUMENT",
     );
-    assert.equal(
-      missing?.label,
-      "Missing PCA inspector, HBCF insurance number",
-    );
+    assert.equal(missing?.label, "2 required documents or details missing");
+    assert.deepEqual(missing?.details, [
+      "No PCA inspector assigned",
+      "No HBCF insurance number recorded",
+    ]);
   });
 
   test("a missing PCA or HBCF number is flagged before work starts, as creation always flagged it", () => {
@@ -234,10 +330,43 @@ describe("Needs Attention", () => {
     const attention = assessProjectAttention(drafting, NOW);
     assert.equal(attention.drafting, true);
     // The certificate files are still the compliance file's job before start.
-    assert.equal(
-      attention.conditions.find((c) => c.kind === "MISSING_DOCUMENT")?.label,
-      "Missing PCA inspector, HBCF insurance number",
+    assert.deepEqual(
+      attention.conditions.find((c) => c.kind === "MISSING_DOCUMENT")?.details,
+      ["No PCA inspector assigned", "No HBCF insurance number recorded"],
     );
+  });
+
+  test("an unreadable signed date is quoted, so the office sees what is wrong", () => {
+    const garbled = project({
+      requirements: {
+        legalAdministration: {
+          signedDate: "TBC",
+          pcaInspector: "Jane Certifier",
+          hbcfInsuranceNumber: "HBCF-1",
+        },
+      },
+    });
+    assert.equal(
+      assessProjectAttention(garbled, NOW).conditions.find(
+        (c) => c.kind === "MISSING_DOCUMENT",
+      )?.label,
+      'Signed date "TBC" is not a date',
+    );
+  });
+
+  test("a contract signed long before an HBCF claim date is not flagged", () => {
+    // Signed first, insured and started well over a year later.
+    const signedEarly = project({
+      requirements: {
+        legalAdministration: {
+          signedDate: "2025-01-10",
+          pcaInspector: "Jane Certifier",
+          hbcfInsuranceNumber: "HBCF-1",
+          insuranceClaimStartDate: "2026-11-20",
+        },
+      },
+    });
+    assert.deepEqual(kinds(signedEarly), []);
   });
 
   test("a required trade with no confirmed booking breaches the dependency only once the activity is under way", () => {

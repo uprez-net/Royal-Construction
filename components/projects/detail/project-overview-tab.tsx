@@ -85,6 +85,14 @@ import {
   hbcfClaimDate,
   readHbcfClaimDocuments,
 } from "@/lib/domain/insurance/hbcf-claims";
+import { projectDocumentGaps } from "@/lib/domain/projects/document-gaps";
+import { normalizeDateString } from "@/utils/date";
+import {
+  DOCUMENT_ATTENTION_ID,
+  DocumentAttentionPanel,
+  type DocumentGapTarget,
+} from "@/components/projects/detail/document-attention-panel";
+import type { VisibleProjectDetailTabKey } from "@/components/projects/detail/project-tab-navigation";
 
 // ---------------------------------------------------------------------------
 // Types & config
@@ -160,7 +168,10 @@ const SECTION_FIELDS: Record<ProjectFlowSectionKey, FieldConfig[]> = {
   legalAdministration: [
     { key: "siteAddress", label: "Site address", type: "textarea", span: 2 },
     { key: "commencementTrigger", label: "Commencement trigger", type: "text" },
-    { key: "signedDate", label: "Signed (contract executed)", type: "text" },
+    // A date, stored `yyyy-MM-dd`: the server normalises it on every save and
+    // compares it with the start date. It was a free-text box, which is how
+    // "TBC" and "12th June" got in.
+    { key: "signedDate", label: "Signed (contract executed)", type: "date" },
     { key: "pcaInspector", label: "PCA inspector", type: "text" },
     // Captured when the first Slab-stage milestone starts, and editable here
     // afterwards through the same PATCH that the kickoff prompt uses.
@@ -264,6 +275,9 @@ function parseNumber(raw: string): number | null {
  * `<input type="date">` only accepts `yyyy-MM-dd`. Requirements dates are
  * written in that shape, but older payloads may carry a full ISO timestamp, so
  * anything longer is trimmed back to the date part rather than shown blank.
+ * Anything else ("12 March 2026" read off a contract) goes through
+ * `normalizeDateString`, the parser the server normalises the signed date
+ * with on save.
  */
 function toDateInputValue(value: unknown) {
   if (value instanceof Date) {
@@ -279,7 +293,13 @@ function toDateInputValue(value: unknown) {
   if (typeof value !== "string" || value.trim() === "") return "";
 
   const [datePart] = value.split("T");
-  return /^\d{4}-\d{2}-\d{2}$/.test(datePart) ? datePart : "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
+  return normalizeDateString(value) ?? "";
+}
+
+/** The element id a field is scrolled to from the document attention panel. */
+function fieldAnchorId(field: string) {
+  return `project-field-${field}`;
 }
 
 function displayValue(value: unknown) {
@@ -371,15 +391,32 @@ function DateField({
   onChange: (v: string | null) => void;
 }) {
   const id = useId();
+  const inputValue = toDateInputValue(value);
+  // A stored value no parser can read ("TBC", "on exchange") would show as an
+  // empty picker and look unset. Say what is there, so it is replaced on
+  // purpose rather than by accident.
+  const unreadable =
+    typeof value === "string" && value.trim() !== "" && inputValue === ""
+      ? value.trim()
+      : null;
+  const hintId = `${id}-unreadable`;
   return (
     <FieldShell label={label} htmlFor={id}>
       <Input
         id={id}
         type="date"
-        value={toDateInputValue(value)}
+        value={inputValue}
+        aria-describedby={unreadable ? hintId : undefined}
+        aria-invalid={unreadable ? true : undefined}
         onChange={(e) => onChange(emptyToNull(e.target.value))}
         className={cn(FIELD_CONTROL_CLASS, "font-mono tabular-nums")}
       />
+      {unreadable ? (
+        <p id={hintId} className="text-[11px] leading-snug text-warning-ink">
+          Recorded as &ldquo;{unreadable}&rdquo;, which is not a date. Pick the
+          date to replace it.
+        </p>
+      ) : null}
     </FieldShell>
   );
 }
@@ -1448,9 +1485,12 @@ function ConflictRow({ conflict }: { conflict: ProjectConflictResult }) {
 export function ProjectOverviewTab({
   project,
   isAdmin,
+  onOpenTab,
 }: {
   project: ProjectDetail;
   isAdmin: boolean;
+  /** Switches the project page to another tab (a certificate's upload). */
+  onOpenTab: (tab: VisibleProjectDetailTabKey) => void;
 }) {
   const params = useParams();
   const dispatch = useAppDispatch();
@@ -1951,21 +1991,89 @@ export function ProjectOverviewTab({
       ?.legalAdministration as Parameters<typeof hbcfClaimDate>[0],
   );
 
+  // The document half of Needs Attention, from the same rule the projects
+  // list reads. The saved project, not the draft: an item clears when its fix
+  // is saved, which is when it leaves the list too.
+  const documentGaps = useMemo(() => {
+    const savedLegal = (project.requirements as RequirementsData | null)
+      ?.legalAdministration as
+      | {
+          signedDate?: string | null;
+          pcaInspector?: string | null;
+          hbcfInsuranceNumber?: string | null;
+        }
+      | undefined;
+    return projectDocumentGaps({
+      status: project.status,
+      started: hasWorkStarted(project.milestones),
+      legal: {
+        signedDate: savedLegal?.signedDate,
+        pcaInspector: savedLegal?.pcaInspector,
+        hbcfInsuranceNumber: savedLegal?.hbcfInsuranceNumber,
+      },
+      heldDocuments: new Set(
+        (project.certifierEngagement?.documents ?? [])
+          .filter((document) => document.files.length > 0)
+          .map((document) => document.documentType),
+      ),
+    });
+  }, [
+    project.requirements,
+    project.status,
+    project.milestones,
+    project.certifierEngagement,
+  ]);
+
+  /**
+   * Opens the section a field lives in, scrolls it into view and puts the
+   * cursor in it. A collapsed section is given time to expand first, or the
+   * browser scrolls to where the field will be before it is there.
+   */
+  const goToDocumentGap = (target: DocumentGapTarget) => {
+    if (target.kind === "tab") {
+      onOpenTab(target.tab);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    const alreadyOpen = openSection === target.section;
+    setOpenSection(target.section);
+    window.setTimeout(
+      () => {
+        const element = document.getElementById(fieldAnchorId(target.field));
+        if (!element) return;
+        const reduceMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+        // Centred, so the sticky Save bar above the form does not cover it.
+        element.scrollIntoView({
+          behavior: reduceMotion ? "auto" : "smooth",
+          block: "center",
+        });
+        element
+          .querySelector<HTMLElement>("input, textarea, button")
+          ?.focus({ preventScroll: true });
+      },
+      alreadyOpen ? 0 : 250,
+    );
+  };
+
   // Header chips and the compliance banner deep-link here via
-  // `#legalAdministration`. Re-apply on hashchange too — a click while
-  // already on Overview used to leave the accordion closed because `params`
-  // (the only prior dependency) does not change for a same-route hash nav.
+  // `#legalAdministration` (a section) or `#document-attention` (the panel).
+  // Re-apply on hashchange too — a click while already on Overview used to
+  // leave the accordion closed because `params` (the only prior dependency)
+  // does not change for a same-route hash nav.
   useEffect(() => {
     const applyHash = () => {
-      const section = window.location.hash.slice(1);
-      if (!section) return;
-      setOpenSection(section);
+      const target = window.location.hash.slice(1);
+      if (!target) return;
+      // Only a section opens; the panel's id must not collapse the one open.
+      if (target in SECTION_META) setOpenSection(target);
       // Wait a tick for the accordion to expand before scrolling, otherwise
       // the browser lands on a collapsed header and the fields stay off-screen.
       window.setTimeout(() => {
-        document.getElementById(section)?.scrollIntoView({
+        document.getElementById(target)?.scrollIntoView({
           behavior: "smooth",
-          block: "start",
+          block: target === DOCUMENT_ATTENTION_ID ? "center" : "start",
         });
       }, 50);
     };
@@ -2054,6 +2162,15 @@ export function ProjectOverviewTab({
         </CardHeader>
 
         <CardContent className="space-y-5 px-4 pt-4 sm:px-6 sm:pt-5">
+          {/* First on the tab: what is keeping this job in Needs attention,
+              and where each one is fixed. */}
+          <DocumentAttentionPanel
+            gaps={documentGaps}
+            hasComplianceFile={project.certifierEngagement !== null}
+            unsaved={dirty}
+            onGo={goToDocumentGap}
+          />
+
           {/* Overview fields */}
           <div className="grid gap-4 md:grid-cols-3">
             <TextField
@@ -2202,6 +2319,7 @@ export function ProjectOverviewTab({
                       {SECTION_FIELDS[key].map((config) => (
                         <div
                           key={config.key}
+                          id={fieldAnchorId(config.key)}
                           className={
                             config.span === 2
                               ? "md:col-span-2 xl:col-span-2"
@@ -2227,44 +2345,49 @@ export function ProjectOverviewTab({
                     ) : null}
 
                     {key === "legalAdministration" ? (
-                      <HbcfClaimsBlock
-                        projectId={project.id}
-                        insuranceNumber={hbcfInsuranceNumber}
-                        documents={hbcfClaimDocuments}
-                        claimDate={hbcfClaimDate(
-                          legalAdministration as Parameters<
-                            typeof hbcfClaimDate
-                          >[0],
-                        )}
-                        extracting={hbcfExtracting}
-                        canRemove={isAdmin}
-                        onNumberChange={(value) =>
-                          updateSectionField(
-                            "legalAdministration",
-                            "hbcfInsuranceNumber",
-                            value,
-                          )
-                        }
-                        onDocumentsChange={(documents) => {
-                          const primary = documents[0];
-                          editDraft((current) => ({
-                            ...current,
-                            legalAdministration: {
-                              ...(current.legalAdministration as object),
-                              hbcfClaimDocuments: documents,
-                              hbcfInsuranceDocument: primary
-                                ? {
-                                    fileId: primary.fileId,
-                                    fileName: primary.fileName,
-                                    kind: "hbcfInsurance",
-                                    url: primary.url,
-                                  }
-                                : null,
-                            } as never,
-                          }));
-                        }}
-                        onUpload={handleHbcfUpload}
-                      />
+                      // The number input is the block's first control, which
+                      // is what the attention panel's "Go to HBCF number"
+                      // focuses.
+                      <div id={fieldAnchorId("hbcfInsuranceNumber")}>
+                        <HbcfClaimsBlock
+                          projectId={project.id}
+                          insuranceNumber={hbcfInsuranceNumber}
+                          documents={hbcfClaimDocuments}
+                          claimDate={hbcfClaimDate(
+                            legalAdministration as Parameters<
+                              typeof hbcfClaimDate
+                            >[0],
+                          )}
+                          extracting={hbcfExtracting}
+                          canRemove={isAdmin}
+                          onNumberChange={(value) =>
+                            updateSectionField(
+                              "legalAdministration",
+                              "hbcfInsuranceNumber",
+                              value,
+                            )
+                          }
+                          onDocumentsChange={(documents) => {
+                            const primary = documents[0];
+                            editDraft((current) => ({
+                              ...current,
+                              legalAdministration: {
+                                ...(current.legalAdministration as object),
+                                hbcfClaimDocuments: documents,
+                                hbcfInsuranceDocument: primary
+                                  ? {
+                                      fileId: primary.fileId,
+                                      fileName: primary.fileName,
+                                      kind: "hbcfInsurance",
+                                      url: primary.url,
+                                    }
+                                  : null,
+                              } as never,
+                            }));
+                          }}
+                          onUpload={handleHbcfUpload}
+                        />
+                      </div>
                     ) : null}
 
                     {key === "commercialsAndClaims" ? (

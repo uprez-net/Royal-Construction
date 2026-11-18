@@ -5,7 +5,6 @@ import {
   normalizeDateString,
   formatDisplayDate,
   compareSignedAndStartDates,
-  SIGNED_START_TOLERANCE_DAYS,
 } from "@/utils/date";
 
 // ---------------------------------------------------------------------------
@@ -146,19 +145,12 @@ test("compareSignedAndStartDates returns 'start_before_signed' when start preced
   assert.equal(result.normalizedStartDate, "2026-05-01");
 });
 
-test("compareSignedAndStartDates returns 'signed_far_before_start' beyond the tolerance", () => {
-  // Tolerance is 365 days; pick a gap just over a year.
+test("compareSignedAndStartDates returns 'ok' however long after signing the start is", () => {
+  // Signed first, started later: a gap of well over a year is a real job.
   const result = compareSignedAndStartDates("2026-01-01", "2027-06-01");
-  assert.equal(result.state, "signed_far_before_start");
+  assert.equal(result.state, "ok");
   assert.equal(result.normalizedSignedDate, "2026-01-01");
   assert.equal(result.normalizedStartDate, "2027-06-01");
-});
-
-test("compareSignedAndStartDates returns 'ok' when gap is exactly at the tolerance boundary", () => {
-  // 365 days = 2026-01-01 to 2027-01-01. The boundary is inclusive (gap >
-  // tolerance), so exactly 365 days is 'ok'.
-  const result = compareSignedAndStartDates("2026-01-01", "2027-01-01");
-  assert.equal(result.state, "ok");
 });
 
 test("compareSignedAndStartDates returns 'unparseable' when the signed date is garbage", () => {
@@ -189,8 +181,4 @@ test("compareSignedAndStartDates normalizes OCR formats before comparing", () =>
   assert.equal(result.state, "ok");
   assert.equal(result.normalizedSignedDate, "2026-06-12");
   assert.equal(result.normalizedStartDate, "2026-06-15");
-});
-
-test("SIGNED_START_TOLERANCE_DAYS is 365", () => {
-  assert.equal(SIGNED_START_TOLERANCE_DAYS, 365);
 });
