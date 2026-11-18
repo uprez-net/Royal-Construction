@@ -32,9 +32,11 @@ export interface GraphAttachmentMetadata {
    */
   isInline: boolean;
   /**
-   * Set when the body can refer to the file by Content-ID. Present on embedded
-   * images Graph still reports as not inline, which is how a signature logo
-   * gets past `isInline` alone.
+   * Set when the body can refer to the file by Content-ID. `listMessageAttachments`
+   * never fills it: Graph defines `contentId` on `fileAttachment` only, so
+   * selecting it on the attachment collection is a 400. A signature logo that
+   * Graph reports as not inline is caught by name and size in
+   * `isSignatureNoise` instead.
    */
   contentId?: string | null;
   /**
@@ -362,7 +364,6 @@ interface GraphApiAttachment {
   contentType?: string;
   size?: number;
   isInline?: boolean;
-  contentId?: string | null;
   "@odata.type"?: string;
 }
 
@@ -728,10 +729,16 @@ export async function createGraphContext(
       // inline every fileAttachment's base64 contentBytes in one response, so a
       // mail carrying three large files is downloaded in full just to find out
       // what is there.
+      //
+      // Select only properties of the base `attachment` type (id, name,
+      // contentType, size, isInline). `contentId` belongs to `fileAttachment`,
+      // and Graph answers a select of it on this collection with a 400 that
+      // fails every caller: sent-mail sync, offer replies, tradie invoices and
+      // lead mail. `@odata.type` comes back without being asked for.
       const list = await graphRequest<{ value: GraphApiAttachment[] }>(
         "GET",
         `https://graph.microsoft.com/v1.0${messagesPath}/${encodeURIComponent(messageId)}`
-          + "/attachments?$select=id,name,contentType,size,isInline,contentId",
+          + "/attachments?$select=id,name,contentType,size,isInline",
         token,
       );
 
@@ -746,7 +753,6 @@ export async function createGraphContext(
           contentType: attachment.contentType ?? "",
           size: attachment.size ?? 0,
           isInline: attachment.isInline ?? false,
-          contentId: attachment.contentId ?? null,
           odataType: attachment["@odata.type"] ?? "",
         }));
     },
