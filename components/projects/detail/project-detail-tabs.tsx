@@ -218,7 +218,11 @@ export function ProjectDetailTabs({
           tags={TAB_UPLOAD_HINTS[activeTab]?.tags}
         >
           {activeTab === "overview" ? (
-            <ProjectOverviewTab project={project} isAdmin={isAdmin} />
+            <ProjectOverviewTab
+              project={project}
+              isAdmin={isAdmin}
+              onOpenTab={handleTabChange}
+            />
           ) : null}
           {activeTab === "milestones" ? (
             <ProjectMilestonesTab

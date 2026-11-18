@@ -10,16 +10,6 @@
 // a `yyyy-MM-dd` value never drifts a day backwards in a negative-UTC-offset
 // timezone.
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-/**
- * Maximum tolerated gap (in days) between the signed date and the start date
- * before the pair is considered suspect (`signed_far_before_start`). Beyond
- * one year the dates are almost certainly a data-entry error rather than a
- * genuine long lead time.
- */
-export const SIGNED_START_TOLERANCE_DAYS = 365;
-
 /**
  * Normalizes a date string to `YYYY-MM-DD`.
  *
@@ -90,9 +80,9 @@ export function normalizeDateString(input: string): string | null {
     const date = new Date(Date.UTC(year, month - 1, day));
 
     if (
-      date.getUTCFullYear() !== year ||
-      date.getUTCMonth() + 1 !== month ||
-      date.getUTCDate() !== day
+      date.getUTCFullYear() !== year
+      || date.getUTCMonth() + 1 !== month
+      || date.getUTCDate() !== day
     ) {
       return null;
     }
@@ -180,11 +170,7 @@ export function formatDisplayDate(
  * (on-site commencement) date.
  */
 export type SignedStartComparisonResult = {
-  readonly state:
-    | "ok"
-    | "start_before_signed"
-    | "signed_far_before_start"
-    | "unparseable";
+  readonly state: "ok" | "start_before_signed" | "unparseable";
   readonly normalizedSignedDate: string | null;
   readonly normalizedStartDate: string | null;
 };
@@ -194,13 +180,16 @@ export type SignedStartComparisonResult = {
  * date and a start date.
  *
  * - `ok` — both parse and the start date is on or after the signed date,
- *   within the tolerance.
+ *   however long after.
  * - `start_before_signed` — both parse but the start date is before the
  *   signed date (an impossible pair for a real build).
- * - `signed_far_before_start` — both parse and the start is after the
- *   signed date, but the gap exceeds `SIGNED_START_TOLERANCE_DAYS` (likely a
- *   data-entry error rather than a genuine long lead time).
  * - `unparseable` — either date does not parse.
+ *
+ * There is no upper limit on the gap. A contract is often signed months
+ * before the job can start — the HBCF cover, the certificate and the site all
+ * have to come first, and the start date follows the HBCF claim date
+ * (issue #421). A gap of more than a year used to be refused as a data-entry
+ * error, which blocked saving a genuine late start.
  *
  * Both inputs are normalized with `normalizeDateString` before comparison,
  * so OCR formats and `yyyy-MM-dd` are handled identically. The function is
@@ -238,15 +227,6 @@ export function compareSignedAndStartDates(
   if (startMs < signedMs) {
     return {
       state: "start_before_signed",
-      normalizedSignedDate,
-      normalizedStartDate,
-    };
-  }
-
-  const gapDays = Math.round((startMs - signedMs) / MS_PER_DAY);
-  if (gapDays > SIGNED_START_TOLERANCE_DAYS) {
-    return {
-      state: "signed_far_before_start",
       normalizedSignedDate,
       normalizedStartDate,
     };

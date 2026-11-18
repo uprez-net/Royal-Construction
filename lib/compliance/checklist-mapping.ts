@@ -12,6 +12,7 @@ import {
 } from "@/constants/complianceDocuments";
 import prisma from "@/lib/prisma";
 import { normalizeFileTags } from "@/lib/domain/file-tags";
+import { projectHbcfCertificateFileId } from "@/lib/domain/insurance/hbcf-claims";
 import { checklistItemDetail } from "@/types/compliance";
 
 /**
@@ -271,17 +272,16 @@ async function projectHbcfFile(projectId: string) {
     select: { requirements: true },
   });
 
-  const requirements = (project?.requirements ?? {}) as Record<string, unknown>;
-  const legal = (requirements.legalAdministration ?? {}) as Record<
-    string,
-    unknown
-  >;
-  const reference = legal.hbcfInsuranceDocument as
-    | { fileId?: unknown }
-    | null
-    | undefined;
-  const fileId =
-    reference && typeof reference.fileId === "string" ? reference.fileId : null;
+  const requirements = (project?.requirements ?? {}) as {
+    legalAdministration?: unknown;
+  };
+  // The same answer `missingBuildStartDocuments` is given, so a certificate
+  // this copies onto the warranty line is never also reported missing.
+  const fileId = projectHbcfCertificateFileId(
+    requirements.legalAdministration as Parameters<
+      typeof projectHbcfCertificateFileId
+    >[0],
+  );
   if (!fileId) return null;
 
   return prisma.file.findUnique({

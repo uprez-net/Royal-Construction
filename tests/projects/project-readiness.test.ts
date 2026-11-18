@@ -26,7 +26,9 @@ test("block: start date before signed date", () => {
   assert.equal(block!.fieldPath, "requirements.legalAdministration.signedDate");
 });
 
-test("block: signed date more than a year before start date", () => {
+test("a contract signed long before the start is neither blocked nor warned", () => {
+  // Signed first, started once the HBCF cover came through well over a year
+  // later. That is a real job, not a data-entry error.
   const blockers = collectProjectDateBlockers({
     signedDate: "2026-01-01",
     startDate: "2027-06-01",
@@ -35,9 +37,7 @@ test("block: signed date more than a year before start date", () => {
     status: "ACTIVE",
   });
 
-  const block = blockers.find((b) => b.id === "signed_far_before_start");
-  assert.ok(block, "expected a signed_far_before_start blocker");
-  assert.equal(block!.severity, "block");
+  assert.deepEqual(blockers, []);
 });
 
 test("no blockers when dates are valid and start is after signed", () => {

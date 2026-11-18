@@ -158,6 +158,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ComplianceStageFlow } from "./compliance-stage-flow";
+import { PriorComplianceSection } from "./prior-compliance-section";
+import { isRecordedOutsideCrm } from "@/lib/domain/compliance/recorded-outside";
 import { DevelopmentApplicationBanner } from "./development-application-banner";
 import { EstateDeveloperBanner } from "./estate-developer-banner";
 
@@ -1505,42 +1507,57 @@ export function ProjectComplianceTab({
   };
 
   // ---------------------------------------------------------------------
-  // Nothing started yet — one button, as specified.
+  // Nothing started yet — one button, as specified. Below it, for a job
+  // certified before it came into the CRM, the way to skip the certifier.
   // ---------------------------------------------------------------------
 
   if (!engagement) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
-            Compliance and certification
-          </CardTitle>
-          <CardDescription>
-            Collect the required documents, send them to the principal
-            certifier, and track their checklist through to approval.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            type="button"
-            onClick={() =>
-              dispatch(
-                openModal({
-                  type: "startCertifierEngagement",
-                  payload: {
-                    projectId: project.id,
-                    defaultAddress: defaultComplianceSubjectAddress(project),
-                  },
-                }),
-              )
-            }
-          >
-            Connect with Certifier
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
+              Compliance and certification
+            </CardTitle>
+            <CardDescription>
+              Collect the required documents, send them to the principal
+              certifier, and track their checklist through to approval.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              type="button"
+              onClick={() =>
+                dispatch(
+                  openModal({
+                    type: "startCertifierEngagement",
+                    payload: {
+                      projectId: project.id,
+                      defaultAddress: defaultComplianceSubjectAddress(project),
+                    },
+                  }),
+                )
+              }
+            >
+              Connect with Certifier
+            </Button>
+          </CardContent>
+        </Card>
+        <PriorComplianceSection project={project} engagement={null} />
+      </div>
     );
+  }
+
+  // ---------------------------------------------------------------------
+  // Compliance done before the CRM: a file with no certifier, so nothing
+  // below — outreach, checklist, threads — applies. Before the COMPLETED
+  // branch, which it would otherwise fall into and show as a finished
+  // certifier file with no certifier.
+  // ---------------------------------------------------------------------
+
+  if (isRecordedOutsideCrm(engagement)) {
+    return <PriorComplianceSection project={project} engagement={engagement} />;
   }
 
   // ---------------------------------------------------------------------

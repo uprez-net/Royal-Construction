@@ -34,9 +34,10 @@ import {
   ComplianceExternalApplicationKind,
   CompliancePartyType,
 } from "@prisma/client";
-import type { File as ProjectFiles } from "@prisma/client";
+import type { File as ProjectFiles, ProjectStatus } from "@prisma/client";
 import { fetchJson } from "@/utils/fetch";
 import type { CertifierEngagementDetail } from "@/types/compliance";
+import type { PriorComplianceDocumentType } from "@/lib/domain/compliance/recorded-outside";
 import type {
   CertifierReplyInput,
   ClassifyReceivedDocumentInput,
@@ -653,6 +654,99 @@ export const uploadComplianceDocument = createAsyncThunk<
     }
   },
 );
+
+/**
+ * One document of compliance done before the CRM. Answers with the refreshed
+ * file, as every compliance thunk does, and with the project's status, which
+ * moves to Active once the certificate and HBCF cover are both held.
+ */
+export const recordPriorComplianceDocument = createAsyncThunk<
+  {
+    projectId: string;
+    engagement: CertifierEngagementDetail | null;
+    projectStatus: ProjectStatus;
+    activated: boolean;
+  },
+  {
+    projectId: string;
+    fileId: string;
+    documentType: PriorComplianceDocumentType;
+  },
+  { rejectValue: string }
+>(
+  "projects/recordPriorComplianceDocument",
+  async ({ projectId, ...payload }, thunkApi) => {
+    const fallback = "Unable to record the compliance document";
+    try {
+      const recorded = await fetchJson<{
+        projectStatus: ProjectStatus;
+        activated: boolean;
+      }>(
+        `/api/projects/${projectId}/compliance/prior`,
+        jsonPost(payload),
+        fallback,
+      );
+      const refreshed = await fetchJson<CertifierEngagementDetail | null>(
+        `/api/projects/${projectId}/compliance`,
+        { method: "GET" },
+        fallback,
+      );
+      return {
+        projectId,
+        engagement: reviveComplianceEngagementDates(refreshed.data),
+        projectStatus: recorded.data.projectStatus,
+        activated: recorded.data.activated,
+      };
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error ? error.message : fallback,
+      );
+    }
+  },
+);
+
+/**
+ * Asks whether prior compliance is now complete, filing nothing. Dispatched
+ * after the Overview tab saves an HBCF certificate on a job whose compliance
+ * was recorded as done before the CRM.
+ */
+export const activatePriorCompliance = createAsyncThunk<
+  {
+    projectId: string;
+    engagement: CertifierEngagementDetail | null;
+    projectStatus: ProjectStatus;
+    activated: boolean;
+  },
+  { projectId: string },
+  { rejectValue: string }
+>("projects/activatePriorCompliance", async ({ projectId }, thunkApi) => {
+  const fallback = "Unable to check the job's compliance";
+  try {
+    const checked = await fetchJson<{
+      projectStatus: ProjectStatus;
+      activated: boolean;
+    }>(
+      `/api/projects/${projectId}/compliance/prior/activate`,
+      { method: "POST" },
+      fallback,
+    );
+    const refreshed = await fetchJson<CertifierEngagementDetail | null>(
+      `/api/projects/${projectId}/compliance`,
+      { method: "GET" },
+      fallback,
+    );
+    return {
+      projectId,
+      engagement: reviveComplianceEngagementDates(refreshed.data),
+      projectStatus: checked.data.projectStatus,
+      activated: checked.data.activated,
+    };
+  } catch (error) {
+    return thunkApi.rejectWithValue(
+      error instanceof Error ? error.message : fallback,
+    );
+  }
+});
 
 export const sendCertifierOutreach = createAsyncThunk<
   { projectId: string; engagement: CertifierEngagementDetail | null },
@@ -1422,6 +1516,13 @@ const complianceOperations = [
     () => complianceScope.engagement,
   ),
   complianceOperation(uploadComplianceDocument, complianceScope.document),
+  // One scope per kind: the section's rows are on screen together, and a
+  // certificate uploading must not freeze the HBCF row beside it.
+  complianceOperation(
+    recordPriorComplianceDocument,
+    (arg) => `prior:${arg.documentType}`,
+  ),
+  complianceOperation(activatePriorCompliance, () => "prior:activate"),
   complianceOperation(sendCertifierOutreach, () => complianceScope.outreach),
   complianceOperation(sendCertifierReply, () => complianceScope.reply),
   complianceOperation(resolveComplianceDocument, complianceScope.document),
@@ -2147,6 +2248,30 @@ const projectsSlice = createSlice({
             ?? action.error.message
             ?? "Unable to add photos to milestone",
         };
+      })
+      // The compliance answers that move the project as well as the file:
+      // prior compliance complete makes the job Active, and the header reads
+      // the status from here. The file itself lands through the matcher below.
+      //
+      // Only from the call that made the move. Two rows can upload at once,
+      // and the one that finishes second may carry the status from before the
+      // other activated the job; the move is one-way and a call that did not
+      // make it changed nothing, so its status is not news.
+      .addCase(recordPriorComplianceDocument.fulfilled, (state, action) => {
+        if (
+          action.payload.activated
+          && state.activeProject?.id === action.payload.projectId
+        ) {
+          state.activeProject.status = action.payload.projectStatus;
+        }
+      })
+      .addCase(activatePriorCompliance.fulfilled, (state, action) => {
+        if (
+          action.payload.activated
+          && state.activeProject?.id === action.payload.projectId
+        ) {
+          state.activeProject.status = action.payload.projectStatus;
+        }
       })
       // Compliance: every thunk lands the same way — the engagement replaced
       // wholesale — so they are registered through one matcher rather than

@@ -158,7 +158,7 @@ export function CreateProjectModal({
   const [dateConfirmPrompt, setDateConfirmPrompt] = useState<{
     signedDate: string;
     startDate: string;
-    state: "start_before_signed" | "signed_far_before_start";
+    state: "start_before_signed";
   } | null>(null);
   // Everything that went wrong with the review form, from either the local
   // checks or the server action, in one shape so the banner, the inline
@@ -720,10 +720,10 @@ export function CreateProjectModal({
 
     // ── Phase 3: date mismatch gate ──
     // Compare the signed date against the start date before dispatching. If
-    // the pair is impossible (start before signed) or suspect (signed more
-    // than a year before start), show a confirmation prompt that states the
-    // exact dates and lets the user confirm or correct in place using the
-    // existing review-stage inputs.
+    // the pair is impossible (start before signed), show a confirmation
+    // prompt that states the exact dates and lets the user confirm or correct
+    // in place using the existing review-stage inputs. A start long after the
+    // signing is normal and is not asked about.
     const signedDateRaw = extraction.legalAdministrationSignedDate;
     const effectiveStartDate =
       normalizeDateString(signedDateRaw)
@@ -735,10 +735,7 @@ export function CreateProjectModal({
       effectiveStartDate,
     );
 
-    if (
-      comparison.state === "start_before_signed"
-      || comparison.state === "signed_far_before_start"
-    ) {
+    if (comparison.state === "start_before_signed") {
       setDateConfirmPrompt({
         signedDate:
           comparison.normalizedSignedDate ?? signedDateRaw ?? "(not set)",
@@ -1210,9 +1207,7 @@ export function CreateProjectModal({
                   />
                   <div className="space-y-2">
                     <p className="text-sm font-semibold text-warning-ink">
-                      {dateConfirmPrompt.state === "start_before_signed"
-                        ? "Start date is before the signed date"
-                        : "Signed date is more than a year before the start date"}
+                      Start date is before the signed date
                     </p>
                     <p className="text-sm text-warning-ink/90">
                       Signed (contract executed):{" "}

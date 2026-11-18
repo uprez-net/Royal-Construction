@@ -22,6 +22,7 @@ import {
 } from "@/constants/complianceDocuments";
 import { businessDaysSince } from "@/lib/dates/business-days";
 import { PORTAL_DOWNLOAD_ALERT } from "./portal-certificates";
+import { isRecordedOutsideCrm } from "./recorded-outside";
 import {
   applicableRequiredDocuments,
   hasArchitectPlansOnFile,
@@ -284,6 +285,11 @@ export function assessOverdueConditions(
 ): OverdueAssessment {
   const raise: OverdueAlert[] = [];
   const resolve: { type: ComplianceAlertType; note: string }[] = [];
+
+  // Compliance done before the CRM has no clocks to run: nobody was engaged
+  // from here, so nobody can be late. The nightly sweep reads every file that
+  // is not APPROVED, this one included, and must raise nothing on it.
+  if (isRecordedOutsideCrm(engagement)) return { raise, resolve };
 
   const record = (outcome: ReturnType<typeof assessPartyResponse>) => {
     if (outcome.raise) raise.push(outcome.raise);

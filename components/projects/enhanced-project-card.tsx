@@ -84,7 +84,7 @@ export function EnhancedProjectCard({
 
         <ProjectAttentionReasons
           attention={project.attention}
-          className="mb-3 rounded-md bg-warning-light px-3 py-2"
+          className="mb-3"
         />
 
         <div className="mb-4 grid grid-cols-2 gap-3 border-b border-border/40 pb-4">

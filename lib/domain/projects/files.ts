@@ -3,6 +3,10 @@ import { logActionOrThrow } from "../audit/action-log";
 import { reclaimSupersededComplianceFiles } from "../compliance/file-reclamation";
 import type { TransactionalDomainDb } from "../db";
 import { DomainNotFoundError, DomainValidationError } from "../errors";
+import {
+  projectHbcfCertificateFileId,
+  readHbcfClaimDocuments,
+} from "../insurance/hbcf-claims";
 import type { BlobDeletePort } from "../ports/blob";
 import {
   requireAdminPrincipal,
@@ -31,6 +35,27 @@ export async function deleteProjectFile(
     if (file.complianceDocumentId || file.incidentId) {
       throw new DomainValidationError(
         "This file is used by a compliance document or incident report. Manage it from that record.",
+        "fileId",
+      );
+    }
+    // The project's HBCF certificate is referenced from its requirements, not
+    // by a relation, so deleting it here would leave the reference behind —
+    // and the job would go on counting as insured with no certificate. It is
+    // removed where it was added, which updates the reference with it.
+    const holder = await tx.project.findUnique({
+      where: { id: input.projectId },
+      select: { requirements: true },
+    });
+    const legal = (
+      holder?.requirements as { legalAdministration?: unknown } | null
+    )?.legalAdministration as Parameters<typeof readHbcfClaimDocuments>[0];
+    const hbcfFileIds = new Set([
+      projectHbcfCertificateFileId(legal),
+      ...readHbcfClaimDocuments(legal).map((document) => document.fileId),
+    ]);
+    if (hbcfFileIds.has(file.id)) {
+      throw new DomainValidationError(
+        "This is the project's HBCF certificate. Remove it from the HBCF claim block under Legal and administration on the Overview tab.",
         "fileId",
       );
     }

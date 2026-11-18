@@ -704,6 +704,11 @@ export const complianceDocumentUploadSchema = z
      * so those uploads name a type instead of an id.
      */
     documentType: z.enum(ComplianceDocumentType).optional(),
+    /**
+     * Attach only if the row is still empty. Sent by an automatic filing,
+     * never by a Replace control (`attachComplianceDocumentFile`).
+     */
+    ifEmpty: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     if (!data.documentId && !data.documentType) {

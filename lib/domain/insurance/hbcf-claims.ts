@@ -51,6 +51,27 @@ export function readHbcfClaimDocuments(
 }
 
 /**
+ * The file id of the HBCF certificate the project itself holds, or null.
+ *
+ * Cover is raised on the Overview tab, often before a certifier is engaged, so
+ * the certificate can sit on the project with nothing on the compliance file.
+ * `hbcfInsuranceDocument` is the reference both the Overview upload and the
+ * Compliance tab's upload (`recordHomeInsuranceOnProject`) write; the claim
+ * list's first document is read when an older payload has only that.
+ *
+ * One answer for every reader that asks whether the job has its HBCF
+ * certificate: the checklist mapping copies this file onto the warranty line,
+ * and `missingBuildStartDocuments` counts it as held.
+ */
+export function projectHbcfCertificateFileId(
+  legal: LegalAdministrationDraft,
+): string | null {
+  const reference = legal?.hbcfInsuranceDocument?.fileId;
+  if (typeof reference === "string" && reference !== "") return reference;
+  return readHbcfClaimDocuments(legal)[0]?.fileId || null;
+}
+
+/**
  * An amount that can be counted: a finite, positive number, held to cents.
  * Anything else -- blank, zero, negative, NaN -- is null, so it cannot reach
  * a total as a plausible-looking figure.
