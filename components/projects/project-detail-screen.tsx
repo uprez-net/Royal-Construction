@@ -53,14 +53,23 @@ export function ProjectDetailScreen({
     displayedProject.requirements?.legalAdministration
     || ({} as ProjectRequirementsHeader);
 
+  // Hydrating follows `project`: router.refresh() (a status change, a send)
+  // hands down a fresh object and the store copy must follow it.
   useEffect(() => {
     dispatch(setActiveProject(project));
+  }, [dispatch, project]);
 
+  // Resetting follows the project's id only. It used to share the effect
+  // above, so every router.refresh() ran this cleanup too: the stored tab was
+  // deleted (the page jumped to Overview while the URL still said
+  // `activeTab=tradies`) and in-flight upload state was dropped. The screen
+  // leaving, or moving to another project, is what ends the UI state.
+  useEffect(() => {
     return () => {
       dispatch(setActiveProject(null));
       dispatch(resetProjectDetailUiState(project.id));
     };
-  }, [dispatch, project]);
+  }, [dispatch, project.id]);
 
   return (
     <UploadHintScope trail="Project">

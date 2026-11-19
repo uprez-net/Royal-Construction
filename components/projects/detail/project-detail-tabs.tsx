@@ -1,15 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import type { ProjectDetail } from "@/types/project";
-import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import {
-  selectProjectDetailUiState,
-  setProjectDetailTab,
-} from "@/lib/store/slices/projectsSlice";
 
 import { ProjectOverviewTab } from "./project-overview-tab";
 import {
@@ -129,72 +124,47 @@ export function ProjectDetailTabs({
     const principal: UserPrincipal = { kind: "user", userId: viewerId, role };
     return canSeeMilestoneNotes(principal) ? principal : null;
   }, [role, viewerId]);
-  const dispatch = useAppDispatch();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  // The URL is the only record of the open tab. It used to be copied into the
+  // store, and the two drifted: the server rendered Overview for a link to
+  // `?activeTab=tradies` and the client swapped tabs after hydrating, and a
+  // reset of the store copy (every router.refresh(), e.g. after a schedule
+  // status change) dropped the page back to Overview while the URL still
+  // named Tradies. Read from the URL, the server renders the linked tab and
+  // nothing else can move it. An unknown or hidden key (see
+  // VISIBLE_PROJECT_DETAIL_TABS) falls back rather than rendering nothing.
   const urlTab = searchParams.get("activeTab");
+  const activeTab: VisibleProjectDetailTabKey =
+    urlTab && isVisibleProjectDetailTab(urlTab) ? urlTab : "overview";
 
-  const selector = useMemo(
-    () => selectProjectDetailUiState(project.id),
-    [project.id],
-  );
-  const detailUi = useAppSelector(selector);
-
-  // The store may hold a tab that is no longer navigable (see
-  // VISIBLE_PROJECT_DETAIL_TABS); fall back rather than render nothing.
-  const activeTab: VisibleProjectDetailTabKey = isVisibleProjectDetailTab(
-    detailUi.activeTab,
-  )
-    ? detailUi.activeTab
-    : "overview";
-
-  // URL → store. Runs on mount for deep links and again on back/forward.
-  // Only when the URL itself moves: a click updates the store first, and the
-  // URL catching up a render later must not snap the tab back.
-  const seenUrlTab = useRef<string | null>(null);
-  // Each time the page is shown anew the URL decides again. The screen's
-  // cleanup resets the stored tab (StrictMode re-runs it in dev, and Next's
-  // Activity re-runs effects when a hidden route is shown again), but the ref
-  // survives, so without this the deep-linked tab would be lost.
-  useEffect(() => {
-    seenUrlTab.current = null;
-  }, [project.id]);
-  useEffect(() => {
-    if (urlTab === seenUrlTab.current) return;
-    seenUrlTab.current = urlTab;
-    if (urlTab && isVisibleProjectDetailTab(urlTab) && urlTab !== activeTab) {
-      dispatch(setProjectDetailTab({ projectId: project.id, tab: urlTab }));
-    }
-  }, [activeTab, dispatch, project.id, urlTab]);
-
-  // Store → URL, so a tab can be deep-linked, shared and reached with the
-  // browser's back button. replaceState rather than router.replace: every tab
-  // renders from data already on the page, and router.replace re-renders the
-  // whole server page on each click.
-  const handleTabChange = useCallback(
-    (tab: VisibleProjectDetailTabKey) => {
-      dispatch(setProjectDetailTab({ projectId: project.id, tab }));
-
+  // replaceState rather than router.replace: every tab renders from data
+  // already on the page, and router.replace re-renders the whole server page
+  // on each click. Next keeps useSearchParams in step with it, which is what
+  // switches the panel.
+  const openTab = useCallback(
+    (tab: VisibleProjectDetailTabKey, extra?: Record<string, string>) => {
       const params = new URLSearchParams(window.location.search);
       params.set("activeTab", tab);
+      for (const [key, value] of Object.entries(extra ?? {})) {
+        params.set(key, value);
+      }
       window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
     },
-    [dispatch, pathname, project.id],
+    [pathname],
+  );
+
+  const handleTabChange = useCallback(
+    (tab: VisibleProjectDetailTabKey) => openTab(tab),
+    [openTab],
   );
 
   // "Verify checklist" on a stage opens that stage's checklist here, on the
   // same record the Checklists tab lists.
   const handleOpenChecklist = useCallback(
-    (number: number) => {
-      dispatch(
-        setProjectDetailTab({ projectId: project.id, tab: "checklists" }),
-      );
-      const params = new URLSearchParams(window.location.search);
-      params.set("activeTab", "checklists");
-      params.set("checklist", String(number));
-      window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
-    },
-    [dispatch, pathname, project.id],
+    (number: number) => openTab("checklists", { checklist: String(number) }),
+    [openTab],
   );
 
   return (
