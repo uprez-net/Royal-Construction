@@ -38,7 +38,7 @@ const commandBody = () =>
 
 test("the reminder checks the caller is staff before it looks anything up or sends", () => {
   const body = actionBody();
-  const check = body.indexOf("await requireInternalUser()");
+  const check = body.indexOf("await requireStaffUser()");
   assert.ok(check >= 0, "sendTradieScheduleReminder never checks its caller");
   assert.match(
     body,

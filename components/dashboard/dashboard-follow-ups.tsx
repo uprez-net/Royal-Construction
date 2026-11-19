@@ -5,11 +5,13 @@ import { Activity } from "lucide-react";
 import { differenceInCalendarDays } from "date-fns";
 
 export interface FollowUpItem {
-  id: number;
+  id: number | string;
   customerName: string;
   projectName: string;
   description: string;
   dueAt: Date | string;
+  /** A date that has no time of day; shown in place of the clock face. */
+  dueLabel?: string;
   status: "positive" | "neutral" | "negative";
 }
 
@@ -113,7 +115,7 @@ export function DashboardFollowUps({
                 <p
                   className={`mt-1.5 text-[11px] font-medium ${(statusConfig[item.status] ?? statusConfig.neutral).ink}`}
                 >
-                  {timeFormat.format(new Date(item.dueAt))}
+                  {item.dueLabel ?? timeFormat.format(new Date(item.dueAt))}
                 </p>
                 <Badge
                   className={`absolute right-4 top-4 h-[22px] gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[11.5px] font-semibold ${(statusConfig[item.status] ?? statusConfig.neutral).pill}`}

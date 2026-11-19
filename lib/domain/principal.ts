@@ -138,11 +138,14 @@ export function requireUserPrincipal(
 /**
  * Roles that are staff rather than a customer portal account.
  *
- * Today everyone at Royal Constructions is an ADMIN on a shared login and
- * SITE_MANAGER is schema-only until Projects ships, so this set is what
- * actually separates "the office" from "a customer". GUEST is inside it
- * because that is how `lib/offer/access.ts` has always scoped lead access, and
- * splitting the two rules apart is a change of behaviour, not a refactor.
+ * The office is on shared ADMIN logins, and from November 2026 one real
+ * SITE_MANAGER holds the role, so this set separates staff from "a customer"
+ * and nothing more: it does NOT say who may see leads, offers, client
+ * messages or a project's money. Those ask `isOfficeRole` and
+ * `canSeeProjectFinancials`, which leave a site manager out. GUEST is inside
+ * this set because that is how `lib/offer/access.ts` has always scoped lead
+ * access, and splitting the two rules apart is a change of behaviour, not a
+ * refactor.
  */
 export const INTERNAL_ROLES: readonly Role[] = [
   Role.ADMIN,
@@ -167,6 +170,41 @@ export function isInternalPrincipal(principal: DomainPrincipal): boolean {
   switch (principal.kind) {
     case "user":
       return isInternalRole(principal.role);
+    case "system":
+      return true;
+    case "anonymous":
+      return false;
+  }
+}
+
+/**
+ * The people who work the sales side of the business: leads, offers, client
+ * calls and texts, ad-hoc email, and the figures that sum them up.
+ *
+ * `INTERNAL_ROLES` minus SITE_MANAGER. A site manager is staff, and works
+ * projects, milestones, tradies and the project's own WhatsApp group — all of
+ * which still ask `isInternalRole`. What a site manager has no business with is
+ * a prospect's name, number, quoted price or conversation, so every rule that
+ * opens those asks this one instead. Two rules, named for what each decides:
+ * widening one into the other is how a site manager ended up reading every
+ * client's pending calls.
+ *
+ * GUEST stays inside, for the same reason it stays in `INTERNAL_ROLES`: that is
+ * how lead access has always been scoped, and `proxy.ts` already turns a GUEST
+ * away from every page.
+ */
+export function isOfficeRole(role: Role): boolean {
+  return isInternalRole(role) && role !== Role.SITE_MANAGER;
+}
+
+/**
+ * `isOfficeRole` for a principal. A system principal counts (a cron filing an
+ * inbound lead acts with the office's authority); an anonymous one never does.
+ */
+export function isOfficePrincipal(principal: DomainPrincipal): boolean {
+  switch (principal.kind) {
+    case "user":
+      return isOfficeRole(principal.role);
     case "system":
       return true;
     case "anonymous":

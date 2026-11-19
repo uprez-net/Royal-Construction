@@ -19,6 +19,7 @@ import {
   assertStartDateMatchesHbcfClaim,
   planStartDateFromHbcfClaim,
 } from "./hbcf-start-date";
+import { withoutFinancialEdits } from "./financial-redaction";
 import { STARTED_MILESTONE_STATUSES } from "./milestone-schedule";
 import { rescheduleProjectFromStart } from "./milestones";
 import {
@@ -82,19 +83,23 @@ type PersistedLegalAdministration = {
  */
 export async function updateProject(
   principal: DomainPrincipal,
-  input: UpdateProjectInput,
+  rawInput: UpdateProjectInput,
   db: DomainDb,
 ): Promise<UpdateProjectResult> {
-  await authorizeProjectEdit(principal, input.projectId, db);
+  await authorizeProjectEdit(principal, rawInput.projectId, db);
 
   const existing = await db.project.findUniqueOrThrow({
-    where: { id: input.projectId },
+    where: { id: rawInput.projectId },
     select: { requirements: true, startDate: true, status: true },
   });
 
   const persisted = (existing.requirements ?? {}) as {
     legalAdministration?: PersistedLegalAdministration;
+    commercialsAndClaims?: unknown;
   };
+  // A caller who may not see the money cannot set it either: their form was
+  // handed zeros and would save them (see `withoutFinancialEdits`).
+  const input = withoutFinancialEdits(principal, rawInput, persisted);
   const merged = input.requirements
     ? { ...persisted, ...input.requirements }
     : persisted;

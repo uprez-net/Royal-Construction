@@ -95,16 +95,25 @@ test("a customer may edit the lead assigned to them", async () => {
   assert.equal(outcome.lead.id, 7);
 });
 
-test("internal staff reach every lead", async () => {
-  for (const principal of [adminPrincipal(), siteManagerPrincipal()]) {
-    const outcome = await updateLead(
-      principal,
-      7,
-      { notes: "Site visit booked" },
-      leadDb().transactionalDb,
-    );
-    assert.equal(outcome.lead.id, 7);
-  }
+test("the office reaches every lead; a site manager does not", async () => {
+  const outcome = await updateLead(
+    adminPrincipal(),
+    7,
+    { notes: "Site visit booked" },
+    leadDb().transactionalDb,
+  );
+  assert.equal(outcome.lead.id, 7);
+
+  await assert.rejects(
+    () =>
+      updateLead(
+        siteManagerPrincipal(),
+        7,
+        { notes: "Site visit booked" },
+        leadDb().transactionalDb,
+      ),
+    DomainAuthorizationError,
+  );
 });
 
 test("an update names a missing lead as missing, not as forbidden", async () => {

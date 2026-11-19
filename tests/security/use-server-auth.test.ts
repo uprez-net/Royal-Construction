@@ -31,6 +31,7 @@ const CALLER_CHECKS = new Set([
   "leadListScope",
   "requireAdminUser",
   "requireInternalUser",
+  "requireStaffUser",
   "requireComplianceAccess",
   "requireComplianceAdmin",
   // lib/domain commands that refuse the caller themselves (issue #301). Each

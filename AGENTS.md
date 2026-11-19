@@ -12,8 +12,13 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 Royal Constructions is a residential construction business with **two to three
 employees**. They share **one or two login IDs** and everyone is an `ADMIN`.
-Site managers become real only once the Projects section ships; until then the
-`SITE_MANAGER` role exists in the schema but nobody holds it.
+One real `SITE_MANAGER` exists (onboarded November 2026). They are staff for
+**projects** and not for the sales side: no leads, offers, client calls and
+texts, the sales dashboard, the operations agent, or a project's money. That is
+`isOfficeRole` / `canSeeProjectFinancials` in `lib/domain` — use them, not
+`isInternalRole`, whenever a rule opens a prospect's details or a price. So a
+site manager is the one case where "everyone is an `ADMIN`" is not true, and a
+missing check here has a real person on the other side of it.
 
 This is calibration, not permission to cut corners. It changes which problems
 are worth solving now:

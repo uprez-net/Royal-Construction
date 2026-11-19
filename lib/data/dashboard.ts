@@ -16,6 +16,7 @@ import { dueFollowUpTaskWhere } from "@/lib/leads/followup-due";
 import { sydneyDateOnly, sydneyWallClockToInstant } from "@/lib/dates/sydney";
 import { getUserByClerkId } from "@/lib/data/user";
 import { leadListScope, type LeadListScope } from "@/lib/offer/access";
+import { isOfficeRole } from "@/lib/domain/principal";
 
 type DashboardKPIQueryResult = {
   current_month_projects: bigint;
@@ -57,11 +58,27 @@ type DashboardKPIQueryResult = {
  * @throws Error if the Clerk user has no corresponding application user.
  */
 async function resolveLeadScope(clerkId: string): Promise<LeadListScope> {
+  const user = await requireOfficeUser(clerkId);
+  return leadListScope(user);
+}
+
+/**
+ * The signed-in user, if they work the sales side.
+ *
+ * Every figure on this dashboard is the business's — revenue, profit, spend,
+ * conversions, every lead's follow-up — and none of it is per-user, so the
+ * lead scope alone would not keep a site manager out of the money. A site
+ * manager has their own dashboard (`lib/data/site-dashboard.ts`).
+ */
+async function requireOfficeUser(clerkId: string) {
   const user = await getUserByClerkId(clerkId);
   if (!user) {
     throw new Error("Unauthorized");
   }
-  return leadListScope(user);
+  if (!isOfficeRole(user.role)) {
+    throw new Error("Unauthorized");
+  }
+  return user;
 }
 
 /**
@@ -342,8 +359,8 @@ export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
               // What this particular follow-up is about, falling back to the
               // lead's notes when the task carries none.
               description:
-                task.notes?.trim() ||
-                resolveLeadNotesTextOr(task.lead, "No additional details"),
+                task.notes?.trim()
+                || resolveLeadNotesTextOr(task.lead, "No additional details"),
               // The instant the work is actually due, rebuilt from the Sydney
               // wall clock the two columns store between them. Handing the
               // card `dueDate` on its own would date every row correctly and
@@ -377,6 +394,8 @@ export async function getDashboardGraphData() {
     if (!userId) {
       throw new Error("Unauthorized");
     }
+    // Lead and revenue trends, spend against estimate: the office's figures.
+    await requireOfficeUser(userId);
 
     const [
       nonConversionData,

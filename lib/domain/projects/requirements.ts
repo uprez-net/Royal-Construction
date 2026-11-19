@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 
+import { canSeeProjectFinancials } from "../access/projects";
 import type { DomainDb } from "../db";
 import type { DomainPrincipal } from "../principal";
 
@@ -236,10 +237,13 @@ export async function updateProjectRequirements(
     );
   }
 
-  const candidate = mergeProjectRequirementsPatch(
-    current.requirements,
-    input.patch,
-  );
+  // The commercial terms are the contract sum and the claim stages progress
+  // claims are raised from. A caller who may not see them does not patch them
+  // (see `withoutFinancialEdits`); today only the office's agent reaches this.
+  const patch = { ...input.patch };
+  if (!canSeeProjectFinancials(principal)) delete patch.commercialsAndClaims;
+
+  const candidate = mergeProjectRequirementsPatch(current.requirements, patch);
   if (!isCompleteProjectRequirements(candidate)) {
     throw new DomainValidationError(
       "The update must preserve every required requirements section and the versioned payload shape.",
@@ -307,7 +311,7 @@ export async function updateProjectRequirements(
   });
 
   return {
-    changedSections: Object.keys(input.patch),
+    changedSections: Object.keys(patch),
     projectId: input.projectId,
     rescheduledMilestones,
     startDate: claimPlan.startDate?.toISOString().slice(0, 10) ?? null,

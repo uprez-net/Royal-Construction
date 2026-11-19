@@ -189,6 +189,13 @@ export type TradeTradie = {
   /** Sum of the quotes received, or null when none has arrived. */
   readonly quotedTotal: number | null;
   readonly quotedCount: number;
+  /**
+   * A quote has come in, whether or not its price is shown. For someone who may
+   * not see prices `quotedTotal` is null even when one has: without this their
+   * screen would say "No quote yet" about a quote that is sitting there, and
+   * the natural next step is to ask the tradie again.
+   */
+  readonly hasQuote: boolean;
   /** Earliest upcoming open booking. */
   readonly nextDate: Date | null;
   /** Approved on at least one activity. */
@@ -344,6 +351,13 @@ export function tradeOverview(
       openCount: open.length,
       phone: tradie.phone,
       quotedCount: quotes.length,
+      hasQuote:
+        quotes.length > 0
+        || own.some(
+          (schedule) =>
+            schedule.status !== TradieScheduleStatus.CANCELLED
+            && schedule.quote != null,
+        ),
       quotedTotal:
         quotes.length > 0
           ? quotes.reduce((sum, value) => sum + value, 0)
@@ -403,6 +417,7 @@ export function tradeOverview(
 
   const quoted = tradies.filter((tradie) => tradie.quotedTotal !== null);
   const lowest = quoted[0];
+  const replied = tradies.filter((tradie) => tradie.hasQuote);
   // A waived activity needs nobody, so it is neither covered nor missing.
   const counted = activities.filter(
     (activity) => activity.milestoneStatus !== "NOT_REQUIRED",
@@ -420,7 +435,7 @@ export function tradeOverview(
         ? { amount: lowest.quotedTotal as number, name: lowest.name }
         : null,
       recipients: tradies.length,
-      replies: quoted.length,
+      replies: replied.length,
     },
     trade,
     tradies,

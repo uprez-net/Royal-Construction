@@ -8,7 +8,7 @@ import {
 } from "../errors";
 import { runOutboxEffectWithOutcome } from "../outbox";
 import { canAccessLead } from "../access/leads";
-import { isInternalPrincipal, type DomainPrincipal } from "../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../principal";
 
 // Emailing a lead from the composer.
 //
@@ -61,7 +61,7 @@ export async function authorizeLeadEmail(
   input: { leadId: number; to: string },
   db: DomainDb,
 ): Promise<AuthorizedLeadEmail> {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(
       "Sending mail about a lead requires internal staff access.",
     );

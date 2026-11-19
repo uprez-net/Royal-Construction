@@ -8,7 +8,7 @@ import {
   DomainTransitionError,
 } from "../../errors";
 import type { CommsChannel } from "../../ports/comms";
-import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../../principal";
 import { recordCommsHistory } from "../shared";
 import { UNREAD_SMS_WHERE } from "../unread";
 import { evaluateSmsEligibility, type SmsEligibility } from "./policy";
@@ -96,7 +96,7 @@ export async function listUnmatchedSms(
   principal: DomainPrincipal,
   db: DomainDb,
 ): Promise<SmsMessageRecord[]> {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError("The SMS review queue is for staff.");
   }
   const rows = await db.smsMessage.findMany({
@@ -123,7 +123,7 @@ export async function resolveUnmatchedSms(
     | { readonly messageId: string; readonly action: "dismiss" },
   db: TransactionalDomainDb,
 ): Promise<SmsMessageRecord> {
-  if (!isInternalPrincipal(principal) || principal.kind !== "user") {
+  if (!isOfficePrincipal(principal) || principal.kind !== "user") {
     throw new DomainAuthorizationError(
       "Filing a text requires a signed-in member of staff.",
     );

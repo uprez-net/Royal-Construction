@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError } from "../errors";
 import {
-  isInternalPrincipal,
+  isOfficePrincipal,
   requireAdminPrincipal,
   type DomainPrincipal,
 } from "../principal";
@@ -661,7 +661,7 @@ export async function searchAgentFiles(
   db: DomainDb,
   ports: { readonly embedding?: EmbeddingPort } = {},
 ): Promise<AgentFileHit[]> {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(
       "The office's documents are available to staff only.",
     );

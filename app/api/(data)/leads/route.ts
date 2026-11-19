@@ -7,6 +7,7 @@ import {
   successResponse,
 } from "@/utils/validators";
 import { getLeads, createLead } from "@/lib/data/leads";
+import { requireInternalUser } from "@/lib/auth/require-internal-user";
 import { NextRequest } from "next/server";
 import { parseLeadStageFilter } from "@/lib/leads/types";
 import { isLeadValidationError } from "@/lib/leads/lead-validation-error";
@@ -14,6 +15,12 @@ import type { LeadStage as DBLeadStage } from "@prisma/client";
 
 /** Validate list parameters and return the matching lead page in the selected order. */
 export async function GET(request: NextRequest) {
+  // `getLeads` reads every lead and checks nobody, so this route has to: the
+  // office lists leads, a site manager does not (see `isOfficeRole`).
+  const access = await requireInternalUser();
+  if (!access.ok) {
+    return errorResponse("Forbidden", { status: 403, code: "FORBIDDEN" });
+  }
   const url = new URL(request.url);
   try {
     const params = parseSearchParamsWithResponse(url, leadLookupParamSchema);

@@ -4,7 +4,7 @@ import { authorizeLead, canAccessLead } from "../../access/leads";
 import type { DomainDb } from "../../db";
 import { DomainAuthorizationError, DomainNotFoundError } from "../../errors";
 import type { CommsChannel } from "../../ports/comms";
-import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../../principal";
 import { normaliseLeadPhone } from "../../leads/whatsapp/phone";
 import { SMS_REFUSALS } from "../sms/policy";
 import {
@@ -94,7 +94,7 @@ export async function getCall(
   input: { readonly callId: string },
   db: DomainDb,
 ): Promise<CallRecord> {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError("Calls are for members of staff.");
   }
   const row = await db.call.findUnique({
@@ -115,7 +115,7 @@ export async function listUnmatchedCalls(
   principal: DomainPrincipal,
   db: DomainDb,
 ): Promise<CallRecord[]> {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError("Calls are for members of staff.");
   }
   const rows = await db.call.findMany({

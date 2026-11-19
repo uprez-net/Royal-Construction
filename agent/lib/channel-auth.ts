@@ -13,6 +13,7 @@ import {
 import { waitForOwnedAgentSession } from "@/agent/lib/session-owner";
 import { findAgentSessionOwner } from "@/lib/domain/access/agent-sessions";
 import { principalForClerkId } from "@/lib/domain/identity/users";
+import { isOfficeRole } from "@/lib/domain/principal";
 
 const clerkClient = createClerkClient({
   publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
@@ -56,7 +57,10 @@ export function clerkInternalUserAuth(): AuthFn<Request> {
       }
 
       const user = await principalForClerkId(clerkAuth.userId, prisma);
-      if (!user) {
+      // The office digest and `recall_crm_context` index every lead, offer and
+      // price, and the specialists act on them. A site manager has the project
+      // screens, not this.
+      if (!user || !isOfficeRole(user.role)) {
         throw new ForbiddenError({
           code: "agent_access_denied",
           message: "The operations agent is unavailable for this account.",

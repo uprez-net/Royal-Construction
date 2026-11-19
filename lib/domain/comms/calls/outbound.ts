@@ -28,7 +28,7 @@ import {
   type CommsChannel,
   type VoicePort,
 } from "../../ports/comms";
-import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../../principal";
 import { normaliseLeadPhone } from "../../leads/whatsapp/phone";
 import { SMS_REFUSALS } from "../sms/policy";
 import { resolveCallablePhone } from "../team-phones";
@@ -109,7 +109,7 @@ export async function requestLeadCall(
   } = {},
 ): Promise<RequestLeadCallResult> {
   const now = input.now ?? new Date();
-  if (!isInternalPrincipal(principal) || principal.kind !== "user") {
+  if (!isOfficePrincipal(principal) || principal.kind !== "user") {
     throw new DomainAuthorizationError(
       "Calling a lead requires a signed-in member of staff.",
     );
@@ -350,7 +350,7 @@ export async function endCall(
     readonly voiceFor: (provider: "twilio" | "telnyx") => VoicePort | null;
   },
 ): Promise<CallRecord> {
-  if (!isInternalPrincipal(principal) || principal.kind !== "user") {
+  if (!isOfficePrincipal(principal) || principal.kind !== "user") {
     throw new DomainAuthorizationError(
       "Ending a call requires a signed-in member of staff.",
     );

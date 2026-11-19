@@ -4,7 +4,7 @@ import type { DomainDb, TransactionalDomainDb } from "../db";
 import { DomainAuthorizationError, DomainNotFoundError } from "../errors";
 import {
   attributionUserId,
-  isInternalPrincipal,
+  isOfficePrincipal,
   type DomainPrincipal,
 } from "../principal";
 import { authorizeLead } from "../access/leads";
@@ -635,7 +635,7 @@ export async function archiveLead(
   id: number,
   db: DomainDb,
 ): Promise<{ id: number; alreadyArchived: boolean }> {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(
       "Archiving a lead requires internal staff access.",
     );

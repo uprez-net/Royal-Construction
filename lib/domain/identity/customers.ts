@@ -6,7 +6,7 @@ import {
   DomainNotFoundError,
   DomainValidationError,
 } from "../errors";
-import { isInternalPrincipal, type DomainPrincipal } from "../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../principal";
 import { ownerFieldPath, type ProjectOwner } from "../projects/owners";
 
 // The customer records a project belongs to: finding one, and resolving the
@@ -41,7 +41,7 @@ export async function listCustomersForDropdown(
   input: { page?: number; limit?: number; query?: string },
   db: DomainDb,
 ): Promise<PaginatedLookupResult<CustomerDropdownItem>> {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(
       "Only staff can browse the customer list.",
     );

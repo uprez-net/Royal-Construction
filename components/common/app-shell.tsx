@@ -45,6 +45,7 @@ type AgentSessionTitleDetail = {
 
 export function AppShell({
   isAdmin,
+  isOffice = true,
   isSignedIn,
   phoneEnabled = false,
   whatsapp = WHATSAPP_OFF,
@@ -55,6 +56,13 @@ export function AppShell({
   children,
 }: {
   isAdmin: boolean;
+  /**
+   * Works the sales side. False for a site manager, whose navigation leaves
+   * out the leads, offers and operations agent screens. Defaults to true so a
+   * signed-out visitor's shell is unchanged; the server refuses the data
+   * either way, this only keeps a link from leading to a refusal.
+   */
+  isOffice?: boolean;
   isSignedIn: boolean;
   /**
    * Staff only: mounts the browser phone (calls and WhatsApp calls). A portal
@@ -78,9 +86,11 @@ export function AppShell({
   const visibleNavigationItems = useMemo(
     () =>
       navigationItems.filter(
-        (item) => item.slug !== "agent" || operationsAgentEnabled,
+        (item) =>
+          (item.slug !== "agent" || operationsAgentEnabled)
+          && (isOffice || !item.officeOnly),
       ),
-    [operationsAgentEnabled],
+    [operationsAgentEnabled, isOffice],
   );
   const [time, setTime] = useState("");
   const [zone, setZone] = useState<"AEST" | "AEDT">("AEST");

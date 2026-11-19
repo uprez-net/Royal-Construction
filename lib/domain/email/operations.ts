@@ -5,7 +5,7 @@ import { DomainAuthorizationError, DomainValidationError } from "../errors";
 import { runOutboxEffectWithOutcome } from "../outbox";
 import {
   attributionUserId,
-  isInternalPrincipal,
+  isOfficePrincipal,
   type DomainPrincipal,
 } from "../principal";
 import type { BlobDeletePort } from "../ports/blob";
@@ -26,7 +26,7 @@ export function authorizeEmailAttachmentDeletion(
   principal: DomainPrincipal,
   blobUrl: string,
 ): { blobUrl: string } {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(
       "Email attachment management requires internal staff access.",
     );
@@ -105,7 +105,7 @@ export async function sendCampaignEmail(
   send: EmailSendPort,
   db?: DomainDb,
 ): Promise<CampaignSendResult> {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(
       "Campaign email requires internal staff access.",
     );

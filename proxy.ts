@@ -68,6 +68,15 @@ const isDevAuthRoute = createRouteMatcher([
   "/api/dev/(.*)",
 ]);
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
+// The sales side's screens. A site manager is sent to their dashboard instead.
+// Pages only: the data behind them refuses a site manager in the domain
+// (`isOfficePrincipal`), which is what actually holds if this is bypassed or
+// the session token still carries yesterday's role.
+const isOfficeOnlyPage = createRouteMatcher([
+  "/leads(.*)",
+  "/offers(.*)",
+  "/agent(.*)",
+]);
 
 // Next 16 renamed the `middleware` convention to `proxy` and deprecated the
 // `middleware` export name. A `proxy.ts` file is resolved as `mod.proxy ||
@@ -136,6 +145,12 @@ export const proxy = clerkMiddleware(async (auth, request) => {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     return NextResponse.redirect(new URL("/guest", request.url));
+  }
+  if (
+    sessionClaims?.public_metadata.role === "SITE_MANAGER"
+    && isOfficeOnlyPage(request)
+  ) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
   if (isAuthRoute(request) && userId) {
     return NextResponse.redirect(new URL("/dashboard", request.url));

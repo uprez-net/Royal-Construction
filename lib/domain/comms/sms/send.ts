@@ -28,7 +28,7 @@ import {
 } from "../../ports/comms";
 import {
   attributionUserId,
-  isInternalPrincipal,
+  isOfficePrincipal,
   type DomainPrincipal,
 } from "../../principal";
 import { maskNumber, providerColumn, recordCommsHistory } from "../shared";
@@ -91,7 +91,7 @@ export async function sendLeadSms(
   } = {},
 ): Promise<SendLeadSmsResult> {
   const now = input.now ?? new Date();
-  if (!isInternalPrincipal(principal) || principal.kind !== "user") {
+  if (!isOfficePrincipal(principal) || principal.kind !== "user") {
     throw new DomainAuthorizationError(
       "Sending an SMS requires a signed-in member of staff.",
     );
@@ -380,7 +380,7 @@ export async function reconcileLeadSms(
   input: ReconcileLeadSmsInput,
   db: TransactionalDomainDb,
 ): Promise<SmsMessageRecord> {
-  if (!isInternalPrincipal(principal) || principal.kind !== "user") {
+  if (!isOfficePrincipal(principal) || principal.kind !== "user") {
     throw new DomainAuthorizationError(
       "Reconciling an SMS requires a signed-in member of staff.",
     );

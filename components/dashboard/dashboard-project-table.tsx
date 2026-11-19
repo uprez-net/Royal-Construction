@@ -181,12 +181,14 @@ export function DashboardProjectTable({
           <DataTable
             flush
             mobileLayout="cards"
+            // Budget and Spent are an admin's: the payload for anyone else
+            // carries zeros (`financialsHidden`), and a column of $0K would
+            // read as "free", not "hidden".
             headers={[
               "Project",
               "Client",
               "Location",
-              "Budget",
-              "Spent",
+              ...(isAdmin ? ["Budget", "Spent"] : []),
               "Progress",
               "Status",
             ]}
@@ -202,12 +204,16 @@ export function DashboardProjectTable({
               </div>,
               <div key={`client-${project.id}`}>{project.customer.name}</div>,
               <div key={`loc-${project.id}`}>{project.location}</div>,
-              <div key={`budget-${project.id}`} className="font-mono">
-                ${Math.round(Number(project.totalBudget) / 1000)}K
-              </div>,
-              <div key={`spent-${project.id}`} className="font-mono">
-                ${Math.round(Number(project.spent) / 1000)}K
-              </div>,
+              ...(isAdmin
+                ? [
+                    <div key={`budget-${project.id}`} className="font-mono">
+                      ${Math.round(Number(project.totalBudget) / 1000)}K
+                    </div>,
+                    <div key={`spent-${project.id}`} className="font-mono">
+                      ${Math.round(Number(project.spent) / 1000)}K
+                    </div>,
+                  ]
+                : []),
               <div key={`prog-${project.id}`}>
                 <div className="flex items-center gap-2">
                   <div className="h-2 w-16 overflow-hidden rounded-full bg-muted">

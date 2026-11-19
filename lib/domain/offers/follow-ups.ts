@@ -18,7 +18,7 @@ import { allowedLeadRecipients } from "../leads/email";
 import { runOutboxEffectWithOutcome } from "../outbox";
 import {
   attributionUserId,
-  isInternalPrincipal,
+  isOfficePrincipal,
   type DomainPrincipal,
 } from "../principal";
 
@@ -359,7 +359,7 @@ export async function sendOfferFollowUp(
   db: DomainDb,
   ports: OfferFollowUpPorts,
 ): Promise<SendOfferFollowUpResult> {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(
       "Following up an offer requires internal staff access.",
     );

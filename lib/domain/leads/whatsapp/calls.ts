@@ -26,7 +26,7 @@ import {
   type WhatsAppChannel,
   type WhatsAppPort,
 } from "../../ports/whatsapp";
-import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../../principal";
 import { recordWhatsAppHistory } from "./records";
 import { waIdToE164 } from "./phone";
 import { leadWhatsAppCallPermission } from "./call-permissions";
@@ -323,7 +323,7 @@ export async function recordWhatsAppCallEvent(
 // ── Staff actions ─────────────────────────────────────────────────────
 
 function requireStaff(principal: DomainPrincipal) {
-  if (!isInternalPrincipal(principal) || principal.kind !== "user") {
+  if (!isOfficePrincipal(principal) || principal.kind !== "user") {
     throw new DomainAuthorizationError(
       "WhatsApp calls are for signed-in members of staff.",
     );

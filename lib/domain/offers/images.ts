@@ -9,7 +9,7 @@ import type {
   OfferImageAiPort,
   OfferImageFetchPort,
 } from "../ports/offer-images";
-import { isInternalPrincipal, type DomainPrincipal } from "../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../principal";
 import type { OfferImageSlotKey } from "@/lib/offer/workspace-images";
 
 const MAX_IMAGE_BYTES = 40 * 1024 * 1024;
@@ -45,7 +45,7 @@ const WIDE_SLOTS: ReadonlySet<OfferImageSlotKey> = new Set([
 ]);
 
 function requireInternal(principal: DomainPrincipal): void {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError("Unauthorized");
   }
 }

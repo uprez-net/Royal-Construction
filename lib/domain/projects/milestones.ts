@@ -9,7 +9,11 @@ import { v4 as randomUUID } from "uuid";
 
 import type { OfferWorkspaceCostLine } from "@/lib/offer/workspace-model";
 
-import { authorizeMilestone, authorizeProject } from "../access/projects";
+import {
+  authorizeMilestone,
+  authorizeProject,
+  canSeeProjectFinancials,
+} from "../access/projects";
 import type { DomainDb } from "../db";
 import {
   DomainNotFoundError,
@@ -33,6 +37,10 @@ import {
   replanFollowingActivities,
   STARTED_MILESTONE_STATUSES,
 } from "./milestone-schedule";
+import {
+  settledBookingStatus,
+  tradieScheduleSpend,
+} from "../tradies/lifecycle";
 import { settleMilestoneBookings } from "../tradies/settlement";
 import { sydneyDateOnly, sydneyToday } from "@/lib/dates/sydney";
 
@@ -298,6 +306,53 @@ export type UpdateMilestoneOutcome = {
 };
 
 /**
+ * The spend a caller who cannot see prices gets to record.
+ *
+ * Completing an activity needs a spend, and the screen works it out from the
+ * prices on the bookings and sends it. Someone who may not see those prices is
+ * handed none, so their screen would work out nothing and send $0 — and $0
+ * would be written to the activity and rolled up into the project's spend. So
+ * for them the figure is worked out here, from the same bookings the same way
+ * (`tradieScheduleSpend`, each booking priced at the status completion is about
+ * to give it), and whatever they sent is ignored. A caller who sees prices
+ * keeps entering and confirming their own.
+ */
+async function withServerSideSpend(
+  principal: DomainPrincipal,
+  input: UpdateMilestoneInput,
+  db: DomainDb,
+): Promise<UpdateMilestoneInput> {
+  if (canSeeProjectFinancials(principal)) return input;
+  if (input.status !== MilestoneStatus.DONE) {
+    return { ...input, spend: undefined };
+  }
+  const bookings = await db.tradieSchedule.findMany({
+    select: {
+      durationDays: true,
+      quotedPrice: true,
+      requiresQuote: true,
+      status: true,
+      tradie: { select: { lastQuotedPrice: true, lastQuotedPriceUnit: true } },
+    },
+    where: { milestoneId: input.milestoneId },
+  });
+  const spend = bookings.reduce(
+    (total, booking) =>
+      total
+      + tradieScheduleSpend({
+        ...booking,
+        status: settledBookingStatus(booking.status, "DONE") ?? booking.status,
+        tradie: {
+          lastQuotedPrice: booking.tradie.lastQuotedPrice?.toString() ?? null,
+          lastQuotedPriceUnit: booking.tradie.lastQuotedPriceUnit,
+        },
+      }),
+    0,
+  );
+  return { ...input, spend };
+}
+
+/**
  * The intrinsic rules of a milestone update, independent of what is stored.
  *
  * Pure, so the App's Zod schema (`utils/validators/milestone.ts`, which
@@ -385,12 +440,13 @@ function toDate(value: string | undefined, field: string): Date | undefined {
  */
 export async function updateMilestone(
   principal: DomainPrincipal,
-  input: UpdateMilestoneInput,
+  rawInput: UpdateMilestoneInput,
   db: DomainDb,
 ): Promise<UpdateMilestoneOutcome> {
   const {
     project: { id: projectId },
-  } = await authorizeMilestone(principal, input.milestoneId, db);
+  } = await authorizeMilestone(principal, rawInput.milestoneId, db);
+  const input = await withServerSideSpend(principal, rawInput, db);
 
   const current = await db.milestone.findUniqueOrThrow({
     where: { id: input.milestoneId },

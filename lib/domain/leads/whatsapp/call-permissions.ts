@@ -25,7 +25,7 @@ import {
   type WhatsAppChannel,
   type WhatsAppPort,
 } from "../../ports/whatsapp";
-import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../../principal";
 import { recordWhatsAppHistory } from "./records";
 import { evaluateWhatsAppEligibility } from "./policy";
 import { waIdToE164 } from "./phone";
@@ -162,7 +162,7 @@ export async function leadWhatsAppCallPermission(
     where: { id: input.leadId },
   });
   if (!lead) throw new DomainNotFoundError("Lead not found");
-  if (!isInternalPrincipal(principal) || !canAccessLead(principal, lead)) {
+  if (!isOfficePrincipal(principal) || !canAccessLead(principal, lead)) {
     throw new DomainAuthorizationError("You do not have access to this lead");
   }
   const conversations = await db.leadWhatsAppConversation.findMany({
@@ -229,7 +229,7 @@ export async function requestWhatsAppCallPermission(
   readonly permission: WhatsAppCallPermissionState;
 }> {
   const now = input.now ?? new Date();
-  if (!isInternalPrincipal(principal) || principal.kind !== "user") {
+  if (!isOfficePrincipal(principal) || principal.kind !== "user") {
     throw new DomainAuthorizationError(
       "Asking to call requires a signed-in member of staff.",
     );
