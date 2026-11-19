@@ -67,7 +67,6 @@ import type {
   AddMaterialInput,
   MilestoneUpdateData,
   MilestonePictureUploadData,
-  ProjectDetailTabKey,
   CreateTradieScheduleInput,
   ManualTradieQuoteFormInput,
   SendTradieRequestsFormInput,
@@ -129,7 +128,8 @@ export interface ProjectsState {
     byProjectId: Record<
       string,
       {
-        activeTab: ProjectDetailTabKey;
+        // The open tab is not here: it lives in the `activeTab` URL parameter
+        // alone (project-detail-tabs.tsx), so a store reset cannot move it.
         activityFilter: "all" | "site-updates" | "milestones";
         chartRange: "monthly" | "quarterly";
       }
@@ -138,7 +138,6 @@ export interface ProjectsState {
 }
 
 const defaultDetailUiState = {
-  activeTab: "overview",
   activityFilter: "all",
   chartRange: "monthly",
 } as const;
@@ -1890,18 +1889,6 @@ const projectsSlice = createSlice({
     clearProjectUploads(state, action: PayloadAction<string>) {
       delete state.uploadsByProjectId[action.payload];
     },
-    setProjectDetailTab(
-      state,
-      action: PayloadAction<{ projectId: string; tab: ProjectDetailTabKey }>,
-    ) {
-      const current =
-        state.detailUi.byProjectId[action.payload.projectId]
-        ?? defaultDetailUiState;
-      state.detailUi.byProjectId[action.payload.projectId] = {
-        ...current,
-        activeTab: action.payload.tab,
-      };
-    },
     setProjectDetailActivityFilter(
       state,
       action: PayloadAction<{
@@ -2336,7 +2323,6 @@ export const {
   completeProjectUpload,
   failProjectUpload,
   clearProjectUploads,
-  setProjectDetailTab,
   setProjectDetailActivityFilter,
   setProjectDetailChartRange,
   resetProjectDetailUiState,
