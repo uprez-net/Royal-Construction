@@ -107,9 +107,13 @@ export function PhoneSection() {
     }
   }
 
+  // Only for the number on screen: a code that went to a number since
+  // replaced must not show up as waiting for the new one.
   const onCodeSent = useCallback((pending: PendingCode) => {
     setStatus((current) =>
-      current ? { ...current, pendingCode: pending } : current,
+      current && current.phone === pending.sentTo
+        ? { ...current, pendingCode: pending }
+        : current,
     );
   }, []);
 

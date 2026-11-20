@@ -11,7 +11,6 @@ import {
   readOwnPhone,
   updateOwnPhone,
 } from "@/lib/domain/identity/phone-verification";
-import { findUserById } from "@/lib/domain/identity/users";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
 import {
@@ -59,10 +58,9 @@ export async function PUT(request: NextRequest) {
       prisma,
       writeOwnPhoneToClerk,
     );
-    if (result.changed) {
-      const user = await findUserById(principal.userId, prisma);
-      if (user) revalidateOwnPhone(user.clerkId);
-    }
+    // Every time, not only on a change: a retry of a save that committed
+    // reads back as unchanged, and its cache must not still hold the old row.
+    revalidateOwnPhone(result.clerkUserId);
     return successResponse(await readOwnPhone(principal, prisma));
   } catch (error) {
     const refusal = domainErrorResponse(error);

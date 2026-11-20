@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { ChevronsUpDown, LogOut, UserRound } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import {
   DropdownMenu,
@@ -124,9 +125,10 @@ export function AccountMenu({
           onSelect={(event) => {
             event.preventDefault();
             setSigningOut(true);
-            void signOut({ redirectUrl: "/sign-in" }).catch(() =>
-              setSigningOut(false),
-            );
+            void signOut({ redirectUrl: "/sign-in" }).catch(() => {
+              toast.error("Couldn't sign you out. You're still signed in.");
+              setSigningOut(false);
+            });
           }}
         >
           <LogOut aria-hidden="true" />

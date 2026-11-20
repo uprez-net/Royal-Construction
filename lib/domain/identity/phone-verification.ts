@@ -186,12 +186,23 @@ export async function updateOwnPhone(
   input: { readonly phone: string },
   db: DomainDb,
   updateIdentity: OwnPhoneIdentityPort,
-): Promise<{ phone: string; changed: boolean; verified: boolean }> {
+): Promise<{
+  phone: string;
+  changed: boolean;
+  verified: boolean;
+  /** For the caller to expire the cached user row, changed or not. */
+  clerkUserId: string;
+}> {
   const user = await requireOwnUser(principal, db);
   const phone = await requireAvailableTeamPhone(input.phone, user.id, db);
 
   if (phone === user.phone) {
-    return { changed: false, phone, verified: isPhoneVerified(user) };
+    return {
+      changed: false,
+      clerkUserId: user.clerkId,
+      phone,
+      verified: isPhoneVerified(user),
+    };
   }
 
   try {
@@ -230,6 +241,7 @@ export async function updateOwnPhone(
 
   return {
     changed: true,
+    clerkUserId: user.clerkId,
     phone,
     verified: isPhoneVerified({ phone, verifiedPhone: user.verifiedPhone }),
   };
@@ -270,7 +282,9 @@ export async function sendPhoneVerificationCode(
     where: { userId: user.id },
   });
 
-  if (existing && existing.phone === user.phone) {
+  // On the account, not the number: changing the number between sends must
+  // not skip the wait.
+  if (existing) {
     const waitMs =
       existing.sentAt.getTime() + PHONE_CODE_RESEND_MS - now.getTime();
     if (waitMs > 0) {
@@ -329,6 +343,15 @@ export async function sendPhoneVerificationCode(
     }
   }
 
+  // The row exactly as this call claimed it. A guess counted against it since
+  // then means it is no longer ours to put back.
+  const claimedRow = {
+    attempts: claim.attempts,
+    codeHash: claim.codeHash,
+    sentAt: now,
+    userId: user.id,
+  };
+
   try {
     await sender.sms.sendSms({
       body: `${code} is your Royal Constructions verification code. It expires in ${PHONE_CODE_TTL_MS / 60_000} minutes.`,
@@ -351,12 +374,10 @@ export async function sendPhoneVerificationCode(
             windowSends: existing.windowSends,
             windowStartedAt: existing.windowStartedAt,
           },
-          where: { sentAt: now, userId: user.id },
+          where: claimedRow,
         });
       } else {
-        await db.phoneVerification.deleteMany({
-          where: { sentAt: now, userId: user.id },
-        });
+        await db.phoneVerification.deleteMany({ where: claimedRow });
       }
       throw new DomainSideEffectError(
         "The code couldn't be texted to this number. Check the number is a mobile and try again.",
@@ -384,9 +405,11 @@ export async function sendPhoneVerificationCode(
  * Check the code the caller typed and, if it is right, mark their phone
  * verified.
  *
- * The guess is counted before it is compared, conditional on the count that
- * was read, so two guesses sent together cannot share one try. The verified
- * mark is conditional on the number still being the one the code went to.
+ * Every write is conditional on the challenge as it was read — same code,
+ * same count — so two guesses sent together cannot share one try. A wrong
+ * guess is counted; a right one consumes the challenge and marks the phone in
+ * one transaction, conditional on the number still being the one the code
+ * went to.
  */
 export async function confirmPhoneVerification(
   principal: DomainPrincipal,
@@ -433,21 +456,25 @@ export async function confirmPhoneVerification(
     );
   }
 
-  const counted = await db.phoneVerification.updateMany({
-    data: { attempts: { increment: 1 } },
-    where: {
-      attempts: pending.attempts,
-      sentAt: pending.sentAt,
-      userId: user.id,
-    },
-  });
-  if (counted.count !== 1) {
-    throw new DomainStaleVersionError(
-      "That code was just checked or replaced. Try again.",
-    );
-  }
+  // The challenge exactly as it was read: the same code, with no guess
+  // counted against it since. A write conditional on this is one try.
+  const challenge = {
+    attempts: pending.attempts,
+    codeHash: pending.codeHash,
+    sentAt: pending.sentAt,
+    userId: user.id,
+  };
+  const stale = new DomainStaleVersionError(
+    "That code was just checked or replaced. Try again.",
+  );
 
   if (!codeMatches(pending, code)) {
+    // A wrong guess is counted and stays counted.
+    const counted = await db.phoneVerification.updateMany({
+      data: { attempts: { increment: 1 } },
+      where: challenge,
+    });
+    if (counted.count !== 1) throw stale;
     const left = PHONE_CODE_MAX_ATTEMPTS - (pending.attempts + 1);
     throw new DomainValidationError(
       left > 0
@@ -457,7 +484,16 @@ export async function confirmPhoneVerification(
     );
   }
 
+  // A right guess consumes the challenge and marks the phone in one commit,
+  // or neither. Consuming expires the code and blanks its hash rather than
+  // deleting the row: `sentAt` and the hourly window are the account's send
+  // history, and changing the number afterwards must not reset them.
   await db.$transaction(async (tx) => {
+    const consumed = await tx.phoneVerification.updateMany({
+      data: { codeHash: "", expiresAt: now },
+      where: challenge,
+    });
+    if (consumed.count !== 1) throw stale;
     const marked = await tx.user.updateMany({
       data: { phoneVerifiedAt: now, verifiedPhone: pending.phone },
       where: { id: user.id, phone: pending.phone },
@@ -468,7 +504,6 @@ export async function confirmPhoneVerification(
         "code",
       );
     }
-    await tx.phoneVerification.deleteMany({ where: { userId: user.id } });
   });
 
   return { alreadyVerified: false, phone: pending.phone, verifiedAt: now };

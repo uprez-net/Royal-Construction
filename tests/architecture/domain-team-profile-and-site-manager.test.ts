@@ -54,6 +54,10 @@ test("a team phone is read as E.164, with a local Australian number as +61", () 
   assert.equal(teamPhoneE164("412 345 678"), null);
   assert.equal(teamPhoneE164("+0412345678"), null);
   assert.equal(teamPhoneE164("phone"), null);
+  // An extension is not part of the number a text goes to.
+  assert.equal(teamPhoneE164("+61 2 4660 0655 ext 12"), null);
+  assert.equal(teamPhoneE164("02 4660 0655 x12"), null);
+  assert.equal(teamPhoneE164("0412-345-678"), "+61412345678");
 });
 
 test("a profile edit writes Clerk, then the local name and phone, never the email", async () => {

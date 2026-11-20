@@ -422,6 +422,9 @@ export type TeamProfilePort = (input: {
  */
 export function teamPhoneE164(raw: string): string | null {
   const trimmed = raw.trim();
+  // Separators only. Stripping every non-digit would fold an extension
+  // ("+61 2 4660 0655 ext 12") into the number and text somebody else.
+  if (!/^\+?[\d\s().-]+$/.test(trimmed)) return null;
   const digits = trimmed.replace(/\D/g, "");
   if (trimmed.startsWith("+")) {
     return /^[1-9]\d{7,14}$/.test(digits) ? `+${digits}` : null;
@@ -456,18 +459,22 @@ export async function listTeamMembers(
 ): Promise<{ members: TeamMemberRow[]; total: number }> {
   requireAdminPrincipal(principal);
   const q = input.q.trim();
+  // A whole number typed as the office writes it ("0412 345 678") is found in
+  // its stored form too; a fragment still matches as a substring.
+  const fullPhone = q ? teamPhoneE164(q) : null;
   const where: Prisma.UserWhereInput = q
     ? {
         OR: [
           { name: { contains: q, mode: "insensitive" } },
           { email: { contains: q, mode: "insensitive" } },
           { phone: { contains: q.replace(/\s+/g, "") } },
+          ...(fullPhone ? [{ phone: fullPhone }] : []),
         ],
       }
     : {};
   const [members, total] = await Promise.all([
     db.user.findMany({
-      orderBy: [{ name: "asc" }, { createdAt: "asc" }],
+      orderBy: [{ name: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       select: {
         clerkId: true,
         email: true,

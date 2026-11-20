@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 
 import { Role } from "@prisma/client";
 import { describe, test } from "vitest";
@@ -95,11 +96,29 @@ describe("texting a verification code", () => {
       "user.findUnique": USER,
     });
     const { port, sent } = sender();
-    const pending = await sendPhoneVerificationCode(ME, recorder.db, port, {
-      generateCode: () => "042817",
-      now: NOW,
-    });
+    const realSend = port.sms!.sendSms;
+    let claimedBeforeSend = false;
+    const orderedPort: PhoneCodeSender = {
+      ...port,
+      sms: {
+        ...port.sms!,
+        // Checked at the moment the text goes: the claim is already written.
+        sendSms: async (message) => {
+          claimedBeforeSend = recorder
+            .operations()
+            .includes("phoneVerification.create");
+          return realSend(message);
+        },
+      },
+    };
+    const pending = await sendPhoneVerificationCode(
+      ME,
+      recorder.db,
+      orderedPort,
+      { generateCode: () => "042817", now: NOW },
+    );
 
+    assert.equal(claimedBeforeSend, true);
     assert.deepEqual(recorder.operations(), [
       "user.findUnique",
       "phoneVerification.findUnique",
@@ -107,9 +126,25 @@ describe("texting a verification code", () => {
     ]);
     const data = (recorder.calls[2]?.args as { data: Record<string, unknown> })
       .data;
+    assert.deepEqual(Object.keys(data).sort(), [
+      "attempts",
+      "codeHash",
+      "expiresAt",
+      "phone",
+      "salt",
+      "sentAt",
+      "userId",
+      "windowSends",
+      "windowStartedAt",
+    ]);
     assert.equal(data.phone, USER.phone);
-    // Never the code itself.
-    assert.ok(!JSON.stringify(data).includes("042817"));
+    // A salted hash of the code, never the code itself.
+    assert.equal(
+      data.codeHash,
+      createHash("sha256")
+        .update(`${String(data.salt)}:042817`)
+        .digest("hex"),
+    );
     assert.equal(sent.length, 1);
     assert.equal(sent[0]?.from, "+61290001234");
     assert.equal(sent[0]?.to, USER.phone);
@@ -138,6 +173,23 @@ describe("texting a verification code", () => {
       /Wait 20 seconds/,
     );
     assert.deepEqual(recorder.writes(), []);
+    assert.equal(sent.length, 0);
+  });
+
+  test("changing the number does not skip the 30-second wait", async () => {
+    const recorder = recordingDb({
+      "phoneVerification.findUnique": {
+        ...(await storedCode()),
+        phone: "+61499999999",
+        sentAt: new Date(NOW.getTime() - 10_000),
+      },
+      "user.findUnique": USER,
+    });
+    const { port, sent } = sender();
+    await assert.rejects(
+      sendPhoneVerificationCode(ME, recorder.db, port, { now: NOW }),
+      /Wait 20 seconds/,
+    );
     assert.equal(sent.length, 0);
   });
 
@@ -190,6 +242,17 @@ describe("texting a verification code", () => {
     assert.deepEqual(recorder.operations().slice(-1), [
       "phoneVerification.deleteMany",
     ]);
+    // Only the row as this call claimed it: a guess counted since leaves it.
+    const created = recorder.calls.find(
+      (call) => call.operation === "phoneVerification.create",
+    )?.args as { data: Record<string, unknown> };
+    const undone = recorder.calls.at(-1)?.args as { where: unknown };
+    assert.deepEqual(undone.where, {
+      attempts: 0,
+      codeHash: created.data.codeHash,
+      sentAt: NOW,
+      userId: USER.id,
+    });
   });
 
   test("an uncertain send keeps the code live: it may still arrive", async () => {
@@ -247,7 +310,7 @@ describe("texting a verification code", () => {
 });
 
 describe("typing the code back", () => {
-  test("the right code marks the number verified and clears the code", async () => {
+  test("the right code marks the number verified and consumes the code", async () => {
     const stored = await storedCode("123456");
     const recorder = recordingDb({
       "phoneVerification.findUnique": stored,
@@ -267,7 +330,45 @@ describe("typing the code back", () => {
     // Conditional on the number still being the one the code went to.
     assert.deepEqual(marked.where, { id: USER.id, phone: USER.phone });
     assert.equal(marked.data.verifiedPhone, USER.phone);
-    assert.ok(recorder.operations().includes("phoneVerification.deleteMany"));
+    // Consumed, not deleted: the send history stays with the account, and a
+    // right guess is not counted as a try.
+    assert.ok(!recorder.operations().includes("phoneVerification.deleteMany"));
+    const consumed = recorder.calls.filter(
+      (call) => call.operation === "phoneVerification.updateMany",
+    );
+    assert.equal(consumed.length, 1);
+    const consume = consumed[0]?.args as {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+    };
+    assert.deepEqual(consume.where, {
+      attempts: stored.attempts,
+      codeHash: stored.codeHash,
+      sentAt: stored.sentAt,
+      userId: USER.id,
+    });
+    assert.deepEqual(Object.keys(consume.data).sort(), [
+      "codeHash",
+      "expiresAt",
+    ]);
+  });
+
+  test("a code replaced or checked since it was read is stale, and nothing is marked", async () => {
+    const recorder = recordingDb({
+      "phoneVerification.findUnique": await storedCode("123456"),
+      "phoneVerification.updateMany": { count: 0 },
+      "user.findUnique": USER,
+    });
+    await assert.rejects(
+      confirmPhoneVerification(
+        ME,
+        { code: "123456" },
+        recorder.transactionalDb,
+        NOW,
+      ),
+      /just checked or replaced/,
+    );
+    assert.ok(!recorder.operations().includes("user.updateMany"));
   });
 
   test("a wrong code uses up one try and says how many are left", async () => {
@@ -366,6 +467,7 @@ describe("changing your own number", () => {
     );
     assert.deepEqual(result, {
       changed: true,
+      clerkUserId: "clerk_me",
       phone: "+61499111222",
       verified: false,
     });
@@ -435,9 +537,14 @@ describe("reading your own phone", () => {
 });
 
 describe("where the code is texted from", () => {
+  const telnyxSms = sender().port.sms;
+  const twilioSms = sender().port.sms;
+
   function runtime(numbers: { e164: string; provider: "telnyx" | "twilio" }[]) {
     return {
-      adapterFor: () => ({ sms: sender().port.sms }),
+      adapterFor: (provider: "telnyx" | "twilio") => ({
+        sms: provider === "telnyx" ? telnyxSms : twilioSms,
+      }),
       config: { numbers: numbers.map((n) => ({ ...n, label: "Office" })) },
     } as unknown as CommsRuntime;
   }
@@ -450,7 +557,8 @@ describe("where the code is texted from", () => {
       ]),
     );
     assert.equal(chosen.from, "+61290001234");
-    assert.ok(chosen.sms);
+    // Telnyx's SMS port with Telnyx's number, not whichever adapter is first.
+    assert.equal(chosen.sms, telnyxSms);
   });
 
   test("no Telnyx number, no sender", () => {

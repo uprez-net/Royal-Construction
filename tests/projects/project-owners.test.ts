@@ -243,6 +243,11 @@ describe("the builder is never an owner", () => {
       builderDetailsOf({ address: "38/62 Turner Rd, Smeaton Grange NSW 2567" }),
       ["address"],
     );
+    // A neighbour on the same road is a client, not the builder.
+    assert.deepEqual(
+      builderDetailsOf({ address: "136 Turner Road, Smeaton Grange NSW 2567" }),
+      [],
+    );
     assert.deepEqual(builderDetailsOf(jane), []);
   });
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useSession, useUser } from "@clerk/nextjs";
 import { Monitor, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 
@@ -11,58 +10,88 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { formatSydneyDateTime } from "@/lib/dates/sydney";
+import { FetchError, fetchJson } from "@/utils/fetch";
 
 import { clerkErrorMessage, wasReverificationCancelled } from "./clerk-error";
 import { useVerifiedAction } from "./reverification";
 
-type UserResource = NonNullable<ReturnType<typeof useUser>["user"]>;
-type DeviceSession = Awaited<ReturnType<UserResource["getSessions"]>>[number];
+/** What `/api/account/sessions` answers: the caller's active sessions. */
+type DeviceSession = {
+  id: string;
+  current: boolean;
+  lastActiveAt: number;
+  browserName: string | null;
+  browserVersion: string | null;
+  deviceType: string | null;
+  isMobile: boolean;
+  city: string | null;
+  country: string | null;
+  ipAddress: string | null;
+};
 
 function deviceName(session: DeviceSession): string {
-  const activity = session.latestActivity;
-  const browser = [activity?.browserName, activity?.browserVersion]
+  const browser = [session.browserName, session.browserVersion]
     .filter(Boolean)
     .join(" ");
-  const device = activity?.deviceType;
-  return [browser, device].filter(Boolean).join(" on ") || "Unknown device";
+  return (
+    [browser, session.deviceType].filter(Boolean).join(" on ")
+    || "Unknown device"
+  );
 }
 
 function whereFrom(session: DeviceSession): string | null {
-  const activity = session.latestActivity;
-  const place = [activity?.city, activity?.country].filter(Boolean).join(", ");
-  return [place, activity?.ipAddress].filter(Boolean).join(" · ") || null;
+  const place = [session.city, session.country].filter(Boolean).join(", ");
+  return [place, session.ipAddress].filter(Boolean).join(" · ") || null;
+}
+
+/**
+ * Sign one device out. Clerk's reverification answer is handed back as is,
+ * for `useVerifiedAction` to show the dialog and call this again.
+ */
+async function revokeSession(session: DeviceSession): Promise<unknown> {
+  const response = await fetch(
+    `/api/account/sessions/${encodeURIComponent(session.id)}`,
+    { method: "DELETE" },
+  );
+  const body: unknown = await response.json().catch(() => null);
+  if (body && typeof body === "object" && "clerk_error" in body) return body;
+  if (!response.ok) {
+    const message =
+      body && typeof body === "object" && "error" in body
+        ? String((body as { error: unknown }).error)
+        : "Could not sign it out.";
+    throw new FetchError(message, response.status, body);
+  }
+  return body;
 }
 
 /** Every device signed in to this account, and signing one out. */
 export function SessionsSection() {
-  const { user } = useUser();
-  const { session: current } = useSession();
   const [sessions, setSessions] = useState<DeviceSession[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<string | "others" | null>(null);
 
-  const revoke = useVerifiedAction((session: DeviceSession) =>
-    session.revoke(),
-  );
+  const revoke = useVerifiedAction(revokeSession);
 
+  // A fresh server read every time, so "Try again" and the reload after a
+  // sign-out really ask Clerk again, and a failure shows as one.
   const load = useCallback(async () => {
-    if (!user) return;
     try {
-      const all = await user.getSessions();
-      setSessions(
-        all
-          .filter((session) => session.status === "active")
-          .sort(
-            (a, b) =>
-              new Date(b.lastActiveAt).getTime()
-              - new Date(a.lastActiveAt).getTime(),
-          ),
+      const response = await fetchJson<DeviceSession[]>(
+        "/api/account/sessions",
+        { cache: "no-store", method: "GET" },
+        "Could not load your devices.",
       );
+      setSessions(response.data);
       setError(null);
     } catch (loadError) {
-      setError(clerkErrorMessage(loadError, "Could not load your devices."));
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Could not load your devices.",
+      );
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     // Deferred a tick: never setState in the effect body.
@@ -70,12 +99,19 @@ export function SessionsSection() {
     return () => window.clearTimeout(first);
   }, [load]);
 
-  const others = (sessions ?? []).filter((s) => s.id !== current?.id);
+  const others = (sessions ?? []).filter((s) => !s.current);
 
   async function signOut(targets: DeviceSession[], key: string) {
     setRevoking(key);
     try {
-      for (const target of targets) await revoke(target);
+      for (const target of targets) {
+        const result = await revoke(target);
+        // Still a reverification answer after the dialog: Clerk did not
+        // accept the check, and the device is still signed in.
+        if (result && typeof result === "object" && "clerk_error" in result) {
+          throw new Error("Couldn't confirm it's you. Try again.");
+        }
+      }
       toast.success(
         targets.length === 1
           ? "Signed that device out."
@@ -128,10 +164,8 @@ export function SessionsSection() {
       ) : (
         <ul className="divide-y divide-border/70">
           {sessions.map((session) => {
-            const isCurrent = session.id === current?.id;
-            const Icon = session.latestActivity?.isMobile
-              ? Smartphone
-              : Monitor;
+            const isCurrent = session.current;
+            const Icon = session.isMobile ? Smartphone : Monitor;
             const from = whereFrom(session);
             return (
               <li

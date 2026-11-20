@@ -469,9 +469,9 @@ async function main() {
   const envelopeTemplate: docusign.EnvelopeTemplate = {
     name: "MBA BC4 Residential Building Contract (Mar 2025) — Royal Constructions",
     description:
-      "Head contract sent from the offer workflow once the Tender is signed. " +
-      "Tabs AutoPlace onto the MBA webform's embedded merge tokens; created by " +
-      "scripts/docusign/create-bc4-template-multiple.ts — edit that script, not this template.",
+      "Head contract sent from the offer workflow once the Tender is signed. "
+      + "Tabs AutoPlace onto the MBA webform's embedded merge tokens; created by "
+      + "scripts/docusign/create-bc4-template-multiple.ts — edit that script, not this template.",
     emailSubject: "Residential Building Contract (BC4) — Royal Constructions",
     shared: "false",
     status: "created",

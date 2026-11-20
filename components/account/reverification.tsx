@@ -72,14 +72,39 @@ export function useVerifiedAction<
 }
 
 export function ReverificationProvider({ children }: { children: ReactNode }) {
-  const [request, setRequest] = useState<ReverificationRequest | null>(null);
+  const [open, setOpen] = useState<{
+    id: number;
+    request: ReverificationRequest;
+  } | null>(null);
+  const current = useRef<ReverificationRequest | null>(null);
+  const nextId = useRef(0);
+
+  // One dialog at a time. A request that arrives while another is open
+  // replaces it, and the one it replaces is cancelled — the quiet path its
+  // caller already handles — so no caller is left waiting on a dialog that
+  // is gone.
+  const show = useCallback((request: ReverificationRequest) => {
+    const previous = current.current;
+    current.current = request;
+    previous?.cancel();
+    nextId.current += 1;
+    setOpen({ id: nextId.current, request });
+  }, []);
+
+  const settle = useCallback((request: ReverificationRequest) => {
+    if (current.current !== request) return;
+    current.current = null;
+    setOpen(null);
+  }, []);
+
   return (
-    <ReverificationContext.Provider value={setRequest}>
+    <ReverificationContext.Provider value={show}>
       {children}
-      {request ? (
+      {open ? (
         <ReverificationDialog
-          request={request}
-          onSettled={() => setRequest(null)}
+          key={open.id}
+          request={open.request}
+          onSettled={() => settle(open.request)}
         />
       ) : null}
     </ReverificationContext.Provider>
@@ -212,7 +237,8 @@ function ReverificationDialog({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!session || busy) return;
-    const entered = value.trim();
+    // A password is sent exactly as typed; only codes are trimmed.
+    const entered = step.kind === "password" ? value : value.trim();
     if (!entered) return;
     setBusy(true);
     setError(null);
@@ -291,6 +317,19 @@ function ReverificationDialog({
     }
   }
 
+  function switchToBackupCode() {
+    setValue("");
+    setError(null);
+    setStep({ kind: "backup_code" });
+  }
+
+  // Offered beside the authenticator app, for someone without their phone.
+  const canUseBackupCode =
+    step.kind === "totp"
+    && (verification?.supportedSecondFactors ?? []).some(
+      (factor) => factor.strategy === "backup_code",
+    );
+
   const canUseEmailCode =
     step.kind === "password"
     && (verification?.supportedFirstFactors ?? []).some(
@@ -344,6 +383,16 @@ function ReverificationDialog({
                 Email me a code instead
               </button>
             ) : null}
+            {canUseBackupCode ? (
+              <button
+                type="button"
+                className="justify-self-start text-[0.8125rem] font-medium text-royal-gold-ink-text underline-offset-2 hover:underline"
+                onClick={switchToBackupCode}
+                disabled={busy}
+              >
+                Use a backup code instead
+              </button>
+            ) : null}
           </form>
         ) : null}
 
@@ -370,7 +419,9 @@ function ReverificationDialog({
               type="submit"
               form="reverify-form"
               variant="royal"
-              disabled={busy || !value.trim()}
+              disabled={
+                busy || !(step.kind === "password" ? value : value.trim())
+              }
             >
               {busy ? <Spinner className="size-4" aria-hidden="true" /> : null}
               Continue

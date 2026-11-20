@@ -70,6 +70,15 @@ function VerificationBody({
   const [checking, setChecking] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const autoSent = useRef(false);
+  // False once this opening has closed (Radix unmounts the body), so a
+  // request still in flight cannot act on a later opening.
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
 
   const codeSent = pendingCode !== null;
   const resendAt = pendingCode
@@ -92,25 +101,45 @@ function VerificationBody({
         { method: "POST" },
         "Could not send a code.",
       );
+      if (!live.current) return;
       setNow(Date.now());
       setCode("");
       onCodeSent(response.data);
     } catch (sendError) {
+      if (!live.current) return;
       setError(
         sendError instanceof Error
           ? sendError.message
           : "Could not send a code.",
       );
+      // A send the carrier could not confirm leaves its code live on the
+      // server. Pick it up, so the code field shows without asking again
+      // (which would only meet the cooldown).
+      await fetchJson<{ pendingCode: PendingCode | null }>(
+        "/api/account/phone",
+        { method: "GET" },
+        "Could not load your phone number.",
+      )
+        .then((status) => {
+          if (live.current && status.data.pendingCode) {
+            onCodeSent(status.data.pendingCode);
+          }
+        })
+        .catch(() => undefined);
     } finally {
-      setSending(false);
+      if (live.current) setSending(false);
     }
   }, [onCodeSent]);
 
   useEffect(() => {
     if (!sendOnOpen || codeSent || autoSent.current) return;
-    autoSent.current = true;
+    // Marked when the timer fires, not when it is set: a timer the cleanup
+    // cancels (Strict Mode's double effect) must not count as the send.
     // Deferred a tick: never setState in the effect body.
-    const first = window.setTimeout(() => void sendCode(), 0);
+    const first = window.setTimeout(() => {
+      autoSent.current = true;
+      void sendCode();
+    }, 0);
     return () => window.clearTimeout(first);
   }, [sendOnOpen, codeSent, sendCode]);
 
@@ -129,15 +158,16 @@ function VerificationBody({
         },
         "Could not check the code.",
       );
-      onVerified();
+      if (live.current) onVerified();
     } catch (verifyError) {
+      if (!live.current) return;
       setError(
         verifyError instanceof Error
           ? verifyError.message
           : "Could not check the code.",
       );
     } finally {
-      setChecking(false);
+      if (live.current) setChecking(false);
     }
   }
 
