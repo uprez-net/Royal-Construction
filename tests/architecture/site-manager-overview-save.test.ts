@@ -71,6 +71,12 @@ test("an unsigned Clerk webhook call is a 401, not a 500", () => {
     join(REPO_ROOT, "app/api/webhook/clerk/route.ts"),
     "utf8",
   );
+  // ... but a missing signing secret is our fault and must stay a 500 (and
+  // reported), checked before the verify step so the 401 cannot hide it.
+  assert.match(
+    route,
+    /if \(!process\.env\.CLERK_WEBHOOK_SIGNING_SECRET\) \{\s*throw new Error[\s\S]*?const evt = await verifyWebhook/,
+  );
   assert.match(
     route,
     /const evt = await verifyWebhook\(request\)\.catch\(\(\) => null\);\s*if \(!evt\) \{[\s\S]*?status: 401/,
