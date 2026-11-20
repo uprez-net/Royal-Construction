@@ -665,9 +665,7 @@ export function ProjectComplianceTab({
         tags: [documentLabel],
         trail: [documentLabel],
       });
-      // Set a small timeout to wait for the file entry to be created in the database before trying to attach it to a document. This is a workaround for a race condition that
-      // can occur when uploading large files, where the file entry may not be immediately available in the database after the upload completes.
-      await new Promise((resolve) => setTimeout(resolve, 850));
+      // uploadFile resolves only once the File row is confirmed server-side.
       const result = await dispatch(
         uploadComplianceDocument({
           projectId: project.id,
