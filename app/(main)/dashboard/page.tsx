@@ -89,6 +89,10 @@ export default async function DashboardPageClient() {
         projectsData={projectsResult.data}
         performance={siteData.data.performance}
         followUpItems={siteData.data.followUps}
+        dataWarnings={[projectsResult.warning, siteData.warning].filter(
+          (warning): warning is string => warning !== null,
+        )}
+        followUpsFailed={siteData.warning !== null}
       />
     );
   }

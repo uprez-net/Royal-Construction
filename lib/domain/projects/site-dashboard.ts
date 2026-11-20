@@ -1,11 +1,15 @@
 import { MilestoneStatus, ProjectStatus, Role } from "@prisma/client";
 
-import { sydneyEndOfDay, sydneyToday } from "@/lib/dates/sydney";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
+
+import { SYDNEY_TZ, sydneyEndOfDay, sydneyToday } from "@/lib/dates/sydney";
+import { duenessOf } from "@/lib/projects/milestone-ledger";
 
 import { projectReadScope } from "../access/projects";
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError } from "../errors";
 import { isInternalPrincipal, type DomainPrincipal } from "../principal";
+import { milestoneEndDate } from "./milestone-schedule";
 
 // What a site manager's dashboard is built from: the live projects' progress by
 // manager, and the activities that are due. Neither carries a dollar figure and
@@ -112,8 +116,15 @@ export type ProjectFollowUp = {
  * level only: a sub-activity rolls up into its parent, which is what the
  * project's own Milestones tab lists as the stage.
  *
+ * "Due" is the Milestones tab's own rule (`duenessOf`), the one the project's
+ * overdue count uses: an open activity is due on its estimated completion
+ * (`milestoneEndDate`: its actual start, or its planned start, plus its
+ * duration), pending or active alike. An activity due to finish today that
+ * has not started is the one most worth chasing.
+ *
  * "Today" is Sydney's, not the server's: Vercel runs on UTC, where the day
- * ends ten hours before the office's does.
+ * ends ten hours before the office's does. Both dates are moved onto Sydney's
+ * wall clock before the calendar days are counted, as the overdue count does.
  */
 export async function listProjectFollowUpsDue(
   principal: DomainPrincipal,
@@ -122,10 +133,12 @@ export async function listProjectFollowUpsDue(
 ): Promise<ProjectFollowUp[]> {
   requireStaff(principal, "Project follow-ups");
 
-  const endOfToday = sydneyEndOfDay(sydneyToday(input.now));
+  const now = input.now ?? new Date();
+  const endOfToday = sydneyEndOfDay(sydneyToday(now));
   const milestones = await db.milestone.findMany({
     orderBy: [{ targetDate: "asc" }, { id: "asc" }],
     select: {
+      estimatedDays: true,
       id: true,
       name: true,
       project: {
@@ -136,21 +149,48 @@ export async function listProjectFollowUpsDue(
         },
       },
       projectStage: true,
+      startDate: true,
       targetDate: true,
     },
     where: {
+      // A narrowing only: an activity cannot finish before it starts, so one
+      // that has not started (or is not planned to) by tonight is not due.
+      OR: [
+        { startDate: { lte: endOfToday } },
+        { startDate: null, targetDate: { lte: endOfToday } },
+      ],
       parentId: null,
       project: { ...projectReadScope(principal), status: { in: BUILDING } },
       status: { in: [MilestoneStatus.PENDING, MilestoneStatus.ACTIVE] },
-      targetDate: { lte: endOfToday },
     },
   });
 
-  return milestones.map((milestone) => ({
-    customerName: milestone.project.customer.name,
-    description: milestone.name,
-    dueAt: milestone.targetDate,
-    id: milestone.id,
-    projectName: milestone.project.name,
-  }));
+  const today = toZonedTime(now, SYDNEY_TZ);
+  const due = milestones.flatMap((milestone) => {
+    const timing = {
+      estimatedDays: milestone.estimatedDays,
+      startDate: milestone.startDate
+        ? toZonedTime(milestone.startDate, SYDNEY_TZ)
+        : null,
+      targetDate: toZonedTime(milestone.targetDate, SYDNEY_TZ),
+    };
+    const dueness = duenessOf(timing, today);
+    if (dueness.kind !== "overdue" && dueness.kind !== "today") return [];
+    return [
+      {
+        customerName: milestone.project.customer.name,
+        description: milestone.name,
+        // Worked out on the wall clock and brought back to an instant, so a
+        // daylight-saving change cannot move it onto the day before.
+        dueAt: fromZonedTime(milestoneEndDate(timing), SYDNEY_TZ),
+        id: milestone.id,
+        projectName: milestone.project.name,
+      },
+    ];
+  });
+  // Most overdue first. The query is ordered by planned start, which is not
+  // the order activities fall due in once their durations differ.
+  return due.sort(
+    (a, b) => a.dueAt.getTime() - b.dueAt.getTime() || a.id.localeCompare(b.id),
+  );
 }

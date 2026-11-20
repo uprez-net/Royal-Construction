@@ -307,10 +307,13 @@ test("project follow-ups are activities due by the end of Sydney's today, on bui
   const where = (call?.args as { where: Record<string, unknown> }).where;
   assert.equal(where.parentId, null);
   assert.deepEqual(where.status, { in: ["PENDING", "ACTIVE"] });
-  // End of the 20th in Sydney is 12:59:59.999 UTC on the 20th (UTC+11).
-  assert.deepEqual(where.targetDate, {
-    lte: new Date("2026-11-20T12:59:59.999Z"),
-  });
+  // End of the 20th in Sydney is 12:59:59.999 UTC on the 20th (UTC+11). Only
+  // a narrowing: nothing that has not started by tonight can be due.
+  const endOfToday = new Date("2026-11-20T12:59:59.999Z");
+  assert.deepEqual(where.OR, [
+    { startDate: { lte: endOfToday } },
+    { startDate: null, targetDate: { lte: endOfToday } },
+  ]);
   const project = where.project as { status: { in: string[] } };
   assert.deepEqual(project.status.in, [
     "ACTIVE",
@@ -322,5 +325,57 @@ test("project follow-ups are activities due by the end of Sydney's today, on bui
   assert.equal(
     recorder.operations().some((operation) => operation.startsWith("lead")),
     false,
+  );
+});
+
+test("a follow-up is due on the activity's estimated completion, the same day the overdue count uses", async () => {
+  // Sydney midnight on a given day, as the database stores a date (UTC+11).
+  const day = (d: number) => new Date(Date.UTC(2026, 10, d - 1, 13));
+  const row = (
+    id: string,
+    timing: { startDate: Date | null; targetDate: Date; estimatedDays: number },
+  ) => ({
+    ...timing,
+    id,
+    name: id,
+    project: {
+      customer: { name: "Smith" },
+      location: "",
+      name: "Smith residence",
+    },
+    projectStage: null,
+  });
+  const recorder = recordingDb({
+    "milestone.findMany": [
+      // Started on the 19th, ten days' work: due on the 29th, not today.
+      row("underway", {
+        estimatedDays: 10,
+        startDate: day(19),
+        targetDate: day(19),
+      }),
+      // Planned for the 18th, two days, never started: due to finish today.
+      row("today", { estimatedDays: 2, startDate: null, targetDate: day(18) }),
+      // Planned for the 10th, two days: overdue since the 13th.
+      row("overdue", {
+        estimatedDays: 2,
+        startDate: null,
+        targetDate: day(10),
+      }),
+    ],
+  });
+
+  const due = await listProjectFollowUpsDue(
+    siteManagerPrincipal(),
+    { now: new Date("2026-11-19T23:30:00Z") }, // 10:30 on the 20th in Sydney
+    recorder.db,
+  );
+
+  assert.deepEqual(
+    due.map((item) => [item.id, item.dueAt.toISOString()]),
+    // Most overdue first, whatever order the rows were read in.
+    [
+      ["overdue", day(12).toISOString()],
+      ["today", day(20).toISOString()],
+    ],
   );
 });

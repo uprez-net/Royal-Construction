@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import type { PaginatedProjectsResult } from "@/lib/data/projects";
 
 import { DashboardFollowUps, type FollowUpItem } from "./dashboard-follow-ups";
+import { DashboardDataWarnings } from "./dashboard-home";
 import { DashboardProjectTable } from "./dashboard-project-table";
 import {
   DashboardSiteManagerTable,
@@ -18,6 +19,13 @@ interface SiteManagerDashboardProps {
   projectsData: PaginatedProjectsResult;
   performance: SiteManagerPerformance[];
   followUpItems: FollowUpItem[];
+  /**
+   * The sections whose read failed and fell back to empty. Shown, so an empty
+   * table is never mistaken for "nothing active" or "nothing due".
+   */
+  dataWarnings?: string[];
+  /** The follow-up read failed: an empty list is not "all clear". */
+  followUpsFailed?: boolean;
 }
 
 /**
@@ -34,11 +42,14 @@ export function SiteManagerDashboard({
   projectsData,
   performance,
   followUpItems,
+  dataWarnings = [],
+  followUpsFailed = false,
 }: SiteManagerDashboardProps) {
   const router = useRouter();
 
   return (
     <div className="flex flex-col gap-6 lg:gap-7">
+      <DashboardDataWarnings warnings={dataWarnings} />
       <PageHeader
         headingLevel="h1"
         title="Dashboard"
@@ -64,7 +75,13 @@ export function SiteManagerDashboard({
           canManage={false}
         />
         <DashboardFollowUps
-          followUpTone={followUpItems.length === 0 ? "positive" : "negative"}
+          followUpTone={
+            followUpsFailed
+              ? "neutral"
+              : followUpItems.length === 0
+                ? "positive"
+                : "negative"
+          }
           pendingFollowUpCount={followUpItems.length}
           followUpItems={followUpItems}
         />

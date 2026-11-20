@@ -59,7 +59,7 @@ const removal = {
   updationData: null,
 };
 
-test("cancelled bookings contribute no spend while completed quoted and hourly work retains its cost", () => {
+test("cancelled and declined bookings contribute no spend while completed quoted and hourly work retains its cost", () => {
   const priced = {
     ...schedule,
     tradie: { lastQuotedPrice: "100", lastQuotedPriceUnit: "HOURLY" as const },
@@ -68,6 +68,11 @@ test("cancelled bookings contribute no spend while completed quoted and hourly w
   };
   assert.equal(
     tradieScheduleSpend({ ...priced, status: TradieScheduleStatus.CANCELLED }),
+    0,
+  );
+  // A decline keeps the quoted price on the row; it was never agreed.
+  assert.equal(
+    tradieScheduleSpend({ ...priced, status: TradieScheduleStatus.DECLINED }),
     0,
   );
   assert.equal(
