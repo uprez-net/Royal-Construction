@@ -17,8 +17,8 @@ import {
 
 import {
   adminPrincipal,
+  customerPrincipal,
   recordingDb,
-  siteManagerPrincipal,
 } from "../architecture/domain-harness";
 import { base, outbox } from "./checklist-fixtures";
 
@@ -172,7 +172,7 @@ describe("raising an issue and telling the tradie", () => {
       }),
     });
     const sent = await sendChecklistIssueEmail(
-      siteManagerPrincipal(),
+      customerPrincipal(),
       {
         attemptKey: "a_1",
         body: "Fix it",
@@ -185,7 +185,8 @@ describe("raising an issue and telling the tradie", () => {
         delivered.push(input);
       },
     ).catch((error: unknown) => error);
-    // A site manager not assigned to this project is refused before sending.
+    // Someone outside the staff is refused before sending. (Any site manager
+    // may record checklists on any project since 2026-11-20.)
     assert.ok(sent instanceof DomainAuthorizationError);
     assert.equal(delivered.length, 0);
 

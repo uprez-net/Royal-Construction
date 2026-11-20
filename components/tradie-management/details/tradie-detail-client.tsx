@@ -17,9 +17,12 @@ import Link from "next/link";
 export function TradieDetailClient({
   tradie,
   showActivity,
+  isOffice,
 }: {
   tradie: TradieDetails;
   showActivity: boolean;
+  /** The office edits, re-prices and deletes a tradie; a site manager rates and reports. */
+  isOffice: boolean;
 }) {
   const dispatch = useAppDispatch();
   useEffect(() => {
@@ -38,14 +41,14 @@ export function TradieDetailClient({
           Back to tradies
         </Link>
       </Button>
-      <TradieCard />
+      <TradieCard isOffice={isOffice} />
       <div className="grid gap-4 lg:grid-cols-12 items-stretch">
         <div className="lg:col-span-8">
           <TradieBusinessDetailsCard />
         </div>
 
         <div className="lg:col-span-4">
-          <TradiePriorityCard />
+          <TradiePriorityCard isOffice={isOffice} />
         </div>
       </div>
       <TradieIncidentsCard />

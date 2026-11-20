@@ -17,7 +17,6 @@ import {
   formatStatus,
   projectStatusConfig,
 } from "@/components/projects/project-status";
-import { HBCF_RECORDED_BY_OFFICE } from "@/components/projects/detail/document-attention-panel";
 import { HbcfCapacityBadge } from "@/components/projects/detail/hbcf-capacity-badge";
 import { SiteManagerSelector } from "@/components/projects/detail/site-manager-selector";
 import { StatusPill } from "@/components/common/status-pill";
@@ -84,10 +83,6 @@ export function ProjectHeader({
   const warnsApply = readinessWarningsApply(project.status);
   const showPcaWarning = pcaMissing && warnsApply;
   const showHbcfWarning = hbcfInsuranceMissing && warnsApply;
-  // HBCF is filed by the office (#559): a caller who cannot see the money
-  // cannot save the number, so the chip says who does instead of linking to a
-  // field that will not save (#572).
-  const hbcfIsOffices = project.financialsHidden === true;
 
   const legalSectionAnchor = `#${LEGAL_SECTION_ID}`;
   const ownerContacts = (
@@ -195,49 +190,46 @@ export function ProjectHeader({
                 <span className="font-mono tabular-nums">{pcaInspector}</span>
               )}
             </span>
-            <span aria-hidden="true" className="hidden sm:inline">
-              |
-            </span>
-            <span
-              className="inline-flex items-center gap-1"
-              key={hbcfInsuranceNumber}
-            >
-              <ShieldCheck className="size-3.5" aria-hidden="true" />
-              HBCF Number{" "}
-              {hbcfInsuranceMissing ? (
-                hbcfIsOffices ? (
-                  <span
-                    className="text-muted-foreground"
-                    title={HBCF_RECORDED_BY_OFFICE}
-                  >
-                    {NOT_SET}
-                    <span className="sr-only">. {HBCF_RECORDED_BY_OFFICE}</span>
-                  </span>
-                ) : showHbcfWarning ? (
-                  <Link
-                    href={legalSectionAnchor}
-                    aria-label="HBCF number not set — click to add"
-                    className="inline-flex items-center gap-1 rounded-md text-warning-ink transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                  >
-                    <StatusPill tone="warning">
-                      <Plus className="size-3" aria-hidden="true" />
-                      Not set
-                    </StatusPill>
-                  </Link>
-                ) : (
-                  <Link
-                    href={legalSectionAnchor}
-                    className="rounded-md text-warning-ink transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                  >
-                    {NOT_SET}
-                  </Link>
-                )
-              ) : (
-                <span className="font-mono tabular-nums">
-                  {hbcfInsuranceNumber}
+            {/* HBCF is the office's to file: a site manager sees no HBCF number. */}
+            {project.financialsHidden ? null : (
+              <>
+                <span aria-hidden="true" className="hidden sm:inline">
+                  |
                 </span>
-              )}
-            </span>
+                <span
+                  className="inline-flex items-center gap-1"
+                  key={hbcfInsuranceNumber}
+                >
+                  <ShieldCheck className="size-3.5" aria-hidden="true" />
+                  HBCF Number{" "}
+                  {hbcfInsuranceMissing ? (
+                    showHbcfWarning ? (
+                      <Link
+                        href={legalSectionAnchor}
+                        aria-label="HBCF number not set — click to add"
+                        className="inline-flex items-center gap-1 rounded-md text-warning-ink transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      >
+                        <StatusPill tone="warning">
+                          <Plus className="size-3" aria-hidden="true" />
+                          Not set
+                        </StatusPill>
+                      </Link>
+                    ) : (
+                      <Link
+                        href={legalSectionAnchor}
+                        className="rounded-md text-warning-ink transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      >
+                        {NOT_SET}
+                      </Link>
+                    )
+                  ) : (
+                    <span className="font-mono tabular-nums">
+                      {hbcfInsuranceNumber}
+                    </span>
+                  )}
+                </span>
+              </>
+            )}
           </div>
           {/* Its own line: who runs the build is a different kind of fact
               from the contract dates and certificates above it. */}
@@ -323,7 +315,10 @@ export function ProjectHeader({
           )}
         </div>
         <div className="flex flex-wrap gap-2 pt-1">
-          <ProjectWhatsAppHeaderButton projectId={project.id} />
+          <ProjectWhatsAppHeaderButton
+            projectId={project.id}
+            isAdmin={canAssignSiteManager}
+          />
           <UploadButton
             projectId={project.id}
             maxFiles={5}

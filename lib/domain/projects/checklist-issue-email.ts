@@ -5,7 +5,7 @@ import {
   OutboxEventKind,
 } from "@prisma/client";
 
-import { authorizeProject } from "../access/projects";
+import { authorizeProjectRecording } from "../access/projects";
 import type { DomainDb } from "../db";
 import {
   DomainSideEffectError,
@@ -67,7 +67,7 @@ export async function sendChecklistIssueEmail(
   sendEmail: ChecklistIssueEmailPort,
   now: Date = new Date(),
 ): Promise<SentChecklistIssueEmail> {
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   const actor = await checklistActor(principal, db);
   const issue = await loadIssue(input, db);
   await loadChecklist(

@@ -48,9 +48,12 @@ export function useCreateProjectWhatsAppGroup(projectId: string) {
  */
 export function ProjectWhatsAppGroupSetup({
   thread,
+  isAdmin,
   onLink,
 }: {
   thread: ProjectWhatsAppThreadDto;
+  /** Only the office creates or links a group; anyone else is told so. */
+  isAdmin: boolean;
   onLink: () => void;
 }) {
   const { create, creating } = useCreateProjectWhatsAppGroup(thread.projectId);
@@ -58,9 +61,10 @@ export function ProjectWhatsAppGroupSetup({
 
   let icon = <WhatsAppBadgeIcon className="size-14" />;
   let title = "Start a WhatsApp group for this project";
-  let body =
-    "One chat with the owners and the team — site updates, photos and questions, all kept with the project.";
-  let actions = (
+  let body = isAdmin
+    ? "One chat with the owners and the team — site updates, photos and questions, all kept with the project."
+    : "The office sets up this project's WhatsApp group.";
+  let actions: React.ReactNode = isAdmin ? (
     <>
       <Button
         type="button"
@@ -85,7 +89,7 @@ export function ProjectWhatsAppGroupSetup({
         Link existing group
       </Button>
     </>
-  );
+  ) : null;
 
   if (!thread.availability.available) {
     icon = (
@@ -97,11 +101,11 @@ export function ProjectWhatsAppGroupSetup({
     body =
       thread.availability.reason
       ?? "Groups are turned off for this deployment.";
-    actions = (
+    actions = isAdmin ? (
       <Button asChild variant="outline" className="rounded-full bg-card px-5">
         <Link href="/admin/whatsapp">See WhatsApp settings</Link>
       </Button>
-    );
+    ) : null;
   } else if (group?.status === "CREATING") {
     icon = (
       <span className="inline-flex size-14 items-center justify-center rounded-full bg-success-light text-success-ink">
@@ -112,7 +116,7 @@ export function ProjectWhatsAppGroupSetup({
     body =
       group.failureReason
       ?? `Asking WhatsApp to create “${group.subject}”. The invite link appears here as soon as WhatsApp confirms it, usually within a minute.`;
-    actions = <></>;
+    actions = null;
   } else if (group?.status === "FAILED") {
     icon = (
       <span className="inline-flex size-14 items-center justify-center rounded-full bg-destructive-light text-destructive-ink">

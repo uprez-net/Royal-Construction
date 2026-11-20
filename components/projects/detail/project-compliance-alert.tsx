@@ -4,7 +4,10 @@ import Link from "next/link";
 import { ArrowRight, ShieldAlert } from "lucide-react";
 
 import { DOCUMENT_ATTENTION_ID } from "@/components/projects/detail/document-attention-panel";
-import { projectDocumentGaps } from "@/lib/domain/projects/document-gaps";
+import {
+  gapsVisibleTo,
+  projectDocumentGaps,
+} from "@/lib/domain/projects/document-gaps";
 import { hasWorkStarted } from "@/lib/domain/projects/milestone-schedule";
 import type { ProjectDetail } from "@/types/project";
 import type { ProjectLegalAdministrationSection } from "@/types/project-flow";
@@ -33,22 +36,25 @@ export function ProjectComplianceAlert({
     }
   ).legalAdministration;
 
-  const gaps = projectDocumentGaps({
-    status: project.status,
-    started: hasWorkStarted(project.milestones),
-    legal: {
-      signedDate: legal?.signedDate,
-      pcaInspector: legal?.pcaInspector,
-      hbcfInsuranceNumber: legal?.hbcfInsuranceNumber,
-      hbcfInsuranceDocument: legal?.hbcfInsuranceDocument,
-      hbcfClaimDocuments: legal?.hbcfClaimDocuments,
-    },
-    heldDocuments: new Set(
-      (project.certifierEngagement?.documents ?? [])
-        .filter((document) => document.files.length > 0)
-        .map((document) => document.documentType),
-    ),
-  });
+  const gaps = gapsVisibleTo(
+    projectDocumentGaps({
+      status: project.status,
+      started: hasWorkStarted(project.milestones),
+      legal: {
+        signedDate: legal?.signedDate,
+        pcaInspector: legal?.pcaInspector,
+        hbcfInsuranceNumber: legal?.hbcfInsuranceNumber,
+        hbcfInsuranceDocument: legal?.hbcfInsuranceDocument,
+        hbcfClaimDocuments: legal?.hbcfClaimDocuments,
+      },
+      heldDocuments: new Set(
+        (project.certifierEngagement?.documents ?? [])
+          .filter((document) => document.files.length > 0)
+          .map((document) => document.documentType),
+      ),
+    }),
+    project.financialsHidden === true,
+  );
   if (gaps.length === 0) return null;
 
   const panelHref = `?activeTab=overview#${DOCUMENT_ATTENTION_ID}`;

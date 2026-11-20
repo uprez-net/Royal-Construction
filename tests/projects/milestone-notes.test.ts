@@ -113,11 +113,22 @@ describe("addMilestoneNote", () => {
     });
   }
 
-  test("refuses a site manager on someone else's project", async () => {
+  test("lets any site manager record a note, not only the assigned one", async () => {
+    // Owner, 2026-11-20: site managers record on every project.
+    const recorder = db();
+    await addMilestoneNote(
+      siteManagerPrincipal("user_other_manager"),
+      { milestoneId: "milestone_1", body: "hello" },
+      recorder.db,
+    );
+    assert.ok(recorder.writes().length > 0);
+  });
+
+  test("refuses a customer and writes nothing", async () => {
     const recorder = db();
     await assert.rejects(
       addMilestoneNote(
-        siteManagerPrincipal("user_other_manager"),
+        customerPrincipal(),
         { milestoneId: "milestone_1", body: "hello" },
         recorder.db,
       ),

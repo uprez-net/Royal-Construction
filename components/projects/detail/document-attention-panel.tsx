@@ -25,7 +25,7 @@ type GapGuide = {
 
 /**
  * Said instead of a how-to to a caller who cannot file HBCF (#572): the
- * header chip, this panel and the Compliance tab's HBCF row.
+ * Compliance tab's HBCF row.
  */
 export const HBCF_RECORDED_BY_OFFICE =
   "The office records the HBCF certificate.";
@@ -37,14 +37,7 @@ export const HBCF_RECORDED_BY_OFFICE =
 function guideFor(
   id: ProjectDocumentGapId,
   hasComplianceFile: boolean,
-  hbcfIsOffices: boolean,
 ): GapGuide {
-  if (
-    hbcfIsOffices
-    && (id === "hbcf_missing" || id === "hbcf_certificate_missing")
-  ) {
-    return { hint: HBCF_RECORDED_BY_OFFICE, go: null };
-  }
   // A certificate needs a compliance file to be uploaded to. With none yet,
   // either the job was certified before the CRM (upload what it holds) or it
   // still has a certifier to engage.
@@ -130,18 +123,12 @@ function guideFor(
 export function DocumentAttentionPanel({
   gaps,
   hasComplianceFile,
-  hbcfIsOffices = false,
   unsaved,
   onGo,
 }: {
   gaps: readonly ProjectDocumentGap[];
   /** The project has a certifier engagement to upload certificates to. */
   hasComplianceFile: boolean;
-  /**
-   * HBCF is the office's to file and this caller is not the office (a site
-   * manager): say so instead of pointing at a field that will not save.
-   */
-  hbcfIsOffices?: boolean;
   /** The form holds edits that are not saved yet. */
   unsaved: boolean;
   onGo: (target: DocumentGapTarget) => void;
@@ -182,7 +169,7 @@ export function DocumentAttentionPanel({
 
       <ul className="space-y-2">
         {gaps.map((gap) => {
-          const guide = guideFor(gap.id, hasComplianceFile, hbcfIsOffices);
+          const guide = guideFor(gap.id, hasComplianceFile);
           return (
             <li
               key={gap.id}

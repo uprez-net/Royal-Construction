@@ -6,7 +6,10 @@ import {
   WhatsAppUnmatchedStatus,
 } from "@prisma/client";
 
-import { authorizeProject } from "../../access/projects";
+import {
+  assertCanSetUpProjectWhatsAppGroup,
+  authorizeProject,
+} from "../../access/projects";
 import type { DomainDb, TransactionalDomainDb } from "../../db";
 import {
   DomainAuthorizationError,
@@ -190,6 +193,7 @@ export async function requestProjectWhatsAppGroup(
       "Creating a WhatsApp group requires a member of staff.",
     );
   }
+  assertCanSetUpProjectWhatsAppGroup(principal);
   const now = input.now ?? new Date();
   const project = await authorizeProject(principal, input.projectId, db);
   const availability = projectWhatsAppGroupAvailability(context.channel);
@@ -593,6 +597,7 @@ export async function listLinkableWhatsAppGroups(
   },
 ): Promise<LinkableWhatsAppGroup[]> {
   requireStaffUser(principal);
+  assertCanSetUpProjectWhatsAppGroup(principal);
   await authorizeProject(principal, input.projectId, db);
   const { channel, groups } = requireGroups(context.channel, context.groups);
 
@@ -655,6 +660,7 @@ export async function linkProjectWhatsAppGroup(
   },
 ): Promise<{ group: ProjectWhatsAppGroupRecord; filedMessages: number }> {
   const staff = requireStaffUser(principal);
+  assertCanSetUpProjectWhatsAppGroup(principal);
   const project = await authorizeProject(principal, input.projectId, db);
   const { channel, groups } = requireGroups(context.channel, context.groups);
   const providerGroupId = input.providerGroupId.trim();
