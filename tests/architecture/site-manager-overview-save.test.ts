@@ -82,3 +82,19 @@ test("an unsigned Clerk webhook call is a 401, not a 500", () => {
     /const evt = await verifyWebhook\(request\)\.catch\(\(\) => null\);\s*if \(!evt\) \{[\s\S]*?status: 401/,
   );
 });
+
+test("the project detail route answers a refusal, not a 500", () => {
+  // Found on staging with a GUEST past the proxy: the handler had no error
+  // handling, so the domain's refusal escaped as a 500 (an incident in
+  // production). Same family as #569.
+  const route = readFileSync(
+    join(REPO_ROOT, "app/api/(data)/projects/[projectId]/route.ts"),
+    "utf8",
+  );
+  const get = route.slice(route.indexOf("export async function GET"));
+  const handler = get.slice(0, get.indexOf("export async function", 10));
+  assert.match(
+    handler,
+    /try \{[\s\S]*getCachedProjectById[\s\S]*domainErrorResponse\(error\)/,
+  );
+});
