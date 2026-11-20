@@ -156,6 +156,44 @@ export function isReplyFromTradie(
 }
 
 /**
+ * The tradie an unreferenced message came from, by any address on their record.
+ *
+ * Their primary email first, then the extra addresses an office answers from
+ * (accounts@, a partner's phone), compared trimmed and lowercased as
+ * `isReplyFromTradie` does. An extra address shared by two tradies names
+ * neither: the message is then not filed as either's.
+ */
+export async function findTradieBySender(
+  sender: string | null | undefined,
+  db: DomainDb,
+): Promise<{ readonly id: string; readonly name: string } | null> {
+  const raw = sender?.trim() ?? "";
+  const from = raw.toLowerCase();
+  if (!from) return null;
+  const candidates = await db.tradie.findMany({
+    select: { additionalEmails: true, email: true, id: true, name: true },
+    take: 5,
+    where: {
+      OR: [
+        { email: { equals: from, mode: "insensitive" } },
+        // `has` is case-sensitive; stored extras are not always lowercased.
+        { additionalEmails: { hasSome: [...new Set([from, raw])] } },
+      ],
+    },
+  });
+  const primary = candidates.find(
+    (tradie) => tradie.email.trim().toLowerCase() === from,
+  );
+  if (primary) return { id: primary.id, name: primary.name };
+  const extra = candidates.filter((tradie) =>
+    tradie.additionalEmails.some(
+      (address) => address.trim().toLowerCase() === from,
+    ),
+  );
+  return extra.length === 1 ? { id: extra[0].id, name: extra[0].name } : null;
+}
+
+/**
  * Find the one booking this reply answers, or say why there is not one.
  *
  * With a `scope` — the reply quoted one of our references — only the bookings

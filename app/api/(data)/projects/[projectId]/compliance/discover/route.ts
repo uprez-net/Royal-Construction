@@ -11,7 +11,9 @@ import {
   requireComplianceAccess,
 } from "@/lib/compliance/access";
 import { assertCanFileComplianceDocument } from "@/lib/domain/access/projects";
-import { userPrincipal } from "@/lib/domain/principal";
+import { assertCanMoveComplianceFile } from "@/lib/domain/compliance/file-ownership";
+import { isDomainError } from "@/lib/domain/errors";
+import { userPrincipal, type DomainPrincipal } from "@/lib/domain/principal";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
 import {
@@ -63,7 +65,8 @@ export async function POST(
   try {
     const { engagement, user } = await requireComplianceAccess(projectId);
     // Looking is filing: a found file is claimed onto the row.
-    assertCanFileComplianceDocument(userPrincipal(user), documentType);
+    const principal = userPrincipal(user);
+    assertCanFileComplianceDocument(principal, documentType);
     const engagementId = engagement!.id;
 
     // 1. Already collected.
@@ -93,7 +96,7 @@ export async function POST(
     const byName = candidates.find((file) =>
       matchesByName(file.filename, documentType),
     );
-    if (byName) {
+    if (byName && (await mayMove(principal, projectId, byName.id))) {
       const document = await claim(
         engagementId,
         documentType,
@@ -119,6 +122,9 @@ export async function POST(
     for (const file of readable) {
       const result = await classifyDocumentAtUrl(file.url, file.filename);
       if (result.documentType !== documentType) {
+        continue;
+      }
+      if (!(await mayMove(principal, projectId, file.id))) {
         continue;
       }
       const document = await claim(
@@ -152,6 +158,28 @@ export async function POST(
       error,
     );
     return errorResponse("Failed to look for this document.");
+  }
+}
+
+/**
+ * Whether this caller may move the file onto a compliance row.
+ *
+ * Claiming moves a file the same way an upload does, so it answers to the same
+ * rule (`assertCanMoveComplianceFile`): the project's HBCF certificate sits on
+ * the project unclaimed, and a site manager's discovery must not pull it onto
+ * another row. A refusal here means "not this file", and the search goes on.
+ */
+async function mayMove(
+  principal: DomainPrincipal,
+  projectId: string,
+  fileId: string,
+): Promise<boolean> {
+  try {
+    await assertCanMoveComplianceFile(principal, { projectId, fileId }, prisma);
+    return true;
+  } catch (error) {
+    if (isDomainError(error)) return false;
+    throw error;
   }
 }
 

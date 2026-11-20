@@ -221,7 +221,7 @@ test("a reply keeps the thread's newest reference and goes where the tradie last
     .find((write) => write.operation === "outboxEvent.upsert");
   assert.match(
     (upsert?.args as { where: { key: string } }).where.key,
-    /^tradie-thread-reply:p_1:t_1:a_1$/,
+    /^tradie-thread-reply:p_1:t_1:a_1:[0-9a-f]{16}$/,
   );
   const filed = recorder
     .writes()
@@ -231,6 +231,75 @@ test("a reply keeps the thread's newest reference and goes where the tradie last
   assert.equal(row.projectId, "p_1");
   assert.equal(row.scheduleId, "s_1");
   assert.equal(row.refToken, "RCTBK-0A1B2C3D4E5F");
+});
+
+test("a newest email with no reference does not hand the reference back to an older request", async () => {
+  const sent: string[] = [];
+  await replyOnTradieThread(
+    adminPrincipal(),
+    { attemptKey: "a_1", body: "Hi", projectId: "p_1", tradieId: "t_1" },
+    replyDb({
+      "tradieEmail.findFirst": (args: unknown) => {
+        const where = (
+          args as { where: { direction?: string; refToken?: unknown } }
+        ).where;
+        if (where.direction === "INBOUND") return null;
+        // The newest referenced email: newer than the request.
+        if (where.refToken) {
+          return {
+            refToken: "RCTBK-0A1B2C3D4E5F",
+            scheduleId: "s_1",
+            sentAt: new Date("2026-11-10T00:00:00Z"),
+          };
+        }
+        // The newest email of all: the tradie's fresh message, no reference.
+        return {
+          refToken: null,
+          scheduleId: null,
+          sentAt: new Date("2026-11-15T00:00:00Z"),
+          subject: "Fresh question",
+        };
+      },
+    }).db,
+    async (message) => {
+      sent.push(message.subject);
+    },
+  );
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /RCTBK-0A1B2C3D4E5F/);
+  assert.doesNotMatch(sent[0], /RCTRQ/);
+});
+
+test("one attempt key with edited text is a new message, not a replay of the old one", async () => {
+  const keyFor = async (body: string) => {
+    const recorder = replyDb();
+    await replyOnTradieThread(
+      adminPrincipal(),
+      { attemptKey: "a_1", body, projectId: "p_1", tradieId: "t_1" },
+      recorder.db,
+      async () => {},
+    );
+    const upsert = recorder
+      .writes()
+      .find((write) => write.operation === "outboxEvent.upsert");
+    return (upsert?.args as { where: { key: string } }).where.key;
+  };
+  assert.equal(await keyFor("Hi"), await keyFor("  Hi  "));
+  assert.notEqual(await keyFor("Hi"), await keyFor("Hi, the 14th works"));
+});
+
+test("a sent reply is filed before its outbox row is completed", async () => {
+  const recorder = replyDb();
+  await replyOnTradieThread(
+    adminPrincipal(),
+    { attemptKey: "a_1", body: "Hi", projectId: "p_1", tradieId: "t_1" },
+    recorder.db,
+    async () => {},
+  );
+  const operations = recorder.writes().map((write) => write.operation);
+  const filed = operations.indexOf("tradieEmail.createMany");
+  const completed = operations.lastIndexOf("outboxEvent.updateMany");
+  assert.ok(filed >= 0 && completed > filed, operations.join(", "));
 });
 
 test("a reply from an address not on the tradie's record goes to their primary email", async () => {

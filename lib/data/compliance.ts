@@ -236,6 +236,13 @@ export async function recordPriorComplianceDocument(
     { projectId: input.projectId, fileId: input.fileId },
     prisma,
   );
+  // The attach below asks this too, but after the file is opened: a refusal
+  // there would leave the empty no-certifier file behind.
+  await assertCanMoveComplianceFile(
+    principal,
+    { projectId: input.projectId, fileId: input.fileId },
+    prisma,
+  );
   const { engagementId } = await openPriorComplianceFile(
     principal,
     { projectId: input.projectId },
@@ -853,6 +860,18 @@ export async function attachComplianceDocumentFile(params: {
         where: { complianceDocumentId: target.id, id: { not: file.id } },
         select: { id: true, url: true },
       });
+
+      // A replaced file is deleted, so it answers to the same rule as the one
+      // moving in: a file the project's HBCF record points at stays, unless
+      // the caller may file HBCF. Thrown inside the transaction, so nothing
+      // above commits either.
+      for (const stale of superseded) {
+        await assertCanMoveComplianceFile(
+          params.principal,
+          { projectId: params.projectId, fileId: stale.id },
+          tx,
+        );
+      }
 
       if (superseded.length > 0) {
         await tx.file.deleteMany({

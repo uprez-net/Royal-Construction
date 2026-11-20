@@ -41,6 +41,19 @@ import {
 import { bookingTrade, tradieTrades } from "@/lib/domain/tradies/request-rules";
 import { tradeLabelsMatching } from "@/lib/domain/tradies/trade-types";
 import { domainActionFailure } from "@/lib/http/domain-response";
+import { currentPrincipal } from "./current-principal";
+import { canSeeProjectFinancials } from "@/lib/domain/access/projects";
+import { withoutTradieQuotes } from "@/lib/domain/projects/financial-redaction";
+
+/**
+ * Tradie rows as the signed-in viewer may see them: without the last quoted
+ * price for someone who may not see tradie prices (a site manager).
+ */
+async function forViewer<T>(rows: T): Promise<T> {
+  return canSeeProjectFinancials(await currentPrincipal())
+    ? rows
+    : withoutTradieQuotes(rows);
+}
 
 export async function fetchTradieRemovalImpact(tradieId: string) {
   try {
@@ -711,7 +724,7 @@ export async function fetchFilteredTradies(
         )
       : tradies;
 
-    return inCategory.map((tradie) => {
+    const rows = inCategory.map((tradie) => {
       return {
         ...tradie,
         trades: tradieTrades(tradie),
@@ -727,6 +740,7 @@ export async function fetchFilteredTradies(
         },
       };
     });
+    return await forViewer(rows);
   } catch (error) {
     console.error("Error fetching filtered tradies:", error);
     throw new Error("Failed to fetch filtered tradies");
@@ -968,7 +982,7 @@ export async function exportTradies() {
       },
     });
 
-    return tradies.map(({ schedules, incidents, ...tradie }) => ({
+    const rows = tradies.map(({ schedules, incidents, ...tradie }) => ({
       ...tradie,
       lastQuotedPrice: tradie.lastQuotedPrice?.toString() ?? null,
       lastQuotedPriceUnit: tradie.lastQuotedPriceUnit,
@@ -979,6 +993,7 @@ export async function exportTradies() {
       jobsCompleted: schedules.filter((s) => s.status === "COMPLETED").length,
       openIncidents: incidents.filter((i) => i.status === "OPEN").length,
     }));
+    return await forViewer(rows);
   } catch (error) {
     console.error("Error exporting tradies:", error);
     throw new Error("Failed to export tradies");

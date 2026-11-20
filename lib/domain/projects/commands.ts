@@ -96,6 +96,7 @@ export async function updateProject(
   const persisted = (existing.requirements ?? {}) as {
     legalAdministration?: PersistedLegalAdministration;
     commercialsAndClaims?: unknown;
+    sourceDocuments?: unknown;
   };
   // A caller who may not see the money cannot set it either: their form was
   // handed zeros and would save them (see `withoutFinancialEdits`).

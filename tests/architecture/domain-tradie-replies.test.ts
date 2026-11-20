@@ -6,6 +6,7 @@ import { TradieScheduleStatus } from "@prisma/client";
 import { test } from "vitest";
 
 import {
+  findTradieBySender,
   AWAITING_TRADIE_REPLY,
   findTradieReplyReference,
   isReplyFromTradie,
@@ -291,7 +292,7 @@ test("the Graph webhook matches a referenced reply before falling back to the se
     "utf8",
   );
   const referenced = route.indexOf("findTradieReplyReference(");
-  const bySender = route.indexOf("isTradieMessage(message.from)");
+  const bySender = route.indexOf("tradieForSender(message.from)");
   assert.ok(referenced > 0 && bySender > referenced);
   assert.match(route, /isReplyFromTradie\(/);
   // A reply to a request email that also covers cancelled or declined work
@@ -319,4 +320,44 @@ test("the Graph webhook applies a reply as the system, not through the browser's
   );
   assert.match(updates, /^import "server-only";/);
   assert.doesNotMatch(updates, /^["']use server["']/m);
+});
+
+test("an unreferenced message finds its tradie by any address on file, in any case", async () => {
+  const tradies = [
+    {
+      additionalEmails: ["Accounts@ABC.example"],
+      email: "quotes@abc.example",
+      id: "t_1",
+      name: "ABC Plumbing",
+    },
+  ];
+  const db = recordingDb({ "tradie.findMany": tradies }).db;
+  assert.deepEqual(await findTradieBySender(" QUOTES@abc.example ", db), {
+    id: "t_1",
+    name: "ABC Plumbing",
+  });
+  assert.deepEqual(await findTradieBySender("accounts@abc.example", db), {
+    id: "t_1",
+    name: "ABC Plumbing",
+  });
+  assert.equal(await findTradieBySender("", db), null);
+
+  // An extra address two tradies share names neither of them.
+  const shared = recordingDb({
+    "tradie.findMany": [
+      {
+        additionalEmails: ["office@x.example"],
+        email: "a@x.example",
+        id: "t_a",
+        name: "A",
+      },
+      {
+        additionalEmails: ["office@x.example"],
+        email: "b@x.example",
+        id: "t_b",
+        name: "B",
+      },
+    ],
+  }).db;
+  assert.equal(await findTradieBySender("office@x.example", shared), null);
 });

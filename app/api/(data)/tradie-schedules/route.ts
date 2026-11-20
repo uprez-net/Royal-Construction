@@ -3,6 +3,7 @@ import {
   getCachedTradies,
 } from "@/lib/data/tradies";
 import { createTradieSchedule } from "@/lib/data/tradieSchedules";
+import { requireStaffUser } from "@/lib/auth/require-internal-user";
 import { currentPrincipal } from "@/lib/data/current-principal";
 import { canSeeProjectFinancials } from "@/lib/domain/access/projects";
 import { withoutTradieQuotes } from "@/lib/domain/projects/financial-redaction";
@@ -39,6 +40,13 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: Request) {
+  // Every booking in the business, so staff only. A site manager works from
+  // these lists (with the quotes taken out below), so this is the staff guard,
+  // not the office one.
+  const access = await requireStaffUser();
+  if (!access.ok) {
+    return errorResponse("Forbidden", { status: 403, code: "FORBIDDEN" });
+  }
   const url = new URL(request.url);
   const mode = url.searchParams.get("mode");
 

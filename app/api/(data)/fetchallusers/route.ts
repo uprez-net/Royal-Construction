@@ -3,6 +3,8 @@ import { clerkClient } from "@/lib/auth";
 import { errorResponse, successResponse } from "@/utils/validators";
 import { OFFICE_ROLES } from "@/lib/domain/principal";
 import { connection } from "next/server";
+import { requireInternalUser } from "@/lib/auth/require-internal-user";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 
 function isDisplayableName(name: string | null | undefined) {
   const normalized = name?.trim();
@@ -11,6 +13,13 @@ function isDisplayableName(name: string | null | undefined) {
 
 export async function GET() {
   await connection();
+  // The office's names and emails, for the lead assignee pickers: the same
+  // audience as the leads they assign. The role filter below limits who is
+  // listed; this limits who may ask.
+  const access = await requireInternalUser();
+  if (!access.ok) {
+    return errorResponse("Forbidden", { status: 403, code: "FORBIDDEN" });
+  }
   try {
     const pageLimit = 100;
     let offset = 0;
@@ -69,6 +78,8 @@ export async function GET() {
 
     return successResponse({ users });
   } catch (error) {
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
     console.error("/api/fetchallusers GET error", error);
     return errorResponse("Failed to fetch users", {
       status: 500,

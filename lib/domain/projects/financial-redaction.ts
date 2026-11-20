@@ -1,4 +1,8 @@
-import type { ProjectRequirementsPayload } from "@/types/project-flow";
+import type {
+  ProjectRequirementsPayload,
+  ProjectSourceDocumentReference,
+} from "@/types/project-flow";
+import { parseQuotedAmount } from "@/utils/calculations";
 
 import { canSeeProjectFinancials } from "../access/projects";
 import type { DomainPrincipal } from "../principal";
@@ -38,11 +42,19 @@ const NO_COMMERCIALS: ProjectRequirementsPayload["commercialsAndClaims"] = {
   variationAdminFee: null,
 };
 
+/** A source-document slot with no file behind it. */
+function noSourceDocument(
+  kind: "tender" | "contract",
+): ProjectSourceDocumentReference {
+  return { fileId: "", fileName: "", kind, url: "" };
+}
+
 /**
- * The extracted requirements without their commercial section, and without the
- * HBCF claim amounts (the insurance pool is counted from them). The rest — wet
- * areas, site safety, inclusions, the HBCF documents themselves — is what a
- * site manager builds from, and stays.
+ * The extracted requirements without their commercial section, without the
+ * HBCF claim amounts (the insurance pool is counted from them), and without the
+ * links to the tender and the contract, which carry the price in full. The
+ * rest — wet areas, site safety, inclusions, the HBCF certificate itself — is
+ * what a site manager builds from, and stays.
  */
 export function hideRequirementsFinancials(
   requirements: ProjectRequirementsPayload | undefined,
@@ -52,6 +64,15 @@ export function hideRequirementsFinancials(
   return {
     ...requirements,
     commercialsAndClaims: NO_COMMERCIALS,
+    ...(requirements.sourceDocuments
+      ? {
+          sourceDocuments: {
+            ...requirements.sourceDocuments,
+            contract: noSourceDocument("contract"),
+            tender: noSourceDocument("tender"),
+          },
+        }
+      : {}),
     ...(legal && Array.isArray(legal.hbcfClaimDocuments)
       ? {
           legalAdministration: {
@@ -183,9 +204,16 @@ export function hideDetailProjectFinancials(
     tradieSchedules: project.tradieSchedules.map((schedule) => ({
       ...schedule,
       billing: null,
+      // Whether a price came in, without the price: the Tradies tab would
+      // otherwise say "No quote yet" about a booking that has one.
+      hasQuotedPrice: parseQuotedAmount(schedule.quotedPrice) !== null,
       milestone: schedule.milestone
         ? hideMilestoneFinancials(schedule.milestone)
         : schedule.milestone,
+      // The office writes terms and amounts into a quote's notes.
+      quote: schedule.quote
+        ? { ...schedule.quote, notes: null }
+        : schedule.quote,
       quotedPrice: null,
       tradie: {
         ...schedule.tradie,
@@ -235,8 +263,9 @@ export function withoutTradieQuotes<T>(payload: T): T {
  * the commercial terms.
  *
  * The save writes `requirements` whole, not merged, so leaving the commercial
- * section out would delete it: it is replaced with the stored one instead. The
- * HBCF fields get the same treatment (`withStoredHbcf`).
+ * section out would delete it: it is replaced with the stored one instead, and
+ * so are the tender and contract links, which were handed over blank. The HBCF
+ * fields get the same treatment (`withStoredHbcf`).
  */
 export function withoutFinancialEdits<
   T extends {
@@ -246,11 +275,17 @@ export function withoutFinancialEdits<
 >(
   principal: DomainPrincipal,
   input: T,
-  stored: { commercialsAndClaims?: unknown; legalAdministration?: unknown },
+  stored: {
+    commercialsAndClaims?: unknown;
+    legalAdministration?: unknown;
+    sourceDocuments?: unknown;
+  },
 ): T {
   if (canSeeProjectFinancials(principal)) return input;
   const requirements = { ...input.requirements };
   delete requirements.commercialsAndClaims;
+  // Handed blank tender and contract links, so it would save them blank.
+  delete requirements.sourceDocuments;
   if (requirements.legalAdministration) {
     requirements.legalAdministration = withStoredHbcf(
       requirements.legalAdministration,
@@ -264,6 +299,9 @@ export function withoutFinancialEdits<
           ...requirements,
           ...("commercialsAndClaims" in stored
             ? { commercialsAndClaims: stored.commercialsAndClaims }
+            : {}),
+          ...("sourceDocuments" in stored
+            ? { sourceDocuments: stored.sourceDocuments }
             : {}),
         }
       : undefined,

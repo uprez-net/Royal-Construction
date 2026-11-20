@@ -247,6 +247,12 @@ export interface TradieScheduleWithTradieAndMilestone extends TradieScheduleWith
   billing?: BookingBillingState | null;
   requestRecipient?: TradieRequestDeliverySummary | null;
   quote?: TradieQuoteSummary | null;
+  /**
+   * A price was recorded on the booking. Set only where the price itself has
+   * been taken out (`hideDetailProjectFinancials`), so a booking priced with
+   * no quote row behind it still reads as quoted rather than "No quote yet".
+   */
+  hasQuotedPrice?: boolean;
 }
 
 /** The tradie chosen for a trade on a project. */
