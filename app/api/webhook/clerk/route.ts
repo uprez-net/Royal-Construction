@@ -5,7 +5,6 @@ import type { InvitationJSON, UserJSON } from "@clerk/backend";
 import { createUser, deleteUser, updateUser } from "@/lib/data/user";
 import { Role } from "@prisma/client";
 import { clerkClient, updateUserMetadata } from "@/lib/auth";
-import { notificationEnvironment } from "@/lib/notification/environment";
 import { clerkRoleToStore } from "@/lib/domain/identity/team";
 import {
   acceptTeamInvitation,
@@ -228,31 +227,17 @@ export async function POST(request: NextRequest) {
         revalidateTag(`user-${updatedId}`, CACHE_PROFILES.MEDIUM);
 
         if (roleDecision.refusedRole) {
-          // A refusal, not a fault: the stored role stands. In production
-          // Clerk is put back to it, so the next event (this write's own echo)
-          // finds nothing to change; a failed write-back throws, so Clerk
-          // retries the event. Only production writes back: staging shares
-          // the Clerk instance and receives the same events, and judging them
-          // against its own data it could undo a change production allowed.
-          const writesBack =
-            notificationEnvironment(process.env) === "production";
-          console.warn(
-            `[clerk-webhook] Refused a dashboard role change to ${current?.role} for ${updatedId}; kept ${roleDecision.refusedRole}${writesBack ? " and set it back in Clerk" : ""}`,
+          // The stored role stands, and Clerk is left as it is. Writing the
+          // stored role back to Clerk cannot be made safe here: a change the
+          // team screen accepts between this decision and that write would be
+          // undone by the write's own echo, restoring the higher role. So the
+          // two disagree until someone sets the role on the team screen, and
+          // that needs a person: logged as an error (ids and roles only) so it
+          // reaches the office inbox. The app keeps deciding from the stored
+          // role, the narrower of the two only ever for page redirects.
+          console.error(
+            `[clerk-webhook] A Clerk dashboard role change was refused for ${updatedId}: Clerk says ${current?.role}, the app keeps ${roleDecision.refusedRole}. Set the role on the team screen (hand over their leads and open tasks first).`,
           );
-          // Re-read at the moment of writing: a change the team screen
-          // accepted since the decision must not be set back to the refused
-          // role's predecessor (whose own echo would then be stored).
-          const storedNow = writesBack
-            ? await prisma.user.findUnique({
-                where: { clerkId: updatedId },
-                select: { role: true },
-              })
-            : null;
-          if (storedNow?.role === roleDecision.refusedRole) {
-            await updateUserMetadata(updatedId, {
-              publicMetadata: { role: roleDecision.refusedRole },
-            });
-          }
         }
 
         return successResponse({ message: "User updated" });

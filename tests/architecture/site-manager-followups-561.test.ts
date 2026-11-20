@@ -135,7 +135,7 @@ test("no role in Clerk, or no local row yet, leaves the behaviour as it was", as
   );
 });
 
-test("the webhook writes the decided role and sets a refused one back to Clerk", () => {
+test("the webhook stores the decided role and never writes a refused one back to Clerk", () => {
   // Source-level, like the other webhook pins: the route has no seam for a
   // Clerk client, so this checks the wiring the decision above depends on.
   const route = readFileSync(
@@ -144,20 +144,13 @@ test("the webhook writes the decided role and sets a refused one back to Clerk",
   );
   assert.match(route, /clerkRoleToStore\(/);
   assert.match(route, /const role = roleDecision\.write;/);
-  assert.match(
-    route,
-    /updateUserMetadata\(updatedId, \{\s*publicMetadata: \{ role: roleDecision\.refusedRole \}/,
-  );
-  // Staging shares the Clerk instance: only production writes back.
-  assert.match(
-    route,
-    /const writesBack =\s*notificationEnvironment\(process\.env\) === "production";/,
-  );
-  assert.match(
-    route,
-    // ... and only while the stored role is still the refused one.
-    /if \(storedNow\?\.role === roleDecision\.refusedRole\) \{\s*await updateUserMetadata\(updatedId/,
-  );
+  // A write-back races the team screen: its echo could restore the higher
+  // role a change accepted meanwhile replaced. So a refusal is reported for a
+  // person to settle, and Clerk is not touched.
+  const refusal = route.slice(route.indexOf("if (roleDecision.refusedRole) {"));
+  const block = refusal.slice(0, refusal.indexOf("return successResponse"));
+  assert.doesNotMatch(block, /updateUserMetadata/);
+  assert.match(block, /console\.error\(/);
 });
 
 test("a GUEST still holding leads cannot be moved to site manager", async () => {
