@@ -157,8 +157,32 @@ const BUILDER_NAMES = new Set(
   ]),
 );
 
-/** 36 or 62 Turner Rd/Road, with no digit before the street number. */
-const BUILDER_STREET_RE = /(?<!\d)(?:36|62)\s*turner\s+r(?:oa)?d\b/;
+/**
+ * 36 or 62 Turner Rd/Road, with no digit before the street number, and the
+ * unit in front of it if one is written: "Unit 3, 36", "U3 36", "3/36",
+ * "38/62". Group 1 or 2 is the unit, group 3 the street number.
+ */
+const BUILDER_STREET_RE =
+  /(?:\b(?:unit|u|suite|shop|factory)\s*(\d+)[\s,/]*|(?<!\d)(\d+)\s*\/\s*)?(?<!\d)(36|62)\s*turner\s+r(?:oa)?d\b/;
+
+/**
+ * The builder's unit at each street number: today's office (taken from
+ * `officeAddress`, so the two cannot drift) and the old "38/62 Turner Rd".
+ * Another unit in the same complex is someone else.
+ */
+const BUILDER_UNITS: Record<string, string | undefined> = {
+  "36": BUILDER_STREET_RE.exec(
+    BUILDER_IDENTITY.officeAddress.toLowerCase(),
+  )?.[1],
+  "62": "38",
+};
+
+function isBuilderStreet(rawAddress: string): boolean {
+  const match = BUILDER_STREET_RE.exec(rawAddress);
+  if (!match) return false;
+  const unit = match[1] ?? match[2];
+  return unit === undefined || unit === BUILDER_UNITS[match[3]];
+}
 
 /**
  * Which of an owner's details are the builder's own: Royal Constructions'
@@ -193,7 +217,8 @@ export function builderDetailsOf(
   // Rd", which contracts signed before the correction still print. Matched on
   // the unsquashed text so the street number is a whole number: squashing
   // would run "Unit 3, 36" together and let "136 Turner Road" match too.
-  if (BUILDER_STREET_RE.test(rawAddress) && address.includes("smeatongrange")) {
+  // No unit written still counts; a different unit (Unit 4) does not.
+  if (isBuilderStreet(rawAddress) && address.includes("smeatongrange")) {
     details.push("address");
   }
   return details;

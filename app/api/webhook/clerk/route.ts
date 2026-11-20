@@ -31,30 +31,36 @@ function metadataPhone(user: UserJSON): string | undefined {
 }
 
 /**
- * The phone Clerk holds now, not the one this event carried.
+ * The phone and role Clerk holds now, not the ones this event carried.
  *
  * Clerk can deliver `user.updated` events late and out of order. Two quick
  * saves of someone's own number (a typo, then the fix) each write the
  * metadata and each fire an event; copying the first event's phone after the
  * second save would put the typo back on `User.phone` and drop its verified
- * badge. Reading Clerk's current value makes every event write the latest
- * number, whichever order they arrive in. If Clerk cannot be read, the stored
- * phone is left alone rather than overwritten with a possibly stale one.
+ * badge. A role changed twice on the team screen is the same: the first
+ * event arriving last would undo the second change. Reading Clerk's current
+ * values makes every event write the latest, whichever order they arrive in.
+ * If Clerk cannot be read, both are left alone rather than overwritten with
+ * possibly stale ones.
  */
-async function currentMetadataPhone(
+async function currentMetadata(
   clerkUserId: string,
-): Promise<string | undefined> {
+): Promise<{ phone: string | undefined; role: Role | undefined } | null> {
   try {
     const user = await clerkClient.users.getUser(clerkUserId);
     const phone = (user.publicMetadata as { phone?: unknown } | undefined)
       ?.phone;
-    return typeof phone === "string" && phone.trim() ? phone.trim() : undefined;
+    return {
+      phone:
+        typeof phone === "string" && phone.trim() ? phone.trim() : undefined,
+      role: roleFromMetadata(user.publicMetadata) ?? undefined,
+    };
   } catch (error) {
     console.error(
-      "[clerk-webhook] Could not read the current phone; leaving the stored one",
+      "[clerk-webhook] Could not read the current metadata; leaving the stored phone and role",
       error,
     );
-    return undefined;
+    return null;
   }
 }
 
@@ -182,7 +188,6 @@ export async function POST(request: NextRequest) {
 
       case "user.updated": {
         const {
-          public_metadata,
           email_addresses: updatedEmailAddresses,
           first_name: updatedFirstName,
           last_name: updatedLastName,
@@ -190,11 +195,12 @@ export async function POST(request: NextRequest) {
         } = evt.data;
 
         const updatedEmail = updatedEmailAddresses[0]?.email_address;
+        const current = await currentMetadata(updatedId);
         // No role in the metadata leaves the stored one alone. It used to mean
         // GUEST, so any update Clerk sent before `user.created` had written the
         // invited role back (they can arrive out of order) demoted the new
         // account to GUEST.
-        const role = roleFromMetadata(public_metadata) ?? undefined;
+        const role = current?.role;
 
         // The phone used to be replaced with a fresh random number on every
         // Clerk update — a role change, a name edit, a new phone set from the
@@ -207,9 +213,7 @@ export async function POST(request: NextRequest) {
         await updateUser(updatedId, {
           name: updatedName || undefined,
           email: updatedEmail,
-          phone: metadataPhone(evt.data)
-            ? await currentMetadataPhone(updatedId)
-            : undefined,
+          phone: metadataPhone(evt.data) ? current?.phone : undefined,
           role,
         });
         // The role every guard reads comes from this cached row.

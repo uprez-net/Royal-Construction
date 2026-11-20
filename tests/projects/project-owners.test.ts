@@ -251,6 +251,34 @@ describe("the builder is never an owner", () => {
     assert.deepEqual(builderDetailsOf(jane), []);
   });
 
+  test("another unit in the office's complex is a client; the office's unit is not", () => {
+    assert.deepEqual(
+      projectOwnerProblems([
+        { ...jane, address: "Unit 4, 36 Turner Road Smeaton Grange NSW 2567" },
+      ]),
+      [],
+    );
+    assert.deepEqual(
+      builderDetailsOf({
+        address: "Unit 3, 36 Turner Road Smeaton Grange NSW 2567",
+      }),
+      ["address"],
+    );
+    assert.deepEqual(
+      builderDetailsOf({ address: "3/36 Turner Rd, Smeaton Grange NSW 2567" }),
+      ["address"],
+    );
+    // No unit written still reads as the office.
+    assert.deepEqual(
+      builderDetailsOf({ address: "36 Turner Road, Smeaton Grange NSW 2567" }),
+      ["address"],
+    );
+    assert.deepEqual(
+      builderDetailsOf({ address: "12/62 Turner Rd, Smeaton Grange NSW 2567" }),
+      [],
+    );
+  });
+
   test("a row that is the builder is refused with one message saying so", () => {
     const problems = projectOwnerProblems([jane, builderRow]);
     assert.equal(problems.length, 1);

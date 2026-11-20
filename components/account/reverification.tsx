@@ -323,9 +323,10 @@ function ReverificationDialog({
     setStep({ kind: "backup_code" });
   }
 
-  // Offered beside the authenticator app, for someone without their phone.
+  // Offered beside the authenticator app or a texted code, for someone
+  // without their phone.
   const canUseBackupCode =
-    step.kind === "totp"
+    (step.kind === "totp" || step.kind === "phone_code")
     && (verification?.supportedSecondFactors ?? []).some(
       (factor) => factor.strategy === "backup_code",
     );

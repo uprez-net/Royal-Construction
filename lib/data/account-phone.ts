@@ -3,7 +3,10 @@ import "server-only";
 import { revalidateTag } from "next/cache";
 
 import { clerkClient } from "@/lib/auth";
-import type { OwnPhoneIdentityPort } from "@/lib/domain/identity/phone-verification";
+import type {
+  OwnPhoneIdentityPort,
+  OwnPhoneIdentityReadPort,
+} from "@/lib/domain/identity/phone-verification";
 import { CACHE_PROFILES } from "@/types/cache";
 
 /**
@@ -21,6 +24,15 @@ export const writeOwnPhoneToClerk: OwnPhoneIdentityPort = async ({
   await clerkClient.users.updateUserMetadata(clerkUserId, {
     publicMetadata: { phone },
   });
+};
+
+/** Clerk's `publicMetadata.phone`, read fresh, or null when it has none. */
+export const readOwnPhoneFromClerk: OwnPhoneIdentityReadPort = async (
+  clerkUserId,
+) => {
+  const user = await clerkClient.users.getUser(clerkUserId);
+  const phone = (user.publicMetadata as { phone?: unknown } | undefined)?.phone;
+  return typeof phone === "string" && phone.trim() ? phone.trim() : null;
 };
 
 /** The cached user row, and the screens that show a staff member's phone. */

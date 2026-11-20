@@ -16,7 +16,7 @@ import {
 } from "../errors";
 import { commsDefinitelyNotSent, type SmsPort } from "../ports/comms";
 import type { DomainPrincipal, UserPrincipal } from "../principal";
-import { requireAvailableTeamPhone } from "./team";
+import { requireAvailableTeamPhone, teamPhoneE164 } from "./team";
 import { findUserById } from "./users";
 
 // A person's own phone number, and proving they hold it.
@@ -47,6 +47,20 @@ export type OwnPhoneIdentityPort = (input: {
   clerkUserId: string;
   phone: string;
 }) => Promise<void>;
+
+/**
+ * Reads Clerk's `publicMetadata.phone`, or null when there is none.
+ *
+ * Every screen that sets a number (the team screen, the profile page) writes
+ * it there before the record. The placeholder the Clerk webhook gives a new
+ * account with no number is written only to the record. So "the record's
+ * number is also in Clerk" is how a send tells a number a person entered
+ * from a made-up one. The placeholder is "+61" and nine random digits, which
+ * can be a real stranger's mobile.
+ */
+export type OwnPhoneIdentityReadPort = (
+  clerkUserId: string,
+) => Promise<string | null>;
 
 export type PhoneCodeSender = {
   /** The carrier's SMS capability, or null when texting is switched off. */
@@ -221,9 +235,15 @@ export async function updateOwnPhone(
   try {
     await db.user.update({ data: { phone }, where: { id: user.id } });
   } catch (error) {
+    // Put Clerk back to what the record holds now, not what this request
+    // read: a save from another tab may have committed in between, and
+    // restoring the older number would let the webhook copy it back.
+    const committed = await db.user
+      .findUnique({ select: { phone: true }, where: { id: user.id } })
+      .catch(() => null);
     await updateIdentity({
       clerkUserId: user.clerkId,
-      phone: user.phone,
+      phone: committed?.phone ?? user.phone,
     }).catch((compensationError) => {
       console.error(
         "[phone] Could not restore Clerk after the local phone write failed",
@@ -255,14 +275,26 @@ export async function updateOwnPhone(
  * cooldown refusal instead of a second text. If the carrier says definitely
  * not sent, the claim is undone so the person can try again straight away; if
  * it cannot say, the code stays live, because it may yet arrive.
+ *
+ * Two refusals come before anything is claimed. `expectedPhone` is the number
+ * the person was shown; if the account's number has changed since, nothing is
+ * sent. And a number nobody entered (the webhook's placeholder) is never
+ * texted.
  */
 export async function sendPhoneVerificationCode(
   principal: DomainPrincipal,
+  input: { readonly expectedPhone: string },
   db: DomainDb,
   sender: PhoneCodeSender,
+  readIdentityPhone: OwnPhoneIdentityReadPort,
   options: { now?: Date; generateCode?: () => string } = {},
 ): Promise<PendingPhoneCode> {
   const user = await requireOwnUser(principal, db);
+  if (input.expectedPhone.trim() !== user.phone) {
+    throw new DomainStaleVersionError(
+      "Your phone number changed since this page loaded, so no code was sent. Check the number and try again.",
+    );
+  }
   if (isPhoneVerified(user)) {
     throw new DomainValidationError(
       "This number is already verified.",
@@ -274,6 +306,27 @@ export async function sendPhoneVerificationCode(
       "Text messages aren't switched on for this site, so no code could be sent.",
       "sms",
       false,
+    );
+  }
+
+  let identityPhone: string | null;
+  try {
+    identityPhone = await readIdentityPhone(user.clerkId);
+  } catch (error) {
+    throw new DomainSideEffectError(
+      "Couldn't check your number with the sign-in service, so no code was sent. Try again.",
+      "clerk",
+      true,
+      { cause: error },
+    );
+  }
+  if (
+    !identityPhone
+    || (teamPhoneE164(identityPhone) ?? identityPhone) !== user.phone
+  ) {
+    throw new DomainValidationError(
+      "This number was filled in when your account was made, not entered by you, so no code was sent. Use Change number to add your own.",
+      "phone",
     );
   }
 
@@ -327,9 +380,16 @@ export async function sendPhoneVerificationCode(
   );
 
   if (existing) {
+    // The row exactly as read, guesses included: a wrong guess counted since
+    // makes this claim lose, so a failed send cannot restore an older count.
     const claimed = await db.phoneVerification.updateMany({
       data: claim,
-      where: { sentAt: existing.sentAt, userId: user.id },
+      where: {
+        attempts: existing.attempts,
+        codeHash: existing.codeHash,
+        sentAt: existing.sentAt,
+        userId: user.id,
+      },
     });
     if (claimed.count !== 1) throw raced;
   } else {

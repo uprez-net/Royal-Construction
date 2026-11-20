@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Monitor, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 
@@ -72,19 +72,26 @@ export function SessionsSection() {
   const [revoking, setRevoking] = useState<string | "others" | null>(null);
 
   const revoke = useVerifiedAction(revokeSession);
+  const latestLoad = useRef(0);
 
   // A fresh server read every time, so "Try again" and the reload after a
-  // sign-out really ask Clerk again, and a failure shows as one.
+  // sign-out really ask Clerk again, and a failure shows as one. Only the
+  // latest read is shown: an older one answering late would bring back a
+  // device just signed out.
   const load = useCallback(async () => {
+    latestLoad.current += 1;
+    const id = latestLoad.current;
     try {
       const response = await fetchJson<DeviceSession[]>(
         "/api/account/sessions",
         { cache: "no-store", method: "GET" },
         "Could not load your devices.",
       );
+      if (id !== latestLoad.current) return;
       setSessions(response.data);
       setError(null);
     } catch (loadError) {
+      if (id !== latestLoad.current) return;
       setError(
         loadError instanceof Error
           ? loadError.message
@@ -101,29 +108,48 @@ export function SessionsSection() {
 
   const others = (sessions ?? []).filter((s) => !s.current);
 
+  // Each device on its own: one that fails does not keep the rest signed in.
+  // Closing "Confirm it's you", or Clerk not accepting it, stops the run,
+  // because every later device would only ask again.
   async function signOut(targets: DeviceSession[], key: string) {
     setRevoking(key);
+    let signedOut = 0;
+    let failure: unknown = null;
     try {
       for (const target of targets) {
-        const result = await revoke(target);
-        // Still a reverification answer after the dialog: Clerk did not
-        // accept the check, and the device is still signed in.
-        if (result && typeof result === "object" && "clerk_error" in result) {
-          throw new Error("Couldn't confirm it's you. Try again.");
+        try {
+          const result = await revoke(target);
+          // Still a reverification answer after the dialog: Clerk did not
+          // accept the check, and the device is still signed in.
+          if (result && typeof result === "object" && "clerk_error" in result) {
+            failure = new Error("Couldn't confirm it's you. Try again.");
+            break;
+          }
+          signedOut += 1;
+        } catch (revokeError) {
+          if (wasReverificationCancelled(revokeError)) break;
+          failure ??= revokeError;
         }
-      }
-      toast.success(
-        targets.length === 1
-          ? "Signed that device out."
-          : `Signed ${targets.length} devices out.`,
-      );
-    } catch (revokeError) {
-      if (!wasReverificationCancelled(revokeError)) {
-        toast.error(clerkErrorMessage(revokeError, "Could not sign it out."));
       }
     } finally {
       setRevoking(null);
       void load();
+    }
+
+    const notSignedOut = targets.length - signedOut;
+    if (failure) {
+      const reason = clerkErrorMessage(failure, "Could not sign it out.");
+      toast.error(
+        signedOut > 0
+          ? `Signed ${signedOut} of ${targets.length} devices out; ${notSignedOut} still signed in. ${reason}`
+          : reason,
+      );
+    } else if (signedOut > 0) {
+      toast.success(
+        signedOut === 1
+          ? "Signed that device out."
+          : `Signed ${signedOut} devices out.`,
+      );
     }
   }
 

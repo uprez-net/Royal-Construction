@@ -80,7 +80,9 @@ function VerificationBody({
     };
   }, []);
 
-  const codeSent = pendingCode !== null;
+  // An expired code is no code: the field would only answer "expired".
+  const codeSent =
+    pendingCode !== null && new Date(pendingCode.expiresAt).getTime() > now;
   const resendAt = pendingCode
     ? new Date(pendingCode.resendAvailableAt).getTime()
     : 0;
@@ -98,12 +100,19 @@ function VerificationBody({
     try {
       const response = await fetchJson<PendingCode>(
         "/api/account/phone/code",
-        { method: "POST" },
+        {
+          body: JSON.stringify({ phone }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        },
         "Could not send a code.",
       );
-      if (!live.current) return;
-      setNow(Date.now());
-      setCode("");
+      if (live.current) {
+        setNow(Date.now());
+        setCode("");
+      }
+      // The section's status, not this opening's: it takes the code even if
+      // the dialog closed meanwhile, so reopening shows the field.
       onCodeSent(response.data);
     } catch (sendError) {
       if (!live.current) return;
@@ -121,15 +130,13 @@ function VerificationBody({
         "Could not load your phone number.",
       )
         .then((status) => {
-          if (live.current && status.data.pendingCode) {
-            onCodeSent(status.data.pendingCode);
-          }
+          if (status.data.pendingCode) onCodeSent(status.data.pendingCode);
         })
         .catch(() => undefined);
     } finally {
       if (live.current) setSending(false);
     }
-  }, [onCodeSent]);
+  }, [onCodeSent, phone]);
 
   useEffect(() => {
     if (!sendOnOpen || codeSent || autoSent.current) return;
@@ -158,7 +165,8 @@ function VerificationBody({
         },
         "Could not check the code.",
       );
-      if (live.current) onVerified();
+      // Verified whether or not this opening is still on screen.
+      onVerified();
     } catch (verifyError) {
       if (!live.current) return;
       setError(

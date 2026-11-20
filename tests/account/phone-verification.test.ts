@@ -9,6 +9,7 @@ import type { CommsRuntime } from "@/lib/comms/factory";
 import {
   DomainAuthorizationError,
   DomainSideEffectError,
+  DomainStaleVersionError,
   DomainValidationError,
 } from "@/lib/domain/errors";
 import {
@@ -55,13 +56,30 @@ function sender(failWith?: Error) {
   return { port, sent };
 }
 
+/** A send as the dialog makes it: USER's number on screen, and in Clerk. */
+function send(
+  principal: Parameters<typeof sendPhoneVerificationCode>[0],
+  db: Parameters<typeof sendPhoneVerificationCode>[2],
+  port: PhoneCodeSender,
+  options?: Parameters<typeof sendPhoneVerificationCode>[5],
+) {
+  return sendPhoneVerificationCode(
+    principal,
+    { expectedPhone: USER.phone },
+    db,
+    port,
+    async () => USER.phone,
+    options,
+  );
+}
+
 /** A stored code for USER, made by the real send so the hash is real. */
 async function storedCode(code = "123456") {
   const recorder = recordingDb({
     "phoneVerification.findUnique": null,
     "user.findUnique": USER,
   });
-  await sendPhoneVerificationCode(ME, recorder.db, sender().port, {
+  await send(ME, recorder.db, sender().port, {
     generateCode: () => code,
     now: NOW,
   });
@@ -111,12 +129,10 @@ describe("texting a verification code", () => {
         },
       },
     };
-    const pending = await sendPhoneVerificationCode(
-      ME,
-      recorder.db,
-      orderedPort,
-      { generateCode: () => "042817", now: NOW },
-    );
+    const pending = await send(ME, recorder.db, orderedPort, {
+      generateCode: () => "042817",
+      now: NOW,
+    });
 
     assert.equal(claimedBeforeSend, true);
     assert.deepEqual(recorder.operations(), [
@@ -169,7 +185,7 @@ describe("texting a verification code", () => {
     });
     const { port, sent } = sender();
     await assert.rejects(
-      sendPhoneVerificationCode(ME, recorder.db, port, { now: NOW }),
+      send(ME, recorder.db, port, { now: NOW }),
       /Wait 20 seconds/,
     );
     assert.deepEqual(recorder.writes(), []);
@@ -187,7 +203,7 @@ describe("texting a verification code", () => {
     });
     const { port, sent } = sender();
     await assert.rejects(
-      sendPhoneVerificationCode(ME, recorder.db, port, { now: NOW }),
+      send(ME, recorder.db, port, { now: NOW }),
       /Wait 20 seconds/,
     );
     assert.equal(sent.length, 0);
@@ -204,10 +220,93 @@ describe("texting a verification code", () => {
     });
     const { port, sent } = sender();
     await assert.rejects(
-      sendPhoneVerificationCode(ME, recorder.db, port, { now: NOW }),
+      send(ME, recorder.db, port, { now: NOW }),
       DomainValidationError,
     );
     assert.equal(sent.length, 0);
+  });
+
+  test("a resend claims the row only as read, guesses included", async () => {
+    const base = await storedCode();
+    const stored = {
+      ...base,
+      attempts: 2,
+      sentAt: new Date(NOW.getTime() - 60_000),
+    };
+    const recorder = recordingDb({
+      "phoneVerification.findUnique": stored,
+      "user.findUnique": USER,
+    });
+    await send(ME, recorder.db, sender().port, { now: NOW });
+    const claim = recorder.calls.find(
+      (call) => call.operation === "phoneVerification.updateMany",
+    )?.args as { where: unknown };
+    assert.deepEqual(claim.where, {
+      attempts: 2,
+      codeHash: base.codeHash,
+      sentAt: stored.sentAt,
+      userId: USER.id,
+    });
+  });
+
+  test("a number changed since the dialog showed it is not texted", async () => {
+    const recorder = recordingDb({ "user.findUnique": USER });
+    const { port, sent } = sender();
+    await assert.rejects(
+      sendPhoneVerificationCode(
+        ME,
+        { expectedPhone: "+61499999999" },
+        recorder.db,
+        port,
+        async () => USER.phone,
+        { now: NOW },
+      ),
+      DomainStaleVersionError,
+    );
+    assert.deepEqual(recorder.writes(), []);
+    assert.equal(sent.length, 0);
+  });
+
+  test("a placeholder number nobody entered is never texted", async () => {
+    // The webhook's placeholder is on the record only; Clerk has no phone,
+    // or (after a failed save) a different one.
+    for (const inClerk of [null, "+61499999999"]) {
+      const recorder = recordingDb({
+        "phoneVerification.findUnique": null,
+        "user.findUnique": USER,
+      });
+      const { port, sent } = sender();
+      await assert.rejects(
+        sendPhoneVerificationCode(
+          ME,
+          { expectedPhone: USER.phone },
+          recorder.db,
+          port,
+          async () => inClerk,
+          { now: NOW },
+        ),
+        /filled in when your account was made/,
+      );
+      assert.deepEqual(recorder.writes(), []);
+      assert.equal(sent.length, 0);
+    }
+  });
+
+  test("Clerk's copy in another format still counts as entered", async () => {
+    const recorder = recordingDb({
+      "phoneVerification.findUnique": null,
+      "user.findUnique": USER,
+    });
+    const { port, sent } = sender();
+    await sendPhoneVerificationCode(
+      ME,
+      { expectedPhone: USER.phone },
+      recorder.db,
+      port,
+      async () => "0412 345 678",
+      { now: NOW },
+    );
+    assert.equal(sent.length, 1);
   });
 
   test("five codes an hour, then a refusal saying how long to wait", async () => {
@@ -222,7 +321,7 @@ describe("texting a verification code", () => {
     });
     const { port, sent } = sender();
     await assert.rejects(
-      sendPhoneVerificationCode(ME, recorder.db, port, { now: NOW }),
+      send(ME, recorder.db, port, { now: NOW }),
       /Try again in 40 minutes/,
     );
     assert.equal(sent.length, 0);
@@ -235,7 +334,7 @@ describe("texting a verification code", () => {
     });
     const { port } = sender(new CommsError("Invalid number", "rejected"));
     await assert.rejects(
-      sendPhoneVerificationCode(ME, recorder.db, port, { now: NOW }),
+      send(ME, recorder.db, port, { now: NOW }),
       (error: unknown) =>
         error instanceof DomainSideEffectError && error.retryable,
     );
@@ -262,7 +361,7 @@ describe("texting a verification code", () => {
     });
     const { port } = sender(new CommsError("Timed out", "uncertain"));
     await assert.rejects(
-      sendPhoneVerificationCode(ME, recorder.db, port, { now: NOW }),
+      send(ME, recorder.db, port, { now: NOW }),
       (error: unknown) =>
         error instanceof DomainSideEffectError && !error.retryable,
     );
@@ -272,12 +371,7 @@ describe("texting a verification code", () => {
   test("with texting switched off it says so and writes nothing", async () => {
     const recorder = recordingDb({ "user.findUnique": USER });
     await assert.rejects(
-      sendPhoneVerificationCode(
-        ME,
-        recorder.db,
-        { from: null, sms: null },
-        { now: NOW },
-      ),
+      send(ME, recorder.db, { from: null, sms: null }, { now: NOW }),
       DomainSideEffectError,
     );
     assert.deepEqual(recorder.writes(), []);
@@ -289,7 +383,7 @@ describe("texting a verification code", () => {
     });
     const { port, sent } = sender();
     await assert.rejects(
-      sendPhoneVerificationCode(ME, recorder.db, port, { now: NOW }),
+      send(ME, recorder.db, port, { now: NOW }),
       /already verified/,
     );
     assert.equal(sent.length, 0);
@@ -298,11 +392,7 @@ describe("texting a verification code", () => {
   test("a cron or an anonymous caller has no phone of its own", async () => {
     const recorder = recordingDb();
     await assert.rejects(
-      sendPhoneVerificationCode(
-        systemPrincipal("test"),
-        recorder.db,
-        sender().port,
-      ),
+      send(systemPrincipal("test"), recorder.db, sender().port),
       DomainAuthorizationError,
     );
     assert.deepEqual(recorder.calls, []);
@@ -494,6 +584,27 @@ describe("changing your own number", () => {
     );
     assert.equal(called, false);
     assert.deepEqual(recorder.writes(), []);
+  });
+
+  test("a failed record write puts Clerk back to the committed number, not the one read", async () => {
+    let reads = 0;
+    const recorder = recordingDb({
+      "user.findFirst": null,
+      // The request read USER; another tab committed +61400000001 since.
+      "user.findUnique": () =>
+        ++reads === 1 ? USER : { phone: "+61400000001" },
+      "user.update": () => {
+        throw new Error("connection lost");
+      },
+    });
+    const written: string[] = [];
+    await assert.rejects(
+      updateOwnPhone(ME, { phone: "0499 111 222" }, recorder.db, async (i) => {
+        written.push(i.phone);
+      }),
+      /connection lost/,
+    );
+    assert.deepEqual(written, ["+61499111222", "+61400000001"]);
   });
 
   test("saving the same number writes nothing", async () => {
