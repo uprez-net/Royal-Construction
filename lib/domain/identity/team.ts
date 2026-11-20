@@ -23,7 +23,14 @@ import {
   runOutboxEffect,
   runOutboxEffectWithOutcome,
 } from "../outbox";
+import {
+  recordTeamInvitation,
+  revokeRecordedTeamInvitation,
+} from "./invitations";
 import { findUserByClerkId } from "./users";
+
+/** How long a Clerk team invitation stays usable. */
+const INVITATION_EXPIRY_DAYS = 7;
 
 // Changing a team member's role.
 //
@@ -108,12 +115,35 @@ export async function inviteTeamMember(
     async () => {
       const invitation = await invite({
         emailAddress: email,
-        expiresInDays: 7,
+        expiresInDays: INVITATION_EXPIRY_DAYS,
         publicMetadata: { role: input.role },
       });
       return { email, id: invitation.id, role: input.role };
     },
   );
+  // Kept so the role still reaches someone who signs up without the link
+  // (./invitations.ts). The invitation has gone either way, so a failure here
+  // is logged rather than reported as a failed send: Clerk's own copy of the
+  // role still covers a sign-up through the link.
+  try {
+    await recordTeamInvitation(
+      {
+        clerkInvitationId: result.id,
+        email: result.email,
+        expiresAt: new Date(
+          (input.now ?? new Date()).getTime()
+            + INVITATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+        ),
+        role: result.role,
+      },
+      db,
+    );
+  } catch (error) {
+    console.error(
+      `[team-invite] Invitation ${result.id} was sent but its role could not be recorded`,
+      error,
+    );
+  }
   return {
     alreadyInvited: replayed,
     email: result.email,
@@ -153,6 +183,16 @@ export async function revokeTeamInvitation(
       return { invitationId: normalizedId };
     },
   );
+  // Clerk has revoked it; this only stops our copy granting the role. Logged
+  // rather than thrown for the same reason as the invite above.
+  try {
+    await revokeRecordedTeamInvitation(result.invitationId, db);
+  } catch (error) {
+    console.error(
+      `[team-invite] Invitation ${result.invitationId} was revoked but our record of it was not`,
+      error,
+    );
+  }
   return { invitationId: result.invitationId };
 }
 
@@ -422,12 +462,113 @@ export type TeamProfilePort = (input: {
  */
 export function teamPhoneE164(raw: string): string | null {
   const trimmed = raw.trim();
+  // Separators only. Stripping every non-digit would fold an extension
+  // ("+61 2 4660 0655 ext 12") into the number and text somebody else.
+  if (!/^\+?[\d\s().-]+$/.test(trimmed)) return null;
   const digits = trimmed.replace(/\D/g, "");
   if (trimmed.startsWith("+")) {
     return /^[1-9]\d{7,14}$/.test(digits) ? `+${digits}` : null;
   }
   if (/^0\d{9}$/.test(digits)) return `+61${digits.slice(1)}`;
   return null;
+}
+
+export type TeamMemberRow = {
+  readonly id: string;
+  readonly clerkId: string;
+  readonly name: string;
+  readonly email: string;
+  readonly phone: string;
+  readonly role: Role;
+};
+
+/**
+ * The people on the team screen: application users, not Clerk's whole user
+ * list.
+ *
+ * The Clerk instance holds accounts the app has no record of: sign-ups the
+ * webhook never reached, and accounts from another deployment sharing the same
+ * instance. Listing those offered role and profile edits that fail on the
+ * missing row. The database is the record, so it decides who is listed;
+ * search matches name, email or phone.
+ */
+export async function listTeamMembers(
+  principal: DomainPrincipal,
+  input: { readonly q: string; readonly page: number; readonly limit: number },
+  db: DomainDb,
+): Promise<{ members: TeamMemberRow[]; total: number }> {
+  requireAdminPrincipal(principal);
+  const q = input.q.trim();
+  // A whole number typed as the office writes it ("0412 345 678") is found in
+  // its stored form too; a fragment still matches as a substring.
+  const fullPhone = q ? teamPhoneE164(q) : null;
+  const where: Prisma.UserWhereInput = q
+    ? {
+        OR: [
+          { name: { contains: q, mode: "insensitive" } },
+          { email: { contains: q, mode: "insensitive" } },
+          { phone: { contains: q.replace(/\s+/g, "") } },
+          ...(fullPhone ? [{ phone: fullPhone }] : []),
+        ],
+      }
+    : {};
+  const [members, total] = await Promise.all([
+    db.user.findMany({
+      orderBy: [{ name: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+      select: {
+        clerkId: true,
+        email: true,
+        id: true,
+        name: true,
+        phone: true,
+        role: true,
+      },
+      skip: (input.page - 1) * input.limit,
+      take: input.limit,
+      where,
+    }),
+    db.user.count({ where }),
+  ]);
+  return { members, total };
+}
+
+/** The phone in its stored form, or a refusal saying what a number looks like. */
+function requireTeamPhone(raw: string): string {
+  const phone = teamPhoneE164(raw);
+  if (!phone) {
+    throw new DomainValidationError(
+      "Enter a phone number like 0412 345 678, or with its country code like +61 412 345 678.",
+      "phone",
+    );
+  }
+  return phone;
+}
+
+/**
+ * A phone `userId` may hold: in its stored form, and nobody else's.
+ *
+ * `User.phone` is unique, so a number already on another account would fail
+ * the write anyway — checking first means the commonest refusal touches
+ * nothing (no Clerk write to undo). The team screen and a person editing their
+ * own profile both go through this, so the two never accept different numbers.
+ */
+export async function requireAvailableTeamPhone(
+  raw: string,
+  userId: string,
+  db: DomainDb,
+): Promise<string> {
+  const phone = requireTeamPhone(raw);
+  const taken = await db.user.findFirst({
+    select: { id: true },
+    where: { id: { not: userId }, phone },
+  });
+  if (taken) {
+    throw new DomainValidationError(
+      "That phone number already belongs to another team member.",
+      "phone",
+    );
+  }
+  return phone;
 }
 
 /**
@@ -463,27 +604,12 @@ export async function updateTeamMemberProfile(
       "name",
     );
   }
-  const phone = teamPhoneE164(input.phone);
-  if (!phone) {
-    throw new DomainValidationError(
-      "Enter a phone number like 0412 345 678, or with its country code like +61 412 345 678.",
-      "phone",
-    );
-  }
+  requireTeamPhone(input.phone);
 
   const user = await findUserByClerkId(input.clerkUserId, db);
   if (!user) throw new DomainNotFoundError("Team member not found.");
 
-  const taken = await db.user.findFirst({
-    select: { id: true },
-    where: { id: { not: user.id }, phone },
-  });
-  if (taken) {
-    throw new DomainValidationError(
-      "That phone number already belongs to another team member.",
-      "phone",
-    );
-  }
+  const phone = await requireAvailableTeamPhone(input.phone, user.id, db);
 
   const [firstName, ...rest] = name.split(" ");
   const lastName = rest.join(" ");

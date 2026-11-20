@@ -356,7 +356,8 @@ export function tradeOverview(
         || own.some(
           (schedule) =>
             schedule.status !== TradieScheduleStatus.CANCELLED
-            && schedule.quote != null,
+            // A quote row, or a price the redaction took out but flagged.
+            && (schedule.quote != null || schedule.hasQuotedPrice === true),
         ),
       quotedTotal:
         quotes.length > 0

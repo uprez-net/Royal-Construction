@@ -172,13 +172,13 @@ export function PriorComplianceSection({
       </CardHeader>
       <CardContent>
         <ul className="divide-y divide-border rounded-lg border border-border">
-          {ROWS.filter(
-            // The HBCF certificate is the office's to file.
-            (row) =>
-              !project.financialsHidden
-              || row.type !== ComplianceDocumentType.HOME_INSURANCE,
-          ).map((row) => {
+          {ROWS.map((row) => {
             const file = fileFor(row.type);
+            // The HBCF certificate is the office's to file. A site manager
+            // still sees the row, and can open a certificate already held.
+            const officeOnly =
+              project.financialsHidden
+              && row.type === ComplianceDocumentType.HOME_INSURANCE;
             const heldOnProject =
               !file
               && row.type === ComplianceDocumentType.HOME_INSURANCE
@@ -238,7 +238,7 @@ export function PriorComplianceSection({
                   </div>
                 </div>
                 <div className="shrink-0 sm:ml-auto">
-                  {busy ? (
+                  {officeOnly ? null : busy ? (
                     <p className="text-xs text-muted-foreground" role="status">
                       Saving…
                     </p>

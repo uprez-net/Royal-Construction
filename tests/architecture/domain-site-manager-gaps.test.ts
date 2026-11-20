@@ -20,7 +20,10 @@ import {
 } from "@/lib/domain/identity/team";
 import { readProjectAttention } from "@/lib/domain/projects/attention";
 import { getProjectRequirements } from "@/lib/domain/projects/requirements";
-import { assertCanMoveComplianceFile } from "@/lib/domain/compliance/file-ownership";
+import {
+  assertCanMoveComplianceFile,
+  deleteSupersededComplianceFiles,
+} from "@/lib/domain/compliance/file-ownership";
 import { calculateFollowUpBadgeLabel } from "@/components/dashboard/dashboard-follow-ups";
 import { anonymousPrincipal, systemPrincipal } from "@/lib/domain/principal";
 import {
@@ -421,6 +424,43 @@ test("a site manager cannot move the project's HBCF file onto another row", asyn
       "file.findUnique": { complianceDocument: null },
       "project.findUnique": { requirements: {} },
     }).run,
+  );
+});
+
+test("replacing the HBCF certificate refuses a site manager before anything is deleted", async () => {
+  const replace = (
+    principal: Parameters<typeof assertCanMoveComplianceFile>[0],
+  ) => {
+    const recorder = recordingDb({
+      "file.findMany": [{ id: "f_old", url: "https://blob.example/old.pdf" }],
+      "file.findUnique": {
+        complianceDocument: {
+          documentType: ComplianceDocumentType.HOME_INSURANCE,
+        },
+      },
+      "project.findUnique": { requirements: {} },
+    });
+    return {
+      recorder,
+      run: deleteSupersededComplianceFiles(
+        principal,
+        { documentId: "d_1", keepFileId: "f_new", projectId: "p_1" },
+        recorder.db,
+      ),
+    };
+  };
+
+  const refused = replace(siteManagerPrincipal(SM));
+  await assert.rejects(refused.run, DomainAuthorizationError);
+  assert.deepEqual(refused.recorder.writes(), []);
+
+  const allowed = replace(adminPrincipal());
+  assert.deepEqual(await allowed.run, [
+    { id: "f_old", url: "https://blob.example/old.pdf" },
+  ]);
+  assert.deepEqual(
+    allowed.recorder.writes().map((write) => write.operation),
+    ["file.deleteMany"],
   );
 });
 

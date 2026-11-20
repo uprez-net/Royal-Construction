@@ -1,6 +1,7 @@
 import { cronOutcome, withCronReporting } from "@/lib/observability/cron";
 import { isOfficeRole } from "@/lib/domain/principal";
 import prisma from "@/lib/prisma";
+import { reportError } from "@/lib/observability/report-error";
 import {
   sydneyDateOnly,
   sydneyStartOfDay,
@@ -75,8 +76,16 @@ async function handle(request: Request) {
       if (!assignee?.id) continue;
       // As the follow-up reminder: the office only, and loudly otherwise.
       if (!isOfficeRole(assignee.role)) {
-        console.error(
-          `[CRON] Meeting task ${task.id} on lead ${lead.id} is held by user ${assignee.id}, who is not in the office. Reassign the lead; no reminder was sent.`,
+        // Reported, not just logged: with nobody reading logs, this is how the
+        // office learns a lead needs reassigning. Ids only.
+        reportError(
+          new Error(
+            `[CRON] Meeting task ${task.id} on lead ${lead.id} is held by user ${assignee.id}, who is not in the office. Reassign the lead; no reminder was sent.`,
+          ),
+          {
+            source: "cron:meeting-review-reminder",
+            ids: { assigneeId: assignee.id, leadId: lead.id, taskId: task.id },
+          },
         );
         continue;
       }

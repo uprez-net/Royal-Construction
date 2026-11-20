@@ -5,6 +5,9 @@ import {
 } from "@/lib/data/tradie-management";
 import { connection } from "next/server";
 import { Metadata } from "next";
+import { currentPrincipal } from "@/lib/data/current-principal";
+import { canSeeProjectFinancials } from "@/lib/domain/access/projects";
+import { withoutTradieQuotes } from "@/lib/domain/projects/financial-redaction";
 
 export const metadata: Metadata = {
   title: "Tradie Management",
@@ -19,10 +22,22 @@ export default async function TradieManagementPage() {
   // fetchers so the query runs at request time, and `connection()` to keep this
   // page's render off the build.
   await connection();
-  const [tradies, kpiData] = await Promise.all([
+  const [tradies, kpiData, principal] = await Promise.all([
     getTradieGroupedByCategory(),
     fetchTradieKPIData(),
+    currentPrincipal(),
   ]);
 
-  return <TradieManagementClient tradies={tradies} tradieKPIData={kpiData} />;
+  // Each row carries the tradie's last quoted price; a site manager does not
+  // see tradie prices (`canSeeProjectFinancials`). The KPIs are counts only.
+  return (
+    <TradieManagementClient
+      tradies={
+        canSeeProjectFinancials(principal)
+          ? tradies
+          : withoutTradieQuotes(tradies)
+      }
+      tradieKPIData={kpiData}
+    />
+  );
 }

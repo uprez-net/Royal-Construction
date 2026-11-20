@@ -6,6 +6,7 @@ import { Metadata } from "next";
 import TradieDetailsSkeleton from "./loading";
 import { currentPrincipal } from "@/lib/data/current-principal";
 import { canSeeProjectFinancials } from "@/lib/domain/access/projects";
+import { withoutTradieQuotes } from "@/lib/domain/projects/financial-redaction";
 
 interface TradieDetailPageProps {
   params: Promise<{
@@ -58,10 +59,13 @@ async function TradieDetailContent({ params }: TradieDetailPageProps) {
 
   // The activity history spells out quotes and invoices; `listTradieActivity`
   // refuses anyone who may not see project money, so the card is not drawn.
+  // The tradie's own price goes the same way (`withoutTradieQuotes`). A copy,
+  // never the cached object: the cache is shared by every viewer.
+  const seesMoney = canSeeProjectFinancials(principal);
   return (
     <TradieDetailClient
-      tradie={tradieDetails}
-      showActivity={canSeeProjectFinancials(principal)}
+      tradie={seesMoney ? tradieDetails : withoutTradieQuotes(tradieDetails)}
+      showActivity={seesMoney}
     />
   );
 }

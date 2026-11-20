@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import {
   CommsDirection,
   OutboxEventKind,
@@ -345,6 +347,11 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/** A short, stable fingerprint of a typed message, for the outbox key. */
+function bodyFingerprint(text: string): string {
+  return createHash("sha256").update(text).digest("hex").slice(0, 16);
+}
+
 /** Plain text as typed, laid out as paragraphs. Exported for the test. */
 export function tradieReplyHtml(text: string): string {
   return text
@@ -382,31 +389,49 @@ async function replyTarget(
   readonly refToken: string | null;
   readonly scheduleId: string | null;
 }> {
-  const [lastEmail, lastRequest, lastInbound] = await Promise.all([
-    db.tradieEmail.findFirst({
-      orderBy: { sentAt: "desc" },
-      select: { refToken: true, scheduleId: true, sentAt: true, subject: true },
-      where: { projectId: input.projectId, tradieId: input.tradieId },
-    }),
-    db.tradieRequestRecipient.findFirst({
-      orderBy: { sentAt: "desc" },
-      select: { refToken: true, sentAt: true, subject: true },
-      where: {
-        request: { projectId: input.projectId },
-        sentAt: { not: null },
-        tradieId: input.tradieId,
-      },
-    }),
-    db.tradieEmail.findFirst({
-      orderBy: { sentAt: "desc" },
-      select: { emailFrom: true },
-      where: {
-        direction: CommsDirection.INBOUND,
-        projectId: input.projectId,
-        tradieId: input.tradieId,
-      },
-    }),
-  ]);
+  const [lastEmail, lastReferenced, lastRequest, lastInbound] =
+    await Promise.all([
+      db.tradieEmail.findFirst({
+        orderBy: { sentAt: "desc" },
+        select: {
+          refToken: true,
+          scheduleId: true,
+          sentAt: true,
+          subject: true,
+        },
+        where: { projectId: input.projectId, tradieId: input.tradieId },
+      }),
+      // The newest email that carried a reference. A tradie's fresh message, or
+      // a reply whose client dropped the subject, has none, and must not hand
+      // the reference back to an older request when a newer email had one.
+      db.tradieEmail.findFirst({
+        orderBy: { sentAt: "desc" },
+        select: { refToken: true, scheduleId: true, sentAt: true },
+        where: {
+          projectId: input.projectId,
+          refToken: { not: null },
+          tradieId: input.tradieId,
+        },
+      }),
+      db.tradieRequestRecipient.findFirst({
+        orderBy: { sentAt: "desc" },
+        select: { refToken: true, sentAt: true, subject: true },
+        where: {
+          request: { projectId: input.projectId },
+          sentAt: { not: null },
+          tradieId: input.tradieId,
+        },
+      }),
+      db.tradieEmail.findFirst({
+        orderBy: { sentAt: "desc" },
+        select: { emailFrom: true },
+        where: {
+          direction: CommsDirection.INBOUND,
+          projectId: input.projectId,
+          tradieId: input.tradieId,
+        },
+      }),
+    ]);
 
   const newest =
     lastEmail
@@ -434,16 +459,21 @@ async function replyTarget(
     }
   }
 
-  const refToken =
-    newest?.refToken
-    ?? lastEmail?.refToken
-    ?? lastRequest?.refToken
-    ?? booking?.refToken
-    ?? null;
+  // The newest reference on the thread, wherever it was carried. `newest`
+  // still decides the subject and the recipient check above and below.
+  const referencedRequest =
+    lastRequest?.refToken && lastRequest.sentAt ? lastRequest : null;
+  const newestReference =
+    lastReferenced
+    && (!referencedRequest?.sentAt
+      || lastReferenced.sentAt >= referencedRequest.sentAt)
+      ? lastReferenced
+      : referencedRequest;
+  const refToken = newestReference?.refToken ?? booking?.refToken ?? null;
   let scheduleId: string | null = booking?.id ?? null;
   if (!scheduleId && refToken && tradieRefKind(refToken) === "booking") {
     scheduleId =
-      (lastEmail?.refToken === refToken ? lastEmail.scheduleId : null)
+      (lastReferenced?.refToken === refToken ? lastReferenced.scheduleId : null)
       ?? (
         await db.tradieSchedule.findUnique({
           select: { id: true },
@@ -535,7 +565,11 @@ export async function replyOnTradieThread(
     ({ replayed } = await runOutboxEffectWithOutcome(
       db,
       {
-        key: `tradie-thread-reply:${input.projectId}:${input.tradieId}:${attemptKey}`,
+        // The message is part of the key. A retry of the same text is the same
+        // attempt and replays; text edited after a failed send is a new
+        // message, and must not be answered "already sent" for an email that
+        // never carried it.
+        key: `tradie-thread-reply:${input.projectId}:${input.tradieId}:${attemptKey}:${bodyFingerprint(text)}`,
         kind: OutboxEventKind.TRADIE_THREAD_REPLY_SEND,
         payload: {
           projectId: input.projectId,
@@ -547,6 +581,26 @@ export async function replyOnTradieThread(
       async () => {
         await send({ body, subject: target.subject, to: target.to });
         delivered = true;
+        // Filed here, before the outbox row is completed. Filed after it, a
+        // failure between the two left a sent reply off the thread for good:
+        // a replay of the key reports "already sent" and files nothing.
+        // `noteTradieEmail` never throws, so the send is never reported as
+        // failed over its copy, and a copy that cannot be written is logged
+        // at error level, which reaches the office.
+        await noteTradieEmail(
+          {
+            body,
+            direction: CommsDirection.OUTBOUND,
+            emailTo: target.to,
+            projectId: input.projectId,
+            refToken: target.refToken,
+            scheduleId: target.scheduleId,
+            sentAt,
+            subject: target.subject,
+            tradieId: input.tradieId,
+          },
+          db,
+        );
         return { to: target.to };
       },
     ));
@@ -566,29 +620,13 @@ export async function replyOnTradieThread(
         { cause: error },
       );
     }
-    // Delivered, but the outbox could not record its outcome. The email went,
-    // so it is filed below; a replay of this key is refused, not resent.
+    // Delivered, and already filed, but the outbox could not record its
+    // outcome. A replay of this key is refused, not resent.
     console.error(
       `[tradie-email] Reply to tradie ${input.tradieId} was sent but its outbox row was not completed`,
       error,
     );
   }
 
-  if (!replayed) {
-    await noteTradieEmail(
-      {
-        body,
-        direction: CommsDirection.OUTBOUND,
-        emailTo: target.to,
-        projectId: input.projectId,
-        refToken: target.refToken,
-        scheduleId: target.scheduleId,
-        sentAt,
-        subject: target.subject,
-        tradieId: input.tradieId,
-      },
-      db,
-    );
-  }
   return { alreadySent: replayed, subject: target.subject, to: target.to };
 }

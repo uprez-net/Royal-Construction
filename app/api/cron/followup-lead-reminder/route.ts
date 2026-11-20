@@ -1,6 +1,7 @@
 import { cronOutcome, withCronReporting } from "@/lib/observability/cron";
 import { isOfficeRole } from "@/lib/domain/principal";
 import prisma from "@/lib/prisma";
+import { reportError } from "@/lib/observability/report-error";
 import {
   sydneyDateOnly,
   sydneyEndOfDay,
@@ -135,8 +136,16 @@ async function handle(request: Request) {
       // before the hand-over rule existed) must not email them the client's
       // details, and must not go quiet either: an error reaches the inbox.
       if (!isOfficeRole(assignee.role)) {
-        console.error(
-          `[CRON] Follow-up task ${task.id} on lead ${lead.id} is held by user ${assignee.id}, who is not in the office. Reassign the lead; no reminder was sent.`,
+        // Reported, not just logged: with nobody reading logs, this is how the
+        // office learns a lead needs reassigning. Ids only.
+        reportError(
+          new Error(
+            `[CRON] Follow-up task ${task.id} on lead ${lead.id} is held by user ${assignee.id}, who is not in the office. Reassign the lead; no reminder was sent.`,
+          ),
+          {
+            source: "cron:followup-lead-reminder",
+            ids: { assigneeId: assignee.id, leadId: lead.id, taskId: task.id },
+          },
         );
         results.push({
           id: lead.id,

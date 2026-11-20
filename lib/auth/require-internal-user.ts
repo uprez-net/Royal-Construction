@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import type { User } from "@prisma/client";
+import { Role, type User } from "@prisma/client";
 import { getUserByClerkId } from "@/lib/data/user";
 import { isInternalRole } from "@/lib/domain/principal";
 import { leadListScope } from "@/lib/offer/access";
@@ -53,9 +53,19 @@ async function requireUser(
   }
 }
 
-/** The office: may read every lead. Refuses a site manager. */
+/**
+ * The office: may read every lead. Refuses a site manager, and a GUEST.
+ *
+ * GUEST stays in `OFFICE_ROLES` so the agent and comms paths keep the lead
+ * scoping they have always had, but it is no one's working role here:
+ * `proxy.ts` turns a GUEST away from everything but the booking page, and the
+ * routes this guards list every lead in the business.
+ */
 export async function requireInternalUser(): Promise<InternalUserGuard> {
-  return requireUser((user) => leadListScope(user).assignedId === null);
+  return requireUser(
+    (user) =>
+      user.role !== Role.GUEST && leadListScope(user).assignedId === null,
+  );
 }
 
 /** Any staff, a site manager included. See the module comment. */

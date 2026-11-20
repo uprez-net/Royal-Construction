@@ -15,6 +15,7 @@ import {
   canSeeProjectFinancials,
 } from "../access/projects";
 import type { DomainDb } from "../db";
+import { HIDDEN_AMOUNT, hideMilestoneFinancials } from "./financial-redaction";
 import {
   DomainNotFoundError,
   DomainTransitionError,
@@ -714,15 +715,22 @@ export async function updateMilestone(
     settledBookings.cancelled.push(...result.cancelled);
   }
 
+  // The figures go back the way the project page hands them out: a caller who
+  // may not see the money gets none here either, from any adapter. Whether a
+  // progress claim is now due is not a figure, and stays.
+  const seesMoney = canSeeProjectFinancials(principal);
+  const milestone = {
+    ...updated,
+    budget: updated.budget.toString(),
+    previousStatus: current.status,
+    spend: updated.spend?.toString(),
+  };
   return {
-    parentUpdates,
-    milestone: {
-      ...updated,
-      budget: updated.budget.toString(),
-      previousStatus: current.status,
-      spend: updated.spend?.toString(),
-    },
-    projectSpent: project.spent.toString(),
+    parentUpdates: seesMoney
+      ? parentUpdates
+      : parentUpdates.map((parent) => ({ ...parent, spend: undefined })),
+    milestone: seesMoney ? milestone : hideMilestoneFinancials(milestone),
+    projectSpent: seesMoney ? project.spent.toString() : HIDDEN_AMOUNT,
     projectStartDate,
     projectStatus,
     replannedActivities,

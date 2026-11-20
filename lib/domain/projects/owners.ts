@@ -158,6 +158,33 @@ const BUILDER_NAMES = new Set(
 );
 
 /**
+ * 36 or 62 Turner Rd/Road, with no digit before the street number, and the
+ * unit in front of it if one is written: "Unit 3, 36", "U3 36", "3/36",
+ * "38/62". Group 1 or 2 is the unit, group 3 the street number.
+ */
+const BUILDER_STREET_RE =
+  /(?:\b(?:unit|u|suite|shop|factory)\s*(\d+)[\s,/]*|(?<!\d)(\d+)\s*\/\s*)?(?<!\d)(36|62)\s*turner\s+r(?:oa)?d\b/;
+
+/**
+ * The builder's unit at each street number: today's office (taken from
+ * `officeAddress`, so the two cannot drift) and the old "38/62 Turner Rd".
+ * Another unit in the same complex is someone else.
+ */
+const BUILDER_UNITS: Record<string, string | undefined> = {
+  "36": BUILDER_STREET_RE.exec(
+    BUILDER_IDENTITY.officeAddress.toLowerCase(),
+  )?.[1],
+  "62": "38",
+};
+
+function isBuilderStreet(rawAddress: string): boolean {
+  const match = BUILDER_STREET_RE.exec(rawAddress);
+  if (!match) return false;
+  const unit = match[1] ?? match[2];
+  return unit === undefined || unit === BUILDER_UNITS[match[3]];
+}
+
+/**
  * Which of an owner's details are the builder's own: Royal Constructions'
  * name, an address on its email domain, one of its phone numbers, or its
  * office address.
@@ -173,7 +200,8 @@ export function builderDetailsOf(
   const name = squash(clean(owner.name));
   const email = clean(owner.email).toLowerCase();
   const phone = canonicalPhone(clean(owner.phone));
-  const address = squash(clean(owner.address));
+  const rawAddress = clean(owner.address).toLowerCase();
+  const address = squash(rawAddress);
 
   const details: ProjectOwnerField[] = [];
   if (BUILDER_NAMES.has(name)) {
@@ -185,8 +213,12 @@ export function builderDetailsOf(
   if (phone && BUILDER_PHONES.has(phone)) {
     details.push("phone");
   }
-  // "38/62 Turner Rd" or "38/62 Turner Road", in Smeaton Grange.
-  if (address.includes("62turnerr") && address.includes("smeatongrange")) {
+  // "Unit 3, 36 Turner Road", in Smeaton Grange — or the old "38/62 Turner
+  // Rd", which contracts signed before the correction still print. Matched on
+  // the unsquashed text so the street number is a whole number: squashing
+  // would run "Unit 3, 36" together and let "136 Turner Road" match too.
+  // No unit written still counts; a different unit (Unit 4) does not.
+  if (isBuilderStreet(rawAddress) && address.includes("smeatongrange")) {
     details.push("address");
   }
   return details;

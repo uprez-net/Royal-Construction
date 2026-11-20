@@ -28,7 +28,16 @@ type ThreadResponse = Omit<TradieThread, "messages"> & {
 type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; thread: ThreadResponse };
+  | {
+      status: "ready";
+      thread: ThreadResponse;
+      /**
+       * A reload after the first one failed. The thread already on screen
+       * stays, and the composer with it, so nothing typed is lost to a
+       * refresh that did not come back.
+       */
+      refreshError: string | null;
+    };
 
 function threadUrl(projectId: string, tradieId: string) {
   return `/api/projects/${encodeURIComponent(projectId)}/tradies/${encodeURIComponent(tradieId)}/emails`;
@@ -122,16 +131,24 @@ function ThreadBody({
       "Could not load the emails with this tradie.",
       controller.signal,
     )
-      .then((response) => setState({ status: "ready", thread: response.data }))
+      .then((response) =>
+        setState({
+          refreshError: null,
+          status: "ready",
+          thread: response.data,
+        }),
+      )
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        setState({
-          status: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Could not load the emails with this tradie.",
-        });
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Could not load the emails with this tradie.";
+        setState((current) =>
+          current.status === "ready"
+            ? { ...current, refreshError: message }
+            : { message, status: "error" },
+        );
       });
     return () => controller.abort();
   }, [projectId, tradieId, reloadToken]);
@@ -221,6 +238,21 @@ function ThreadBody({
   const blocked = state.thread.replyBlockedBy;
   return (
     <div className="space-y-2">
+      {state.refreshError ? (
+        <div
+          role="status"
+          className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+        >
+          <span>
+            Could not refresh the emails: {state.refreshError} What is shown may
+            be out of date.
+          </span>
+          <Button size="sm" variant="outline" className="h-7" onClick={reload}>
+            <RefreshCw className="mr-1.5 size-3.5" aria-hidden="true" />
+            Refresh
+          </Button>
+        </div>
+      ) : null}
       {blocked ? (
         <p className="rounded-md border border-warning/40 bg-warning-light px-3 py-2 text-xs text-warning-ink">
           {blocked}

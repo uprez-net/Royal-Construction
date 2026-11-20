@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import type { Role } from "@prisma/client";
 import { test } from "vitest";
 
+import { NO_LEADS_ASSIGNEE } from "@/lib/domain/access/leads";
 import { canAccessLead, leadListScope } from "@/lib/offer/access";
 import {
   offerListLeadWhere,
@@ -26,16 +27,23 @@ test("office roles list every lead", () => {
   }
 });
 
-test("a site manager lists only the leads assigned to them", () => {
+test("a site manager lists no leads, not even one assigned to them", () => {
+  // A lead assigned before the office-only rule must not open for them.
   assert.deepEqual(leadListScope({ id: "u1", role: "SITE_MANAGER" }), {
-    assignedId: "u1",
+    assignedId: NO_LEADS_ASSIGNEE,
   });
+  for (const assignedId of ["u1", "u2"]) {
+    assert.equal(
+      canAccessLead({ id: "u1", role: "SITE_MANAGER" }, { id: 1, assignedId }),
+      false,
+    );
+  }
+});
+
+test("a customer still opens a lead assigned to them", () => {
   assert.equal(
-    canAccessLead(
-      { id: "u1", role: "SITE_MANAGER" },
-      { id: 1, assignedId: "u2" },
-    ),
-    false,
+    canAccessLead({ id: "u1", role: "CUSTOMER" }, { id: 1, assignedId: "u1" }),
+    true,
   );
 });
 

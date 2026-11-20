@@ -70,8 +70,8 @@ export const EMAIL_FOOTER_HTML = `
               </p>
               <p style="font-size:12px;line-height:1.6;color:${RC_COLORS.muted};margin:0 0 16px;">
                 <strong style="color:${RC_COLORS.text};">Office</strong><br>
-                38/62 Turner RD<br>
-                Smeaton Grange, NSW 2567
+                Unit 3, 36 Turner Road<br>
+                Smeaton Grange NSW 2567
               </p>
               <p style="font-size:12px;line-height:1.6;color:${RC_COLORS.muted};margin:0 0 20px;">
                 <strong style="color:${RC_COLORS.text};">Contact</strong><br>

@@ -7,6 +7,7 @@ import { applyTradieScheduleUpdate } from "@/lib/data/tradie-schedule-updates";
 import { getAllAdminUsersIds } from "@/lib/data/user";
 import {
   AWAITING_TRADIE_REPLY,
+  findTradieBySender,
   findTradieReplyReference,
   isReplyFromTradie,
   matchTradieReplyToSchedule,
@@ -372,20 +373,22 @@ async function fileTradieMessage(input: {
   }
 }
 
-async function isTradieMessage(fromEmail: string): Promise<boolean> {
+/**
+ * The tradie a message came from, by their primary or any extra address,
+ * matched case-insensitively. Null when it is nobody's, or on a lookup
+ * failure, which leaves the message to the lead path as before.
+ */
+async function tradieForSender(
+  fromEmail: string,
+): Promise<{ id: string; name: string } | null> {
   try {
-    const existingTradie = await prisma.tradie.findUnique({
-      where: {
-        email: fromEmail,
-      },
-    });
-    return existingTradie !== null;
+    return await findTradieBySender(fromEmail, prisma);
   } catch (error) {
     console.error(
       `Error checking if fromEmail ${fromEmail} is a tradie message:`,
       error,
     );
-    return false;
+    return null;
   }
 }
 
@@ -1069,28 +1072,35 @@ async function processNotifications(
             continue;
           }
 
-          if (message.from && (await isTradieMessage(message.from))) {
-            const tradie = await prisma.tradie.findUnique({
-              select: { id: true, name: true },
-              where: { email: message.from },
-            });
-            if (!tradie) continue;
-            if (!isMachineGenerated(message.headers)) {
-              await fileTradieMessage({
-                content,
-                message,
-                reference: null,
-                to:
-                  message.to?.[0]
-                  ?? config.senderUpn
-                  ?? "info@royalconstructions.com.au",
-                tradieId: tradie.id,
-              });
+          const tradie = message.from
+            ? await tradieForSender(message.from)
+            : null;
+          if (tradie) {
+            if (isMachineGenerated(message.headers)) {
+              // An out-of-office or a bounce from the tradie's address is not
+              // an answer: read as one, "I'm away until Monday" could decline
+              // or confirm a booking. Logged: it is the only trace of either.
+              console.log(
+                `  Tradie ${tradie.id}: auto-generated`,
+                JSON.stringify({
+                  autoSubmitted: message.headers.autoSubmitted ?? null,
+                  from: message.from,
+                  subject: message.subject,
+                }),
+              );
+              continue;
             }
-            if (
-              message.hasAttachments
-              && !isMachineGenerated(message.headers)
-            ) {
+            await fileTradieMessage({
+              content,
+              message,
+              reference: null,
+              to:
+                message.to?.[0]
+                ?? config.senderUpn
+                ?? "info@royalconstructions.com.au",
+              tradieId: tradie.id,
+            });
+            if (message.hasAttachments) {
               await startTradieInvoiceEmail({
                 content,
                 from: message.from,
