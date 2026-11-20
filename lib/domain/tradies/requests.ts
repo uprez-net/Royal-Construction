@@ -712,6 +712,7 @@ export async function deliverTradieRequest(
 
   switch (input.trigger) {
     case "initial":
+      assertCanBookTradies(principal);
       if (
         recipient.deliveryStatus !== TradieRequestDeliveryStatus.SENDING
         || recipient.attempts !== 0

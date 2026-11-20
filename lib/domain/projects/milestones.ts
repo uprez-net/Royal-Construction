@@ -561,7 +561,8 @@ export async function updateMilestone(
       "Marking an activity not required is for the office, because it cancels its tradie bookings.",
     );
   }
-  if (!canManageProject(principal, authorized)) {
+  const managesProject = canManageProject(principal, authorized);
+  if (!managesProject) {
     assertRecordingOnlyUpdate(input, current, statusChanged);
   }
 
@@ -593,7 +594,9 @@ export async function updateMilestone(
     where: { id: input.milestoneId },
     data: {
       status: input.status,
-      targetDate,
+      // A recording-only caller cannot change it (checked above), so it is not
+      // written back: a replan another tab made meanwhile would be undone.
+      targetDate: managesProject ? targetDate : undefined,
       startDate,
       actualDate: clearsFutureCompletion ? null : actualDate,
       spend:
