@@ -187,6 +187,11 @@ test("a hidden detail carries no money anywhere in its tree", () => {
         message: "Tradie quoted a price of 88000",
         type: "tradieScheduleQuoted",
       },
+      {
+        id: "a4",
+        message: "Variation status updated with description: tiles, $5,000",
+        type: "variationUpdated",
+      },
     ],
     lead: { emails: [{ body: "Your quotation is 880000" }], id: 4 },
     invoices: [{ total: "654321" }],

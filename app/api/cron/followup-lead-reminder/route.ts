@@ -1,4 +1,5 @@
 import { cronOutcome, withCronReporting } from "@/lib/observability/cron";
+import { isOfficeRole } from "@/lib/domain/principal";
 import prisma from "@/lib/prisma";
 import {
   sydneyDateOnly,
@@ -68,10 +69,14 @@ async function handle(request: Request) {
         },
       },
       include: {
-        assignedTo: { select: { id: true, name: true, email: true } },
+        assignedTo: {
+          select: { id: true, name: true, email: true, role: true },
+        },
         lead: {
           include: {
-            assignedUser: { select: { id: true, name: true, email: true } },
+            assignedUser: {
+              select: { id: true, name: true, email: true, role: true },
+            },
           },
         },
       },
@@ -123,6 +128,21 @@ async function handle(request: Request) {
           taskId: task.id,
           name: lead.name,
           status: "skipped_no_email",
+        });
+        continue;
+      }
+      // Leads are the office's. One held by someone outside it (a role changed
+      // before the hand-over rule existed) must not email them the client's
+      // details, and must not go quiet either: an error reaches the inbox.
+      if (!isOfficeRole(assignee.role)) {
+        console.error(
+          `[CRON] Follow-up task ${task.id} on lead ${lead.id} is held by user ${assignee.id}, who is not in the office. Reassign the lead; no reminder was sent.`,
+        );
+        results.push({
+          id: lead.id,
+          taskId: task.id,
+          name: lead.name,
+          status: "skipped_not_office",
         });
         continue;
       }

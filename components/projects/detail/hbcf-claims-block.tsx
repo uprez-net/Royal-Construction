@@ -73,7 +73,7 @@ export function HbcfClaimsBlock({
   claimDate,
   extracting,
   canRemove,
-  amountsHidden = false,
+  readOnly = false,
   onNumberChange,
   onDocumentsChange,
   onUpload,
@@ -86,11 +86,13 @@ export function HbcfClaimsBlock({
   extracting: boolean;
   canRemove: boolean;
   /**
-   * The caller may not see project money (a site manager). The amounts are
-   * redacted on the server and a typed one is not saved, so the inputs and the
-   * total are not drawn rather than offered and then quietly dropped.
+   * The caller is not the office (a site manager). HBCF is recorded by the
+   * office: the server keeps every stored HBCF field on their save and refuses
+   * their upload, and the amounts reach them blanked. So nothing is offered for
+   * editing — no upload, no number, no amounts or total — rather than offered
+   * and then quietly dropped. The documents themselves stay viewable.
    */
-  amountsHidden?: boolean;
+  readOnly?: boolean;
   onNumberChange: (value: string | null) => void;
   onDocumentsChange: (documents: HbcfClaimDocument[]) => void;
   onUpload: (files: DBFile[]) => void;
@@ -138,36 +140,39 @@ export function HbcfClaimsBlock({
             }
             placeholder="Not recorded yet"
             disabled={extracting}
+            readOnly={readOnly}
             className="h-9"
           />
         </div>
 
-        <div className="flex flex-col justify-end gap-1.5">
-          <UploadButton
-            projectId={projectId}
-            maxFiles={MAX_HBCF_UPLOAD}
-            accept="application/pdf,.pdf"
-            hints={{
-              trail: ["HBCF insurance"],
-              tags: ["HBCF insurance", "Insurance certificate"],
-            }}
-            onUpload={onUpload}
-          />
-          <p className="text-[11px] text-muted-foreground">
-            {documents.length > 0
-              ? "Adds to the documents below. Nothing already here is replaced."
-              : `PDF, up to ${MAX_HBCF_UPLOAD} at a time.`}
-          </p>
-          {extracting ? (
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2
-                aria-hidden="true"
-                className="h-3 w-3 animate-spin motion-reduce:animate-none"
-              />
-              Reading the documents&hellip;
+        {readOnly ? null : (
+          <div className="flex flex-col justify-end gap-1.5">
+            <UploadButton
+              projectId={projectId}
+              maxFiles={MAX_HBCF_UPLOAD}
+              accept="application/pdf,.pdf"
+              hints={{
+                trail: ["HBCF insurance"],
+                tags: ["HBCF insurance", "Insurance certificate"],
+              }}
+              onUpload={onUpload}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {documents.length > 0
+                ? "Adds to the documents below. Nothing already here is replaced."
+                : `PDF, up to ${MAX_HBCF_UPLOAD} at a time.`}
             </p>
-          ) : null}
-        </div>
+            {extracting ? (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2
+                  aria-hidden="true"
+                  className="h-3 w-3 animate-spin motion-reduce:animate-none"
+                />
+                Reading the documents&hellip;
+              </p>
+            ) : null}
+          </div>
+        )}
       </div>
 
       {hasNumber ? null : (
@@ -179,7 +184,11 @@ export function HbcfClaimsBlock({
             aria-hidden="true"
             className="mt-0.5 h-4 w-4 shrink-0"
           />
-          <p>Upload the insurance document to update the no.</p>
+          <p>
+            {readOnly
+              ? "No HBCF insurance no. yet. The office records it."
+              : "Upload the insurance document to update the no."}
+          </p>
         </div>
       )}
 
@@ -282,7 +291,7 @@ export function HbcfClaimsBlock({
                   </div>
                 </div>
 
-                {amountsHidden ? null : (
+                {readOnly ? null : (
                   <div className="space-y-1.5 sm:w-52">
                     <Label
                       htmlFor={amountId}
@@ -362,7 +371,7 @@ export function HbcfClaimsBlock({
         </div>
       ) : null}
 
-      {amountsHidden ? null : (
+      {readOnly ? null : (
         <div
           className={cn(
             "flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-lg border px-4 py-3",

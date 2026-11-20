@@ -5,7 +5,13 @@ import { join } from "node:path";
 import { MilestoneStatus, ProjectStatus, Role } from "@prisma/client";
 import { test } from "vitest";
 
-import { DomainAuthorizationError } from "@/lib/domain/errors";
+import {
+  DomainAuthorizationError,
+  DomainTransitionError,
+} from "@/lib/domain/errors";
+import { changeTeamMemberRole } from "@/lib/domain/identity/team";
+import { readProjectAttention } from "@/lib/domain/projects/attention";
+import { calculateFollowUpBadgeLabel } from "@/components/dashboard/dashboard-follow-ups";
 import { anonymousPrincipal, systemPrincipal } from "@/lib/domain/principal";
 import {
   filterOfficeUserIds,
@@ -19,8 +25,9 @@ import { createLead, updateLead } from "@/lib/domain/leads/commands";
 import { updateProject } from "@/lib/domain/projects/commands";
 import {
   hideRequirementsFinancials,
-  withStoredHbcfClaimAmounts,
+  withStoredHbcf,
 } from "@/lib/domain/projects/financial-redaction";
+import { assertCanRecordHbcf } from "@/lib/domain/access/projects";
 import { updateMilestone } from "@/lib/domain/projects/milestones";
 import { listTradieActivity } from "@/lib/domain/tradies/queries";
 import { isLeadValidationError } from "@/lib/leads/lead-validation-error";
@@ -148,27 +155,18 @@ test("HBCF claim amounts are blanked for someone who may not see money", () => {
   ]);
 });
 
-test("a blanked HBCF amount saved back keeps the stored one; a new document arrives unconfirmed", () => {
-  const restored = withStoredHbcfClaimAmounts(
-    {
-      hbcfClaimDocuments: [
-        { ...CONFIRMED, claimAmount: null },
-        { ...CONFIRMED, amountConfirmed: true, claimAmount: 9, fileId: "f_2" },
-      ],
-    },
-    { hbcfClaimDocuments: [CONFIRMED] },
-  );
-  assert.deepEqual(restored.hbcfClaimDocuments, [
-    CONFIRMED,
-    { ...CONFIRMED, amountConfirmed: false, claimAmount: 9, fileId: "f_2" },
-  ]);
-});
-
 const UNCONFIRMED = {
   ...CONFIRMED,
   amountConfirmed: false,
   claimAmount: 1200,
   fileId: "f_3",
+};
+
+const STORED_LEGAL = {
+  hbcfClaimDocuments: [CONFIRMED, UNCONFIRMED],
+  hbcfInsuranceDocument: { fileId: "f_1", fileName: "hbcf.pdf", url: "u" },
+  hbcfInsuranceNumber: "C1",
+  siteAddress: "1 Site St",
 };
 
 /** A site manager's project save of this legal section; what was stored. */
@@ -185,9 +183,7 @@ async function siteManagerSavesLegal(legal: Record<string, unknown>) {
       siteManagerId: SM,
     },
     "project.findUniqueOrThrow": {
-      requirements: {
-        legalAdministration: { hbcfClaimDocuments: [CONFIRMED, UNCONFIRMED] },
-      },
+      requirements: { legalAdministration: STORED_LEGAL },
       startDate: new Date("2026-06-01T00:00:00.000Z"),
       status: ProjectStatus.ON_TRACK,
     },
@@ -204,34 +200,66 @@ async function siteManagerSavesLegal(legal: Record<string, unknown>) {
     .find((call) => call.operation === "project.update")?.args as {
     data: { requirements: { legalAdministration: Record<string, unknown> } };
   };
-  return write.data.requirements.legalAdministration.hbcfClaimDocuments;
+  return write.data.requirements.legalAdministration;
 }
 
-test("a site manager's project save cannot change a confirmed HBCF amount", async () => {
+const STORED_HBCF = {
+  hbcfClaimDocuments: STORED_LEGAL.hbcfClaimDocuments,
+  hbcfInsuranceDocument: STORED_LEGAL.hbcfInsuranceDocument,
+  hbcfInsuranceNumber: STORED_LEGAL.hbcfInsuranceNumber,
+};
+const hbcfOf = (legal: Record<string, unknown>) => ({
+  hbcfClaimDocuments: legal.hbcfClaimDocuments,
+  hbcfInsuranceDocument: legal.hbcfInsuranceDocument,
+  hbcfInsuranceNumber: legal.hbcfInsuranceNumber,
+});
+
+test("a site manager's project save cannot change anything HBCF (#560)", async () => {
+  // HBCF is recorded by the office. Whatever the save carries for it — a
+  // zeroed amount, an edited certificate number (which would make the pool
+  // drop a document as a duplicate), a removed or added document, a null — the
+  // stored HBCF fields are what is written.
+  for (const attempt of [
+    {
+      hbcfClaimDocuments: [
+        { ...CONFIRMED, certificateNumber: "C9", claimAmount: 0 },
+        UNCONFIRMED,
+      ],
+      hbcfInsuranceNumber: "changed",
+    },
+    { hbcfClaimDocuments: [] },
+    { hbcfClaimDocuments: null, hbcfInsuranceDocument: null },
+    {
+      hbcfClaimDocuments: [
+        ...STORED_LEGAL.hbcfClaimDocuments,
+        { ...CONFIRMED, fileId: "f_new" },
+      ],
+    },
+    {},
+  ]) {
+    const saved = await siteManagerSavesLegal({
+      ...attempt,
+      siteAddress: "2 New St",
+    });
+    assert.deepEqual(hbcfOf(saved), STORED_HBCF, JSON.stringify(attempt));
+    // The rest of the section is theirs to edit.
+    assert.equal(saved.siteAddress, "2 New St");
+  }
+});
+
+test("a field the project never had is not created by a site manager's save", () => {
   assert.deepEqual(
-    await siteManagerSavesLegal({
-      hbcfClaimDocuments: [{ ...CONFIRMED, claimAmount: 0 }, UNCONFIRMED],
-    }),
-    [CONFIRMED, UNCONFIRMED],
+    withStoredHbcf({ hbcfInsuranceNumber: "C1", siteAddress: "x" }, {}),
+    { siteAddress: "x" },
   );
 });
 
-test("a site manager cannot remove a confirmed HBCF document; an unconfirmed one they can (#560)", async () => {
-  // A confirmed amount is part of the company's HBCF pool total.
-  assert.deepEqual(await siteManagerSavesLegal({ hbcfClaimDocuments: [] }), [
-    CONFIRMED,
-  ]);
-  assert.deepEqual(
-    await siteManagerSavesLegal({ hbcfClaimDocuments: null }),
-    [CONFIRMED, UNCONFIRMED],
-    "a null list is no way round it",
+test("the HBCF upload refuses a site manager; the office may record it", () => {
+  assert.throws(
+    () => assertCanRecordHbcf(siteManagerPrincipal(SM)),
+    DomainAuthorizationError,
   );
-  // A legal section sent with no document list at all keeps the stored list:
-  // the save replaces the section whole.
-  assert.deepEqual(await siteManagerSavesLegal({ siteAddress: "1 Site St" }), [
-    CONFIRMED,
-    UNCONFIRMED,
-  ]);
+  assert.doesNotThrow(() => assertCanRecordHbcf(adminPrincipal()));
 });
 
 /* ---------------------------------------------------------- spend -- */
@@ -333,4 +361,118 @@ test("a tradie's activity history (quotes and invoices) refuses a site manager",
     allowed.db,
   );
   assert.deepEqual(page.items, []);
+});
+
+/* ------------------------------------------------- role changes -- */
+
+const ROLE_CHANGE = {
+  expectedRole: Role.ADMIN,
+  newRole: Role.SITE_MANAGER,
+  userId: "u_1",
+};
+
+test("someone still holding leads cannot be moved out of the office", async () => {
+  // Whoever holds a lead can open it, and the reminders email them the
+  // client's details. The office reassigns first.
+  const recorder = recordingDb({
+    "lead.count": 2,
+    "leadTask.count": 1,
+    "user.count": 3,
+    "user.findUnique": { id: "u_1", name: "Sam", role: Role.ADMIN },
+  });
+  await assert.rejects(
+    changeTeamMemberRole(
+      adminPrincipal(),
+      ROLE_CHANGE,
+      recorder.transactionalDb,
+    ),
+    (error) => {
+      assert.ok(error instanceof DomainTransitionError);
+      assert.match(
+        error.message,
+        /Sam still has 2 leads and 1 open lead task assigned\. Reassign them/,
+      );
+      return true;
+    },
+  );
+  assert.deepEqual(recorder.writes(), []);
+});
+
+test("someone holding nothing moves to site manager as before", async () => {
+  const recorder = recordingDb({
+    "lead.count": 0,
+    "leadTask.count": 0,
+    "user.count": 3,
+    "user.findUnique": { id: "u_1", name: "Sam", role: Role.ADMIN },
+    "user.updateMany": { count: 1 },
+  });
+  const changed = await changeTeamMemberRole(
+    adminPrincipal(),
+    ROLE_CHANGE,
+    recorder.transactionalDb,
+  );
+  assert.equal(changed.role, Role.SITE_MANAGER);
+});
+
+/* ------------------------------------------------ public booking -- */
+
+test("the booking page writes its lead as the booking, whoever is signed in", () => {
+  // A client signed in to the app in the same browser was refused ("only the
+  // office adds a lead") after their invitation had gone out, and an
+  // anonymous client could not update their own lead.
+  const route = readFileSync(
+    join(REPO_ROOT, "app/api/graph/book-consultant/route.ts"),
+    "utf8",
+  );
+  assert.match(route, /systemPrincipal\("graph:public-booking"\)/);
+  assert.equal(route.match(/principal: BOOKING_WRITER/g)?.length, 2);
+});
+
+/* ------------------------------------------------- project alerts -- */
+
+test("a site manager is not alerted to pending variations; the office is", async () => {
+  const row = {
+    certifierEngagement: null,
+    checklists: [],
+    customer: { name: "Sam Smith" },
+    id: "p1",
+    location: "1 Example St",
+    milestones: [],
+    name: "Smith residence",
+    requirements: null,
+    status: ProjectStatus.ON_TRACK,
+    tradieSchedules: [],
+    variations: [
+      { description: "Extra tiles, $5,000", number: 1, status: "PENDING" },
+    ],
+  };
+  const kindsFor = async (principal: ReturnType<typeof adminPrincipal>) => {
+    const [attention] = await readProjectAttention(
+      principal,
+      recordingDb({ "project.findMany": [row] }).db,
+    );
+    return attention.conditions.map((condition) => condition.kind);
+  };
+  assert.equal(
+    (await kindsFor(siteManagerPrincipal(SM))).includes("VARIATION"),
+    false,
+  );
+  assert.equal((await kindsFor(adminPrincipal())).includes("VARIATION"), true);
+});
+
+/* --------------------------------------------- follow-up badges -- */
+
+test("a follow-up badge counts days on Sydney's calendar, not the machine's", () => {
+  // Due at Sydney midnight on Fri 20 Nov (13:00 UTC on the 19th). At 01:00 UTC
+  // on the 20th it is noon Friday in Sydney: due today, though UTC's calendar
+  // says the due date was yesterday.
+  const dueAt = new Date("2026-11-19T13:00:00Z");
+  assert.equal(
+    calculateFollowUpBadgeLabel(dueAt, new Date("2026-11-20T01:00:00Z")),
+    "Due today",
+  );
+  assert.equal(
+    calculateFollowUpBadgeLabel(dueAt, new Date("2026-11-20T14:00:00Z")),
+    "1 day overdue",
+  );
 });

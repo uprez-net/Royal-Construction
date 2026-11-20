@@ -29,7 +29,7 @@ import {
   requestAddress,
 } from "@/lib/http/rate-limit";
 import { isDomainError } from "@/lib/domain/errors";
-import { anonymousPrincipal } from "@/lib/domain/principal";
+import { anonymousPrincipal, systemPrincipal } from "@/lib/domain/principal";
 import {
   sydneyDateOnly,
   sydneyTimeOnly,
@@ -64,6 +64,16 @@ function tooManyBookings(message: string): Response {
 // arriving here is a claim to be proved, which resolveLeadClaim does, not an
 // identity to be trusted.
 const ANONYMOUS_BOOKING = anonymousPrincipal("public booking form");
+
+// Who the lead writes are made as, once the booking is proved. Not the caller:
+// the lead layer would resolve whoever is signed in to the app in this browser,
+// so a client with a customer login was refused ("only the office adds a
+// lead") after their invitation had gone out, and an anonymous client booking
+// from their welcome email could not update their own lead (authorizeLead). By
+// here the route has done its own authentication — the signed lead token
+// (resolveLeadClaim), the rate limits, the slot check — so the writes act with
+// this channel's authority, as the inbound lead webhook's do.
+const BOOKING_WRITER = systemPrincipal("graph:public-booking");
 
 // Graph wants a naive local string, "YYYY-MM-DDTHH:mm:ss", alongside a
 // separate timeZone field. Module scope because the idempotency key is built
@@ -302,25 +312,29 @@ async function upsertBookingNotes({
     if (!existingLead) {
       throw new Error(`Lead ${existingLeadId} was not found.`);
     }
-    await updateLead(existingLead.id, {
-      // Lead.notes is deliberately left alone. Overwriting it put this booking's
-      // agenda where the sales notes belong, and everything that reads that
-      // column — the offer pre-fill's "# Sales notes" block above all — then
-      // described the booking instead. The agenda's home is the history entry
-      // below, which is where the Notes tab puts a note too.
-      //
-      // Not 'Meeting Scheduled'. That stage was retired: it described a booked
-      // task rather than progress, and completing it wrote CONTACTED. The lead
-      // is in Discovery, and the booking is a task.
-      // No stage at all here in fact: updateLead advances a lead into Discovery
-      // when work is scheduled and leaves anything further on alone.
-      meetingDate: meetingAt.toISOString(),
-      meetingTime: toTimeOnly(meetingAt),
-      meetingMode,
-      // Only the new entry. Handing back the merged list re-inserted every row
-      // the lead already had, once per booking.
-      history: [noteEntry],
-    });
+    await updateLead(
+      existingLead.id,
+      {
+        // Lead.notes is deliberately left alone. Overwriting it put this booking's
+        // agenda where the sales notes belong, and everything that reads that
+        // column — the offer pre-fill's "# Sales notes" block above all — then
+        // described the booking instead. The agenda's home is the history entry
+        // below, which is where the Notes tab puts a note too.
+        //
+        // Not 'Meeting Scheduled'. That stage was retired: it described a booked
+        // task rather than progress, and completing it wrote CONTACTED. The lead
+        // is in Discovery, and the booking is a task.
+        // No stage at all here in fact: updateLead advances a lead into Discovery
+        // when work is scheduled and leaves anything further on alone.
+        meetingDate: meetingAt.toISOString(),
+        meetingTime: toTimeOnly(meetingAt),
+        meetingMode,
+        // Only the new entry. Handing back the merged list re-inserted every row
+        // the lead already had, once per booking.
+        history: [noteEntry],
+      },
+      { principal: BOOKING_WRITER },
+    );
     await createMeetingTask(existingLead.id, meetingAt, taskNote);
     return existingLead.id;
   }
@@ -351,7 +365,7 @@ async function upsertBookingNotes({
         },
       ],
     },
-    { skipWelcomeEmail: true },
+    { principal: BOOKING_WRITER, skipWelcomeEmail: true },
   );
 
   // createLead answers with a conflict object rather than a lead when the

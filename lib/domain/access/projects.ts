@@ -126,6 +126,19 @@ export function canSeeProjectFinancials(principal: DomainPrincipal): boolean {
 }
 
 /**
+ * Recording HBCF on a project — uploading a certificate or claim document and
+ * reading its number and amount — is the office's, under the same rule as
+ * seeing the money: the claim amounts are what the HBCF pool is counted from.
+ */
+export function assertCanRecordHbcf(principal: DomainPrincipal): void {
+  if (!canSeeProjectFinancials(principal)) {
+    throw new DomainAuthorizationError(
+      "HBCF insurance documents are recorded by the office.",
+    );
+  }
+}
+
+/**
  * A customer id no record carries, so a CUSTOMER principal whose account has
  * no customer link matches nothing instead of everything.
  */

@@ -177,7 +177,17 @@ export default function TeamManagementPage() {
             total={userTotal}
             onPageChange={setUserPage}
             handleAction={(arg) =>
-              handleUpdateUserRole(arg.userId, arg.newRole)
+              // A refused change (the last admin, or someone who still holds
+              // leads) says why. It used to fail with nothing on screen.
+              handleUpdateUserRole(arg.userId, arg.newRole).catch(
+                (error: unknown) => {
+                  toast.error(
+                    error instanceof Error
+                      ? error.message
+                      : "The role could not be changed.",
+                  );
+                },
+              )
             }
             onSaveProfile={handleUpdateUserProfile}
             header={

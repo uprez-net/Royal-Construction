@@ -3,6 +3,9 @@ import { Badge } from "../ui/badge";
 import { Card, CardContent, CardHeader } from "../ui/card";
 import { Activity } from "lucide-react";
 import { differenceInCalendarDays } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
+
+import { SYDNEY_TZ } from "@/lib/dates/sydney";
 
 export interface FollowUpItem {
   id: number | string;
@@ -41,8 +44,20 @@ const statusConfig: Record<
   },
 };
 
-export function calculateFollowUpBadgeLabel(dueAt: Date): string {
-  const days = differenceInCalendarDays(dueAt, new Date());
+/**
+ * "Due today", "2 days left", "1 day overdue", counted on Sydney's calendar.
+ * Counted on the machine's own, the page rendered on the server (UTC) called a
+ * follow-up due at Sydney midnight on Friday "1 day overdue" all Friday
+ * morning.
+ */
+export function calculateFollowUpBadgeLabel(
+  dueAt: Date,
+  now: Date = new Date(),
+): string {
+  const days = differenceInCalendarDays(
+    toZonedTime(dueAt, SYDNEY_TZ),
+    toZonedTime(now, SYDNEY_TZ),
+  );
 
   if (days > 0) {
     return `${days} day${days === 1 ? "" : "s"} left`;

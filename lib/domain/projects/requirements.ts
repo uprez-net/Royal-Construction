@@ -6,7 +6,7 @@ import { canSeeProjectFinancials } from "../access/projects";
 import type { DomainDb } from "../db";
 import type { DomainPrincipal } from "../principal";
 
-import { withStoredHbcfClaimAmounts } from "./financial-redaction";
+import { withStoredHbcf } from "./financial-redaction";
 import { planStartDateFromHbcfClaim } from "./hbcf-start-date";
 import { rescheduleProjectFromStart } from "./milestones";
 import {
@@ -245,7 +245,7 @@ export async function updateProjectRequirements(
   if (!canSeeProjectFinancials(principal)) {
     delete patch.commercialsAndClaims;
     if (patch.legalAdministration) {
-      patch.legalAdministration = withStoredHbcfClaimAmounts(
+      patch.legalAdministration = withStoredHbcf(
         patch.legalAdministration,
         (current.requirements as { legalAdministration?: unknown })
           .legalAdministration,

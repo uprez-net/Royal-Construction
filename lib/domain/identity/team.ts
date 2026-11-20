@@ -14,6 +14,7 @@ import {
 } from "../errors";
 import {
   describePrincipal,
+  isOfficeRole,
   requireAdminPrincipal,
   type DomainPrincipal,
 } from "../principal";
@@ -298,6 +299,35 @@ export async function changeTeamMemberRole(
           current.role,
           input.newRole,
         );
+      }
+
+      // Whoever holds a lead can open it (`canAccessLead`), and the follow-up
+      // and meeting reminders email its holder the client's details. Leads are
+      // the office's (`assertOfficeAssignee`), so someone leaving the office —
+      // to site manager most often — hands theirs over first. Refused rather
+      // than reassigned here: who takes them is the office's call.
+      if (isOfficeRole(current.role) && !isOfficeRole(input.newRole)) {
+        const [leads, tasks] = await Promise.all([
+          tx.lead.count({ where: { assignedId: current.id } }),
+          tx.leadTask.count({
+            where: { assignedId: current.id, completedAt: null },
+          }),
+        ]);
+        if (leads > 0 || tasks > 0) {
+          const held = [
+            leads > 0 ? `${leads} lead${leads === 1 ? "" : "s"}` : null,
+            tasks > 0
+              ? `${tasks} open lead task${tasks === 1 ? "" : "s"}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" and ");
+          throw new DomainTransitionError(
+            `${current.name || "This team member"} still has ${held} assigned. Reassign them to someone in the office first, then change the role.`,
+            current.role,
+            input.newRole,
+          );
+        }
       }
 
       const changed = await tx.user.updateMany({

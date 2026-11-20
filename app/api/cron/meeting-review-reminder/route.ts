@@ -1,4 +1,5 @@
 import { cronOutcome, withCronReporting } from "@/lib/observability/cron";
+import { isOfficeRole } from "@/lib/domain/principal";
 import prisma from "@/lib/prisma";
 import {
   sydneyDateOnly,
@@ -52,10 +53,14 @@ async function handle(request: Request) {
         },
       },
       include: {
-        assignedTo: { select: { id: true, name: true, email: true } },
+        assignedTo: {
+          select: { id: true, name: true, email: true, role: true },
+        },
         lead: {
           include: {
-            assignedUser: { select: { id: true, name: true, email: true } },
+            assignedUser: {
+              select: { id: true, name: true, email: true, role: true },
+            },
           },
         },
       },
@@ -68,6 +73,13 @@ async function handle(request: Request) {
       const lead = task.lead;
       const assignee = task.assignedTo ?? lead.assignedUser;
       if (!assignee?.id) continue;
+      // As the follow-up reminder: the office only, and loudly otherwise.
+      if (!isOfficeRole(assignee.role)) {
+        console.error(
+          `[CRON] Meeting task ${task.id} on lead ${lead.id} is held by user ${assignee.id}, who is not in the office. Reassign the lead; no reminder was sent.`,
+        );
+        continue;
+      }
 
       const notificationPayload = createNotification("leadMeetingReview", {
         leadId: lead.id.toString(),

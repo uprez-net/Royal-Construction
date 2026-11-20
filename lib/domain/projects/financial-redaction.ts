@@ -1,7 +1,6 @@
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 
 import { canSeeProjectFinancials } from "../access/projects";
-import { readHbcfClaimDocuments } from "../insurance/hbcf-claims";
 import type { DomainPrincipal } from "../principal";
 import type {
   ProjectDetail,
@@ -67,65 +66,38 @@ export function hideRequirementsFinancials(
   };
 }
 
+/** The legal-section fields that record the HBCF certificate and claims. */
+const HBCF_FIELDS = [
+  "hbcfClaimDocuments",
+  "hbcfInsuranceDocument",
+  "hbcfInsuranceNumber",
+] as const;
+
 /**
- * The HBCF claim documents of an edit, with the amounts the caller may not see
- * put back from the stored ones.
+ * A legal-section edit with its HBCF fields put back to the stored ones, for a
+ * caller who is not the office.
  *
- * A screen that was handed no amounts saves none, and a confirmed amount is
- * what the company's HBCF pool counts. So a document already on the project
- * keeps its stored amount and confirmation, matched by file; a document the
- * caller adds keeps whatever amount was read off it but arrives unconfirmed,
- * so it counts only once the office has looked at it.
- *
- * A confirmed document cannot be taken out either (#560): it is part of the
- * pool total, and only the office removes one. One the save left out is kept.
- * Unconfirmed documents count for nothing, so the caller may remove those.
+ * HBCF is recorded by the office: the certificate, its number and the claim
+ * documents, whose confirmed amounts make up the company's HBCF pool. A site
+ * manager's screen shows them read-only and is handed the amounts blanked, so
+ * whatever their save carries for these fields — the blanked amounts, an
+ * edited certificate number, a document added or left out, a `null` — is
+ * replaced with what is stored (#560). A field the project has never had is
+ * not created. The rest of the section (site address, contacts, signed date,
+ * the insurance claim dates captured at the Slab start) is theirs to edit.
  */
-export function withStoredHbcfClaimAmounts<T>(
-  incomingLegal: T,
-  storedLegal: unknown,
-): T {
-  if (
-    !incomingLegal
-    || typeof incomingLegal !== "object"
-    || !("hbcfClaimDocuments" in incomingLegal)
-  ) {
-    // Not sent: a patch keeps the stored list by merging around it.
-    return incomingLegal;
+export function withStoredHbcf<T>(incomingLegal: T, storedLegal: unknown): T {
+  if (!incomingLegal || typeof incomingLegal !== "object") return incomingLegal;
+  const stored =
+    storedLegal && typeof storedLegal === "object"
+      ? (storedLegal as Record<string, unknown>)
+      : {};
+  const legal = { ...(incomingLegal as Record<string, unknown>) };
+  for (const field of HBCF_FIELDS) {
+    if (field in stored) legal[field] = stored[field];
+    else delete legal[field];
   }
-  // Sent as something other than a list (a null from a hand-written call) is
-  // read as an empty list, so the confirmed documents are still kept.
-  const sentList = (incomingLegal as { hbcfClaimDocuments?: unknown })
-    .hbcfClaimDocuments;
-  const documents: Record<string, unknown>[] = Array.isArray(sentList)
-    ? sentList
-    : [];
-  const storedDocuments = readHbcfClaimDocuments(
-    storedLegal as Parameters<typeof readHbcfClaimDocuments>[0],
-  );
-  const stored = new Map(
-    storedDocuments.map((document) => [document.fileId, document]),
-  );
-  const sent = new Set(documents.map((document) => document?.fileId));
-  const dropped = storedDocuments.filter(
-    (document) => document.amountConfirmed && !sent.has(document.fileId),
-  );
-  return {
-    ...incomingLegal,
-    hbcfClaimDocuments: [
-      ...documents.map((document) => {
-        const previous = stored.get(String(document?.fileId ?? ""));
-        return previous
-          ? {
-              ...document,
-              amountConfirmed: previous.amountConfirmed,
-              claimAmount: previous.claimAmount,
-            }
-          : { ...document, amountConfirmed: false };
-      }),
-      ...dropped,
-    ],
-  };
+  return legal as T;
 }
 
 /** A milestone without its budget, spend or the office's tradie figures. */
@@ -176,6 +148,9 @@ const MONEY_LOG_TYPES: ReadonlySet<string> = new Set([
   "milestoneTradieFigureChanged",
   "tradieScheduleQuoted",
   "variationCreated",
+  // No amount in the text, but the variation's description, which is where the
+  // office writes what it costs; the variations themselves are hidden too.
+  "variationUpdated",
 ]);
 
 /** The whole detail payload: contract, claims, variations, quotes, costs. */
@@ -261,7 +236,7 @@ export function withoutTradieQuotes<T>(payload: T): T {
  *
  * The save writes `requirements` whole, not merged, so leaving the commercial
  * section out would delete it: it is replaced with the stored one instead. The
- * HBCF claim amounts get the same treatment (`withStoredHbcfClaimAmounts`).
+ * HBCF fields get the same treatment (`withStoredHbcf`).
  */
 export function withoutFinancialEdits<
   T extends {
@@ -277,16 +252,8 @@ export function withoutFinancialEdits<
   const requirements = { ...input.requirements };
   delete requirements.commercialsAndClaims;
   if (requirements.legalAdministration) {
-    // The save replaces the legal section whole, so a section sent without its
-    // document list would delete every stored document: keep the stored list.
-    const legal = requirements.legalAdministration as Record<string, unknown>;
-    const storedDocuments = (
-      stored.legalAdministration as { hbcfClaimDocuments?: unknown } | undefined
-    )?.hbcfClaimDocuments;
-    requirements.legalAdministration = withStoredHbcfClaimAmounts(
-      !Array.isArray(legal.hbcfClaimDocuments) && Array.isArray(storedDocuments)
-        ? { ...legal, hbcfClaimDocuments: storedDocuments }
-        : legal,
+    requirements.legalAdministration = withStoredHbcf(
+      requirements.legalAdministration,
       stored.legalAdministration,
     );
   }
