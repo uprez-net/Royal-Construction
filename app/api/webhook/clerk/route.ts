@@ -4,7 +4,7 @@ import { verifyWebhook } from "@clerk/nextjs/webhooks";
 import type { UserJSON } from "@clerk/backend";
 import { createUser, deleteUser, updateUser } from "@/lib/data/user";
 import { Role } from "@prisma/client";
-import { updateUserMetadata } from "@/lib/auth";
+import { clerkClient, updateUserMetadata } from "@/lib/auth";
 import { errorResponse, successResponse } from "@/utils/validators";
 import { randomPhoneNumberGenerator } from "@/utils/generator";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -19,6 +19,34 @@ function metadataPhone(user: UserJSON): string | undefined {
   const phone = (user.public_metadata as { phone?: unknown } | undefined)
     ?.phone;
   return typeof phone === "string" && phone.trim() ? phone.trim() : undefined;
+}
+
+/**
+ * The phone Clerk holds now, not the one this event carried.
+ *
+ * Clerk can deliver `user.updated` events late and out of order. Two quick
+ * saves of someone's own number (a typo, then the fix) each write the
+ * metadata and each fire an event; copying the first event's phone after the
+ * second save would put the typo back on `User.phone` and drop its verified
+ * badge. Reading Clerk's current value makes every event write the latest
+ * number, whichever order they arrive in. If Clerk cannot be read, the stored
+ * phone is left alone rather than overwritten with a possibly stale one.
+ */
+async function currentMetadataPhone(
+  clerkUserId: string,
+): Promise<string | undefined> {
+  try {
+    const user = await clerkClient.users.getUser(clerkUserId);
+    const phone = (user.publicMetadata as { phone?: unknown } | undefined)
+      ?.phone;
+    return typeof phone === "string" && phone.trim() ? phone.trim() : undefined;
+  } catch (error) {
+    console.error(
+      "[clerk-webhook] Could not read the current phone; leaving the stored one",
+      error,
+    );
+    return undefined;
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -78,7 +106,9 @@ export async function POST(request: NextRequest) {
         await updateUser(updatedId, {
           name: updatedName || undefined,
           email: updatedEmail,
-          phone: metadataPhone(evt.data),
+          phone: metadataPhone(evt.data)
+            ? await currentMetadataPhone(updatedId)
+            : undefined,
           role,
         });
         // The role every guard reads comes from this cached row.

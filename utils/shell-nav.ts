@@ -6,6 +6,7 @@
 // "Phone & SMS" page, and read "Comms" in the header beside a page heading
 // that said otherwise.
 const SCREEN_TITLES: Readonly<Record<string, string>> = {
+  account: "Profile & account",
   agent: "Operations Agent",
   comms: "Phone & SMS",
   whatsapp: "WhatsApp",

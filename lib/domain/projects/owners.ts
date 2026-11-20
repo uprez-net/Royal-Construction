@@ -157,6 +157,9 @@ const BUILDER_NAMES = new Set(
   ]),
 );
 
+/** 36 or 62 Turner Rd/Road, with no digit before the street number. */
+const BUILDER_STREET_RE = /(?<!\d)(?:36|62)\s*turner\s+r(?:oa)?d\b/;
+
 /**
  * Which of an owner's details are the builder's own: Royal Constructions'
  * name, an address on its email domain, one of its phone numbers, or its
@@ -173,7 +176,8 @@ export function builderDetailsOf(
   const name = squash(clean(owner.name));
   const email = clean(owner.email).toLowerCase();
   const phone = canonicalPhone(clean(owner.phone));
-  const address = squash(clean(owner.address));
+  const rawAddress = clean(owner.address).toLowerCase();
+  const address = squash(rawAddress);
 
   const details: ProjectOwnerField[] = [];
   if (BUILDER_NAMES.has(name)) {
@@ -185,8 +189,11 @@ export function builderDetailsOf(
   if (phone && BUILDER_PHONES.has(phone)) {
     details.push("phone");
   }
-  // "38/62 Turner Rd" or "38/62 Turner Road", in Smeaton Grange.
-  if (address.includes("62turnerr") && address.includes("smeatongrange")) {
+  // "Unit 3, 36 Turner Road", in Smeaton Grange — or the old "38/62 Turner
+  // Rd", which contracts signed before the correction still print. Matched on
+  // the unsquashed text so the street number is a whole number: squashing
+  // would run "Unit 3, 36" together and let "136 Turner Road" match too.
+  if (BUILDER_STREET_RE.test(rawAddress) && address.includes("smeatongrange")) {
     details.push("address");
   }
   return details;

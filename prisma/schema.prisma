@@ -1367,10 +1367,18 @@ model User {
   /// Last time this user's browser asked for a calling credential. Inbound
   /// calls ring the browsers of staff seen recently (lib/domain/comms).
   commsBrowserSeenAt DateTime?
+  /// The number this user proved they hold by typing back a code texted to it
+  /// (lib/domain/identity/phone-verification.ts), E.164. The phone counts as
+  /// verified only while this equals `phone`, so any writer that changes
+  /// `phone` (the team screen, the Clerk webhook) drops the badge without
+  /// having to know about it.
+  verifiedPhone      String?
+  phoneVerifiedAt    DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  phoneVerification         PhoneVerification?
   files                     File[]                     @relation("UserFiles")
   siteManagerProjects       Project[]                  @relation("SiteManagerProjects")
   siteUpdates               SiteUpdate[]
@@ -2778,6 +2786,28 @@ enum RecordingConsent {
 /// A team member's own phone, added under Admin → Phone & SMS. "Call via
 /// phone" on a lead rings the customer first, then puts them through to the
 /// phone picked here, presenting the business number.
+/// The code a user was texted to prove they hold their phone. One per user:
+/// asking again replaces it, so only the latest code works, and the row's
+/// `sentAt` is what a double-click races on (see sendPhoneVerificationCode).
+model PhoneVerification {
+  userId          String   @id
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The number the code went to, E.164. A code proves only this number.
+  phone           String
+  /// sha256 of a per-code salt and the code. The code itself is never stored.
+  codeHash        String
+  salt            String
+  expiresAt       DateTime
+  /// Wrong guesses against this code.
+  attempts        Int      @default(0)
+  sentAt          DateTime
+  /// Start of the current hour-long sending window, and the texts sent in it.
+  windowStartedAt DateTime
+  windowSends     Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 model CommsTeamPhone {
   id        String   @id @default(uuid())
   /// Who carries it, as the office says it: "Raj", "Site mobile".

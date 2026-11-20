@@ -69,7 +69,7 @@ const CHROME = "#555555"; // running header + footer text
 // carries only the legal name, licence, ABN and MBA accreditation — none of the
 // street address, phone, mobile, email or website the template's header needs.
 const TENDER_HEADER_LINES: readonly string[] = [
-  "38/62 Turner Rd, Smeaton Grange NSW 2567  |  ABN 56 644 111 580",
+  "Unit 3, 36 Turner Road Smeaton Grange NSW 2567  |  ABN 56 644 111 580",
   "P 1300 832 355  |  M 0406 555 565  |  gurpinder@royalconstructions.com.au  |  royalconstructions.com.au",
 ];
 const TENDER_FOOTER_BASE = "Royal Constructions  |  ABN 56 644 111 580";

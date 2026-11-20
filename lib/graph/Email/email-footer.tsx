@@ -133,9 +133,9 @@ export function EmailFooter() {
                   Office
                 </span>
                 <br />
-                38/62 Turner RD
+                Unit 3, 36 Turner Road
                 <br />
-                Smeaton Grange, NSW 2567
+                Smeaton Grange NSW 2567
               </Text>
 
               <Text
