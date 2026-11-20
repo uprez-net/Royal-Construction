@@ -172,7 +172,12 @@ export function PriorComplianceSection({
       </CardHeader>
       <CardContent>
         <ul className="divide-y divide-border rounded-lg border border-border">
-          {ROWS.map((row) => {
+          {ROWS.filter(
+            // The HBCF certificate is the office's to file.
+            (row) =>
+              !project.financialsHidden
+              || row.type !== ComplianceDocumentType.HOME_INSURANCE,
+          ).map((row) => {
             const file = fileFor(row.type);
             const heldOnProject =
               !file
@@ -256,6 +261,11 @@ export function PriorComplianceSection({
             );
           })}
         </ul>
+        {project.financialsHidden ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            The office uploads the HBCF certificate.
+          </p>
+        ) : null}
         {recorded ? (
           // As on every compliance row: one document per row.
           <p className="mt-2 text-xs text-muted-foreground">

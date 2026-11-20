@@ -5,6 +5,7 @@ import {
   requireComplianceAccess,
 } from "@/lib/compliance/access";
 import { attachComplianceDocumentFile } from "@/lib/data/compliance";
+import { userPrincipal } from "@/lib/domain/principal";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
@@ -43,9 +44,10 @@ export async function POST(
   const { projectId } = routeParams.data;
 
   try {
-    const { engagement } = await requireComplianceAccess(projectId);
+    const { engagement, user } = await requireComplianceAccess(projectId);
 
     const document = await attachComplianceDocumentFile({
+      principal: userPrincipal(user),
       engagementId: engagement!.id,
       projectId,
       documentId: body.data.documentId,

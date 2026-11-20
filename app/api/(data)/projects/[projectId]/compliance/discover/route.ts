@@ -10,6 +10,8 @@ import {
   complianceAccessResponse,
   requireComplianceAccess,
 } from "@/lib/compliance/access";
+import { assertCanFileComplianceDocument } from "@/lib/domain/access/projects";
+import { userPrincipal } from "@/lib/domain/principal";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
 import {
@@ -59,7 +61,9 @@ export async function POST(
   const { documentType } = body.data;
 
   try {
-    const { engagement } = await requireComplianceAccess(projectId);
+    const { engagement, user } = await requireComplianceAccess(projectId);
+    // Looking is filing: a found file is claimed onto the row.
+    assertCanFileComplianceDocument(userPrincipal(user), documentType);
     const engagementId = engagement!.id;
 
     // 1. Already collected.

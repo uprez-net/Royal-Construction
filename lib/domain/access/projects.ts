@@ -1,4 +1,4 @@
-import { Role } from "@prisma/client";
+import { ComplianceDocumentType, Role } from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError, DomainNotFoundError } from "../errors";
@@ -135,6 +135,21 @@ export function assertCanRecordHbcf(principal: DomainPrincipal): void {
     throw new DomainAuthorizationError(
       "HBCF insurance documents are recorded by the office.",
     );
+  }
+}
+
+/**
+ * Filing a document on a project's compliance file, by type. The HBCF
+ * certificate is the office's (`assertCanRecordHbcf`): filing it copies its
+ * number and file onto the project's HBCF record. Every other type is open to
+ * whoever may work the compliance file.
+ */
+export function assertCanFileComplianceDocument(
+  principal: DomainPrincipal,
+  documentType: ComplianceDocumentType,
+): void {
+  if (documentType === ComplianceDocumentType.HOME_INSURANCE) {
+    assertCanRecordHbcf(principal);
   }
 }
 

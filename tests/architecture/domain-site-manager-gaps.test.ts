@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { MilestoneStatus, ProjectStatus, Role } from "@prisma/client";
+import {
+  ComplianceDocumentType,
+  MilestoneStatus,
+  ProjectStatus,
+  Role,
+} from "@prisma/client";
 import { test } from "vitest";
 
 import {
@@ -27,7 +32,10 @@ import {
   hideRequirementsFinancials,
   withStoredHbcf,
 } from "@/lib/domain/projects/financial-redaction";
-import { assertCanRecordHbcf } from "@/lib/domain/access/projects";
+import {
+  assertCanFileComplianceDocument,
+  assertCanRecordHbcf,
+} from "@/lib/domain/access/projects";
 import { updateMilestone } from "@/lib/domain/projects/milestones";
 import { listTradieActivity } from "@/lib/domain/tradies/queries";
 import { isLeadValidationError } from "@/lib/leads/lead-validation-error";
@@ -260,6 +268,57 @@ test("the HBCF upload refuses a site manager; the office may record it", () => {
     DomainAuthorizationError,
   );
   assert.doesNotThrow(() => assertCanRecordHbcf(adminPrincipal()));
+});
+
+test("only the office files an HBCF certificate on the compliance file", () => {
+  assert.throws(
+    () =>
+      assertCanFileComplianceDocument(
+        siteManagerPrincipal(SM),
+        ComplianceDocumentType.HOME_INSURANCE,
+      ),
+    DomainAuthorizationError,
+  );
+  // Every other document is still the site manager's to file.
+  assert.doesNotThrow(() =>
+    assertCanFileComplianceDocument(
+      siteManagerPrincipal(SM),
+      ComplianceDocumentType.SURVEY,
+    ),
+  );
+  assert.doesNotThrow(() =>
+    assertCanFileComplianceDocument(
+      adminPrincipal(),
+      ComplianceDocumentType.HOME_INSURANCE,
+    ),
+  );
+});
+
+test("every road onto the compliance file checks the HBCF rule before it writes", () => {
+  // The upload, Identify and prior-compliance routes all meet in
+  // attachComplianceDocumentFile; discovery claims files on its own.
+  const source = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
+  const before = (text: string, first: string, second: string) => {
+    const a = text.indexOf(first);
+    const b = text.indexOf(second, a);
+    assert.ok(a >= 0 && b > a, `${first} must come before ${second}`);
+  };
+  const RULE = "assertCanFileComplianceDocument(";
+
+  const data = source("lib/data/compliance.ts");
+  const attach = data.slice(
+    data.indexOf("export async function attachComplianceDocumentFile"),
+  );
+  before(attach, RULE, "tx.complianceDocument.create");
+  const prior = data.slice(
+    data.indexOf("export async function recordPriorComplianceDocument"),
+  );
+  before(prior, RULE, "openPriorComplianceFile(");
+
+  const discover = source(
+    "app/api/(data)/projects/[projectId]/compliance/discover/route.ts",
+  );
+  before(discover, RULE, "await claim(");
 });
 
 /* ---------------------------------------------------------- spend -- */

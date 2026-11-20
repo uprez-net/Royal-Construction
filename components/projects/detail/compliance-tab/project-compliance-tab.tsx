@@ -181,6 +181,11 @@ const SIGNED_COPIES_SENT: ReadonlySet<CertifierEngagementStatus> = new Set([
   CertifierEngagementStatus.APPROVED,
 ]);
 
+/** Types only the office files: the HBCF certificate is copied onto the project. */
+const OFFICE_ONLY_TYPES: ReadonlySet<ComplianceDocumentType> = new Set([
+  ComplianceDocumentType.HOME_INSURANCE,
+]);
+
 /**
  * Statuses the review send is offered from.
  *
@@ -2205,6 +2210,11 @@ export function ProjectComplianceTab({
                       <IdentifyDocumentPicker
                         disabled={isScopeBusy(scopeOf(document))}
                         filledTypes={filledTypes}
+                        hiddenTypes={
+                          project.financialsHidden
+                            ? OFFICE_ONLY_TYPES
+                            : undefined
+                        }
                         onSelect={(type) =>
                           void handleIdentify(document.id, type)
                         }
@@ -2807,6 +2817,7 @@ export function ProjectComplianceTab({
             engagement={engagement}
             values={portalCertificate}
             insurance={insuranceDocument}
+            canRecordCover={!project.financialsHidden}
             checklistPassed={checklistPassed}
             rowMode={rowMode}
             isRowBusy={(document, documentType) =>

@@ -60,6 +60,12 @@ type CertificateAndCoverSectionProps = {
   certificateDocumentType: ComplianceDocumentType;
   insurance: ComplianceDocumentWithFiles | undefined;
   /**
+   * Whether this user may file the HBCF certificate. The office does; a site
+   * manager sees the certificate but not the upload, and the server refuses it
+   * anyway (`assertCanFileComplianceDocument`).
+   */
+  canRecordCover: boolean;
+  /**
    * Whether the certifier has finished with the checklist.
    *
    * The card is locked until then rather than hidden, because a reader
@@ -89,6 +95,7 @@ export function CertificateAndCoverSection({
   certificate,
   certificateDocumentType,
   insurance,
+  canRecordCover,
   checklistPassed,
   rowMode,
   isRowBusy,
@@ -182,7 +189,7 @@ export function CertificateAndCoverSection({
                   ComplianceDocumentType.HOME_INSURANCE,
                 )}
                 document={insurance}
-                mode={rowMode(insurance)}
+                mode={canRecordCover ? rowMode(insurance) : "frozen"}
                 isBusy={isRowBusy(
                   insurance,
                   ComplianceDocumentType.HOME_INSURANCE,
@@ -191,6 +198,10 @@ export function CertificateAndCoverSection({
                 onPreviewFile={onPreviewFile}
               />
             </ul>
+          ) : !canRecordCover ? (
+            <p className="text-sm text-muted-foreground">
+              No HBCF certificate yet. The office uploads it.
+            </p>
           ) : (
             <>
               <p className="font-medium text-foreground">

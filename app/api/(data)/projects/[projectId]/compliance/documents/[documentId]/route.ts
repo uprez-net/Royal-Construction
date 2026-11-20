@@ -48,8 +48,9 @@ export async function PATCH(
   const { projectId, documentId } = routeParams.data;
 
   try {
-    await requireComplianceAccess(projectId);
+    const { user } = await requireComplianceAccess(projectId);
     const result = await classifyReceivedDocument({
+      principal: userPrincipal(user),
       projectId,
       documentId,
       documentType: body.data.documentType,
