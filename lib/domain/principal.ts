@@ -193,8 +193,14 @@ export function isInternalPrincipal(principal: DomainPrincipal): boolean {
  * how lead access has always been scoped, and `proxy.ts` already turns a GUEST
  * away from every page.
  */
+export const OFFICE_ROLES: readonly Role[] = INTERNAL_ROLES.filter(
+  (role) => role !== Role.SITE_MANAGER,
+);
+
+const OFFICE_ROLE_SET: ReadonlySet<Role> = new Set(OFFICE_ROLES);
+
 export function isOfficeRole(role: Role): boolean {
-  return isInternalRole(role) && role !== Role.SITE_MANAGER;
+  return OFFICE_ROLE_SET.has(role);
 }
 
 /**

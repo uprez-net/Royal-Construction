@@ -7,7 +7,7 @@ import { Novu } from "@novu/api";
 import { instrumentApi } from "@/lib/observability/instrument";
 
 import {
-  getAllNotificationRecipients,
+  getOfficeNotificationRecipients,
   getNotificationRecipients,
 } from "../data/user";
 import {
@@ -52,7 +52,8 @@ async function currentRequester(): Promise<NotificationRecipient | null> {
  * Sends an in-app notification through Novu to one or more users.
  *
  * Recipients can be explicitly provided via user IDs or, if no recipients are
- * supplied, the notification is broadcast to all users in the system.
+ * supplied, the notification is broadcast to the office (ADMIN and GUEST),
+ * not to site managers, customers or tradies.
  *
  * Who actually receives it depends on where this runs (see
  * lib/notification/environment.ts): production skips the muted test accounts;
@@ -65,7 +66,7 @@ async function currentRequester(): Promise<NotificationRecipient | null> {
  * retry a reminder that was never meant to go out here.
  *
  * @param userId - Array of application user IDs. Pass an empty array to send
- * the notification to all users.
+ * the notification to the office.
  * @param content - Notification content.
  * @param content.title - Notification title.
  * @param content.message - Notification body.
@@ -82,7 +83,7 @@ export async function triggerNotification(
   try {
     const recipients =
       userId.length === 0
-        ? await getAllNotificationRecipients()
+        ? await getOfficeNotificationRecipients()
         : await getNotificationRecipients(userId);
     if (recipients.length === 0) {
       return { success: false, error: "No notification recipients found" };

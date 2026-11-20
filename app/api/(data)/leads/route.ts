@@ -9,6 +9,7 @@ import {
 import { getLeads, createLead } from "@/lib/data/leads";
 import { requireInternalUser } from "@/lib/auth/require-internal-user";
 import { NextRequest } from "next/server";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import { parseLeadStageFilter } from "@/lib/leads/types";
 import { isLeadValidationError } from "@/lib/leads/lead-validation-error";
 import type { LeadStage as DBLeadStage } from "@prisma/client";
@@ -108,6 +109,9 @@ export async function POST(request: NextRequest) {
       console.warn("/api/leads POST rejected", { reason: error.message });
       return badRequestResponse(error.message);
     }
+    // A site manager is refused by the domain (only the office adds leads).
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
     console.error("/api/leads POST error", error);
     return errorResponse("Failed to create lead", {
       status: 500,

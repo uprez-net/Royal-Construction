@@ -6,6 +6,7 @@ import { canSeeProjectFinancials } from "../access/projects";
 import type { DomainDb } from "../db";
 import type { DomainPrincipal } from "../principal";
 
+import { withStoredHbcfClaimAmounts } from "./financial-redaction";
 import { planStartDateFromHbcfClaim } from "./hbcf-start-date";
 import { rescheduleProjectFromStart } from "./milestones";
 import {
@@ -241,7 +242,16 @@ export async function updateProjectRequirements(
   // claims are raised from. A caller who may not see them does not patch them
   // (see `withoutFinancialEdits`); today only the office's agent reaches this.
   const patch = { ...input.patch };
-  if (!canSeeProjectFinancials(principal)) delete patch.commercialsAndClaims;
+  if (!canSeeProjectFinancials(principal)) {
+    delete patch.commercialsAndClaims;
+    if (patch.legalAdministration) {
+      patch.legalAdministration = withStoredHbcfClaimAmounts(
+        patch.legalAdministration,
+        (current.requirements as { legalAdministration?: unknown })
+          .legalAdministration,
+      );
+    }
+  }
 
   const candidate = mergeProjectRequirementsPatch(current.requirements, patch);
   if (!isCompleteProjectRequirements(candidate)) {

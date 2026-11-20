@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+
+import { Role } from "@prisma/client";
 import { test } from "vitest";
 
 import {
@@ -270,6 +272,9 @@ test("an edit that does not name an assignee is not a reassignment", async () =>
 test("re-sending the same assignee is not a reassignment either", async () => {
   const recorder = leadDb({
     "lead.findUnique": { ...BASE_LEAD, assignedId: "user_1" },
+    // The assignee is in the office; a site manager is refused (see
+    // domain-site-manager-gaps.test.ts).
+    "user.findUnique": { role: Role.ADMIN },
   });
   const outcome = await updateLead(
     adminPrincipal(),
@@ -283,6 +288,9 @@ test("re-sending the same assignee is not a reassignment either", async () => {
 test("a real handover is reported as one, and moves the open tasks", async () => {
   const recorder = leadDb({
     "lead.findUnique": { ...BASE_LEAD, assignedId: "user_1" },
+    // The assignee is in the office; a site manager is refused (see
+    // domain-site-manager-gaps.test.ts).
+    "user.findUnique": { role: Role.ADMIN },
   });
   const outcome = await updateLead(
     adminPrincipal(),

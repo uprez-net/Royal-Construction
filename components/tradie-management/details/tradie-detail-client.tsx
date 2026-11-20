@@ -14,7 +14,13 @@ import { TradieActivityLogCard } from "./tradie-activity-log-card";
 import { TradieIncidentsCard } from "./tradie-incident-card";
 import Link from "next/link";
 
-export function TradieDetailClient({ tradie }: { tradie: TradieDetails }) {
+export function TradieDetailClient({
+  tradie,
+  showActivity,
+}: {
+  tradie: TradieDetails;
+  showActivity: boolean;
+}) {
   const dispatch = useAppDispatch();
   useEffect(() => {
     dispatch(setSelectedTradie(tradie));
@@ -43,7 +49,7 @@ export function TradieDetailClient({ tradie }: { tradie: TradieDetails }) {
         </div>
       </div>
       <TradieIncidentsCard />
-      <TradieActivityLogCard />
+      {showActivity ? <TradieActivityLogCard /> : null}
     </div>
   );
 }

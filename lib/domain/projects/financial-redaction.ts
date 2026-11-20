@@ -1,6 +1,7 @@
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 
 import { canSeeProjectFinancials } from "../access/projects";
+import { readHbcfClaimDocuments } from "../insurance/hbcf-claims";
 import type { DomainPrincipal } from "../principal";
 import type {
   ProjectDetail,
@@ -39,15 +40,71 @@ const NO_COMMERCIALS: ProjectRequirementsPayload["commercialsAndClaims"] = {
 };
 
 /**
- * The extracted requirements without their commercial section. The rest — wet
- * areas, site safety, inclusions — is what a site manager builds from, and
- * stays.
+ * The extracted requirements without their commercial section, and without the
+ * HBCF claim amounts (the insurance pool is counted from them). The rest — wet
+ * areas, site safety, inclusions, the HBCF documents themselves — is what a
+ * site manager builds from, and stays.
  */
 export function hideRequirementsFinancials(
   requirements: ProjectRequirementsPayload | undefined,
 ): ProjectRequirementsPayload | undefined {
   if (!requirements) return requirements;
-  return { ...requirements, commercialsAndClaims: NO_COMMERCIALS };
+  const legal = requirements.legalAdministration;
+  return {
+    ...requirements,
+    commercialsAndClaims: NO_COMMERCIALS,
+    ...(legal && Array.isArray(legal.hbcfClaimDocuments)
+      ? {
+          legalAdministration: {
+            ...legal,
+            hbcfClaimDocuments: legal.hbcfClaimDocuments.map((document) => ({
+              ...document,
+              claimAmount: null,
+            })),
+          },
+        }
+      : {}),
+  };
+}
+
+/**
+ * The HBCF claim documents of an edit, with the amounts the caller may not see
+ * put back from the stored ones.
+ *
+ * A screen that was handed no amounts saves none, and a confirmed amount is
+ * what the company's HBCF pool counts. So a document already on the project
+ * keeps its stored amount and confirmation, matched by file; a document the
+ * caller adds keeps whatever amount was read off it but arrives unconfirmed,
+ * so it counts only once the office has looked at it. Removing a document is
+ * left alone: that is the document list, not its money.
+ */
+export function withStoredHbcfClaimAmounts<T>(
+  incomingLegal: T,
+  storedLegal: unknown,
+): T {
+  const documents = (incomingLegal as { hbcfClaimDocuments?: unknown } | null)
+    ?.hbcfClaimDocuments;
+  if (!Array.isArray(documents)) return incomingLegal;
+  const stored = new Map(
+    readHbcfClaimDocuments(
+      storedLegal as Parameters<typeof readHbcfClaimDocuments>[0],
+    ).map((document) => [document.fileId, document]),
+  );
+  return {
+    ...incomingLegal,
+    hbcfClaimDocuments: documents.map((document) => {
+      const previous = stored.get(
+        (document as { fileId?: string } | null)?.fileId ?? "",
+      );
+      return previous
+        ? {
+            ...document,
+            amountConfirmed: previous.amountConfirmed,
+            claimAmount: previous.claimAmount,
+          }
+        : { ...document, amountConfirmed: false };
+    }),
+  };
 }
 
 /** A milestone without its budget, spend or the office's tradie figures. */
@@ -182,7 +239,8 @@ export function withoutTradieQuotes<T>(payload: T): T {
  * the commercial terms.
  *
  * The save writes `requirements` whole, not merged, so leaving the commercial
- * section out would delete it: it is replaced with the stored one instead.
+ * section out would delete it: it is replaced with the stored one instead. The
+ * HBCF claim amounts get the same treatment (`withStoredHbcfClaimAmounts`).
  */
 export function withoutFinancialEdits<
   T extends {
@@ -192,11 +250,17 @@ export function withoutFinancialEdits<
 >(
   principal: DomainPrincipal,
   input: T,
-  stored: { commercialsAndClaims?: unknown },
+  stored: { commercialsAndClaims?: unknown; legalAdministration?: unknown },
 ): T {
   if (canSeeProjectFinancials(principal)) return input;
   const requirements = { ...input.requirements };
   delete requirements.commercialsAndClaims;
+  if (requirements.legalAdministration) {
+    requirements.legalAdministration = withStoredHbcfClaimAmounts(
+      requirements.legalAdministration,
+      stored.legalAdministration,
+    );
+  }
   return {
     ...input,
     requirements: input.requirements

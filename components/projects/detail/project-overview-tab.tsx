@@ -2432,6 +2432,7 @@ export function ProjectOverviewTab({
                           )}
                           extracting={hbcfExtracting}
                           canRemove={isAdmin}
+                          amountsHidden={Boolean(project.financialsHidden)}
                           onNumberChange={(value) =>
                             updateSectionField(
                               "legalAdministration",

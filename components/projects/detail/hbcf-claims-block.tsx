@@ -73,6 +73,7 @@ export function HbcfClaimsBlock({
   claimDate,
   extracting,
   canRemove,
+  amountsHidden = false,
   onNumberChange,
   onDocumentsChange,
   onUpload,
@@ -84,6 +85,12 @@ export function HbcfClaimsBlock({
   claimDate: string | null;
   extracting: boolean;
   canRemove: boolean;
+  /**
+   * The caller may not see project money (a site manager). The amounts are
+   * redacted on the server and a typed one is not saved, so the inputs and the
+   * total are not drawn rather than offered and then quietly dropped.
+   */
+  amountsHidden?: boolean;
   onNumberChange: (value: string | null) => void;
   onDocumentsChange: (documents: HbcfClaimDocument[]) => void;
   onUpload: (files: DBFile[]) => void;
@@ -275,59 +282,63 @@ export function HbcfClaimsBlock({
                   </div>
                 </div>
 
-                <div className="space-y-1.5 sm:w-52">
-                  <Label
-                    htmlFor={amountId}
-                    className="text-xs font-medium text-muted-foreground"
-                  >
-                    Claim amount (AUD)
-                  </Label>
-                  <div className="flex items-center gap-1.5">
-                    <Input
-                      id={amountId}
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      step="0.01"
-                      value={doc.claimAmount ?? ""}
-                      placeholder="0.00"
-                      disabled={extracting}
-                      // Typing an amount is a person stating it, so it counts.
-                      onChange={(e) =>
-                        patchDocument(doc.fileId, {
-                          amountConfirmed: true,
-                          claimAmount: normalizeClaimAmount(e.target.value),
-                        })
-                      }
-                      className="h-9 font-mono tabular-nums"
-                      aria-describedby={reason ? `${amountId}-note` : undefined}
-                    />
-                    {reason === "unconfirmed" ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-9 shrink-0"
-                        onClick={() =>
-                          patchDocument(doc.fileId, { amountConfirmed: true })
-                        }
-                      >
-                        <Check aria-hidden="true" className="h-3.5 w-3.5" />
-                        Confirm
-                      </Button>
-                    ) : null}
-                  </div>
-                  {reason ? (
-                    <p
-                      id={`${amountId}-note`}
-                      className="text-[11px] leading-snug text-warning-ink"
+                {amountsHidden ? null : (
+                  <div className="space-y-1.5 sm:w-52">
+                    <Label
+                      htmlFor={amountId}
+                      className="text-xs font-medium text-muted-foreground"
                     >
-                      {EXCLUSION_COPY[reason]}
-                    </p>
-                  ) : (
-                    <StatusPill tone="success">Counted</StatusPill>
-                  )}
-                </div>
+                      Claim amount (AUD)
+                    </Label>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        id={amountId}
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step="0.01"
+                        value={doc.claimAmount ?? ""}
+                        placeholder="0.00"
+                        disabled={extracting}
+                        // Typing an amount is a person stating it, so it counts.
+                        onChange={(e) =>
+                          patchDocument(doc.fileId, {
+                            amountConfirmed: true,
+                            claimAmount: normalizeClaimAmount(e.target.value),
+                          })
+                        }
+                        className="h-9 font-mono tabular-nums"
+                        aria-describedby={
+                          reason ? `${amountId}-note` : undefined
+                        }
+                      />
+                      {reason === "unconfirmed" ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-9 shrink-0"
+                          onClick={() =>
+                            patchDocument(doc.fileId, { amountConfirmed: true })
+                          }
+                        >
+                          <Check aria-hidden="true" className="h-3.5 w-3.5" />
+                          Confirm
+                        </Button>
+                      ) : null}
+                    </div>
+                    {reason ? (
+                      <p
+                        id={`${amountId}-note`}
+                        className="text-[11px] leading-snug text-warning-ink"
+                      >
+                        {EXCLUSION_COPY[reason]}
+                      </p>
+                    ) : (
+                      <StatusPill tone="success">Counted</StatusPill>
+                    )}
+                  </div>
+                )}
               </li>
             );
           })}
@@ -351,27 +362,29 @@ export function HbcfClaimsBlock({
         </div>
       ) : null}
 
-      <div
-        className={cn(
-          "flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-lg border px-4 py-3",
-          "border-primary/30 bg-primary/5",
-        )}
-        aria-live="polite"
-      >
-        <div>
-          <p className="text-sm font-semibold text-foreground">
-            Total HBCF claim amount
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {documents.length === 0
-              ? "No HBCF documents yet."
-              : `${counted.length} of ${documents.length} document${documents.length === 1 ? "" : "s"} counted.`}
+      {amountsHidden ? null : (
+        <div
+          className={cn(
+            "flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-lg border px-4 py-3",
+            "border-primary/30 bg-primary/5",
+          )}
+          aria-live="polite"
+        >
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              Total HBCF claim amount
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {documents.length === 0
+                ? "No HBCF documents yet."
+                : `${counted.length} of ${documents.length} document${documents.length === 1 ? "" : "s"} counted.`}
+            </p>
+          </div>
+          <p className="font-mono text-lg font-semibold tabular-nums text-foreground">
+            {amountFormat.format(total)}
           </p>
         </div>
-        <p className="font-mono text-lg font-semibold tabular-nums text-foreground">
-          {amountFormat.format(total)}
-        </p>
-      </div>
+      )}
     </div>
   );
 }

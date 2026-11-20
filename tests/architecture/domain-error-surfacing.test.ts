@@ -129,7 +129,6 @@ const ADMIN_CONTENT =
 
 const UNMAPPED: Record<string, string> = {
   "app/api/(data)/leads/[leadId]/route.ts": LEADS_RESULT_SHAPE,
-  "app/api/(data)/leads/route.ts": LEADS_RESULT_SHAPE,
   "app/api/(data)/leads/tasks/route.ts": LEADS_RESULT_SHAPE,
   "app/api/(workflow)/extract-checklist/route.ts": MACHINE_CALLER,
   "app/api/(workflow)/extract-project-data/route.ts": MACHINE_CALLER,

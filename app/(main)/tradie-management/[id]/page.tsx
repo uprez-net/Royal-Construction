@@ -5,6 +5,8 @@ import { Suspense } from "react";
 import { Metadata } from "next";
 import TradieDetailsSkeleton from "./loading";
 import { rateCurrency } from "@/utils/formatters";
+import { currentPrincipal } from "@/lib/data/current-principal";
+import { canSeeProjectFinancials } from "@/lib/domain/access/projects";
 
 interface TradieDetailPageProps {
   params: Promise<{
@@ -29,8 +31,8 @@ export async function generateMetadata({
     ? `${Number(tradie.rating).toFixed(1)}/5`
     : "No rating";
   const lastQuotedPrice =
-    tradie.lastQuotedPrice != null &&
-    !Number.isNaN(Number(tradie.lastQuotedPrice))
+    tradie.lastQuotedPrice != null
+    && !Number.isNaN(Number(tradie.lastQuotedPrice))
       ? rateCurrency.format(Number(tradie.lastQuotedPrice))
       : null;
 
@@ -53,13 +55,23 @@ export async function generateMetadata({
 
 async function TradieDetailContent({ params }: TradieDetailPageProps) {
   const { id } = await params;
-  const tradieDetails = await getTradieByIdCached(id);
+  const [tradieDetails, principal] = await Promise.all([
+    getTradieByIdCached(id),
+    currentPrincipal(),
+  ]);
 
   if (!tradieDetails) {
     notFound();
   }
 
-  return <TradieDetailClient tradie={tradieDetails} />;
+  // The activity history spells out quotes and invoices; `listTradieActivity`
+  // refuses anyone who may not see project money, so the card is not drawn.
+  return (
+    <TradieDetailClient
+      tradie={tradieDetails}
+      showActivity={canSeeProjectFinancials(principal)}
+    />
+  );
 }
 
 export default function TradieDetailPage({ params }: TradieDetailPageProps) {

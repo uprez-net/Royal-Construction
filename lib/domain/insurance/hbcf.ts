@@ -2,8 +2,11 @@ import { ProjectStatus } from "@prisma/client";
 import { format } from "date-fns";
 
 import type { DomainDb } from "../db";
+import { authorizeLead } from "../access/leads";
+import { canSeeProjectFinancials } from "../access/projects";
+import { DomainAuthorizationError } from "../errors";
 import { getAdminOfferContent } from "../admin/offer-content";
-import { systemPrincipal } from "../principal";
+import { systemPrincipal, type DomainPrincipal } from "../principal";
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import {
   hbcfAssessment,
@@ -90,11 +93,29 @@ export async function getActiveHbcfClaims(
     });
 }
 
+/**
+ * The HBCF pool is the whole company's insurance book: every active project's
+ * claim amount (or, before one is confirmed, its contract sum or budget) and
+ * the client name it is for. That is project money, so it is read by whoever
+ * may see project money and nobody else — not a site manager.
+ */
+function assertCanReadHbcfPool(principal: DomainPrincipal): void {
+  if (!canSeeProjectFinancials(principal)) {
+    throw new DomainAuthorizationError(
+      "The HBCF claim pool is only available to the office.",
+    );
+  }
+}
+
 /** Build the lead HBCF timeline from one explicit database boundary. */
 export async function getHbcfTimelineForLead(
+  principal: DomainPrincipal,
   leadId: number,
   db: DomainDb,
 ): Promise<HbcfTimelinePayload | null> {
+  assertCanReadHbcfPool(principal);
+  // A missing lead is a DomainNotFoundError here, which the route answers 404.
+  await authorizeLead(principal, leadId, db);
   const [lead, claims, adminContent] = await Promise.all([
     db.lead.findUnique({
       select: {
@@ -130,9 +151,11 @@ export async function getHbcfTimelineForLead(
 
 /** Report whether a project breaches the active HBCF pool. */
 export async function getHbcfBreachForProject(
+  principal: DomainPrincipal,
   projectId: string,
   db: DomainDb,
 ): Promise<HbcfProjectBreach | null> {
+  assertCanReadHbcfPool(principal);
   const [claims, adminContent] = await Promise.all([
     getActiveHbcfClaims(db),
     getAdminOfferContent(systemPrincipal("HBCF breach read"), db),

@@ -316,15 +316,24 @@ export type UpdateMilestoneOutcome = {
  * (`tradieScheduleSpend`, each booking priced at the status completion is about
  * to give it), and whatever they sent is ignored. A caller who sees prices
  * keeps entering and confirming their own.
+ *
+ * Only on the way INTO done. An activity that is already done keeps the spend
+ * it has: correcting its completion date is not a reason to re-price it, and
+ * the office may have typed a figure the bookings do not explain (an activity
+ * with no bookings at all would otherwise be re-priced to $0).
  */
 async function withServerSideSpend(
   principal: DomainPrincipal,
   input: UpdateMilestoneInput,
+  stored: { readonly status: MilestoneStatus; readonly spend: unknown },
   db: DomainDb,
 ): Promise<UpdateMilestoneInput> {
   if (canSeeProjectFinancials(principal)) return input;
   if (input.status !== MilestoneStatus.DONE) {
     return { ...input, spend: undefined };
+  }
+  if (stored.status === MilestoneStatus.DONE && stored.spend !== null) {
+    return { ...input, spend: Number(stored.spend) };
   }
   const bookings = await db.tradieSchedule.findMany({
     select: {
@@ -446,20 +455,21 @@ export async function updateMilestone(
   const {
     project: { id: projectId },
   } = await authorizeMilestone(principal, rawInput.milestoneId, db);
-  const input = await withServerSideSpend(principal, rawInput, db);
 
   const current = await db.milestone.findUniqueOrThrow({
-    where: { id: input.milestoneId },
+    where: { id: rawInput.milestoneId },
     select: {
       id: true,
       name: true,
       parentId: true,
       projectId: true,
       status: true,
+      spend: true,
       actualDate: true,
       childrenMilestones: { select: { status: true } },
     },
   });
+  const input = await withServerSideSpend(principal, rawInput, current, db);
 
   // Staying put is always allowed: an update that leaves the status alone is
   // editing something else — a target date most often — and the state machine

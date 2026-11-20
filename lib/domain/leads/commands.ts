@@ -5,6 +5,7 @@ import { DomainAuthorizationError, DomainNotFoundError } from "../errors";
 import {
   attributionUserId,
   isOfficePrincipal,
+  isOfficeRole,
   type DomainPrincipal,
 } from "../principal";
 import { authorizeLead } from "../access/leads";
@@ -117,13 +118,50 @@ async function lockDedupeKeys(
   }
 }
 
-/** Who may create a lead: staff, the public booking route, and crons. */
+/** Who may create a lead: the office, the public booking route, and crons. */
 function assertMayCreateLead(principal: DomainPrincipal): void {
-  // Deliberately permissive. The booking route and the inbound lead webhook are
-  // open by design — refusing an anonymous create here would close the front
-  // door. What those callers must not do is name an existing lead they cannot
-  // prove they own, and that is `authorizeLead`'s job at their own boundary.
-  void principal;
+  // Deliberately permissive to the open callers. The booking route and the
+  // inbound lead webhook are open by design — refusing an anonymous create here
+  // would close the front door. What those callers must not do is name an
+  // existing lead they cannot prove they own, and that is `authorizeLead`'s job
+  // at their own boundary.
+  //
+  // A signed-in account outside the office is refused: a site manager does not
+  // capture leads, and the duplicate answer below hands back the existing
+  // lead's contact details, notes and email thread.
+  if (principal.kind === "user" && !isOfficeRole(principal.role)) {
+    throw new DomainAuthorizationError("Only the office can add a lead.");
+  }
+}
+
+/**
+ * A lead is assigned to the office, never to a site manager or a customer.
+ *
+ * Whoever holds a lead can read it (`canAccessLead` lets an assignee in), so
+ * this is what keeps the sales side out of a site manager's reach. Checked on
+ * the write rather than by narrowing `canAccessLead`: the read rule is shared by
+ * every comms and listing path, and a refusal here is one the office can act on.
+ */
+async function assertOfficeAssignee(
+  assignedId: string | null | undefined,
+  db: DomainDb,
+): Promise<void> {
+  const id = assignedId?.trim();
+  if (!id) return;
+  const assignee = await db.user.findUnique({
+    select: { role: true },
+    where: { id },
+  });
+  if (!assignee) {
+    throw new LeadValidationError(
+      "That person could not be found. Pick someone else to assign.",
+    );
+  }
+  if (!isOfficeRole(assignee.role)) {
+    throw new LeadValidationError(
+      "A lead can only be assigned to the office, not to a site manager.",
+    );
+  }
 }
 
 export type CreateLeadOptions = {
@@ -145,6 +183,7 @@ export async function createLead(
   options: CreateLeadOptions = {},
 ): Promise<CreateLeadOutcome> {
   assertMayCreateLead(principal);
+  await assertOfficeAssignee(input.assignedId, db);
   void options;
 
   const mappedStage: LeadStage = input.stage
@@ -284,6 +323,9 @@ export async function updateLead(
   db: TransactionalDomainDb,
 ): Promise<UpdateLeadOutcome> {
   await authorizeLead(principal, id, db);
+  if (input.assignedId !== undefined) {
+    await assertOfficeAssignee(input.assignedId, db);
+  }
 
   const mappedStage = input.stage ? stageToPrismaMap[input.stage] : undefined;
   const updateData: Prisma.LeadUpdateInput = {};
