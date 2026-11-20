@@ -105,7 +105,7 @@ function tradieState(tradie: TradeTradie): {
   if (tradie.selected) return { label: "Selected", tone: "success" };
   if (tradie.approved) return { label: "Approved", tone: "success" };
   if (tradie.openCount === 0) return { label: "Closed", tone: "neutral" };
-  if (tradie.quotedTotal !== null)
+  if (tradie.quotedTotal !== null || tradie.hasQuote)
     return { label: "Quote received", tone: "primary" };
   return { label: "Awaiting quote", tone: "warning" };
 }
@@ -169,7 +169,11 @@ function QuoteCard({
           <p className="flex items-center gap-2 font-mono text-sm font-medium text-foreground">
             {tradie.quotedTotal === null ? (
               <span className="font-sans text-muted-foreground">
-                {booked ? "No price yet" : "No quote yet"}
+                {tradie.hasQuote
+                  ? "Quote received"
+                  : booked
+                    ? "No price yet"
+                    : "No quote yet"}
               </span>
             ) : (
               currency.format(tradie.quotedTotal)
@@ -526,6 +530,7 @@ function SelectionBanner({
   const unpriced =
     tradie !== undefined
     && tradie.quotedTotal === null
+    && !tradie.hasQuote
     && tradie.openCount > 0
     && tradie.delivery?.request.kind === "BOOKING";
   return (
@@ -645,7 +650,10 @@ export function TradeWorkbench({
               "—"
             )
           }
-          note={stats.lowest?.name ?? "No quotes yet"}
+          note={
+            stats.lowest?.name
+            ?? (stats.replies > 0 ? "Prices not shown" : "No quotes yet")
+          }
         />
         <Stat
           icon={<CalendarCheck2 className="size-4" />}

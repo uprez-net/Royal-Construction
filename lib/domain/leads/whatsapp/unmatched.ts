@@ -13,7 +13,7 @@ import {
 } from "../../errors";
 import type { WhatsAppChannel } from "../../ports/whatsapp";
 import {
-  isInternalPrincipal,
+  isOfficePrincipal,
   type DomainPrincipal,
   type UserPrincipal,
 } from "../../principal";
@@ -57,7 +57,7 @@ export type UnmatchedWhatsAppRecord = {
 };
 
 function requireStaff(principal: DomainPrincipal): UserPrincipal {
-  if (principal.kind !== "user" || !isInternalPrincipal(principal)) {
+  if (principal.kind !== "user" || !isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(
       "Reviewing WhatsApp messages requires a signed-in member of staff.",
     );

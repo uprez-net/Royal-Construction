@@ -66,6 +66,9 @@ const TABLE_HEADERS = [
   "Status",
 ];
 
+/** Where Budget and Spent sit in `TABLE_HEADERS` and `TABLE_ALIGN`. */
+const MONEY_COLUMNS = [3, 4];
+
 const TABLE_ALIGN = [
   "start",
   "start",
@@ -141,6 +144,9 @@ function ProjectsWorkspace({
   // client's own fetch below settles it either way.
   const [listFailed, setListFailed] = useState(listFailedOnServer);
   const [isExporting, setIsExporting] = useState(false);
+  // The money columns, their sorts and the export (which carries budget and
+  // spend) are an admin's. The payload is already zeroed for anyone else.
+  const showMoney = role === "ADMIN";
   // Hard re-entry guard: `disabled` alone still allows a second call from the
   // toast's Retry action or a rapid double activation before React re-renders.
   const exportInFlightRef = useRef(false);
@@ -505,14 +511,14 @@ function ProjectsWorkspace({
           <DataTable
             flush
             mobileLayout="cards"
-            headers={
-              showAttentionColumn
-                ? [...TABLE_HEADERS, ATTENTION_HEADER]
-                : TABLE_HEADERS
-            }
-            align={
-              showAttentionColumn ? [...TABLE_ALIGN, "start"] : [...TABLE_ALIGN]
-            }
+            headers={(showAttentionColumn
+              ? [...TABLE_HEADERS, ATTENTION_HEADER]
+              : TABLE_HEADERS
+            ).filter((_, index) => showMoney || !MONEY_COLUMNS.includes(index))}
+            align={(showAttentionColumn
+              ? [...TABLE_ALIGN, "start" as const]
+              : [...TABLE_ALIGN]
+            ).filter((_, index) => showMoney || !MONEY_COLUMNS.includes(index))}
             caption="Active projects, with budget, spend, progress and delivery status. Select a row to open its quick view."
             rowLabel={(rowIndex) =>
               `Open ${visibleProjects[rowIndex]?.name ?? "project"}`
@@ -539,20 +545,26 @@ function ProjectsWorkspace({
                   {project.customer.name}
                 </span>,
                 <span key={`loc-${project.id}`}>{project.location}</span>,
-                <span
-                  key={`budget-${project.id}`}
-                  className="font-mono tabular-nums"
-                >
-                  {Number.isFinite(budget)
-                    ? compactCurrency.format(budget)
-                    : "—"}
-                </span>,
-                <span
-                  key={`spent-${project.id}`}
-                  className="font-mono tabular-nums"
-                >
-                  {Number.isFinite(spent) ? compactCurrency.format(spent) : "—"}
-                </span>,
+                ...(showMoney
+                  ? [
+                      <span
+                        key={`budget-${project.id}`}
+                        className="font-mono tabular-nums"
+                      >
+                        {Number.isFinite(budget)
+                          ? compactCurrency.format(budget)
+                          : "—"}
+                      </span>,
+                      <span
+                        key={`spent-${project.id}`}
+                        className="font-mono tabular-nums"
+                      >
+                        {Number.isFinite(spent)
+                          ? compactCurrency.format(spent)
+                          : "—"}
+                      </span>,
+                    ]
+                  : []),
                 <span
                   key={`prog-${project.id}`}
                   className="inline-flex items-center justify-end gap-2"
@@ -629,6 +641,7 @@ function ProjectsWorkspace({
           searchTerm={searchTerm}
           onSearchTermChange={setSearchTerm}
           sort={list.sort}
+          showFinancialSorts={showMoney}
           onSortChange={(sort) =>
             updateListParams({
               sort: sort === "name" ? null : sort,
@@ -636,32 +649,38 @@ function ProjectsWorkspace({
             })
           }
         >
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void handleExport()}
-            disabled={isExporting}
-            aria-busy={isExporting}
-            className={cn(TOOLBAR_BUTTON_CLASS, "gap-2")}
-          >
-            {isExporting ? (
-              <Loader2
-                className="h-4 w-4 animate-spin motion-reduce:animate-none"
-                aria-hidden="true"
-              />
-            ) : (
-              <Download className="h-4 w-4" aria-hidden="true" />
-            )}
-            {isExporting ? "Exporting…" : "Export"}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => dispatch(openModal({ type: "createProject" }))}
-            className={cn(TOOLBAR_BUTTON_CLASS, "gap-2")}
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            New project
-          </Button>
+          {showMoney && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void handleExport()}
+              disabled={isExporting}
+              aria-busy={isExporting}
+              className={cn(TOOLBAR_BUTTON_CLASS, "gap-2")}
+            >
+              {isExporting ? (
+                <Loader2
+                  className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+              ) : (
+                <Download className="h-4 w-4" aria-hidden="true" />
+              )}
+              {isExporting ? "Exporting…" : "Export"}
+            </Button>
+          )}
+          {/* A project is made from a lead, which a site manager cannot open,
+              and the wizard shows the contract terms. */}
+          {showMoney && (
+            <Button
+              type="button"
+              onClick={() => dispatch(openModal({ type: "createProject" }))}
+              className={cn(TOOLBAR_BUTTON_CLASS, "gap-2")}
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              New project
+            </Button>
+          )}
         </ProjectToolbar>
 
         {isGrid ? (

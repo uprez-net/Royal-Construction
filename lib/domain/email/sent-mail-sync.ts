@@ -7,7 +7,7 @@ import {
 import { recordTradieActivity } from "../audit/tradie-activity-log";
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError, DomainValidationError } from "../errors";
-import { isInternalPrincipal, type DomainPrincipal } from "../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../principal";
 import {
   extractCertifierRefToken,
   isPublicMailDomain,
@@ -129,7 +129,7 @@ export async function recordSentMessage(
   db: DomainDb,
   ports: { storeAttachments?: SentAttachmentPort } = {},
 ): Promise<SentMessageOutcome> {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(
       "Copying sent mail onto a trail requires internal staff access.",
     );

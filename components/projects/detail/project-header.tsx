@@ -125,7 +125,10 @@ export function ProjectHeader({
             </span>
             {/* Sits beside the status because it qualifies the same thing: what
                 state this project is in. Absent unless the pool is breached. */}
-            <HbcfCapacityBadge projectId={project.id} />
+            {/* The pool is project money; it refuses anyone who cannot see it. */}
+            {project.financialsHidden ? null : (
+              <HbcfCapacityBadge projectId={project.id} />
+            )}
           </div>
           <div className="flex flex-col items-start gap-1.5 pt-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
             <span className="inline-flex items-center gap-1">

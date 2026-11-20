@@ -3,6 +3,9 @@ import {
   getCachedTradies,
 } from "@/lib/data/tradies";
 import { createTradieSchedule } from "@/lib/data/tradieSchedules";
+import { currentPrincipal } from "@/lib/data/current-principal";
+import { canSeeProjectFinancials } from "@/lib/domain/access/projects";
+import { withoutTradieQuotes } from "@/lib/domain/projects/financial-redaction";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import { reportError } from "@/lib/observability/report-error";
 import {
@@ -46,10 +49,23 @@ export async function GET(request: Request) {
     );
     if (!params.success) return params.response;
 
-    const payload = await getCachedTradieCoordinationDashboard(params.data);
-    return successResponse(payload);
+    // The cache is shared by every caller, so the quotes come out after it.
+    const [payload, principal] = await Promise.all([
+      getCachedTradieCoordinationDashboard(params.data),
+      currentPrincipal(),
+    ]);
+    return successResponse(
+      canSeeProjectFinancials(principal)
+        ? payload
+        : withoutTradieQuotes(payload),
+    );
   }
 
-  const tradies = await getCachedTradies();
-  return successResponse(tradies);
+  const [tradies, principal] = await Promise.all([
+    getCachedTradies(),
+    currentPrincipal(),
+  ]);
+  return successResponse(
+    canSeeProjectFinancials(principal) ? tradies : withoutTradieQuotes(tradies),
+  );
 }

@@ -10,7 +10,7 @@ import {
   deleteUserByClerkId,
   findAdminUserIds,
   findUserByClerkId,
-  listAllNotificationRecipients,
+  listOfficeNotificationRecipients,
   resolveNotificationRecipients,
   updateUserByClerkId,
 } from "@/lib/domain/identity/users";
@@ -91,9 +91,9 @@ export async function getUserByClerkIdCached(clerkId: string) {
   return findUserByClerkId(clerkId, prisma);
 }
 
-/** Clerk id and email of every application user, for a broadcast notification. */
-export async function getAllNotificationRecipients() {
-  return listAllNotificationRecipients(prisma);
+/** Clerk id and email of everyone in the office, for a broadcast notification. */
+export async function getOfficeNotificationRecipients() {
+  return listOfficeNotificationRecipients(prisma);
 }
 
 /** Clerk id and email for internal user ids, for Novu dispatch. */

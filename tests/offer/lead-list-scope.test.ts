@@ -15,12 +15,28 @@ import {
 // scope into the query it runs, and each revision it ships is narrowed by
 // toOfferListRow instead of spreading the whole Offer row.
 
-const INTERNAL_ROLES: Role[] = ["ADMIN", "SITE_MANAGER", "GUEST"];
+// The office: INTERNAL_ROLES minus SITE_MANAGER (`isOfficeRole`). A site manager
+// is staff for projects and has no business with a prospect's details.
+const OFFICE_ROLES: Role[] = ["ADMIN", "GUEST"];
+const INTERNAL_ROLES = OFFICE_ROLES;
 
-test("internal roles list every lead", () => {
-  for (const role of INTERNAL_ROLES) {
+test("office roles list every lead", () => {
+  for (const role of OFFICE_ROLES) {
     assert.deepEqual(leadListScope({ id: "u1", role }), { assignedId: null });
   }
+});
+
+test("a site manager lists only the leads assigned to them", () => {
+  assert.deepEqual(leadListScope({ id: "u1", role: "SITE_MANAGER" }), {
+    assignedId: "u1",
+  });
+  assert.equal(
+    canAccessLead(
+      { id: "u1", role: "SITE_MANAGER" },
+      { id: 1, assignedId: "u2" },
+    ),
+    false,
+  );
 });
 
 test("a customer lists only the leads assigned to them", () => {
@@ -35,7 +51,11 @@ test("the listing scope admits exactly the leads canAccessLead admits", () => {
     { id: 2, assignedId: "u2" },
     { id: 3, assignedId: null },
   ];
-  for (const role of [...INTERNAL_ROLES, "CUSTOMER"] as Role[]) {
+  for (const role of [
+    ...INTERNAL_ROLES,
+    "SITE_MANAGER",
+    "CUSTOMER",
+  ] as Role[]) {
     const user = { id: "u1", role };
     const scope = leadListScope(user);
     for (const lead of leads) {
@@ -70,7 +90,7 @@ test("a customer's lead filter keeps their scope beside every search and tab", (
   );
 });
 
-test("an internal lead filter carries no assignee", () => {
+test("an office lead filter carries no assignee", () => {
   for (const role of INTERNAL_ROLES) {
     const where = offerListLeadWhere(
       leadListScope({ id: "u1", role }),

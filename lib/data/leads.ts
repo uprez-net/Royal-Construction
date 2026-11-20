@@ -64,6 +64,7 @@ import {
   updateLead as updateLeadDomain,
 } from "@/lib/domain/leads/commands";
 import { currentLeadPrincipal } from "@/lib/data/current-principal";
+import type { DomainPrincipal } from "@/lib/domain/principal";
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
 
@@ -407,6 +408,12 @@ export async function getLeads(
 
 type CreateLeadOptions = {
   skipWelcomeEmail?: boolean;
+  /**
+   * Who the write is for, when it is not whoever is signed in. The public
+   * booking route passes its own: a client who happens to be signed in to the
+   * app in the same browser is still booking as a member of the public.
+   */
+  principal?: DomainPrincipal;
 };
 
 /**
@@ -586,7 +593,7 @@ export async function createLead(
   options?: CreateLeadOptions,
 ): Promise<UiLead | { message: string; existingLead: UiLead }> {
   const outcome = await createLeadDomain(
-    await currentLeadPrincipal(),
+    options?.principal ?? (await currentLeadPrincipal()),
     input,
     prisma,
   );
@@ -719,9 +726,11 @@ async function sendLeadWelcomeEmail(created: {
 export async function updateLead(
   id: number,
   input: UpdateLeadInput,
+  /** As `CreateLeadOptions.principal`: the booking route's own authority. */
+  options?: { principal?: DomainPrincipal },
 ): Promise<UiLead> {
   const outcome = await updateLeadDomain(
-    await currentLeadPrincipal(),
+    options?.principal ?? (await currentLeadPrincipal()),
     id,
     input,
     prisma,

@@ -20,11 +20,7 @@ import {
 } from "@/types/tradieActivityLog";
 import { tradieActivityLogSchemas } from "@/utils/validators/tradieActivityLog";
 
-import {
-  adminPrincipal,
-  recordingDb,
-  siteManagerPrincipal,
-} from "../architecture/domain-harness";
+import { adminPrincipal, recordingDb } from "../architecture/domain-harness";
 
 // A tradie's history across every project, built like notifications and the
 // project activity log: a schema and a template per type, one generator. What
@@ -264,7 +260,9 @@ const ROW = (id: string, project: Record<string, unknown> | null) => ({
   type: "bookingCreated",
 });
 
-test("the log pages newest first, and names only projects the reader may manage", async () => {
+test("the log pages newest first, and names the project each entry was for", async () => {
+  // The office only: a site manager is refused before the read (the log spells
+  // out quotes and invoices), see domain-site-manager-gaps.test.ts.
   const mine = { id: "p_mine", name: "Smith", siteManagerId: "user_sm" };
   const theirs = { id: "p_other", name: "Jones", siteManagerId: "user_x" };
   const recorder = recordingDb({
@@ -275,16 +273,15 @@ test("the log pages newest first, and names only projects the reader may manage"
     ],
   });
   const page = await listTradieActivity(
-    siteManagerPrincipal("user_sm"),
+    adminPrincipal(),
     { limit: 2, tradieId: "t_1" },
     recorder.db,
   );
   assert.deepEqual(
     page.items.map((item) => item.project?.name ?? null),
-    ["Smith", null],
+    ["Smith", "Jones"],
   );
-  // The other site manager's job: what happened, not whose build it was.
-  assert.equal(page.items[1].milestoneName, null);
+  assert.equal(page.items[1].milestoneName, "Framing");
   assert.equal(page.items[1].message, "Entry l_2");
   // A third row came back, so there is an older page, starting after l_2.
   assert.equal(page.nextCursor, "l_2");

@@ -1,5 +1,10 @@
+import { ComplianceDocumentType } from "@prisma/client";
+
+import { assertCanFileComplianceDocument } from "../access/projects";
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError, DomainNotFoundError } from "../errors";
+import { projectHbcfFileIds } from "../insurance/hbcf-claims";
+import type { DomainPrincipal } from "../principal";
 
 /**
  * The file a compliance upload names, provided it is this project's.
@@ -38,4 +43,41 @@ export async function requireProjectComplianceFile(
     throw new DomainAuthorizationError("That file belongs to another project.");
   }
   throw new DomainNotFoundError(`File ${input.fileId} not found.`);
+}
+
+/**
+ * Refuses to move a file that is part of the project's HBCF record — the
+ * certificate on the compliance file, or a certificate or claim document the
+ * Overview holds — for anyone who may not file HBCF. Attaching moves the file
+ * off its row, and a later replacement deletes it, which would leave the
+ * project pointing at a certificate that is gone.
+ */
+export async function assertCanMoveComplianceFile(
+  principal: DomainPrincipal,
+  input: { readonly projectId: string; readonly fileId: string },
+  db: DomainDb,
+): Promise<void> {
+  const [file, project] = await Promise.all([
+    db.file.findUnique({
+      where: { id: input.fileId },
+      select: { complianceDocument: { select: { documentType: true } } },
+    }),
+    db.project.findUnique({
+      where: { id: input.projectId },
+      select: { requirements: true },
+    }),
+  ]);
+  const legal = (
+    project?.requirements as { legalAdministration?: unknown } | null
+  )?.legalAdministration as Parameters<typeof projectHbcfFileIds>[0];
+  if (
+    file?.complianceDocument?.documentType
+      === ComplianceDocumentType.HOME_INSURANCE
+    || projectHbcfFileIds(legal).has(input.fileId)
+  ) {
+    assertCanFileComplianceDocument(
+      principal,
+      ComplianceDocumentType.HOME_INSURANCE,
+    );
+  }
 }

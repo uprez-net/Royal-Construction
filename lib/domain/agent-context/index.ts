@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError } from "../errors";
 import {
-  isInternalPrincipal,
+  isOfficePrincipal,
   requireAdminPrincipal,
   type DomainPrincipal,
 } from "../principal";
@@ -263,7 +263,7 @@ export async function searchAgentContext(
   db: DomainDb,
   ports: { embedding?: EmbeddingPort } = {},
 ): Promise<AgentContextHit[]> {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(
       "The office context is available to staff only.",
     );

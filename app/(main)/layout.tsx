@@ -4,7 +4,7 @@ import { AppShell } from "@/components/common/app-shell";
 import { auth } from "@clerk/nextjs/server";
 import { AppShellLoader } from "@/components/common/app-shell-loader";
 import { getUserByClerkIdCached } from "@/lib/data/user";
-import { isInternalRole } from "@/lib/domain/principal";
+import { isOfficeRole } from "@/lib/domain/principal";
 import { readWhatsAppConfig } from "@/lib/whatsapp/config";
 
 async function LayoutContent({ children }: { children: React.ReactNode }) {
@@ -18,9 +18,10 @@ async function LayoutContent({ children }: { children: React.ReactNode }) {
   return (
     <AppShell
       isAdmin={user?.role === "ADMIN"}
+      isOffice={user ? isOfficeRole(user.role) : true}
       description="Royal Constructions - One place for all your construction project management needs."
       isSignedIn={!!user}
-      phoneEnabled={user ? isInternalRole(user.role) : false}
+      phoneEnabled={user ? isOfficeRole(user.role) : false}
       whatsapp={{
         calling: whatsappConfig.channel?.callingEnabled === true,
         enabled: whatsappConfig.enabled,

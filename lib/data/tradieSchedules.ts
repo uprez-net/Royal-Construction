@@ -14,7 +14,7 @@ import { createNotification } from "@/types/notification";
 import { currency, dateFormat } from "@/utils/formatters";
 import { after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { requireInternalUser } from "@/lib/auth/require-internal-user";
+import { requireStaffUser } from "@/lib/auth/require-internal-user";
 import { getAllAdminUsersIds, getUserByClerkIdCached } from "./user";
 import { authorizeProject } from "@/lib/domain/access/projects";
 import {
@@ -326,7 +326,7 @@ export async function sendTradieScheduleReminder({
   subject: string;
   body: string;
 }) {
-  const access = await requireInternalUser();
+  const access = await requireStaffUser();
   if (!access.ok) {
     return { success: false, message: access.error };
   }
@@ -405,7 +405,7 @@ export async function rescheduleTradieScheduleAction(input: {
   email: { subject: string; body: string } | null;
   idempotencyKey: string;
 }): Promise<RescheduleTradieScheduleResult> {
-  const access = await requireInternalUser();
+  const access = await requireStaffUser();
   if (!access.ok) return { ok: false, error: access.error };
 
   if (
@@ -541,7 +541,7 @@ export async function getTradieBookings(
   | DomainActionFailure
   | { ok: false; error: string }
 > {
-  const access = await requireInternalUser();
+  const access = await requireStaffUser();
   if (!access.ok) return { ok: false, error: access.error };
 
   try {

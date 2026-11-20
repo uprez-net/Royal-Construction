@@ -28,7 +28,7 @@ import {
 } from "../../ports/whatsapp";
 import {
   attributionUserId,
-  isInternalPrincipal,
+  isOfficePrincipal,
   type DomainPrincipal,
 } from "../../principal";
 import {
@@ -126,7 +126,7 @@ export async function sendLeadWhatsAppMessage(
 
   // Internal staff only — the same rule as email. A CUSTOMER may open the lead
   // assigned to them; that is not a reason to message from Royal's number.
-  if (!isInternalPrincipal(principal) || principal.kind !== "user") {
+  if (!isOfficePrincipal(principal) || principal.kind !== "user") {
     throw new DomainAuthorizationError(
       "Sending a WhatsApp message requires a signed-in member of staff.",
     );
@@ -527,7 +527,7 @@ export async function reconcileLeadWhatsAppMessage(
   input: ReconcileLeadWhatsAppInput,
   db: TransactionalDomainDb,
 ): Promise<LeadWhatsAppMessageRecord> {
-  if (!isInternalPrincipal(principal) || principal.kind !== "user") {
+  if (!isOfficePrincipal(principal) || principal.kind !== "user") {
     throw new DomainAuthorizationError(
       "Reconciling a WhatsApp message requires a signed-in member of staff.",
     );

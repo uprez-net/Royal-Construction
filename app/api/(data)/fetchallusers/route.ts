@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { clerkClient } from "@/lib/auth";
 import { errorResponse, successResponse } from "@/utils/validators";
-import { Role } from "@prisma/client";
+import { OFFICE_ROLES } from "@/lib/domain/principal";
 import { connection } from "next/server";
 
 function isDisplayableName(name: string | null | undefined) {
@@ -36,7 +36,9 @@ export async function GET() {
     const Users = await prisma.user.findMany({
       where: {
         clerkId: { in: Array.from(usersByClerkId.keys()) },
-        role: { in: [Role.ADMIN, Role.SITE_MANAGER, Role.GUEST] },
+        // The lead assignee pickers are this route's only readers, and a lead
+        // is assigned to the office only (`assertOfficeAssignee`).
+        role: { in: [...OFFICE_ROLES] },
       },
       select: {
         id: true,

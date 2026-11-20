@@ -7,13 +7,21 @@ import {
   successResponse,
 } from "@/utils/validators";
 import { getLeads, createLead } from "@/lib/data/leads";
+import { requireInternalUser } from "@/lib/auth/require-internal-user";
 import { NextRequest } from "next/server";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import { parseLeadStageFilter } from "@/lib/leads/types";
 import { isLeadValidationError } from "@/lib/leads/lead-validation-error";
 import type { LeadStage as DBLeadStage } from "@prisma/client";
 
 /** Validate list parameters and return the matching lead page in the selected order. */
 export async function GET(request: NextRequest) {
+  // `getLeads` reads every lead and checks nobody, so this route has to: the
+  // office lists leads, a site manager does not (see `isOfficeRole`).
+  const access = await requireInternalUser();
+  if (!access.ok) {
+    return errorResponse("Forbidden", { status: 403, code: "FORBIDDEN" });
+  }
   const url = new URL(request.url);
   try {
     const params = parseSearchParamsWithResponse(url, leadLookupParamSchema);
@@ -101,6 +109,9 @@ export async function POST(request: NextRequest) {
       console.warn("/api/leads POST rejected", { reason: error.message });
       return badRequestResponse(error.message);
     }
+    // A site manager is refused by the domain (only the office adds leads).
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
     console.error("/api/leads POST error", error);
     return errorResponse("Failed to create lead", {
       status: 500,

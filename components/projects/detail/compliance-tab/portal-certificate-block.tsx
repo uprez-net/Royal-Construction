@@ -57,6 +57,8 @@ type PortalCertificateBlockProps = {
   engagement: CertifierEngagementDetail;
   values: PortalCertificateValues;
   insurance: ComplianceDocumentWithFiles | undefined;
+  /** Whether this user may file the HBCF certificate (the office). */
+  canRecordCover: boolean;
   checklistPassed: boolean;
   rowMode: (
     document?: ComplianceDocumentWithFiles,
@@ -83,6 +85,7 @@ export function PortalCertificateBlock({
   engagement,
   values,
   insurance,
+  canRecordCover,
   checklistPassed,
   rowMode,
   isRowBusy,
@@ -124,6 +127,7 @@ export function PortalCertificateBlock({
           CERTIFICATE_DOCUMENT_TYPE[values.certificateKind]
         }
         insurance={insurance}
+        canRecordCover={canRecordCover}
         checklistPassed={checklistPassed}
         rowMode={rowMode}
         isRowBusy={isRowBusy}

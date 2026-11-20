@@ -400,7 +400,11 @@ export async function getAuthorizedProjectRequirements(
 
   // `lib/domain/projects/requirements.ts` owns the payload shape rule and
   // hands back the `updatedAt` a later save has to quote.
-  const stored = await getProjectRequirements(input.projectId, agentDb);
+  const stored = await getProjectRequirements(
+    userPrincipal(actor),
+    input.projectId,
+    agentDb,
+  );
 
   return actionEnvelope({
     entityRef: projectReference(project),

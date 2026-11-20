@@ -11,7 +11,11 @@ import {
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import { summarizeInvoices } from "@/lib/projects/invoice-totals";
 
-import { projectManageScope, projectReadScope } from "../access/projects";
+import {
+  canSeeProjectFinancials,
+  projectManageScope,
+  projectReadScope,
+} from "../access/projects";
 import type { DomainDb } from "../db";
 import { DomainNotFoundError } from "../errors";
 import { serializeInvoice, serializeListInvoice } from "../invoices/serialize";
@@ -23,6 +27,10 @@ import {
   readProjectAttention,
 } from "./attention";
 import { readProjectDetailRow } from "./detail-read";
+import {
+  hideDetailProjectFinancials,
+  hideListProjectFinancials,
+} from "./financial-redaction";
 import { canSeeMilestoneNotes } from "./milestone-note-rules";
 import { readProjectDocuments } from "./documents";
 
@@ -483,7 +491,14 @@ export async function listProjects(
     options.scope ?? "read",
     attentionIds,
   );
-  const orderBy = buildProjectOrderBy(query?.sortBy, query?.sortOrder);
+  // Sorting by budget or spend would hand the ordering of the money to a caller
+  // who may not see it, one comparison at a time.
+  const showFinancials = canSeeProjectFinancials(principal);
+  const sortBy =
+    !showFinancials && (query?.sortBy === "budget" || query?.sortBy === "spent")
+      ? undefined
+      : query?.sortBy;
+  const orderBy = buildProjectOrderBy(sortBy, query?.sortOrder);
 
   const [projects, totalCount] = await Promise.all([
     db.project.findMany({
@@ -506,9 +521,10 @@ export async function listProjects(
   );
 
   return {
-    items: projects.map((project) =>
-      withProjectStats(project, attention.get(project.id) ?? null),
-    ),
+    items: projects.map((project) => {
+      const item = withProjectStats(project, attention.get(project.id) ?? null);
+      return showFinancials ? item : hideListProjectFinancials(item);
+    }),
     page,
     limit,
     totalCount,
@@ -525,7 +541,11 @@ export async function listAllProjectsForExport(
     where: projectReadScope(principal),
     include: projectInclude,
   });
-  return projects.map((project) => withProjectStats(project));
+  const showFinancials = canSeeProjectFinancials(principal);
+  return projects.map((project) => {
+    const item = withProjectStats(project);
+    return showFinancials ? item : hideListProjectFinancials(item);
+  });
 }
 
 /** Id, name and location only — for autocompletes and lookup dialogs. */
@@ -609,7 +629,7 @@ export async function getProjectDetail(
   // `Lead` is the raw relation, shaped into `lead` here and not sent twice.
   const { Lead: rawLead, ...row } = project;
 
-  return {
+  const detail: ProjectDetail = {
     ...row,
     documents,
     lead: {
@@ -675,6 +695,9 @@ export async function getProjectDetail(
       }),
     ),
   };
+  return canSeeProjectFinancials(principal)
+    ? detail
+    : hideDetailProjectFinancials(detail);
 }
 
 /** `getProjectDetail`, refusing instead of answering null. */

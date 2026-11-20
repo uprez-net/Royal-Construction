@@ -12,6 +12,7 @@ import { Invoice, type Invoices, LineAmountTypes } from "xero-node";
 import prisma from "@/lib/prisma";
 import { currentPrincipal } from "@/lib/data/current-principal";
 import { logAction } from "@/lib/domain/audit/action-log";
+import { filterOfficeUserIds } from "@/lib/domain/identity/users";
 import type { DomainPrincipal } from "@/lib/domain/principal";
 import { attributionUserId } from "@/lib/domain/principal";
 import type {
@@ -229,8 +230,16 @@ export function afterVariationRaised(
       },
       prisma,
     );
+    // A variation is priced, and a site manager does not see project money:
+    // the project's holder is told only if they work in the office. Never `[]`,
+    // which would broadcast.
+    const recipients = await filterOfficeUserIds(
+      [variation.siteManagerId],
+      prisma,
+    );
+    if (recipients.length === 0) return;
     await triggerNotification(
-      variation.siteManagerId ? [variation.siteManagerId] : [],
+      recipients,
       createNotification("variationCreated", {
         projectId: variation.projectId,
         projectName: variation.projectName,
@@ -301,16 +310,23 @@ export async function updateVariationStatus(
       },
       prisma,
     );
-    await triggerNotification(
-      outcome.siteManagerId ? [outcome.siteManagerId] : [],
-      createNotification("variationUpdated", {
-        projectId: outcome.projectId,
-        projectName: outcome.projectName,
-        status: outcome.status,
-        variationAmount: outcome.cost,
-        variationDescription: outcome.description,
-      }),
+    // Same rule as a new variation: the office only, and never `[]`.
+    const recipients = await filterOfficeUserIds(
+      [outcome.siteManagerId],
+      prisma,
     );
+    if (recipients.length > 0) {
+      await triggerNotification(
+        recipients,
+        createNotification("variationUpdated", {
+          projectId: outcome.projectId,
+          projectName: outcome.projectName,
+          status: outcome.status,
+          variationAmount: outcome.cost,
+          variationDescription: outcome.description,
+        }),
+      );
+    }
     revalidateTag(`project-${outcome.projectId}`, CACHE_PROFILES.MEDIUM);
   });
 

@@ -51,9 +51,13 @@ const read = (path: string) => readFileSync(join(ROOT, path), "utf8");
 
 /* ---------------------------------------------------------------- leads -- */
 
-test("lead scope: staff read every lead, anyone else only their own", () => {
+test("lead scope: the office reads every lead, anyone else only their own", () => {
   assert.deepEqual(leadListScope(adminPrincipal()), { assignedId: null });
-  assert.deepEqual(leadListScope(siteManagerPrincipal()), { assignedId: null });
+  // A site manager is staff for projects, not for the sales side: their lead
+  // scope is their own assignments (none, today).
+  assert.deepEqual(leadListScope(siteManagerPrincipal("u_sm")), {
+    assignedId: "u_sm",
+  });
   assert.deepEqual(leadListScope(customerPrincipal("u_c")), {
     assignedId: "u_c",
   });

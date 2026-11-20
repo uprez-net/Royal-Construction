@@ -2,6 +2,7 @@ import { Role, type User } from "@prisma/client";
 
 import type { DomainDb, TransactionalDomainDb } from "../db";
 import {
+  OFFICE_ROLES,
   type DomainPrincipal,
   type UserPrincipal,
   userPrincipal,
@@ -259,9 +260,41 @@ export async function findPhonesByClerkIds(
   return Object.fromEntries(users.map((user) => [user.clerkId, user.phone]));
 }
 
-/** Every application user's Clerk id and email, for a broadcast. */
-export async function listAllNotificationRecipients(
+/**
+ * Clerk id and email of everyone in the office, for a broadcast.
+ *
+ * A broadcast is the office being told something (today: a new lead, with the
+ * prospect's name and suburb). It used to reach every application user, which
+ * meant site managers, customers and tradies with a login heard about every
+ * enquiry. The office is `isOfficeRole`.
+ */
+export async function listOfficeNotificationRecipients(
   db: DomainDb,
 ): Promise<{ clerkId: string; email: string }[]> {
-  return db.user.findMany({ select: { clerkId: true, email: true } });
+  return db.user.findMany({
+    select: { clerkId: true, email: true },
+    where: { role: { in: [...OFFICE_ROLES] } },
+  });
+}
+
+/**
+ * The given user ids that belong to the office, for a notification only the
+ * office may read (a variation's price). Never pass the result to
+ * `triggerNotification` when it is empty: an empty list is a broadcast.
+ */
+export async function filterOfficeUserIds(
+  userIds: readonly (string | null | undefined)[],
+  db: DomainDb,
+): Promise<string[]> {
+  const ids = [
+    ...new Set(
+      userIds.map((id) => id?.trim()).filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  if (ids.length === 0) return [];
+  const users = await db.user.findMany({
+    select: { id: true },
+    where: { id: { in: ids }, role: { in: [...OFFICE_ROLES] } },
+  });
+  return users.map((user) => user.id);
 }

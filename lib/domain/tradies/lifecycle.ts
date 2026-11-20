@@ -66,7 +66,8 @@ export async function requireBookableTradie(tradieId: string, db: DomainDb) {
 
 /**
  * What a booking costs the milestone. Removed bookings remain in history but
- * cannot inflate it.
+ * cannot inflate it, and neither can one the tradie or the office declined: a
+ * decline leaves its quoted price on the row, and that price was never agreed.
  *
  * A recorded price wins: a quote, or the price the office entered for a tradie
  * booked without one. Only a booking with no price at all is costed from the
@@ -86,7 +87,12 @@ export function tradieScheduleSpend(schedule: {
     lastQuotedPriceUnit: "HOURLY" | "FIXED";
   };
 }): number {
-  if (schedule.status === TradieScheduleStatus.CANCELLED) return 0;
+  if (
+    schedule.status === TradieScheduleStatus.CANCELLED
+    || schedule.status === TradieScheduleStatus.DECLINED
+  ) {
+    return 0;
+  }
   if (schedule.quotedPrice) return parseQuotedAmount(schedule.quotedPrice) ?? 0;
   return schedule.requiresQuote
     ? 0

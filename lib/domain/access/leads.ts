@@ -2,7 +2,7 @@ import type { DomainDb } from "../db";
 import { DomainAuthorizationError, DomainNotFoundError } from "../errors";
 import {
   type DomainPrincipal,
-  isInternalPrincipal,
+  isOfficePrincipal,
   isUserPrincipal,
 } from "../principal";
 
@@ -19,11 +19,17 @@ export type AccessibleLead = {
   assignedId: string | null;
 };
 
+/**
+ * The office reads every lead; anyone else, a site manager included, only the
+ * leads assigned to them. `isOfficePrincipal`, not `isInternalPrincipal`: a
+ * site manager is staff for projects but has no business with a prospect's
+ * name, number or quoted price (see `isOfficeRole`).
+ */
 export function canAccessLead(
   principal: DomainPrincipal,
   lead: AccessibleLead,
 ): boolean {
-  if (isInternalPrincipal(principal)) return true;
+  if (isOfficePrincipal(principal)) return true;
   return isUserPrincipal(principal) && lead.assignedId === principal.userId;
 }
 
@@ -36,12 +42,13 @@ export function canAccessLead(
  * a row whose page then refuses to open.
  *
  * `assignedId: null` means "no filter", not "leads with no assignee" —
- * an encoding `requireInternalUser` reads directly to decide who is staff.
+ * an encoding `requireInternalUser` reads directly to decide who is office
+ * staff, so narrowing this rule also narrows every action it guards.
  */
 export type LeadListScope = { assignedId: string | null };
 
 export function leadListScope(principal: DomainPrincipal): LeadListScope {
-  if (isInternalPrincipal(principal)) return { assignedId: null };
+  if (isOfficePrincipal(principal)) return { assignedId: null };
   if (isUserPrincipal(principal)) return { assignedId: principal.userId };
   // No open route lists leads, and a scope that silently matched nothing would
   // read as "this account has no leads" rather than "you may not ask".

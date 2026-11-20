@@ -1,3 +1,4 @@
+import { revalidateTag } from "next/cache";
 import { NextRequest } from "next/server";
 import { verifyWebhook } from "@clerk/nextjs/webhooks";
 import type { UserJSON } from "@clerk/backend";
@@ -6,6 +7,7 @@ import { Role } from "@prisma/client";
 import { updateUserMetadata } from "@/lib/auth";
 import { errorResponse, successResponse } from "@/utils/validators";
 import { randomPhoneNumberGenerator } from "@/utils/generator";
+import { CACHE_PROFILES } from "@/types/cache";
 
 /**
  * The phone the team screen saved into `publicMetadata.phone`, or undefined.
@@ -79,6 +81,8 @@ export async function POST(request: NextRequest) {
           phone: metadataPhone(evt.data),
           role,
         });
+        // The role every guard reads comes from this cached row.
+        revalidateTag(`user-${updatedId}`, CACHE_PROFILES.MEDIUM);
 
         return successResponse({ message: "User updated" });
       }

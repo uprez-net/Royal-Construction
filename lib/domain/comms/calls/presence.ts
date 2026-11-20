@@ -1,7 +1,7 @@
 import type { DomainDb } from "../../db";
 import { DomainAuthorizationError } from "../../errors";
 import { browserIdentity } from "../../ports/comms";
-import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../../principal";
 
 // A staff browser asking for a calling credential.
 //
@@ -16,7 +16,7 @@ export async function recordBrowserPresence(
   db: DomainDb,
   now: Date = new Date(),
 ): Promise<string> {
-  if (!isInternalPrincipal(principal) || principal.kind !== "user") {
+  if (!isOfficePrincipal(principal) || principal.kind !== "user") {
     throw new DomainAuthorizationError(
       "Browser calling is for signed-in members of staff.",
     );
