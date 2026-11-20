@@ -77,7 +77,7 @@ function Step({
     <Section
       style={{
         padding: "1.5rem 0",
-        borderBottom: showBorder ? "1px solid #E2E8F0" : undefined,
+        borderBottom: showBorder ? "1px solid #E6E2D9" : undefined,
       }}
     >
       <Row>
@@ -85,7 +85,7 @@ function Step({
           <Text
             className="m-0"
             style={{
-              fontFamily: FONTS.condensed,
+              fontFamily: FONTS.heading,
               fontWeight: 500,
               fontSize: 22,
               lineHeight: 1,
@@ -99,7 +99,7 @@ function Step({
           <Text
             className="m-0 mb-2"
             style={{
-              fontFamily: FONTS.condensed,
+              fontFamily: FONTS.label,
               fontWeight: 500,
               fontSize: 17,
               lineHeight: 1.2,
@@ -143,7 +143,7 @@ function GetStartedCard({
     <Section
       style={{
         padding: "1.5rem 0",
-        borderBottom: showBorder ? "1px solid #E2E8F0" : undefined,
+        borderBottom: showBorder ? "1px solid #E6E2D9" : undefined,
       }}
     >
       <Row>
@@ -151,7 +151,7 @@ function GetStartedCard({
           <Text
             className="m-0 mb-3"
             style={{
-              fontFamily: FONTS.condensed,
+              fontFamily: FONTS.heading,
               fontWeight: 500,
               fontSize: 20,
               color: RC_COLORS.textOnLight,
@@ -197,7 +197,7 @@ function AppointmentBookingCard({ bookingUrl }: { bookingUrl: string }) {
         style={{
           backgroundColor: RC_COLORS.light,
           borderRadius: 6,
-          border: `2px solid ${RC_COLORS.gold}`,
+          border: `1px solid ${RC_COLORS.border}`,
           padding: "1.5rem",
         }}
       >
@@ -206,7 +206,7 @@ function AppointmentBookingCard({ bookingUrl }: { bookingUrl: string }) {
             <Text
               className="m-0 mb-3 uppercase"
               style={{
-                fontFamily: FONTS.condensed,
+                fontFamily: FONTS.label,
                 fontWeight: 500,
                 fontSize: 13,
                 letterSpacing: "0.6px",
@@ -218,7 +218,7 @@ function AppointmentBookingCard({ bookingUrl }: { bookingUrl: string }) {
             <Text
               className="m-0 mb-4 uppercase"
               style={{
-                fontFamily: FONTS.condensed,
+                fontFamily: FONTS.heading,
                 fontWeight: 500,
                 fontSize: 26,
                 lineHeight: 1.1,
@@ -316,11 +316,10 @@ export default function WelcomeEmail({
               <Text
                 className="mobile_font-40 m-0 uppercase"
                 style={{
-                  fontFamily: FONTS.condensed,
+                  fontFamily: FONTS.heading,
                   fontWeight: 500,
                   fontSize: 48,
                   lineHeight: 1,
-                  letterSpacing: "-1.2px",
                   color: RC_COLORS.textOnLight,
                 }}
               >
@@ -373,7 +372,7 @@ export default function WelcomeEmail({
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderRadius: 6,
-                  border: "1px solid #E2E8F0",
+                  border: "1px solid #E6E2D9",
                   padding: "1.5rem",
                 }}
               >
@@ -382,7 +381,7 @@ export default function WelcomeEmail({
                     <Text
                       className="m-0 mb-4 uppercase"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.heading,
                         fontWeight: 500,
                         fontSize: 26,
                         lineHeight: 1,
@@ -434,7 +433,7 @@ export default function WelcomeEmail({
               <Text
                 className="m-0 mb-6 uppercase"
                 style={{
-                  fontFamily: FONTS.condensed,
+                  fontFamily: FONTS.heading,
                   fontWeight: 500,
                   fontSize: 28,
                   lineHeight: 1,
@@ -466,7 +465,7 @@ export default function WelcomeEmail({
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
-                  borderLeft: `3px solid ${RC_COLORS.gold}`,
+                  borderLeft: `3px solid ${RC_COLORS.border}`,
                   padding: "1rem 1.25rem",
                 }}
               >
@@ -495,7 +494,7 @@ export default function WelcomeEmail({
               <Text
                 className="m-0 mb-4 uppercase"
                 style={{
-                  fontFamily: FONTS.condensed,
+                  fontFamily: FONTS.heading,
                   fontWeight: 500,
                   fontSize: 28,
                   lineHeight: 1,
@@ -522,7 +521,7 @@ export default function WelcomeEmail({
             {/* Sign-off */}
             <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
               <Section
-                style={{ borderTop: "1px solid #E2E8F0", paddingTop: "1.5rem" }}
+                style={{ borderTop: "1px solid #E6E2D9", paddingTop: "1.5rem" }}
               >
                 <Row>
                   <Column>
@@ -548,7 +547,7 @@ export default function WelcomeEmail({
                     <Text
                       className="m-0"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.label,
                         fontSize: 16,
                         color: RC_COLORS.gold,
                       }}

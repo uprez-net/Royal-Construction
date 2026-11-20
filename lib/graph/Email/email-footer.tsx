@@ -10,7 +10,7 @@ export function EmailFooter() {
     <Section
       style={{
         backgroundColor: RC_COLORS.light,
-        borderTop: `3px solid ${RC_COLORS.gold}`,
+        borderTop: `3px solid ${RC_COLORS.brandGold}`,
         margin: 0,
         padding: 0,
       }}
@@ -207,7 +207,7 @@ export function EmailFooter() {
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderRadius: 6,
-                  border: "1px solid #E2E8F0",
+                  border: "1px solid #E6E2D9",
                   padding: "1.25rem",
                 }}
               >

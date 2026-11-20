@@ -79,7 +79,7 @@ function PriceLine({
       <Column
         align="right"
         style={{
-          fontFamily: FONTS.condensed,
+          fontFamily: FONTS.mono,
           fontWeight: isTotal ? 600 : 500,
           fontSize: isTotal ? 18 : 15,
           color: isTotal ? RC_COLORS.gold : RC_COLORS.textOnLight,
@@ -291,7 +291,7 @@ export default function VariationInvoiceEmail({
                     )}
                     <Section
                       style={{
-                        borderTop: `2px solid ${RC_COLORS.gold}`,
+                        borderTop: `2px solid ${RC_COLORS.brandGold}`,
                         marginTop: "1rem",
                         paddingTop: "1rem",
                       }}

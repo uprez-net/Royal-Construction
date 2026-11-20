@@ -6,6 +6,7 @@ import {
   EMAIL_FOOTER_HTML,
   EMAIL_HEADER_HTML,
 } from "@/constants/email-artifacts";
+import { FONTS, RC_COLORS } from "@/lib/graph/Email/email-theme";
 
 import { authorizeProject } from "../../access/projects";
 import type { DomainDb } from "../../db";
@@ -335,7 +336,7 @@ export function projectWhatsAppInviteHtml(input: {
   readonly senderName: string;
 }): string {
   const link = escapeHtml(input.inviteLink);
-  const anchor = `<a href="${link}" style="color:#128C7E;font-weight:600;">${link}</a>`;
+  const anchor = `<a href="${link}" style="color:${RC_COLORS.gold};font-weight:600;">${link}</a>`;
   const paragraphs = input.body
     .split(/\n\s*\n/)
     .map(
@@ -346,6 +347,6 @@ export function projectWhatsAppInviteHtml(input: {
           .join("<br>")}</p>`,
     )
     .join("");
-  const button = `<p style="margin:20px 0 22px;"><a href="${link}" style="display:inline-block;background:#25D366;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:999px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">Join the WhatsApp group</a></p>`;
-  return `<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div style="background-color:#f7f6f2;margin:0;padding:0">${EMAIL_HEADER_HTML}<div style="padding:8px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;color:#1f2937;">${paragraphs}${button}<p style="margin:16px 0 0;">Thanks &amp; Regards,<br>${escapeHtml(input.senderName)}<br>Royal Constructions.</p></div>${EMAIL_FOOTER_HTML}</div></body></html>`;
+  const button = `<p style="margin:20px 0 22px;"><a href="${link}" style="display:inline-block;background:${RC_COLORS.gold};color:${RC_COLORS.white};text-decoration:none;font-weight:600;padding:12px 22px;border-radius:999px;font-family:${FONTS.body};">Join the WhatsApp group</a></p>`;
+  return `<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div style="background-color:${RC_COLORS.container};margin:0;padding:0">${EMAIL_HEADER_HTML}<div style="padding:8px 24px;font-family:${FONTS.body};font-size:15px;color:${RC_COLORS.text};">${paragraphs}${button}<p style="margin:16px 0 0;">Thanks &amp; Regards,<br>${escapeHtml(input.senderName)}<br>Royal Constructions.</p></div>${EMAIL_FOOTER_HTML}</div></body></html>`;
 }

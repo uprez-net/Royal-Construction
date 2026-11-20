@@ -44,7 +44,7 @@ function DetailItem({
   return (
     <Row
       style={{
-        borderBottom: showBorder ? "1px solid #E2E8F0" : undefined,
+        borderBottom: showBorder ? "1px solid #E6E2D9" : undefined,
       }}
     >
       <Column style={{ padding: "1rem 0" }}>
@@ -77,7 +77,7 @@ function DetailItem({
             <Text
               className="m-0"
               style={{
-                fontFamily: FONTS.condensed,
+                fontFamily: FONTS.label,
                 fontWeight: 500,
                 fontSize: 17,
                 lineHeight: 1.2,
@@ -152,11 +152,10 @@ export default function BookConsultantScheduleMeeting({
               <Text
                 className="mobile_font-40 m-0 uppercase"
                 style={{
-                  fontFamily: FONTS.condensed,
+                  fontFamily: FONTS.heading,
                   fontWeight: 500,
                   fontSize: 48,
                   lineHeight: 1,
-                  letterSpacing: "-1.2px",
                   color: RC_COLORS.textOnLight,
                 }}
               >
@@ -191,7 +190,7 @@ export default function BookConsultantScheduleMeeting({
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderRadius: 6,
-                  border: "1px solid #E2E8F0",
+                  border: "1px solid #E6E2D9",
                   padding: "0.5rem 1.5rem",
                 }}
               >
@@ -221,7 +220,7 @@ export default function BookConsultantScheduleMeeting({
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
-                  borderLeft: `3px solid ${RC_COLORS.gold}`,
+                  borderLeft: `3px solid ${RC_COLORS.border}`,
                   padding: "1rem 1.25rem",
                 }}
               >
@@ -250,7 +249,7 @@ export default function BookConsultantScheduleMeeting({
             <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
               <Section
                 style={{
-                  borderTop: "1px solid #E2E8F0",
+                  borderTop: "1px solid #E6E2D9",
                   paddingTop: "1.5rem",
                 }}
               >
@@ -265,7 +264,7 @@ export default function BookConsultantScheduleMeeting({
                     <Text
                       className="m-0"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.label,
                         fontSize: 16,
                         color: RC_COLORS.gold,
                       }}
