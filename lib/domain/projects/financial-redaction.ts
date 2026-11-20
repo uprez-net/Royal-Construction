@@ -75,35 +75,56 @@ export function hideRequirementsFinancials(
  * what the company's HBCF pool counts. So a document already on the project
  * keeps its stored amount and confirmation, matched by file; a document the
  * caller adds keeps whatever amount was read off it but arrives unconfirmed,
- * so it counts only once the office has looked at it. Removing a document is
- * left alone: that is the document list, not its money.
+ * so it counts only once the office has looked at it.
+ *
+ * A confirmed document cannot be taken out either (#560): it is part of the
+ * pool total, and only the office removes one. One the save left out is kept.
+ * Unconfirmed documents count for nothing, so the caller may remove those.
  */
 export function withStoredHbcfClaimAmounts<T>(
   incomingLegal: T,
   storedLegal: unknown,
 ): T {
-  const documents = (incomingLegal as { hbcfClaimDocuments?: unknown } | null)
-    ?.hbcfClaimDocuments;
-  if (!Array.isArray(documents)) return incomingLegal;
+  if (
+    !incomingLegal
+    || typeof incomingLegal !== "object"
+    || !("hbcfClaimDocuments" in incomingLegal)
+  ) {
+    // Not sent: a patch keeps the stored list by merging around it.
+    return incomingLegal;
+  }
+  // Sent as something other than a list (a null from a hand-written call) is
+  // read as an empty list, so the confirmed documents are still kept.
+  const sentList = (incomingLegal as { hbcfClaimDocuments?: unknown })
+    .hbcfClaimDocuments;
+  const documents: Record<string, unknown>[] = Array.isArray(sentList)
+    ? sentList
+    : [];
+  const storedDocuments = readHbcfClaimDocuments(
+    storedLegal as Parameters<typeof readHbcfClaimDocuments>[0],
+  );
   const stored = new Map(
-    readHbcfClaimDocuments(
-      storedLegal as Parameters<typeof readHbcfClaimDocuments>[0],
-    ).map((document) => [document.fileId, document]),
+    storedDocuments.map((document) => [document.fileId, document]),
+  );
+  const sent = new Set(documents.map((document) => document?.fileId));
+  const dropped = storedDocuments.filter(
+    (document) => document.amountConfirmed && !sent.has(document.fileId),
   );
   return {
     ...incomingLegal,
-    hbcfClaimDocuments: documents.map((document) => {
-      const previous = stored.get(
-        (document as { fileId?: string } | null)?.fileId ?? "",
-      );
-      return previous
-        ? {
-            ...document,
-            amountConfirmed: previous.amountConfirmed,
-            claimAmount: previous.claimAmount,
-          }
-        : { ...document, amountConfirmed: false };
-    }),
+    hbcfClaimDocuments: [
+      ...documents.map((document) => {
+        const previous = stored.get(String(document?.fileId ?? ""));
+        return previous
+          ? {
+              ...document,
+              amountConfirmed: previous.amountConfirmed,
+              claimAmount: previous.claimAmount,
+            }
+          : { ...document, amountConfirmed: false };
+      }),
+      ...dropped,
+    ],
   };
 }
 
@@ -256,8 +277,16 @@ export function withoutFinancialEdits<
   const requirements = { ...input.requirements };
   delete requirements.commercialsAndClaims;
   if (requirements.legalAdministration) {
+    // The save replaces the legal section whole, so a section sent without its
+    // document list would delete every stored document: keep the stored list.
+    const legal = requirements.legalAdministration as Record<string, unknown>;
+    const storedDocuments = (
+      stored.legalAdministration as { hbcfClaimDocuments?: unknown } | undefined
+    )?.hbcfClaimDocuments;
     requirements.legalAdministration = withStoredHbcfClaimAmounts(
-      requirements.legalAdministration,
+      !Array.isArray(legal.hbcfClaimDocuments) && Array.isArray(storedDocuments)
+        ? { ...legal, hbcfClaimDocuments: storedDocuments }
+        : legal,
       stored.legalAdministration,
     );
   }

@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Metadata } from "next";
 import TradieDetailsSkeleton from "./loading";
-import { rateCurrency } from "@/utils/formatters";
 import { currentPrincipal } from "@/lib/data/current-principal";
 import { canSeeProjectFinancials } from "@/lib/domain/access/projects";
 
@@ -30,12 +29,6 @@ export async function generateMetadata({
   const rating = tradie.rating
     ? `${Number(tradie.rating).toFixed(1)}/5`
     : "No rating";
-  const lastQuotedPrice =
-    tradie.lastQuotedPrice != null
-    && !Number.isNaN(Number(tradie.lastQuotedPrice))
-      ? rateCurrency.format(Number(tradie.lastQuotedPrice))
-      : null;
-
   return {
     title: `${tradie.name} • ${tradie.trade}`,
     description: [
@@ -46,7 +39,6 @@ export async function generateMetadata({
       tradie.incidents.length > 0
         ? `${tradie.incidents.length} incident${tradie.incidents.length > 1 ? "s" : ""} recorded.`
         : "No recorded incidents.",
-      lastQuotedPrice ? `Last quoted price: ${lastQuotedPrice}.` : null,
     ]
       .filter(Boolean)
       .join(" "),

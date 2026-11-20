@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { MilestoneStatus, ProjectStatus, Role } from "@prisma/client";
 import { test } from "vitest";
@@ -30,6 +32,7 @@ import {
   recordingDb,
   siteManagerPrincipal,
 } from "./domain-harness";
+import { REPO_ROOT } from "../support/repo-root";
 
 // The second pass over PR #559: the places a site manager still reached the
 // sales side or project money after the first one. Each refusal is checked
@@ -161,7 +164,15 @@ test("a blanked HBCF amount saved back keeps the stored one; a new document arri
   ]);
 });
 
-test("a site manager's project save cannot change a confirmed HBCF amount", async () => {
+const UNCONFIRMED = {
+  ...CONFIRMED,
+  amountConfirmed: false,
+  claimAmount: 1200,
+  fileId: "f_3",
+};
+
+/** A site manager's project save of this legal section; what was stored. */
+async function siteManagerSavesLegal(legal: Record<string, unknown>) {
   const recorder = recordingDb({
     "milestone.count": 0,
     "milestone.findMany": [],
@@ -175,7 +186,7 @@ test("a site manager's project save cannot change a confirmed HBCF amount", asyn
     },
     "project.findUniqueOrThrow": {
       requirements: {
-        legalAdministration: { hbcfClaimDocuments: [CONFIRMED] },
+        legalAdministration: { hbcfClaimDocuments: [CONFIRMED, UNCONFIRMED] },
       },
       startDate: new Date("2026-06-01T00:00:00.000Z"),
       status: ProjectStatus.ON_TRACK,
@@ -184,14 +195,7 @@ test("a site manager's project save cannot change a confirmed HBCF amount", asyn
 
   await updateProject(
     siteManagerPrincipal(SM),
-    {
-      projectId: "p_1",
-      requirements: {
-        legalAdministration: {
-          hbcfClaimDocuments: [{ ...CONFIRMED, claimAmount: 0 }],
-        },
-      },
-    },
+    { projectId: "p_1", requirements: { legalAdministration: legal } },
     recorder.db,
   );
 
@@ -200,10 +204,34 @@ test("a site manager's project save cannot change a confirmed HBCF amount", asyn
     .find((call) => call.operation === "project.update")?.args as {
     data: { requirements: { legalAdministration: Record<string, unknown> } };
   };
+  return write.data.requirements.legalAdministration.hbcfClaimDocuments;
+}
+
+test("a site manager's project save cannot change a confirmed HBCF amount", async () => {
   assert.deepEqual(
-    write.data.requirements.legalAdministration.hbcfClaimDocuments,
-    [CONFIRMED],
+    await siteManagerSavesLegal({
+      hbcfClaimDocuments: [{ ...CONFIRMED, claimAmount: 0 }, UNCONFIRMED],
+    }),
+    [CONFIRMED, UNCONFIRMED],
   );
+});
+
+test("a site manager cannot remove a confirmed HBCF document; an unconfirmed one they can (#560)", async () => {
+  // A confirmed amount is part of the company's HBCF pool total.
+  assert.deepEqual(await siteManagerSavesLegal({ hbcfClaimDocuments: [] }), [
+    CONFIRMED,
+  ]);
+  assert.deepEqual(
+    await siteManagerSavesLegal({ hbcfClaimDocuments: null }),
+    [CONFIRMED, UNCONFIRMED],
+    "a null list is no way round it",
+  );
+  // A legal section sent with no document list at all keeps the stored list:
+  // the save replaces the section whole.
+  assert.deepEqual(await siteManagerSavesLegal({ siteAddress: "1 Site St" }), [
+    CONFIRMED,
+    UNCONFIRMED,
+  ]);
 });
 
 /* ---------------------------------------------------------- spend -- */
@@ -276,6 +304,15 @@ test("filtering no recipients reads nothing, so nobody is broadcast to by accide
 });
 
 /* --------------------------------------------------------- tradies -- */
+
+test("the tradie page's description does not carry the tradie's quoted price", () => {
+  // Page metadata reaches anyone who can open the page, a site manager too.
+  const page = readFileSync(
+    join(REPO_ROOT, "app/(main)/tradie-management/[id]/page.tsx"),
+    "utf8",
+  );
+  assert.doesNotMatch(page, /Last quoted price/i);
+});
 
 test("a tradie's activity history (quotes and invoices) refuses a site manager", async () => {
   const refused = recordingDb();
