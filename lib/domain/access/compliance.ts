@@ -3,10 +3,11 @@ import { Role } from "@prisma/client";
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError, DomainNotFoundError } from "../errors";
 import {
+  type DomainPrincipal,
   isInternalPrincipal,
+  isInternalRole,
   isUserPrincipal,
   requireAdminPrincipal,
-  type DomainPrincipal,
 } from "../principal";
 
 export type ComplianceFileProject = {
@@ -38,8 +39,11 @@ export function canWorkComplianceFile(
   if (principal.role === Role.SITE_MANAGER) return false;
   return (
     principal.role === Role.ADMIN
-    || project.siteManagerId === principal.userId
-    || project.leadAssignedId === principal.userId
+    // The project's people only while they are staff: a GUEST ("Access
+    // pending") still named on a project or lead is not (#561).
+    || (isInternalRole(principal.role)
+      && (project.siteManagerId === principal.userId
+        || project.leadAssignedId === principal.userId))
     || (principal.role === Role.CUSTOMER
       && principal.customerId === project.customerId)
   );

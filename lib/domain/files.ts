@@ -11,10 +11,16 @@ import {
   DomainSideEffectError,
   DomainValidationError,
 } from "./errors";
-import { authorizeFileAttachment } from "./access/projects";
+import {
+  authorizeFileAttachment,
+  canSeeProjectFinancials,
+} from "./access/projects";
 import { authorizeLead } from "./access/leads";
 import { canWorkComplianceFile } from "./access/compliance";
-import { isBuildDocumentType } from "./projects/financial-redaction";
+import {
+  isBuildDocumentType,
+  officeOnlyFileMatcher,
+} from "./projects/financial-redaction";
 import {
   isInternalPrincipal,
   isOfficePrincipal,
@@ -45,16 +51,29 @@ export type SaveFileInput = {
 
 /** The part of a File row that decides who may open it. */
 export type ReadableFile = {
+  readonly id: string;
+  readonly url: string;
+  readonly filename: string;
+  readonly tags: readonly string[] | null;
   readonly uploadedBy: string;
   readonly leadId: number | null;
   readonly complianceDocument: {
     readonly documentType: ComplianceDocumentType;
+    /**
+     * A file received by email is filed on the compliance file with no
+     * `projectId` of its own; its project is the engagement's.
+     */
+    readonly engagement: { readonly project: ReadableProject } | null;
   } | null;
-  readonly project: {
-    readonly siteManagerId: string | null;
-    readonly customerId: string;
-    readonly Lead: { readonly assignedId: string | null } | null;
-  } | null;
+  readonly project: ReadableProject | null;
+};
+
+type ReadableProject = {
+  readonly siteManagerId: string | null;
+  readonly customerId: string;
+  readonly Lead: { readonly assignedId: string | null } | null;
+  /** For the HBCF and tender/contract links (`officeOnlyFileMatcher`). */
+  readonly requirements: unknown;
 };
 
 /**
@@ -78,21 +97,37 @@ export function canReadFile(
   if (file.leadId !== null) return isOfficePrincipal(principal);
   if (principal.role === Role.ADMIN) return true;
   if (file.complianceDocument !== null) {
+    const project =
+      file.project ?? file.complianceDocument.engagement?.project ?? null;
     if (
-      file.project !== null
+      project !== null
       && canWorkComplianceFile(principal, {
-        customerId: file.project.customerId,
-        leadAssignedId: file.project.Lead?.assignedId ?? null,
-        siteManagerId: file.project.siteManagerId,
+        customerId: project.customerId,
+        leadAssignedId: project.Lead?.assignedId ?? null,
+        siteManagerId: project.siteManagerId,
       })
     ) {
       return true;
     }
     return (
       principal.role === Role.SITE_MANAGER
-      && file.project?.siteManagerId === principal.userId
+      && project?.siteManagerId === principal.userId
       && isBuildDocumentType(file.complianceDocument.documentType)
     );
+  }
+  // The HBCF certificate and claims, and the tender and contract, are the
+  // office's however they were filed: the project detail hides them from a
+  // site manager (`hideDetailProjectFinancials`), so the download does too.
+  if (
+    !canSeeProjectFinancials(principal)
+    && officeOnlyFileMatcher(file.project?.requirements)({
+      id: file.id,
+      name: file.filename,
+      tags: file.tags,
+      url: file.url,
+    })
+  ) {
+    return false;
   }
   return (
     file.uploadedBy === principal.userId

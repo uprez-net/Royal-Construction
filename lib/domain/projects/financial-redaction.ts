@@ -236,43 +236,55 @@ function sourceDocumentMatcher(
     (fileId !== null && fileIds.has(fileId)) || (url !== null && urls.has(url));
 }
 
+/**
+ * Files that are the office's whatever else they are: the HBCF certificate and
+ * claim documents (contract value, sum assured, claim amounts) and the tender
+ * and contract (the full contract price), filed as ordinary project files.
+ * One matcher for the project detail and the file download
+ * (`canReadFile`), so the two cannot disagree.
+ *
+ * HBCF: the file ids the legal section links, or the HBCF upload's tag (a
+ * replaced certificate is no longer linked). Tender and contract: the file id
+ * or URL `sourceDocuments` links (the Overview card can repoint by URL alone),
+ * an exact Tender/Contract tag, then the Documents tab's name rule.
+ */
+export function officeOnlyFileMatcher(requirements: unknown) {
+  const payload = requirements as ProjectRequirementsPayload | undefined;
+  const hbcfFileIds = projectHbcfFileIds(
+    payload?.legalAdministration as Parameters<typeof projectHbcfFileIds>[0],
+  );
+  const isLinkedSource = sourceDocumentMatcher(payload);
+  return (file: {
+    readonly id: string | null;
+    readonly url: string | null;
+    readonly name: string | null | undefined;
+    readonly tags: readonly string[] | null | undefined;
+  }): boolean => {
+    const tags = file.tags ?? [];
+    return (
+      (file.id !== null && hbcfFileIds.has(file.id))
+      || tags.includes(HBCF_FILE_TAG)
+      || isLinkedSource(file.id, file.url)
+      || tags.some((tag) => SOURCE_DOCUMENT_TAGS.has(tag.toLowerCase()))
+      || isTenderOrContractName(file.name)
+    );
+  };
+}
+
 /** The whole detail payload: contract, claims, variations, quotes, costs. */
 export function hideDetailProjectFinancials(
   project: ProjectDetail,
 ): ProjectDetail {
-  // The HBCF certificate and claim documents are filed as ordinary files too;
-  // they go with the HBCF fields (`withoutHbcf`).
-  const hbcfFileIds = projectHbcfFileIds(
-    project.requirements?.legalAdministration as Parameters<
-      typeof projectHbcfFileIds
-    >[0],
-  );
-  const isHbcf = (fileId: string | null, tags: readonly string[] | null) =>
-    (fileId !== null && hbcfFileIds.has(fileId))
-    || (tags ?? []).includes(HBCF_FILE_TAG);
-  // The tender and contract PDFs (the full contract price) are filed as
-  // ordinary project files too when they were uploaded by hand. Their file id
-  // is the exact signal; the tags and then the name are the fallback.
-  const isLinkedSource = sourceDocumentMatcher(project.requirements);
-  const isSourceDocument = (
-    fileId: string | null,
-    url: string | null,
-    name: string | null | undefined,
-    tags: readonly string[] | null,
-  ) =>
-    isLinkedSource(fileId, url)
-    || (tags ?? []).some((tag) => SOURCE_DOCUMENT_TAGS.has(tag.toLowerCase()))
-    || isTenderOrContractName(name);
+  const isOfficeFile = officeOnlyFileMatcher(project.requirements);
   const documents = project.documents.filter(
     (document) =>
       !OFFICE_DOCUMENT_SOURCES.has(document.source)
-      && !isHbcf(document.fileId, document.tags)
-      && !isSourceDocument(
-        document.fileId,
-        document.url,
-        document.name,
-        document.tags,
-      )
+      && !isOfficeFile({
+        id: document.fileId,
+        name: document.name,
+        tags: document.tags,
+        url: document.url,
+      })
       && (document.source !== "compliance"
         || isBuildDocumentType(document.complianceDocumentType)),
   );
@@ -292,8 +304,12 @@ export function hideDetailProjectFinancials(
     // compliance file stays only as a build document kept above.
     files: project.files.filter(
       (file) =>
-        !isHbcf(file.id, file.tags)
-        && !isSourceDocument(file.id, file.url, file.filename, file.tags)
+        !isOfficeFile({
+          id: file.id,
+          name: file.filename,
+          tags: file.tags,
+          url: file.url,
+        })
         && file.leadId === null
         && (!file.complianceDocumentId || buildFileIds.has(file.id)),
     ),

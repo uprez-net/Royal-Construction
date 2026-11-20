@@ -70,6 +70,8 @@ const STALE_REQUIREMENTS =
 
 export type UpdateProjectResult = {
   readonly projectId: string;
+  /** `requirementsVersion` of what this save committed, for this caller. */
+  readonly requirementsVersion: string;
   /** Blockers that did not stop the save but the header should still show. */
   readonly warnings: readonly string[];
   /** Activities re-dated because the start date moved; 0 when it did not. */
@@ -245,21 +247,22 @@ export async function updateProject(
   };
 
   const writeProjectFields = async (tx: DomainDb): Promise<void> => {
-    if (
-      rawInput.expectedRequirementsVersion === undefined
-      || existing.requirements === null
-    ) {
+    if (rawInput.expectedRequirementsVersion === undefined) {
       await tx.project.update({ where: { id: input.projectId }, data });
       return;
     }
     // Two saves read the same requirements in the same moment: the second
     // matches no row, writes nothing, and throws, so the rescheduling in the
-    // same transaction rolls back with it.
+    // same transaction rolls back with it. A project with none stored yet
+    // holds SQL NULL (`Json?`), which the predicate must match as such.
     const updated = await tx.project.updateMany({
       where: {
         id: input.projectId,
         requirements: {
-          equals: existing.requirements as Prisma.InputJsonValue,
+          equals:
+            existing.requirements === null
+              ? Prisma.DbNull
+              : (existing.requirements as Prisma.InputJsonValue),
         },
       },
       data,
@@ -295,8 +298,24 @@ export async function updateProject(
       ? await db.$transaction(write, { timeout: 30_000 })
       : await write(db);
 
+  // What this save committed, as this caller is shown it: the page pairs it
+  // with its draft (a re-read after the commit could already describe a later
+  // save, and hand a stale draft a fresh fingerprint).
+  const committedRequirements =
+    input.requirements !== undefined
+      ? input.requirements
+      : existing.requirements;
   return {
     projectId: input.projectId,
+    requirementsVersion: requirementsVersion(
+      canSeeProjectFinancials(principal)
+        ? committedRequirements
+        : hideRequirementsFinancials(
+            committedRequirements as unknown as
+              | ProjectRequirementsPayload
+              | undefined,
+          ),
+    ),
     rescheduledMilestones,
     startDateFollowedHbcfClaim: claimPlan.startDate !== null,
     startDateHeldByStartedWork: claimPlan.heldByStartedWork,

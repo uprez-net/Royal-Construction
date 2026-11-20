@@ -7,6 +7,15 @@ import { canReadFile } from "@/lib/domain/files";
 import { userPrincipal } from "@/lib/domain/principal";
 import { uuidSchema } from "@/utils/validators/common";
 
+// What `canReadFile` decides from, for the file's own project or, for a file
+// received by email onto the compliance file, the engagement's.
+const READABLE_PROJECT = {
+  siteManagerId: true,
+  customerId: true,
+  requirements: true,
+  Lead: { select: { assignedId: true } },
+} as const;
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ fileId: string }> },
@@ -24,20 +33,21 @@ export async function GET(
   const file = await prisma.file.findUnique({
     where: { id: parsedFileId.data },
     select: {
+      id: true,
       url: true,
       storagePath: true,
       filename: true,
       fileType: true,
+      tags: true,
       uploadedBy: true,
       leadId: true,
-      complianceDocument: { select: { documentType: true } },
-      project: {
+      complianceDocument: {
         select: {
-          siteManagerId: true,
-          customerId: true,
-          Lead: { select: { assignedId: true } },
+          documentType: true,
+          engagement: { select: { project: { select: READABLE_PROJECT } } },
         },
       },
+      project: { select: READABLE_PROJECT },
     },
   });
   if (!file)

@@ -239,7 +239,16 @@ export async function POST(request: NextRequest) {
           console.warn(
             `[clerk-webhook] Refused a dashboard role change to ${current?.role} for ${updatedId}; kept ${roleDecision.refusedRole}${writesBack ? " and set it back in Clerk" : ""}`,
           );
-          if (writesBack) {
+          // Re-read at the moment of writing: a change the team screen
+          // accepted since the decision must not be set back to the refused
+          // role's predecessor (whose own echo would then be stored).
+          const storedNow = writesBack
+            ? await prisma.user.findUnique({
+                where: { clerkId: updatedId },
+                select: { role: true },
+              })
+            : null;
+          if (storedNow?.role === roleDecision.refusedRole) {
             await updateUserMetadata(updatedId, {
               publicMetadata: { role: roleDecision.refusedRole },
             });

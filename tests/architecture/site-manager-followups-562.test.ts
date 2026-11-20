@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { ProjectStatus } from "@prisma/client";
+import { Prisma, ProjectStatus } from "@prisma/client";
 import { test } from "vitest";
 
 import { DomainStaleVersionError } from "@/lib/domain/errors";
@@ -140,4 +140,64 @@ test("a save without a fingerprint keeps the unconditional write", async () => {
   const [write] = recorder.writes();
   assert.equal(write.operation, "project.update");
   assert.deepEqual((write.args as { where: unknown }).where, { id: "p_1" });
+});
+
+test("a first save onto no stored requirements matches SQL NULL, so a second cannot slip in", async () => {
+  const recorder = projectDb(null);
+  await updateProject(
+    adminPrincipal(),
+    {
+      expectedRequirementsVersion: requirementsVersion(null),
+      name: "Renamed",
+      projectId: "p_1",
+    },
+    recorder.db,
+  );
+  const [write] = recorder.writes();
+  assert.equal(write.operation, "project.updateMany");
+  assert.deepEqual((write.args as { where: unknown }).where, {
+    id: "p_1",
+    requirements: { equals: Prisma.DbNull },
+  });
+
+  // The second of two such saves matches no row.
+  await assert.rejects(
+    updateProject(
+      adminPrincipal(),
+      {
+        expectedRequirementsVersion: requirementsVersion(null),
+        name: "Renamed again",
+        projectId: "p_1",
+      },
+      projectDb(null, 0).db,
+    ),
+    DomainStaleVersionError,
+  );
+});
+
+test("the save returns the fingerprint of what it committed, as the caller sees it", async () => {
+  const saved = { ...STORED, summary: "Double brick" };
+  const result = await updateProject(
+    siteManagerPrincipal("user_sm"),
+    {
+      expectedRequirementsVersion: requirementsVersion(
+        hideRequirementsFinancials(
+          STORED as unknown as ProjectRequirementsPayload,
+        ),
+      ),
+      projectId: "p_1",
+      requirements: saved,
+    },
+    projectDb(STORED).db,
+  );
+  // The HBCF number is restored on save (withStoredHbcf) and hidden in the
+  // site manager's view, so their fingerprint is of the redacted copy.
+  assert.equal(
+    result.requirementsVersion,
+    requirementsVersion(
+      hideRequirementsFinancials({
+        ...saved,
+      } as unknown as ProjectRequirementsPayload),
+    ),
+  );
 });

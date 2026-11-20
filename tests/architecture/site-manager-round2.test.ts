@@ -496,3 +496,31 @@ test("a site manager's save with no legal section keeps the stored one", () => {
     assert.equal(saved.requirements?.summary, "new");
   }
 });
+
+test("saving an activity that is already waived is the office's too", async () => {
+  // Its bookings are settled again on save, cancelling any made since.
+  const recorder = recordingDb({
+    "project.findUnique": { id: "project", siteManagerId: SM },
+    "milestone.findUnique": { projectId: "project", parentId: null },
+    "milestone.findUniqueOrThrow": {
+      id: "activity",
+      parentId: null,
+      projectId: "project",
+      status: S.NOT_REQUIRED,
+      actualDate: null,
+      startDate: null,
+      targetDate: null,
+      spend: null,
+      childrenMilestones: [],
+    },
+  });
+  await assert.rejects(
+    updateMilestone(
+      siteManagerPrincipal(SM),
+      { milestoneId: "activity", status: S.NOT_REQUIRED },
+      recorder.db,
+    ),
+    DomainAuthorizationError,
+  );
+  assert.deepEqual(recorder.writes(), []);
+});

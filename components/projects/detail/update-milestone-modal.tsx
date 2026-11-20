@@ -216,6 +216,10 @@ export default function UpdateMilestoneModal({
       setSubmitError(null);
       const validatedData = milestoneUpdateSchema.safeParse({
         ...waiverDates(data, sydneyToday()),
+        // Not sent by someone who cannot re-plan (the field is not drawn for
+        // them): the browser's local day can differ from Sydney's, and the
+        // server would read the unchanged date as a change.
+        targetDate: canPlan ? data.targetDate : undefined,
         spend:
           data.spend && data.spend > 0
             ? data.spend

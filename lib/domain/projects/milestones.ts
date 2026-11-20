@@ -558,9 +558,10 @@ export async function updateMilestone(
   assertMilestoneFieldsForStatus(input);
   // Waiving an activity cancels its open bookings and rejects their pending
   // approvals: booking work, so the office's (owner, 2026-11-20).
+  // Saving a waived activity settles its bookings again (cancelling any that
+  // were made after the waiver), so it is refused too, not only the move.
   if (
-    statusChanged
-    && input.status === MilestoneStatus.NOT_REQUIRED
+    input.status === MilestoneStatus.NOT_REQUIRED
     && !canBookTradies(principal)
   ) {
     throw new DomainAuthorizationError(

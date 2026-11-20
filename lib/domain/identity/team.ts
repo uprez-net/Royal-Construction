@@ -318,7 +318,9 @@ async function assertRoleChangeAllowed(
   // the office's (`assertOfficeAssignee`), so someone leaving the office —
   // to site manager most often — hands theirs over first. Refused rather
   // than reassigned here: who takes them is the office's call.
-  if (isOfficeRole(current.role) && !isOfficeRole(newRole)) {
+  // Any move to a role outside the office, from wherever: a GUEST (not office
+  // since #561) can still hold leads assigned before then.
+  if (current.role !== newRole && !isOfficeRole(newRole)) {
     const [leads, tasks] = await Promise.all([
       db.lead.count({ where: { assignedId: current.id } }),
       db.leadTask.count({

@@ -97,8 +97,11 @@ test("an echo of the stored role is a no-op: no count, no write, no write-back",
 });
 
 test("a change the rules allow is stored", async () => {
-  // GUEST holds no office work, so moving it to site manager hands over nothing.
+  // A GUEST holding no leads or open tasks moves to site manager: checked
+  // (any move to a non-office role is), and nothing to hand over.
   const recorder = recordingDb({
+    "lead.count": 0,
+    "leadTask.count": 0,
     "user.findUnique": { id: "u_1", name: "New", role: "GUEST" },
   });
 
@@ -152,6 +155,22 @@ test("the webhook writes the decided role and sets a refused one back to Clerk",
   );
   assert.match(
     route,
-    /if \(writesBack\) \{\s*await updateUserMetadata\(updatedId/,
+    // ... and only while the stored role is still the refused one.
+    /if \(storedNow\?\.role === roleDecision\.refusedRole\) \{\s*await updateUserMetadata\(updatedId/,
   );
+});
+
+test("a GUEST still holding leads cannot be moved to site manager", async () => {
+  // GUEST stopped being office in #561; leads assigned before then must be
+  // handed over first, as for anyone leaving the office.
+  const recorder = recordingDb({
+    "lead.count": 2,
+    "leadTask.count": 0,
+    "user.findUnique": { id: "u_1", name: "Old", role: "GUEST" },
+  });
+  const decision = await clerkRoleToStore(
+    { clerkRole: Role.SITE_MANAGER, clerkUserId: "clerk_1" },
+    recorder.db,
+  );
+  assert.deepEqual(decision, { refusedRole: Role.GUEST, write: undefined });
 });

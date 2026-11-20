@@ -128,13 +128,18 @@ export async function PATCH(
     // `data` stays the project the screens read; what the save did to the
     // start date rides beside it, so the Overview can say whether the start
     // followed the HBCF claim date or stayed because work had started.
-    return successResponse(updatedProject, {
-      meta: {
-        rescheduledMilestones: outcome.rescheduledMilestones,
-        startDateFollowedHbcfClaim: outcome.startDateFollowedHbcfClaim,
-        startDateHeldByStartedWork: outcome.startDateHeldByStartedWork,
+    // The fingerprint of what this save committed, not of the re-read, which
+    // may already include a later save (issue #562).
+    return successResponse(
+      { ...updatedProject, requirementsVersion: outcome.requirementsVersion },
+      {
+        meta: {
+          rescheduledMilestones: outcome.rescheduledMilestones,
+          startDateFollowedHbcfClaim: outcome.startDateFollowedHbcfClaim,
+          startDateHeldByStartedWork: outcome.startDateHeldByStartedWork,
+        },
       },
-    });
+    );
   } catch (error) {
     // The blocker list is worth more to the operator than the status code:
     // the Overview tab binds each entry to the field that caused it. Kept at

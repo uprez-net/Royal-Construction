@@ -8,7 +8,7 @@ import { describe, test } from "vitest";
 import { authorizeComplianceMutation } from "@/lib/domain/access/compliance";
 import { assertCanReadTradieDirectory } from "@/lib/domain/access/tradies";
 import { DomainAuthorizationError } from "@/lib/domain/errors";
-import { canReadFile } from "@/lib/domain/files";
+import { canReadFile, type ReadableFile } from "@/lib/domain/files";
 import { decideVariation } from "@/lib/domain/projects/variations";
 import { retryWhatsAppMedia } from "@/lib/domain/whatsapp/media";
 import { REPO_ROOT } from "../support/repo-root";
@@ -117,15 +117,25 @@ describe("Variation decisions are the office's money", () => {
 });
 
 describe("File reads follow the record the file sits on", () => {
-  const sitePhoto = {
+  const sitePhoto: ReadableFile = {
     complianceDocument: null,
+    filename: "slab-pour.jpg",
+    id: "f_photo",
     leadId: null,
     project: {
       Lead: null,
       customerId: "c_1",
+      requirements: {
+        legalAdministration: {
+          hbcfInsuranceDocument: { fileId: "f_hbcf_cert", url: "u_hbcf" },
+        },
+        sourceDocuments: { contract: { fileId: "f_contract", url: "u_c" } },
+      },
       siteManagerId: SM_ID,
     },
+    tags: ["Milestone"],
     uploadedBy: "someone_else",
+    url: "u_photo",
   };
 
   test("a site manager may open a photo on a project they run", () => {
@@ -136,7 +146,7 @@ describe("File reads follow the record the file sits on", () => {
     assert.equal(
       canReadFile(siteManagerPrincipal(SM_ID), {
         ...sitePhoto,
-        complianceDocument: { documentType: "SURVEY" },
+        complianceDocument: { documentType: "SURVEY", engagement: null },
       }),
       true,
     );
@@ -146,7 +156,10 @@ describe("File reads follow the record the file sits on", () => {
     assert.equal(
       canReadFile(siteManagerPrincipal(SM_ID), {
         ...sitePhoto,
-        complianceDocument: { documentType: "HOME_INSURANCE" },
+        complianceDocument: {
+          documentType: "HOME_INSURANCE",
+          engagement: null,
+        },
       }),
       false,
     );
@@ -156,8 +169,8 @@ describe("File reads follow the record the file sits on", () => {
     assert.equal(
       canReadFile(siteManagerPrincipal(SM_ID), {
         ...sitePhoto,
-        complianceDocument: { documentType: "SURVEY" },
-        project: { ...sitePhoto.project, siteManagerId: "someone_else" },
+        complianceDocument: { documentType: "SURVEY", engagement: null },
+        project: { ...sitePhoto.project!, siteManagerId: "someone_else" },
       }),
       false,
     );
@@ -192,13 +205,51 @@ describe("File reads follow the record the file sits on", () => {
           userId: "user_customer",
         },
         {
-          complianceDocument: { documentType: "SURVEY" },
-          leadId: null,
-          project: { Lead: null, customerId: "c_1", siteManagerId: null },
+          ...sitePhoto,
+          complianceDocument: { documentType: "SURVEY", engagement: null },
+          project: {
+            Lead: null,
+            customerId: "c_1",
+            requirements: null,
+            siteManagerId: null,
+          },
           uploadedBy: "user_customer",
         },
       ),
       true,
+    );
+  });
+
+  test("a site manager may not download the HBCF certificate or the contract, linked or tagged", () => {
+    for (const file of [
+      { ...sitePhoto, id: "f_hbcf_cert" },
+      { ...sitePhoto, id: "f_old_cert", tags: ["HBCF insurance"] },
+      { ...sitePhoto, id: "f_contract" },
+      { ...sitePhoto, id: "f_x", filename: "Signed Contract.pdf" },
+      { ...sitePhoto, id: "f_y", tags: ["Tender"] },
+    ]) {
+      assert.equal(
+        canReadFile(siteManagerPrincipal(SM_ID), file),
+        false,
+        file.id,
+      );
+      assert.equal(canReadFile(adminPrincipal(ADMIN_ID), file), true, file.id);
+    }
+  });
+
+  test("a compliance file received by email resolves its project through the engagement", () => {
+    const emailed: ReadableFile = {
+      ...sitePhoto,
+      complianceDocument: {
+        documentType: "SURVEY",
+        engagement: { project: sitePhoto.project! },
+      },
+      project: null,
+    };
+    assert.equal(canReadFile(siteManagerPrincipal(SM_ID), emailed), true);
+    assert.equal(
+      canReadFile(siteManagerPrincipal("someone_else"), emailed),
+      false,
     );
   });
 
