@@ -430,6 +430,45 @@ export function teamPhoneE164(raw: string): string | null {
   return null;
 }
 
+/** The phone in its stored form, or a refusal saying what a number looks like. */
+function requireTeamPhone(raw: string): string {
+  const phone = teamPhoneE164(raw);
+  if (!phone) {
+    throw new DomainValidationError(
+      "Enter a phone number like 0412 345 678, or with its country code like +61 412 345 678.",
+      "phone",
+    );
+  }
+  return phone;
+}
+
+/**
+ * A phone `userId` may hold: in its stored form, and nobody else's.
+ *
+ * `User.phone` is unique, so a number already on another account would fail
+ * the write anyway — checking first means the commonest refusal touches
+ * nothing (no Clerk write to undo). The team screen and a person editing their
+ * own profile both go through this, so the two never accept different numbers.
+ */
+export async function requireAvailableTeamPhone(
+  raw: string,
+  userId: string,
+  db: DomainDb,
+): Promise<string> {
+  const phone = requireTeamPhone(raw);
+  const taken = await db.user.findFirst({
+    select: { id: true },
+    where: { id: { not: userId }, phone },
+  });
+  if (taken) {
+    throw new DomainValidationError(
+      "That phone number already belongs to another team member.",
+      "phone",
+    );
+  }
+  return phone;
+}
+
 /**
  * Change a team member's name and phone, in Clerk and in the local record.
  *
@@ -463,27 +502,12 @@ export async function updateTeamMemberProfile(
       "name",
     );
   }
-  const phone = teamPhoneE164(input.phone);
-  if (!phone) {
-    throw new DomainValidationError(
-      "Enter a phone number like 0412 345 678, or with its country code like +61 412 345 678.",
-      "phone",
-    );
-  }
+  requireTeamPhone(input.phone);
 
   const user = await findUserByClerkId(input.clerkUserId, db);
   if (!user) throw new DomainNotFoundError("Team member not found.");
 
-  const taken = await db.user.findFirst({
-    select: { id: true },
-    where: { id: { not: user.id }, phone },
-  });
-  if (taken) {
-    throw new DomainValidationError(
-      "That phone number already belongs to another team member.",
-      "phone",
-    );
-  }
+  const phone = await requireAvailableTeamPhone(input.phone, user.id, db);
 
   const [firstName, ...rest] = name.split(" ");
   const lastName = rest.join(" ");

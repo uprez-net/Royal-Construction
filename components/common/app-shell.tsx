@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
-import { UserButton } from "@clerk/nextjs";
 import { navigationItems } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -25,6 +24,7 @@ import {
 } from "@/utils/shell-nav";
 import Image from "next/image";
 import { Notifications } from "./notifications";
+import { AccountMenu } from "@/components/account/account-menu";
 import { PhoneDock } from "@/components/comms/phone-dock";
 import { PhoneProvider } from "@/components/comms/phone-provider";
 import { NotificationProvider } from "@/context/NotificationContext";
@@ -318,25 +318,9 @@ export function AppShell({
                   </div>
                 ) : (
                   <div className="border-t border-sidebar-border px-4 py-4">
-                    <UserButton
-                      showName={true}
-                      appearance={{
-                        elements: {
-                          avatarBox: "size-9",
-                          userButtonBox:
-                            "w-full! flex! flex-row-reverse!  gap-2 justify-end text-sidebar-foreground",
-                          userButtonTrigger: "w-full",
-                          userButtonOuterIdentifier:
-                            "text-base text-sidebar-foreground!",
-                          userButtonAvatarBox: "w-8 h-8",
-                          rootBox: "w-full shadow-xs",
-                        },
-                      }}
-                      userProfileProps={{
-                        appearance: {
-                          baseTheme: "light",
-                        },
-                      }}
+                    <AccountMenu
+                      variant="sidebar"
+                      onNavigate={() => setMobileNavOpen(false)}
                     />
                   </div>
                 )}
@@ -435,13 +419,7 @@ export function AppShell({
                       </Button>
                     </div>
                   ) : (
-                    <UserButton
-                      appearance={{
-                        elements: {
-                          avatarBox: "size-9",
-                        },
-                      }}
-                    />
+                    <AccountMenu variant="header" />
                   )}
                 </div>
               </div>
