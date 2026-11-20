@@ -62,12 +62,30 @@ const isPublicRoute = createRouteMatcher([
   "/eve/v1(.*)",
 ]);
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
+// The client's booking page and the two APIs it calls. A signed-in GUEST
+// (Clerk's default for a new account, a client among them) may use these and
+// nothing else: other public routes, Eve's channel among them, rely on the
+// GUEST block below.
+const isPublicBookingRoute = createRouteMatcher([
+  "/book-consultation",
+  "/api/graph/book-consultant(.*)",
+  "/api/graph/read-calender-dateTime(.*)",
+]);
 const isEvalAuthRoute = createRouteMatcher(["/api/eval/auth(.*)"]);
 const isDevAuthRoute = createRouteMatcher([
   "/dev/sign-in(.*)",
   "/api/dev/(.*)",
 ]);
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
+// The sales side's screens. A site manager is sent to their dashboard instead.
+// Pages only: the data behind them refuses a site manager in the domain
+// (`isOfficePrincipal`), which is what actually holds if this is bypassed or
+// the session token still carries yesterday's role.
+const isOfficeOnlyPage = createRouteMatcher([
+  "/leads(.*)",
+  "/offers(.*)",
+  "/agent(.*)",
+]);
 
 // Next 16 renamed the `middleware` convention to `proxy` and deprecated the
 // `middleware` export name. A `proxy.ts` file is resolved as `mod.proxy ||
@@ -129,13 +147,22 @@ export const proxy = clerkMiddleware(async (auth, request) => {
   ) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
-  if (sessionClaims?.public_metadata.role === "GUEST") {
+  if (
+    sessionClaims?.public_metadata.role === "GUEST"
+    && !isPublicBookingRoute(request)
+  ) {
     // Same reasoning: a redirect to an HTML page is not a usable answer to a
     // fetch(), which follows it and then fails to parse the body as JSON.
     if (isApiRoute) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     return NextResponse.redirect(new URL("/guest", request.url));
+  }
+  if (
+    sessionClaims?.public_metadata.role === "SITE_MANAGER"
+    && isOfficeOnlyPage(request)
+  ) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
   if (isAuthRoute(request) && userId) {
     return NextResponse.redirect(new URL("/dashboard", request.url));

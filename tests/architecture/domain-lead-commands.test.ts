@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+
+import { Role } from "@prisma/client";
 import { test } from "vitest";
 
 import {
@@ -95,16 +97,25 @@ test("a customer may edit the lead assigned to them", async () => {
   assert.equal(outcome.lead.id, 7);
 });
 
-test("internal staff reach every lead", async () => {
-  for (const principal of [adminPrincipal(), siteManagerPrincipal()]) {
-    const outcome = await updateLead(
-      principal,
-      7,
-      { notes: "Site visit booked" },
-      leadDb().transactionalDb,
-    );
-    assert.equal(outcome.lead.id, 7);
-  }
+test("the office reaches every lead; a site manager does not", async () => {
+  const outcome = await updateLead(
+    adminPrincipal(),
+    7,
+    { notes: "Site visit booked" },
+    leadDb().transactionalDb,
+  );
+  assert.equal(outcome.lead.id, 7);
+
+  await assert.rejects(
+    () =>
+      updateLead(
+        siteManagerPrincipal(),
+        7,
+        { notes: "Site visit booked" },
+        leadDb().transactionalDb,
+      ),
+    DomainAuthorizationError,
+  );
 });
 
 test("an update names a missing lead as missing, not as forbidden", async () => {
@@ -261,6 +272,9 @@ test("an edit that does not name an assignee is not a reassignment", async () =>
 test("re-sending the same assignee is not a reassignment either", async () => {
   const recorder = leadDb({
     "lead.findUnique": { ...BASE_LEAD, assignedId: "user_1" },
+    // The assignee is in the office; a site manager is refused (see
+    // domain-site-manager-gaps.test.ts).
+    "user.findUnique": { role: Role.ADMIN },
   });
   const outcome = await updateLead(
     adminPrincipal(),
@@ -274,6 +288,9 @@ test("re-sending the same assignee is not a reassignment either", async () => {
 test("a real handover is reported as one, and moves the open tasks", async () => {
   const recorder = leadDb({
     "lead.findUnique": { ...BASE_LEAD, assignedId: "user_1" },
+    // The assignee is in the office; a site manager is refused (see
+    // domain-site-manager-gaps.test.ts).
+    "user.findUnique": { role: Role.ADMIN },
   });
   const outcome = await updateLead(
     adminPrincipal(),

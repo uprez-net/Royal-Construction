@@ -8,6 +8,7 @@ import {
   findAgentSessionOwner,
 } from "@/lib/domain/access/agent-sessions";
 import {
+  NO_LEADS_ASSIGNEE,
   authorizeLead,
   canAccessLead,
   leadListScope,
@@ -51,9 +52,17 @@ const read = (path: string) => readFileSync(join(ROOT, path), "utf8");
 
 /* ---------------------------------------------------------------- leads -- */
 
-test("lead scope: staff read every lead, anyone else only their own", () => {
+test("lead scope: the office reads every lead, a site manager none, anyone else only their own", () => {
   assert.deepEqual(leadListScope(adminPrincipal()), { assignedId: null });
-  assert.deepEqual(leadListScope(siteManagerPrincipal()), { assignedId: null });
+  // A site manager is staff for projects, not for the sales side: no leads,
+  // not even one assigned to them before the office-only rule.
+  assert.deepEqual(leadListScope(siteManagerPrincipal("u_sm")), {
+    assignedId: NO_LEADS_ASSIGNEE,
+  });
+  assert.equal(
+    canAccessLead(siteManagerPrincipal("u_sm"), { assignedId: "u_sm", id: 1 }),
+    false,
+  );
   assert.deepEqual(leadListScope(customerPrincipal("u_c")), {
     assignedId: "u_c",
   });

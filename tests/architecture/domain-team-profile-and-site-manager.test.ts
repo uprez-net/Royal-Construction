@@ -13,11 +13,11 @@ import {
   DomainValidationError,
 } from "@/lib/domain/errors";
 import {
+  listTeamMembers,
   teamPhoneE164,
   updateTeamMemberProfile,
   type TeamProfilePort,
 } from "@/lib/domain/identity/team";
-import { findPhonesByClerkIds } from "@/lib/domain/identity/users";
 import { assignProjectSiteManager } from "@/lib/domain/projects/commands";
 import {
   adminPrincipal,
@@ -54,6 +54,10 @@ test("a team phone is read as E.164, with a local Australian number as +61", () 
   assert.equal(teamPhoneE164("412 345 678"), null);
   assert.equal(teamPhoneE164("+0412345678"), null);
   assert.equal(teamPhoneE164("phone"), null);
+  // An extension is not part of the number a text goes to.
+  assert.equal(teamPhoneE164("+61 2 4660 0655 ext 12"), null);
+  assert.equal(teamPhoneE164("02 4660 0655 x12"), null);
+  assert.equal(teamPhoneE164("0412-345-678"), "+61412345678");
 });
 
 test("a profile edit writes Clerk, then the local name and phone, never the email", async () => {
@@ -264,27 +268,51 @@ test("a team phone reads in AU format and that format saves back unchanged", () 
   }
 });
 
-test("the team screen's phones come from the database, keyed by Clerk id", async () => {
+test("the team screen lists application users, searched and paged in the database", async () => {
   const recorder = recordingDb({
+    "user.count": 21,
     "user.findMany": [
-      { clerkId: "clerk_jane", phone: "+61412345678" },
-      { clerkId: "clerk_sam", phone: "+61298765432" },
+      {
+        clerkId: "clerk_jane",
+        email: "jane@example.com",
+        id: "u1",
+        name: "Jane",
+        phone: "+61412345678",
+        role: Role.ADMIN,
+      },
     ],
   });
-  assert.deepEqual(
-    await findPhonesByClerkIds(
-      ["clerk_jane", "clerk_sam", "clerk_jane", ""],
+  const listed = await listTeamMembers(
+    adminPrincipal(),
+    { limit: 20, page: 2, q: " jane " },
+    recorder.db,
+  );
+  assert.equal(listed.total, 21);
+  assert.equal(listed.members[0]?.clerkId, "clerk_jane");
+  const query = recorder.calls[0]?.args as {
+    skip: number;
+    take: number;
+    where: { OR: unknown[] };
+  };
+  assert.equal(query.skip, 20);
+  assert.equal(query.take, 20);
+  assert.deepEqual(query.where.OR[0], {
+    name: { contains: "jane", mode: "insensitive" },
+  });
+  assert.deepEqual(recorder.writes(), []);
+});
+
+test("only an admin may list the team", async () => {
+  const recorder = recordingDb();
+  await assert.rejects(
+    listTeamMembers(
+      siteManagerPrincipal(),
+      { limit: 20, page: 1, q: "" },
       recorder.db,
     ),
-    { clerk_jane: "+61412345678", clerk_sam: "+61298765432" },
+    DomainAuthorizationError,
   );
-  assert.deepEqual((recorder.calls[0]?.args as { where: unknown }).where, {
-    clerkId: { in: ["clerk_jane", "clerk_sam"] },
-  });
-  // No ids, no query: `{ in: [] }` means different things to different engines.
-  const empty = recordingDb();
-  assert.deepEqual(await findPhonesByClerkIds([], empty.db), {});
-  assert.deepEqual(empty.calls, []);
+  assert.deepEqual(recorder.calls, []);
 });
 
 test("a team phone goes to Clerk metadata, never to Clerk's phone numbers", () => {

@@ -8,7 +8,7 @@ import {
   DomainTransitionError,
   DomainValidationError,
 } from "../errors";
-import { isInternalPrincipal, type DomainPrincipal } from "../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../principal";
 import { CALL_SELECT, toCallRecord, type CallRecord } from "./calls/records";
 import { recordCommsHistory } from "./shared";
 import {
@@ -60,7 +60,7 @@ export type PendingComms = {
 };
 
 function requireStaff(principal: DomainPrincipal, what: string): void {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(`${what} is for members of staff.`);
   }
 }
@@ -173,7 +173,7 @@ export async function resolvePendingCall(
     | { readonly callId: string; readonly action: "dismiss" },
   db: TransactionalDomainDb,
 ): Promise<CallRecord> {
-  if (!isInternalPrincipal(principal) || principal.kind !== "user") {
+  if (!isOfficePrincipal(principal) || principal.kind !== "user") {
     throw new DomainAuthorizationError(
       "Filing a call requires a signed-in member of staff.",
     );

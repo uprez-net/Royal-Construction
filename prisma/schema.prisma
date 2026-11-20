@@ -606,6 +606,9 @@ enum OutboxEventKind {
   /// Keyed per attempt (the browser's Idempotency-Key), so a double click or
   /// a retry is one email and a deliberate follow-up the next day is another.
   OFFER_FOLLOW_UP_SEND
+  /// One message the office typed on a tradie's project email thread. Keyed
+  /// per attempt, so a double click is one email and a second reply is another.
+  TRADIE_THREAD_REPLY_SEND
 }
 
 enum AgentMemoryProvenance {
@@ -682,6 +685,7 @@ model Project {
   emailedInvoices     TradieInvoiceInbox[]
   whatsappGroup       ProjectWhatsAppGroup?
   checklists          ProjectChecklist[]
+  tradieEmails        TradieEmail[]
 
   @@index([name])
   @@index([customerId])
@@ -842,6 +846,7 @@ model Tradie {
   activityLogs      TradieActivityLog[]
   invoices          TradieInvoice[]
   emailedInvoices   TradieInvoiceInbox[]
+  emails            TradieEmail[]
 
   complianceOutreaches ComplianceOutreach[] @relation("TradieComplianceOutreaches")
   checklistIssues      ChecklistIssue[]     @relation("ChecklistIssueTradie")
@@ -1109,6 +1114,7 @@ model TradieSchedule {
   quote            TradieQuote?            @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   invoices         TradieInvoice[]
   emailedInvoices  TradieInvoiceInbox[]
+  emails           TradieEmail[]
 
   @@index([tradieId])
   @@index([projectId])
@@ -1175,6 +1181,49 @@ model TradieRequestRecipient {
   @@unique([requestId, tradieId])
   @@index([tradieId])
   @@index([deliveryStatus, nextAttemptAt])
+}
+
+/// One email between the office and a tradie, filed to the project it was
+/// about: a reminder, a reschedule, a reply the office typed on the thread,
+/// one typed in Outlook, and the tradie's own answers.
+///
+/// Request emails are not copied here: TradieRequestRecipient already holds
+/// each tradie's rendered copy, and the thread reads it from there. Rules live
+/// in lib/domain/tradies/emails.ts.
+model TradieEmail {
+  id             String         @id @default(uuid())
+  tradieId       String
+  /// Null for an inbound message nothing tied to one project: no reference,
+  /// and the tradie has bookings on several. Kept, rather than dropped, so the
+  /// tradie's record still has it.
+  projectId      String?
+  /// The booking it was about, when it named one ([RCTBK-…]).
+  scheduleId     String?
+  direction      CommsDirection
+  /// Null where the sender is the office mailbox and the code that sent it
+  /// does not know which: Graph picks the From.
+  emailFrom      String?
+  emailTo        String
+  subject        String
+  body           String         @db.Text
+  /// The tradie reference the message carried, so a reply can quote it again.
+  refToken       String?
+  /// Graph's id, for a message that came through Graph: an inbound reply or an
+  /// Outlook send. The same notification can arrive twice; this keeps it one.
+  /// Unique per tradie: one Outlook message to two tradies is on both records.
+  graphMessageId String?
+  hasAttachments Boolean        @default(false)
+  sentAt         DateTime
+  createdAt      DateTime       @default(now())
+
+  tradie   Tradie          @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  project  Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  schedule TradieSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+
+  @@unique([graphMessageId, tradieId])
+  @@index([projectId, tradieId, sentAt])
+  @@index([tradieId, sentAt])
+  @@index([scheduleId])
 }
 
 /// Where a quote came from. Its amounts live on the bookings it priced
@@ -1318,10 +1367,18 @@ model User {
   /// Last time this user's browser asked for a calling credential. Inbound
   /// calls ring the browsers of staff seen recently (lib/domain/comms).
   commsBrowserSeenAt DateTime?
+  /// The number this user proved they hold by typing back a code texted to it
+  /// (lib/domain/identity/phone-verification.ts), E.164. The phone counts as
+  /// verified only while this equals `phone`, so any writer that changes
+  /// `phone` (the team screen, the Clerk webhook) drops the badge without
+  /// having to know about it.
+  verifiedPhone      String?
+  phoneVerifiedAt    DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  phoneVerification         PhoneVerification?
   files                     File[]                     @relation("UserFiles")
   siteManagerProjects       Project[]                  @relation("SiteManagerProjects")
   siteUpdates               SiteUpdate[]
@@ -2724,6 +2781,51 @@ enum RecordingConsent {
   DECLINED
   /// Told the call is recorded (inbound), rather than asked.
   DECLARED
+}
+
+/// A team invitation sent through Clerk, and the role it was sent with.
+///
+/// Clerk copies an invitation's metadata onto the account only when the person
+/// signs up through the invitation link. Anyone who signs up any other way
+/// with the invited address arrived with no role, and the webhook made them a
+/// GUEST. This row is how `user.created` still finds the role the office
+/// picked (lib/domain/identity/invitations.ts).
+model TeamInvitation {
+  id                String    @id @default(uuid())
+  /// Clerk's invitation id (`inv_…`).
+  clerkInvitationId String    @unique
+  /// Lowercased, as the invitation was sent.
+  email             String
+  role              Role
+  expiresAt         DateTime
+  acceptedAt        DateTime?
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([email])
+}
+
+/// The code a user was texted to prove they hold their phone. One per user:
+/// asking again replaces it, so only the latest code works, and the row's
+/// `sentAt` is what a double-click races on (see sendPhoneVerificationCode).
+model PhoneVerification {
+  userId          String   @id
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The number the code went to, E.164. A code proves only this number.
+  phone           String
+  /// sha256 of a per-code salt and the code. The code itself is never stored.
+  codeHash        String
+  salt            String
+  expiresAt       DateTime
+  /// Wrong guesses against this code.
+  attempts        Int      @default(0)
+  sentAt          DateTime
+  /// Start of the current hour-long sending window, and the texts sent in it.
+  windowStartedAt DateTime
+  windowSends     Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 /// A team member's own phone, added under Admin → Phone & SMS. "Call via

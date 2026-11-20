@@ -68,6 +68,8 @@ export type TradieReplyScope =
 export type TradieReplyReference = {
   readonly token: string;
   readonly scope: TradieReplyScope;
+  /** The project the referenced email was about. */
+  readonly projectId: string;
   readonly projectName: string;
   readonly tradie: {
     readonly id: string;
@@ -94,13 +96,16 @@ export async function findTradieReplyReference(
       const recipient = await db.tradieRequestRecipient.findUnique({
         select: {
           id: true,
-          request: { select: { project: { select: { name: true } } } },
+          request: {
+            select: { project: { select: { id: true, name: true } } },
+          },
           tradie,
         },
         where: { refToken: token },
       });
       return recipient
         ? {
+            projectId: recipient.request.project.id,
             projectName: recipient.request.project.name,
             scope: { requestRecipientId: recipient.id },
             token,
@@ -110,11 +115,16 @@ export async function findTradieReplyReference(
     }
     case "booking": {
       const schedule = await db.tradieSchedule.findUnique({
-        select: { id: true, project: { select: { name: true } }, tradie },
+        select: {
+          id: true,
+          project: { select: { id: true, name: true } },
+          tradie,
+        },
         where: { refToken: token },
       });
       return schedule
         ? {
+            projectId: schedule.project.id,
             projectName: schedule.project.name,
             scope: { scheduleId: schedule.id },
             token,
@@ -143,6 +153,47 @@ export function isReplyFromTradie(
   return [reference.tradie.email, ...reference.tradie.additionalEmails].some(
     (address) => address.trim().toLowerCase() === from,
   );
+}
+
+/**
+ * The tradie an unreferenced message came from, by any address on their record.
+ *
+ * Their primary email first, then the extra addresses an office answers from
+ * (accounts@, a partner's phone), compared trimmed and lowercased as
+ * `isReplyFromTradie` does. An extra address shared by two tradies names
+ * neither: the message is then not filed as either's.
+ */
+export async function findTradieBySender(
+  sender: string | null | undefined,
+  db: DomainDb,
+): Promise<{ readonly id: string; readonly name: string } | null> {
+  const from = sender?.trim().toLowerCase() ?? "";
+  if (!from) return null;
+  // Prisma matches a scalar list case-sensitively only, and stored extras are
+  // not always lowercased ("Accounts@ABC.example"), so any tradie with extras
+  // is read and compared below. `hasSome` with the sender's own casing missed
+  // every other spelling, and with it the second tradie sharing an address,
+  // which the shared-address rule below depends on seeing. The directory is a
+  // few hundred rows at most; no `take`, for the same reason.
+  const candidates = await db.tradie.findMany({
+    select: { additionalEmails: true, email: true, id: true, name: true },
+    where: {
+      OR: [
+        { email: { equals: from, mode: "insensitive" } },
+        { additionalEmails: { isEmpty: false } },
+      ],
+    },
+  });
+  const primary = candidates.find(
+    (tradie) => tradie.email.trim().toLowerCase() === from,
+  );
+  if (primary) return { id: primary.id, name: primary.name };
+  const extra = candidates.filter((tradie) =>
+    tradie.additionalEmails.some(
+      (address) => address.trim().toLowerCase() === from,
+    ),
+  );
+  return extra.length === 1 ? { id: extra[0].id, name: extra[0].name } : null;
 }
 
 /**

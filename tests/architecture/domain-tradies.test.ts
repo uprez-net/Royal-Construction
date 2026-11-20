@@ -496,6 +496,10 @@ test("a role that moved under the caller is refused, not overwritten", async () 
 
 test("a demotion with other admins left through goes through", async () => {
   const recorder = recordingDb({
+    // Holds no leads: someone who does hands them over first (see
+    // domain-site-manager-gaps.test.ts).
+    "lead.count": 0,
+    "leadTask.count": 0,
     "user.count": 3,
     "user.findUnique": { id: "u_1", name: "Sam", role: "ADMIN" },
     "user.updateMany": { count: 1 },

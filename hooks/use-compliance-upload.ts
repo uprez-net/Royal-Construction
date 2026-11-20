@@ -8,6 +8,7 @@ import {
   useUploadHints,
   type UploadHintExtras,
 } from "@/components/common/upload-hints";
+import { completeProjectUpload } from "@/lib/files/complete-project-upload";
 import { buildBlobPath } from "@/utils/formatters";
 import type { ClientPayload } from "@/utils/validators";
 
@@ -53,8 +54,14 @@ const IDLE_UPLOAD: ComplianceUploadState = {
  * carrying its queue state and object-URL bookkeeping for a control that shows
  * one spinner.
  *
- * `/api/upload` writes the File row on completion; the caller then points a
- * compliance document at the returned `fileId`.
+ * The File row is confirmed before `uploadFile` resolves, through
+ * `/api/upload/complete`, so the `fileId` it returns is one the server can
+ * already see. It used to rely on Blob's `onUploadCompleted` callback writing
+ * the row, which is a webhook that arrives whenever it arrives: the caller
+ * pointed a compliance document at the id straight away and, on a large
+ * construction certificate, got "file not found" back. An 850ms sleep at each
+ * call site papered over it. The upload is now marked `project-file`, so the
+ * callback skips it and there is exactly one writer.
  */
 export function useComplianceUpload(projectId: string) {
   const [uploads, setUploads] = useState<Record<string, ComplianceUploadState>>(
@@ -101,6 +108,7 @@ export function useComplianceUpload(projectId: string) {
       patch(key, { isUploading: true, progress: 0, error: null });
 
       try {
+        const resolvedHints = hintsFor(hints);
         const blob = await upload(
           buildBlobPath({ fileId, fileName: file.name, projectId }),
           file,
@@ -113,12 +121,28 @@ export function useComplianceUpload(projectId: string) {
               fileName: file.name,
               fileSize: file.size,
               isOfferFile: false,
-              ...hintsFor(hints),
+              // Confirmed synchronously below; the Blob callback skips it.
+              uploadType: "project-file",
+              ...resolvedHints,
             } satisfies ClientPayload),
             abortSignal: controller.signal,
             onUploadProgress: ({ percentage }) =>
               patch(key, { progress: percentage }),
           },
+        );
+
+        // Wait for the File row, not for the webhook. Whatever the caller does
+        // next with this id — attach it to a compliance document, put it on a
+        // thread — needs the row to exist.
+        await completeProjectUpload(
+          {
+            projectId,
+            fileId,
+            fileName: file.name,
+            fileUrl: blob.url,
+            ...resolvedHints,
+          },
+          controller.signal,
         );
 
         return { fileId, name: file.name, url: blob.url };

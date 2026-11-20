@@ -8,7 +8,7 @@ import {
 } from "../errors";
 import type { CommsChannel } from "../ports/comms";
 import {
-  isInternalPrincipal,
+  isOfficePrincipal,
   requireAdminPrincipal,
   type DomainPrincipal,
 } from "../principal";
@@ -123,7 +123,7 @@ async function assertNumberFree(
  */
 export function canSeeTeamPhones(principal: DomainPrincipal): boolean {
   return (
-    isInternalPrincipal(principal)
+    isOfficePrincipal(principal)
     && !(principal.kind === "user" && principal.role === Role.GUEST)
   );
 }

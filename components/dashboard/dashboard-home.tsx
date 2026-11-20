@@ -22,6 +22,27 @@ interface DashboardHomeProps {
   dataWarnings?: string[];
 }
 
+/** Which sections fell back to empty because their read failed. */
+export function DashboardDataWarnings({ warnings }: { warnings: string[] }) {
+  if (warnings.length === 0) return null;
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-warning bg-warning-light px-4 py-3 text-sm text-foreground">
+      <AlertTriangle
+        className="mt-0.5 size-4 shrink-0 text-warning"
+        aria-hidden="true"
+      />
+      <div>
+        <p className="font-semibold">
+          Some dashboard sections are temporarily unavailable.
+        </p>
+        <p className="text-muted-foreground">
+          Showing available data while {warnings.join(", ")} refreshes.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function DashboardHome({
   isAdmin,
   today,
@@ -33,22 +54,7 @@ export function DashboardHome({
 }: DashboardHomeProps) {
   return (
     <div className="flex flex-col gap-6 lg:gap-7">
-      {dataWarnings.length > 0 && (
-        <div className="flex items-start gap-3 rounded-lg border border-warning bg-warning-light px-4 py-3 text-sm text-foreground">
-          <AlertTriangle
-            className="mt-0.5 size-4 shrink-0 text-warning"
-            aria-hidden="true"
-          />
-          <div>
-            <p className="font-semibold">
-              Some dashboard sections are temporarily unavailable.
-            </p>
-            <p className="text-muted-foreground">
-              Showing available data while {dataWarnings.join(", ")} refreshes.
-            </p>
-          </div>
-        </div>
-      )}
+      <DashboardDataWarnings warnings={dataWarnings} />
       <section className="flex flex-col gap-4 lg:gap-5">
         <DashboardHeader today={today} />
         <DashboardKPI

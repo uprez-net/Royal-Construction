@@ -291,9 +291,7 @@ export function ConnectPartyModal({
         trail: ["Project", "Compliance", `Connect with ${label}`, "Land deed"],
         tags: ["Compliance", label, "Land deed"],
       });
-      // The same settle the tab's own uploads wait out: the File row is written
-      // by /api/upload and is not always visible to the next query immediately.
-      await new Promise((resolve) => setTimeout(resolve, 850));
+      // uploadFile resolves only once the File row is confirmed server-side.
       await dispatch(
         uploadComplianceDocument({
           projectId,

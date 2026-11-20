@@ -1,10 +1,15 @@
-import { OutboxEventKind, TradieScheduleStatus } from "@prisma/client";
+import {
+  CommsDirection,
+  OutboxEventKind,
+  TradieScheduleStatus,
+} from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import { DomainNotFoundError, DomainTransitionError } from "../errors";
 import { isInternalPrincipal, type DomainPrincipal } from "../principal";
 import { runOutboxEffectWithOutcome } from "../outbox";
 import { INACTIVE_SCHEDULE_STATUSES } from "./lifecycle";
+import { noteTradieEmail } from "./emails";
 import { subjectWithTradieRef } from "./reply-reference";
 import {
   noteTradieActivity,
@@ -110,6 +115,22 @@ export async function sendTradieScheduleReminder(
         },
         principal,
         type: "bookingEmailSent",
+      },
+      db,
+    );
+    // On the tradie's project thread, so the reply it prompts has its question
+    // beside it.
+    await noteTradieEmail(
+      {
+        body: input.body,
+        direction: CommsDirection.OUTBOUND,
+        emailTo: to,
+        projectId: schedule.projectId,
+        refToken: schedule.refToken,
+        scheduleId: input.scheduleId,
+        sentAt: input.now ?? new Date(),
+        subject,
+        tradieId: schedule.tradieId,
       },
       db,
     );

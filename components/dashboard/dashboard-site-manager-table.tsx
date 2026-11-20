@@ -15,20 +15,33 @@ export interface SiteManagerPerformance {
   avatarUrl?: string;
   name: string;
   projectsCount: number;
-  workerHoursPerWeek: number;
   milestonesCompleted: number;
   milestonesTotal: number;
-  rating: number; // 1-5 scale
+  /** Not recorded anywhere yet: only the sample list below carries it. */
+  workerHoursPerWeek?: number;
+  /** 1-5 scale. Not recorded anywhere yet either. */
+  rating?: number;
 }
 
 interface DashboardSiteManagerTableProps {
   siteManagers: SiteManagerPerformance[];
+  /** The Manage button opens team admin, which is not for everyone. */
+  canManage?: boolean;
 }
 
 export function DashboardSiteManagerTable({
   siteManagers,
+  canManage = true,
 }: DashboardSiteManagerTableProps) {
   const router = useRouter();
+  // A column nobody fills is not drawn: a row of dashes reads as data that
+  // failed to load.
+  const showHours = siteManagers.some(
+    (manager) => manager.workerHoursPerWeek !== undefined,
+  );
+  const showRating = siteManagers.some(
+    (manager) => manager.rating !== undefined,
+  );
   return (
     <TableCard
       header={
@@ -37,13 +50,15 @@ export function DashboardSiteManagerTable({
             Site Manager Performance
           </h2>
 
-          <Button
-            variant="outline"
-            className={TOOLBAR_BUTTON_CLASS}
-            onClick={() => router.push("/team")}
-          >
-            Manage
-          </Button>
+          {canManage && (
+            <Button
+              variant="outline"
+              className={TOOLBAR_BUTTON_CLASS}
+              onClick={() => router.push("/team")}
+            >
+              Manage
+            </Button>
+          )}
         </div>
       }
     >
@@ -55,9 +70,9 @@ export function DashboardSiteManagerTable({
           headers={[
             "Manager",
             "Projects",
-            "Worker Hrs/Week",
+            ...(showHours ? ["Worker Hrs/Week"] : []),
             "Milestones",
-            "Rating",
+            ...(showRating ? ["Rating"] : []),
           ]}
           rows={siteManagers.map((manager) => [
             <UserCell
@@ -66,9 +81,13 @@ export function DashboardSiteManagerTable({
               avatarUrl={manager.avatarUrl}
             />,
             manager.projectsCount.toString(),
-            manager.workerHoursPerWeek.toString(),
+            ...(showHours
+              ? [(manager.workerHoursPerWeek ?? 0).toString()]
+              : []),
             `${manager.milestonesCompleted}/${manager.milestonesTotal}`,
-            <RatingStars key={manager.id} rating={manager.rating} />,
+            ...(showRating
+              ? [<RatingStars key={manager.id} rating={manager.rating ?? 0} />]
+              : []),
           ])}
           emptyState={
             <div className="flex flex-col items-center justify-center gap-3">

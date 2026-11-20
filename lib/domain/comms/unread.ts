@@ -3,7 +3,7 @@ import { CallAnsweredBy, CommsDirection, type Prisma } from "@prisma/client";
 import { authorizeLead, leadListScope } from "../access/leads";
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError, DomainValidationError } from "../errors";
-import { isInternalPrincipal, type DomainPrincipal } from "../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../principal";
 
 // What "unread" means for a phone call and a text, once.
 //
@@ -69,7 +69,7 @@ export async function listLeadCommsUnread(
   input: { readonly leadIds: readonly number[] },
   db: DomainDb,
 ): Promise<LeadCommsUnread[]> {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError("Call and SMS summaries are for staff.");
   }
   if (input.leadIds.length > MAX_UNREAD_LEADS) {

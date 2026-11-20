@@ -20,7 +20,7 @@ import type {
 } from "@/types/project-flow";
 import { openOverdueDays } from "@/lib/projects/milestone-ledger";
 
-import { projectReadScope } from "../access/projects";
+import { canSeeProjectFinancials, projectReadScope } from "../access/projects";
 import { BUILD_START_DOCUMENT_TYPES } from "../compliance/lifecycle";
 import type { DomainDb } from "../db";
 import type { DomainPrincipal } from "../principal";
@@ -533,7 +533,13 @@ export async function readProjectAttention(
     },
     select: attentionSourceSelect,
   });
-  return rows.map((row) => assessProjectAttention(row, now));
+  // A pending variation is named with its description, which is where the
+  // office writes what it costs. Someone who may not see project money (a site
+  // manager) is not alerted to them; the variation is the office's to chase.
+  const seesMoney = canSeeProjectFinancials(principal);
+  return rows.map((row) =>
+    assessProjectAttention(seesMoney ? row : { ...row, variations: [] }, now),
+  );
 }
 
 /** Projects with at least one condition, most urgent first. */

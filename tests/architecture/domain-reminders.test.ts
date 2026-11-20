@@ -83,7 +83,17 @@ test("manual tradie reminders persist their provider attempt before sending", as
     to: "tradie@example.com",
   });
   assert.equal(sent, 1);
-  assert.equal(recorder.writes().length, 3);
+  assert.equal(recorder.writes().length, 4);
+
+  // Filed on the tradie's project thread, as sent.
+  const filed = recorder
+    .writes()
+    .find((write) => write.operation === "tradieEmail.createMany");
+  const row = (filed?.args as { data: Record<string, unknown>[] }).data[0];
+  assert.equal(row.direction, "OUTBOUND");
+  assert.equal(row.emailTo, "tradie@example.com");
+  assert.equal(row.body, "Please confirm the booking.");
+  assert.equal(row.scheduleId, "schedule_1");
 
   // The key is scoped to the day it was used. The modal builds the subject and
   // body deterministically from the schedule, so an unscoped content key made

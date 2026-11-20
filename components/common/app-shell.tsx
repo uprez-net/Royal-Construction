@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
-import { UserButton } from "@clerk/nextjs";
 import { navigationItems } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -25,6 +24,7 @@ import {
 } from "@/utils/shell-nav";
 import Image from "next/image";
 import { Notifications } from "./notifications";
+import { AccountMenu } from "@/components/account/account-menu";
 import { PhoneDock } from "@/components/comms/phone-dock";
 import { PhoneProvider } from "@/components/comms/phone-provider";
 import { NotificationProvider } from "@/context/NotificationContext";
@@ -45,6 +45,7 @@ type AgentSessionTitleDetail = {
 
 export function AppShell({
   isAdmin,
+  isOffice = true,
   isSignedIn,
   phoneEnabled = false,
   whatsapp = WHATSAPP_OFF,
@@ -55,6 +56,13 @@ export function AppShell({
   children,
 }: {
   isAdmin: boolean;
+  /**
+   * Works the sales side. False for a site manager, whose navigation leaves
+   * out the leads, offers and operations agent screens. Defaults to true so a
+   * signed-out visitor's shell is unchanged; the server refuses the data
+   * either way, this only keeps a link from leading to a refusal.
+   */
+  isOffice?: boolean;
   isSignedIn: boolean;
   /**
    * Staff only: mounts the browser phone (calls and WhatsApp calls). A portal
@@ -78,9 +86,11 @@ export function AppShell({
   const visibleNavigationItems = useMemo(
     () =>
       navigationItems.filter(
-        (item) => item.slug !== "agent" || operationsAgentEnabled,
+        (item) =>
+          (item.slug !== "agent" || operationsAgentEnabled)
+          && (isOffice || !item.officeOnly),
       ),
-    [operationsAgentEnabled],
+    [operationsAgentEnabled, isOffice],
   );
   const [time, setTime] = useState("");
   const [zone, setZone] = useState<"AEST" | "AEDT">("AEST");
@@ -308,25 +318,9 @@ export function AppShell({
                   </div>
                 ) : (
                   <div className="border-t border-sidebar-border px-4 py-4">
-                    <UserButton
-                      showName={true}
-                      appearance={{
-                        elements: {
-                          avatarBox: "size-9",
-                          userButtonBox:
-                            "w-full! flex! flex-row-reverse!  gap-2 justify-end text-sidebar-foreground",
-                          userButtonTrigger: "w-full",
-                          userButtonOuterIdentifier:
-                            "text-base text-sidebar-foreground!",
-                          userButtonAvatarBox: "w-8 h-8",
-                          rootBox: "w-full shadow-xs",
-                        },
-                      }}
-                      userProfileProps={{
-                        appearance: {
-                          baseTheme: "light",
-                        },
-                      }}
+                    <AccountMenu
+                      variant="sidebar"
+                      onNavigate={() => setMobileNavOpen(false)}
                     />
                   </div>
                 )}
@@ -425,13 +419,7 @@ export function AppShell({
                       </Button>
                     </div>
                   ) : (
-                    <UserButton
-                      appearance={{
-                        elements: {
-                          avatarBox: "size-9",
-                        },
-                      }}
-                    />
+                    <AccountMenu variant="header" />
                   )}
                 </div>
               </div>

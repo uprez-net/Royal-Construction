@@ -104,14 +104,21 @@ function iconFor(type: ComplianceDocumentType): LucideIcon {
 export function IdentifyDocumentPicker({
   disabled,
   filledTypes,
+  hiddenTypes,
   onSelect,
 }: {
   disabled?: boolean;
+  /** Types this user may not file, left off the list (the server refuses them). */
+  hiddenTypes?: ReadonlySet<ComplianceDocumentType>;
   /** Types that already have a file on this engagement. */
   filledTypes: ReadonlySet<ComplianceDocumentType>;
   onSelect: (type: ComplianceDocumentType) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const groups = IDENTIFIABLE_DOCUMENT_GROUPS.map((group) => ({
+    ...group,
+    types: group.types.filter((type) => !hiddenTypes?.has(type)),
+  }));
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -138,7 +145,7 @@ export function IdentifyDocumentPicker({
         <Command label="Search document types">
           <CommandInput placeholder="Search document types…" />
           <CommandList className="max-h-80">
-            {IDENTIFIABLE_DOCUMENT_GROUPS.map((group) =>
+            {groups.map((group) =>
               group.types.length > 0 ? (
                 <CommandGroup key={group.heading} heading={group.heading}>
                   {group.types.map((type) => {

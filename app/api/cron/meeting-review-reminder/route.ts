@@ -1,5 +1,7 @@
 import { cronOutcome, withCronReporting } from "@/lib/observability/cron";
+import { isOfficeRole } from "@/lib/domain/principal";
 import prisma from "@/lib/prisma";
+import { reportError } from "@/lib/observability/report-error";
 import {
   sydneyDateOnly,
   sydneyStartOfDay,
@@ -52,10 +54,14 @@ async function handle(request: Request) {
         },
       },
       include: {
-        assignedTo: { select: { id: true, name: true, email: true } },
+        assignedTo: {
+          select: { id: true, name: true, email: true, role: true },
+        },
         lead: {
           include: {
-            assignedUser: { select: { id: true, name: true, email: true } },
+            assignedUser: {
+              select: { id: true, name: true, email: true, role: true },
+            },
           },
         },
       },
@@ -68,6 +74,21 @@ async function handle(request: Request) {
       const lead = task.lead;
       const assignee = task.assignedTo ?? lead.assignedUser;
       if (!assignee?.id) continue;
+      // As the follow-up reminder: the office only, and loudly otherwise.
+      if (!isOfficeRole(assignee.role)) {
+        // Reported, not just logged: with nobody reading logs, this is how the
+        // office learns a lead needs reassigning. Ids only.
+        reportError(
+          new Error(
+            `[CRON] Meeting task ${task.id} on lead ${lead.id} is held by user ${assignee.id}, who is not in the office. Reassign the lead; no reminder was sent.`,
+          ),
+          {
+            source: "cron:meeting-review-reminder",
+            ids: { assigneeId: assignee.id, leadId: lead.id, taskId: task.id },
+          },
+        );
+        continue;
+      }
 
       const notificationPayload = createNotification("leadMeetingReview", {
         leadId: lead.id.toString(),

@@ -7,7 +7,7 @@ import {
   DomainNotFoundError,
   DomainValidationError,
 } from "../../errors";
-import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../../principal";
 import { WHATSAPP_CONSENT_SOURCE_LABELS } from "./consent-labels";
 import { recordWhatsAppHistory } from "./records";
 
@@ -49,7 +49,7 @@ export async function recordLeadWhatsAppConsent(
   input: LeadWhatsAppConsentInput,
   db: TransactionalDomainDb,
 ): Promise<LeadWhatsAppConsentState> {
-  if (principal.kind !== "user" || !isInternalPrincipal(principal)) {
+  if (principal.kind !== "user" || !isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(
       "Recording WhatsApp consent requires a signed-in member of staff.",
     );

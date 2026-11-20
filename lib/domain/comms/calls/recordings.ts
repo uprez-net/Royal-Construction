@@ -16,7 +16,7 @@ import {
   type CommsProviderName,
   type RecordingPort,
 } from "../../ports/comms";
-import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../../principal";
 import { providerName } from "../shared";
 
 // Copying a call recording off the carrier and into Royal's own storage.
@@ -239,7 +239,7 @@ export async function retryCallRecording(
   input: { readonly recordingId: string },
   db: DomainDb,
 ): Promise<void> {
-  if (!isInternalPrincipal(principal) || principal.kind !== "user") {
+  if (!isOfficePrincipal(principal) || principal.kind !== "user") {
     throw new DomainAuthorizationError(
       "Retrying a recording requires a member of staff.",
     );
@@ -268,7 +268,7 @@ export async function recordingLocation(
   input: { readonly recordingId: string },
   db: DomainDb,
 ): Promise<{ url: string; mimeType: string | null }> {
-  if (!isInternalPrincipal(principal) || principal.kind !== "user") {
+  if (!isOfficePrincipal(principal) || principal.kind !== "user") {
     throw new DomainAuthorizationError("Recordings are for members of staff.");
   }
   const recording = await db.callRecording.findUnique({

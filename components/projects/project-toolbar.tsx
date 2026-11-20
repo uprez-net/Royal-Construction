@@ -15,6 +15,8 @@ interface ProjectToolbarProps {
   onSearchTermChange: (term: string) => void;
   sort: ProjectSort;
   onSortChange: (sort: ProjectSort) => void;
+  /** Budget and Spent orderings: an admin's, as the columns are. */
+  showFinancialSorts?: boolean;
   /** Export and New project, at the end of the row. */
   children?: ReactNode;
 }
@@ -25,6 +27,7 @@ export function ProjectToolbar({
   onSearchTermChange,
   sort,
   onSortChange,
+  showFinancialSorts = true,
   children,
 }: ProjectToolbarProps) {
   const dispatch = useAppDispatch();
@@ -44,7 +47,11 @@ export function ProjectToolbar({
       <ListSortMenu
         label="projects"
         value={sort}
-        options={PROJECT_SORT_OPTIONS}
+        options={PROJECT_SORT_OPTIONS.filter(
+          (option) =>
+            showFinancialSorts
+            || (option.value !== "budget" && option.value !== "spent"),
+        )}
         onChange={onSortChange}
       />
       <ToolbarSearch

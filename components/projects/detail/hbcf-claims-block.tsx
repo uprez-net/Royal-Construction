@@ -73,6 +73,7 @@ export function HbcfClaimsBlock({
   claimDate,
   extracting,
   canRemove,
+  readOnly = false,
   onNumberChange,
   onDocumentsChange,
   onUpload,
@@ -84,6 +85,14 @@ export function HbcfClaimsBlock({
   claimDate: string | null;
   extracting: boolean;
   canRemove: boolean;
+  /**
+   * The caller is not the office (a site manager). HBCF is recorded by the
+   * office: the server keeps every stored HBCF field on their save and refuses
+   * their upload, and the amounts reach them blanked. So nothing is offered for
+   * editing — no upload, no number, no amounts or total — rather than offered
+   * and then quietly dropped. The documents themselves stay viewable.
+   */
+  readOnly?: boolean;
   onNumberChange: (value: string | null) => void;
   onDocumentsChange: (documents: HbcfClaimDocument[]) => void;
   onUpload: (files: DBFile[]) => void;
@@ -131,36 +140,39 @@ export function HbcfClaimsBlock({
             }
             placeholder="Not recorded yet"
             disabled={extracting}
+            readOnly={readOnly}
             className="h-9"
           />
         </div>
 
-        <div className="flex flex-col justify-end gap-1.5">
-          <UploadButton
-            projectId={projectId}
-            maxFiles={MAX_HBCF_UPLOAD}
-            accept="application/pdf,.pdf"
-            hints={{
-              trail: ["HBCF insurance"],
-              tags: ["HBCF insurance", "Insurance certificate"],
-            }}
-            onUpload={onUpload}
-          />
-          <p className="text-[11px] text-muted-foreground">
-            {documents.length > 0
-              ? "Adds to the documents below. Nothing already here is replaced."
-              : `PDF, up to ${MAX_HBCF_UPLOAD} at a time.`}
-          </p>
-          {extracting ? (
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2
-                aria-hidden="true"
-                className="h-3 w-3 animate-spin motion-reduce:animate-none"
-              />
-              Reading the documents&hellip;
+        {readOnly ? null : (
+          <div className="flex flex-col justify-end gap-1.5">
+            <UploadButton
+              projectId={projectId}
+              maxFiles={MAX_HBCF_UPLOAD}
+              accept="application/pdf,.pdf"
+              hints={{
+                trail: ["HBCF insurance"],
+                tags: ["HBCF insurance", "Insurance certificate"],
+              }}
+              onUpload={onUpload}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {documents.length > 0
+                ? "Adds to the documents below. Nothing already here is replaced."
+                : `PDF, up to ${MAX_HBCF_UPLOAD} at a time.`}
             </p>
-          ) : null}
-        </div>
+            {extracting ? (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2
+                  aria-hidden="true"
+                  className="h-3 w-3 animate-spin motion-reduce:animate-none"
+                />
+                Reading the documents&hellip;
+              </p>
+            ) : null}
+          </div>
+        )}
       </div>
 
       {hasNumber ? null : (
@@ -172,7 +184,11 @@ export function HbcfClaimsBlock({
             aria-hidden="true"
             className="mt-0.5 h-4 w-4 shrink-0"
           />
-          <p>Upload the insurance document to update the no.</p>
+          <p>
+            {readOnly
+              ? "No HBCF insurance no. yet. The office records it."
+              : "Upload the insurance document to update the no."}
+          </p>
         </div>
       )}
 
@@ -275,59 +291,63 @@ export function HbcfClaimsBlock({
                   </div>
                 </div>
 
-                <div className="space-y-1.5 sm:w-52">
-                  <Label
-                    htmlFor={amountId}
-                    className="text-xs font-medium text-muted-foreground"
-                  >
-                    Claim amount (AUD)
-                  </Label>
-                  <div className="flex items-center gap-1.5">
-                    <Input
-                      id={amountId}
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      step="0.01"
-                      value={doc.claimAmount ?? ""}
-                      placeholder="0.00"
-                      disabled={extracting}
-                      // Typing an amount is a person stating it, so it counts.
-                      onChange={(e) =>
-                        patchDocument(doc.fileId, {
-                          amountConfirmed: true,
-                          claimAmount: normalizeClaimAmount(e.target.value),
-                        })
-                      }
-                      className="h-9 font-mono tabular-nums"
-                      aria-describedby={reason ? `${amountId}-note` : undefined}
-                    />
-                    {reason === "unconfirmed" ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-9 shrink-0"
-                        onClick={() =>
-                          patchDocument(doc.fileId, { amountConfirmed: true })
-                        }
-                      >
-                        <Check aria-hidden="true" className="h-3.5 w-3.5" />
-                        Confirm
-                      </Button>
-                    ) : null}
-                  </div>
-                  {reason ? (
-                    <p
-                      id={`${amountId}-note`}
-                      className="text-[11px] leading-snug text-warning-ink"
+                {readOnly ? null : (
+                  <div className="space-y-1.5 sm:w-52">
+                    <Label
+                      htmlFor={amountId}
+                      className="text-xs font-medium text-muted-foreground"
                     >
-                      {EXCLUSION_COPY[reason]}
-                    </p>
-                  ) : (
-                    <StatusPill tone="success">Counted</StatusPill>
-                  )}
-                </div>
+                      Claim amount (AUD)
+                    </Label>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        id={amountId}
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step="0.01"
+                        value={doc.claimAmount ?? ""}
+                        placeholder="0.00"
+                        disabled={extracting}
+                        // Typing an amount is a person stating it, so it counts.
+                        onChange={(e) =>
+                          patchDocument(doc.fileId, {
+                            amountConfirmed: true,
+                            claimAmount: normalizeClaimAmount(e.target.value),
+                          })
+                        }
+                        className="h-9 font-mono tabular-nums"
+                        aria-describedby={
+                          reason ? `${amountId}-note` : undefined
+                        }
+                      />
+                      {reason === "unconfirmed" ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-9 shrink-0"
+                          onClick={() =>
+                            patchDocument(doc.fileId, { amountConfirmed: true })
+                          }
+                        >
+                          <Check aria-hidden="true" className="h-3.5 w-3.5" />
+                          Confirm
+                        </Button>
+                      ) : null}
+                    </div>
+                    {reason ? (
+                      <p
+                        id={`${amountId}-note`}
+                        className="text-[11px] leading-snug text-warning-ink"
+                      >
+                        {EXCLUSION_COPY[reason]}
+                      </p>
+                    ) : (
+                      <StatusPill tone="success">Counted</StatusPill>
+                    )}
+                  </div>
+                )}
               </li>
             );
           })}
@@ -351,27 +371,29 @@ export function HbcfClaimsBlock({
         </div>
       ) : null}
 
-      <div
-        className={cn(
-          "flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-lg border px-4 py-3",
-          "border-primary/30 bg-primary/5",
-        )}
-        aria-live="polite"
-      >
-        <div>
-          <p className="text-sm font-semibold text-foreground">
-            Total HBCF claim amount
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {documents.length === 0
-              ? "No HBCF documents yet."
-              : `${counted.length} of ${documents.length} document${documents.length === 1 ? "" : "s"} counted.`}
+      {readOnly ? null : (
+        <div
+          className={cn(
+            "flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-lg border px-4 py-3",
+            "border-primary/30 bg-primary/5",
+          )}
+          aria-live="polite"
+        >
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              Total HBCF claim amount
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {documents.length === 0
+                ? "No HBCF documents yet."
+                : `${counted.length} of ${documents.length} document${documents.length === 1 ? "" : "s"} counted.`}
+            </p>
+          </div>
+          <p className="font-mono text-lg font-semibold tabular-nums text-foreground">
+            {amountFormat.format(total)}
           </p>
         </div>
-        <p className="font-mono text-lg font-semibold tabular-nums text-foreground">
-          {amountFormat.format(total)}
-        </p>
-      </div>
+      )}
     </div>
   );
 }

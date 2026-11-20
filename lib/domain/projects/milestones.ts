@@ -9,8 +9,13 @@ import { v4 as randomUUID } from "uuid";
 
 import type { OfferWorkspaceCostLine } from "@/lib/offer/workspace-model";
 
-import { authorizeMilestone, authorizeProject } from "../access/projects";
+import {
+  authorizeMilestone,
+  authorizeProject,
+  canSeeProjectFinancials,
+} from "../access/projects";
 import type { DomainDb } from "../db";
+import { HIDDEN_AMOUNT, hideMilestoneFinancials } from "./financial-redaction";
 import {
   DomainNotFoundError,
   DomainTransitionError,
@@ -33,6 +38,10 @@ import {
   replanFollowingActivities,
   STARTED_MILESTONE_STATUSES,
 } from "./milestone-schedule";
+import {
+  settledBookingStatus,
+  tradieScheduleSpend,
+} from "../tradies/lifecycle";
 import { settleMilestoneBookings } from "../tradies/settlement";
 import { sydneyDateOnly, sydneyToday } from "@/lib/dates/sydney";
 
@@ -298,6 +307,62 @@ export type UpdateMilestoneOutcome = {
 };
 
 /**
+ * The spend a caller who cannot see prices gets to record.
+ *
+ * Completing an activity needs a spend, and the screen works it out from the
+ * prices on the bookings and sends it. Someone who may not see those prices is
+ * handed none, so their screen would work out nothing and send $0 — and $0
+ * would be written to the activity and rolled up into the project's spend. So
+ * for them the figure is worked out here, from the same bookings the same way
+ * (`tradieScheduleSpend`, each booking priced at the status completion is about
+ * to give it), and whatever they sent is ignored. A caller who sees prices
+ * keeps entering and confirming their own.
+ *
+ * Only on the way INTO done. An activity that is already done keeps the spend
+ * it has: correcting its completion date is not a reason to re-price it, and
+ * the office may have typed a figure the bookings do not explain (an activity
+ * with no bookings at all would otherwise be re-priced to $0).
+ */
+async function withServerSideSpend(
+  principal: DomainPrincipal,
+  input: UpdateMilestoneInput,
+  stored: { readonly status: MilestoneStatus; readonly spend: unknown },
+  db: DomainDb,
+): Promise<UpdateMilestoneInput> {
+  if (canSeeProjectFinancials(principal)) return input;
+  if (input.status !== MilestoneStatus.DONE) {
+    return { ...input, spend: undefined };
+  }
+  if (stored.status === MilestoneStatus.DONE && stored.spend !== null) {
+    return { ...input, spend: Number(stored.spend) };
+  }
+  const bookings = await db.tradieSchedule.findMany({
+    select: {
+      durationDays: true,
+      quotedPrice: true,
+      requiresQuote: true,
+      status: true,
+      tradie: { select: { lastQuotedPrice: true, lastQuotedPriceUnit: true } },
+    },
+    where: { milestoneId: input.milestoneId },
+  });
+  const spend = bookings.reduce(
+    (total, booking) =>
+      total
+      + tradieScheduleSpend({
+        ...booking,
+        status: settledBookingStatus(booking.status, "DONE") ?? booking.status,
+        tradie: {
+          lastQuotedPrice: booking.tradie.lastQuotedPrice?.toString() ?? null,
+          lastQuotedPriceUnit: booking.tradie.lastQuotedPriceUnit,
+        },
+      }),
+    0,
+  );
+  return { ...input, spend };
+}
+
+/**
  * The intrinsic rules of a milestone update, independent of what is stored.
  *
  * Pure, so the App's Zod schema (`utils/validators/milestone.ts`, which
@@ -385,25 +450,27 @@ function toDate(value: string | undefined, field: string): Date | undefined {
  */
 export async function updateMilestone(
   principal: DomainPrincipal,
-  input: UpdateMilestoneInput,
+  rawInput: UpdateMilestoneInput,
   db: DomainDb,
 ): Promise<UpdateMilestoneOutcome> {
   const {
     project: { id: projectId },
-  } = await authorizeMilestone(principal, input.milestoneId, db);
+  } = await authorizeMilestone(principal, rawInput.milestoneId, db);
 
   const current = await db.milestone.findUniqueOrThrow({
-    where: { id: input.milestoneId },
+    where: { id: rawInput.milestoneId },
     select: {
       id: true,
       name: true,
       parentId: true,
       projectId: true,
       status: true,
+      spend: true,
       actualDate: true,
       childrenMilestones: { select: { status: true } },
     },
   });
+  const input = await withServerSideSpend(principal, rawInput, current, db);
 
   // Staying put is always allowed: an update that leaves the status alone is
   // editing something else — a target date most often — and the state machine
@@ -648,15 +715,22 @@ export async function updateMilestone(
     settledBookings.cancelled.push(...result.cancelled);
   }
 
+  // The figures go back the way the project page hands them out: a caller who
+  // may not see the money gets none here either, from any adapter. Whether a
+  // progress claim is now due is not a figure, and stays.
+  const seesMoney = canSeeProjectFinancials(principal);
+  const milestone = {
+    ...updated,
+    budget: updated.budget.toString(),
+    previousStatus: current.status,
+    spend: updated.spend?.toString(),
+  };
   return {
-    parentUpdates,
-    milestone: {
-      ...updated,
-      budget: updated.budget.toString(),
-      previousStatus: current.status,
-      spend: updated.spend?.toString(),
-    },
-    projectSpent: project.spent.toString(),
+    parentUpdates: seesMoney
+      ? parentUpdates
+      : parentUpdates.map((parent) => ({ ...parent, spend: undefined })),
+    milestone: seesMoney ? milestone : hideMilestoneFinancials(milestone),
+    projectSpent: seesMoney ? project.spent.toString() : HIDDEN_AMOUNT,
     projectStartDate,
     projectStatus,
     replannedActivities,

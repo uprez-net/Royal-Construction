@@ -33,7 +33,12 @@ export const navigationItems: NavItem[] = [
     label: "Dashboard",
     icon: <LayoutDashboard className="size-4" />,
   },
-  { slug: "leads", label: "Leads", icon: <Megaphone className="size-4" /> },
+  {
+    slug: "leads",
+    label: "Leads",
+    icon: <Megaphone className="size-4" />,
+    officeOnly: true,
+  },
   // {
   //   slug: "email-ad-hock",
   //   label: "Ad-hoc Email",
@@ -48,11 +53,13 @@ export const navigationItems: NavItem[] = [
     slug: "offers",
     label: "Offers",
     icon: <ReceiptText className="size-4" />,
+    officeOnly: true,
   },
   {
     slug: "agent",
     label: "Operations Agent",
     icon: <Bot className="size-4" />,
+    officeOnly: true,
   },
   // {
   //   slug: "catalogue",

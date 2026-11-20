@@ -2,6 +2,8 @@ import type { Role } from "@prisma/client";
 import type { AuthFn } from "eve/channels/auth";
 import { ForbiddenError, withAuthChallenges } from "eve/channels/auth";
 
+import { isOfficeRole } from "@/lib/domain/principal";
+
 // The inbound MCP channel's authentication policy and its public resource
 // identity, with no Clerk client and no Prisma connection in sight — those
 // arrive as dependencies from agent/channels/mcp.ts. Keeping them out is what
@@ -58,32 +60,43 @@ const FRONTEND_API_HOST =
   /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
 
 /** Matches Eve's OAuth resource URL rules before calling oauthResource(). */
-export function isValidMcpResourceUrl(value: string | undefined | null): boolean {
+export function isValidMcpResourceUrl(
+  value: string | undefined | null,
+): boolean {
   if (!value) return false;
 
   try {
     const url = new URL(value);
     const loopback = isLoopbackHostname(url.hostname);
-    return (url.protocol === "https:" || (url.protocol === "http:" && loopback))
+    return (
+      (url.protocol === "https:" || (url.protocol === "http:" && loopback))
       && !url.username
       && !url.password
       && !url.search
-      && !url.hash;
+      && !url.hash
+    );
   } catch {
     return false;
   }
 }
 
 function isLoopbackHostname(hostname: string): boolean {
-  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "");
+  const host = hostname
+    .replace(/^\[|\]$/g, "")
+    .toLowerCase()
+    .replace(/\.$/, "");
   if (host === "localhost" || host.endsWith(".localhost") || host === "::1") {
     return true;
   }
 
   const octets = host.split(".").map(Number);
-  return octets.length === 4
-    && octets.every((octet) => Number.isInteger(octet) && octet >= 0 && octet <= 255)
-    && octets[0] === 127;
+  return (
+    octets.length === 4
+    && octets.every(
+      (octet) => Number.isInteger(octet) && octet >= 0 && octet <= 255,
+    )
+    && octets[0] === 127
+  );
 }
 
 /**
@@ -207,7 +220,9 @@ export function createMcpUserAuth(deps: McpAuthDependencies): AuthFn<Request> {
       // Falling through would report it as a bad credential and send the client
       // back to sign in again, which cannot fix it; the account needs a row.
       const principal = await deps.principalFor(clerkUserId);
-      if (!principal) {
+      // Office only, as on the browser channel (agent/lib/channel-auth.ts):
+      // the office digest and recall index every lead, offer and price.
+      if (!principal || !isOfficeRole(principal.role)) {
         throw new ForbiddenError({
           code: "agent_access_denied",
           message: "The operations agent is unavailable for this account.",

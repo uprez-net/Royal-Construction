@@ -8,6 +8,9 @@ export async function completeProjectUpload(
     fileId: string;
     fileName: string;
     fileUrl: string;
+    /** Upload hints; the server normalises them again. */
+    tags?: readonly string[];
+    origin?: string | null;
   },
   signal?: AbortSignal,
 ) {

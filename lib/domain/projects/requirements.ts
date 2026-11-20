@@ -2,9 +2,14 @@ import type { Prisma } from "@prisma/client";
 
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 
+import { canSeeProjectFinancials } from "../access/projects";
 import type { DomainDb } from "../db";
 import type { DomainPrincipal } from "../principal";
 
+import {
+  hideRequirementsFinancials,
+  withStoredHbcf,
+} from "./financial-redaction";
 import { planStartDateFromHbcfClaim } from "./hbcf-start-date";
 import { rescheduleProjectFromStart } from "./milestones";
 import {
@@ -154,6 +159,7 @@ export type ProjectRequirementsRead = {
  * looking at the row it is about to overwrite.
  */
 export async function getProjectRequirements(
+  principal: DomainPrincipal,
   projectId: string,
   db: DomainDb,
 ): Promise<ProjectRequirementsRead> {
@@ -170,7 +176,10 @@ export async function getProjectRequirements(
   }
   return {
     projectId: project.id,
-    requirements: project.requirements,
+    // The commercial section and the HBCF claim amounts, as on the screens.
+    requirements: canSeeProjectFinancials(principal)
+      ? project.requirements
+      : hideRequirementsFinancials(project.requirements)!,
     updatedAt: project.updatedAt.toISOString(),
   };
 }
@@ -236,10 +245,22 @@ export async function updateProjectRequirements(
     );
   }
 
-  const candidate = mergeProjectRequirementsPatch(
-    current.requirements,
-    input.patch,
-  );
+  // The commercial terms are the contract sum and the claim stages progress
+  // claims are raised from. A caller who may not see them does not patch them
+  // (see `withoutFinancialEdits`); today only the office's agent reaches this.
+  const patch = { ...input.patch };
+  if (!canSeeProjectFinancials(principal)) {
+    delete patch.commercialsAndClaims;
+    if (patch.legalAdministration) {
+      patch.legalAdministration = withStoredHbcf(
+        patch.legalAdministration,
+        (current.requirements as { legalAdministration?: unknown })
+          .legalAdministration,
+      );
+    }
+  }
+
+  const candidate = mergeProjectRequirementsPatch(current.requirements, patch);
   if (!isCompleteProjectRequirements(candidate)) {
     throw new DomainValidationError(
       "The update must preserve every required requirements section and the versioned payload shape.",
@@ -307,7 +328,7 @@ export async function updateProjectRequirements(
   });
 
   return {
-    changedSections: Object.keys(input.patch),
+    changedSections: Object.keys(patch),
     projectId: input.projectId,
     rescheduledMilestones,
     startDate: claimPlan.startDate?.toISOString().slice(0, 10) ?? null,

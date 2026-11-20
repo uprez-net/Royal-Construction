@@ -313,14 +313,20 @@ test("a GUEST never sees the team's numbers or routes a call to one", async () =
   assert.equal(
     (
       await listTeamPhones(
-        siteManagerPrincipal(),
+        adminPrincipal(),
         recordingDb({
           "commsTeamPhone.findMany": [],
         }).db,
       )
     ).length,
     0,
-    "other staff still may",
+    "the office still may",
+  );
+  // The numbers feed the Call picker for calling a lead; a site manager has no
+  // lead to call.
+  await assert.rejects(
+    listTeamPhones(siteManagerPrincipal(), recordingDb().db),
+    /for members of staff/,
   );
 
   const recorder = recordingDb(

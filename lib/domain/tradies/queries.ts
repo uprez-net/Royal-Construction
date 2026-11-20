@@ -1,6 +1,6 @@
 import { Role, type Prisma, type TradieScheduleStatus } from "@prisma/client";
 
-import { canManageProject } from "../access/projects";
+import { canManageProject, canSeeProjectFinancials } from "../access/projects";
 import {
   assertCanReadTradieDirectory,
   authorizeTradie,
@@ -8,7 +8,7 @@ import {
   tradieScheduleListScope,
 } from "../access/tradies";
 import type { DomainDb } from "../db";
-import { DomainNotFoundError } from "../errors";
+import { DomainAuthorizationError, DomainNotFoundError } from "../errors";
 import {
   isUserPrincipal,
   requireAdminPrincipal,
@@ -143,7 +143,9 @@ export type TradieActivityPage = {
 const ACTIVITY_PAGE_SIZE = 25;
 
 /**
- * A tradie's activity log, newest first, a page at a time. Staff.
+ * A tradie's activity log, newest first, a page at a time. The office only:
+ * the log spells out the tradie's quotes and invoices across every project,
+ * in the message text, so there is no field to blank for a site manager.
  *
  * Read fresh rather than through the tradie page's cache: the commands that
  * write it run from Eve, the email webhook and a cron, none of which can
@@ -159,6 +161,11 @@ export async function listTradieActivity(
   db: DomainDb,
 ): Promise<TradieActivityPage> {
   assertCanReadTradieDirectory(principal);
+  if (!canSeeProjectFinancials(principal)) {
+    throw new DomainAuthorizationError(
+      "A tradie's activity history is only available to the office.",
+    );
+  }
   const limit = Math.min(Math.max(input.limit ?? ACTIVITY_PAGE_SIZE, 1), 100);
   const rows = await db.tradieActivityLog.findMany({
     ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),

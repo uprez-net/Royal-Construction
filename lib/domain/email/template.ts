@@ -4,7 +4,7 @@ import {
 } from "@/constants/email-artifacts";
 
 import { DomainAuthorizationError, DomainValidationError } from "../errors";
-import { isInternalPrincipal, type DomainPrincipal } from "../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../principal";
 
 export type EmailTemplateLink = {
   readonly label: string;
@@ -45,7 +45,7 @@ export async function generateEmailTemplate(
   input: EmailTemplateInput,
   generate: EmailTextGenerationPort,
 ): Promise<GeneratedEmailResult> {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(
       "Email template generation requires internal staff access.",
     );

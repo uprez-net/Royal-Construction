@@ -3,13 +3,18 @@ import { Badge } from "../ui/badge";
 import { Card, CardContent, CardHeader } from "../ui/card";
 import { Activity } from "lucide-react";
 import { differenceInCalendarDays } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
+
+import { SYDNEY_TZ } from "@/lib/dates/sydney";
 
 export interface FollowUpItem {
-  id: number;
+  id: number | string;
   customerName: string;
   projectName: string;
   description: string;
   dueAt: Date | string;
+  /** A date that has no time of day; shown in place of the clock face. */
+  dueLabel?: string;
   status: "positive" | "neutral" | "negative";
 }
 
@@ -39,8 +44,20 @@ const statusConfig: Record<
   },
 };
 
-export function calculateFollowUpBadgeLabel(dueAt: Date): string {
-  const days = differenceInCalendarDays(dueAt, new Date());
+/**
+ * "Due today", "2 days left", "1 day overdue", counted on Sydney's calendar.
+ * Counted on the machine's own, the page rendered on the server (UTC) called a
+ * follow-up due at Sydney midnight on Friday "1 day overdue" all Friday
+ * morning.
+ */
+export function calculateFollowUpBadgeLabel(
+  dueAt: Date,
+  now: Date = new Date(),
+): string {
+  const days = differenceInCalendarDays(
+    toZonedTime(dueAt, SYDNEY_TZ),
+    toZonedTime(now, SYDNEY_TZ),
+  );
 
   if (days > 0) {
     return `${days} day${days === 1 ? "" : "s"} left`;
@@ -113,7 +130,7 @@ export function DashboardFollowUps({
                 <p
                   className={`mt-1.5 text-[11px] font-medium ${(statusConfig[item.status] ?? statusConfig.neutral).ink}`}
                 >
-                  {timeFormat.format(new Date(item.dueAt))}
+                  {item.dueLabel ?? timeFormat.format(new Date(item.dueAt))}
                 </p>
                 <Badge
                   className={`absolute right-4 top-4 h-[22px] gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[11.5px] font-semibold ${(statusConfig[item.status] ?? statusConfig.neutral).pill}`}

@@ -7,6 +7,7 @@ import { applyTradieScheduleUpdate } from "@/lib/data/tradie-schedule-updates";
 import { getAllAdminUsersIds } from "@/lib/data/user";
 import {
   AWAITING_TRADIE_REPLY,
+  findTradieBySender,
   findTradieReplyReference,
   isReplyFromTradie,
   matchTradieReplyToSchedule,
@@ -15,6 +16,7 @@ import {
   type TradieReplyReference,
 } from "@/lib/domain/tradies/replies";
 import { extractTradieRefToken } from "@/lib/domain/tradies/reply-reference";
+import { recordInboundTradieEmail } from "@/lib/domain/tradies/emails";
 import { triggerNotification } from "@/lib/notification/novu";
 import { createNotification } from "@/types/notification";
 import { saveLeadEmailTrail } from "@/lib/graph/save-lead-email-trail";
@@ -330,20 +332,63 @@ async function handleTradieReply(input: {
   }
 }
 
-async function isTradieMessage(fromEmail: string): Promise<boolean> {
+/**
+ * File a tradie's message on its project thread, before anything reads it.
+ *
+ * Whatever the reply does to a booking — applied, refused, sent to the office
+ * for review — what the tradie wrote is kept, so the Tradies tab can show it.
+ * A failure here is logged and does not stop the reply being applied.
+ */
+async function fileTradieMessage(input: {
+  tradieId: string;
+  reference: TradieReplyReference | null;
+  message: GraphMessage;
+  content: string;
+  to: string;
+}): Promise<void> {
+  const { message } = input;
   try {
-    const existingTradie = await prisma.tradie.findUnique({
-      where: {
-        email: fromEmail,
+    const filed = await recordInboundTradieEmail(
+      {
+        body: input.content,
+        from: message.from ?? "",
+        graphMessageId: message.id,
+        hasAttachments: Boolean(message.hasAttachments),
+        receivedAt: new Date(message.receivedDateTime),
+        reference: input.reference,
+        subject: message.subject ?? "(no subject)",
+        to: input.to,
+        tradieId: input.tradieId,
       },
-    });
-    return existingTradie !== null;
+      prisma,
+    );
+    console.log(
+      `  Tradie ${input.tradieId}: message ${filed.recorded ? "filed" : "already filed"} on ${filed.projectId ? `project ${filed.projectId}` : "no project"}`,
+    );
+  } catch (error) {
+    console.error(
+      `Could not file tradie ${input.tradieId}'s email on its project thread`,
+      error,
+    );
+  }
+}
+
+/**
+ * The tradie a message came from, by their primary or any extra address,
+ * matched case-insensitively. Null when it is nobody's, or on a lookup
+ * failure, which leaves the message to the lead path as before.
+ */
+async function tradieForSender(
+  fromEmail: string,
+): Promise<{ id: string; name: string } | null> {
+  try {
+    return await findTradieBySender(fromEmail, prisma);
   } catch (error) {
     console.error(
       `Error checking if fromEmail ${fromEmail} is a tradie message:`,
       error,
     );
-    return false;
+    return null;
   }
 }
 
@@ -998,6 +1043,16 @@ async function processNotifications(
                 `The reply quotes ${tradieReference.token} (${tradieReference.projectName}) but came from ${message.from || "an unknown sender"}, which is not an address on ${tradieReference.tradie.name}'s record. Check it and update the booking by hand.`,
               );
             } else {
+              await fileTradieMessage({
+                content,
+                message,
+                reference: tradieReference,
+                to:
+                  message.to?.[0]
+                  ?? config.senderUpn
+                  ?? "info@royalconstructions.com.au",
+                tradieId: tradieReference.tradie.id,
+              });
               if (message.hasAttachments) {
                 await startTradieInvoiceEmail({
                   content,
@@ -1017,16 +1072,35 @@ async function processNotifications(
             continue;
           }
 
-          if (message.from && (await isTradieMessage(message.from))) {
-            const tradie = await prisma.tradie.findUnique({
-              select: { id: true, name: true },
-              where: { email: message.from },
+          const tradie = message.from
+            ? await tradieForSender(message.from)
+            : null;
+          if (tradie) {
+            if (isMachineGenerated(message.headers)) {
+              // An out-of-office or a bounce from the tradie's address is not
+              // an answer: read as one, "I'm away until Monday" could decline
+              // or confirm a booking. Logged: it is the only trace of either.
+              console.log(
+                `  Tradie ${tradie.id}: auto-generated`,
+                JSON.stringify({
+                  autoSubmitted: message.headers.autoSubmitted ?? null,
+                  from: message.from,
+                  subject: message.subject,
+                }),
+              );
+              continue;
+            }
+            await fileTradieMessage({
+              content,
+              message,
+              reference: null,
+              to:
+                message.to?.[0]
+                ?? config.senderUpn
+                ?? "info@royalconstructions.com.au",
+              tradieId: tradie.id,
             });
-            if (!tradie) continue;
-            if (
-              message.hasAttachments
-              && !isMachineGenerated(message.headers)
-            ) {
+            if (message.hasAttachments) {
               await startTradieInvoiceEmail({
                 content,
                 from: message.from,

@@ -74,9 +74,14 @@ import {
   openPriorComplianceFile,
 } from "@/lib/domain/compliance/prior-compliance";
 import type { PriorComplianceDocumentType } from "@/lib/domain/compliance/recorded-outside";
-import { requireProjectComplianceFile } from "@/lib/domain/compliance/file-ownership";
+import {
+  assertCanMoveComplianceFile,
+  deleteSupersededComplianceFiles,
+  requireProjectComplianceFile,
+} from "@/lib/domain/compliance/file-ownership";
 import { dismissUnidentifiedComplianceDocument } from "@/lib/domain/compliance/dismiss-arrival";
 import { vercelBlobDelete } from "@/lib/blob-port";
+import { assertCanFileComplianceDocument } from "@/lib/domain/access/projects";
 import { userPrincipal, type DomainPrincipal } from "@/lib/domain/principal";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -223,10 +228,19 @@ export async function recordPriorComplianceDocument(
     fileId: string;
   },
 ) {
-  // Before the file is opened: a missing or foreign file must not leave an
-  // empty no-certifier file behind, which would shut Connect with Certifier
-  // off for this project.
+  // Before the file is opened: a missing or foreign file, or an HBCF
+  // certificate from someone outside the office, must not leave an empty
+  // no-certifier file behind, which would shut Connect with Certifier off for
+  // this project.
+  assertCanFileComplianceDocument(principal, input.documentType);
   await requireProjectComplianceFile(
+    { projectId: input.projectId, fileId: input.fileId },
+    prisma,
+  );
+  // The attach below asks this too, but after the file is opened: a refusal
+  // there would leave the empty no-certifier file behind.
+  await assertCanMoveComplianceFile(
+    principal,
     { projectId: input.projectId, fileId: input.fileId },
     prisma,
   );
@@ -236,6 +250,7 @@ export async function recordPriorComplianceDocument(
     prisma,
   );
   await attachComplianceDocumentFile({
+    principal,
     engagementId,
     projectId: input.projectId,
     documentType: input.documentType,
@@ -750,6 +765,8 @@ export async function sendCertifierReply(
  * here.
  */
 export async function attachComplianceDocumentFile(params: {
+  /** Who is filing it: the HBCF certificate is the office's. */
+  principal: DomainPrincipal;
   engagementId: string;
   projectId: string;
   documentId?: string;
@@ -771,6 +788,11 @@ export async function attachComplianceDocumentFile(params: {
     { projectId: params.projectId, fileId: params.fileId },
     prisma,
   );
+  await assertCanMoveComplianceFile(
+    params.principal,
+    { projectId: params.projectId, fileId: file.id },
+    prisma,
+  );
 
   const { document, sentBackFor, superseded, skipped } =
     await prisma.$transaction(async (tx) => {
@@ -787,6 +809,11 @@ export async function attachComplianceDocumentFile(params: {
               orderBy: { order: "asc" },
             })
           : null;
+
+      // Refused before anything is written, by the type the file would land
+      // under: a row picked by id is whatever type that row already is.
+      const filedAs = target?.documentType ?? params.documentType;
+      if (filedAs) assertCanFileComplianceDocument(params.principal, filedAs);
 
       if (!target) {
         if (!params.documentType) {
@@ -824,22 +851,20 @@ export async function attachComplianceDocumentFile(params: {
         }
       }
 
-      // Every upload control on the tab is a single-file "Replace": one row
-      // holds one document, not a growing pile of attempts at it. Appending
-      // instead left the old copy attached — rendered on the row, offered to the
-      // certifier by the next send, and counted by the vault — with its blob
-      // never reclaimed. Read inside the transaction so the row cannot be left
-      // pointing at two files even briefly.
-      const superseded = await tx.file.findMany({
-        where: { complianceDocumentId: target.id, id: { not: file.id } },
-        select: { id: true, url: true },
-      });
-
-      if (superseded.length > 0) {
-        await tx.file.deleteMany({
-          where: { id: { in: superseded.map((stale) => stale.id) } },
-        });
-      }
+      // One row holds one document, not a growing pile of attempts at it.
+      // Appending instead left the old copy attached — rendered on the row,
+      // offered to the certifier by the next send, and counted by the vault —
+      // with its blob never reclaimed. A refusal throws inside this
+      // transaction, so nothing above commits either.
+      const superseded = await deleteSupersededComplianceFiles(
+        params.principal,
+        {
+          documentId: target.id,
+          keepFileId: file.id,
+          projectId: params.projectId,
+        },
+        tx,
+      );
 
       await tx.file.update({
         where: { id: file.id },
@@ -1693,6 +1718,7 @@ export async function sendSignedCopies(engagementId: string) {
  * hold the copy this one supersedes.
  */
 export async function classifyReceivedDocument(params: {
+  principal: DomainPrincipal;
   projectId: string;
   documentId: string;
   documentType: ComplianceDocumentType;
@@ -1721,6 +1747,7 @@ export async function classifyReceivedDocument(params: {
 
   if (!isCertifierResponseType(params.documentType)) {
     const document = await attachComplianceDocumentFile({
+      principal: params.principal,
       engagementId: arrival.engagementId,
       projectId: params.projectId,
       documentType: params.documentType,

@@ -181,6 +181,11 @@ const SIGNED_COPIES_SENT: ReadonlySet<CertifierEngagementStatus> = new Set([
   CertifierEngagementStatus.APPROVED,
 ]);
 
+/** Types only the office files: the HBCF certificate is copied onto the project. */
+const OFFICE_ONLY_TYPES: ReadonlySet<ComplianceDocumentType> = new Set([
+  ComplianceDocumentType.HOME_INSURANCE,
+]);
+
 /**
  * Statuses the review send is offered from.
  *
@@ -660,9 +665,7 @@ export function ProjectComplianceTab({
         tags: [documentLabel],
         trail: [documentLabel],
       });
-      // Set a small timeout to wait for the file entry to be created in the database before trying to attach it to a document. This is a workaround for a race condition that
-      // can occur when uploading large files, where the file entry may not be immediately available in the database after the upload completes.
-      await new Promise((resolve) => setTimeout(resolve, 850));
+      // uploadFile resolves only once the File row is confirmed server-side.
       const result = await dispatch(
         uploadComplianceDocument({
           projectId: project.id,
@@ -2205,6 +2208,11 @@ export function ProjectComplianceTab({
                       <IdentifyDocumentPicker
                         disabled={isScopeBusy(scopeOf(document))}
                         filledTypes={filledTypes}
+                        hiddenTypes={
+                          project.financialsHidden
+                            ? OFFICE_ONLY_TYPES
+                            : undefined
+                        }
                         onSelect={(type) =>
                           void handleIdentify(document.id, type)
                         }
@@ -2807,6 +2815,7 @@ export function ProjectComplianceTab({
             engagement={engagement}
             values={portalCertificate}
             insurance={insuranceDocument}
+            canRecordCover={!project.financialsHidden}
             checklistPassed={checklistPassed}
             rowMode={rowMode}
             isRowBusy={(document, documentType) =>

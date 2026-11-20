@@ -38,6 +38,13 @@ export interface SafeProject extends Omit<
   spent: string;
   lotSize?: string;
   requirements?: ProjectRequirementsPayload;
+  /**
+   * Set when the caller may not see the project's money (see
+   * `canSeeProjectFinancials`). Every amount on the payload is then zero or
+   * empty, which is "hidden" and not "free": a screen that finds this set
+   * draws no money at all rather than a column of $0.
+   */
+  financialsHidden?: true;
 }
 
 /**
@@ -240,6 +247,12 @@ export interface TradieScheduleWithTradieAndMilestone extends TradieScheduleWith
   billing?: BookingBillingState | null;
   requestRecipient?: TradieRequestDeliverySummary | null;
   quote?: TradieQuoteSummary | null;
+  /**
+   * A price was recorded on the booking. Set only where the price itself has
+   * been taken out (`hideDetailProjectFinancials`), so a booking priced with
+   * no quote row behind it still reads as quoted rather than "No quote yet".
+   */
+  hasQuotedPrice?: boolean;
 }
 
 /** The tradie chosen for a trade on a project. */

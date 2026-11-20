@@ -1,4 +1,6 @@
 import { DashboardHome } from "@/components/dashboard/dashboard-home";
+import { SiteManagerDashboard } from "@/components/dashboard/site-manager-dashboard";
+import { getSiteDashboardData } from "@/lib/data/site-dashboard";
 import { auth } from "@clerk/nextjs/server";
 import { getProjects, type PaginatedProjectsResult } from "@/lib/data/projects";
 import {
@@ -63,11 +65,41 @@ export const metadata: Metadata = {
 
 export default async function DashboardPageClient() {
   await connection();
-  const [user, projectsResult, kpiResult, followUpsResult, graphResult] =
-    await Promise.all([
-      auth().then(({ userId }) =>
-        userId ? getUserByClerkIdCached(userId) : null,
+  const signedInUser = await auth().then(({ userId }) =>
+    userId ? getUserByClerkIdCached(userId) : null,
+  );
+  // A site manager gets their own dashboard, built from its own reads. The sales
+  // one below sums revenue and profit and lists lead follow-ups, and a page that
+  // merely hid those would still have fetched them.
+  if (signedInUser?.role === "SITE_MANAGER") {
+    const [projectsResult, siteData] = await Promise.all([
+      settleDashboardSection(
+        "project list",
+        getProjects({ page: 1, limit: 10, status: "ACTIVE" }),
+        emptyProjects,
       ),
+      settleDashboardSection("site manager figures", getSiteDashboardData(), {
+        followUps: [],
+        performance: [],
+      }),
+    ]);
+    return (
+      <SiteManagerDashboard
+        today={formatSydneyDate(new Date())}
+        projectsData={projectsResult.data}
+        performance={siteData.data.performance}
+        followUpItems={siteData.data.followUps}
+        dataWarnings={[projectsResult.warning, siteData.warning].filter(
+          (warning): warning is string => warning !== null,
+        )}
+        followUpsFailed={siteData.warning !== null}
+      />
+    );
+  }
+
+  const user = signedInUser;
+  const [projectsResult, kpiResult, followUpsResult, graphResult] =
+    await Promise.all([
       settleDashboardSection(
         "project list",
         getProjects({

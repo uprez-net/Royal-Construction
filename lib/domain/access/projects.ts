@@ -1,4 +1,4 @@
-import { Role } from "@prisma/client";
+import { ComplianceDocumentType, Role } from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError, DomainNotFoundError } from "../errors";
@@ -34,10 +34,10 @@ export type ManageableProject = {
 /**
  * Manage scope: an ADMIN, or the site manager this project is assigned to.
  *
- * SITE_MANAGER is schema-only until Projects ships and everyone at Royal
- * Constructions is an ADMIN on a shared login, so today this refuses almost
- * nobody. It is written anyway because it is nearly free and because the
- * Projects section is what makes it real.
+ * The office is on shared ADMIN logins, so this refuses them nothing; it is
+ * what holds a site manager (one exists since November 2026) to the projects
+ * they are assigned. Reading is wider (`projectReadScope`) and money is
+ * narrower (`canSeeProjectFinancials`).
  */
 export function canManageProject(
   principal: DomainPrincipal,
@@ -103,6 +103,54 @@ export function projectReadScope(principal: DomainPrincipal): {
   throw new DomainAuthorizationError(
     "Viewing projects requires a signed-in user.",
   );
+}
+
+/**
+ * May this caller see what a project costs and earns?
+ *
+ * The contract sum, budgets and spend, variations, progress claims, tradie
+ * quotes and tradie invoices. ADMIN and the system (a cron, a webhook) only:
+ * a site manager works the build, and every screen they are given already
+ * hides the money behind `isAdmin`, so this is that rule made true of the
+ * payload too. A payload the screen does not draw is still a payload the
+ * browser holds and `/api/projects` hands over, which is why the answer is
+ * decided here and not left to the component.
+ *
+ * Allow-list, not "not a site manager": a role added later sees no money until
+ * someone says it may. The customer portal is held to it as well — its screens
+ * never drew the budget, so nothing a customer sees changes.
+ */
+export function canSeeProjectFinancials(principal: DomainPrincipal): boolean {
+  if (principal.kind === "system") return true;
+  return isUserPrincipal(principal) && principal.role === Role.ADMIN;
+}
+
+/**
+ * Recording HBCF on a project — uploading a certificate or claim document and
+ * reading its number and amount — is the office's, under the same rule as
+ * seeing the money: the claim amounts are what the HBCF pool is counted from.
+ */
+export function assertCanRecordHbcf(principal: DomainPrincipal): void {
+  if (!canSeeProjectFinancials(principal)) {
+    throw new DomainAuthorizationError(
+      "HBCF insurance documents are recorded by the office.",
+    );
+  }
+}
+
+/**
+ * Filing a document on a project's compliance file, by type. The HBCF
+ * certificate is the office's (`assertCanRecordHbcf`): filing it copies its
+ * number and file onto the project's HBCF record. Every other type is open to
+ * whoever may work the compliance file.
+ */
+export function assertCanFileComplianceDocument(
+  principal: DomainPrincipal,
+  documentType: ComplianceDocumentType,
+): void {
+  if (documentType === ComplianceDocumentType.HOME_INSURANCE) {
+    assertCanRecordHbcf(principal);
+  }
 }
 
 /**

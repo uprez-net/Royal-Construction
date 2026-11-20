@@ -5,6 +5,8 @@ export type NavItem = {
   label: string;
   icon: ReactNode;
   checkAdmin?: boolean;
+  /** Sales side: leads, offers, the operations agent. Not for a site manager. */
+  officeOnly?: boolean;
 };
 
 export type ProjectDetailKpi = {

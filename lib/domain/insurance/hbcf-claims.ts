@@ -71,6 +71,20 @@ export function projectHbcfCertificateFileId(
   return readHbcfClaimDocuments(legal)[0]?.fileId || null;
 }
 
+/** Every file the project's HBCF record points at: certificate and claims. */
+export function projectHbcfFileIds(
+  legal: LegalAdministrationDraft,
+): ReadonlySet<string> {
+  const ids = new Set(
+    readHbcfClaimDocuments(legal)
+      .map((document) => document.fileId)
+      .filter(Boolean),
+  );
+  const certificate = legal?.hbcfInsuranceDocument?.fileId;
+  if (typeof certificate === "string" && certificate) ids.add(certificate);
+  return ids;
+}
+
 /**
  * An amount that can be counted: a finite, positive number, held to cents.
  * Anything else -- blank, zero, negative, NaN -- is null, so it cannot reach

@@ -1,5 +1,6 @@
 import {
   CertifierEmailDirection,
+  CommsDirection,
   type GraphMailbox,
   Prisma,
 } from "@prisma/client";
@@ -7,7 +8,10 @@ import {
 import { recordTradieActivity } from "../audit/tradie-activity-log";
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError, DomainValidationError } from "../errors";
-import { isInternalPrincipal, type DomainPrincipal } from "../principal";
+import { isOfficePrincipal, type DomainPrincipal } from "../principal";
+import { recordTradieEmail } from "../tradies/emails";
+import { findTradieReplyReference } from "../tradies/replies";
+import { extractTradieRefToken } from "../tradies/reply-reference";
 import {
   extractCertifierRefToken,
   isPublicMailDomain,
@@ -113,6 +117,39 @@ export type SentAttachmentPort = (
   projectId: string,
 ) => Promise<readonly StoredAttachment[]>;
 
+/** File an Outlook send on the tradie's project thread, when it names one. */
+async function fileOutlookTradieEmail(
+  input: SentMessageInput,
+  target: Extract<SentMessageTarget, { kind: "tradie" }>,
+  from: string,
+  db: DomainDb,
+): Promise<void> {
+  const token = extractTradieRefToken(input.subject);
+  if (!token) return;
+  const reference = await findTradieReplyReference(token, db);
+  // A reference to another tradie's thread, quoted in a message to this one,
+  // is not this tradie's conversation.
+  if (!reference || reference.tradie.id !== target.tradieId) return;
+  await recordTradieEmail(
+    {
+      body: input.body,
+      direction: CommsDirection.OUTBOUND,
+      emailFrom: from,
+      emailTo: target.recipient,
+      graphMessageId: input.graphMessageId,
+      hasAttachments: input.hasAttachments,
+      projectId: reference.projectId,
+      refToken: token,
+      scheduleId:
+        "scheduleId" in reference.scope ? reference.scope.scheduleId : null,
+      sentAt: input.sentAt,
+      subject: input.subject,
+      tradieId: target.tradieId,
+    },
+    db,
+  );
+}
+
 /**
  * Copy one sent message onto every trail it belongs to.
  *
@@ -129,7 +166,7 @@ export async function recordSentMessage(
   db: DomainDb,
   ports: { storeAttachments?: SentAttachmentPort } = {},
 ): Promise<SentMessageOutcome> {
-  if (!isInternalPrincipal(principal)) {
+  if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(
       "Copying sent mail onto a trail requires internal staff access.",
     );
@@ -212,6 +249,12 @@ export async function recordSentMessage(
       }
 
       case "tradie": {
+        // A reply typed in Outlook on one of our tradie threads goes on that
+        // project's thread too. Only when the subject carries the reference:
+        // without it there is no telling which job the message was about.
+        // Its own key (the Graph id) makes this safe to replay, so it runs
+        // before the activity-log check below rather than behind it.
+        await fileOutlookTradieEmail(input, target, from, db);
         const existing = await db.tradieActivityLog.findFirst({
           select: { id: true },
           where: {

@@ -5,7 +5,10 @@ import { z } from "zod";
 
 import prisma from "@/lib/prisma";
 import { currentPrincipal } from "@/lib/data/current-principal";
-import { authorizeProjectEdit } from "@/lib/domain/access/projects";
+import {
+  assertCanRecordHbcf,
+  authorizeProjectEdit,
+} from "@/lib/domain/access/projects";
 import { processPDFWithMistral } from "@/lib/ocr";
 import { handleHbcfExtractionGeneration } from "@/lib/agent/hbcfExtractionAgent";
 import {
@@ -87,7 +90,11 @@ export async function POST(
     // certificate. The inline copy this replaces also let a CUSTOMER through,
     // which the PATCH it fed never did -- so they could spend an OCR run on a
     // save that was then refused.
-    await authorizeProjectEdit(await currentPrincipal(), projectId, prisma);
+    // And recording HBCF is the office's: a site manager may edit the project
+    // but not upload its insurance, and the reply carries the claim amount.
+    const principal = await currentPrincipal();
+    assertCanRecordHbcf(principal);
+    await authorizeProjectEdit(principal, projectId, prisma);
 
     const pages = await processPDFWithMistral(body.data.url);
     const markdown = pageBlocksToMarkdown(pages).trim();

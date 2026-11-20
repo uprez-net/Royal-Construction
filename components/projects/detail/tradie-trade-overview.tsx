@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   FilePlus2,
   Inbox,
+  Mail,
   Pencil,
   Phone,
   Send,
@@ -36,6 +37,7 @@ import {
 
 import { BillingPill } from "./financials-tab/activity-detail";
 import { ManualQuoteDialog } from "./manual-quote-dialog";
+import { TradieEmailThreadModal } from "./tradie-email-thread-modal";
 import { RequestDeliveryStatus } from "./request-delivery-status";
 import {
   toScheduleDetailsItem,
@@ -98,6 +100,9 @@ function Stat({
   );
 }
 
+const ICON_BUTTON =
+  "size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary";
+
 function tradieState(tradie: TradeTradie): {
   tone: "success" | "warning" | "neutral" | "primary";
   label: string;
@@ -105,7 +110,7 @@ function tradieState(tradie: TradeTradie): {
   if (tradie.selected) return { label: "Selected", tone: "success" };
   if (tradie.approved) return { label: "Approved", tone: "success" };
   if (tradie.openCount === 0) return { label: "Closed", tone: "neutral" };
-  if (tradie.quotedTotal !== null)
+  if (tradie.quotedTotal !== null || tradie.hasQuote)
     return { label: "Quote received", tone: "primary" };
   return { label: "Awaiting quote", tone: "warning" };
 }
@@ -117,6 +122,7 @@ function QuoteCard({
   lowest,
   selectionLive,
   onSelect,
+  onOpenEmails,
 }: {
   projectId: string;
   tradie: TradeTradie;
@@ -125,6 +131,8 @@ function QuoteCard({
   /** Someone holds the trade, so nobody else can be selected. */
   selectionLive: boolean;
   onSelect: () => void;
+  /** Opens this tradie's email thread; null when the caller may not see it. */
+  onOpenEmails: (() => void) | null;
 }) {
   const state = tradieState(tradie);
   const requested = tradie.schedules.filter((schedule) =>
@@ -169,7 +177,11 @@ function QuoteCard({
           <p className="flex items-center gap-2 font-mono text-sm font-medium text-foreground">
             {tradie.quotedTotal === null ? (
               <span className="font-sans text-muted-foreground">
-                {booked ? "No price yet" : "No quote yet"}
+                {tradie.hasQuote
+                  ? "Quote received"
+                  : booked
+                    ? "No price yet"
+                    : "No quote yet"}
               </span>
             ) : (
               currency.format(tradie.quotedTotal)
@@ -210,29 +222,43 @@ function QuoteCard({
             </p>
           )}
         </div>
-        {!selectionLive && tradie.openCount > 0 ? (
-          <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
-            <Button
-              size="sm"
-              variant={tradie.selectBlockedBy ? "outline" : "default"}
-              className="h-8 text-xs"
-              disabled={tradie.selectBlockedBy !== null}
-              aria-describedby={tradie.selectBlockedBy ? reasonId : undefined}
-              onClick={onSelect}
-            >
-              <CheckCircle2 className="mr-1.5 size-3.5" aria-hidden="true" />
-              Select quote
-            </Button>
-            {tradie.selectBlockedBy ? (
-              <p
-                id={reasonId}
-                className="max-w-72 text-xs text-muted-foreground sm:text-right"
+        <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
+          <div className="flex items-center gap-2">
+            {onOpenEmails ? (
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label={`Open emails with ${tradie.name}`}
+                title="Emails"
+                className={ICON_BUTTON}
+                onClick={onOpenEmails}
               >
-                {tradie.selectBlockedBy}
-              </p>
+                <Mail className="size-3.5" aria-hidden="true" />
+              </Button>
+            ) : null}
+            {!selectionLive && tradie.openCount > 0 ? (
+              <Button
+                size="sm"
+                variant={tradie.selectBlockedBy ? "outline" : "default"}
+                className="h-8 text-xs"
+                disabled={tradie.selectBlockedBy !== null}
+                aria-describedby={tradie.selectBlockedBy ? reasonId : undefined}
+                onClick={onSelect}
+              >
+                <CheckCircle2 className="mr-1.5 size-3.5" aria-hidden="true" />
+                Select quote
+              </Button>
             ) : null}
           </div>
-        ) : null}
+          {!selectionLive && tradie.openCount > 0 && tradie.selectBlockedBy ? (
+            <p
+              id={reasonId}
+              className="max-w-72 text-xs text-muted-foreground sm:text-right"
+            >
+              {tradie.selectBlockedBy}
+            </p>
+          ) : null}
+        </div>
       </div>
     </article>
   );
@@ -301,9 +327,6 @@ function selectedBooking(
     ?? null
   );
 }
-
-const ICON_BUTTON =
-  "size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary";
 
 /** The selected tradie's booking on one activity, and what can be done to it. */
 function SelectedBookingRow({
@@ -526,6 +549,7 @@ function SelectionBanner({
   const unpriced =
     tradie !== undefined
     && tradie.quotedTotal === null
+    && !tradie.hasQuote
     && tradie.openCount > 0
     && tradie.delivery?.request.kind === "BOOKING";
   return (
@@ -589,6 +613,11 @@ export function TradeWorkbench({
   const [manualQuote, setManualQuote] = useState<{
     tradieId: string | null;
   } | null>(null);
+  /** Whose email thread is open, if anyone's. */
+  const [emailsWith, setEmailsWith] = useState<{
+    tradieId: string;
+    name: string;
+  } | null>(null);
 
   // The selected tradie first; the order otherwise is the quote comparison's.
   const tradies = [...overview.tradies].sort(
@@ -645,7 +674,10 @@ export function TradeWorkbench({
               "—"
             )
           }
-          note={stats.lowest?.name ?? "No quotes yet"}
+          note={
+            stats.lowest?.name
+            ?? (stats.replies > 0 ? "Prices not shown" : "No quotes yet")
+          }
         />
         <Stat
           icon={<CalendarCheck2 className="size-4" />}
@@ -729,6 +761,17 @@ export function TradeWorkbench({
                 lowest={tradie.tradieId === lowestId}
                 selectionLive={selection !== null}
                 onSelect={() => setSelecting(tradie)}
+                // The thread is quotes; hidden where the money is
+                // (canSeeProjectFinancials, enforced again by the route).
+                onOpenEmails={
+                  project.financialsHidden
+                    ? null
+                    : () =>
+                        setEmailsWith({
+                          name: tradie.name,
+                          tradieId: tradie.tradieId,
+                        })
+                }
               />
             ))
           )}
@@ -822,6 +865,11 @@ export function TradeWorkbench({
         initialTradieId={manualQuote?.tradieId ?? null}
         project={project}
         trade={trade}
+      />
+      <TradieEmailThreadModal
+        projectId={project.id}
+        tradie={emailsWith}
+        onClose={() => setEmailsWith(null)}
       />
     </div>
   );
