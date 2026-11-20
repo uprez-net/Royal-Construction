@@ -274,7 +274,7 @@ export default function SpecialOfferEmail({
                           You could save up to
                         </Text>
                         <Text
-                          className="m-0"
+                          className="m-0 mobile_font-56"
                           style={{
                             fontFamily: FONTS.mono,
                             fontWeight: 500,
