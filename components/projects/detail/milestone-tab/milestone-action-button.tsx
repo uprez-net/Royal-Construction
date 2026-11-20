@@ -57,7 +57,7 @@ export function MilestoneActionGroup({
   onOpenAddUpdateModal: (id: string) => void;
   onStatusUpdate: (id: string, status?: MilestoneStatus) => void;
   onStartMilestone: (id: string) => void;
-  /** Absent for a caller who records but does not plan (`viewerAccess.manage`). */
+  /** Absent for a caller who may not cancel bookings (`viewerAccess.book`). */
   onMarkasNotRequired?: (id: string) => void;
 }) {
   const hasChildren = milestone.childrenMilestones.length > 0;

@@ -136,6 +136,7 @@ export default function UpdateMilestoneModal({
   // assigned site manager's; any site manager records progress
   // (`viewerAccess.manage` / `assertRecordingOnlyUpdate`).
   const canPlan = project?.viewerAccess.manage ?? true;
+  const canWaive = project?.viewerAccess.book ?? true;
   const canSetStart =
     canPlan || !milestone?.startDate || milestone.status === "PENDING";
 
@@ -330,23 +331,31 @@ export default function UpdateMilestoneModal({
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
-                  {statusOptions.map((option) => (
-                    <SelectItem
-                      key={option.value}
-                      value={option.value}
-                      disabled={
-                        option.value !== milestone?.status
-                        && !allowedMilestoneTransitions(
-                          milestone?.status ?? "PENDING",
-                          project?.milestones.filter(
-                            (child) => child.parentId === milestoneId,
-                          ) ?? [],
-                        ).includes(option.value)
-                      }
-                    >
-                      {option.label}
-                    </SelectItem>
-                  ))}
+                  {statusOptions
+                    // Waiving cancels the activity's bookings: the office's.
+                    .filter(
+                      (option) =>
+                        option.value !== "NOT_REQUIRED"
+                        || canWaive
+                        || milestone?.status === "NOT_REQUIRED",
+                    )
+                    .map((option) => (
+                      <SelectItem
+                        key={option.value}
+                        value={option.value}
+                        disabled={
+                          option.value !== milestone?.status
+                          && !allowedMilestoneTransitions(
+                            milestone?.status ?? "PENDING",
+                            project?.milestones.filter(
+                              (child) => child.parentId === milestoneId,
+                            ) ?? [],
+                          ).includes(option.value)
+                        }
+                      >
+                        {option.label}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               <p id="status-hint" className="text-xs text-muted-foreground">

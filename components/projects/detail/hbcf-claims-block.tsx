@@ -1,5 +1,6 @@
 "use client";
 
+import { HBCF_FILE_TAG } from "@/lib/domain/insurance/hbcf-claims";
 import { useId } from "react";
 import { format, isValid, parse } from "date-fns";
 import type { File as DBFile } from "@prisma/client";
@@ -142,7 +143,7 @@ export function HbcfClaimsBlock({
             accept="application/pdf,.pdf"
             hints={{
               trail: ["HBCF insurance"],
-              tags: ["HBCF insurance", "Insurance certificate"],
+              tags: [HBCF_FILE_TAG, "Insurance certificate"],
             }}
             onUpload={onUpload}
           />

@@ -343,16 +343,52 @@ test("but does not re-plan it or waive it", async () => {
 
 /* ------------------------------------------- the compliance file and gaps */
 
-test("a site manager's detail carries no compliance file and no office files", () => {
+test("a site manager's detail carries no compliance file, only the build documents filed on it", () => {
   const hidden = hideDetailProjectFinancials({
     activityLogs: [],
     certifierEngagement: { documents: [{ id: "cd_1" }] },
     customer: {},
-    documents: [],
+    documents: [
+      { fileId: "f_photo", key: "f_photo", source: "milestone" },
+      {
+        complianceDocumentType: "FULL_ARCHITECTURAL_DESIGN",
+        fileId: "f_plans",
+        key: "f_plans",
+        source: "compliance",
+      },
+      {
+        complianceDocumentType: "BUILD_COST_SUMMARY",
+        fileId: "f_cost",
+        key: "f_cost",
+        source: "compliance",
+      },
+      {
+        complianceDocumentType: "HOME_INSURANCE",
+        fileId: "f_hbcf",
+        key: "f_hbcf",
+        source: "compliance",
+      },
+      {
+        complianceDocumentType: "UNKNOWN",
+        fileId: "f_da",
+        key: "f_da",
+        source: "compliance",
+      },
+    ],
     files: [
       { complianceDocumentId: null, id: "f_photo", leadId: null },
+      { complianceDocumentId: "cd_2", id: "f_plans", leadId: null },
+      { complianceDocumentId: "cd_3", id: "f_cost", leadId: null },
       { complianceDocumentId: "cd_1", id: "f_da", leadId: null },
       { complianceDocumentId: null, id: "f_lead", leadId: 7 },
+      // A certificate the Overview replaced: no longer named by the legal
+      // section, still filed under the HBCF upload's tag.
+      {
+        complianceDocumentId: null,
+        id: "f_old_hbcf",
+        leadId: null,
+        tags: ["HBCF insurance", "Insurance certificate"],
+      },
     ],
     invoices: [],
     materials: [],
@@ -363,9 +399,15 @@ test("a site manager's detail carries no compliance file and no office files", (
     variations: [],
   } as never);
   assert.equal(hidden.certifierEngagement, null);
+  // The plans they build from stay (owner, 2026-11-20); the cost summary, the
+  // HBCF certificate and anything unidentified go, as rows and as files.
+  assert.deepEqual(
+    hidden.documents.map((document) => document.key),
+    ["f_photo", "f_plans"],
+  );
   assert.deepEqual(
     hidden.files.map((file) => file.id),
-    ["f_photo"],
+    ["f_photo", "f_plans"],
   );
 });
 
@@ -408,4 +450,31 @@ test("the projects list does not tell a site manager about HBCF or the certifica
       (detail) => !/HBCF|Construction Certificate/i.test(String(detail)),
     ),
   );
+});
+
+test("waiving an activity is the office's, even for the project's own site manager", async () => {
+  const recorder = recordingDb({
+    "project.findUnique": { id: "project", siteManagerId: SM },
+    "milestone.findUnique": { projectId: "project", parentId: null },
+    "milestone.findUniqueOrThrow": {
+      id: "activity",
+      parentId: null,
+      projectId: "project",
+      status: S.PENDING,
+      actualDate: null,
+      startDate: null,
+      targetDate: null,
+      spend: null,
+      childrenMilestones: [],
+    },
+  });
+  await assert.rejects(
+    updateMilestone(
+      siteManagerPrincipal(SM),
+      { milestoneId: "activity", status: S.NOT_REQUIRED },
+      recorder.db,
+    ),
+    DomainAuthorizationError,
+  );
+  assert.deepEqual(recorder.writes(), []);
 });

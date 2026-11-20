@@ -55,6 +55,8 @@ export type ProjectDocument = {
   readonly tags: string[];
   /** Whether this tab may delete it: only a file the project owns outright. */
   readonly deletable: boolean;
+  /** For a file filed on the compliance file: what it was filed as. */
+  readonly complianceDocumentType?: ComplianceDocumentType | null;
 };
 
 /** The File columns describing one needs. */
@@ -146,6 +148,7 @@ export function describeProjectFile(
       file.projectId === context.projectId
       && !file.complianceDocumentId
       && !file.incidentId,
+    complianceDocumentType: context.compliance?.documentType ?? null,
   };
 }
 

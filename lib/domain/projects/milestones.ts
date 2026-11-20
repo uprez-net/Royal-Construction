@@ -13,6 +13,7 @@ import {
   authorizeMilestoneRecording,
   authorizeProject,
   authorizeProjectRecording,
+  canBookTradies,
   canManageProject,
   canSeeProjectFinancials,
 } from "../access/projects";
@@ -447,9 +448,9 @@ function toDate(value: string | undefined, field: string): Date | undefined {
  * What a site manager may change on an activity of a project they record on
  * but do not manage (`canRecordOnProject` without `canManageProject`): its
  * progress — starting it (with the day it started), finishing it, the day it
- * finished — and not its plan. Re-dating the target or the planned start, and
- * waiving it as not required (which also cancels its open bookings), stay with
- * the office and the project's own site manager. Dates are compared as Sydney
+ * finished — and not its plan: re-dating the target or an existing start stays
+ * with the office and the project's own site manager. (Waiving it is the
+ * office's alone; see `updateMilestone`.) Dates are compared as Sydney
  * days, because the form sends back the stored ones it was opened with.
  */
 function assertRecordingOnlyUpdate(
@@ -470,11 +471,6 @@ function assertRecordingOnlyUpdate(
     if (date === undefined) return true;
     return stored !== null && sydneyDateOnly(date) === sydneyDateOnly(stored);
   };
-  if (statusChanged && input.status === MilestoneStatus.NOT_REQUIRED) {
-    throw new DomainAuthorizationError(
-      "Marking an activity not required is for the office or the project's site manager.",
-    );
-  }
   if (!sameDay(input.targetDate, current.targetDate, "targetDate")) {
     throw new DomainAuthorizationError(
       "An activity's target date is changed by the office or the project's site manager.",
@@ -554,6 +550,17 @@ export async function updateMilestone(
   }
 
   assertMilestoneFieldsForStatus(input);
+  // Waiving an activity cancels its open bookings and rejects their pending
+  // approvals: booking work, so the office's (owner, 2026-11-20).
+  if (
+    statusChanged
+    && input.status === MilestoneStatus.NOT_REQUIRED
+    && !canBookTradies(principal)
+  ) {
+    throw new DomainAuthorizationError(
+      "Marking an activity not required is for the office, because it cancels its tradie bookings.",
+    );
+  }
   if (!canManageProject(principal, authorized)) {
     assertRecordingOnlyUpdate(input, current, statusChanged);
   }
