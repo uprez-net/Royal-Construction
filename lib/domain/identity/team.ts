@@ -23,7 +23,14 @@ import {
   runOutboxEffect,
   runOutboxEffectWithOutcome,
 } from "../outbox";
+import {
+  recordTeamInvitation,
+  revokeRecordedTeamInvitation,
+} from "./invitations";
 import { findUserByClerkId } from "./users";
+
+/** How long a Clerk team invitation stays usable. */
+const INVITATION_EXPIRY_DAYS = 7;
 
 // Changing a team member's role.
 //
@@ -108,12 +115,35 @@ export async function inviteTeamMember(
     async () => {
       const invitation = await invite({
         emailAddress: email,
-        expiresInDays: 7,
+        expiresInDays: INVITATION_EXPIRY_DAYS,
         publicMetadata: { role: input.role },
       });
       return { email, id: invitation.id, role: input.role };
     },
   );
+  // Kept so the role still reaches someone who signs up without the link
+  // (./invitations.ts). The invitation has gone either way, so a failure here
+  // is logged rather than reported as a failed send: Clerk's own copy of the
+  // role still covers a sign-up through the link.
+  try {
+    await recordTeamInvitation(
+      {
+        clerkInvitationId: result.id,
+        email: result.email,
+        expiresAt: new Date(
+          (input.now ?? new Date()).getTime()
+            + INVITATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+        ),
+        role: result.role,
+      },
+      db,
+    );
+  } catch (error) {
+    console.error(
+      `[team-invite] Invitation ${result.id} was sent but its role could not be recorded`,
+      error,
+    );
+  }
   return {
     alreadyInvited: replayed,
     email: result.email,
@@ -153,6 +183,16 @@ export async function revokeTeamInvitation(
       return { invitationId: normalizedId };
     },
   );
+  // Clerk has revoked it; this only stops our copy granting the role. Logged
+  // rather than thrown for the same reason as the invite above.
+  try {
+    await revokeRecordedTeamInvitation(result.invitationId, db);
+  } catch (error) {
+    console.error(
+      `[team-invite] Invitation ${result.invitationId} was revoked but our record of it was not`,
+      error,
+    );
+  }
   return { invitationId: result.invitationId };
 }
 

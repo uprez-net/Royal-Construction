@@ -1076,22 +1076,31 @@ async function processNotifications(
             ? await tradieForSender(message.from)
             : null;
           if (tradie) {
-            if (!isMachineGenerated(message.headers)) {
-              await fileTradieMessage({
-                content,
-                message,
-                reference: null,
-                to:
-                  message.to?.[0]
-                  ?? config.senderUpn
-                  ?? "info@royalconstructions.com.au",
-                tradieId: tradie.id,
-              });
+            if (isMachineGenerated(message.headers)) {
+              // An out-of-office or a bounce from the tradie's address is not
+              // an answer: read as one, "I'm away until Monday" could decline
+              // or confirm a booking. Logged: it is the only trace of either.
+              console.log(
+                `  Tradie ${tradie.id}: auto-generated`,
+                JSON.stringify({
+                  autoSubmitted: message.headers.autoSubmitted ?? null,
+                  from: message.from,
+                  subject: message.subject,
+                }),
+              );
+              continue;
             }
-            if (
-              message.hasAttachments
-              && !isMachineGenerated(message.headers)
-            ) {
+            await fileTradieMessage({
+              content,
+              message,
+              reference: null,
+              to:
+                message.to?.[0]
+                ?? config.senderUpn
+                ?? "info@royalconstructions.com.au",
+              tradieId: tradie.id,
+            });
+            if (message.hasAttachments) {
               await startTradieInvoiceEmail({
                 content,
                 from: message.from,

@@ -32,7 +32,8 @@ import {
   updateTradie as updateTradieDomain,
 } from "@/lib/domain/tradies/directory";
 import { reportTradieIncident as reportTradieIncidentDomain } from "@/lib/domain/tradies/incidents";
-import { userPrincipal } from "@/lib/domain/principal";
+import { userPrincipal, type DomainPrincipal } from "@/lib/domain/principal";
+import { assertCanReadTradieDirectory } from "@/lib/domain/access/tradies";
 import {
   getTradieRemovalImpact,
   listTradieActivity,
@@ -46,13 +47,23 @@ import { canSeeProjectFinancials } from "@/lib/domain/access/projects";
 import { withoutTradieQuotes } from "@/lib/domain/projects/financial-redaction";
 
 /**
- * Tradie rows as the signed-in viewer may see them: without the last quoted
- * price for someone who may not see tradie prices (a site manager).
+ * The caller of a directory listing, refused unless they may browse the tradie
+ * directory (staff: an ADMIN or a site manager). Thrown outside the listing's
+ * own catch, so the refusal reaches the caller as itself and not as "Failed
+ * to fetch".
  */
-async function forViewer<T>(rows: T): Promise<T> {
-  return canSeeProjectFinancials(await currentPrincipal())
-    ? rows
-    : withoutTradieQuotes(rows);
+async function requireDirectoryReader(): Promise<DomainPrincipal> {
+  const principal = await currentPrincipal();
+  assertCanReadTradieDirectory(principal);
+  return principal;
+}
+
+/**
+ * Tradie rows as this viewer may see them: without the last quoted price for
+ * someone who may not see tradie prices (a site manager).
+ */
+function forViewer<T>(principal: DomainPrincipal, rows: T): T {
+  return canSeeProjectFinancials(principal) ? rows : withoutTradieQuotes(rows);
 }
 
 export async function fetchTradieRemovalImpact(tradieId: string) {
@@ -667,6 +678,7 @@ export async function getTradieGroupedByCategoryCached(): Promise<
 export async function fetchFilteredTradies(
   input: TradieTableQuery,
 ): Promise<TradieRow[]> {
+  const principal = await requireDirectoryReader();
   try {
     // "gas" finds a tradie whose second trade is Gas Fitting.
     const tradeLabels = input.search
@@ -740,7 +752,7 @@ export async function fetchFilteredTradies(
         },
       };
     });
-    return await forViewer(rows);
+    return forViewer(principal, rows);
   } catch (error) {
     console.error("Error fetching filtered tradies:", error);
     throw new Error("Failed to fetch filtered tradies");
@@ -963,6 +975,7 @@ export async function toggleTradieFavourite(
  * @throws {Error} If the tradie export operation fails.
  */
 export async function exportTradies() {
+  const principal = await requireDirectoryReader();
   try {
     const tradies = await prisma.tradie.findMany({
       where: { archivedAt: null },
@@ -993,7 +1006,7 @@ export async function exportTradies() {
       jobsCompleted: schedules.filter((s) => s.status === "COMPLETED").length,
       openIncidents: incidents.filter((i) => i.status === "OPEN").length,
     }));
-    return await forViewer(rows);
+    return forViewer(principal, rows);
   } catch (error) {
     console.error("Error exporting tradies:", error);
     throw new Error("Failed to export tradies");

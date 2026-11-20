@@ -1,10 +1,19 @@
 import { revalidateTag } from "next/cache";
 import { NextRequest } from "next/server";
 import { verifyWebhook } from "@clerk/nextjs/webhooks";
-import type { UserJSON } from "@clerk/backend";
+import type { InvitationJSON, UserJSON } from "@clerk/backend";
 import { createUser, deleteUser, updateUser } from "@/lib/data/user";
 import { Role } from "@prisma/client";
 import { clerkClient, updateUserMetadata } from "@/lib/auth";
+import {
+  acceptTeamInvitation,
+  markTeamInvitationUsed,
+  recordTeamInvitation,
+  revokeRecordedTeamInvitation,
+  roleForNewAccount,
+  roleFromMetadata,
+} from "@/lib/domain/identity/invitations";
+import prisma from "@/lib/prisma";
 import { errorResponse, successResponse } from "@/utils/validators";
 import { randomPhoneNumberGenerator } from "@/utils/generator";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -49,6 +58,83 @@ async function currentMetadataPhone(
   }
 }
 
+/**
+ * An application (not organization) invitation event.
+ *
+ * Clerk sends `invitation.created`, `.accepted` and `.revoked`, but
+ * @clerk/backend's `WebhookEvent` union does not list them, so they are
+ * recognised by name here rather than by a `case` the compiler would reject.
+ */
+type InvitationEvent = {
+  type: "invitation.created" | "invitation.accepted" | "invitation.revoked";
+  data: InvitationJSON & { expires_at?: number | null };
+};
+
+function invitationEvent(evt: {
+  type: string;
+  data: unknown;
+}): InvitationEvent | null {
+  return evt.type === "invitation.created"
+    || evt.type === "invitation.accepted"
+    || evt.type === "invitation.revoked"
+    ? (evt as InvitationEvent)
+    : null;
+}
+
+/**
+ * How long Clerk keeps an invitation open when it does not say. Only an
+ * invitation sent from Clerk's dashboard reaches here without our own record
+ * (the app records its own when it sends one), and Clerk's default is 30 days.
+ */
+const CLERK_DEFAULT_INVITATION_DAYS = 30;
+
+async function handleInvitationEvent({ type, data }: InvitationEvent) {
+  switch (type) {
+    case "invitation.created": {
+      const role = roleFromMetadata(data.public_metadata);
+      if (role) {
+        await recordTeamInvitation(
+          {
+            clerkInvitationId: data.id,
+            email: data.email_address,
+            expiresAt: new Date(
+              data.expires_at
+                ?? data.created_at
+                  + CLERK_DEFAULT_INVITATION_DAYS * 24 * 60 * 60 * 1000,
+            ),
+            role,
+          },
+          prisma,
+        );
+      }
+      return successResponse({ message: "Invitation recorded" });
+    }
+
+    case "invitation.revoked":
+      await revokeRecordedTeamInvitation(data.id, prisma);
+      return successResponse({ message: "Invitation revoked" });
+
+    case "invitation.accepted": {
+      const changed = await acceptTeamInvitation(
+        {
+          clerkInvitationId: data.id,
+          email: data.email_address,
+          metadata: data.public_metadata,
+        },
+        prisma,
+      );
+      if (changed) {
+        // Clerk's copy follows, so the next `user.updated` agrees with it.
+        await updateUserMetadata(changed.clerkId, {
+          publicMetadata: { role: changed.role },
+        });
+        revalidateTag(`user-${changed.clerkId}`, CACHE_PROFILES.MEDIUM);
+      }
+      return successResponse({ message: "Invitation accepted" });
+    }
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const evt = await verifyWebhook(request);
@@ -60,6 +146,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const invitation = invitationEvent(evt);
+    if (invitation) return handleInvitationEvent(invitation);
+
     switch (evt.type) {
       case "user.created": {
         const { email_addresses, first_name, last_name, id } = evt.data;
@@ -69,7 +158,15 @@ export async function POST(request: NextRequest) {
         // with no number, so a placeholder stands in until someone sets one.
         const phone = metadataPhone(evt.data) ?? randomPhoneNumberGenerator();
         const fullName = [first_name, last_name].filter(Boolean).join(" ");
-        const newUser = await createUser(fullName, email, id, phone);
+        // The invited role: Clerk's copy from the invitation link, else our
+        // record of an invitation to this address. This used to be GUEST for
+        // everyone, written back over the invitation's role just below.
+        const { role, invitationId } = await roleForNewAccount(
+          { email, metadata: evt.data.public_metadata },
+          prisma,
+        );
+        const newUser = await createUser(fullName, email, id, phone, role);
+        if (invitationId) await markTeamInvitationUsed(invitationId, prisma);
         await updateUserMetadata(id, {
           publicMetadata: {
             role: newUser.role,
@@ -93,7 +190,11 @@ export async function POST(request: NextRequest) {
         } = evt.data;
 
         const updatedEmail = updatedEmailAddresses[0]?.email_address;
-        const role = (public_metadata?.role as Role) || Role.GUEST;
+        // No role in the metadata leaves the stored one alone. It used to mean
+        // GUEST, so any update Clerk sent before `user.created` had written the
+        // invited role back (they can arrive out of order) demoted the new
+        // account to GUEST.
+        const role = roleFromMetadata(public_metadata) ?? undefined;
 
         // The phone used to be replaced with a fresh random number on every
         // Clerk update — a role change, a name edit, a new phone set from the

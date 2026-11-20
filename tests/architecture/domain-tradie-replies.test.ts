@@ -322,6 +322,48 @@ test("the Graph webhook applies a reply as the system, not through the browser's
   assert.doesNotMatch(updates, /^["']use server["']/m);
 });
 
+type SenderFixture = {
+  additionalEmails: string[];
+  email: string;
+  id: string;
+  name: string;
+};
+
+/**
+ * `tradie.findMany` answered from `rows` through the query's own filter, the
+ * way Postgres would, so a query that stops finding a row fails here instead
+ * of being masked by a fixture that returns everything.
+ */
+function tradiesWhere(rows: readonly SenderFixture[]) {
+  return (args: unknown) => {
+    const { where } = args as {
+      where: {
+        OR: Array<{
+          email?: { equals: string; mode?: string };
+          additionalEmails?: { isEmpty: boolean };
+        }>;
+      };
+    };
+    return rows.filter((row) =>
+      where.OR.some((clause) => {
+        if (clause.email) {
+          const { equals, mode } = clause.email;
+          return mode === "insensitive"
+            ? row.email.toLowerCase() === equals.toLowerCase()
+            : row.email === equals;
+        }
+        if (clause.additionalEmails) {
+          return (
+            (row.additionalEmails.length === 0)
+            === clause.additionalEmails.isEmpty
+          );
+        }
+        return false;
+      }),
+    );
+  };
+}
+
 test("an unreferenced message finds its tradie by any address on file, in any case", async () => {
   const tradies = [
     {
@@ -330,8 +372,15 @@ test("an unreferenced message finds its tradie by any address on file, in any ca
       id: "t_1",
       name: "ABC Plumbing",
     },
+    // Neither address matches, and no extras: the query must not return it.
+    {
+      additionalEmails: [],
+      email: "other@elsewhere.example",
+      id: "t_2",
+      name: "Elsewhere",
+    },
   ];
-  const db = recordingDb({ "tradie.findMany": tradies }).db;
+  const db = recordingDb({ "tradie.findMany": tradiesWhere(tradies) }).db;
   assert.deepEqual(await findTradieBySender(" QUOTES@abc.example ", db), {
     id: "t_1",
     name: "ABC Plumbing",
@@ -341,12 +390,14 @@ test("an unreferenced message finds its tradie by any address on file, in any ca
     name: "ABC Plumbing",
   });
   assert.equal(await findTradieBySender("", db), null);
+  assert.equal(await findTradieBySender("nobody@abc.example", db), null);
 
-  // An extra address two tradies share names neither of them.
+  // An extra address two tradies share names neither of them, however each
+  // record happens to spell it.
   const shared = recordingDb({
-    "tradie.findMany": [
+    "tradie.findMany": tradiesWhere([
       {
-        additionalEmails: ["office@x.example"],
+        additionalEmails: ["Office@X.example"],
         email: "a@x.example",
         id: "t_a",
         name: "A",
@@ -357,7 +408,8 @@ test("an unreferenced message finds its tradie by any address on file, in any ca
         id: "t_b",
         name: "B",
       },
-    ],
+    ]),
   }).db;
   assert.equal(await findTradieBySender("office@x.example", shared), null);
+  assert.equal(await findTradieBySender("OFFICE@x.example", shared), null);
 });

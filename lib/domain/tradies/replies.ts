@@ -167,17 +167,20 @@ export async function findTradieBySender(
   sender: string | null | undefined,
   db: DomainDb,
 ): Promise<{ readonly id: string; readonly name: string } | null> {
-  const raw = sender?.trim() ?? "";
-  const from = raw.toLowerCase();
+  const from = sender?.trim().toLowerCase() ?? "";
   if (!from) return null;
+  // Prisma matches a scalar list case-sensitively only, and stored extras are
+  // not always lowercased ("Accounts@ABC.example"), so any tradie with extras
+  // is read and compared below. `hasSome` with the sender's own casing missed
+  // every other spelling, and with it the second tradie sharing an address,
+  // which the shared-address rule below depends on seeing. The directory is a
+  // few hundred rows at most; no `take`, for the same reason.
   const candidates = await db.tradie.findMany({
     select: { additionalEmails: true, email: true, id: true, name: true },
-    take: 5,
     where: {
       OR: [
         { email: { equals: from, mode: "insensitive" } },
-        // `has` is case-sensitive; stored extras are not always lowercased.
-        { additionalEmails: { hasSome: [...new Set([from, raw])] } },
+        { additionalEmails: { isEmpty: false } },
       ],
     },
   });

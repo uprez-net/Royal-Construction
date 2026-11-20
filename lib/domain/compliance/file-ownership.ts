@@ -46,6 +46,51 @@ export async function requireProjectComplianceFile(
 }
 
 /**
+ * Delete the files a compliance document held before `keepFileId` replaced
+ * them, and return them so the caller can reclaim their blobs.
+ *
+ * Every upload control on the compliance tab is a single-file "Replace": one
+ * row holds one document. A replaced file is deleted, so it answers to the
+ * same rule as the one moving in (`assertCanMoveComplianceFile`): a file the
+ * project's HBCF record points at stays unless the caller may file HBCF. Every
+ * file is checked before any is deleted, so a refusal deletes nothing. Run it
+ * inside the caller's transaction, so the row is never left pointing at two
+ * files and a refusal rolls the whole attach back.
+ */
+export async function deleteSupersededComplianceFiles(
+  principal: DomainPrincipal,
+  input: {
+    readonly projectId: string;
+    readonly documentId: string;
+    readonly keepFileId: string;
+  },
+  tx: DomainDb,
+): Promise<{ id: string; url: string }[]> {
+  const superseded = await tx.file.findMany({
+    where: {
+      complianceDocumentId: input.documentId,
+      id: { not: input.keepFileId },
+    },
+    select: { id: true, url: true },
+  });
+
+  for (const stale of superseded) {
+    await assertCanMoveComplianceFile(
+      principal,
+      { projectId: input.projectId, fileId: stale.id },
+      tx,
+    );
+  }
+
+  if (superseded.length > 0) {
+    await tx.file.deleteMany({
+      where: { id: { in: superseded.map((stale) => stale.id) } },
+    });
+  }
+  return superseded;
+}
+
+/**
  * Refuses to move a file that is part of the project's HBCF record — the
  * certificate on the compliance file, or a certificate or claim document the
  * Overview holds — for anyone who may not file HBCF. Attaching moves the file

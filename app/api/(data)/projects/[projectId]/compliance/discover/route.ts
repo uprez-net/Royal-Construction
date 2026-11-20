@@ -92,11 +92,18 @@ export async function POST(
       orderBy: { createdAt: "desc" },
     });
 
-    // 2. The name says what it is.
-    const byName = candidates.find((file) =>
-      matchesByName(file.filename, documentType),
-    );
-    if (byName && (await mayMove(principal, projectId, byName.id))) {
+    // 2. The name says what it is. Newest first, and past any match this
+    // caller may not move: one refused file must not hide an eligible one
+    // behind it and send the search to OCR for nothing.
+    let byName: (typeof candidates)[number] | undefined;
+    for (const file of candidates) {
+      if (!matchesByName(file.filename, documentType)) continue;
+      if (await mayMove(principal, projectId, file.id)) {
+        byName = file;
+        break;
+      }
+    }
+    if (byName) {
       const document = await claim(
         engagementId,
         documentType,
