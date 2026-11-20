@@ -244,23 +244,6 @@ export async function deleteUserByClerkId(
 }
 
 /**
- * Stored phone numbers keyed by Clerk id, for the team screen, which lists
- * Clerk users and reads each one's phone from here first.
- */
-export async function findPhonesByClerkIds(
-  clerkIds: readonly string[],
-  db: DomainDb,
-): Promise<Record<string, string>> {
-  const ids = [...new Set(clerkIds.filter(Boolean))];
-  if (ids.length === 0) return {};
-  const users = await db.user.findMany({
-    select: { clerkId: true, phone: true },
-    where: { clerkId: { in: ids } },
-  });
-  return Object.fromEntries(users.map((user) => [user.clerkId, user.phone]));
-}
-
-/**
  * Clerk id and email of everyone in the office, for a broadcast.
  *
  * A broadcast is the office being told something (today: a new lead, with the

@@ -430,6 +430,61 @@ export function teamPhoneE164(raw: string): string | null {
   return null;
 }
 
+export type TeamMemberRow = {
+  readonly id: string;
+  readonly clerkId: string;
+  readonly name: string;
+  readonly email: string;
+  readonly phone: string;
+  readonly role: Role;
+};
+
+/**
+ * The people on the team screen: application users, not Clerk's whole user
+ * list.
+ *
+ * The Clerk instance holds accounts the app has no record of: sign-ups the
+ * webhook never reached, and accounts from another deployment sharing the same
+ * instance. Listing those offered role and profile edits that fail on the
+ * missing row. The database is the record, so it decides who is listed;
+ * search matches name, email or phone.
+ */
+export async function listTeamMembers(
+  principal: DomainPrincipal,
+  input: { readonly q: string; readonly page: number; readonly limit: number },
+  db: DomainDb,
+): Promise<{ members: TeamMemberRow[]; total: number }> {
+  requireAdminPrincipal(principal);
+  const q = input.q.trim();
+  const where: Prisma.UserWhereInput = q
+    ? {
+        OR: [
+          { name: { contains: q, mode: "insensitive" } },
+          { email: { contains: q, mode: "insensitive" } },
+          { phone: { contains: q.replace(/\s+/g, "") } },
+        ],
+      }
+    : {};
+  const [members, total] = await Promise.all([
+    db.user.findMany({
+      orderBy: [{ name: "asc" }, { createdAt: "asc" }],
+      select: {
+        clerkId: true,
+        email: true,
+        id: true,
+        name: true,
+        phone: true,
+        role: true,
+      },
+      skip: (input.page - 1) * input.limit,
+      take: input.limit,
+      where,
+    }),
+    db.user.count({ where }),
+  ]);
+  return { members, total };
+}
+
 /** The phone in its stored form, or a refusal saying what a number looks like. */
 function requireTeamPhone(raw: string): string {
   const phone = teamPhoneE164(raw);

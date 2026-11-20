@@ -2,15 +2,12 @@ import { clerkClient } from "@/lib/auth";
 import { Role } from "@prisma/client";
 import { requireAdminUser } from "@/lib/auth/require-admin";
 import prisma from "@/lib/prisma";
-import {
-  findPhonesByClerkIds,
-  findUserByClerkId,
-  findUserById,
-} from "@/lib/domain/identity/users";
+import { findUserByClerkId, findUserById } from "@/lib/domain/identity/users";
 import {
   changeTeamMemberRole,
   checkTeamMemberRoleChange,
   inviteTeamMember,
+  listTeamMembers,
   recordRoleReconciliation,
   revokeTeamInvitation,
 } from "@/lib/domain/identity/team";
@@ -66,12 +63,40 @@ export async function GET(request: NextRequest) {
     if (!params.success) {
       return params.response;
     }
-    console.log("Received GET /api/users with params:", params);
-    const users = await clerkClient.users.getUserList({
-      limit: params.data.limit,
-      offset: (params.data.userPage - 1) * params.data.limit,
-      query: params.data.q,
+    // Who is listed comes from the database: Clerk also holds accounts the
+    // app has no row for, and every edit on this screen needs the row.
+    const { members, total } = await listTeamMembers(
+      principal,
+      {
+        limit: params.data.limit,
+        page: params.data.userPage,
+        q: params.data.q,
+      },
+      prisma,
+    );
+
+    // Clerk's record for each listed member, which the screen's rows are
+    // shaped on. The role shown is the stored one, which every guard reads.
+    const clerkUsers = members.length
+      ? await clerkClient.users.getUserList({
+          limit: members.length,
+          userId: members.map((member) => member.clerkId),
+        })
+      : { data: [] };
+    const byClerkId = new Map(clerkUsers.data.map((user) => [user.id, user]));
+    const users = members.flatMap((member) => {
+      const clerkUser = byClerkId.get(member.clerkId);
+      if (!clerkUser) return [];
+      return [
+        {
+          ...clerkUser,
+          publicMetadata: { ...clerkUser.publicMetadata, role: member.role },
+        },
+      ];
     });
+    const phones = Object.fromEntries(
+      members.map((member) => [member.clerkId, member.phone]),
+    );
 
     const invites = await clerkClient.invitations.getInvitationList({
       limit: params.data.limit,
@@ -79,18 +104,11 @@ export async function GET(request: NextRequest) {
       query: params.data.q,
     });
 
-    // The phone shown on the team screen is the stored one; Clerk's
-    // publicMetadata.phone is only the fallback for a member with no row.
-    const phones = await findPhonesByClerkIds(
-      users.data.map((user) => user.id),
-      prisma,
-    );
-
     return successResponse({
-      users: users.data,
+      users,
       phones,
       invites: invites.data,
-      userTotal: users.totalCount,
+      userTotal: total,
       inviteTotal: invites.totalCount,
     });
   } catch (error) {
