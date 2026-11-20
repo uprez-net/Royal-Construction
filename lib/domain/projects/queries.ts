@@ -13,6 +13,7 @@ import { summarizeInvoices } from "@/lib/projects/invoice-totals";
 
 import { canWorkComplianceFile } from "../access/compliance";
 import {
+  canEditProject,
   canManageProject,
   canSeeProjectFinancials,
   projectManageScope,
@@ -641,6 +642,10 @@ export async function getProjectDetail(
     viewerAccess: {
       compliance: canWorkComplianceFile(principal, {
         customerId: row.customerId,
+        leadAssignedId: rawLead.assignedId ?? null,
+        siteManagerId: row.siteManagerId,
+      }),
+      edit: canEditProject(principal, {
         leadAssignedId: rawLead.assignedId ?? null,
         siteManagerId: row.siteManagerId,
       }),

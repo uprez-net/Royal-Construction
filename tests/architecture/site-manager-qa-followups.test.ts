@@ -157,6 +157,9 @@ test("the project page is told what the caller may record, from the commands' ow
   );
   assert.match(source, /compliance: canWorkComplianceFile\(principal/);
   assert.match(source, /manage: canManageProject\(principal/);
+  // The Overview tab's save is `authorizeProjectEdit`, which also admits the
+  // lead's assignee: its own flag, not `manage`.
+  assert.match(source, /edit: canEditProject\(principal/);
 });
 
 /* --------------------------------------- #570: no sales record on site -- */

@@ -369,6 +369,11 @@ export interface ProjectDetail extends SafeProject {
   viewerAccess: {
     /** `canManageProject`: activities, bookings, the WhatsApp group. */
     manage: boolean;
+    /**
+     * `canEditProject`: the Overview tab's own fields and start date. Wider
+     * than `manage` by the lead's assignee, so it is decided on its own.
+     */
+    edit: boolean;
     /** `canWorkComplianceFile`: the Compliance tab's uploads and sends. */
     compliance: boolean;
   };
