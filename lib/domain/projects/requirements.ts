@@ -2,10 +2,7 @@ import type { Prisma } from "@prisma/client";
 
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 
-import {
-  canOpenHbcfDocuments,
-  canSeeProjectFinancials,
-} from "../access/projects";
+import { canSeeProjectFinancials } from "../access/projects";
 import type { DomainDb } from "../db";
 import type { DomainPrincipal } from "../principal";
 
@@ -182,9 +179,7 @@ export async function getProjectRequirements(
     // The commercial section and the HBCF claim amounts, as on the screens.
     requirements: canSeeProjectFinancials(principal)
       ? project.requirements
-      : hideRequirementsFinancials(project.requirements, {
-          hbcfLinks: canOpenHbcfDocuments(principal),
-        })!,
+      : hideRequirementsFinancials(project.requirements)!,
     updatedAt: project.updatedAt.toISOString(),
   };
 }

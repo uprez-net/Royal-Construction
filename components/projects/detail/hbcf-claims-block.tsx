@@ -233,51 +233,41 @@ export function HbcfClaimsBlock({
                     </p>
                   ) : null}
                   <div className="flex flex-wrap gap-1 pt-0.5">
-                    {/* No link for staff who may not see the money: the documents
-                        print the amount insured and the contract price, and
-                        the server sends them none (`canOpenHbcfDocuments`). */}
-                    {!doc.url ? null : (
-                      <>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs text-primary"
-                          onClick={() =>
-                            dispatch(
-                              openModal({
-                                type: "previewFile",
-                                payload: { fileUrl: doc.url },
-                              }),
-                            )
-                          }
-                          aria-label={`View ${doc.fileName || "HBCF document"}`}
-                        >
-                          <Eye aria-hidden="true" className="h-3.5 w-3.5" />
-                          View
-                        </Button>
-                        <Button
-                          asChild
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs text-primary"
-                        >
-                          <a
-                            href={doc.url}
-                            download={doc.fileName || true}
-                            target="_blank"
-                            rel="noreferrer"
-                            aria-label={`Download ${doc.fileName || "HBCF document"}`}
-                          >
-                            <Download
-                              aria-hidden="true"
-                              className="h-3.5 w-3.5"
-                            />
-                            Download
-                          </a>
-                        </Button>
-                      </>
-                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs text-primary"
+                      onClick={() =>
+                        dispatch(
+                          openModal({
+                            type: "previewFile",
+                            payload: { fileUrl: doc.url },
+                          }),
+                        )
+                      }
+                      aria-label={`View ${doc.fileName || "HBCF document"}`}
+                    >
+                      <Eye aria-hidden="true" className="h-3.5 w-3.5" />
+                      View
+                    </Button>
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs text-primary"
+                    >
+                      <a
+                        href={doc.url}
+                        download={doc.fileName || true}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`Download ${doc.fileName || "HBCF document"}`}
+                      >
+                        <Download aria-hidden="true" className="h-3.5 w-3.5" />
+                        Download
+                      </a>
+                    </Button>
                     {canRemove ? (
                       <Button
                         type="button"

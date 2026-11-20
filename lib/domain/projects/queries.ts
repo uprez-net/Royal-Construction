@@ -12,7 +12,6 @@ import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import { summarizeInvoices } from "@/lib/projects/invoice-totals";
 
 import {
-  canOpenHbcfDocuments,
   canSeeProjectFinancials,
   projectManageScope,
   projectReadScope,
@@ -524,11 +523,7 @@ export async function listProjects(
   return {
     items: projects.map((project) => {
       const item = withProjectStats(project, attention.get(project.id) ?? null);
-      return showFinancials
-        ? item
-        : hideListProjectFinancials(item, {
-            hbcfLinks: canOpenHbcfDocuments(principal),
-          });
+      return showFinancials ? item : hideListProjectFinancials(item);
     }),
     page,
     limit,
@@ -549,11 +544,7 @@ export async function listAllProjectsForExport(
   const showFinancials = canSeeProjectFinancials(principal);
   return projects.map((project) => {
     const item = withProjectStats(project);
-    return showFinancials
-      ? item
-      : hideListProjectFinancials(item, {
-          hbcfLinks: canOpenHbcfDocuments(principal),
-        });
+    return showFinancials ? item : hideListProjectFinancials(item);
   });
 }
 
@@ -706,9 +697,7 @@ export async function getProjectDetail(
   };
   return canSeeProjectFinancials(principal)
     ? detail
-    : hideDetailProjectFinancials(detail, {
-        hbcfLinks: canOpenHbcfDocuments(principal),
-      });
+    : hideDetailProjectFinancials(detail);
 }
 
 /** `getProjectDetail`, refusing instead of answering null. */

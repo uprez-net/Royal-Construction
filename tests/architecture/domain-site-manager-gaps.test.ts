@@ -40,7 +40,6 @@ import {
 import {
   assertCanFileComplianceDocument,
   assertCanRecordHbcf,
-  canOpenHbcfDocuments,
 } from "@/lib/domain/access/projects";
 import { updateMilestone } from "@/lib/domain/projects/milestones";
 import { listTradieActivity } from "@/lib/domain/tradies/queries";
@@ -50,7 +49,6 @@ import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 
 import {
   adminPrincipal,
-  customerPrincipal,
   recordingDb,
   siteManagerPrincipal,
 } from "./domain-harness";
@@ -160,42 +158,19 @@ const CONFIRMED = {
   url: "https://blob/hbcf.pdf",
 };
 
-test("HBCF claim amounts and document links are blanked for someone who may not see money", () => {
-  // The documents print the amount insured and the contract price.
+test("HBCF claim amounts are blanked for someone who may not see money", () => {
   const hidden = hideRequirementsFinancials({
     commercialsAndClaims: {},
     legalAdministration: {
       hbcfClaimDocuments: [CONFIRMED],
-      hbcfInsuranceDocument: { fileId: "f_1", fileName: "c.pdf", url: "u" },
       hbcfInsuranceNumber: "C1",
     },
   } as unknown as ProjectRequirementsPayload);
+  // The certificate itself stays openable: a site manager checks it on site.
   assert.deepEqual(hidden?.legalAdministration.hbcfClaimDocuments, [
-    { ...CONFIRMED, claimAmount: null, url: "" },
-  ]);
-  assert.deepEqual(hidden?.legalAdministration.hbcfInsuranceDocument, {
-    fileId: "f_1",
-    fileName: "c.pdf",
-    url: "",
-  });
-  // Which certificate it is stays: the site still needs the number.
-  assert.equal(hidden?.legalAdministration.hbcfInsuranceNumber, "C1");
-});
-
-test("the homeowner may open their HBCF documents; a site manager may not", () => {
-  assert.equal(canOpenHbcfDocuments(siteManagerPrincipal(SM)), false);
-  assert.equal(canOpenHbcfDocuments(adminPrincipal()), true);
-  assert.equal(canOpenHbcfDocuments(customerPrincipal()), true);
-  const kept = hideRequirementsFinancials(
-    {
-      commercialsAndClaims: {},
-      legalAdministration: { hbcfClaimDocuments: [CONFIRMED] },
-    } as unknown as ProjectRequirementsPayload,
-    { hbcfLinks: true },
-  );
-  assert.deepEqual(kept?.legalAdministration.hbcfClaimDocuments, [
     { ...CONFIRMED, claimAmount: null },
   ]);
+  assert.equal(hidden?.legalAdministration.hbcfInsuranceNumber, "C1");
 });
 
 const COMPLETE_REQUIREMENTS = {
