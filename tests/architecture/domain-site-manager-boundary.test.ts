@@ -193,7 +193,9 @@ test("a hidden detail carries no money anywhere in its tree", () => {
         type: "variationUpdated",
       },
     ],
+    customer: { email: "client@example.com", id: "c1", phone: "0412 000 000" },
     lead: { emails: [{ body: "Your quotation is 880000" }], id: 4 },
+    leadId: 4,
     invoices: [{ total: "654321" }],
     materials: [{ id: "x", totalCost: "123456", unitCost: "777.77" }],
     milestones: [milestone],
@@ -226,7 +228,12 @@ test("a hidden detail carries no money anywhere in its tree", () => {
     hidden.activityLogs.map((entry) => entry.id),
     ["a1"],
   );
-  assert.deepEqual(hidden.lead.emails, []);
+  // The sales record is gone, not just its thread; the client's contact
+  // details stay on `customer` (#570).
+  assert.equal(hidden.lead, null);
+  assert.equal(hidden.leadId, null);
+  assert.equal(hidden.customer.phone, "0412 000 000");
+  assert.equal(hidden.customer.email, "client@example.com");
 });
 
 test("tradie quotes come out of a booking payload wherever they sit, and dates stay dates", () => {

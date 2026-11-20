@@ -71,6 +71,7 @@ export async function readProjectDetailRow(
       'Lead', (
         SELECT jsonb_build_object(
           'id', l.id, 'email', l.email, 'type', l.type, 'location', l.location,
+          'assignedId', l."assignedId",
           'emails', (
             SELECT coalesce(jsonb_agg(to_jsonb(e) ORDER BY e."sentAt" ASC), '[]')
             FROM "LeadEmails" e WHERE e."leadId" = l.id

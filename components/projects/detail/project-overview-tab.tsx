@@ -454,10 +454,13 @@ function StartDateField({
   milestones,
   locked,
   claimDate,
+  canEdit,
   onSaved,
 }: {
   projectId: string;
   value: unknown;
+  /** `viewerAccess.edit`: without it the date is shown, not offered. */
+  canEdit: boolean;
   milestones: ProjectDetail["milestones"];
   /** Work has started on site: the date is the day it began, and fixed. */
   locked: boolean;
@@ -553,7 +556,7 @@ function StartDateField({
     </p>
   );
 
-  if (!editing || locked || followsClaim) {
+  if (!editing || locked || followsClaim || !canEdit) {
     return (
       <FieldShell label="Start date (on-site)">
         <div
@@ -573,7 +576,7 @@ function StartDateField({
               ? displayDate(parse(current, "yyyy-MM-dd", new Date()))
               : "Not set"}
           </span>
-          {locked || followsClaim ? (
+          {!canEdit ? null : locked || followsClaim ? (
             <span className="mr-2 flex items-center">
               <Lock
                 className="size-3.5 text-muted-foreground"
@@ -2216,20 +2219,24 @@ export function ProjectOverviewTab({
                 Unsaved
               </Badge>
             ) : null}
-            <Button
-              onClick={requestSave}
-              disabled={!dirty || saving}
-              aria-busy={saving}
-            >
-              {saving ? (
-                "Saving…"
-              ) : (
-                <>
-                  <span className="sm:hidden">Save</span>
-                  <span className="hidden sm:inline">Save changes</span>
-                </>
-              )}
-            </Button>
+            {/* The save is `authorizeProjectEdit`'s: not offered to a caller
+                it would refuse (#568). */}
+            {project.viewerAccess.edit ? (
+              <Button
+                onClick={requestSave}
+                disabled={!dirty || saving}
+                aria-busy={saving}
+              >
+                {saving ? (
+                  "Saving…"
+                ) : (
+                  <>
+                    <span className="sm:hidden">Save</span>
+                    <span className="hidden sm:inline">Save changes</span>
+                  </>
+                )}
+              </Button>
+            ) : null}
           </div>
         </CardHeader>
 
@@ -2239,6 +2246,7 @@ export function ProjectOverviewTab({
           <DocumentAttentionPanel
             gaps={documentGaps}
             hasComplianceFile={project.certifierEngagement !== null}
+            hbcfIsOffices={project.financialsHidden === true}
             unsaved={dirty}
             onGo={goToDocumentGap}
           />
@@ -2265,6 +2273,7 @@ export function ProjectOverviewTab({
               milestones={project.milestones}
               locked={hasWorkStarted(project.milestones)}
               claimDate={savedClaimDate}
+              canEdit={project.viewerAccess.edit}
               // The header and the milestone tab read the store, not this
               // tab, so the saved project goes back there.
               onSaved={(saved) => dispatch(setActiveProject(saved))}

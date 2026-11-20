@@ -41,7 +41,7 @@ const leadEmails = reviveRow(
     },
   ],
   "LeadEmails",
-) as ProjectDetail["lead"]["emails"];
+) as NonNullable<ProjectDetail["lead"]>["emails"];
 
 function detailFixture(): ProjectDetail {
   return {
@@ -167,7 +167,7 @@ test("the count and latest date cover every email, however many", () => {
     id: `e${index}`,
     sentAt: new Date(Date.UTC(2026, 0, 1 + index)),
   }));
-  detail.lead.emails = many;
+  detail.lead!.emails = many;
 
   const lead = (
     projectDetailEnvelope(detail).data.project as {

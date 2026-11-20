@@ -128,7 +128,6 @@ const ADMIN_CONTENT =
   "returns its own {ok,error} result that the admin editor renders; worth reconciling with domainActionFailure when the admin surface is revisited";
 
 const UNMAPPED: Record<string, string> = {
-  "app/api/(data)/leads/[leadId]/route.ts": LEADS_RESULT_SHAPE,
   "app/api/(data)/leads/tasks/route.ts": LEADS_RESULT_SHAPE,
   "app/api/(workflow)/extract-checklist/route.ts": MACHINE_CALLER,
   "app/api/(workflow)/extract-project-data/route.ts": MACHINE_CALLER,

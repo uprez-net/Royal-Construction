@@ -9,13 +9,38 @@ import {
   type DomainPrincipal,
 } from "../principal";
 
+export type ComplianceFileProject = {
+  readonly siteManagerId: string | null;
+  readonly customerId: string;
+  /** The assignee of the lead the project came from. */
+  readonly leadAssignedId: string | null;
+};
+
 /**
  * Compliance edit scope is intentionally wider than project management.
  *
  * The project's site manager and originating lead assignee may work the file,
  * and the owning customer may supply their own evidence. Decisions that settle
  * evidence remain admin-only through `authorizeComplianceDecision`.
+ *
+ * Pure, so the project page can ask it to decide whether to draw the
+ * compliance actions at all (#568) rather than draw ones that are refused.
  */
+export function canWorkComplianceFile(
+  principal: DomainPrincipal,
+  project: ComplianceFileProject,
+): boolean {
+  if (!isUserPrincipal(principal)) return false;
+  return (
+    principal.role === Role.ADMIN
+    || project.siteManagerId === principal.userId
+    || project.leadAssignedId === principal.userId
+    || (principal.role === Role.CUSTOMER
+      && principal.customerId === project.customerId)
+  );
+}
+
+/** `canWorkComplianceFile`, asserted, with the project and its engagement. */
 export async function authorizeComplianceAccess(
   principal: DomainPrincipal,
   projectId: string,
@@ -41,12 +66,11 @@ export async function authorizeComplianceAccess(
   });
   if (!project) throw new DomainNotFoundError("Project not found");
 
-  const allowed =
-    principal.role === Role.ADMIN
-    || project.siteManagerId === principal.userId
-    || project.Lead?.assignedId === principal.userId
-    || (principal.role === Role.CUSTOMER
-      && principal.customerId === project.customerId);
+  const allowed = canWorkComplianceFile(principal, {
+    customerId: project.customerId,
+    leadAssignedId: project.Lead?.assignedId ?? null,
+    siteManagerId: project.siteManagerId,
+  });
   if (!allowed) {
     throw new DomainAuthorizationError(
       "You do not have access to this project's compliance file.",

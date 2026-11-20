@@ -32,14 +32,19 @@ function isChannel(value: string | null): value is CommunicationChannel {
 export function ProjectCommunicationTabs({
   project,
 }: ProjectCommunicationTabsProps) {
-  const [emails, setEmails] = useState<LeadEmails[]>(project.lead.emails);
+  // No lead on the payload means the caller is not the office (a site
+  // manager): the email thread is the sales side's, so there is no Email
+  // channel to offer (#570).
+  const lead = project.lead;
+  const [emails, setEmails] = useState<LeadEmails[]>(lead?.emails ?? []);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const requested = searchParams.get(COMMUNICATION_CHANNEL_PARAM);
-  const channel: CommunicationChannel = isChannel(requested)
-    ? requested
-    : "whatsapp";
+  const channel: CommunicationChannel =
+    isChannel(requested) && (requested !== "email" || lead)
+      ? requested
+      : "whatsapp";
   const searchParamsString = searchParams.toString();
 
   const choose = useCallback(
@@ -67,14 +72,21 @@ export function ProjectCommunicationTabs({
       key: "whatsapp",
       label: "WhatsApp",
     },
-    {
-      hint: `${emails.length} email${emails.length === 1 ? "" : "s"}`,
-      icon: (
-        <Mail className="size-4 text-royal-gold-ink-text" aria-hidden="true" />
-      ),
-      key: "email",
-      label: "Email",
-    },
+    ...(lead
+      ? [
+          {
+            hint: `${emails.length} email${emails.length === 1 ? "" : "s"}`,
+            icon: (
+              <Mail
+                className="size-4 text-royal-gold-ink-text"
+                aria-hidden="true"
+              />
+            ),
+            key: "email" as const,
+            label: "Email",
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -133,20 +145,20 @@ export function ProjectCommunicationTabs({
         id={`comms-panel-${channel}`}
         aria-labelledby={`comms-tab-${channel}`}
       >
-        {channel === "whatsapp" ? (
+        {channel === "email" && lead ? (
+          <LeadEmailSection
+            emails={emails}
+            leadId={lead.id}
+            leadEmail={lead.email}
+            projectType={lead.type}
+            location={lead.location}
+            isFullScreen
+            appendEmailToLead={appendEmailToLead}
+          />
+        ) : (
           <ProjectWhatsAppPanel
             projectId={project.id}
             leadName={project.name}
-          />
-        ) : (
-          <LeadEmailSection
-            emails={emails}
-            leadId={project.lead.id}
-            leadEmail={project.lead.email}
-            projectType={project.lead.type}
-            location={project.lead.location}
-            isFullScreen
-            appendEmailToLead={appendEmailToLead}
           />
         )}
       </div>

@@ -14,6 +14,7 @@ import { ProjectComplianceAlert } from "./detail/project-compliance-alert";
 import { UploadHintScope } from "@/components/common/upload-hints";
 import { ProjectDetailTabs } from "./detail/project-detail-tabs";
 import { ProjectHeader } from "./detail/project-header";
+import { ProjectNotAssignedNotice } from "./detail/project-not-assigned-notice";
 import { ProjectStatCards } from "./detail/project-stat-cards";
 import { Role } from "@prisma/client";
 
@@ -80,6 +81,9 @@ export function ProjectDetailScreen({
           key={`header-${siteAddress}-${signedDate}-${pcaInspector}-${insuranceClaimStartDate}-${insuranceClaimEndDate}-${hbcfInsuranceNumber}`}
         />
         <ProjectStatCards role={role} />
+        {displayedProject.viewerAccess.manage ? null : (
+          <ProjectNotAssignedNotice />
+        )}
         <ProjectComplianceAlert project={displayedProject} />
         <ProjectAlerts project={displayedProject} />
         <ProjectDetailTabs
