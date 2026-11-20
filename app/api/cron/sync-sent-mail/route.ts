@@ -25,10 +25,7 @@ async function handle(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   // An unset secret refuses everyone, rather than letting "Bearer undefined"
   // through.
-  if (
-    process.env.NODE_ENV === "production"
-    && (!cronSecret || authHeader !== `Bearer ${cronSecret}`)
-  ) {
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     if (!cronSecret) {
       console.error("[sent-mail-sync] cron: CRON_SECRET is not configured.");
     }

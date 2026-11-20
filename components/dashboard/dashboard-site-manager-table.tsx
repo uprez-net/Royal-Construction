@@ -1,6 +1,5 @@
 import { Users } from "lucide-react";
 import { DataTable } from "../common/data-table";
-import { RatingStars } from "../common/rating-stars";
 import { UserCell } from "../common/user-table-cell";
 
 import { Button } from "../ui/button";
@@ -17,10 +16,6 @@ export interface SiteManagerPerformance {
   projectsCount: number;
   milestonesCompleted: number;
   milestonesTotal: number;
-  /** Not recorded anywhere yet: only the sample list below carries it. */
-  workerHoursPerWeek?: number;
-  /** 1-5 scale. Not recorded anywhere yet either. */
-  rating?: number;
 }
 
 interface DashboardSiteManagerTableProps {
@@ -34,14 +29,6 @@ export function DashboardSiteManagerTable({
   canManage = true,
 }: DashboardSiteManagerTableProps) {
   const router = useRouter();
-  // A column nobody fills is not drawn: a row of dashes reads as data that
-  // failed to load.
-  const showHours = siteManagers.some(
-    (manager) => manager.workerHoursPerWeek !== undefined,
-  );
-  const showRating = siteManagers.some(
-    (manager) => manager.rating !== undefined,
-  );
   return (
     <TableCard
       header={
@@ -67,13 +54,7 @@ export function DashboardSiteManagerTable({
           flush
           mobileLayout="cards"
           mobileColumns={1}
-          headers={[
-            "Manager",
-            "Projects",
-            ...(showHours ? ["Worker Hrs/Week"] : []),
-            "Milestones",
-            ...(showRating ? ["Rating"] : []),
-          ]}
+          headers={["Manager", "Projects", "Milestones"]}
           rows={siteManagers.map((manager) => [
             <UserCell
               key={manager.id}
@@ -81,13 +62,7 @@ export function DashboardSiteManagerTable({
               avatarUrl={manager.avatarUrl}
             />,
             manager.projectsCount.toString(),
-            ...(showHours
-              ? [(manager.workerHoursPerWeek ?? 0).toString()]
-              : []),
             `${manager.milestonesCompleted}/${manager.milestonesTotal}`,
-            ...(showRating
-              ? [<RatingStars key={manager.id} rating={manager.rating ?? 0} />]
-              : []),
           ])}
           emptyState={
             <div className="flex flex-col items-center justify-center gap-3">

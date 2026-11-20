@@ -1,6 +1,9 @@
 import { DashboardHome } from "@/components/dashboard/dashboard-home";
 import { SiteManagerDashboard } from "@/components/dashboard/site-manager-dashboard";
-import { getSiteDashboardData } from "@/lib/data/site-dashboard";
+import {
+  getSiteDashboardData,
+  getSiteManagerPerformance,
+} from "@/lib/data/site-dashboard";
 import { auth } from "@clerk/nextjs/server";
 import { getProjects, type PaginatedProjectsResult } from "@/lib/data/projects";
 import {
@@ -98,7 +101,7 @@ export default async function DashboardPageClient() {
   }
 
   const user = signedInUser;
-  const [projectsResult, kpiResult, followUpsResult, graphResult] =
+  const [projectsResult, kpiResult, followUpsResult, graphResult, siteResult] =
     await Promise.all([
       settleDashboardSection(
         "project list",
@@ -124,6 +127,11 @@ export default async function DashboardPageClient() {
         getDashboardGraphData(),
         emptyGraphData,
       ),
+      settleDashboardSection(
+        "site manager performance",
+        getSiteManagerPerformance(),
+        [],
+      ),
     ]);
 
   const dashboardKPI = kpiResult.data;
@@ -133,6 +141,7 @@ export default async function DashboardPageClient() {
     kpiResult.warning,
     followUpsResult.warning,
     graphResult.warning,
+    siteResult.warning,
   ].filter((warning): warning is string => warning !== null);
 
   return (
@@ -143,6 +152,7 @@ export default async function DashboardPageClient() {
       projectsData={projectsResult.data}
       kpiData={dashboardKPI}
       followUpItems={followUpItems}
+      siteManagers={siteResult.data}
       dataWarnings={warnings}
     />
   );

@@ -4,7 +4,11 @@ import { createActivityLogEntry } from "@/types/activityLog";
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import { normalizeDateString } from "@/utils/date";
 
-import { authorizeProject, authorizeProjectEdit } from "../access/projects";
+import {
+  authorizeProject,
+  authorizeProjectEdit,
+  canSeeProjectFinancials,
+} from "../access/projects";
 import { logActionOrThrow } from "../audit/action-log";
 import type { DomainDb } from "../db";
 import { DomainStaleVersionError, DomainValidationError } from "../errors";
@@ -19,7 +23,11 @@ import {
   assertStartDateMatchesHbcfClaim,
   planStartDateFromHbcfClaim,
 } from "./hbcf-start-date";
-import { withoutFinancialEdits } from "./financial-redaction";
+import {
+  hideRequirementsFinancials,
+  withoutFinancialEdits,
+} from "./financial-redaction";
+import { requirementsVersion } from "./requirements-version";
 import { STARTED_MILESTONE_STATUSES } from "./milestone-schedule";
 import { rescheduleProjectFromStart } from "./milestones";
 import {
@@ -48,10 +56,22 @@ export type UpdateProjectInput = {
   readonly estimatedEndDate?: string;
   readonly totalBudget?: number;
   readonly requirements?: Record<string, unknown>;
+  /**
+   * The `requirementsVersion` the caller was shown (issue #562). When supplied,
+   * the save is refused if the stored requirements have changed since, seen
+   * the way this caller sees them; callers that omit it keep the unconditional
+   * write.
+   */
+  readonly expectedRequirementsVersion?: string;
 };
+
+const STALE_REQUIREMENTS =
+  "Someone else saved this project since you opened it. Reload to see their change.";
 
 export type UpdateProjectResult = {
   readonly projectId: string;
+  /** `requirementsVersion` of what this save committed, for this caller. */
+  readonly requirementsVersion: string;
   /** Blockers that did not stop the save but the header should still show. */
   readonly warnings: readonly string[];
   /** Activities re-dated because the start date moved; 0 when it did not. */
@@ -92,6 +112,26 @@ export async function updateProject(
     where: { id: rawInput.projectId },
     select: { requirements: true, startDate: true, status: true },
   });
+
+  // Someone changed the requirements since this caller's copy was made: their
+  // save would put the old ones back (issue #562). Compared as this caller is
+  // shown them, so a change they cannot see (HBCF, for a site manager) does
+  // not refuse them; `withStoredHbcf` keeps it on save anyway.
+  if (
+    rawInput.expectedRequirementsVersion !== undefined
+    && rawInput.expectedRequirementsVersion
+      !== requirementsVersion(
+        canSeeProjectFinancials(principal)
+          ? existing.requirements
+          : hideRequirementsFinancials(
+              existing.requirements as unknown as
+                | ProjectRequirementsPayload
+                | undefined,
+            ),
+      )
+  ) {
+    throw new DomainStaleVersionError(STALE_REQUIREMENTS);
+  }
 
   const persisted = (existing.requirements ?? {}) as {
     legalAdministration?: PersistedLegalAdministration;
@@ -185,33 +225,52 @@ export async function updateProject(
     }
   }
 
-  const writeProjectFields = (tx: DomainDb) =>
-    tx.project.update({
-      where: { id: input.projectId },
-      data: {
-        ...(input.name ? { name: input.name } : {}),
-        ...(input.location ? { location: input.location } : {}),
-        ...(input.council !== undefined ? { council: input.council } : {}),
-        ...(input.description !== undefined
-          ? { description: input.description }
-          : {}),
-        ...(requestedStartDate
-          ? { startDate: new Date(requestedStartDate) }
-          : {}),
-        ...(input.estimatedEndDate
-          ? { estimatedEndDate: new Date(input.estimatedEndDate) }
-          : {}),
-        ...(input.totalBudget !== undefined
-          ? { totalBudget: new Prisma.Decimal(input.totalBudget) }
-          : {}),
-        ...(input.requirements !== undefined
-          ? {
-              requirements:
-                input.requirements as unknown as Prisma.InputJsonValue,
-            }
-          : {}),
+  const data = {
+    ...(input.name ? { name: input.name } : {}),
+    ...(input.location ? { location: input.location } : {}),
+    ...(input.council !== undefined ? { council: input.council } : {}),
+    ...(input.description !== undefined
+      ? { description: input.description }
+      : {}),
+    ...(requestedStartDate ? { startDate: new Date(requestedStartDate) } : {}),
+    ...(input.estimatedEndDate
+      ? { estimatedEndDate: new Date(input.estimatedEndDate) }
+      : {}),
+    ...(input.totalBudget !== undefined
+      ? { totalBudget: new Prisma.Decimal(input.totalBudget) }
+      : {}),
+    ...(input.requirements !== undefined
+      ? {
+          requirements: input.requirements as unknown as Prisma.InputJsonValue,
+        }
+      : {}),
+  };
+
+  const writeProjectFields = async (tx: DomainDb): Promise<void> => {
+    if (rawInput.expectedRequirementsVersion === undefined) {
+      await tx.project.update({ where: { id: input.projectId }, data });
+      return;
+    }
+    // Two saves read the same requirements in the same moment: the second
+    // matches no row, writes nothing, and throws, so the rescheduling in the
+    // same transaction rolls back with it. A project with none stored yet
+    // holds SQL NULL (`Json?`), which the predicate must match as such.
+    const updated = await tx.project.updateMany({
+      where: {
+        id: input.projectId,
+        requirements: {
+          equals:
+            existing.requirements === null
+              ? Prisma.DbNull
+              : (existing.requirements as Prisma.InputJsonValue),
+        },
       },
+      data,
     });
+    if (updated.count !== 1) {
+      throw new DomainStaleVersionError(STALE_REQUIREMENTS);
+    }
+  };
 
   const write = async (tx: DomainDb): Promise<number> => {
     await writeProjectFields(tx);
@@ -239,8 +298,24 @@ export async function updateProject(
       ? await db.$transaction(write, { timeout: 30_000 })
       : await write(db);
 
+  // What this save committed, as this caller is shown it: the page pairs it
+  // with its draft (a re-read after the commit could already describe a later
+  // save, and hand a stale draft a fresh fingerprint).
+  const committedRequirements =
+    input.requirements !== undefined
+      ? input.requirements
+      : existing.requirements;
   return {
     projectId: input.projectId,
+    requirementsVersion: requirementsVersion(
+      canSeeProjectFinancials(principal)
+        ? committedRequirements
+        : hideRequirementsFinancials(
+            committedRequirements as unknown as
+              | ProjectRequirementsPayload
+              | undefined,
+          ),
+    ),
     rescheduledMilestones,
     startDateFollowedHbcfClaim: claimPlan.startDate !== null,
     startDateHeldByStartedWork: claimPlan.heldByStartedWork,

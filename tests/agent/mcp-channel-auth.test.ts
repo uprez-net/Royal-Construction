@@ -71,6 +71,21 @@ test("a Clerk account with no application user is refused, not retried", async (
   assert.equal((await response.json()).code, "agent_access_denied");
 });
 
+test("an access-pending GUEST is refused over MCP, which the proxy does not guard", async () => {
+  // The proxy turns a GUEST away from pages, not from a bearer token, so this
+  // refusal is the only thing keeping an unapproved account out of the agent.
+  const response = await refusalFrom(
+    createMcpUserAuth(
+      deps({
+        principalFor: async () => ({ role: "GUEST" as const, userId: "usr_g" }),
+      }),
+    ),
+  );
+
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).code, "agent_access_denied");
+});
+
 test("a site manager is refused, as on the browser channel", async () => {
   // The office digest and recall index every lead, offer and price.
   const response = await refusalFrom(

@@ -179,3 +179,14 @@ export function mergeDocumentsByUrl(
   }
   return [...byUrl.values()];
 }
+
+/**
+ * The filename rule for the tender and the contract, which carry the price in
+ * full. A guess from the name, so the redaction tries the file id and tags
+ * first; the Documents tab hides the same files from a non-admin with it.
+ */
+export function isTenderOrContractName(name: string | null | undefined) {
+  if (!name) return false;
+  const lower = name.toLowerCase();
+  return lower.includes("tender") || lower.includes("contract");
+}

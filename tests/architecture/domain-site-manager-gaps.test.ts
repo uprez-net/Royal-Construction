@@ -523,7 +523,7 @@ test("a broadcast and a variation notification reach the office only", async () 
   await listOfficeNotificationRecipients(recorder.db);
   assert.deepEqual(await filterOfficeUserIds([SM, null, SM], recorder.db), []);
 
-  const officeOnly = { in: [Role.ADMIN, Role.GUEST] };
+  const officeOnly = { in: [Role.ADMIN] };
   const [broadcast, filtered] = recorder.calls as unknown as {
     args: { where: { role: unknown; id?: unknown } };
   }[];

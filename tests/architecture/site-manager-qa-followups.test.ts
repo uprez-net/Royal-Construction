@@ -117,7 +117,7 @@ test("the public booking route answers a body that is not a JSON object with 400
 
 /* ------------------------------- #568: draw only what will be accepted -- */
 
-test("the compliance file is worked by the office, the lead's assignee and the owning customer, never a site manager", () => {
+test("the compliance file is worked by the office and the owning customer, never a site manager or a guest", () => {
   const project = {
     customerId: "c_1",
     leadAssignedId: "user_sales",
@@ -136,7 +136,7 @@ test("the compliance file is worked by the office, the lead's assignee and the o
       { kind: "user", role: "GUEST", userId: "user_sales" } as never,
       project,
     ),
-    true,
+    false,
   );
   assert.equal(
     canWorkComplianceFile(

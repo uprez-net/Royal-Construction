@@ -12,6 +12,7 @@ import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import { summarizeInvoices } from "@/lib/projects/invoice-totals";
 
 import { canWorkComplianceFile } from "../access/compliance";
+import { requirementsVersion } from "./requirements-version";
 import {
   canBookTradies,
   canEditProject,
@@ -114,9 +115,16 @@ export type PaginatedProjectLookupResult = {
   totalPages: number;
 };
 
+/** What the header, the picker and Eve read off the site manager. */
+const siteManagerSummary = {
+  select: { id: true, name: true, email: true, phone: true },
+} as const;
+
 const projectInclude = {
   customer: true,
-  siteManager: true,
+  // The summary, not the whole User row: the list would otherwise carry the
+  // Clerk id and verification state of the site manager.
+  siteManager: siteManagerSummary,
   variations: true,
   // A summary row per claim — enough for the quick-view's claims table and the
   // cleared-money roll-up, without the PDF link and tax breakdown the detail
@@ -159,11 +167,6 @@ const projectInclude = {
  * payload a CUSTOMER can be served (issue #411).
  */
 const authorSummary = { select: { id: true, name: true } } as const;
-
-/** What the header, the picker and Eve read off the site manager. */
-const siteManagerSummary = {
-  select: { id: true, name: true, email: true, phone: true },
-} as const;
 
 /** What a booking row reads off its activity (`BookingMilestone`). */
 const bookingMilestone = {
@@ -720,9 +723,15 @@ export async function getProjectDetail(
       }),
     ),
   };
-  return canSeeProjectFinancials(principal)
+  const shown = canSeeProjectFinancials(principal)
     ? detail
     : hideDetailProjectFinancials(detail);
+  // Taken from what this caller is shown, so their save can be checked
+  // against the same view (`updateProject`, issue #562).
+  return {
+    ...shown,
+    requirementsVersion: requirementsVersion(shown.requirements),
+  };
 }
 
 /** `getProjectDetail`, refusing instead of answering null. */

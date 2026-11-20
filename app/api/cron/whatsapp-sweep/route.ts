@@ -36,10 +36,7 @@ export const maxDuration = 120;
 async function handle(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
-  if (
-    process.env.NODE_ENV === "production"
-    && (!cronSecret || authHeader !== `Bearer ${cronSecret}`)
-  ) {
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     if (!cronSecret) {
       console.error("[whatsapp-sweep] cron: CRON_SECRET is not configured.");
     }

@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { fetchJson } from "@/utils/fetch";
+import { FetchError, fetchJson } from "@/utils/fetch";
 import { formatValue, toLabel } from "@/utils/formatters";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -1555,6 +1555,14 @@ export function ProjectOverviewTab({
   useEffect(() => {
     estimatedEndDateRef.current = stateEstimatedEndDate;
   }, [stateEstimatedEndDate]);
+  // The fingerprint of the requirements this form's draft was made from
+  // (issue #562). It is paired with the draft, not the store: the draft is
+  // taken once when the tab opens and replaced only by a save's response, so
+  // the fingerprint moves at exactly those two points. Following the store
+  // instead would pair a stale draft with a fresh fingerprint and let it
+  // overwrite a change made elsewhere. Read at save time through the ref, so
+  // a flow that awaits (the HBCF upload's OCR) sends the current one.
+  const requirementsVersionRef = useRef(project.requirementsVersion);
 
   // Open while a save would move the start date onto a changed HBCF claim
   // date, which reschedules every milestone: the same deliberate step the
@@ -1716,6 +1724,7 @@ export function ProjectOverviewTab({
             // through the ref: the HBCF upload saves after a long OCR wait,
             // and the value captured when it began may be out of date.
             estimatedEndDate: estimatedEndDateAtSave,
+            expectedRequirementsVersion: requirementsVersionRef.current,
           }),
         },
         "Unable to update project",
@@ -1740,6 +1749,7 @@ export function ProjectOverviewTab({
       // "Not set" until a full reload. The PATCH returns the whole project,
       // so hand it to the store the header actually reads.
       dispatch(setActiveProject(response.data));
+      requirementsVersionRef.current = response.data.requirementsVersion;
       // Edits made while the request was in flight are newer than what was
       // saved; replacing them with the response would lose them silently.
       // Every edit makes a new draft object, so the draft is unedited only
@@ -1756,8 +1766,13 @@ export function ProjectOverviewTab({
       }
       return true;
     } catch (error) {
+      // Nothing was written and the form keeps what was typed; say why.
       toast.error(
-        error instanceof Error ? error.message : "Unable to update project",
+        error instanceof FetchError && error.status === 409
+          ? "Someone else saved this project since you opened it. Reload to see their change."
+          : error instanceof Error
+            ? error.message
+            : "Unable to update project",
       );
       return false;
     } finally {

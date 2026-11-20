@@ -41,9 +41,9 @@ import {
 
 /* ------------------------------------------------------------ the rule -- */
 
-test("the office is ADMIN and GUEST; a site manager and a customer are not in it", () => {
+test("the office is ADMIN; a site manager, a GUEST and a customer are not in it", () => {
   assert.equal(isOfficeRole(Role.ADMIN), true);
-  assert.equal(isOfficeRole(Role.GUEST), true);
+  assert.equal(isOfficeRole(Role.GUEST), false);
   assert.equal(isOfficeRole(Role.SITE_MANAGER), false);
   assert.equal(isOfficeRole(Role.CUSTOMER), false);
 

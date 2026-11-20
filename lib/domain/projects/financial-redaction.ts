@@ -7,7 +7,7 @@ import { parseQuotedAmount } from "@/utils/calculations";
 
 import { canSeeProjectFinancials } from "../access/projects";
 import { HBCF_FILE_TAG, projectHbcfFileIds } from "../insurance/hbcf-claims";
-import type { ProjectDocument } from "./document-tags";
+import { isTenderOrContractName, type ProjectDocument } from "./document-tags";
 import type { DomainPrincipal } from "../principal";
 import type {
   ProjectDetail,
@@ -204,27 +204,89 @@ const BUILD_DOCUMENT_TYPES: ReadonlySet<ComplianceDocumentType> = new Set([
   "COMPLYING_DEVELOPMENT_CERTIFICATE",
 ] satisfies ComplianceDocumentType[]);
 
+/** Whether a compliance document is one a site manager builds from. */
+export function isBuildDocumentType(
+  type: ComplianceDocumentType | null | undefined,
+): boolean {
+  return type != null && BUILD_DOCUMENT_TYPES.has(type);
+}
+
+const SOURCE_DOCUMENT_TAGS: ReadonlySet<string> = new Set([
+  "tender",
+  "contract",
+]);
+
+/**
+ * The tender and contract links on the requirements, as a matcher. The Overview
+ * card can repoint a link by URL alone (`fileId` stays as it was), so a file
+ * matches on either its id or its URL.
+ */
+function sourceDocumentMatcher(
+  requirements: ProjectRequirementsPayload | undefined,
+) {
+  const refs = [
+    requirements?.sourceDocuments?.tender,
+    requirements?.sourceDocuments?.contract,
+  ].filter((ref) => ref != null);
+  const fileIds = new Set(
+    refs.flatMap((ref) => (ref.fileId ? [ref.fileId] : [])),
+  );
+  const urls = new Set(refs.flatMap((ref) => (ref.url ? [ref.url] : [])));
+  return (fileId: string | null, url: string | null) =>
+    (fileId !== null && fileIds.has(fileId)) || (url !== null && urls.has(url));
+}
+
+/**
+ * Files that are the office's whatever else they are: the HBCF certificate and
+ * claim documents (contract value, sum assured, claim amounts) and the tender
+ * and contract (the full contract price), filed as ordinary project files.
+ * One matcher for the project detail and the file download
+ * (`canReadFile`), so the two cannot disagree.
+ *
+ * HBCF: the file ids the legal section links, or the HBCF upload's tag (a
+ * replaced certificate is no longer linked). Tender and contract: the file id
+ * or URL `sourceDocuments` links (the Overview card can repoint by URL alone),
+ * an exact Tender/Contract tag, then the Documents tab's name rule.
+ */
+export function officeOnlyFileMatcher(requirements: unknown) {
+  const payload = requirements as ProjectRequirementsPayload | undefined;
+  const hbcfFileIds = projectHbcfFileIds(
+    payload?.legalAdministration as Parameters<typeof projectHbcfFileIds>[0],
+  );
+  const isLinkedSource = sourceDocumentMatcher(payload);
+  return (file: {
+    readonly id: string | null;
+    readonly url: string | null;
+    readonly name: string | null | undefined;
+    readonly tags: readonly string[] | null | undefined;
+  }): boolean => {
+    const tags = file.tags ?? [];
+    return (
+      (file.id !== null && hbcfFileIds.has(file.id))
+      || tags.includes(HBCF_FILE_TAG)
+      || isLinkedSource(file.id, file.url)
+      || tags.some((tag) => SOURCE_DOCUMENT_TAGS.has(tag.toLowerCase()))
+      || isTenderOrContractName(file.name)
+    );
+  };
+}
+
 /** The whole detail payload: contract, claims, variations, quotes, costs. */
 export function hideDetailProjectFinancials(
   project: ProjectDetail,
 ): ProjectDetail {
-  // The HBCF certificate and claim documents are filed as ordinary files too;
-  // they go with the HBCF fields (`withoutHbcf`).
-  const hbcfFileIds = projectHbcfFileIds(
-    project.requirements?.legalAdministration as Parameters<
-      typeof projectHbcfFileIds
-    >[0],
-  );
-  const isHbcf = (fileId: string | null, tags: readonly string[] | null) =>
-    (fileId !== null && hbcfFileIds.has(fileId))
-    || (tags ?? []).includes(HBCF_FILE_TAG);
+  const isOfficeFile = officeOnlyFileMatcher(project.requirements);
   const documents = project.documents.filter(
     (document) =>
       !OFFICE_DOCUMENT_SOURCES.has(document.source)
-      && !isHbcf(document.fileId, document.tags)
+      && !isOfficeFile({
+        id: document.fileId,
+        name: document.name,
+        tags: document.tags,
+        url: document.url,
+      })
       && (document.source !== "compliance"
-        || (document.complianceDocumentType != null
-          && BUILD_DOCUMENT_TYPES.has(document.complianceDocumentType))),
+        || isBuildDocumentType(document.complianceDocumentType)),
   );
   const buildFileIds = new Set(
     documents
@@ -242,7 +304,12 @@ export function hideDetailProjectFinancials(
     // compliance file stays only as a build document kept above.
     files: project.files.filter(
       (file) =>
-        !isHbcf(file.id, file.tags)
+        !isOfficeFile({
+          id: file.id,
+          name: file.filename,
+          tags: file.tags,
+          url: file.url,
+        })
         && file.leadId === null
         && (!file.complianceDocumentId || buildFileIds.has(file.id)),
     ),

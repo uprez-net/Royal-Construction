@@ -58,8 +58,10 @@ export function canManageProject(
  * project, not only the ones whose Site manager field names them. The owner's
  * call (2026-11-20, reversing #573's "assigned only"): site managers record on
  * every job, and production had no project assigned to one. Everything else a
- * manager may do — planning activities, bookings, variations, materials,
- * setting up the WhatsApp group — stays on `canManageProject` or narrower.
+ * manager may do — planning activities, bookings, materials, setting up the
+ * WhatsApp group — stays on `canManageProject` or narrower. Deciding a
+ * variation moves the contract value, so it is the office's money
+ * (`canSeeProjectFinancials`), not this rule.
  */
 export function canRecordOnProject(
   principal: DomainPrincipal,

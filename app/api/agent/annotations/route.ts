@@ -4,6 +4,7 @@ import { Role } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { isBlobStorageUrl } from "@/lib/blob-url";
+import { leadListScope } from "@/lib/offer/access";
 
 type Annotation = {
   type: "lead" | "offer" | "project" | "file";
@@ -23,11 +24,17 @@ export async function GET(request: Request) {
   const query = (url.searchParams.get("q") ?? "").trim().slice(0, 80);
   if (query.length < 2) return NextResponse.json({ annotations: [] });
   const isAdmin = actor.role === Role.ADMIN;
+  // The domain's lead rule, not a copy of it: the office sees every lead, and
+  // anyone else only the leads assigned to them. A site manager's scope matches
+  // no lead at all. `null` means no filter, so it is spread away, not compared.
+  const leadScope = leadListScope(actor);
+  const leadAssignee =
+    leadScope.assignedId === null ? {} : { assignedId: leadScope.assignedId };
   const [leads, projects, offers, files, offerFiles] = await Promise.all([
     prisma.lead.findMany({
       where: {
         isArchived: false,
-        ...(isAdmin ? {} : { assignedId: actor.id }),
+        ...leadAssignee,
         OR: [
           { name: { contains: query, mode: "insensitive" } },
           { email: { contains: query, mode: "insensitive" } },
@@ -50,7 +57,9 @@ export async function GET(request: Request) {
     prisma.offer.findMany({
       where: {
         isActive: true,
-        ...(isAdmin ? {} : { lead: { assignedId: actor.id } }),
+        ...(leadScope.assignedId === null
+          ? {}
+          : { lead: { assignedId: leadScope.assignedId } }),
         OR: [
           { baseReference: { contains: query, mode: "insensitive" } },
           { lead: { name: { contains: query, mode: "insensitive" } } },
@@ -67,9 +76,13 @@ export async function GET(request: Request) {
     prisma.file.findMany({
       where: {
         filename: { contains: query, mode: "insensitive" },
+        // Lead and compliance files are never offered outside the office; the
+        // full rule for opening one is `canReadFile` on /api/agent/files.
         ...(isAdmin
           ? {}
           : {
+              complianceDocumentId: null,
+              leadId: null,
               OR: [
                 { uploadedBy: actor.id },
                 { project: { siteManagerId: actor.id } },
@@ -82,7 +95,9 @@ export async function GET(request: Request) {
     prisma.offerFile.findMany({
       where: {
         filename: { contains: query, mode: "insensitive" },
-        ...(isAdmin ? {} : { offer: { lead: { assignedId: actor.id } } }),
+        ...(leadScope.assignedId === null
+          ? {}
+          : { offer: { lead: { assignedId: leadScope.assignedId } } }),
       },
       take: 8,
       select: { id: true, filename: true, fileType: true, url: true },

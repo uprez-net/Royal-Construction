@@ -6,6 +6,9 @@ import {
   type AiRewriteRequest,
 } from "@/lib/ai-rewrite/schema";
 import z from "zod";
+
+import { isInternalRole } from "@/lib/domain/principal";
+import prisma from "@/lib/prisma";
 // ^ adjust this path to wherever you place schema.ts (e.g. lib/ai-rewrite/schema)
 
 // ---------------------------------------------------------------------------
@@ -86,8 +89,8 @@ function sanitizeOutput(raw: string) {
     .replace(/```$/, "")
     .trim();
   const isQuoted =
-    (out.startsWith('"') && out.endsWith('"')) ||
-    (out.startsWith("\u201C") && out.endsWith("\u201D"));
+    (out.startsWith('"') && out.endsWith('"'))
+    || (out.startsWith("\u201C") && out.endsWith("\u201D"));
   if (isQuoted && out.length > 1) {
     out = out.slice(1, -1).trim();
   }
@@ -130,6 +133,16 @@ export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) {
     return jsonError("Unauthorized", 401);
+  }
+
+  // AI writing assist is for staff. A client account is refused; a site
+  // manager keeps it for the project and tradie forms they use.
+  const user = await prisma.user.findUnique({
+    select: { role: true },
+    where: { clerkId: userId },
+  });
+  if (!user || !isInternalRole(user.role)) {
+    return jsonError("Forbidden", 403);
   }
 
   let body: unknown;

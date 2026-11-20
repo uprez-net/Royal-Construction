@@ -182,7 +182,12 @@ export async function createMilestone(
 ): Promise<CreatedMilestone> {
   await authorizeProject(principal, input.projectId, db);
 
-  if (!(input.budget >= 0)) {
+  // A budget is the office's figure. From anyone else it is dropped, as
+  // `withoutFinancialEdits` does for a save, and stored as 0 for the office to
+  // set: the column's $10,000 default would be summed into the stage and
+  // tender figures on the Financials tab as if someone had priced it.
+  const seesMoney = canSeeProjectFinancials(principal);
+  if (seesMoney && !(input.budget >= 0)) {
     throw new DomainValidationError(
       "Budget must be a non-negative number.",
       "budget",
@@ -230,7 +235,7 @@ export async function createMilestone(
       name: input.name,
       description: input.description,
       targetDate,
-      budget: new Prisma.Decimal(input.budget),
+      budget: new Prisma.Decimal(seesMoney ? input.budget : 0),
       order,
       projectId: input.projectId,
       parentId,
@@ -238,11 +243,12 @@ export async function createMilestone(
     },
   });
 
-  return {
+  const row = {
     ...created,
     budget: created.budget.toString(),
     spend: created.spend?.toString(),
   };
+  return seesMoney ? row : hideMilestoneFinancials(row);
 }
 
 export type UpdateMilestoneInput = {
@@ -552,9 +558,10 @@ export async function updateMilestone(
   assertMilestoneFieldsForStatus(input);
   // Waiving an activity cancels its open bookings and rejects their pending
   // approvals: booking work, so the office's (owner, 2026-11-20).
+  // Saving a waived activity settles its bookings again (cancelling any that
+  // were made after the waiver), so it is refused too, not only the move.
   if (
-    statusChanged
-    && input.status === MilestoneStatus.NOT_REQUIRED
+    input.status === MilestoneStatus.NOT_REQUIRED
     && !canBookTradies(principal)
   ) {
     throw new DomainAuthorizationError(

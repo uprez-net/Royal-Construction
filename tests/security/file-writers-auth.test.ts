@@ -48,7 +48,8 @@ test("staff may attach files to any project, as every project screen lets them",
   // behind them accept the file. Refusing the upload only broke them.
   assert.equal(canAttachToProject({ role: "ADMIN" }, PROJECT), true);
   assert.equal(canAttachToProject({ role: "SITE_MANAGER" }, PROJECT), true);
-  assert.equal(canAttachToProject({ role: "GUEST" }, PROJECT), true);
+  // A GUEST is an account waiting for access, not staff (#561).
+  assert.equal(canAttachToProject({ role: "GUEST" }, PROJECT), false);
 });
 
 test("a customer may attach files only to their own project", () => {
@@ -89,7 +90,7 @@ test("the upload staff roles are the roles that read every lead", () => {
     .filter(Boolean)
     .sort();
   assert.deepEqual([...PROJECT_STAFF_ROLES].sort(), internal);
-  assert.deepEqual(internal, ["ADMIN", "GUEST", "SITE_MANAGER"]);
+  assert.deepEqual(internal, ["ADMIN", "SITE_MANAGER"]);
 });
 
 test("the upload route checks the lead and the project before issuing a token", () => {
