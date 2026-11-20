@@ -14,8 +14,13 @@ import {
   DomainAuthorizationError,
   DomainTransitionError,
 } from "@/lib/domain/errors";
-import { changeTeamMemberRole } from "@/lib/domain/identity/team";
+import {
+  changeTeamMemberRole,
+  checkTeamMemberRoleChange,
+} from "@/lib/domain/identity/team";
 import { readProjectAttention } from "@/lib/domain/projects/attention";
+import { getProjectRequirements } from "@/lib/domain/projects/requirements";
+import { assertCanMoveComplianceFile } from "@/lib/domain/compliance/file-ownership";
 import { calculateFollowUpBadgeLabel } from "@/components/dashboard/dashboard-follow-ups";
 import { anonymousPrincipal, systemPrincipal } from "@/lib/domain/principal";
 import {
@@ -35,6 +40,7 @@ import {
 import {
   assertCanFileComplianceDocument,
   assertCanRecordHbcf,
+  canOpenHbcfDocuments,
 } from "@/lib/domain/access/projects";
 import { updateMilestone } from "@/lib/domain/projects/milestones";
 import { listTradieActivity } from "@/lib/domain/tradies/queries";
@@ -44,6 +50,7 @@ import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 
 import {
   adminPrincipal,
+  customerPrincipal,
   recordingDb,
   siteManagerPrincipal,
 } from "./domain-harness";
@@ -153,14 +160,88 @@ const CONFIRMED = {
   url: "https://blob/hbcf.pdf",
 };
 
-test("HBCF claim amounts are blanked for someone who may not see money", () => {
+test("HBCF claim amounts and document links are blanked for someone who may not see money", () => {
+  // The documents print the amount insured and the contract price.
   const hidden = hideRequirementsFinancials({
     commercialsAndClaims: {},
-    legalAdministration: { hbcfClaimDocuments: [CONFIRMED] },
+    legalAdministration: {
+      hbcfClaimDocuments: [CONFIRMED],
+      hbcfInsuranceDocument: { fileId: "f_1", fileName: "c.pdf", url: "u" },
+      hbcfInsuranceNumber: "C1",
+    },
   } as unknown as ProjectRequirementsPayload);
   assert.deepEqual(hidden?.legalAdministration.hbcfClaimDocuments, [
+    { ...CONFIRMED, claimAmount: null, url: "" },
+  ]);
+  assert.deepEqual(hidden?.legalAdministration.hbcfInsuranceDocument, {
+    fileId: "f_1",
+    fileName: "c.pdf",
+    url: "",
+  });
+  // Which certificate it is stays: the site still needs the number.
+  assert.equal(hidden?.legalAdministration.hbcfInsuranceNumber, "C1");
+});
+
+test("the homeowner may open their HBCF documents; a site manager may not", () => {
+  assert.equal(canOpenHbcfDocuments(siteManagerPrincipal(SM)), false);
+  assert.equal(canOpenHbcfDocuments(adminPrincipal()), true);
+  assert.equal(canOpenHbcfDocuments(customerPrincipal()), true);
+  const kept = hideRequirementsFinancials(
+    {
+      commercialsAndClaims: {},
+      legalAdministration: { hbcfClaimDocuments: [CONFIRMED] },
+    } as unknown as ProjectRequirementsPayload,
+    { hbcfLinks: true },
+  );
+  assert.deepEqual(kept?.legalAdministration.hbcfClaimDocuments, [
     { ...CONFIRMED, claimAmount: null },
   ]);
+});
+
+const COMPLETE_REQUIREMENTS = {
+  automationTriggers: {
+    noticeCountdowns: true,
+    orderReminders: true,
+    rainDelayCalculations: true,
+  },
+  commercialsAndClaims: { totalContractSum: 500_000 },
+  conflicts: [],
+  inclusionsAndExclusions: { exclusions: [], inclusions: [] },
+  legalAdministration: { hbcfClaimDocuments: [CONFIRMED] },
+  projectName: "Job",
+  projectType: "Granny flat",
+  safetyAndSiteLogistics: {},
+  sourceDocuments: {},
+  subStructureAndGround: {},
+  summary: "",
+  utilityInfrastructure: {},
+  validations: [],
+  version: 1,
+  wetAreaCompliance: {},
+};
+
+test("the agent's requirements read is redacted like the screens", async () => {
+  const read = (principal: Parameters<typeof getProjectRequirements>[0]) =>
+    getProjectRequirements(
+      principal,
+      "p_1",
+      recordingDb({
+        "project.findUnique": {
+          id: "p_1",
+          requirements: COMPLETE_REQUIREMENTS,
+          updatedAt: new Date("2026-11-20T00:00:00.000Z"),
+        },
+      }).db,
+    );
+
+  const hidden = (await read(siteManagerPrincipal(SM))).requirements;
+  assert.equal(hidden.commercialsAndClaims.totalContractSum, null);
+  assert.equal(
+    hidden.legalAdministration.hbcfClaimDocuments?.[0]?.claimAmount,
+    null,
+  );
+  const shown = (await read(adminPrincipal())).requirements;
+  assert.equal(shown.commercialsAndClaims.totalContractSum, 500_000);
 });
 
 const UNCONFIRMED = {
@@ -321,6 +402,53 @@ test("every road onto the compliance file checks the HBCF rule before it writes"
   before(discover, RULE, "await claim(");
 });
 
+test("a site manager cannot move the project's HBCF file onto another row", async () => {
+  // Attaching moves a file off its row, and replacing it later deletes it.
+  const move = (
+    principal: Parameters<typeof assertCanMoveComplianceFile>[0],
+    reads: Record<string, unknown>,
+  ) => {
+    const recorder = recordingDb(reads);
+    return {
+      recorder,
+      run: assertCanMoveComplianceFile(
+        principal,
+        { fileId: "f_1", projectId: "p_1" },
+        recorder.db,
+      ),
+    };
+  };
+  const onInsuranceRow = {
+    "file.findUnique": {
+      complianceDocument: {
+        documentType: ComplianceDocumentType.HOME_INSURANCE,
+      },
+    },
+    "project.findUnique": { requirements: {} },
+  };
+  const onOverview = {
+    "file.findUnique": { complianceDocument: null },
+    "project.findUnique": {
+      requirements: { legalAdministration: STORED_LEGAL },
+    },
+  };
+
+  for (const reads of [onInsuranceRow, onOverview]) {
+    const { recorder, run } = move(siteManagerPrincipal(SM), reads);
+    await assert.rejects(run, DomainAuthorizationError);
+    assert.deepEqual(recorder.writes(), []);
+    await assert.doesNotReject(move(adminPrincipal(), reads).run);
+  }
+
+  // Any other file is still theirs to place.
+  await assert.doesNotReject(
+    move(siteManagerPrincipal(SM), {
+      "file.findUnique": { complianceDocument: null },
+      "project.findUnique": { requirements: {} },
+    }).run,
+  );
+});
+
 /* ---------------------------------------------------------- spend -- */
 
 test("a site manager correcting a done activity's date keeps the spend the office recorded", async () => {
@@ -473,6 +601,39 @@ test("someone holding nothing moves to site manager as before", async () => {
   assert.equal(changed.role, Role.SITE_MANAGER);
 });
 
+test("a refused role change is checked before Clerk hears of it", async () => {
+  // Clerk's user.updated webhook writes the role straight to the database, so
+  // a change published to Clerk and then refused could still land.
+  const recorder = recordingDb({
+    "lead.count": 1,
+    "leadTask.count": 0,
+    "user.count": 3,
+    "user.findUnique": { id: "u_1", name: "Sam", role: Role.ADMIN },
+  });
+  await assert.rejects(
+    checkTeamMemberRoleChange(
+      adminPrincipal(),
+      { newRole: Role.SITE_MANAGER, userId: "u_1" },
+      recorder.db,
+    ),
+    DomainTransitionError,
+  );
+  assert.deepEqual(recorder.writes(), []);
+
+  const route = readFileSync(
+    join(REPO_ROOT, "app/api/(data)/users/route.ts"),
+    "utf8",
+  );
+  const patch = route.slice(route.indexOf("export async function PATCH"));
+  const checked = patch.indexOf("checkTeamMemberRoleChange(");
+  assert.ok(
+    checked > 0 && checked < patch.indexOf("clerkClient.users.updateUser("),
+    "the role is published to Clerk before it is checked",
+  );
+  // And every cached copy of the user forgets the old role.
+  assert.match(patch, /revalidateTag\(`user-\$\{userId\}`/);
+});
+
 /* ------------------------------------------------ public booking -- */
 
 test("the booking page writes its lead as the booking, whoever is signed in", () => {
@@ -485,6 +646,32 @@ test("the booking page writes its lead as the booking, whoever is signed in", ()
   );
   assert.match(route, /systemPrincipal\("graph:public-booking"\)/);
   assert.equal(route.match(/principal: BOOKING_WRITER/g)?.length, 2);
+});
+
+test("a signed-in GUEST still reaches the booking page and its two APIs, and nothing else", () => {
+  // GUEST is Clerk's default for a new account, a client among them. The
+  // proxy used to send every GUEST request to /guest, the booking page
+  // included. The exemption is the booking routes only: Eve's channel is also
+  // a public route, and admits any office role, GUEST included.
+  const proxy = readFileSync(join(REPO_ROOT, "proxy.ts"), "utf8");
+  const start = proxy.indexOf(
+    "const isPublicBookingRoute = createRouteMatcher([",
+  );
+  const booking = proxy.slice(start, proxy.indexOf("]);", start));
+  assert.ok(start >= 0, "no booking route matcher");
+  for (const route of [
+    '"/book-consultation"',
+    '"/api/graph/book-consultant(.*)"',
+    '"/api/graph/read-calender-dateTime(.*)"',
+  ]) {
+    assert.ok(booking.includes(route), `${route} is not exempt`);
+  }
+  assert.ok(!booking.includes("/eve"), "Eve's channel is exempt");
+  assert.match(
+    proxy,
+    /role === "GUEST"\s*&& !isPublicBookingRoute\(request\)/,
+    "the GUEST redirect does not exempt the booking routes",
+  );
 });
 
 /* ------------------------------------------------- project alerts -- */

@@ -252,6 +252,75 @@ export async function resolveRoleReconciliation(
 }
 
 /**
+ * The two rules a role change must pass, read without writing: the last admin
+ * stays, and someone leaving the office hands their leads over first.
+ */
+async function assertRoleChangeAllowed(
+  current: { id: string; name: string | null; role: Role },
+  newRole: Role,
+  db: DomainDb,
+): Promise<void> {
+  if (
+    current.role === Role.ADMIN
+    && newRole !== Role.ADMIN
+    && (await db.user.count({ where: { role: Role.ADMIN } })) <= 1
+  ) {
+    throw new DomainTransitionError(
+      "The last admin cannot be demoted.",
+      current.role,
+      newRole,
+    );
+  }
+
+  // Whoever holds a lead can open it (`canAccessLead`), and the follow-up
+  // and meeting reminders email its holder the client's details. Leads are
+  // the office's (`assertOfficeAssignee`), so someone leaving the office —
+  // to site manager most often — hands theirs over first. Refused rather
+  // than reassigned here: who takes them is the office's call.
+  if (isOfficeRole(current.role) && !isOfficeRole(newRole)) {
+    const [leads, tasks] = await Promise.all([
+      db.lead.count({ where: { assignedId: current.id } }),
+      db.leadTask.count({
+        where: { assignedId: current.id, completedAt: null },
+      }),
+    ]);
+    if (leads > 0 || tasks > 0) {
+      const held = [
+        leads > 0 ? `${leads} lead${leads === 1 ? "" : "s"}` : null,
+        tasks > 0 ? `${tasks} open lead task${tasks === 1 ? "" : "s"}` : null,
+      ]
+        .filter(Boolean)
+        .join(" and ");
+      throw new DomainTransitionError(
+        `${current.name || "This team member"} still has ${held} assigned. Reassign them to someone in the office first, then change the role.`,
+        current.role,
+        newRole,
+      );
+    }
+  }
+}
+
+/**
+ * The same checks as `changeTeamMemberRole`, with nothing written. For the
+ * team route, which publishes the role to Clerk before the local write: a
+ * change these rules refuse must never reach Clerk, because Clerk's
+ * `user.updated` webhook writes the role straight back to the database.
+ */
+export async function checkTeamMemberRoleChange(
+  principal: DomainPrincipal,
+  input: { userId: string; newRole: Role },
+  db: DomainDb,
+): Promise<void> {
+  requireAdminPrincipal(principal);
+  const current = await db.user.findUnique({
+    select: { id: true, name: true, role: true },
+    where: { id: input.userId },
+  });
+  if (!current) throw new DomainNotFoundError("Team member not found.");
+  await assertRoleChangeAllowed(current, input.newRole, db);
+}
+
+/**
  * Change a member's role, refusing to demote the last ADMIN.
  *
  * Serializable, and the update is conditional on the role the decision was
@@ -289,46 +358,7 @@ export async function changeTeamMemberRole(
         );
       }
 
-      if (
-        current.role === Role.ADMIN
-        && input.newRole !== Role.ADMIN
-        && (await tx.user.count({ where: { role: Role.ADMIN } })) <= 1
-      ) {
-        throw new DomainTransitionError(
-          "The last admin cannot be demoted.",
-          current.role,
-          input.newRole,
-        );
-      }
-
-      // Whoever holds a lead can open it (`canAccessLead`), and the follow-up
-      // and meeting reminders email its holder the client's details. Leads are
-      // the office's (`assertOfficeAssignee`), so someone leaving the office —
-      // to site manager most often — hands theirs over first. Refused rather
-      // than reassigned here: who takes them is the office's call.
-      if (isOfficeRole(current.role) && !isOfficeRole(input.newRole)) {
-        const [leads, tasks] = await Promise.all([
-          tx.lead.count({ where: { assignedId: current.id } }),
-          tx.leadTask.count({
-            where: { assignedId: current.id, completedAt: null },
-          }),
-        ]);
-        if (leads > 0 || tasks > 0) {
-          const held = [
-            leads > 0 ? `${leads} lead${leads === 1 ? "" : "s"}` : null,
-            tasks > 0
-              ? `${tasks} open lead task${tasks === 1 ? "" : "s"}`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" and ");
-          throw new DomainTransitionError(
-            `${current.name || "This team member"} still has ${held} assigned. Reassign them to someone in the office first, then change the role.`,
-            current.role,
-            input.newRole,
-          );
-        }
-      }
+      await assertRoleChangeAllowed(current, input.newRole, tx);
 
       const changed = await tx.user.updateMany({
         data: { role: input.newRole },

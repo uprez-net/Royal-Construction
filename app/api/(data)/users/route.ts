@@ -9,6 +9,7 @@ import {
 } from "@/lib/domain/identity/users";
 import {
   changeTeamMemberRole,
+  checkTeamMemberRoleChange,
   inviteTeamMember,
   recordRoleReconciliation,
   revokeTeamInvitation,
@@ -25,7 +26,10 @@ import {
   updateUserRoleSchema,
   userSearchQuerySchema,
 } from "@/utils/validators";
+import { revalidateTag } from "next/cache";
 import { NextRequest } from "next/server";
+
+import { CACHE_PROFILES } from "@/types/cache";
 
 /**
  * A refused request is not a server fault. The domain errors carry the status
@@ -175,6 +179,15 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
+    // Refused before Clerk hears of it: Clerk's user.updated webhook writes
+    // the role straight to the database, so a change published here and then
+    // refused would still land if the webhooks arrive out of order.
+    await checkTeamMemberRoleChange(
+      principal,
+      { newRole, userId: target.id },
+      prisma,
+    );
+
     const updatedUser = await clerkClient.users.updateUser(userId, {
       publicMetadata: { role: newRole },
     });
@@ -188,6 +201,9 @@ export async function PATCH(request: NextRequest) {
         },
         prisma,
       );
+      // Every guard that reads the cached user would otherwise go on seeing
+      // the old role for up to ten minutes.
+      revalidateTag(`user-${userId}`, CACHE_PROFILES.MEDIUM);
       return successResponse({
         message: "User role updated successfully",
         success: true,

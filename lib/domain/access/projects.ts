@@ -139,6 +139,18 @@ export function assertCanRecordHbcf(principal: DomainPrincipal): void {
 }
 
 /**
+ * Whether the caller may open the HBCF certificate and claim documents. They
+ * print the amount insured and the contract price, so staff who may not see
+ * the money may not open them; the homeowner holds the policy and may.
+ */
+export function canOpenHbcfDocuments(principal: DomainPrincipal): boolean {
+  return (
+    canSeeProjectFinancials(principal)
+    || (isUserPrincipal(principal) && principal.role === Role.CUSTOMER)
+  );
+}
+
+/**
  * Filing a document on a project's compliance file, by type. The HBCF
  * certificate is the office's (`assertCanRecordHbcf`): filing it copies its
  * number and file onto the project's HBCF record. Every other type is open to

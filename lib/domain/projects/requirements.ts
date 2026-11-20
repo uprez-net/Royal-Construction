@@ -2,11 +2,17 @@ import type { Prisma } from "@prisma/client";
 
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 
-import { canSeeProjectFinancials } from "../access/projects";
+import {
+  canOpenHbcfDocuments,
+  canSeeProjectFinancials,
+} from "../access/projects";
 import type { DomainDb } from "../db";
 import type { DomainPrincipal } from "../principal";
 
-import { withStoredHbcf } from "./financial-redaction";
+import {
+  hideRequirementsFinancials,
+  withStoredHbcf,
+} from "./financial-redaction";
 import { planStartDateFromHbcfClaim } from "./hbcf-start-date";
 import { rescheduleProjectFromStart } from "./milestones";
 import {
@@ -156,6 +162,7 @@ export type ProjectRequirementsRead = {
  * looking at the row it is about to overwrite.
  */
 export async function getProjectRequirements(
+  principal: DomainPrincipal,
   projectId: string,
   db: DomainDb,
 ): Promise<ProjectRequirementsRead> {
@@ -172,7 +179,12 @@ export async function getProjectRequirements(
   }
   return {
     projectId: project.id,
-    requirements: project.requirements,
+    // The commercial section and the HBCF claim amounts, as on the screens.
+    requirements: canSeeProjectFinancials(principal)
+      ? project.requirements
+      : hideRequirementsFinancials(project.requirements, {
+          hbcfLinks: canOpenHbcfDocuments(principal),
+        })!,
     updatedAt: project.updatedAt.toISOString(),
   };
 }

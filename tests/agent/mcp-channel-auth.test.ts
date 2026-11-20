@@ -71,6 +71,23 @@ test("a Clerk account with no application user is refused, not retried", async (
   assert.equal((await response.json()).code, "agent_access_denied");
 });
 
+test("a site manager is refused, as on the browser channel", async () => {
+  // The office digest and recall index every lead, offer and price.
+  const response = await refusalFrom(
+    createMcpUserAuth(
+      deps({
+        principalFor: async () => ({
+          role: "SITE_MANAGER" as const,
+          userId: "usr_sm",
+        }),
+      }),
+    ),
+  );
+
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).code, "agent_access_denied");
+});
+
 test("the rollout flag closes the endpoint before any credential is read", async () => {
   let reads = 0;
   const auth = createMcpUserAuth(
@@ -268,7 +285,10 @@ test("openid is advertised, so a client that requests it can register for it", (
   // register what the protected-resource metadata advertises.
   assert.ok(MCP_SCOPES.includes("openid"));
   assert.deepEqual(
-    [...(mcpResourceConfig({ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: KEY })?.scopes ?? [])],
+    [
+      ...(mcpResourceConfig({ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: KEY })?.scopes
+        ?? []),
+    ],
     ["openid", "profile", "email"],
   );
 });

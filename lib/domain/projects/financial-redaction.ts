@@ -38,28 +38,53 @@ const NO_COMMERCIALS: ProjectRequirementsPayload["commercialsAndClaims"] = {
   variationAdminFee: null,
 };
 
+/** What else a hidden payload keeps, by who is reading it. */
+export type FinancialRedactionOptions = {
+  /** Keep the HBCF document links (`canOpenHbcfDocuments`). */
+  readonly hbcfLinks?: boolean;
+};
+
 /**
  * The extracted requirements without their commercial section, and without the
- * HBCF claim amounts (the insurance pool is counted from them). The rest — wet
- * areas, site safety, inclusions, the HBCF documents themselves — is what a
- * site manager builds from, and stays.
+ * HBCF claim amounts (the insurance pool is counted from them). The links to
+ * the HBCF documents, which print the amount insured and the contract price,
+ * go too unless `hbcfLinks` says the reader may open them. Which documents
+ * exist, and the certificate number, stay. The rest — wet areas, site safety,
+ * inclusions — is what a site manager builds from.
  */
 export function hideRequirementsFinancials(
   requirements: ProjectRequirementsPayload | undefined,
+  options: FinancialRedactionOptions = {},
 ): ProjectRequirementsPayload | undefined {
+  const link = (url: string) => (options.hbcfLinks ? url : "");
   if (!requirements) return requirements;
   const legal = requirements.legalAdministration;
   return {
     ...requirements,
     commercialsAndClaims: NO_COMMERCIALS,
-    ...(legal && Array.isArray(legal.hbcfClaimDocuments)
+    ...(legal
       ? {
           legalAdministration: {
             ...legal,
-            hbcfClaimDocuments: legal.hbcfClaimDocuments.map((document) => ({
-              ...document,
-              claimAmount: null,
-            })),
+            ...(Array.isArray(legal.hbcfClaimDocuments)
+              ? {
+                  hbcfClaimDocuments: legal.hbcfClaimDocuments.map(
+                    (document) => ({
+                      ...document,
+                      claimAmount: null,
+                      url: link(document.url),
+                    }),
+                  ),
+                }
+              : {}),
+            ...(legal.hbcfInsuranceDocument
+              ? {
+                  hbcfInsuranceDocument: {
+                    ...legal.hbcfInsuranceDocument,
+                    url: link(legal.hbcfInsuranceDocument.url),
+                  },
+                }
+              : {}),
           },
         }
       : {}),
@@ -119,6 +144,7 @@ export function hideMilestoneFinancials<
 /** A project row for the list, the quick view and the CSV export. */
 export function hideListProjectFinancials(
   project: ProjectWithStats,
+  options: FinancialRedactionOptions = {},
 ): ProjectWithStats {
   return {
     ...project,
@@ -131,7 +157,7 @@ export function hideListProjectFinancials(
       pendingCount: 0,
     },
     invoices: [],
-    requirements: hideRequirementsFinancials(project.requirements),
+    requirements: hideRequirementsFinancials(project.requirements, options),
     spent: HIDDEN_AMOUNT,
     totalBudget: HIDDEN_AMOUNT,
   };
@@ -156,6 +182,7 @@ const MONEY_LOG_TYPES: ReadonlySet<string> = new Set([
 /** The whole detail payload: contract, claims, variations, quotes, costs. */
 export function hideDetailProjectFinancials(
   project: ProjectDetail,
+  options: FinancialRedactionOptions = {},
 ): ProjectDetail {
   return {
     ...project,
@@ -173,7 +200,7 @@ export function hideDetailProjectFinancials(
       unitCost: HIDDEN_AMOUNT,
     })),
     milestones: project.milestones.map(hideMilestoneFinancials),
-    requirements: hideRequirementsFinancials(project.requirements),
+    requirements: hideRequirementsFinancials(project.requirements, options),
     siteUpdates: project.siteUpdates.map((siteUpdate) => ({
       ...siteUpdate,
       milestone: hideMilestoneFinancials(siteUpdate.milestone),

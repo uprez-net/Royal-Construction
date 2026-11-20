@@ -74,7 +74,10 @@ import {
   openPriorComplianceFile,
 } from "@/lib/domain/compliance/prior-compliance";
 import type { PriorComplianceDocumentType } from "@/lib/domain/compliance/recorded-outside";
-import { requireProjectComplianceFile } from "@/lib/domain/compliance/file-ownership";
+import {
+  assertCanMoveComplianceFile,
+  requireProjectComplianceFile,
+} from "@/lib/domain/compliance/file-ownership";
 import { dismissUnidentifiedComplianceDocument } from "@/lib/domain/compliance/dismiss-arrival";
 import { vercelBlobDelete } from "@/lib/blob-port";
 import { assertCanFileComplianceDocument } from "@/lib/domain/access/projects";
@@ -775,6 +778,11 @@ export async function attachComplianceDocumentFile(params: {
   // than telling the certifier one exists somewhere.
   const file = await requireProjectComplianceFile(
     { projectId: params.projectId, fileId: params.fileId },
+    prisma,
+  );
+  await assertCanMoveComplianceFile(
+    params.principal,
+    { projectId: params.projectId, fileId: file.id },
     prisma,
   );
 

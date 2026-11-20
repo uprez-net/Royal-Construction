@@ -62,6 +62,15 @@ const isPublicRoute = createRouteMatcher([
   "/eve/v1(.*)",
 ]);
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
+// The client's booking page and the two APIs it calls. A signed-in GUEST
+// (Clerk's default for a new account, a client among them) may use these and
+// nothing else: other public routes, Eve's channel among them, rely on the
+// GUEST block below.
+const isPublicBookingRoute = createRouteMatcher([
+  "/book-consultation",
+  "/api/graph/book-consultant(.*)",
+  "/api/graph/read-calender-dateTime(.*)",
+]);
 const isEvalAuthRoute = createRouteMatcher(["/api/eval/auth(.*)"]);
 const isDevAuthRoute = createRouteMatcher([
   "/dev/sign-in(.*)",
@@ -138,7 +147,10 @@ export const proxy = clerkMiddleware(async (auth, request) => {
   ) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
-  if (sessionClaims?.public_metadata.role === "GUEST") {
+  if (
+    sessionClaims?.public_metadata.role === "GUEST"
+    && !isPublicBookingRoute(request)
+  ) {
     // Same reasoning: a redirect to an HTML page is not a usable answer to a
     // fetch(), which follows it and then fails to parse the body as JSON.
     if (isApiRoute) {
