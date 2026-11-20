@@ -185,8 +185,12 @@ export function builderDetailsOf(
   if (phone && BUILDER_PHONES.has(phone)) {
     details.push("phone");
   }
-  // "38/62 Turner Rd" or "38/62 Turner Road", in Smeaton Grange.
-  if (address.includes("62turnerr") && address.includes("smeatongrange")) {
+  // "Unit 3, 36 Turner Road", in Smeaton Grange — or the old "38/62 Turner
+  // Rd", which contracts signed before the correction still print.
+  if (
+    (address.includes("36turnerr") || address.includes("62turnerr"))
+    && address.includes("smeatongrange")
+  ) {
     details.push("address");
   }
   return details;

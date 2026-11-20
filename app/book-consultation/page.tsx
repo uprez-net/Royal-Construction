@@ -831,8 +831,8 @@ function BookingContent() {
       {/* ── Footer ── */}
       <div className="border-t border-border bg-card px-6 py-5 text-center">
         <p className="text-xs font-normal text-muted-foreground">
-          © {new Date().getFullYear()} Royal Constructions NSW · 38/62 Turner
-          Rd, Smeaton Grange NSW 2567 · 1300 832 355
+          © {new Date().getFullYear()} Royal Constructions NSW · Unit 3, 36
+          Turner Road Smeaton Grange NSW 2567
         </p>
       </div>
     </div>

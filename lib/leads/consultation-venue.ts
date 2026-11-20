@@ -6,7 +6,7 @@
  * Kept free of server-only imports so the page can load it.
  */
 export const DEFAULT_CONSULTATION_VENUE =
-  "Unit 38/62 Turner Rd, Smeaton Grange NSW 2567, Australia";
+  "Unit 3, 36 Turner Road Smeaton Grange NSW 2567, Australia";
 
 /**
  * Long enough for any real street address with unit and building notes, short

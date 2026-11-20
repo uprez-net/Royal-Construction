@@ -224,7 +224,7 @@ describe("the owner rule", () => {
 
 describe("the builder is never an owner", () => {
   const builderRow = {
-    address: "38/62 Turner Road, Smeaton Grange NSW 2567",
+    address: "Unit 3, 36 Turner Road Smeaton Grange NSW 2567",
     email: "info@royalconstructions.com.au",
     name: "ROYAL CONSTRUCTIONS PTY LTD",
     phone: "1300 832 355",
@@ -238,6 +238,11 @@ describe("the builder is never an owner", () => {
       "address",
     ]);
     assert.deepEqual(builderDetailsOf({ phone: "0406-555-565" }), ["phone"]);
+    // Contracts signed before the address was corrected still print the old one.
+    assert.deepEqual(
+      builderDetailsOf({ address: "38/62 Turner Rd, Smeaton Grange NSW 2567" }),
+      ["address"],
+    );
     assert.deepEqual(builderDetailsOf(jane), []);
   });
 
