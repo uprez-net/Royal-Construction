@@ -16,6 +16,7 @@ import { MilestoneStatus as S } from "@prisma/client";
 import {
   hideDetailProjectFinancials,
   withStoredHbcf,
+  withoutFinancialEdits,
 } from "@/lib/domain/projects/financial-redaction";
 import { updateMilestone } from "@/lib/domain/projects/milestones";
 import { assessProjectAttention } from "@/lib/domain/projects/attention";
@@ -477,4 +478,20 @@ test("waiving an activity is the office's, even for the project's own site manag
     DomainAuthorizationError,
   );
   assert.deepEqual(recorder.writes(), []);
+});
+
+test("a site manager's save with no legal section keeps the stored one", () => {
+  const storedLegal = {
+    hbcfInsuranceNumber: "HB-1",
+    siteAddress: "12 Rose St",
+  };
+  for (const legalAdministration of [undefined, null]) {
+    const saved = withoutFinancialEdits(
+      siteManagerPrincipal(SM),
+      { requirements: { legalAdministration, summary: "new" } },
+      { legalAdministration: storedLegal },
+    );
+    assert.deepEqual(saved.requirements?.legalAdministration, storedLegal);
+    assert.equal(saved.requirements?.summary, "new");
+  }
 });

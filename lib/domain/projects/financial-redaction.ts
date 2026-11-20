@@ -360,6 +360,10 @@ export function withoutFinancialEdits<
       requirements.legalAdministration,
       stored.legalAdministration,
     );
+  } else if ("legalAdministration" in stored) {
+    // The save replaces `requirements` whole: a payload with no legal section
+    // (or a null one) would delete the stored one, HBCF and all.
+    requirements.legalAdministration = stored.legalAdministration;
   }
   return {
     ...input,
