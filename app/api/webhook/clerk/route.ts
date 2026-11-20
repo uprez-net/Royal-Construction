@@ -144,9 +144,18 @@ async function handleInvitationEvent({ type, data }: InvitationEvent) {
 
 export async function POST(request: NextRequest) {
   try {
-    const evt = await verifyWebhook(request);
+    // Our own misconfiguration is not the caller's fault: with no signing
+    // secret every real event would be refused as "unsigned" and nobody told.
+    // Thrown here it reaches the 500 handler below, which is reported.
+    if (!process.env.CLERK_WEBHOOK_SIGNING_SECRET) {
+      throw new Error("CLERK_WEBHOOK_SIGNING_SECRET is not configured.");
+    }
+    // An unsigned or wrongly signed call is the caller's fault, not ours:
+    // `verifyWebhook` throws for it, which used to answer 500 and report an
+    // incident for every probe of this public route.
+    const evt = await verifyWebhook(request).catch(() => null);
     if (!evt) {
-      console.error("Invalid webhook event");
+      console.warn("Clerk webhook refused: missing or invalid signature");
       return errorResponse("Invalid webhook signature", {
         status: 401,
         code: "INVALID_SIGNATURE",

@@ -1,7 +1,4 @@
-import type {
-  ProjectRequirementsPayload,
-  ProjectSourceDocumentReference,
-} from "@/types/project-flow";
+import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import type { ComplianceDocumentType } from "@prisma/client";
 import { parseQuotedAmount } from "@/utils/calculations";
 
@@ -46,12 +43,6 @@ const NO_COMMERCIALS: ProjectRequirementsPayload["commercialsAndClaims"] = {
 };
 
 /** A source-document slot with no file behind it. */
-function noSourceDocument(
-  kind: "tender" | "contract",
-): ProjectSourceDocumentReference {
-  return { fileId: "", fileName: "", kind, url: "" };
-}
-
 /**
  * The extracted requirements without their commercial section, without any
  * HBCF field (`withoutHbcf`), and without the links to the tender and the
@@ -63,20 +54,18 @@ export function hideRequirementsFinancials(
 ): ProjectRequirementsPayload | undefined {
   if (!requirements) return requirements;
   const legal = requirements.legalAdministration;
+  // The tender and contract links are left out, not blanked. The Overview and
+  // the Slab-start dialog send the whole requirements back on a save, and the
+  // PATCH refuses a link with no file id, name or URL: blank placeholders made
+  // every site manager's save a 400. A save drops the key anyway and keeps the
+  // stored links (`withoutFinancialEdits`), and no screen of theirs reads it.
+  const rest: Partial<ProjectRequirementsPayload> = { ...requirements };
+  delete rest.sourceDocuments;
   return {
-    ...requirements,
+    ...rest,
     commercialsAndClaims: NO_COMMERCIALS,
-    ...(requirements.sourceDocuments
-      ? {
-          sourceDocuments: {
-            ...requirements.sourceDocuments,
-            contract: noSourceDocument("contract"),
-            tender: noSourceDocument("tender"),
-          },
-        }
-      : {}),
     ...(legal ? { legalAdministration: withoutHbcf(legal) } : {}),
-  };
+  } as ProjectRequirementsPayload;
 }
 
 /**
