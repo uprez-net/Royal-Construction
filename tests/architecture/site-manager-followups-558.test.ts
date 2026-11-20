@@ -237,6 +237,35 @@ describe("File reads follow the record the file sits on", () => {
     }
   });
 
+  test("an HBCF or contract file filed on the compliance file as a build type is still the office's", () => {
+    for (const file of [
+      {
+        ...sitePhoto,
+        id: "f_hbcf_cert",
+        complianceDocument: {
+          documentType: "SURVEY" as const,
+          engagement: null,
+        },
+      },
+      {
+        ...sitePhoto,
+        id: "f_contract",
+        complianceDocument: {
+          documentType: "SURVEY" as const,
+          engagement: { project: sitePhoto.project! },
+        },
+        project: null,
+      },
+    ]) {
+      assert.equal(
+        canReadFile(siteManagerPrincipal(SM_ID), file),
+        false,
+        file.id,
+      );
+      assert.equal(canReadFile(adminPrincipal(ADMIN_ID), file), true, file.id);
+    }
+  });
+
   test("a compliance file received by email resolves its project through the engagement", () => {
     const emailed: ReadableFile = {
       ...sitePhoto,

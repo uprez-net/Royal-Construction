@@ -96,9 +96,27 @@ export function canReadFile(
   if (!isUserPrincipal(principal)) return false;
   if (file.leadId !== null) return isOfficePrincipal(principal);
   if (principal.role === Role.ADMIN) return true;
+  // A file received by email onto the compliance file has no projectId of its
+  // own; its project is the engagement's.
+  const project =
+    file.project ?? file.complianceDocument?.engagement?.project ?? null;
+  // The HBCF certificate and claims, and the tender and contract, are the
+  // office's however and wherever they were filed — the compliance file
+  // included: the project detail hides them from anyone who cannot see the
+  // money (`hideDetailProjectFinancials`), so the download does too. Checked
+  // before the compliance rule, which would otherwise admit them.
+  if (
+    !canSeeProjectFinancials(principal)
+    && officeOnlyFileMatcher(project?.requirements)({
+      id: file.id,
+      name: file.filename,
+      tags: file.tags,
+      url: file.url,
+    })
+  ) {
+    return false;
+  }
   if (file.complianceDocument !== null) {
-    const project =
-      file.project ?? file.complianceDocument.engagement?.project ?? null;
     if (
       project !== null
       && canWorkComplianceFile(principal, {
@@ -114,20 +132,6 @@ export function canReadFile(
       && project?.siteManagerId === principal.userId
       && isBuildDocumentType(file.complianceDocument.documentType)
     );
-  }
-  // The HBCF certificate and claims, and the tender and contract, are the
-  // office's however they were filed: the project detail hides them from a
-  // site manager (`hideDetailProjectFinancials`), so the download does too.
-  if (
-    !canSeeProjectFinancials(principal)
-    && officeOnlyFileMatcher(file.project?.requirements)({
-      id: file.id,
-      name: file.filename,
-      tags: file.tags,
-      url: file.url,
-    })
-  ) {
-    return false;
   }
   return (
     file.uploadedBy === principal.userId

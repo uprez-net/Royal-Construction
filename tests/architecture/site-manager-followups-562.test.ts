@@ -142,7 +142,7 @@ test("a save without a fingerprint keeps the unconditional write", async () => {
   assert.deepEqual((write.args as { where: unknown }).where, { id: "p_1" });
 });
 
-test("a first save onto no stored requirements matches SQL NULL, so a second cannot slip in", async () => {
+test("a first save onto no stored requirements is conditional on SQL NULL, and a save matching no row is refused", async () => {
   const recorder = projectDb(null);
   await updateProject(
     adminPrincipal(),
@@ -160,7 +160,8 @@ test("a first save onto no stored requirements matches SQL NULL, so a second can
     requirements: { equals: Prisma.DbNull },
   });
 
-  // The second of two such saves matches no row.
+  // When the conditional write matches no row (the database's answer to a
+  // second such save), the command refuses with nothing written.
   await assert.rejects(
     updateProject(
       adminPrincipal(),
