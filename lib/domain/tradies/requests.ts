@@ -19,7 +19,7 @@ import {
   isInternalPrincipal,
   type DomainPrincipal,
 } from "../principal";
-import { authorizeProject } from "../access/projects";
+import { assertCanBookTradies, authorizeProject } from "../access/projects";
 import { runOutboxEffectWithOutcome } from "../outbox";
 import {
   noteTradieActivity,
@@ -216,6 +216,7 @@ export async function sendTradieRequests(
   db: TransactionalDomainDb,
   ports: TradieRequestMailPorts & { readonly render: TradieRequestRenderPort },
 ): Promise<SentTradieRequests> {
+  assertCanBookTradies(principal);
   if (input.tradieIds.length === 0) {
     throw new DomainValidationError("Choose at least one tradie.", "tradieIds");
   }
@@ -711,6 +712,7 @@ export async function deliverTradieRequest(
 
   switch (input.trigger) {
     case "initial":
+      assertCanBookTradies(principal);
       if (
         recipient.deliveryStatus !== TradieRequestDeliveryStatus.SENDING
         || recipient.attempts !== 0
@@ -733,6 +735,7 @@ export async function deliverTradieRequest(
       }
       break;
     case "manual": {
+      assertCanBookTradies(principal);
       const project = await authorizeProject(
         principal,
         recipient.request.projectId,
@@ -959,6 +962,7 @@ export async function draftTradieRequestWorkDetails(
   db: DomainDb,
   ai: TradieRequestAiPort,
 ): Promise<WorkDetailsDraft> {
+  assertCanBookTradies(principal);
   if (input.milestoneIds.length === 0) {
     throw new DomainValidationError("Choose at least one activity.");
   }

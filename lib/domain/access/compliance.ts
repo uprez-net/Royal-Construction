@@ -31,6 +31,11 @@ export function canWorkComplianceFile(
   project: ComplianceFileProject,
 ): boolean {
   if (!isUserPrincipal(principal)) return false;
+  // The compliance file is the office's paperwork (DA and CC documents, the
+  // certifier's emails, the HBCF certificate, the build cost summary), not
+  // site work: a site manager does not see or work it, assigned or not
+  // (owner, 2026-11-20).
+  if (principal.role === Role.SITE_MANAGER) return false;
   return (
     principal.role === Role.ADMIN
     || project.siteManagerId === principal.userId

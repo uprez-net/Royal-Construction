@@ -161,19 +161,26 @@ const CONFIRMED = {
   url: "https://blob/hbcf.pdf",
 };
 
-test("HBCF claim amounts are blanked for someone who may not see money", () => {
+test("HBCF is left out whole for someone who may not see money", () => {
   const hidden = hideRequirementsFinancials({
     commercialsAndClaims: {},
     legalAdministration: {
       hbcfClaimDocuments: [CONFIRMED],
+      hbcfInsuranceDocument: { fileId: "f_1", fileName: "hbcf.pdf", url: "u" },
       hbcfInsuranceNumber: "C1",
+      pcaInspector: "Jo",
     },
   } as unknown as ProjectRequirementsPayload);
-  // The certificate itself stays openable: a site manager checks it on site.
-  assert.deepEqual(hidden?.legalAdministration.hbcfClaimDocuments, [
-    { ...CONFIRMED, claimAmount: null },
-  ]);
-  assert.equal(hidden?.legalAdministration.hbcfInsuranceNumber, "C1");
+  // Owner, 2026-11-20: the claim documents carry the contract value and the
+  // sum assured, and the number alone fetches the certificate.
+  const legal = hidden?.legalAdministration as unknown as Record<
+    string,
+    unknown
+  >;
+  assert.equal("hbcfClaimDocuments" in legal, false);
+  assert.equal("hbcfInsuranceDocument" in legal, false);
+  assert.equal("hbcfInsuranceNumber" in legal, false);
+  assert.equal(legal.pcaInspector, "Jo");
 });
 
 const COMPLETE_REQUIREMENTS = {
@@ -214,10 +221,7 @@ test("the agent's requirements read is redacted like the screens", async () => {
 
   const hidden = (await read(siteManagerPrincipal(SM))).requirements;
   assert.equal(hidden.commercialsAndClaims.totalContractSum, null);
-  assert.equal(
-    hidden.legalAdministration.hbcfClaimDocuments?.[0]?.claimAmount,
-    null,
-  );
+  assert.equal(hidden.legalAdministration.hbcfClaimDocuments, undefined);
   const shown = (await read(adminPrincipal())).requirements;
   assert.equal(shown.commercialsAndClaims.totalContractSum, 500_000);
 });

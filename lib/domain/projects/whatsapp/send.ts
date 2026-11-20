@@ -7,7 +7,7 @@ import {
   WhatsAppMessageStatus,
 } from "@prisma/client";
 
-import { authorizeProject } from "../../access/projects";
+import { authorizeProjectRecording } from "../../access/projects";
 import type { TransactionalDomainDb } from "../../db";
 import {
   DomainAuthorizationError,
@@ -104,7 +104,11 @@ export async function sendProjectWhatsAppMessage(
       "idempotencyKey",
     );
   }
-  const project = await authorizeProject(principal, input.projectId, db);
+  const project = await authorizeProjectRecording(
+    principal,
+    input.projectId,
+    db,
+  );
   const outboxKey = projectWhatsAppOutboxKey(project.id, idempotencyKey);
 
   const prior = await db.projectWhatsAppMessage.findUnique({
@@ -377,7 +381,7 @@ export async function reconcileProjectWhatsAppMessage(
   db: TransactionalDomainDb,
 ): Promise<ProjectWhatsAppMessageRecord> {
   requireStaff(principal);
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   const message = await db.projectWhatsAppMessage.findUnique({
     select: {
       direction: true,

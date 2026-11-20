@@ -132,6 +132,13 @@ export default function UpdateMilestoneModal({
     return totalSpend;
   }, [project, milestoneId]);
   const [isPending, startTransition] = useTransition();
+  // Re-planning (target date, an existing start) is the office's or the
+  // assigned site manager's; any site manager records progress
+  // (`viewerAccess.manage` / `assertRecordingOnlyUpdate`).
+  const canPlan = project?.viewerAccess.manage ?? true;
+  const canWaive = project?.viewerAccess.book ?? true;
+  const canSetStart =
+    canPlan || !milestone?.startDate || milestone.status === "PENDING";
 
   // Derived from the milestone as it stands right now, so reopening the dialog
   // never shows the previous session's dates or spend.
@@ -324,23 +331,31 @@ export default function UpdateMilestoneModal({
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
-                  {statusOptions.map((option) => (
-                    <SelectItem
-                      key={option.value}
-                      value={option.value}
-                      disabled={
-                        option.value !== milestone?.status
-                        && !allowedMilestoneTransitions(
-                          milestone?.status ?? "PENDING",
-                          project?.milestones.filter(
-                            (child) => child.parentId === milestoneId,
-                          ) ?? [],
-                        ).includes(option.value)
-                      }
-                    >
-                      {option.label}
-                    </SelectItem>
-                  ))}
+                  {statusOptions
+                    // Waiving cancels the activity's bookings: the office's.
+                    .filter(
+                      (option) =>
+                        option.value !== "NOT_REQUIRED"
+                        || canWaive
+                        || milestone?.status === "NOT_REQUIRED",
+                    )
+                    .map((option) => (
+                      <SelectItem
+                        key={option.value}
+                        value={option.value}
+                        disabled={
+                          option.value !== milestone?.status
+                          && !allowedMilestoneTransitions(
+                            milestone?.status ?? "PENDING",
+                            project?.milestones.filter(
+                              (child) => child.parentId === milestoneId,
+                            ) ?? [],
+                          ).includes(option.value)
+                        }
+                      >
+                        {option.label}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               <p id="status-hint" className="text-xs text-muted-foreground">
@@ -354,94 +369,32 @@ export default function UpdateMilestoneModal({
               so until someone sets the real one, "overdue" on
               the milestones tab counts against a date nobody chose.
             */}
-            <div className="space-y-1.5">
-              <Label htmlFor="targetDate" className={labelClassName}>
-                Target date
-              </Label>
-              <Popover modal>
-                <PopoverTrigger asChild>
-                  <Button
-                    id="targetDate"
-                    type="button"
-                    variant="outline"
-                    className={cn(
-                      inputClassName,
-                      "w-full justify-start text-left font-normal",
-                      !formState.targetDate && "text-muted-foreground",
-                    )}
-                    aria-invalid={Boolean(fieldErrors.targetDate)}
-                    aria-describedby={
-                      fieldErrors.targetDate
-                        ? "targetDate-error"
-                        : "targetDate-hint"
-                    }
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formState.targetDate ? (
-                      format(new Date(formState.targetDate), "PPP")
-                    ) : (
-                      <span>Pick a date</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={
-                      formState.targetDate
-                        ? new Date(formState.targetDate)
-                        : undefined
-                    }
-                    onSelect={(date) =>
-                      handleFormChange(
-                        "targetDate",
-                        date ? format(date, "yyyy-MM-dd") : "",
-                      )
-                    }
-                    captionLayout="dropdown"
-                  />
-                </PopoverContent>
-              </Popover>
-              {fieldErrors.targetDate ? (
-                <p id="targetDate-error" className="text-xs text-destructive">
-                  {fieldErrors.targetDate}
-                </p>
-              ) : (
-                <p
-                  id="targetDate-hint"
-                  className="text-xs text-muted-foreground"
-                >
-                  When this activity is due. Drives the due and overdue markers
-                  on the Stage schedule.
-                </p>
-              )}
-            </div>
-
-            {(formState.status === "ACTIVE" || formState.status === "DONE") && (
+            {canPlan ? (
               <div className="space-y-1.5">
-                <Label htmlFor="startDate" className={labelClassName}>
-                  Start date
-                  <RequiredMark />
+                <Label htmlFor="targetDate" className={labelClassName}>
+                  Target date
                 </Label>
                 <Popover modal>
                   <PopoverTrigger asChild>
                     <Button
-                      id="startDate"
+                      id="targetDate"
                       type="button"
                       variant="outline"
                       className={cn(
                         inputClassName,
                         "w-full justify-start text-left font-normal",
-                        !formState.startDate && "text-muted-foreground",
+                        !formState.targetDate && "text-muted-foreground",
                       )}
-                      aria-invalid={Boolean(fieldErrors.startDate)}
+                      aria-invalid={Boolean(fieldErrors.targetDate)}
                       aria-describedby={
-                        fieldErrors.startDate ? "startDate-error" : undefined
+                        fieldErrors.targetDate
+                          ? "targetDate-error"
+                          : "targetDate-hint"
                       }
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {formState.startDate ? (
-                        format(new Date(formState.startDate), "PPP")
+                      {formState.targetDate ? (
+                        format(new Date(formState.targetDate), "PPP")
                       ) : (
                         <span>Pick a date</span>
                       )}
@@ -451,13 +404,13 @@ export default function UpdateMilestoneModal({
                     <Calendar
                       mode="single"
                       selected={
-                        formState.startDate
-                          ? new Date(formState.startDate)
+                        formState.targetDate
+                          ? new Date(formState.targetDate)
                           : undefined
                       }
                       onSelect={(date) =>
                         handleFormChange(
-                          "startDate",
+                          "targetDate",
                           date ? format(date, "yyyy-MM-dd") : "",
                         )
                       }
@@ -465,13 +418,82 @@ export default function UpdateMilestoneModal({
                     />
                   </PopoverContent>
                 </Popover>
-                {fieldErrors.startDate ? (
-                  <p id="startDate-error" className="text-xs text-destructive">
-                    {fieldErrors.startDate}
+                {fieldErrors.targetDate ? (
+                  <p id="targetDate-error" className="text-xs text-destructive">
+                    {fieldErrors.targetDate}
                   </p>
-                ) : null}
+                ) : (
+                  <p
+                    id="targetDate-hint"
+                    className="text-xs text-muted-foreground"
+                  >
+                    When this activity is due. Drives the due and overdue
+                    markers on the Stage schedule.
+                  </p>
+                )}
               </div>
-            )}
+            ) : null}
+
+            {canSetStart
+              && (formState.status === "ACTIVE"
+                || formState.status === "DONE") && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="startDate" className={labelClassName}>
+                    Start date
+                    <RequiredMark />
+                  </Label>
+                  <Popover modal>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="startDate"
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          inputClassName,
+                          "w-full justify-start text-left font-normal",
+                          !formState.startDate && "text-muted-foreground",
+                        )}
+                        aria-invalid={Boolean(fieldErrors.startDate)}
+                        aria-describedby={
+                          fieldErrors.startDate ? "startDate-error" : undefined
+                        }
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {formState.startDate ? (
+                          format(new Date(formState.startDate), "PPP")
+                        ) : (
+                          <span>Pick a date</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={
+                          formState.startDate
+                            ? new Date(formState.startDate)
+                            : undefined
+                        }
+                        onSelect={(date) =>
+                          handleFormChange(
+                            "startDate",
+                            date ? format(date, "yyyy-MM-dd") : "",
+                          )
+                        }
+                        captionLayout="dropdown"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  {fieldErrors.startDate ? (
+                    <p
+                      id="startDate-error"
+                      className="text-xs text-destructive"
+                    >
+                      {fieldErrors.startDate}
+                    </p>
+                  ) : null}
+                </div>
+              )}
             {/* The same test the server makes before it moves the project's
                 start date: nothing on the project has started yet. */}
             {formState.status === "ACTIVE"

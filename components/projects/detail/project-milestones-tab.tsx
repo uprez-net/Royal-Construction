@@ -538,7 +538,9 @@ export function ProjectMilestonesTab({
                           <span className="flex items-center justify-end gap-1">
                             {/* A finished stage has no open activity left to
                                   book a tradie onto, so it gets no button. */}
-                            {ledgerStage.state !== "complete" ? (
+                            {/* Booking is the office's (`viewerAccess.book`). */}
+                            {ledgerStage.state !== "complete"
+                            && project.viewerAccess.book ? (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -646,20 +648,27 @@ export function ProjectMilestonesTab({
                                   </span>
                                 )}
 
-                                <Button
-                                  size="default"
-                                  variant="ghost"
-                                  className="ml-auto text-primary"
-                                  onClick={() =>
-                                    handleAddMilestone(ledgerStage.stage)
-                                  }
-                                >
-                                  <Plus className="size-4" aria-hidden="true" />
-                                  Add activity
-                                  <span className="sr-only">
-                                    to {ledgerStage.label}
-                                  </span>
-                                </Button>
+                                {/* Planning, not recording: the office
+                                    or the assigned site manager. */}
+                                {project.viewerAccess.manage ? (
+                                  <Button
+                                    size="default"
+                                    variant="ghost"
+                                    className="ml-auto text-primary"
+                                    onClick={() =>
+                                      handleAddMilestone(ledgerStage.stage)
+                                    }
+                                  >
+                                    <Plus
+                                      className="size-4"
+                                      aria-hidden="true"
+                                    />
+                                    Add activity
+                                    <span className="sr-only">
+                                      to {ledgerStage.label}
+                                    </span>
+                                  </Button>
+                                ) : null}
                               </div>
 
                               {open.length > 0 ? (
@@ -683,7 +692,9 @@ export function ProjectMilestonesTab({
                                       onSendReminder={handleSendReminder}
                                       onOpenViewPicture={handleOpenViewPicture}
                                       onMarkasNotRequired={
-                                        handleMarkAsNotRequired
+                                        project.viewerAccess.book
+                                          ? handleMarkAsNotRequired
+                                          : undefined
                                       }
                                       onCreateVariation={
                                         isAdmin ? setVariationFor : undefined
@@ -764,7 +775,9 @@ export function ProjectMilestonesTab({
                                             handleOpenViewPicture
                                           }
                                           onMarkasNotRequired={
-                                            handleMarkAsNotRequired
+                                            project.viewerAccess.book
+                                              ? handleMarkAsNotRequired
+                                              : undefined
                                           }
                                           onCreateVariation={
                                             isAdmin

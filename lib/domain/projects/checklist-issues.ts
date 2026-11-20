@@ -1,6 +1,6 @@
 import { ChecklistIssueEventKind, ChecklistIssueStatus } from "@prisma/client";
 
-import { authorizeProject } from "../access/projects";
+import { authorizeProjectRecording } from "../access/projects";
 import { logAction } from "../audit/action-log";
 import type { TransactionalDomainDb } from "../db";
 import { DomainNotFoundError, DomainValidationError } from "../errors";
@@ -82,7 +82,7 @@ export async function raiseChecklistIssue(
     );
   }
 
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   const replay = await db.checklistIssue.findUnique({
     select: { checklistId: true, id: true, number: true },
     where: { requestKey },

@@ -66,6 +66,7 @@ async function TradieDetailContent({ params }: TradieDetailPageProps) {
     <TradieDetailClient
       tradie={seesMoney ? tradieDetails : withoutTradieQuotes(tradieDetails)}
       showActivity={seesMoney}
+      isOffice={seesMoney}
     />
   );
 }

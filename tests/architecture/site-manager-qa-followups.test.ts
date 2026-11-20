@@ -117,27 +117,25 @@ test("the public booking route answers a body that is not a JSON object with 400
 
 /* ------------------------------- #568: draw only what will be accepted -- */
 
-test("the compliance file is worked by the office, the assigned site manager, the lead's assignee and the owning customer", () => {
+test("the compliance file is worked by the office, the lead's assignee and the owning customer, never a site manager", () => {
   const project = {
     customerId: "c_1",
     leadAssignedId: "user_sales",
     siteManagerId: SM,
   };
   assert.equal(canWorkComplianceFile(adminPrincipal(), project), true);
-  assert.equal(canWorkComplianceFile(siteManagerPrincipal(SM), project), true);
+  // Owner, 2026-11-20: the compliance file is the office's paperwork, so not
+  // even the assigned site manager works it.
+  assert.equal(canWorkComplianceFile(siteManagerPrincipal(SM), project), false);
   assert.equal(
     canWorkComplianceFile(siteManagerPrincipal("user_other_sm"), project),
     false,
   );
   assert.equal(
-    canWorkComplianceFile(siteManagerPrincipal(SM), {
-      ...project,
-      siteManagerId: null,
-    }),
-    false,
-  );
-  assert.equal(
-    canWorkComplianceFile(siteManagerPrincipal("user_sales"), project),
+    canWorkComplianceFile(
+      { kind: "user", role: "GUEST", userId: "user_sales" } as never,
+      project,
+    ),
     true,
   );
   assert.equal(
@@ -157,6 +155,9 @@ test("the project page is told what the caller may record, from the commands' ow
   );
   assert.match(source, /compliance: canWorkComplianceFile\(principal/);
   assert.match(source, /manage: canManageProject\(principal/);
+  assert.match(source, /record: canRecordOnProject\(principal/);
+  assert.match(source, /book: canBookTradies\(principal\)/);
+  assert.match(source, /history: canSeeProjectHistory\(principal\)/);
   // The Overview tab's save is `authorizeProjectEdit`, which also admits the
   // lead's assignee: its own flag, not `manage`.
   assert.match(source, /edit: canEditProject\(principal/);

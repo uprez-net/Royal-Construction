@@ -15,6 +15,7 @@ import { sameTrade } from "@/lib/domain/tradies/request-rules";
 import { projectTrades, tradeOverview } from "./tradie-requests";
 import { TradeList, TradeWorkbench } from "./tradie-trade-overview";
 import { TradeSelector } from "./trade-selector";
+import { SiteManagerBookingsList } from "./site-manager-bookings-list";
 
 export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
   const attentionItems = useTradieAttention(project.tradieSchedules);
@@ -61,6 +62,12 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
         },
       }),
     );
+
+  // Without `book` (a site manager) the tab is only a record of who is booked
+  // here: no alerts, reminders, quotes or prices. Returned after the hooks.
+  if (!project.viewerAccess.book) {
+    return <SiteManagerBookingsList project={project} />;
+  }
 
   return (
     <div className="space-y-4">

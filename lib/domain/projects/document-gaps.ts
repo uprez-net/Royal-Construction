@@ -153,3 +153,25 @@ export function projectDocumentGaps({
 
   return gaps;
 }
+
+/**
+ * Gaps that are the office's to fill: HBCF, and the certificate filed on the
+ * compliance file. Neither is site work, so a caller who may not see project
+ * money (a site manager) is not shown them anywhere — the project page, the
+ * projects list or the dashboard (owner, 2026-11-20).
+ */
+const OFFICE_GAP_IDS: readonly ProjectDocumentGapId[] = [
+  "hbcf_missing",
+  "hbcf_certificate_missing",
+  "construction_certificate_missing",
+];
+
+/** The gaps a caller is shown: all of them, or the site's share. */
+export function gapsVisibleTo<T extends { readonly id: ProjectDocumentGapId }>(
+  gaps: readonly T[],
+  financialsHidden: boolean,
+): readonly T[] {
+  return financialsHidden
+    ? gaps.filter((gap) => !OFFICE_GAP_IDS.includes(gap.id))
+    : gaps;
+}

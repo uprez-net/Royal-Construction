@@ -4,6 +4,7 @@ import {
   TradieScheduleStatus,
 } from "@prisma/client";
 
+import { assertCanBookTradies } from "../access/projects";
 import type { DomainDb } from "../db";
 import { DomainNotFoundError, DomainTransitionError } from "../errors";
 import { isInternalPrincipal, type DomainPrincipal } from "../principal";
@@ -56,6 +57,7 @@ export async function sendTradieScheduleReminder(
   db: DomainDb,
   send: TradieReminderEmailPort,
 ): Promise<{ to: string; alreadySent: boolean }> {
+  assertCanBookTradies(principal);
   if (!isInternalPrincipal(principal)) {
     throw new DomainTransitionError(
       "Sending schedule reminders requires internal staff access.",

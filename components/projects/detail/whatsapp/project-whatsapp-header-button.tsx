@@ -46,8 +46,11 @@ const OUTLINE = "h-9 rounded-lg px-3.5 text-sm font-medium";
  */
 export function ProjectWhatsAppHeaderButton({
   projectId,
+  isAdmin,
 }: {
   projectId: string;
+  /** Only the office creates, links or invites; anyone else gets the chat. */
+  isAdmin: boolean;
 }) {
   const { thread } = useProjectWhatsApp(projectId, {
     pollMs: PROJECT_WHATSAPP_HEADER_POLL_MS,
@@ -98,6 +101,8 @@ export function ProjectWhatsAppHeaderButton({
     </>
   );
 
+  if (!isAdmin && !thread.availability.available) return null;
+
   if (!thread.availability.available) {
     return (
       <DropdownMenu>
@@ -136,26 +141,30 @@ export function ProjectWhatsAppHeaderButton({
     );
   }
 
-  if (group?.status === "ACTIVE" && group.inviteLink) {
+  if (group?.status === "ACTIVE" && (!isAdmin || group.inviteLink)) {
     const unread = group.unreadCount;
     return (
       <>
         <div className="inline-flex items-center gap-1.5">
-          <Button
-            type="button"
-            onClick={() => setInviting(true)}
-            className={GREEN}
-          >
-            <Mail className="mr-1.5 size-4" aria-hidden="true" />
-            Invite owners
-          </Button>
-          <CopyButton
-            value={group.inviteLink}
-            label="Copy link"
-            copiedLabel="Copied"
-            successToast="Invite link copied — paste it anywhere the owners will see it."
-            className={OUTLINE}
-          />
+          {isAdmin && group.inviteLink ? (
+            <>
+              <Button
+                type="button"
+                onClick={() => setInviting(true)}
+                className={GREEN}
+              >
+                <Mail className="mr-1.5 size-4" aria-hidden="true" />
+                Invite owners
+              </Button>
+              <CopyButton
+                value={group.inviteLink}
+                label="Copy link"
+                copiedLabel="Copied"
+                successToast="Invite link copied — paste it anywhere the owners will see it."
+                className={OUTLINE}
+              />
+            </>
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -205,6 +214,8 @@ export function ProjectWhatsAppHeaderButton({
   }
 
   // No group yet, or the last one failed or was deleted.
+  if (!isAdmin) return null;
+
   return (
     <>
       <div className="inline-flex">

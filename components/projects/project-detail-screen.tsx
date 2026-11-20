@@ -81,7 +81,7 @@ export function ProjectDetailScreen({
           key={`header-${siteAddress}-${signedDate}-${pcaInspector}-${insuranceClaimStartDate}-${insuranceClaimEndDate}-${hbcfInsuranceNumber}`}
         />
         <ProjectStatCards role={role} />
-        {displayedProject.viewerAccess.manage ? null : (
+        {displayedProject.viewerAccess.record ? null : (
           <ProjectNotAssignedNotice />
         )}
         <ProjectComplianceAlert project={displayedProject} />

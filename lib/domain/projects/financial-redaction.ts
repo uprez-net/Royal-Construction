@@ -2,9 +2,12 @@ import type {
   ProjectRequirementsPayload,
   ProjectSourceDocumentReference,
 } from "@/types/project-flow";
+import type { ComplianceDocumentType } from "@prisma/client";
 import { parseQuotedAmount } from "@/utils/calculations";
 
 import { canSeeProjectFinancials } from "../access/projects";
+import { HBCF_FILE_TAG, projectHbcfFileIds } from "../insurance/hbcf-claims";
+import type { ProjectDocument } from "./document-tags";
 import type { DomainPrincipal } from "../principal";
 import type {
   ProjectDetail,
@@ -50,11 +53,10 @@ function noSourceDocument(
 }
 
 /**
- * The extracted requirements without their commercial section, without the
- * HBCF claim amounts (the insurance pool is counted from them), and without the
- * links to the tender and the contract, which carry the price in full. The
- * rest — wet areas, site safety, inclusions, the HBCF certificate itself — is
- * what a site manager builds from, and stays.
+ * The extracted requirements without their commercial section, without any
+ * HBCF field (`withoutHbcf`), and without the links to the tender and the
+ * contract, which carry the price in full. The rest — wet areas, site safety,
+ * inclusions — is what a site manager builds from, and stays.
  */
 export function hideRequirementsFinancials(
   requirements: ProjectRequirementsPayload | undefined,
@@ -73,18 +75,22 @@ export function hideRequirementsFinancials(
           },
         }
       : {}),
-    ...(legal && Array.isArray(legal.hbcfClaimDocuments)
-      ? {
-          legalAdministration: {
-            ...legal,
-            hbcfClaimDocuments: legal.hbcfClaimDocuments.map((document) => ({
-              ...document,
-              claimAmount: null,
-            })),
-          },
-        }
-      : {}),
+    ...(legal ? { legalAdministration: withoutHbcf(legal) } : {}),
   };
+}
+
+/**
+ * The legal section without its HBCF fields. The certificate, its number and
+ * the claim documents carry the contract value, the sum assured and the claim
+ * amounts the pool is counted from, and the number alone is enough to fetch
+ * the certificate: none of it is site work (owner, 2026-11-20, replacing the
+ * earlier "amounts blanked, certificate openable"). A save puts the stored
+ * fields back (`withStoredHbcf`), so leaving them out cannot erase them.
+ */
+function withoutHbcf<T extends object>(legal: T): T {
+  const rest = { ...legal } as Record<string, unknown>;
+  for (const field of HBCF_FIELDS) delete rest[field];
+  return rest as T;
 }
 
 /** The legal-section fields that record the HBCF certificate and claims. */
@@ -161,30 +167,88 @@ export function hideListProjectFinancials(
 }
 
 /**
- * The activity-log entries whose message carries an amount: a tradie's quote, a
- * variation's price, an activity's quoted price or the office's tradie figures.
- * Dropped from a hidden detail because the text is the leak — there is no field
- * to zero.
+ * Documents tab rows that belong to the office: the sales lead, tradie
+ * invoices and variations (prices, the contract value).
  */
-const MONEY_LOG_TYPES: ReadonlySet<string> = new Set([
-  "milestonePriceChanged",
-  "milestoneTradieFigureChanged",
-  "tradieScheduleQuoted",
-  "variationCreated",
-  // No amount in the text, but the variation's description, which is where the
-  // office writes what it costs; the variations themselves are hidden too.
-  "variationUpdated",
-]);
+const OFFICE_DOCUMENT_SOURCES: ReadonlySet<ProjectDocument["source"]> = new Set(
+  ["lead", "tradie-invoice", "variation"],
+);
+
+/**
+ * What a site manager builds from, of everything filed on the compliance file:
+ * the plans, the site's survey and reports, and the approvals. An allow-list:
+ * the rest — the HBCF certificate, the build cost summary, fee proposals and
+ * invoices, the land deed and owner's consent, application forms, and anything
+ * not yet identified — stays with the office (owner, 2026-11-20).
+ */
+const BUILD_DOCUMENT_TYPES: ReadonlySet<ComplianceDocumentType> = new Set([
+  "DEPOSITED_PLAN",
+  "TITLE_SEARCH_DETAIL_AND_LEVEL",
+  "SURVEY",
+  "PRELIMINARY_ARCHITECTURAL_PLANS",
+  "FULL_ARCHITECTURAL_DESIGN",
+  "PLANNING_CERTIFICATE_10_7",
+  "BASIX_CERTIFICATE",
+  "BUSHFIRE_REPORT",
+  "STRUCTURAL_DRAWINGS",
+  "HYDRAULIC_STORMWATER_DRAWINGS",
+  "GEOTECH_REPORT",
+  "WATER_SERVICING_APPROVAL",
+  "SECTION_73_NOTICE",
+  "ROAD_OPENING_PERMIT",
+  "MINE_SUBSIDENCE_APPROVAL",
+  "WASTE_MANAGEMENT_PLAN",
+  "TRAFFIC_CONTROL_PLAN",
+  "DEVELOPMENT_CONSENT",
+  "CONSTRUCTION_CERTIFICATE",
+  "COMPLYING_DEVELOPMENT_CERTIFICATE",
+] satisfies ComplianceDocumentType[]);
 
 /** The whole detail payload: contract, claims, variations, quotes, costs. */
 export function hideDetailProjectFinancials(
   project: ProjectDetail,
 ): ProjectDetail {
+  // The HBCF certificate and claim documents are filed as ordinary files too;
+  // they go with the HBCF fields (`withoutHbcf`).
+  const hbcfFileIds = projectHbcfFileIds(
+    project.requirements?.legalAdministration as Parameters<
+      typeof projectHbcfFileIds
+    >[0],
+  );
+  const isHbcf = (fileId: string | null, tags: readonly string[] | null) =>
+    (fileId !== null && hbcfFileIds.has(fileId))
+    || (tags ?? []).includes(HBCF_FILE_TAG);
+  const documents = project.documents.filter(
+    (document) =>
+      !OFFICE_DOCUMENT_SOURCES.has(document.source)
+      && !isHbcf(document.fileId, document.tags)
+      && (document.source !== "compliance"
+        || (document.complianceDocumentType != null
+          && BUILD_DOCUMENT_TYPES.has(document.complianceDocumentType))),
+  );
+  const buildFileIds = new Set(
+    documents
+      .filter((document) => document.source === "compliance")
+      .map((document) => document.fileId),
+  );
   return {
     ...project,
-    activityLogs: project.activityLogs.filter(
-      (entry) => !MONEY_LOG_TYPES.has(entry.type),
+    // The History tab is the office's audit trail (`canSeeProjectHistory`).
+    activityLogs: [],
+    documents,
+    // The raw files too, not only the Documents rows: the Documents tab
+    // rebuilds a row from any file it is handed. A file filed on the
+    // compliance file or brought over from the lead keeps its projectId, so a
+    // compliance file stays only as a build document kept above.
+    files: project.files.filter(
+      (file) =>
+        !isHbcf(file.id, file.tags)
+        && file.leadId === null
+        && (!file.complianceDocumentId || buildFileIds.has(file.id)),
     ),
+    // The compliance file (documents, certifier, its emails) is the office's
+    // (`canWorkComplianceFile`); the HBCF certificate can be filed there too.
+    certifierEngagement: null,
     financialsHidden: true,
     invoices: [],
     // The lead this project came from is the sales record: its email thread
@@ -296,6 +360,10 @@ export function withoutFinancialEdits<
       requirements.legalAdministration,
       stored.legalAdministration,
     );
+  } else if ("legalAdministration" in stored) {
+    // The save replaces `requirements` whole: a payload with no legal section
+    // (or a null one) would delete the stored one, HBCF and all.
+    requirements.legalAdministration = stored.legalAdministration;
   }
   return {
     ...input,

@@ -139,7 +139,7 @@ export function ProjectDetailTabs({
   // VISIBLE_PROJECT_DETAIL_TABS) falls back rather than rendering nothing.
   const urlTab = searchParams.get("activeTab");
   const activeTab: VisibleProjectDetailTabKey =
-    urlTab && isVisibleProjectDetailTab(urlTab) ? urlTab : "overview";
+    urlTab && isVisibleProjectDetailTab(urlTab, project) ? urlTab : "overview";
 
   // replaceState rather than router.replace: every tab renders from data
   // already on the page, and router.replace re-renders the whole server page
@@ -229,18 +229,14 @@ export function ProjectDetailTabs({
               a project they are not assigned to (#568): say so rather than
               draw a panel whose every button is refused. */}
           {activeTab === "communications" ? (
-            project.viewerAccess.manage ? (
-              <ProjectCommunicationTabs project={project} />
+            project.viewerAccess.record ? (
+              <ProjectCommunicationTabs project={project} isAdmin={isAdmin} />
             ) : (
               <ProjectNotAssignedNotice what="use its WhatsApp group" />
             )
           ) : null}
           {activeTab === "compliance" ? (
-            project.viewerAccess.compliance ? (
-              <ProjectComplianceTab project={project} isAdmin={isAdmin} />
-            ) : (
-              <ProjectNotAssignedNotice what="work its compliance file" />
-            )
+            <ProjectComplianceTab project={project} isAdmin={isAdmin} />
           ) : null}
         </UploadHintScope>
       </div>

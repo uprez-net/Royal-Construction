@@ -29,10 +29,13 @@ import { getTradieByIdCached } from "@/lib/data/tradie-management";
 
 interface TradieActionsDropdownProps {
   tradieRow: TradieRow;
+  /** The office may edit, re-price, favourite and delete; a site manager rates and reports. */
+  isOffice: boolean;
 }
 
 export function TradieActionsDropdown({
   tradieRow,
+  isOffice,
 }: TradieActionsDropdownProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -144,26 +147,30 @@ export function TradieActionsDropdown({
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem
-          onClick={(e) => startFetchingDetails(() => onEditDetails(e))}
-        >
-          {isEditDetailsPending ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Loading Details...
-            </>
-          ) : (
-            <>
-              <Pencil className="mr-2 h-4 w-4" />
-              Edit Details
-            </>
-          )}
-        </DropdownMenuItem>
+        {isOffice && (
+          <>
+            <DropdownMenuItem
+              onClick={(e) => startFetchingDetails(() => onEditDetails(e))}
+            >
+              {isEditDetailsPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading Details...
+                </>
+              ) : (
+                <>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit Details
+                </>
+              )}
+            </DropdownMenuItem>
 
-        <DropdownMenuItem onClick={onPriceChange}>
-          <Tag className="mr-2 h-4 w-4" />
-          Price Change
-        </DropdownMenuItem>
+            <DropdownMenuItem onClick={onPriceChange}>
+              <Tag className="mr-2 h-4 w-4" />
+              Price Change
+            </DropdownMenuItem>
+          </>
+        )}
 
         <DropdownMenuItem onClick={onReportIncident}>
           <AlertTriangle className="mr-2 h-4 w-4" />
@@ -175,30 +182,36 @@ export function TradieActionsDropdown({
           Rate Tradie
         </DropdownMenuItem>
 
-        <DropdownMenuSeparator />
+        {isOffice && (
+          <>
+            <DropdownMenuSeparator />
 
-        <DropdownMenuItem
-          onClick={(e) => startTransition(() => onToggleFavourite(e))}
-          disabled={isPending}
-        >
-          <Star
-            className={`mr-2 h-4 w-4 ${
-              tradieRow.isFavourite ? "fill-warning text-warning" : ""
-            }`}
-          />
+            <DropdownMenuItem
+              onClick={(e) => startTransition(() => onToggleFavourite(e))}
+              disabled={isPending}
+            >
+              <Star
+                className={`mr-2 h-4 w-4 ${
+                  tradieRow.isFavourite ? "fill-warning text-warning" : ""
+                }`}
+              />
 
-          {tradieRow.isFavourite ? "Remove from Favorites" : "Add to Favorites"}
-        </DropdownMenuItem>
+              {tradieRow.isFavourite
+                ? "Remove from Favorites"
+                : "Add to Favorites"}
+            </DropdownMenuItem>
 
-        <DropdownMenuSeparator />
+            <DropdownMenuSeparator />
 
-        <DropdownMenuItem
-          onClick={onDelete}
-          className="text-destructive focus:text-destructive"
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete Tradie
-        </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={onDelete}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Tradie
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

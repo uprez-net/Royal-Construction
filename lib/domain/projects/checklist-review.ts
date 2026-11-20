@@ -1,6 +1,6 @@
 import { ChecklistItemState } from "@prisma/client";
 
-import { authorizeProject } from "../access/projects";
+import { authorizeProjectRecording } from "../access/projects";
 import type { DomainDb } from "../db";
 import { DomainNotFoundError, DomainValidationError } from "../errors";
 import type { BlobDeletePort } from "../ports/blob";
@@ -36,7 +36,7 @@ export async function setChecklistItemState(
   db: DomainDb,
   now: Date = new Date(),
 ): Promise<{ readonly itemId: string; readonly state: ChecklistItemState }> {
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   const actor = requireUserPrincipal(principal);
   const checklist = await loadChecklist(input, db, { requireOpen: true });
   const item = await db.checklistItem.findFirst({
@@ -94,7 +94,7 @@ export async function updateChecklistDetails(
   readonly comments: string | null;
   readonly checkedBy: string | null;
 }> {
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   requireUserPrincipal(principal);
   const checklist = await loadChecklist(input, db, { requireOpen: true });
   const data: { comments?: string | null; checkedBy?: string | null } = {};
@@ -141,7 +141,7 @@ export async function attachChecklistPhotos(
   input: AttachChecklistPhotosInput,
   db: DomainDb,
 ): Promise<{ readonly attached: number }> {
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   const actor = requireUserPrincipal(principal);
   const checklist = await loadChecklist(input, db, { requireOpen: true });
   const fileIds = [...new Set(input.fileIds)];
@@ -256,7 +256,7 @@ export async function removeChecklistPhoto(
   db: DomainDb,
   deleteBlob: BlobDeletePort,
 ): Promise<{ readonly removed: true }> {
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   requireUserPrincipal(principal);
   const checklist = await loadChecklist(input, db, { requireOpen: true });
   const attachment = await db.checklistAttachment.findFirst({

@@ -50,6 +50,26 @@ export function canManageProject(
 }
 
 /**
+ * Record scope: the site work a site manager is there for — the stage
+ * checklists, an activity's progress, notes and photos, and the project's
+ * WhatsApp messages.
+ *
+ * Wider than `canManageProject` by one clause: any site manager, on every
+ * project, not only the ones whose Site manager field names them. The owner's
+ * call (2026-11-20, reversing #573's "assigned only"): site managers record on
+ * every job, and production had no project assigned to one. Everything else a
+ * manager may do — planning activities, bookings, variations, materials,
+ * setting up the WhatsApp group — stays on `canManageProject` or narrower.
+ */
+export function canRecordOnProject(
+  principal: DomainPrincipal,
+  project: ManageableProject,
+): boolean {
+  if (canManageProject(principal, project)) return true;
+  return isUserPrincipal(principal) && principal.role === Role.SITE_MANAGER;
+}
+
+/**
  * `canManageProject` as a query filter, for listings and for narrowing a
  * lookup so a forbidden project reads as absent.
  *
@@ -184,6 +204,94 @@ export async function authorizeProject(
     );
   }
   return project;
+}
+
+/** Assert this caller may record site work on this project, and return it. */
+export async function authorizeProjectRecording(
+  principal: DomainPrincipal,
+  projectId: string,
+  db: DomainDb,
+): Promise<AuthorizedProject> {
+  const project = await db.project.findUnique({
+    select: { id: true, location: true, name: true, siteManagerId: true },
+    where: { id: projectId },
+  });
+
+  if (!project) throw new DomainNotFoundError("Project not found");
+  if (!canRecordOnProject(principal, project)) {
+    throw new DomainAuthorizationError(
+      "You do not have access to this project",
+    );
+  }
+  return project;
+}
+
+/** `authorizeProjectRecording` for the project a milestone belongs to. */
+export async function authorizeMilestoneRecording(
+  principal: DomainPrincipal,
+  milestoneId: string,
+  db: DomainDb,
+): Promise<{ milestoneId: string; project: AuthorizedProject }> {
+  const milestone = await db.milestone.findUnique({
+    select: { projectId: true },
+    where: { id: milestoneId },
+  });
+  if (!milestone) throw new DomainNotFoundError("Milestone not found");
+  return {
+    milestoneId,
+    project: await authorizeProjectRecording(
+      principal,
+      milestone.projectId,
+      db,
+    ),
+  };
+}
+
+/**
+ * Booking tradies — asking for quotes, booking, moving or cancelling a
+ * booking, recording a quote, reminding a tradie — is the office's. Every one
+ * of them handles a price, so it follows the money rule; a site manager sees
+ * who is booked and when, not the booking controls (owner, 2026-11-20).
+ */
+export function canBookTradies(principal: DomainPrincipal): boolean {
+  return canSeeProjectFinancials(principal);
+}
+
+export function assertCanBookTradies(principal: DomainPrincipal): void {
+  if (!canBookTradies(principal)) {
+    throw new DomainAuthorizationError(
+      "Tradie bookings are made by the office.",
+    );
+  }
+}
+
+/**
+ * Setting up a project's WhatsApp group (create it, link one, invite the
+ * owners) is the office's. A site manager reads and posts in the group once
+ * it exists (`canRecordOnProject`).
+ */
+export function canSetUpProjectWhatsAppGroup(
+  principal: DomainPrincipal,
+): boolean {
+  return canSeeProjectFinancials(principal);
+}
+
+export function assertCanSetUpProjectWhatsAppGroup(
+  principal: DomainPrincipal,
+): void {
+  if (!canSetUpProjectWhatsAppGroup(principal)) {
+    throw new DomainAuthorizationError(
+      "The office sets up the project's WhatsApp group.",
+    );
+  }
+}
+
+/**
+ * A project's History tab (the activity log: who changed what, some lines
+ * naming an amount) is the office's audit trail, not site work.
+ */
+export function canSeeProjectHistory(principal: DomainPrincipal): boolean {
+  return canSeeProjectFinancials(principal);
 }
 
 /**

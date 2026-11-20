@@ -14,6 +14,7 @@ import { ProjectWhatsAppPanel } from "./whatsapp/project-whatsapp-panel";
 
 interface ProjectCommunicationTabsProps {
   project: ProjectDetail;
+  isAdmin: boolean;
 }
 
 export type CommunicationChannel = "whatsapp" | "email";
@@ -31,6 +32,7 @@ function isChannel(value: string | null): value is CommunicationChannel {
  */
 export function ProjectCommunicationTabs({
   project,
+  isAdmin,
 }: ProjectCommunicationTabsProps) {
   // No lead on the payload means the caller is not the office (a site
   // manager): the email thread is the sales side's, so there is no Email
@@ -159,6 +161,7 @@ export function ProjectCommunicationTabs({
           <ProjectWhatsAppPanel
             projectId={project.id}
             leadName={project.name}
+            isAdmin={isAdmin}
           />
         )}
       </div>

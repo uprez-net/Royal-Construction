@@ -87,7 +87,10 @@ import {
   hbcfClaimDate,
   readHbcfClaimDocuments,
 } from "@/lib/domain/insurance/hbcf-claims";
-import { projectDocumentGaps } from "@/lib/domain/projects/document-gaps";
+import {
+  gapsVisibleTo,
+  projectDocumentGaps,
+} from "@/lib/domain/projects/document-gaps";
 import { normalizeDateString } from "@/utils/date";
 import {
   DOCUMENT_ATTENTION_ID,
@@ -2067,28 +2070,32 @@ export function ProjectOverviewTab({
   const documentGaps = useMemo(() => {
     const savedLegal = (project.requirements as RequirementsData | null)
       ?.legalAdministration;
-    return projectDocumentGaps({
-      status: project.status,
-      started: hasWorkStarted(project.milestones),
-      legal: {
-        signedDate: savedLegal?.signedDate,
-        pcaInspector: savedLegal?.pcaInspector,
-        hbcfInsuranceNumber: savedLegal?.hbcfInsuranceNumber,
-        // A certificate uploaded in the HBCF claim block counts as held.
-        hbcfInsuranceDocument: savedLegal?.hbcfInsuranceDocument,
-        hbcfClaimDocuments: savedLegal?.hbcfClaimDocuments,
-      },
-      heldDocuments: new Set(
-        (project.certifierEngagement?.documents ?? [])
-          .filter((document) => document.files.length > 0)
-          .map((document) => document.documentType),
-      ),
-    });
+    return gapsVisibleTo(
+      projectDocumentGaps({
+        status: project.status,
+        started: hasWorkStarted(project.milestones),
+        legal: {
+          signedDate: savedLegal?.signedDate,
+          pcaInspector: savedLegal?.pcaInspector,
+          hbcfInsuranceNumber: savedLegal?.hbcfInsuranceNumber,
+          // A certificate uploaded in the HBCF claim block counts as held.
+          hbcfInsuranceDocument: savedLegal?.hbcfInsuranceDocument,
+          hbcfClaimDocuments: savedLegal?.hbcfClaimDocuments,
+        },
+        heldDocuments: new Set(
+          (project.certifierEngagement?.documents ?? [])
+            .filter((document) => document.files.length > 0)
+            .map((document) => document.documentType),
+        ),
+      }),
+      project.financialsHidden === true,
+    );
   }, [
     project.requirements,
     project.status,
     project.milestones,
     project.certifierEngagement,
+    project.financialsHidden,
   ]);
 
   /**
@@ -2246,7 +2253,6 @@ export function ProjectOverviewTab({
           <DocumentAttentionPanel
             gaps={documentGaps}
             hasComplianceFile={project.certifierEngagement !== null}
-            hbcfIsOffices={project.financialsHidden === true}
             unsaved={dirty}
             onGo={goToDocumentGap}
           />
@@ -2425,10 +2431,12 @@ export function ProjectOverviewTab({
                       />
                     ) : null}
 
-                    {key === "legalAdministration" ? (
+                    {key === "legalAdministration"
+                    && !project.financialsHidden ? (
                       // The number input is the block's first control, which
                       // is what the attention panel's "Go to HBCF number"
-                      // focuses.
+                      // focuses. Not offered to a caller who cannot see the
+                      // money: HBCF is the office's (#559).
                       <div id={fieldAnchorId("hbcfInsuranceNumber")}>
                         <HbcfClaimsBlock
                           projectId={project.id}
@@ -2441,7 +2449,6 @@ export function ProjectOverviewTab({
                           )}
                           extracting={hbcfExtracting}
                           canRemove={isAdmin}
-                          readOnly={Boolean(project.financialsHidden)}
                           onNumberChange={(value) =>
                             updateSectionField(
                               "legalAdministration",

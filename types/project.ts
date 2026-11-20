@@ -363,12 +363,23 @@ export interface ProjectDetail extends SafeProject {
   /**
    * What the caller may record on this project, decided by the rules the
    * commands enforce, so the page draws only actions that will be accepted.
-   * A site manager reads every project but records only on the ones they are
-   * assigned to (#568).
+   * A site manager reads every project and records site work on every one
+   * (`record`); the rest of managing it stays with the office or the assigned
+   * site manager (`manage`).
    */
   viewerAccess: {
-    /** `canManageProject`: activities, bookings, the WhatsApp group. */
+    /** `canManageProject`: planning activities, variations, materials. */
     manage: boolean;
+    /**
+     * `canRecordOnProject`: checklists, an activity's progress, notes and
+     * photos, and posting in the WhatsApp group. Every site manager, every
+     * project.
+     */
+    record: boolean;
+    /** `canBookTradies`: quotes, bookings, reminders. The office only. */
+    book: boolean;
+    /** `canSeeProjectHistory`: the History tab. The office only. */
+    history: boolean;
     /**
      * `canEditProject`: the Overview tab's own fields and start date. Wider
      * than `manage` by the lead's assignee, so it is decided on its own.

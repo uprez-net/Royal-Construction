@@ -63,6 +63,7 @@ export function ProjectWhatsAppGroupChat({
   onSent,
   onChanged,
   onInvite,
+  isAdmin,
   className,
 }: {
   thread: ProjectWhatsAppThreadDto;
@@ -73,6 +74,8 @@ export function ProjectWhatsAppGroupChat({
   onSent: (message: ProjectWhatsAppMessageDto) => void;
   onChanged: () => void;
   onInvite: () => void;
+  /** Only the office invites owners; a site manager reads and posts. */
+  isAdmin: boolean;
   className?: string;
 }) {
   const group = thread.group;
@@ -181,7 +184,7 @@ export function ProjectWhatsAppGroupChat({
           title={group.subject}
           subtitle={subtitle}
           actions={
-            group.inviteLink && group.status === "ACTIVE" ? (
+            isAdmin && group.inviteLink && group.status === "ACTIVE" ? (
               <>
                 <Button
                   type="button"
@@ -219,7 +222,9 @@ export function ProjectWhatsAppGroupChat({
             group.status === "SUSPENDED"
               ? "WhatsApp has suspended this group. You can read it, but nothing can be sent until the suspension clears."
               : group.status === "DELETED"
-                ? "This group was deleted in WhatsApp. Its history stays here; create a new group from the project header."
+                ? isAdmin
+                  ? "This group was deleted in WhatsApp. Its history stays here; create a new group from the project header."
+                  : "This group was deleted in WhatsApp. Its history stays here; the office can create a new one."
                 : null
           }
           placeholder={`Message ${group.subject}`}
@@ -241,8 +246,9 @@ export function ProjectWhatsAppGroupChat({
         }
         empty={
           <ChatNotice>
-            The group is ready. Invite the owners, then anything they post —
-            messages, photos, voice notes — shows up here.
+            {isAdmin
+              ? "The group is ready. Invite the owners, then anything they post — messages, photos, voice notes — shows up here."
+              : "The group is ready. Anything the owners post — messages, photos, voice notes — shows up here."}
           </ChatNotice>
         }
         renderActions={(message) =>

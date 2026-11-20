@@ -2,7 +2,7 @@ import { ChecklistSignaturePurpose, ChecklistStatus } from "@prisma/client";
 
 import { PROJECT_STAGE_LABELS } from "@/types/project";
 
-import { authorizeProject } from "../access/projects";
+import { authorizeProjectRecording } from "../access/projects";
 import type { DomainDb, TransactionalDomainDb } from "../db";
 import {
   DomainSideEffectError,
@@ -148,7 +148,7 @@ export async function exportChecklistDocument(
 ): Promise<ExportedChecklist> {
   const reviewerName = requireReviewerName(input.reviewerName);
   const signature = requireSignature(input.signatureDataUrl);
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   const actor = await checklistActor(principal, db);
   const checklist = await loadChecklist(input, db);
 

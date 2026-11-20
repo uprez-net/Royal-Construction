@@ -209,7 +209,7 @@ export function MilestoneCard({
   onOpenAddUpdateModal: (id: string) => void;
   onStatusUpdate: (id: string, status?: MilestoneStatus) => void;
   onStartMilestone: (id: string) => void;
-  onMarkasNotRequired: (id: string) => void;
+  onMarkasNotRequired?: (id: string) => void;
   onSendReminder: (tradieReminder: TradieScheduleListItem) => void;
   onOpenViewPicture: (imageUrls: string[], selectedIndex: number) => void;
   /** Raise a variation on this activity. Admin only, so absent otherwise. */
@@ -432,53 +432,58 @@ export function MilestoneCard({
                     </span>
                   </span>
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="ml-auto h-8"
-                    onClick={() =>
-                      onSendReminder({
-                        id: schedule.id,
-                        tradieId: schedule.tradieId,
-                        milestoneId: schedule.milestoneId ?? undefined,
-                        scheduledDate: new Date(
-                          schedule.scheduledDate,
-                        ).toISOString(),
-                        abn: schedule.tradie.abn,
-                        status: schedule.status,
-                        tradeType: bookingTrade(schedule),
-                        tradieName: schedule.tradie.name,
-                        lastQuotedPriceUnit:
-                          schedule.tradie.lastQuotedPriceUnit,
-                        projectId: schedule.projectId,
-                        projectName: project.name,
-                        taskLabel: `${milestone.name} - ${bookingTrade(schedule)}`,
-                        durationDays: schedule.durationDays,
-                        updatedAt: new Date(schedule.updatedAt).toISOString(),
-                        contact: {
-                          email: schedule.tradie.email,
-                          phone: schedule.tradie.phone,
-                          additionalEmails: schedule.tradie.additionalEmails,
-                        },
-                        siteManager: {
-                          name: project.siteManager?.name ?? "Site Manager",
-                          email:
-                            project.siteManager?.email ?? "Site Manager Email",
-                          phone:
-                            project.siteManager?.phone ?? "Site Manager Phone",
-                        },
-                        lastQuotedPrice: schedule.tradie.lastQuotedPrice,
-                        isFavourite: schedule.tradie.isFavourite,
-                        note: schedule.tradie.note,
-                        requiresQuote: schedule.requiresQuote,
-                        quotedPrice: schedule.quotedPrice ?? undefined,
-                        refToken: schedule.refToken,
-                      } satisfies TradieScheduleListItem)
-                    }
-                  >
-                    <Bell className="mr-1 size-3.5" aria-hidden="true" />
-                    Remind {schedule.tradie.name.split(" ")[0]}
-                  </Button>
+                  {/* A reminder is a booking action: the office only. */}
+                  {project.viewerAccess.book ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto h-8"
+                      onClick={() =>
+                        onSendReminder({
+                          id: schedule.id,
+                          tradieId: schedule.tradieId,
+                          milestoneId: schedule.milestoneId ?? undefined,
+                          scheduledDate: new Date(
+                            schedule.scheduledDate,
+                          ).toISOString(),
+                          abn: schedule.tradie.abn,
+                          status: schedule.status,
+                          tradeType: bookingTrade(schedule),
+                          tradieName: schedule.tradie.name,
+                          lastQuotedPriceUnit:
+                            schedule.tradie.lastQuotedPriceUnit,
+                          projectId: schedule.projectId,
+                          projectName: project.name,
+                          taskLabel: `${milestone.name} - ${bookingTrade(schedule)}`,
+                          durationDays: schedule.durationDays,
+                          updatedAt: new Date(schedule.updatedAt).toISOString(),
+                          contact: {
+                            email: schedule.tradie.email,
+                            phone: schedule.tradie.phone,
+                            additionalEmails: schedule.tradie.additionalEmails,
+                          },
+                          siteManager: {
+                            name: project.siteManager?.name ?? "Site Manager",
+                            email:
+                              project.siteManager?.email
+                              ?? "Site Manager Email",
+                            phone:
+                              project.siteManager?.phone
+                              ?? "Site Manager Phone",
+                          },
+                          lastQuotedPrice: schedule.tradie.lastQuotedPrice,
+                          isFavourite: schedule.tradie.isFavourite,
+                          note: schedule.tradie.note,
+                          requiresQuote: schedule.requiresQuote,
+                          quotedPrice: schedule.quotedPrice ?? undefined,
+                          refToken: schedule.refToken,
+                        } satisfies TradieScheduleListItem)
+                      }
+                    >
+                      <Bell className="mr-1 size-3.5" aria-hidden="true" />
+                      Remind {schedule.tradie.name.split(" ")[0]}
+                    </Button>
+                  ) : null}
                 </div>
               ))}
             </div>

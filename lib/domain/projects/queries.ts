@@ -13,9 +13,12 @@ import { summarizeInvoices } from "@/lib/projects/invoice-totals";
 
 import { canWorkComplianceFile } from "../access/compliance";
 import {
+  canBookTradies,
   canEditProject,
   canManageProject,
+  canRecordOnProject,
   canSeeProjectFinancials,
+  canSeeProjectHistory,
   projectManageScope,
   projectReadScope,
 } from "../access/projects";
@@ -650,6 +653,9 @@ export async function getProjectDetail(
         siteManagerId: row.siteManagerId,
       }),
       manage: canManageProject(principal, row),
+      record: canRecordOnProject(principal, row),
+      book: canBookTradies(principal),
+      history: canSeeProjectHistory(principal),
     },
     lead: {
       id: rawLead.id,

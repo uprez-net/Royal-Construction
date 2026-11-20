@@ -7,7 +7,10 @@ import {
   EMAIL_HEADER_HTML,
 } from "@/constants/email-artifacts";
 
-import { authorizeProject } from "../../access/projects";
+import {
+  assertCanSetUpProjectWhatsAppGroup,
+  authorizeProject,
+} from "../../access/projects";
 import type { DomainDb } from "../../db";
 import {
   DomainAuthorizationError,
@@ -63,6 +66,7 @@ async function loadInviteContext(
   projectId: string,
   db: DomainDb,
 ) {
+  assertCanSetUpProjectWhatsAppGroup(principal);
   await authorizeProject(principal, projectId, db);
   const project = await db.project.findUniqueOrThrow({
     select: {

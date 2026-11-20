@@ -18,7 +18,7 @@ import {
 } from "../errors";
 import { attributionUserId, type DomainPrincipal } from "../principal";
 import { recordTradieActivity } from "../audit/tradie-activity-log";
-import { authorizeProject } from "../access/projects";
+import { assertCanBookTradies, authorizeProject } from "../access/projects";
 import {
   INACTIVE_SCHEDULE_STATUSES,
   requireActiveTradie,
@@ -146,6 +146,7 @@ export async function recordManualQuote(
   input: ManualQuoteInput,
   db: DomainDb,
 ): Promise<RecordedManualQuote> {
+  assertCanBookTradies(principal);
   if (input.lines.length === 0) {
     throw new DomainValidationError(
       "Add an amount for at least one activity.",
@@ -493,6 +494,7 @@ export async function selectTradeQuote(
   },
   db: DomainDb,
 ): Promise<SelectedTradeQuote> {
+  assertCanBookTradies(principal);
   const project = await authorizeProject(principal, input.projectId, db);
 
   return serializable(db, async (tx) => {
@@ -712,6 +714,7 @@ export async function requestTradeCancellation(
   ) {
     throw new DomainNotFoundError("Selection not found.");
   }
+  assertCanBookTradies(principal);
   const project = await authorizeProject(principal, selection.projectId, db);
   if (selection.status !== TradeSelectionStatus.ACTIVE) {
     throw new DomainTransitionError(

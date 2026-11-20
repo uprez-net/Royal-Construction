@@ -10,7 +10,7 @@ import {
 
 import { PROJECT_STAGE_LABELS } from "@/types/project";
 
-import { authorizeProject } from "../access/projects";
+import { authorizeProjectRecording } from "../access/projects";
 import { canReadTradieDirectory } from "../access/tradies";
 import type { DomainDb } from "../db";
 import { DomainNotFoundError } from "../errors";
@@ -28,7 +28,8 @@ import { CHECKLIST_COUNT, tradesForItem } from "./checklist-templates";
 // checklist's inspection screen. The writes are split by what they decide:
 // rows and photos in `checklist-review.ts`, closing in `checklist-closure.ts`,
 // defects in `checklist-issue-*.ts`, the document in `checklist-export.ts`.
-// Every one runs `authorizeProject` first, so a checklist id copied from
+// Every one runs `authorizeProjectRecording` first (any site manager, every
+// project, owner 2026-11-20), so a checklist id copied from
 // another project reads as absent.
 
 export type ChecklistSummary = {
@@ -50,7 +51,7 @@ export async function listProjectChecklists(
   input: { readonly projectId: string },
   db: DomainDb,
 ): Promise<ChecklistSummary[]> {
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   await ensureProjectChecklists(input.projectId, db);
   const rows = await db.projectChecklist.findMany({
     include: {
@@ -218,7 +219,7 @@ export async function getChecklistDetail(
   input: { readonly projectId: string; readonly number: number },
   db: DomainDb,
 ): Promise<ChecklistDetail> {
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   if (
     !Number.isInteger(input.number)
     || input.number < 1
@@ -392,7 +393,7 @@ export async function getChecklistDetail(
  * contractor when nobody on the job did the work.
  *
  * The rest of the directory goes only to a caller who may browse it
- * (`canReadTradieDirectory`). Everyone `authorizeProject` admits today can,
+ * (`canReadTradieDirectory`). Everyone `authorizeProjectRecording` admits can,
  * but the two rules are separate, and widening the first must not hand the
  * directory's emails to whoever it admits.
  */

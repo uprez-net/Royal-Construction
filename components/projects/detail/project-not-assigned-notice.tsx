@@ -3,7 +3,7 @@ import { Info } from "lucide-react";
 /**
  * Said to a caller who may read this project but not record on it: a site
  * manager on a project whose Site manager field names someone else, or nobody
- * (#568). The rule is `canManageProject`; this replaces actions that would
+ * (#568). The rule is `canRecordOnProject`; this replaces actions that would
  * only be refused with the one thing that changes the answer.
  */
 export function ProjectNotAssignedNotice({
