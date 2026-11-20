@@ -13,17 +13,30 @@ import { useComplianceUpload } from "@/hooks/use-compliance-upload";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { cn } from "@/lib/utils";
-import {
-  certifierEmailAttachments,
-  type CertifierEmailRecord,
-} from "@/types/compliance";
+import { certifierEmailAttachments } from "@/types/compliance";
 import { filePreviewModal } from "@/utils/file-preview";
 import { dataTimeFormat, stripEmailBody } from "@/utils/formatters";
 import type { CertifierReplyAttachment } from "@/utils/validators/compliance";
 
+/**
+ * What a bubble needs from a message. Structural, so a compliance email and a
+ * tradie email both fit without either being converted into the other.
+ */
+export type ThreadEmail = {
+  id: string;
+  direction: "INBOUND" | "OUTBOUND";
+  body: string;
+  sentAt: string | Date;
+  /** `[{ name, url }]`; anything else renders as no attachments. */
+  attachments?: unknown;
+  subject?: string;
+  /** A line under the body, for something the transcript cannot show. */
+  footnote?: string | null;
+};
+
 type CertifierThreadProps = {
   projectId: string;
-  emails: CertifierEmailRecord[];
+  emails: readonly ThreadEmail[];
   isSending: boolean;
   onSend: (input: {
     body: string;
@@ -48,6 +61,12 @@ type CertifierThreadProps = {
    * offering nothing.
    */
   readOnly?: boolean;
+  /** Offer the Attach button. Off where the send cannot carry files. */
+  allowAttachments?: boolean;
+  /** Each bubble's subject above its body, for a thread of separate emails. */
+  showSubjects?: boolean;
+  /** Under "Nothing sent yet" when the thread is empty. */
+  emptyHint?: string;
 };
 
 /**
@@ -79,6 +98,9 @@ export function CertifierThread({
   isFullScreen = false,
   counterpartyLabel = "certifier",
   readOnly = false,
+  allowAttachments = true,
+  showSubjects = false,
+  emptyHint = "The conversation appears here once the documents go out.",
 }: CertifierThreadProps) {
   const dispatch = useAppDispatch();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -170,9 +192,7 @@ export function CertifierThread({
             <p className="text-sm font-medium text-muted-foreground">
               Nothing sent yet
             </p>
-            <p className="mt-1 text-xs text-muted-foreground/70">
-              The conversation appears here once the documents go out.
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground/70">{emptyHint}</p>
           </div>
         ) : (
           <ScrollArea
@@ -206,9 +226,20 @@ export function CertifierThread({
                             : "bg-muted text-foreground rounded-bl-sm",
                         )}
                       >
+                        {showSubjects && email.subject ? (
+                          <p className="mb-1 text-xs font-semibold text-foreground">
+                            {email.subject}
+                          </p>
+                        ) : null}
                         <p className="whitespace-pre-wrap wrap-break-word">
                           {plainBody}
                         </p>
+
+                        {email.footnote ? (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            {email.footnote}
+                          </p>
+                        ) : null}
 
                         {attachments.length > 0 ? (
                           <ul className="mt-2 space-y-1 border-t border-current/20 pt-2">
@@ -288,20 +319,24 @@ export function CertifierThread({
                 event.target.value = "";
               }}
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={isAttaching || isSending}
-              onClick={() => attachmentInputRef.current?.click()}
-            >
-              {isAttaching ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Paperclip className="size-4" aria-hidden="true" />
-              )}
-              Attach
-            </Button>
+            {allowAttachments ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={isAttaching || isSending}
+                onClick={() => attachmentInputRef.current?.click()}
+              >
+                {isAttaching ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Paperclip className="size-4" aria-hidden="true" />
+                )}
+                Attach
+              </Button>
+            ) : (
+              <span />
+            )}
 
             <Button
               type="button"

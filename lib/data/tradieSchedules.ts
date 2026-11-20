@@ -2,7 +2,7 @@
 
 import { createHash } from "node:crypto";
 import prisma from "@/lib/prisma";
-import { TradieScheduleStatus } from "@prisma/client";
+import { CommsDirection, TradieScheduleStatus } from "@prisma/client";
 import type {
   CreateTradieScheduleInput,
   UpdateTradieScheduleInput,
@@ -25,6 +25,7 @@ import {
   rescheduleTradieSchedule as rescheduleTradieScheduleDomain,
 } from "@/lib/domain/tradies/schedules";
 import { sendTradieScheduleReminder as sendTradieScheduleReminderDomain } from "@/lib/domain/tradies/reminders";
+import { noteTradieEmail } from "@/lib/domain/tradies/emails";
 import { DomainNotFoundError, isDomainError } from "@/lib/domain/errors";
 import {
   domainActionFailure,
@@ -137,6 +138,20 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
         subject: emailContent.subject,
         body: emailContent.html,
       });
+      await noteTradieEmail(
+        {
+          body: emailContent.html,
+          direction: CommsDirection.OUTBOUND,
+          emailTo: schedule.tradie.email,
+          projectId: schedule.projectId,
+          refToken: schedule.refToken,
+          scheduleId: schedule.id,
+          sentAt: new Date(),
+          subject: emailContent.subject,
+          tradieId: schedule.tradieId,
+        },
+        prisma,
+      );
     });
 
     return result;

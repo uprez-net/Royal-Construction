@@ -68,6 +68,8 @@ export type TradieReplyScope =
 export type TradieReplyReference = {
   readonly token: string;
   readonly scope: TradieReplyScope;
+  /** The project the referenced email was about. */
+  readonly projectId: string;
   readonly projectName: string;
   readonly tradie: {
     readonly id: string;
@@ -94,13 +96,16 @@ export async function findTradieReplyReference(
       const recipient = await db.tradieRequestRecipient.findUnique({
         select: {
           id: true,
-          request: { select: { project: { select: { name: true } } } },
+          request: {
+            select: { project: { select: { id: true, name: true } } },
+          },
           tradie,
         },
         where: { refToken: token },
       });
       return recipient
         ? {
+            projectId: recipient.request.project.id,
             projectName: recipient.request.project.name,
             scope: { requestRecipientId: recipient.id },
             token,
@@ -110,11 +115,16 @@ export async function findTradieReplyReference(
     }
     case "booking": {
       const schedule = await db.tradieSchedule.findUnique({
-        select: { id: true, project: { select: { name: true } }, tradie },
+        select: {
+          id: true,
+          project: { select: { id: true, name: true } },
+          tradie,
+        },
         where: { refToken: token },
       });
       return schedule
         ? {
+            projectId: schedule.project.id,
             projectName: schedule.project.name,
             scope: { scheduleId: schedule.id },
             token,

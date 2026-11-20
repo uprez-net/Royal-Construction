@@ -1,5 +1,6 @@
 import { addDays, endOfDay, startOfDay } from "date-fns";
 import {
+  CommsDirection,
   OutboxEventKind,
   TradieScheduleStatus,
   type Prisma,
@@ -15,6 +16,7 @@ import {
   enqueueOutboxEvent,
   failOutboxEvent,
 } from "@/lib/domain/outbox";
+import { noteTradieEmail } from "@/lib/domain/tradies/emails";
 import {
   findTradieReminderWindow,
   markTradieReminderSent,
@@ -179,6 +181,20 @@ export async function sendTradieReminders(): Promise<{
           subject: email.subject,
           body: email.html,
         });
+        await noteTradieEmail(
+          {
+            body: email.html,
+            direction: CommsDirection.OUTBOUND,
+            emailTo: schedule.tradie.email,
+            projectId: schedule.projectId,
+            refToken: schedule.refToken,
+            scheduleId: schedule.id,
+            sentAt: new Date(),
+            subject: email.subject,
+            tradieId: schedule.tradieId,
+          },
+          prisma,
+        );
       }
 
       await markTradieReminderSent(schedule.id, prisma);

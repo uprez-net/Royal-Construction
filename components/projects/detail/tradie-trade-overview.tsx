@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   FilePlus2,
   Inbox,
+  Mail,
   Pencil,
   Phone,
   Send,
@@ -36,6 +37,7 @@ import {
 
 import { BillingPill } from "./financials-tab/activity-detail";
 import { ManualQuoteDialog } from "./manual-quote-dialog";
+import { TradieEmailThreadModal } from "./tradie-email-thread-modal";
 import { RequestDeliveryStatus } from "./request-delivery-status";
 import {
   toScheduleDetailsItem,
@@ -98,6 +100,9 @@ function Stat({
   );
 }
 
+const ICON_BUTTON =
+  "size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary";
+
 function tradieState(tradie: TradeTradie): {
   tone: "success" | "warning" | "neutral" | "primary";
   label: string;
@@ -117,6 +122,7 @@ function QuoteCard({
   lowest,
   selectionLive,
   onSelect,
+  onOpenEmails,
 }: {
   projectId: string;
   tradie: TradeTradie;
@@ -125,6 +131,8 @@ function QuoteCard({
   /** Someone holds the trade, so nobody else can be selected. */
   selectionLive: boolean;
   onSelect: () => void;
+  /** Opens this tradie's email thread on the project. */
+  onOpenEmails: () => void;
 }) {
   const state = tradieState(tradie);
   const requested = tradie.schedules.filter((schedule) =>
@@ -214,29 +222,41 @@ function QuoteCard({
             </p>
           )}
         </div>
-        {!selectionLive && tradie.openCount > 0 ? (
-          <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
+        <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
+          <div className="flex items-center gap-2">
             <Button
-              size="sm"
-              variant={tradie.selectBlockedBy ? "outline" : "default"}
-              className="h-8 text-xs"
-              disabled={tradie.selectBlockedBy !== null}
-              aria-describedby={tradie.selectBlockedBy ? reasonId : undefined}
-              onClick={onSelect}
+              variant="outline"
+              size="icon"
+              aria-label={`Open emails with ${tradie.name}`}
+              title="Emails"
+              className={ICON_BUTTON}
+              onClick={onOpenEmails}
             >
-              <CheckCircle2 className="mr-1.5 size-3.5" aria-hidden="true" />
-              Select quote
+              <Mail className="size-3.5" aria-hidden="true" />
             </Button>
-            {tradie.selectBlockedBy ? (
-              <p
-                id={reasonId}
-                className="max-w-72 text-xs text-muted-foreground sm:text-right"
+            {!selectionLive && tradie.openCount > 0 ? (
+              <Button
+                size="sm"
+                variant={tradie.selectBlockedBy ? "outline" : "default"}
+                className="h-8 text-xs"
+                disabled={tradie.selectBlockedBy !== null}
+                aria-describedby={tradie.selectBlockedBy ? reasonId : undefined}
+                onClick={onSelect}
               >
-                {tradie.selectBlockedBy}
-              </p>
+                <CheckCircle2 className="mr-1.5 size-3.5" aria-hidden="true" />
+                Select quote
+              </Button>
             ) : null}
           </div>
-        ) : null}
+          {!selectionLive && tradie.openCount > 0 && tradie.selectBlockedBy ? (
+            <p
+              id={reasonId}
+              className="max-w-72 text-xs text-muted-foreground sm:text-right"
+            >
+              {tradie.selectBlockedBy}
+            </p>
+          ) : null}
+        </div>
       </div>
     </article>
   );
@@ -305,9 +325,6 @@ function selectedBooking(
     ?? null
   );
 }
-
-const ICON_BUTTON =
-  "size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary";
 
 /** The selected tradie's booking on one activity, and what can be done to it. */
 function SelectedBookingRow({
@@ -594,6 +611,11 @@ export function TradeWorkbench({
   const [manualQuote, setManualQuote] = useState<{
     tradieId: string | null;
   } | null>(null);
+  /** Whose email thread is open, if anyone's. */
+  const [emailsWith, setEmailsWith] = useState<{
+    tradieId: string;
+    name: string;
+  } | null>(null);
 
   // The selected tradie first; the order otherwise is the quote comparison's.
   const tradies = [...overview.tradies].sort(
@@ -737,6 +759,12 @@ export function TradeWorkbench({
                 lowest={tradie.tradieId === lowestId}
                 selectionLive={selection !== null}
                 onSelect={() => setSelecting(tradie)}
+                onOpenEmails={() =>
+                  setEmailsWith({
+                    name: tradie.name,
+                    tradieId: tradie.tradieId,
+                  })
+                }
               />
             ))
           )}
@@ -830,6 +858,11 @@ export function TradeWorkbench({
         initialTradieId={manualQuote?.tradieId ?? null}
         project={project}
         trade={trade}
+      />
+      <TradieEmailThreadModal
+        projectId={project.id}
+        tradie={emailsWith}
+        onClose={() => setEmailsWith(null)}
       />
     </div>
   );

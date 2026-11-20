@@ -195,25 +195,27 @@ test("a request reference names that email's bookings; a booking reference names
     recordingDb({
       "tradieRequestRecipient.findUnique": {
         id: "r_1",
-        request: { project: { name: "11 Wheat Street" } },
+        request: { project: { id: "p_1", name: "11 Wheat Street" } },
         tradie: ABC,
       },
     }).db,
   );
   assert.deepEqual(request?.scope, { requestRecipientId: "r_1" });
   assert.equal(request?.projectName, "11 Wheat Street");
+  assert.equal(request?.projectId, "p_1");
 
   const booking = await findTradieReplyReference(
     "RCTBK-0A1B2C3D4E5F",
     recordingDb({
       "tradieSchedule.findUnique": {
         id: "s_1",
-        project: { name: "11 Wheat Street" },
+        project: { id: "p_1", name: "11 Wheat Street" },
         tradie: ABC,
       },
     }).db,
   );
   assert.deepEqual(booking?.scope, { scheduleId: "s_1" });
+  assert.equal(booking?.projectId, "p_1");
 
   // Nothing behind it: the caller falls back to matching on the sender.
   assert.equal(
