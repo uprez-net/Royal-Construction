@@ -21,6 +21,7 @@ import {
   adminPrincipal,
   customerPrincipal,
   recordingDb,
+  siteManagerPrincipal,
 } from "../architecture/domain-harness";
 import { REPO_ROOT } from "../support/repo-root";
 
@@ -149,6 +150,33 @@ test("a caller who cannot manage the project gets no thread", async () => {
     ),
     DomainAuthorizationError,
   );
+});
+
+test("a site manager can neither read nor write a tradie thread: it carries quotes", async () => {
+  const read = recordingDb({ "project.findUnique": PROJECT });
+  await assert.rejects(
+    getTradieProjectThread(
+      siteManagerPrincipal(),
+      { projectId: "p_1", tradieId: "t_1" },
+      read.db,
+    ),
+    DomainAuthorizationError,
+  );
+  let sent = 0;
+  const write = replyDb();
+  await assert.rejects(
+    replyOnTradieThread(
+      siteManagerPrincipal(),
+      { attemptKey: "a_1", body: "Hi", projectId: "p_1", tradieId: "t_1" },
+      write.db,
+      async () => {
+        sent += 1;
+      },
+    ),
+    DomainAuthorizationError,
+  );
+  assert.equal(sent, 0);
+  assert.deepEqual(write.writes(), []);
 });
 
 test("a reply keeps the thread's newest reference and goes where the tradie last wrote from", async () => {

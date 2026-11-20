@@ -4,7 +4,7 @@ import {
   TradieScheduleStatus,
 } from "@prisma/client";
 
-import { authorizeProject } from "../access/projects";
+import { authorizeProject, canSeeProjectFinancials } from "../access/projects";
 import type { DomainDb } from "../db";
 import {
   DomainAuthorizationError,
@@ -15,7 +15,7 @@ import {
   isDomainError,
 } from "../errors";
 import { runOutboxEffectWithOutcome } from "../outbox";
-import { isInternalPrincipal, type DomainPrincipal } from "../principal";
+import type { DomainPrincipal } from "../principal";
 import { AWAITING_TRADIE_REPLY, type TradieReplyReference } from "./replies";
 import { subjectWithTradieRef, tradieRefKind } from "./reply-reference";
 
@@ -236,12 +236,30 @@ function replyBlockedBy(tradie: {
   return null;
 }
 
+/**
+ * Who may read or write a tradie thread: whoever may see the project's money.
+ *
+ * The thread is quotes. A tradie answers "Yes, $4,800", a booking email
+ * carries the agreed price, and free text cannot be redacted the way a
+ * payload's amount fields are. A site manager is kept out of tradie quotes
+ * everywhere else (`canSeeProjectFinancials`), so the thread follows that
+ * rule rather than the wider "internal staff" one.
+ */
+function assertCanUseTradieThread(principal: DomainPrincipal): void {
+  if (!canSeeProjectFinancials(principal)) {
+    throw new DomainAuthorizationError(
+      "Tradie emails carry quoted prices, so they are kept to the office.",
+    );
+  }
+}
+
 /** One tradie's thread on one project, for the Tradies tab. */
 export async function getTradieProjectThread(
   principal: DomainPrincipal,
   input: { readonly projectId: string; readonly tradieId: string },
   db: DomainDb,
 ): Promise<TradieThread> {
+  assertCanUseTradieThread(principal);
   await authorizeProject(principal, input.projectId, db);
   const tradie = await db.tradie.findUnique({
     select: { archivedAt: true, email: true, id: true, name: true },
@@ -475,11 +493,7 @@ export async function replyOnTradieThread(
   db: DomainDb,
   send: TradieThreadEmailPort,
 ): Promise<TradieThreadReplyResult> {
-  if (!isInternalPrincipal(principal)) {
-    throw new DomainAuthorizationError(
-      "Emailing a tradie requires internal staff access.",
-    );
-  }
+  assertCanUseTradieThread(principal);
   const project = await authorizeProject(principal, input.projectId, db);
   const attemptKey = input.attemptKey.trim();
   if (!attemptKey) {

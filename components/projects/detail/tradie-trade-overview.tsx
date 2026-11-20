@@ -131,8 +131,8 @@ function QuoteCard({
   /** Someone holds the trade, so nobody else can be selected. */
   selectionLive: boolean;
   onSelect: () => void;
-  /** Opens this tradie's email thread on the project. */
-  onOpenEmails: () => void;
+  /** Opens this tradie's email thread; null when the caller may not see it. */
+  onOpenEmails: (() => void) | null;
 }) {
   const state = tradieState(tradie);
   const requested = tradie.schedules.filter((schedule) =>
@@ -224,16 +224,18 @@ function QuoteCard({
         </div>
         <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label={`Open emails with ${tradie.name}`}
-              title="Emails"
-              className={ICON_BUTTON}
-              onClick={onOpenEmails}
-            >
-              <Mail className="size-3.5" aria-hidden="true" />
-            </Button>
+            {onOpenEmails ? (
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label={`Open emails with ${tradie.name}`}
+                title="Emails"
+                className={ICON_BUTTON}
+                onClick={onOpenEmails}
+              >
+                <Mail className="size-3.5" aria-hidden="true" />
+              </Button>
+            ) : null}
             {!selectionLive && tradie.openCount > 0 ? (
               <Button
                 size="sm"
@@ -759,11 +761,16 @@ export function TradeWorkbench({
                 lowest={tradie.tradieId === lowestId}
                 selectionLive={selection !== null}
                 onSelect={() => setSelecting(tradie)}
-                onOpenEmails={() =>
-                  setEmailsWith({
-                    name: tradie.name,
-                    tradieId: tradie.tradieId,
-                  })
+                // The thread is quotes; hidden where the money is
+                // (canSeeProjectFinancials, enforced again by the route).
+                onOpenEmails={
+                  project.financialsHidden
+                    ? null
+                    : () =>
+                        setEmailsWith({
+                          name: tradie.name,
+                          tradieId: tradie.tradieId,
+                        })
                 }
               />
             ))
