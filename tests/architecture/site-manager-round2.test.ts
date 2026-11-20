@@ -131,6 +131,7 @@ test("the recording commands use the record rule, the planning ones do not", () 
       "getProjectWhatsAppThread",
       "markProjectWhatsAppRead",
     ],
+    "lib/domain/projects/resources.ts": ["createProjectUpdate"],
     "lib/domain/projects/whatsapp/send.ts": [
       "sendProjectWhatsAppMessage",
       "reconcileProjectWhatsAppMessage",

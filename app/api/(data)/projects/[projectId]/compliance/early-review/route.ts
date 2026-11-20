@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 
 import {
   complianceAccessResponse,
-  requireComplianceAccess,
+  requireComplianceMutation,
 } from "@/lib/compliance/access";
 import { sendComplianceDocumentsForReview } from "@/lib/data/compliance";
 import { domainErrorResponse } from "@/lib/http/domain-response";
@@ -35,7 +35,7 @@ export async function POST(
 
   const { projectId } = routeParams.data;
   try {
-    const { engagement } = await requireComplianceAccess(projectId);
+    const { engagement } = await requireComplianceMutation(projectId);
     const result = await sendComplianceDocumentsForReview(
       engagement!.id,
       body.data.documentIds,

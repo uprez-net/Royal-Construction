@@ -2,6 +2,9 @@ import { auth } from "@clerk/nextjs/server";
 import { APICallError, generateText } from "ai";
 import { z } from "zod";
 
+import { isOfficeRole } from "@/lib/domain/principal";
+import prisma from "@/lib/prisma";
+
 const aiNoteActionSchema = z.object({
   action: z.enum(["improve", "summarize", "followup"]),
   mentionTokens: z
@@ -58,6 +61,16 @@ export async function POST(request: Request) {
 
   if (!userId) {
     return jsonError("Unauthorized", 401);
+  }
+
+  // The lead-note editor is the office's: it opens a prospect's note. A
+  // customer or site manager signed in here is refused, not served.
+  const user = await prisma.user.findUnique({
+    select: { role: true },
+    where: { clerkId: userId },
+  });
+  if (!user || !isOfficeRole(user.role)) {
+    return jsonError("Forbidden", 403);
   }
 
   const parsed = aiNoteActionSchema.safeParse(

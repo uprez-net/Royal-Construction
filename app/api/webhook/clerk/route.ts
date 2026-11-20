@@ -5,6 +5,8 @@ import type { InvitationJSON, UserJSON } from "@clerk/backend";
 import { createUser, deleteUser, updateUser } from "@/lib/data/user";
 import { Role } from "@prisma/client";
 import { clerkClient, updateUserMetadata } from "@/lib/auth";
+import { notificationEnvironment } from "@/lib/notification/environment";
+import { clerkRoleToStore } from "@/lib/domain/identity/team";
 import {
   acceptTeamInvitation,
   markTeamInvitationUsed,
@@ -200,7 +202,13 @@ export async function POST(request: NextRequest) {
         // GUEST, so any update Clerk sent before `user.created` had written the
         // invited role back (they can arrive out of order) demoted the new
         // account to GUEST.
-        const role = current?.role;
+        // A dashboard role change the team screen's rules refuse is not stored;
+        // the stored role is written back to Clerk below.
+        const roleDecision = await clerkRoleToStore(
+          { clerkRole: current?.role, clerkUserId: updatedId },
+          prisma,
+        );
+        const role = roleDecision.write;
 
         // The phone used to be replaced with a fresh random number on every
         // Clerk update — a role change, a name edit, a new phone set from the
@@ -218,6 +226,25 @@ export async function POST(request: NextRequest) {
         });
         // The role every guard reads comes from this cached row.
         revalidateTag(`user-${updatedId}`, CACHE_PROFILES.MEDIUM);
+
+        if (roleDecision.refusedRole) {
+          // A refusal, not a fault: the stored role stands. In production
+          // Clerk is put back to it, so the next event (this write's own echo)
+          // finds nothing to change; a failed write-back throws, so Clerk
+          // retries the event. Only production writes back: staging shares
+          // the Clerk instance and receives the same events, and judging them
+          // against its own data it could undo a change production allowed.
+          const writesBack =
+            notificationEnvironment(process.env) === "production";
+          console.warn(
+            `[clerk-webhook] Refused a dashboard role change to ${current?.role} for ${updatedId}; kept ${roleDecision.refusedRole}${writesBack ? " and set it back in Clerk" : ""}`,
+          );
+          if (writesBack) {
+            await updateUserMetadata(updatedId, {
+              publicMetadata: { role: roleDecision.refusedRole },
+            });
+          }
+        }
 
         return successResponse({ message: "User updated" });
       }

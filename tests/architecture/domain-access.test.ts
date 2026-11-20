@@ -260,7 +260,8 @@ test("attach scope is wider than manage scope, deliberately", async () => {
   const project = { customerId: "c_1" };
   assert.equal(canAttachFileToProject({ role: "ADMIN" }, project), true);
   assert.equal(canAttachFileToProject({ role: "SITE_MANAGER" }, project), true);
-  assert.equal(canAttachFileToProject({ role: "GUEST" }, project), true);
+  // Access pending is not staff: no attach, the same as any non-staff role.
+  assert.equal(canAttachFileToProject({ role: "GUEST" }, project), false);
   assert.equal(
     canAttachFileToProject({ customerId: "c_1", role: "CUSTOMER" }, project),
     true,

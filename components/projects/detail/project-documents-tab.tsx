@@ -39,6 +39,7 @@ import {
 import {
   PROJECT_DOCUMENT_SOURCE_LABEL,
   describeProjectFile,
+  isTenderOrContractName,
   type ProjectDocument,
   type ProjectDocumentSource,
 } from "@/lib/domain/projects/document-tags";
@@ -113,11 +114,6 @@ const SOURCE_ICON: Record<
   },
 };
 
-function isAdminOnly(document: ProjectDocument) {
-  const name = document.name.toLowerCase();
-  return name.includes("tender") || name.includes("contract");
-}
-
 function parseDate(value: string) {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -186,7 +182,7 @@ export function ProjectDocumentsTab({
     return [...fresh, ...project.documents].filter(
       (document) =>
         !(document.fileId && deletedIds.has(document.fileId))
-        && (isAdmin || !isAdminOnly(document)),
+        && (isAdmin || !isTenderOrContractName(document.name)),
     );
   }, [
     deletedIds,

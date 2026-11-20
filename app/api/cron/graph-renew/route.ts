@@ -4,12 +4,15 @@ import { getGraphConfig, type GraphMailbox } from "@/lib/graph/config";
 import { NextResponse } from "next/server";
 
 async function handle(request: Request) {
-  // Verify it is a Vercel cron request (standard security check on Vercel environment)
-  const authHeader = request.headers.get("authorization");
+  // Only Vercel's scheduler, in every environment. An unset secret refuses
+  // rather than matching the literal "Bearer undefined".
+  const cronSecret = process.env.CRON_SECRET;
   if (
-    process.env.NODE_ENV === "production"
-    && authHeader !== `Bearer ${process.env.CRON_SECRET}`
+    !cronSecret
+    || request.headers.get("authorization") !== `Bearer ${cronSecret}`
   ) {
+    if (!cronSecret)
+      console.error("[graph-renew] cron: CRON_SECRET is not configured.");
     return new Response("Unauthorized", { status: 401 });
   }
 

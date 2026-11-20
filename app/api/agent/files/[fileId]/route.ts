@@ -3,6 +3,8 @@ import { get } from "@/lib/blob";
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getUserByClerkIdCached } from "@/lib/data/user";
+import { canReadFile } from "@/lib/domain/files";
+import { userPrincipal } from "@/lib/domain/principal";
 import { uuidSchema } from "@/utils/validators/common";
 
 export async function GET(
@@ -27,16 +29,20 @@ export async function GET(
       filename: true,
       fileType: true,
       uploadedBy: true,
-      project: { select: { siteManagerId: true } },
+      leadId: true,
+      complianceDocument: { select: { documentType: true } },
+      project: {
+        select: {
+          siteManagerId: true,
+          customerId: true,
+          Lead: { select: { assignedId: true } },
+        },
+      },
     },
   });
   if (!file)
     return NextResponse.json({ error: "File not found" }, { status: 404 });
-  const canAccess =
-    file.uploadedBy === user.id
-    || user.role === "ADMIN"
-    || file.project?.siteManagerId === user.id;
-  if (!canAccess)
+  if (!canReadFile(userPrincipal(user), file))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const blob = await get(file.storagePath ?? file.url, {
     access: file.storagePath ? "private" : "public",

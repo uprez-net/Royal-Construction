@@ -256,10 +256,10 @@ const foundBranchOf = (source: string): string => {
   return source.slice(start, end);
 };
 
-test("the reconcile cron checks the CRON_SECRET in production", () => {
+test("the reconcile cron checks the CRON_SECRET everywhere, not only in production", () => {
   const source = code(CRON);
   assert.match(source, /CRON_SECRET/);
-  assert.match(source, /NODE_ENV === "production"/);
+  assert.doesNotMatch(source, /NODE_ENV === "production"/);
 });
 
 test("the reconcile cron never sets resolvedAt for a row it found", () => {

@@ -18,6 +18,13 @@ export type SiteDashboardData = {
   readonly followUps: FollowUpItem[];
 };
 
+/** The same per-manager read a site manager's dashboard shows, for the admin's. */
+export async function getSiteManagerPerformance(): Promise<
+  SiteManagerPerformance[]
+> {
+  return listSiteManagerPerformance(await currentPrincipal(), prisma);
+}
+
 export async function getSiteDashboardData(): Promise<SiteDashboardData> {
   const principal = await currentPrincipal();
   const [performance, followUps] = await Promise.all([

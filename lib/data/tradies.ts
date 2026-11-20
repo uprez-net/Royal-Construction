@@ -23,6 +23,9 @@ import {
 } from "@/lib/domain/tradies/trade-types";
 import { getTradieCoordinationDashboard } from "./tradie-dashboard";
 import { ProjectRequirementsPayload } from "@/types/project-flow";
+import { signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
+import { assertCanReadTradieDirectory } from "@/lib/domain/access/tradies";
+import { DomainAuthorizationError } from "@/lib/domain/errors";
 
 function toSafeTradie(
   tradie: Awaited<ReturnType<typeof prisma.tradie.findMany>>[number],
@@ -221,6 +224,14 @@ export async function getCachedTradieCoordinationDashboard(
 }
 
 export async function getTradiesForLookup(limit = 20, search = "", trade = "") {
+  // A Server Action: any signed-in client can call it, so the directory rule
+  // is checked here. It sits before the `try` below, which answers `[]` for
+  // any error, so a refusal reaches the caller as a refusal and not an empty
+  // list.
+  const principal = await signedInUserPrincipal();
+  if (!principal)
+    throw new DomainAuthorizationError("Sign in to browse tradies.");
+  assertCanReadTradieDirectory(principal);
   try {
     const tradeLabels = search ? await tradeLabelsMatching(search, prisma) : [];
     const search_: Prisma.TradieWhereInput | undefined = search

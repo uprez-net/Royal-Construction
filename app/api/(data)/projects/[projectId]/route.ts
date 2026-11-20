@@ -3,9 +3,9 @@ import prisma from "@/lib/prisma";
 import { currentPrincipal } from "@/lib/data/current-principal";
 import { getCachedProjectById, getProjectById } from "@/lib/data/projects";
 import { projectExtractionSchema } from "@/lib/agent/projectExtraction-validators";
-import { isDomainError } from "@/lib/domain/errors";
 import { updateProject } from "@/lib/domain/projects/commands";
 import { ProjectDateBlockerError } from "@/lib/domain/projects/readiness";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
 import {
@@ -72,6 +72,7 @@ const updateProjectBodySchema = z.object({
   estimatedEndDate: z.string().optional(),
   totalBudget: z.number().optional(),
   requirements: projectRequirementsPayloadSchema.optional(),
+  expectedRequirementsVersion: z.string().optional(),
 });
 
 export async function PATCH(
@@ -103,6 +104,7 @@ export async function PATCH(
         council: body.data.council,
         description: body.data.description,
         estimatedEndDate: body.data.estimatedEndDate,
+        expectedRequirementsVersion: body.data.expectedRequirementsVersion,
         location: body.data.location,
         name: body.data.name,
         projectId,
@@ -156,12 +158,8 @@ export async function PATCH(
     // Every other domain refusal answers with its own status and its own
     // message. "You do not have access to update this project." is useless to
     // the one person who can act on it as an opaque INTERNAL_ERROR.
-    if (isDomainError(error)) {
-      return errorResponse(error.message, {
-        status: error.status,
-        code: error.code.toUpperCase(),
-      });
-    }
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
 
     console.error(`PATCH /api/projects/${projectId} error`, error);
     return errorResponse("Failed to update project", {

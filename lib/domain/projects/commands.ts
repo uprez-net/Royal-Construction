@@ -4,7 +4,11 @@ import { createActivityLogEntry } from "@/types/activityLog";
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import { normalizeDateString } from "@/utils/date";
 
-import { authorizeProject, authorizeProjectEdit } from "../access/projects";
+import {
+  authorizeProject,
+  authorizeProjectEdit,
+  canSeeProjectFinancials,
+} from "../access/projects";
 import { logActionOrThrow } from "../audit/action-log";
 import type { DomainDb } from "../db";
 import { DomainStaleVersionError, DomainValidationError } from "../errors";
@@ -19,7 +23,11 @@ import {
   assertStartDateMatchesHbcfClaim,
   planStartDateFromHbcfClaim,
 } from "./hbcf-start-date";
-import { withoutFinancialEdits } from "./financial-redaction";
+import {
+  hideRequirementsFinancials,
+  withoutFinancialEdits,
+} from "./financial-redaction";
+import { requirementsVersion } from "./requirements-version";
 import { STARTED_MILESTONE_STATUSES } from "./milestone-schedule";
 import { rescheduleProjectFromStart } from "./milestones";
 import {
@@ -48,7 +56,17 @@ export type UpdateProjectInput = {
   readonly estimatedEndDate?: string;
   readonly totalBudget?: number;
   readonly requirements?: Record<string, unknown>;
+  /**
+   * The `requirementsVersion` the caller was shown (issue #562). When supplied,
+   * the save is refused if the stored requirements have changed since, seen
+   * the way this caller sees them; callers that omit it keep the unconditional
+   * write.
+   */
+  readonly expectedRequirementsVersion?: string;
 };
+
+const STALE_REQUIREMENTS =
+  "Someone else saved this project since you opened it. Reload to see their change.";
 
 export type UpdateProjectResult = {
   readonly projectId: string;
@@ -92,6 +110,26 @@ export async function updateProject(
     where: { id: rawInput.projectId },
     select: { requirements: true, startDate: true, status: true },
   });
+
+  // Someone changed the requirements since this caller's copy was made: their
+  // save would put the old ones back (issue #562). Compared as this caller is
+  // shown them, so a change they cannot see (HBCF, for a site manager) does
+  // not refuse them; `withStoredHbcf` keeps it on save anyway.
+  if (
+    rawInput.expectedRequirementsVersion !== undefined
+    && rawInput.expectedRequirementsVersion
+      !== requirementsVersion(
+        canSeeProjectFinancials(principal)
+          ? existing.requirements
+          : hideRequirementsFinancials(
+              existing.requirements as unknown as
+                | ProjectRequirementsPayload
+                | undefined,
+            ),
+      )
+  ) {
+    throw new DomainStaleVersionError(STALE_REQUIREMENTS);
+  }
 
   const persisted = (existing.requirements ?? {}) as {
     legalAdministration?: PersistedLegalAdministration;
@@ -185,33 +223,51 @@ export async function updateProject(
     }
   }
 
-  const writeProjectFields = (tx: DomainDb) =>
-    tx.project.update({
-      where: { id: input.projectId },
-      data: {
-        ...(input.name ? { name: input.name } : {}),
-        ...(input.location ? { location: input.location } : {}),
-        ...(input.council !== undefined ? { council: input.council } : {}),
-        ...(input.description !== undefined
-          ? { description: input.description }
-          : {}),
-        ...(requestedStartDate
-          ? { startDate: new Date(requestedStartDate) }
-          : {}),
-        ...(input.estimatedEndDate
-          ? { estimatedEndDate: new Date(input.estimatedEndDate) }
-          : {}),
-        ...(input.totalBudget !== undefined
-          ? { totalBudget: new Prisma.Decimal(input.totalBudget) }
-          : {}),
-        ...(input.requirements !== undefined
-          ? {
-              requirements:
-                input.requirements as unknown as Prisma.InputJsonValue,
-            }
-          : {}),
+  const data = {
+    ...(input.name ? { name: input.name } : {}),
+    ...(input.location ? { location: input.location } : {}),
+    ...(input.council !== undefined ? { council: input.council } : {}),
+    ...(input.description !== undefined
+      ? { description: input.description }
+      : {}),
+    ...(requestedStartDate ? { startDate: new Date(requestedStartDate) } : {}),
+    ...(input.estimatedEndDate
+      ? { estimatedEndDate: new Date(input.estimatedEndDate) }
+      : {}),
+    ...(input.totalBudget !== undefined
+      ? { totalBudget: new Prisma.Decimal(input.totalBudget) }
+      : {}),
+    ...(input.requirements !== undefined
+      ? {
+          requirements: input.requirements as unknown as Prisma.InputJsonValue,
+        }
+      : {}),
+  };
+
+  const writeProjectFields = async (tx: DomainDb): Promise<void> => {
+    if (
+      rawInput.expectedRequirementsVersion === undefined
+      || existing.requirements === null
+    ) {
+      await tx.project.update({ where: { id: input.projectId }, data });
+      return;
+    }
+    // Two saves read the same requirements in the same moment: the second
+    // matches no row, writes nothing, and throws, so the rescheduling in the
+    // same transaction rolls back with it.
+    const updated = await tx.project.updateMany({
+      where: {
+        id: input.projectId,
+        requirements: {
+          equals: existing.requirements as Prisma.InputJsonValue,
+        },
       },
+      data,
     });
+    if (updated.count !== 1) {
+      throw new DomainStaleVersionError(STALE_REQUIREMENTS);
+    }
+  };
 
   const write = async (tx: DomainDb): Promise<number> => {
     await writeProjectFields(tx);

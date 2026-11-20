@@ -162,11 +162,14 @@ test("documents are for staff only", async () => {
     ),
     /staff only/,
   );
-  const guest = await searchAgentFiles(
-    userPrincipal({ id: "g1", role: Role.GUEST }),
-    { query: "bushfire" },
-    db,
-    { embedding: keywordEmbedding().port },
+  // Access pending (GUEST) is not staff, so it reads no documents either.
+  await assert.rejects(
+    searchAgentFiles(
+      userPrincipal({ id: "g1", role: Role.GUEST }),
+      { query: "bushfire" },
+      db,
+      { embedding: keywordEmbedding().port },
+    ),
+    /staff only/,
   );
-  assert.ok(guest.length > 0);
 });

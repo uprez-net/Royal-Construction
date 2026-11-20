@@ -315,7 +315,7 @@ export interface MilestoneWithFilesTradiesUpdates extends SafeMilestone {
 
 export interface ProjectWithStats extends SafeProject {
   customer: Customer;
-  siteManager: User | null;
+  siteManager: SiteManagerSummary | null;
   milestones: {
     id: string;
     name: string;
@@ -389,6 +389,11 @@ export interface ProjectDetail extends SafeProject {
     compliance: boolean;
   };
   activityLogs: ActivityLogWithAuthor[];
+  /**
+   * Fingerprint of `requirements` as this caller was shown them; the Overview
+   * sends it back so a save from an out-of-date copy is refused (#562).
+   */
+  requirementsVersion?: string;
   milestones: MilestoneWithFilesTradiesUpdates[];
   siteUpdates: SiteUpdateWithAuthorAndMilestone[];
   variations: SafeVariation[];

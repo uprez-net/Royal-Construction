@@ -6,6 +6,9 @@ import { put } from "@/lib/blob";
 import { getProjectById } from "@/lib/data/projects";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { createProjectUpdate } from "@/lib/data/projectUpdates";
+import { authorizeProjectRecording } from "@/lib/domain/access/projects";
+import { userPrincipal } from "@/lib/domain/principal";
+import prisma from "@/lib/prisma";
 import {
   createProjectUpdateSchema,
   projectParamSchema,
@@ -51,6 +54,10 @@ export async function POST(
   let photoUrls: string[] = [];
 
   try {
+    // The rule createProjectUpdate applies, asked before any photo is written
+    // to public storage, so a refused caller leaves no object behind.
+    await authorizeProjectRecording(userPrincipal(user), projectId, prisma);
+
     if (contentType.includes("application/json")) {
       const body = await parseBodyWithResponse(
         request,

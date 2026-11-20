@@ -20,26 +20,24 @@ async function handle(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
-  if (process.env.NODE_ENV === "production") {
-    if (!cronSecret) {
-      console.error(
-        "[CRON_ERROR] CRON_SECRET is not configured in production env.",
-      );
-      return errorResponse("Cron not configured", {
-        status: 500,
-        code: "CONFIG_ERROR",
-      });
-    }
+  if (!cronSecret) {
+    console.error(
+      "[CRON_ERROR] CRON_SECRET is not configured in production env.",
+    );
+    return errorResponse("Cron not configured", {
+      status: 500,
+      code: "CONFIG_ERROR",
+    });
+  }
 
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      console.warn(
-        "[CRON_WARN] Unauthorized attempt to trigger followup-lead-reminder cron.",
-      );
-      return errorResponse("Unauthorized", {
-        status: 401,
-        code: "UNAUTHORIZED",
-      });
-    }
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    console.warn(
+      "[CRON_WARN] Unauthorized attempt to trigger followup-lead-reminder cron.",
+    );
+    return errorResponse("Unauthorized", {
+      status: 401,
+      code: "UNAUTHORIZED",
+    });
   }
 
   try {

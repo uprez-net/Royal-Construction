@@ -12,7 +12,12 @@ import {
   isWhatsAppMediaError,
   type WhatsAppMediaPort,
 } from "../ports/whatsapp";
-import { isInternalPrincipal, type DomainPrincipal } from "../principal";
+import { authorizeProjectRecording } from "../access/projects";
+import {
+  isInternalPrincipal,
+  isOfficePrincipal,
+  type DomainPrincipal,
+} from "../principal";
 
 // Files customers and owners send on WhatsApp: photos, videos, voice notes,
 // documents and stickers. Shared by a lead's 1:1 conversation, a project's
@@ -320,8 +325,12 @@ export async function storeWhatsAppMedia(
 /**
  * Put a FAILED file back in the queue, at a person's request.
  *
- * Any internal member of staff: a file on a lead or project they can open is
- * one they can ask to fetch again. The caller then starts the workflow.
+ * Who may ask depends on whose thread the file came from. A project group's
+ * file is site work, so anyone who may record on that project may ask (a site
+ * manager on every job). A prospect's file, and a file from an unmatched
+ * message, are the office's: a site manager cannot open either. The check runs
+ * before the status is read, so a refused caller learns nothing about the file.
+ * The caller then starts the workflow.
  */
 export async function retryWhatsAppMedia(
   principal: DomainPrincipal,
@@ -334,11 +343,26 @@ export async function retryWhatsAppMedia(
     );
   }
   const row = await db.whatsAppMedia.findUnique({
-    select: { id: true, status: true },
+    select: {
+      id: true,
+      status: true,
+      projectMessage: { select: { projectId: true } },
+    },
     where: { id: input.mediaId },
   });
   if (!row)
     throw new DomainNotFoundError("That WhatsApp file is not on record.");
+  if (row.projectMessage) {
+    await authorizeProjectRecording(
+      principal,
+      row.projectMessage.projectId,
+      db,
+    );
+  } else if (!isOfficePrincipal(principal)) {
+    throw new DomainAuthorizationError(
+      "This WhatsApp file belongs to a client's conversation, which the office handles.",
+    );
+  }
   if (row.status === WhatsAppMediaStatus.STORED) {
     throw new DomainTransitionError(
       "This file is already saved.",
