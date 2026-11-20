@@ -17,6 +17,7 @@ import {
   formatStatus,
   projectStatusConfig,
 } from "@/components/projects/project-status";
+import { HBCF_RECORDED_BY_OFFICE } from "@/components/projects/detail/document-attention-panel";
 import { HbcfCapacityBadge } from "@/components/projects/detail/hbcf-capacity-badge";
 import { SiteManagerSelector } from "@/components/projects/detail/site-manager-selector";
 import { StatusPill } from "@/components/common/status-pill";
@@ -83,6 +84,10 @@ export function ProjectHeader({
   const warnsApply = readinessWarningsApply(project.status);
   const showPcaWarning = pcaMissing && warnsApply;
   const showHbcfWarning = hbcfInsuranceMissing && warnsApply;
+  // HBCF is filed by the office (#559): a caller who cannot see the money
+  // cannot save the number, so the chip says who does instead of linking to a
+  // field that will not save (#572).
+  const hbcfIsOffices = project.financialsHidden === true;
 
   const legalSectionAnchor = `#${LEGAL_SECTION_ID}`;
   const ownerContacts = (
@@ -200,7 +205,15 @@ export function ProjectHeader({
               <ShieldCheck className="size-3.5" aria-hidden="true" />
               HBCF Number{" "}
               {hbcfInsuranceMissing ? (
-                showHbcfWarning ? (
+                hbcfIsOffices ? (
+                  <span
+                    className="text-muted-foreground"
+                    title={HBCF_RECORDED_BY_OFFICE}
+                  >
+                    {NOT_SET}
+                    <span className="sr-only">. {HBCF_RECORDED_BY_OFFICE}</span>
+                  </span>
+                ) : showHbcfWarning ? (
                   <Link
                     href={legalSectionAnchor}
                     aria-label="HBCF number not set — click to add"

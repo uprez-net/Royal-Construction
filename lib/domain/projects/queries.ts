@@ -11,7 +11,9 @@ import {
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import { summarizeInvoices } from "@/lib/projects/invoice-totals";
 
+import { canWorkComplianceFile } from "../access/compliance";
 import {
+  canManageProject,
   canSeeProjectFinancials,
   projectManageScope,
   projectReadScope,
@@ -187,6 +189,8 @@ export const projectDetailInclude = {
       email: true,
       type: true,
       location: true,
+      // Who the compliance rule admits (`viewerAccess`); not sent on.
+      assignedId: true,
       emails: {
         orderBy: { sentAt: "asc" as const },
       },
@@ -632,6 +636,16 @@ export async function getProjectDetail(
   const detail: ProjectDetail = {
     ...row,
     documents,
+    // What this caller may record here, so the page draws only actions that
+    // will be accepted (#568). The rules are the ones the commands enforce.
+    viewerAccess: {
+      compliance: canWorkComplianceFile(principal, {
+        customerId: row.customerId,
+        leadAssignedId: rawLead.assignedId ?? null,
+        siteManagerId: row.siteManagerId,
+      }),
+      manage: canManageProject(principal, row),
+    },
     lead: {
       id: rawLead.id,
       email: rawLead.email,

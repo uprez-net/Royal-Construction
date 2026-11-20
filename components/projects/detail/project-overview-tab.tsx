@@ -2239,6 +2239,7 @@ export function ProjectOverviewTab({
           <DocumentAttentionPanel
             gaps={documentGaps}
             hasComplianceFile={project.certifierEngagement !== null}
+            hbcfIsOffices={project.financialsHidden === true}
             unsaved={dirty}
             onGo={goToDocumentGap}
           />

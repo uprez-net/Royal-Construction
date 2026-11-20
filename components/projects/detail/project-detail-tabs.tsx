@@ -20,6 +20,8 @@ import { canSeeMilestoneNotes } from "@/lib/domain/projects/milestone-note-rules
 import { UploadHintScope } from "@/components/common/upload-hints";
 import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 
+import { ProjectNotAssignedNotice } from "./project-not-assigned-notice";
+
 /** Shown for the moment a tab's code is fetched, the first time it opens. */
 function TabLoading() {
   return (
@@ -223,11 +225,22 @@ export function ProjectDetailTabs({
           {activeTab === "history" ? (
             <ProjectHistoryTabs project={project} />
           ) : null}
+          {/* Both tabs fetch and act through rules this caller may fail on
+              a project they are not assigned to (#568): say so rather than
+              draw a panel whose every button is refused. */}
           {activeTab === "communications" ? (
-            <ProjectCommunicationTabs project={project} />
+            project.viewerAccess.manage ? (
+              <ProjectCommunicationTabs project={project} />
+            ) : (
+              <ProjectNotAssignedNotice what="use its WhatsApp group" />
+            )
           ) : null}
           {activeTab === "compliance" ? (
-            <ProjectComplianceTab project={project} isAdmin={isAdmin} />
+            project.viewerAccess.compliance ? (
+              <ProjectComplianceTab project={project} isAdmin={isAdmin} />
+            ) : (
+              <ProjectNotAssignedNotice what="work its compliance file" />
+            )
           ) : null}
         </UploadHintScope>
       </div>

@@ -145,6 +145,8 @@ export function hideListProjectFinancials(
     ...project,
     approvedVariationSpend: HIDDEN_AMOUNT,
     financialsHidden: true,
+    // The sales record this project came from (#570): see the detail below.
+    leadId: null,
     invoiceTotals: {
       invoiced: "0.00",
       outstanding: "0.00",
@@ -185,9 +187,12 @@ export function hideDetailProjectFinancials(
     ),
     financialsHidden: true,
     invoices: [],
-    // The sales thread on the lead this project came from: it carries the
-    // quotation and its price, and is the sales side's, not the build's.
-    lead: { ...project.lead, emails: [] },
+    // The lead this project came from is the sales record: its email thread
+    // carries the quotation and its price, and the rest of it only repeats the
+    // customer's details and links back into sales. A site manager keeps the
+    // client's contact details on `customer` (#570).
+    lead: null,
+    leadId: null,
     materials: project.materials.map((material) => ({
       ...material,
       totalCost: HIDDEN_AMOUNT,

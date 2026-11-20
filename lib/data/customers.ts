@@ -6,6 +6,7 @@ import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { currentPrincipal } from "@/lib/data/current-principal";
 import {
+  assertCanBrowseCustomers,
   findCustomerByContact as findCustomerByContactDomain,
   findCustomerById as findCustomerByIdDomain,
   listCustomersForDropdown,
@@ -45,12 +46,11 @@ export async function getCachedCustomersForDropdown(
   limit = 10,
   query?: string,
 ) {
-  return cachedCustomersForDropdown(
-    await currentPrincipal(),
-    page,
-    limit,
-    query,
-  );
+  const principal = await currentPrincipal();
+  // Refuse outside the cache boundary, so the route meets the DomainError
+  // itself rather than whatever crossing "use cache" makes of it (#569).
+  assertCanBrowseCustomers(principal);
+  return cachedCustomersForDropdown(principal, page, limit, query);
 }
 
 export async function getCustomersForDropdown(
