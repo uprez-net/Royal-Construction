@@ -94,6 +94,12 @@ audits/
 spec/
 
 
+# --- Standalone services ----------------------------------------------------
+# Each package under services/ formats itself with its own config and its own
+# Prettier (`pnpm format:check` inside it, run by its own workflow).
+/services/
+
+
 # --- Scratch, logs and local tooling ----------------------------------------
 tmp/
 logs/

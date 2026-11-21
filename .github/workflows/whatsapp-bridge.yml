@@ -1,0 +1,213 @@
+# The WhatsApp bridge (services/whatsapp-bridge) — its own checks and its own
+# deployment, apart from the Next.js app's Quality Checks.
+#
+# Runs only when the bridge (or this file) changed, and then only when the
+# change is more than formatting: scripts/ci-changes.mjs prints each changed
+# file as Prettier would, before and after, and skips the run when they match.
+#
+# A push to staging or main that passes is built into an image on GHCR and
+# deployed over SSH to that branch's server (GitHub environments
+# `whatsapp-bridge-staging` / `whatsapp-bridge-production`). See the service's
+# README, "Deploying", for the secrets each environment needs. Until they are
+# set, the deploy job says so and stops without failing.
+
+name: WhatsApp Bridge
+
+on:
+  push:
+    branches: [main, staging]
+    paths:
+      - "services/whatsapp-bridge/**"
+      - ".github/workflows/whatsapp-bridge.yml"
+  pull_request:
+    branches: [main, staging]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "services/whatsapp-bridge/**"
+      - ".github/workflows/whatsapp-bridge.yml"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Run every check (and deploy, from staging or main) even if nothing substantive changed
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  SERVICE_DIR: services/whatsapp-bridge
+  IMAGE: ghcr.io/uprez-net/royal-construction-whatsapp-bridge
+
+jobs:
+  changes:
+    name: Decide
+    runs-on: ubuntu-latest
+    outputs:
+      substantive: ${{ steps.decide.outputs.substantive }}
+      reason: ${{ steps.decide.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v5
+        with:
+          package_json_file: services/whatsapp-bridge/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: services/whatsapp-bridge/pnpm-lock.yaml
+      - name: Install the bridge's dependencies (for Prettier)
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Is this more than formatting?
+        id: decide
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+        run: |
+          if [ "$FORCE" = "true" ]; then
+            echo "substantive=true" >> "$GITHUB_OUTPUT"
+            echo "reason=forced" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node "$SERVICE_DIR/scripts/ci-changes.mjs"
+
+  verify:
+    name: Verify
+    needs: changes
+    if: needs.changes.outputs.substantive == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/whatsapp-bridge
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+        with:
+          package_json_file: services/whatsapp-bridge/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: services/whatsapp-bridge/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Formatting
+        run: pnpm format:check
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Tests
+        run: pnpm test
+      - name: Build
+        run: pnpm build
+
+  image:
+    name: Image
+    needs: [changes, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag
+        id: tag
+        run: echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # A pull request builds the image to prove the Dockerfile works, and
+      # pushes nothing. A branch push publishes it for the deploy job.
+      - name: Build${{ github.event_name != 'pull_request' && ' and push' || '' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.SERVICE_DIR }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+            ${{ env.IMAGE }}:${{ github.ref_name == 'main' && 'latest' || github.ref_name == 'staging' && 'staging' || format('ref-{0}', github.run_id) }}
+          cache-from: type=gha,scope=whatsapp-bridge
+          cache-to: type=gha,mode=max,scope=whatsapp-bridge
+
+  deploy:
+    name: Deploy
+    needs: image
+    if: github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'staging')
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'whatsapp-bridge-production' || 'whatsapp-bridge-staging' }}
+    permissions:
+      contents: read
+      packages: read
+    env:
+      SSH_HOST: ${{ secrets.BRIDGE_SSH_HOST }}
+      SSH_USER: ${{ secrets.BRIDGE_SSH_USER }}
+      SSH_KEY: ${{ secrets.BRIDGE_SSH_KEY }}
+      SSH_KNOWN_HOSTS: ${{ secrets.BRIDGE_SSH_KNOWN_HOSTS }}
+      DEPLOY_PATH: ${{ vars.BRIDGE_DEPLOY_PATH || '/opt/royal-whatsapp-bridge' }}
+      COMPOSE_PROFILES: ${{ vars.BRIDGE_COMPOSE_PROFILES }}
+      TAG: ${{ needs.image.outputs.tag }}
+    steps:
+      - name: Check the environment is configured
+        id: configured
+        run: |
+          if [ -z "$SSH_HOST" ] || [ -z "$SSH_USER" ] || [ -z "$SSH_KEY" ] || [ -z "$SSH_KNOWN_HOSTS" ]; then
+            echo "::notice title=Bridge not deployed::Set BRIDGE_SSH_HOST, BRIDGE_SSH_USER, BRIDGE_SSH_KEY and BRIDGE_SSH_KNOWN_HOSTS on the ${{ github.ref_name == 'main' && 'whatsapp-bridge-production' || 'whatsapp-bridge-staging' }} environment to deploy. The image $IMAGE:$TAG was published."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v5
+        if: steps.configured.outputs.ready == 'true'
+        with:
+          sparse-checkout: |
+            services/whatsapp-bridge/compose.yaml
+            services/whatsapp-bridge/Caddyfile
+          sparse-checkout-cone-mode: false
+      - name: SSH key
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_bridge
+          chmod 600 ~/.ssh/id_bridge
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Copy the compose files
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          ssh -i ~/.ssh/id_bridge "$SSH_USER@$SSH_HOST" "mkdir -p '$DEPLOY_PATH'"
+          scp -i ~/.ssh/id_bridge \
+            "$SERVICE_DIR/compose.yaml" "$SERVICE_DIR/Caddyfile" \
+            "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
+      # The server keeps its own .env (the tokens); CI never sees or sends it.
+      # GITHUB_TOKEN goes over stdin, only to pull this run's image.
+      - name: Pull and restart
+        if: steps.configured.outputs.ready == 'true'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/id_bridge "$SSH_USER@$SSH_HOST" \
+            "set -e
+             cd '$DEPLOY_PATH'
+             test -f .env || { echo '.env is missing in $DEPLOY_PATH — copy .env.example and fill it in.'; exit 1; }
+             docker login ghcr.io -u '${{ github.actor }}' --password-stdin >/dev/null
+             export BRIDGE_IMAGE_TAG='$TAG' COMPOSE_PROFILES='$COMPOSE_PROFILES'
+             docker compose pull whatsapp-bridge
+             docker compose up -d --remove-orphans
+             docker logout ghcr.io >/dev/null
+             for i in \$(seq 1 30); do
+               if curl -fsS http://127.0.0.1:\${BRIDGE_PORT:-8080}/healthz; then echo; exit 0; fi
+               sleep 2
+             done
+             echo 'The bridge did not become healthy.'; docker compose logs --tail 80 whatsapp-bridge; exit 1"

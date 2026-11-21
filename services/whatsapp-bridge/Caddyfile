@@ -1,0 +1,6 @@
+# HTTPS in front of the bridge, with a certificate Caddy obtains and renews.
+# BRIDGE_DOMAIN's DNS must point at this server, and ports 80/443 be open.
+{$BRIDGE_DOMAIN} {
+	encode gzip
+	reverse_proxy whatsapp-bridge:8080
+}

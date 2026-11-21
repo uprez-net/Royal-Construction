@@ -18,6 +18,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "app/.well-known/workflow/**",
     "tmp/**",
+    // Standalone services lint, typecheck and test themselves (services/*).
+    "services/**",
   ]),
 ]);
 

@@ -2,6 +2,8 @@
 
 # dependencies
 /node_modules
+# Any nested package (services/*) keeps its own node_modules too.
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -72,3 +74,15 @@ package-lock.json
 .claude/
 .mcp.json
 .docs-build/
+
+# services/* — standalone packages with their own installs and builds.
+# node_modules/ above already covers their dependencies.
+services/*/node_modules/
+services/*/dist/
+services/*/coverage/
+# The WhatsApp bridge's runtime state: Baileys auth keys (long-lived private
+# keys for the linked device), group mappings, the event outbox and media.
+services/*/data/
+services/*/.env
+services/*/.env.*
+!services/*/.env.example

@@ -16,6 +16,8 @@ function walk(dir: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     if (entry === "node_modules" || entry === ".next" || entry === "tmp")
       continue;
+    // services/* are standalone packages with their own rules and checks.
+    if (dir === REPO_ROOT && entry === "services") continue;
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) walk(full, found);
     else if (/\.(ts|tsx|mts)$/.test(entry)) found.push(full);
