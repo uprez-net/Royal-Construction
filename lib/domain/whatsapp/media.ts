@@ -21,13 +21,15 @@ import {
 
 // Files customers and owners send on WhatsApp: photos, videos, voice notes,
 // documents and stickers. Shared by a lead's 1:1 conversation, a project's
-// group and the unmatched review queue.
+// group and the unmatched review queue. A lead's (or unmatched) file comes from
+// Meta by its media id; a project group's from the WhatsApp bridge, which
+// downloaded it when it arrived, by the message id.
 //
 // Two halves, deliberately apart:
 //
-//   1. The webhook records WHAT arrived — Meta's media id, the type, caption
+//   1. The webhook records WHAT arrived — the media id, the type, caption
 //      and file name — in the same transaction as the message, so the message
-//      is never acknowledged to Meta without its attachment being on record.
+//      is never acknowledged without its attachment being on record.
 //   2. A workflow copies the file into Blob storage afterwards
 //      (lib/workflow/whatsapp-media.ts → storeWhatsAppMedia). Downloading can
 //      take seconds and fail on its own; the webhook must not wait for it.
@@ -214,7 +216,10 @@ export async function storeWhatsAppMedia(
   input: { readonly mediaId: string; readonly maxBytes: number },
   db: DomainDb,
   ports: {
+    /** Meta's media endpoint: a lead's or an unmatched message's file. */
     readonly download: WhatsAppMediaPort | null;
+    /** The WhatsApp bridge: a project group's file. */
+    readonly bridgeDownload?: WhatsAppMediaPort | null;
     readonly put: BlobPutPort;
   },
   now: Date = new Date(),
@@ -230,6 +235,7 @@ export async function storeWhatsAppMedia(
       fileName: true,
       id: true,
       mimeType: true,
+      projectMessageId: true,
       providerMediaId: true,
       status: true,
     },
@@ -243,11 +249,15 @@ export async function storeWhatsAppMedia(
   if (row.status !== WhatsAppMediaStatus.PENDING) {
     return { outcome: "not_pending" };
   }
-  if (!ports.download) {
+  const fromBridge = row.projectMessageId !== null;
+  const download = fromBridge ? (ports.bridgeDownload ?? null) : ports.download;
+  if (!download) {
     // Not configured in this runtime. Left PENDING for the sweep, which runs
-    // where the token is; retrying the step here would only fail again.
+    // where the credentials are; retrying the step here would only fail again.
     throw new DomainSideEffectError(
-      "WhatsApp media can't be downloaded from this runtime (no access token).",
+      fromBridge
+        ? "Group files can't be fetched from this runtime (the WhatsApp bridge isn't configured)."
+        : "WhatsApp media can't be downloaded from this runtime (no access token).",
       "whatsapp",
       false,
     );
@@ -267,9 +277,9 @@ export async function storeWhatsAppMedia(
     return { outcome: "failed" as const, reason };
   };
 
-  let download;
+  let file;
   try {
-    download = await ports.download(row.providerMediaId, {
+    file = await download(row.providerMediaId, {
       maxBytes: input.maxBytes,
     });
   } catch (error) {
@@ -286,14 +296,14 @@ export async function storeWhatsAppMedia(
     throw new DomainSideEffectError(reason, "whatsapp", true, { cause: error });
   }
 
-  const mimeType = download.mimeType ?? row.mimeType;
+  const mimeType = file.mimeType ?? row.mimeType;
   const month = now.toISOString().slice(0, 7).replace("-", "/");
   const pathname = `whatsapp-media/${month}/${row.id}${whatsappMediaExtension(mimeType, row.fileName)}`;
   let stored: { url: string };
   try {
     stored = await ports.put({
       allowOverwrite: true,
-      body: download.bytes,
+      body: file.bytes,
       contentType: mimeType ?? "application/octet-stream",
       pathname,
     });
@@ -311,7 +321,7 @@ export async function storeWhatsAppMedia(
     data: {
       blobPathname: pathname,
       blobUrl: stored.url,
-      byteSize: download.byteSize,
+      byteSize: file.byteSize,
       failureReason: null,
       mimeType,
       status: WhatsAppMediaStatus.STORED,

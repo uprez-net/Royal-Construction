@@ -2,19 +2,19 @@ import { idempotencyHeader } from "@/lib/idempotency/attempt-key";
 import { fetchJson } from "@/utils/fetch";
 
 import type {
-  LinkableWhatsAppGroupDto,
+  ProjectWhatsAppCreateResultDto,
   ProjectWhatsAppGroupDto,
   ProjectWhatsAppInviteDraftDto,
   ProjectWhatsAppInviteResultDto,
   ProjectWhatsAppMessageDto,
-  ProjectWhatsAppRequestResultDto,
   ProjectWhatsAppSendResultDto,
   ProjectWhatsAppThreadDto,
+  WhatsAppBridgeGroupDto,
 } from "./whatsapp-types";
 
 // The browser's side of a project's WhatsApp group routes. Each call unwraps
 // the { success, data } envelope and lets the server's sentence through — the
-// office needs "Meta only offers groups to Official Business Accounts", not
+// office needs "The WhatsApp bridge isn't connected. Scan the QR code…", not
 // "request failed".
 
 async function unwrap<T>(
@@ -62,39 +62,61 @@ export function fetchProjectWhatsApp(
   );
 }
 
-export function requestProjectWhatsAppGroup(
+/** Create the project's group on Royal's number (the owners are added). */
+export function createProjectWhatsAppGroup(
   projectId: string,
-): Promise<ProjectWhatsAppRequestResultDto> {
-  return unwrap<ProjectWhatsAppRequestResultDto>(
+): Promise<ProjectWhatsAppCreateResultDto> {
+  return unwrap<ProjectWhatsAppCreateResultDto>(
     base(projectId),
     { method: "POST" },
-    "The WhatsApp group could not be requested.",
+    "The WhatsApp group could not be created.",
   );
 }
 
+/** Groups Royal's number is in that no project has linked yet. */
 export function fetchLinkableWhatsAppGroups(
   projectId: string,
   signal?: AbortSignal,
-): Promise<{ groups: LinkableWhatsAppGroupDto[] }> {
-  return unwrap<{ groups: LinkableWhatsAppGroupDto[] }>(
+): Promise<{ groups: WhatsAppBridgeGroupDto[] }> {
+  return unwrap<{ groups: WhatsAppBridgeGroupDto[] }>(
     `${base(projectId)}/link`,
     { cache: "no-store", method: "GET", signal },
-    "Could not list the business's WhatsApp groups.",
+    "Could not list the WhatsApp groups.",
   );
 }
 
 export function linkProjectWhatsAppGroup(
   projectId: string,
-  providerGroupId: string,
-): Promise<{ group: ProjectWhatsAppGroupDto; filedMessages: number }> {
+  groupJid: string,
+): Promise<{ group: ProjectWhatsAppGroupDto; alreadyLinked: boolean }> {
   return unwrap(
     `${base(projectId)}/link`,
     {
-      body: JSON.stringify({ providerGroupId }),
+      body: JSON.stringify({ groupJid }),
       headers: JSON_HEADERS,
       method: "POST",
     },
     "The WhatsApp group could not be linked.",
+  );
+}
+
+export function unlinkProjectWhatsAppGroup(
+  projectId: string,
+): Promise<{ group: ProjectWhatsAppGroupDto; bridgeUpdated: boolean }> {
+  return unwrap(
+    `${base(projectId)}/link`,
+    { method: "DELETE" },
+    "The WhatsApp group could not be unlinked.",
+  );
+}
+
+export function refreshProjectWhatsAppInviteLink(
+  projectId: string,
+): Promise<{ group: ProjectWhatsAppGroupDto }> {
+  return unwrap(
+    `${base(projectId)}/invite-link`,
+    { method: "POST" },
+    "Could not refresh the invite link.",
   );
 }
 

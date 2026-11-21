@@ -3,7 +3,7 @@ import { ProjectWhatsAppGroupStatus } from "@prisma/client";
 import { authorizeProjectRecording } from "../../access/projects";
 import type { DomainDb } from "../../db";
 import { DomainAuthorizationError, DomainValidationError } from "../../errors";
-import type { WhatsAppChannel } from "../../ports/whatsapp";
+import type { WhatsAppBridgePort } from "../../ports/whatsapp-bridge";
 import {
   isInternalPrincipal,
   isOfficePrincipal,
@@ -70,7 +70,7 @@ export async function getProjectWhatsAppThread(
     readonly limit?: number;
   },
   db: DomainDb,
-  context: { readonly channel: WhatsAppChannel | null },
+  context: { readonly bridge: WhatsAppBridgePort | null | undefined },
 ): Promise<ProjectWhatsAppThread> {
   requireStaff(principal);
   await authorizeProjectRecording(principal, input.projectId, db);
@@ -138,7 +138,7 @@ export async function getProjectWhatsAppThread(
   );
 
   return {
-    availability: projectWhatsAppGroupAvailability(context.channel),
+    availability: projectWhatsAppGroupAvailability(context.bridge),
     group,
     leadId: isOfficePrincipal(principal) ? project.Lead.id : null,
     leadName: project.Lead.name,
@@ -169,7 +169,7 @@ export async function markProjectWhatsAppRead(
     data: { unreadCount: 0 },
     where: {
       projectId: input.projectId,
-      status: { not: ProjectWhatsAppGroupStatus.DELETED },
+      status: ProjectWhatsAppGroupStatus.ACTIVE,
     },
   });
 }

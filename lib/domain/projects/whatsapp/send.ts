@@ -22,11 +22,11 @@ import {
   enqueueOutboxEvent,
   failOutboxEvent,
 } from "../../outbox";
-import {
-  isWhatsAppSendError,
-  type WhatsAppPort,
-  type WhatsAppSendReceipt,
-} from "../../ports/whatsapp";
+import { isWhatsAppSendError } from "../../ports/whatsapp";
+import type {
+  WhatsAppBridgePort,
+  WhatsAppBridgeSendReceipt,
+} from "../../ports/whatsapp-bridge";
 import {
   attributionUserId,
   isInternalPrincipal,
@@ -48,15 +48,18 @@ import {
 // cannot be taken back:
 //
 //   - the caller's idempotency key names the intent; none is derived here;
-//   - the message row and its outbox intent are written before Meta is called;
+//   - the message row and its outbox intent are written before the bridge is called;
 //   - a definite refusal marks it FAILED and re-opens the intent, so pressing
 //     Send again with the same key is a genuine retry;
 //   - an ambiguous failure is flagged for a person and never retried;
 //   - a replay of a key that already sent answers `alreadySent: true`.
 //
-// What differs is the gate. Everyone in the group joined it through the
-// invite, so there is no per-person consent or customer-service window to
-// check — only that the group exists, is ours and is not suspended.
+// What differs is the gate, and the channel. Everyone in the group joined it
+// themselves or was added by the office, so there is no per-person consent or
+// customer-service window to check — only that the group is linked and live.
+// It goes out through Royal's WhatsApp bridge (ports/whatsapp-bridge.ts), with
+// the outbox key as the bridge's own Idempotency-Key: a retry the bridge has
+// already sent answers with the first message instead of posting twice.
 
 export type SendProjectWhatsAppInput = {
   readonly projectId: string;
@@ -93,7 +96,7 @@ export async function sendProjectWhatsAppMessage(
   principal: DomainPrincipal,
   input: SendProjectWhatsAppInput,
   db: TransactionalDomainDb,
-  ports: { readonly whatsapp?: WhatsAppPort | null } = {},
+  ports: { readonly bridge?: WhatsAppBridgePort | null } = {},
 ): Promise<SendProjectWhatsAppResult> {
   requireStaff(principal);
   const now = input.now ?? new Date();
@@ -141,9 +144,9 @@ export async function sendProjectWhatsAppMessage(
     );
   }
 
-  const port = ports.whatsapp ?? null;
-  const availability = projectWhatsAppGroupAvailability(port?.channel ?? null);
-  if (!port?.groups || !availability.available) {
+  const bridge = ports.bridge ?? null;
+  const availability = projectWhatsAppGroupAvailability(bridge);
+  if (!bridge || !availability.available) {
     throw new DomainSideEffectError(
       availability.reason
         ?? "WhatsApp isn't reachable from here, so nothing was sent.",
@@ -151,11 +154,9 @@ export async function sendProjectWhatsAppMessage(
       false,
     );
   }
-  const groups = port.groups;
 
   const group = await db.projectWhatsAppGroup.findUnique({
     select: {
-      businessPhoneNumberId: true,
       id: true,
       providerGroupId: true,
       status: true,
@@ -167,11 +168,6 @@ export async function sendProjectWhatsAppMessage(
       "This project has no WhatsApp group yet. Create or link one first.",
     );
   }
-  if (group.status === ProjectWhatsAppGroupStatus.SUSPENDED) {
-    throw new DomainTransitionError(
-      "WhatsApp has suspended this group, so nothing can be sent to it until the suspension clears.",
-    );
-  }
   if (
     group.status !== ProjectWhatsAppGroupStatus.ACTIVE
     || !group.providerGroupId
@@ -179,7 +175,7 @@ export async function sendProjectWhatsAppMessage(
     throw new DomainTransitionError(
       group.status === ProjectWhatsAppGroupStatus.CREATING
         ? "The group is still being created. Try again once it shows as ready."
-        : "This project's WhatsApp group isn't active. Create or link a new one.",
+        : "This project's WhatsApp group isn't linked any more. Create or link one.",
     );
   }
   const providerGroupId = group.providerGroupId;
@@ -189,7 +185,6 @@ export async function sendProjectWhatsAppMessage(
       key: outboxKey,
       kind: OutboxEventKind.PROJECT_WHATSAPP_SEND,
       payload: {
-        from: group.businessPhoneNumberId,
         groupId: providerGroupId,
         projectId: project.id,
       },
@@ -287,12 +282,12 @@ export async function sendProjectWhatsAppMessage(
     );
   }
 
-  let receipt: WhatsAppSendReceipt;
+  let receipt: WhatsAppBridgeSendReceipt;
   try {
-    receipt = await groups.sendText({
-      body,
-      fromPhoneNumberId: group.businessPhoneNumberId,
-      groupId: providerGroupId,
+    receipt = await bridge.sendText({
+      groupJid: providerGroupId,
+      idempotencyKey: outboxKey,
+      text: body,
     });
   } catch (error) {
     const sendError = isWhatsAppSendError(error) ? error : null;
@@ -339,12 +334,13 @@ export async function sendProjectWhatsAppMessage(
   await db.$transaction(async (tx) => {
     await completeOutboxEvent(tx, claimed.id, {
       messageId: prepared.messageId,
-      providerMessageId: receipt.providerMessageId,
+      providerMessageId: receipt.messageId,
+      replayedByBridge: receipt.replayed,
     });
     await tx.projectWhatsAppMessage.update({
       data: {
         occurredAt: sentAt,
-        providerMessageId: receipt.providerMessageId,
+        providerMessageId: receipt.messageId,
         status: WhatsAppMessageStatus.SENT,
         statusAt: sentAt,
       },
@@ -354,7 +350,7 @@ export async function sendProjectWhatsAppMessage(
       data: { lastMessageAt: sentAt },
       where: { id: group.id },
     });
-    await applyPendingWhatsAppStatuses(receipt.providerMessageId, tx);
+    await applyPendingWhatsAppStatuses(receipt.messageId, tx);
   });
 
   const current = await db.projectWhatsAppMessage.findUniqueOrThrow({

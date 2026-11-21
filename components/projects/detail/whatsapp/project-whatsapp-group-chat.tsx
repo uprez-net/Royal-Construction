@@ -98,7 +98,8 @@ export function ProjectWhatsAppGroupChat({
     activeParticipants > 0
       ? `${activeParticipants} member${activeParticipants === 1 ? "" : "s"}`
       : null,
-    group.status === "SUSPENDED" ? "suspended by WhatsApp" : null,
+    group.status === "UNLINKED" ? "unlinked from this project" : null,
+    group.status === "DELETED" ? "Royal's number is no longer in it" : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -219,12 +220,14 @@ export function ProjectWhatsAppGroupChat({
           maxLength={MAX_WHATSAPP_TEXT_LENGTH}
           disabled={readOnly}
           disabledReason={
-            group.status === "SUSPENDED"
-              ? "WhatsApp has suspended this group. You can read it, but nothing can be sent until the suspension clears."
+            group.status === "UNLINKED"
+              ? isAdmin
+                ? "This group was unlinked from the project. Its history stays here; link or create a group from the project header."
+                : "This group was unlinked from the project. Its history stays here; the office can link another."
               : group.status === "DELETED"
                 ? isAdmin
-                  ? "This group was deleted in WhatsApp. Its history stays here; create a new group from the project header."
-                  : "This group was deleted in WhatsApp. Its history stays here; the office can create a new one."
+                  ? "Royal's number is no longer in this group. Its history stays here; create or link a group from the project header."
+                  : "Royal's number is no longer in this group. Its history stays here; the office can set up another."
                 : null
           }
           placeholder={`Message ${group.subject}`}
@@ -240,8 +243,8 @@ export function ProjectWhatsAppGroupChat({
         onRetryMedia={(mediaId) => void retryMedia(mediaId)}
         banner={
           <ChatNotice>
-            Messages you send here appear in the group from{" "}
-            {formatE164ForDisplay(group.businessDisplayNumber)}.
+            Messages you send here appear in the group from Royal&apos;s
+            WhatsApp number.
           </ChatNotice>
         }
         empty={

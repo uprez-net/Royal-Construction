@@ -93,8 +93,6 @@ export function toProjectWhatsAppMessageRecord(
 }
 
 export const PROJECT_WHATSAPP_GROUP_SELECT = {
-  businessDisplayNumber: true,
-  businessPhoneNumberId: true,
   failureReason: true,
   id: true,
   inviteLink: true,
@@ -106,7 +104,6 @@ export const PROJECT_WHATSAPP_GROUP_SELECT = {
   },
   projectId: true,
   providerGroupId: true,
-  requestedAt: true,
   status: true,
   subject: true,
   unreadCount: true,
@@ -117,6 +114,7 @@ type RawGroup = Prisma.ProjectWhatsAppGroupGetPayload<{
 }>;
 
 export type ProjectWhatsAppParticipantRecord = {
+  /** Their WhatsApp id, as the bridge reported it. */
   readonly waId: string;
   readonly phoneE164: string | null;
   readonly joinedAt: Date | null;
@@ -130,13 +128,14 @@ export type ProjectWhatsAppGroupRecord = {
   readonly status: ProjectWhatsAppGroupStatus;
   readonly origin: ProjectWhatsAppGroupOrigin;
   readonly subject: string;
-  /** Null until Meta confirms the group. Safe to share with the owners. */
+  /**
+   * Null until WhatsApp shares it (Royal's number must be a group admin).
+   * Lets anyone holding it join the client's group: the office's to send.
+   */
   readonly inviteLink: string | null;
+  /** The group's WhatsApp id (…@g.us). */
   readonly providerGroupId: string | null;
-  readonly businessPhoneNumberId: string;
-  readonly businessDisplayNumber: string;
   readonly failureReason: string | null;
-  readonly requestedAt: Date | null;
   readonly lastMessageAt: Date | null;
   readonly unreadCount: number;
   readonly participants: readonly ProjectWhatsAppParticipantRecord[];
@@ -146,8 +145,6 @@ export function toProjectWhatsAppGroupRecord(
   row: RawGroup,
 ): ProjectWhatsAppGroupRecord {
   return {
-    businessDisplayNumber: row.businessDisplayNumber,
-    businessPhoneNumberId: row.businessPhoneNumberId,
     failureReason: row.failureReason,
     id: row.id,
     inviteLink: row.inviteLink,
@@ -161,7 +158,6 @@ export function toProjectWhatsAppGroupRecord(
     })),
     projectId: row.projectId,
     providerGroupId: row.providerGroupId,
-    requestedAt: row.requestedAt,
     status: row.status,
     subject: row.subject,
     unreadCount: row.unreadCount,

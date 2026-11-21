@@ -2,39 +2,52 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Link2, Loader2, Plus, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  Link2,
+  Loader2,
+  Plus,
+  Unlink,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { WhatsAppBadgeIcon } from "@/components/whatsapp/whatsapp-logo";
 import {
   announceProjectWhatsAppChange,
-  requestProjectWhatsAppGroup,
+  createProjectWhatsAppGroup,
 } from "@/lib/projects/whatsapp-service";
 import type { ProjectWhatsAppThreadDto } from "@/lib/projects/whatsapp-types";
 
-/** Ask for a group, telling the rest of the page when it is under way. */
+/**
+ * Create the project's group on Royal's WhatsApp number, telling the rest of
+ * the page when it changed. The create is one request, so the answer is the
+ * group (or why there isn't one), not "on its way".
+ */
 export function useCreateProjectWhatsAppGroup(projectId: string) {
   const [creating, setCreating] = useState(false);
   async function create() {
     if (creating) return;
     setCreating(true);
     try {
-      const result = await requestProjectWhatsAppGroup(projectId);
+      const result = await createProjectWhatsAppGroup(projectId);
+      const others = Math.max(0, result.memberCount - 1);
       toast.success(
-        result.start
-          ? "Creating the WhatsApp group — this takes a moment."
-          : "The WhatsApp group is already being created.",
+        result.ownersAsked === 0
+          ? "WhatsApp group created. No owner has a mobile on file — send them the invite link."
+          : others >= result.ownersAsked
+            ? "WhatsApp group created with the owners in it."
+            : "WhatsApp group created. Some owners couldn't be added (their WhatsApp privacy settings) — send them the invite link.",
       );
-      announceProjectWhatsAppChange(projectId);
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
-          : "The WhatsApp group could not be requested.",
+          : "The WhatsApp group could not be created.",
       );
-      announceProjectWhatsAppChange(projectId);
     } finally {
+      announceProjectWhatsAppChange(projectId);
       setCreating(false);
     }
   }
@@ -43,8 +56,8 @@ export function useCreateProjectWhatsAppGroup(projectId: string) {
 
 /**
  * What the group pane shows before there is a group to chat in: groups not
- * available here, none yet, being created, or failed — each with the one or
- * two things the office can do about it.
+ * set up here, none yet, being created, failed, unlinked, or Royal's number
+ * no longer in it — each with the one or two things the office can do.
  */
 export function ProjectWhatsAppGroupSetup({
   thread,
@@ -58,11 +71,14 @@ export function ProjectWhatsAppGroupSetup({
 }) {
   const { create, creating } = useCreateProjectWhatsAppGroup(thread.projectId);
   const group = thread.group;
+  const ownersWithMobile = thread.owners.filter((owner) => owner.phoneE164);
 
   let icon = <WhatsAppBadgeIcon className="size-14" />;
   let title = "Start a WhatsApp group for this project";
   let body = isAdmin
-    ? "One chat with the owners and the team — site updates, photos and questions, all kept with the project."
+    ? ownersWithMobile.length > 0
+      ? `One chat with the owners and the team, on Royal's WhatsApp number. ${ownersWithMobile.map((owner) => owner.name).join(" and ")} ${ownersWithMobile.length === 1 ? "is" : "are"} added straight away; anyone WhatsApp won't let us add gets the invite link.`
+      : "One chat with the owners and the team, on Royal's WhatsApp number. No owner has a mobile on file, so invite them with the link once it's made."
     : "The office sets up this project's WhatsApp group.";
   let actions: React.ReactNode = isAdmin ? (
     <>
@@ -77,7 +93,7 @@ export function ProjectWhatsAppGroupSetup({
         ) : (
           <Plus className="mr-1.5 size-4" aria-hidden="true" />
         )}
-        Create group
+        {creating ? "Creating…" : "Create group"}
       </Button>
       <Button
         type="button"
@@ -97,13 +113,13 @@ export function ProjectWhatsAppGroupSetup({
         <Users className="size-7" aria-hidden="true" />
       </span>
     );
-    title = "WhatsApp groups aren't available yet";
+    title = "WhatsApp groups aren't set up yet";
     body =
       thread.availability.reason
-      ?? "Groups are turned off for this deployment.";
+      ?? "The WhatsApp bridge isn't configured for this deployment.";
     actions = isAdmin ? (
       <Button asChild variant="outline" className="rounded-full bg-card px-5">
-        <Link href="/admin/whatsapp">See WhatsApp settings</Link>
+        <Link href="/admin/whatsapp-bridge">Open WhatsApp bridge settings</Link>
       </Button>
     ) : null;
   } else if (group?.status === "CREATING") {
@@ -113,9 +129,7 @@ export function ProjectWhatsAppGroupSetup({
       </span>
     );
     title = "Creating the group…";
-    body =
-      group.failureReason
-      ?? `Asking WhatsApp to create “${group.subject}”. The invite link appears here as soon as WhatsApp confirms it, usually within a minute.`;
+    body = `Creating “${group.subject}” on Royal's WhatsApp number. This takes a few seconds.`;
     actions = null;
   } else if (group?.status === "FAILED") {
     icon = (
@@ -124,7 +138,28 @@ export function ProjectWhatsAppGroupSetup({
       </span>
     );
     title = "The group wasn't created";
-    body = group.failureReason ?? "WhatsApp didn't create the group.";
+    body =
+      group.failureReason ?? "The WhatsApp bridge didn't create the group.";
+  } else if (group?.status === "DELETED") {
+    icon = (
+      <span className="inline-flex size-14 items-center justify-center rounded-full bg-warning-light text-warning-ink">
+        <AlertTriangle className="size-7" aria-hidden="true" />
+      </span>
+    );
+    title = "Royal's number is no longer in the group";
+    body =
+      group.failureReason
+      ?? "The group was deleted, or Royal's number was removed from it. Its messages so far are kept here.";
+  } else if (group?.status === "UNLINKED") {
+    icon = (
+      <span className="inline-flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <Unlink className="size-7" aria-hidden="true" />
+      </span>
+    );
+    title = "No WhatsApp group linked";
+    body = isAdmin
+      ? `“${group.subject}” was unlinked from this project. Link the right group, or create a new one.`
+      : "The office unlinked this project's WhatsApp group.";
   }
 
   return (

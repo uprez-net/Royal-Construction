@@ -11,6 +11,7 @@ import {
   whatsappAdminConfig,
   whatsappAdminHealth,
 } from "@/lib/whatsapp/admin-status";
+import { readWhatsAppBridgeConfig } from "@/lib/whatsapp-bridge/config";
 import { xeroConnectionExpiry } from "@/lib/xero/connection-expiry";
 
 // The status shown beside each Admin tool on the hub. One loader per tool,
@@ -31,6 +32,7 @@ export type AdminHubTool =
   | "offer-content"
   | "xero"
   | "whatsapp"
+  | "whatsapp-bridge"
   | "phone-sms";
 
 /**
@@ -122,6 +124,20 @@ function whatsappStatus(): Promise<AdminHubStatus | null> {
   });
 }
 
+// Configuration only, like the rest of the hub: whether the bridge is linked
+// right now is a network call, made on its own page.
+function whatsappBridgeStatus(): Promise<AdminHubStatus | null> {
+  return statusOf("whatsapp-bridge", async () => {
+    const config = readWhatsAppBridgeConfig();
+    if (!config.enabled && config.problems.length === 0) {
+      return { label: "Off", tone: "neutral" };
+    }
+    return config.enabled && config.problems.length === 0
+      ? { label: "Configured", tone: "success" }
+      : { label: "Needs attention", tone: "warning" };
+  });
+}
+
 function phoneSmsStatus(): Promise<AdminHubStatus | null> {
   return statusOf("phone-sms", async () => {
     const config = readCommsConfig();
@@ -144,16 +160,25 @@ function phoneSmsStatus(): Promise<AdminHubStatus | null> {
  * status, so it is always null and its row shows "—".
  */
 export async function getAdminHubStatuses(): Promise<AdminHubStatuses> {
-  const [approvals, team, buildSequence, tradeTypes, xero, whatsapp, phoneSms] =
-    await Promise.all([
-      approvalsStatus(),
-      teamStatus(),
-      buildSequenceStatus(),
-      tradeTypesStatus(),
-      xeroStatus(),
-      whatsappStatus(),
-      phoneSmsStatus(),
-    ]);
+  const [
+    approvals,
+    team,
+    buildSequence,
+    tradeTypes,
+    xero,
+    whatsapp,
+    whatsappBridge,
+    phoneSms,
+  ] = await Promise.all([
+    approvalsStatus(),
+    teamStatus(),
+    buildSequenceStatus(),
+    tradeTypesStatus(),
+    xeroStatus(),
+    whatsappStatus(),
+    whatsappBridgeStatus(),
+    phoneSmsStatus(),
+  ]);
   return {
     approvals,
     team,
@@ -162,6 +187,7 @@ export async function getAdminHubStatuses(): Promise<AdminHubStatuses> {
     "offer-content": null,
     xero,
     whatsapp,
+    "whatsapp-bridge": whatsappBridge,
     "phone-sms": phoneSms,
   };
 }

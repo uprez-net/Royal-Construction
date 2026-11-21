@@ -23,7 +23,6 @@ import { resolveProjectXeroContactId } from "@/lib/xero/contact";
 import { CACHE_PROFILES } from "@/types/cache";
 import { createNotification } from "@/types/notification";
 import type { ProjectDetail } from "@/types/project";
-import { requestWhatsAppGroupForNewProject } from "@/lib/whatsapp/project-groups";
 
 // The Next adapter over `lib/domain/projects/creation.ts`.
 //
@@ -128,10 +127,6 @@ export async function createProjectWithLead(
     revalidateTag(`project-${created.projectId}`, CACHE_PROFILES.MEDIUM);
 
     await ensureProjectXeroContact(created.projectId);
-
-    // Every new project gets its WhatsApp group when groups are on. Never
-    // throws: a group that could not be asked for shows on the project header.
-    await requestWhatsAppGroupForNewProject(created.projectId);
 
     await triggerNotification(
       created.siteManagerId ? [created.siteManagerId] : [],

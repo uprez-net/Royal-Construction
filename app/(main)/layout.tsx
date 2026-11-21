@@ -5,6 +5,7 @@ import { auth } from "@clerk/nextjs/server";
 import { AppShellLoader } from "@/components/common/app-shell-loader";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { isOfficeRole } from "@/lib/domain/principal";
+import { readWhatsAppBridgeConfig } from "@/lib/whatsapp-bridge/config";
 import { readWhatsAppConfig } from "@/lib/whatsapp/config";
 
 async function LayoutContent({ children }: { children: React.ReactNode }) {
@@ -25,6 +26,7 @@ async function LayoutContent({ children }: { children: React.ReactNode }) {
       whatsapp={{
         calling: whatsappConfig.channel?.callingEnabled === true,
         enabled: whatsappConfig.enabled,
+        groups: readWhatsAppBridgeConfig().enabled,
       }}
       operationsAgentEnabled={isAgentFeatureEnabled()}
     >

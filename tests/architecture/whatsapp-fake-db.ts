@@ -37,12 +37,7 @@ const UNIQUE_KEYS: Record<string, string[][]> = {
     ["unmatchedMessageId"],
   ],
   project: [["id"], ["leadId"]],
-  projectWhatsAppGroup: [
-    ["id"],
-    ["projectId"],
-    ["providerGroupId"],
-    ["createRequestId"],
-  ],
+  projectWhatsAppGroup: [["id"], ["projectId"], ["providerGroupId"]],
   projectWhatsAppMessage: [["id"], ["providerMessageId"], ["idempotencyKey"]],
   projectWhatsAppParticipant: [["id"], ["groupId", "waId"]],
   leadEmails: [["id"]],
@@ -506,13 +501,11 @@ function defaultsFor(model: string): Row {
     case "projectWhatsAppGroup":
       return {
         createAttempt: 0,
-        createRequestId: null,
         failureReason: null,
         inviteLink: null,
         inviteLinkAt: null,
         lastMessageAt: null,
         providerGroupId: null,
-        requestedAt: null,
         unreadCount: 0,
       };
     case "projectWhatsAppMessage":
@@ -536,7 +529,6 @@ function defaultsFor(model: string): Row {
       return {
         resolvedAt: null,
         resolvedById: null,
-        providerGroupId: null,
         resolvedLeadId: null,
         status: "PENDING",
       };

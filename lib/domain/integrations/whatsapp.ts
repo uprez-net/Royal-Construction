@@ -1,7 +1,6 @@
 import {
   ProjectWhatsAppGroupStatus,
   WhatsAppMediaStatus,
-  WhatsAppUnmatchedReason,
   WhatsAppUnmatchedStatus,
 } from "@prisma/client";
 
@@ -17,8 +16,6 @@ export type WhatsAppOperationalCounts = {
   readonly media: Readonly<Record<WhatsAppMediaStatus, number>>;
   /** Waiting in the lead review queue. */
   readonly unmatchedPending: number;
-  /** Posted in groups no project is linked to. */
-  readonly unlinkedGroupMessages: number;
   /** Sends WhatsApp never confirmed, waiting for a person. */
   readonly needsReconciliation: number;
 };
@@ -33,7 +30,6 @@ export async function getWhatsAppOperationalCounts(
     groups,
     media,
     unmatchedPending,
-    unlinkedGroupMessages,
     leadReconcile,
     projectReconcile,
   ] = await Promise.all([
@@ -41,16 +37,7 @@ export async function getWhatsAppOperationalCounts(
     db.projectWhatsAppGroup.groupBy({ _count: { _all: true }, by: ["status"] }),
     db.whatsAppMedia.groupBy({ _count: { _all: true }, by: ["status"] }),
     db.whatsAppUnmatchedMessage.count({
-      where: {
-        reason: { not: WhatsAppUnmatchedReason.UNLINKED_GROUP },
-        status: WhatsAppUnmatchedStatus.PENDING,
-      },
-    }),
-    db.whatsAppUnmatchedMessage.count({
-      where: {
-        reason: WhatsAppUnmatchedReason.UNLINKED_GROUP,
-        status: WhatsAppUnmatchedStatus.PENDING,
-      },
+      where: { status: WhatsAppUnmatchedStatus.PENDING },
     }),
     db.leadWhatsAppMessage.count({ where: { needsReconciliation: true } }),
     db.projectWhatsAppMessage.count({ where: { needsReconciliation: true } }),
@@ -71,7 +58,6 @@ export async function getWhatsAppOperationalCounts(
     media: mediaCounts,
     needsReconciliation: leadReconcile + projectReconcile,
     projectGroups: groupCounts,
-    unlinkedGroupMessages,
     unmatchedPending,
   };
 }

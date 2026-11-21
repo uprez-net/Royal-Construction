@@ -6,6 +6,7 @@ import { isDomainError, DomainSideEffectError } from "@/lib/domain/errors";
 import { systemPrincipal } from "@/lib/domain/principal";
 import { storeWhatsAppMedia } from "@/lib/domain/whatsapp/media";
 import prisma from "@/lib/prisma";
+import { createWhatsAppBridgePortFromEnv } from "@/lib/whatsapp-bridge/client";
 import { createCloudApiMediaPort } from "@/lib/whatsapp/cloud-api";
 import { readWhatsAppConfig } from "@/lib/whatsapp/config";
 
@@ -29,12 +30,18 @@ async function storeOne(mediaId: string): Promise<string> {
       PRINCIPAL,
       { maxBytes: config.mediaMaxBytes, mediaId },
       prisma,
-      { download: createCloudApiMediaPort(config), put: vercelBlobPut },
+      {
+        // A lead's file from Meta; a project group's from the bridge.
+        bridgeDownload:
+          createWhatsAppBridgePortFromEnv()?.downloadMedia ?? null,
+        download: createCloudApiMediaPort(config),
+        put: vercelBlobPut,
+      },
     );
     return result.outcome;
   } catch (error) {
     if (error instanceof DomainSideEffectError && error.retryable) {
-      // Back off: Meta's media endpoint and Blob both recover in seconds to
+      // Back off: Meta, the bridge and Blob all recover in seconds to
       // minutes, and the domain gives up on its own after MAX_MEDIA_ATTEMPTS.
       const { attempt } = getStepMetadata();
       throw new RetryableError(error.message, {

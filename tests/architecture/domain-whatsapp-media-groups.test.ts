@@ -11,12 +11,17 @@ import {
 import { recordInboundLeadWhatsAppMessage } from "@/lib/domain/leads/whatsapp/inbound";
 import {
   applyWhatsAppGroupEvent,
+  createProjectWhatsAppGroup,
+  GROUP_CREATE_DEADLINE_MS,
   linkProjectWhatsAppGroup,
-  requestProjectWhatsAppGroup,
-  resolveCreatingProjectWhatsAppGroup,
-  submitProjectWhatsAppGroupCreate,
+  listWhatsAppBridgeGroups,
+  reconcileWhatsAppBridgeMappings,
+  unlinkProjectWhatsAppGroup,
 } from "@/lib/domain/projects/whatsapp/groups";
-import { recordInboundProjectWhatsAppMessage } from "@/lib/domain/projects/whatsapp/inbound";
+import {
+  recordInboundProjectWhatsAppMessage,
+  type InboundProjectWhatsAppMessage,
+} from "@/lib/domain/projects/whatsapp/inbound";
 import { sendProjectWhatsAppInvite } from "@/lib/domain/projects/whatsapp/invite";
 import { getProjectWhatsAppThread } from "@/lib/domain/projects/whatsapp/queries";
 import { sendProjectWhatsAppMessage } from "@/lib/domain/projects/whatsapp/send";
@@ -24,10 +29,13 @@ import {
   WhatsAppMediaError,
   WhatsAppSendError,
   type WhatsAppChannel,
-  type WhatsAppGroupsPort,
   type WhatsAppMediaPort,
-  type WhatsAppPort,
 } from "@/lib/domain/ports/whatsapp";
+import {
+  WhatsAppBridgeError,
+  type WhatsAppBridgeGroup,
+  type WhatsAppBridgePort,
+} from "@/lib/domain/ports/whatsapp-bridge";
 import { systemPrincipal, type DomainPrincipal } from "@/lib/domain/principal";
 import {
   storeWhatsAppMedia,
@@ -36,13 +44,14 @@ import {
 
 import { fakeWhatsAppDb } from "./whatsapp-fake-db";
 
-// Media copied into Blob storage, and a WhatsApp group per project. Each of
-// these reaches a client or comes in from the open internet, so the tests pin
-// the promises the runbook makes: nothing twice, nothing silently, and only
-// the people the contract names.
+// Media copied into Blob storage, and a WhatsApp group per project through
+// Royal's WhatsApp bridge. Each of these reaches a client or comes in from the
+// open internet, so the tests pin the promises the runbook makes: nothing
+// twice, nothing silently, and only the people the contract names.
 
 const admin: DomainPrincipal = { kind: "user", role: Role.ADMIN, userId: "u1" };
 const webhook = systemPrincipal("whatsapp-webhook");
+const bridgeWebhook = systemPrincipal("whatsapp-bridge-webhook");
 const workflow = systemPrincipal("workflow:test");
 
 const OFFICE = {
@@ -51,47 +60,83 @@ const OFFICE = {
   phoneNumberId: "1000000000001",
 };
 
-function channel(groupsEnabled = true): WhatsAppChannel {
+const GROUP = "120363000000000001@g.us";
+const OTHER_GROUP = "120363000000000002@g.us";
+const LINK = "https://chat.whatsapp.com/LINK";
+
+function channel(): WhatsAppChannel {
   return {
     defaultPhoneNumberId: OFFICE.phoneNumberId,
     enabledTemplateNames: null,
-    groupsEnabled,
     numbers: [OFFICE],
     sendingAvailable: true,
   };
 }
 
-function groupsPort(overrides: Partial<WhatsAppGroupsPort> = {}) {
-  const calls = { create: 0, sendText: 0 };
-  const port: WhatsAppGroupsPort = {
-    create: async () => {
-      calls.create += 1;
-      return { groupId: null, inviteLink: null, requestId: "REQ-1" };
+function bridgeGroup(jid = GROUP): WhatsAppBridgeGroup {
+  return {
+    createdAt: null,
+    description: null,
+    isAdmin: true,
+    jid,
+    mappedProjectId: null,
+    participants: [
+      {
+        admin: "superadmin",
+        jid: "61280001234@s.whatsapp.net",
+        phoneE164: "+61280001234",
+      },
+      {
+        admin: null,
+        jid: "61412345678@s.whatsapp.net",
+        phoneE164: "+61412345678",
+      },
+    ],
+    subject: "Royal Constructions · 12 Smith St, Kellyville",
+  };
+}
+
+/** A bridge that answers like the real one, recording what it was asked. */
+function bridgePort(overrides: Partial<WhatsAppBridgePort> = {}) {
+  const calls = {
+    create: [] as Parameters<WhatsAppBridgePort["createGroup"]>[0][],
+    removeMapping: [] as string[],
+    replace: [] as { groupJid: string; projectId: string }[][],
+    send: [] as Parameters<WhatsAppBridgePort["sendText"]>[0][],
+    setMapping: [] as [string, string][],
+  };
+  const unused = async () => assert.fail("not expected in this test");
+  const port: WhatsAppBridgePort = {
+    connect: unused,
+    createGroup: async (request) => {
+      calls.create.push(request);
+      return { group: bridgeGroup(), inviteLink: LINK };
     },
-    info: async (groupId) => ({
-      groupId,
-      participantWaIds: ["61412345678"],
-      subject: "Royal Constructions · 12 Smith St",
-      suspended: false,
-    }),
-    inviteLink: async () => "https://chat.whatsapp.com/LINK",
-    list: async () => [],
-    sendText: async () => {
-      calls.sendText += 1;
-      return { providerMessageId: `wamid.group.${calls.sendText}` };
+    downloadMedia: unused,
+    group: async (jid) => bridgeGroup(jid),
+    inviteLink: async () => LINK,
+    listGroups: async () => [bridgeGroup()],
+    logout: unused,
+    qr: unused,
+    removeMapping: async (jid) => void calls.removeMapping.push(jid),
+    replaceMappings: async (mappings) => {
+      calls.replace.push([...mappings]);
+      return { added: mappings.length, changed: 0, removed: 0 };
     },
+    sendText: async (message) => {
+      calls.send.push(message);
+      return {
+        messageId: `3EB0SENT${calls.send.length}`,
+        replayed: false,
+        sentAt: new Date(),
+      };
+    },
+    session: unused,
+    setMapping: async (jid, projectId) =>
+      void calls.setMapping.push([jid, projectId]),
     ...overrides,
   };
   return { calls, port };
-}
-
-function whatsappPort(groups: WhatsAppGroupsPort): WhatsAppPort {
-  return {
-    channel: channel(),
-    groups,
-    sendTemplate: async () => ({ providerMessageId: "wamid.t" }),
-    sendText: async () => ({ providerMessageId: "wamid.x" }),
-  };
 }
 
 /** A project with two owners, one with a phone, and its lead. */
@@ -134,15 +179,31 @@ function seedProject() {
 
 function activeGroup(fake: ReturnType<typeof fakeWhatsAppDb>) {
   return fake.seed("projectWhatsAppGroup", {
-    businessDisplayNumber: OFFICE.displayNumber,
-    businessPhoneNumberId: OFFICE.phoneNumberId,
-    inviteLink: "https://chat.whatsapp.com/LINK",
+    inviteLink: LINK,
     origin: "CREATED",
     projectId: "p1",
-    providerGroupId: "GROUP-1",
+    providerGroupId: GROUP,
     status: "ACTIVE",
     subject: "Royal Constructions · 12 Smith St, Kellyville",
   });
+}
+
+function groupMessage(
+  overrides: Partial<InboundProjectWhatsAppMessage> = {},
+): InboundProjectWhatsAppMessage {
+  return {
+    fromMe: false,
+    groupJid: GROUP,
+    media: null,
+    providerMessageId: "3EB0IN1",
+    senderJid: "123456789012345@lid",
+    senderName: "Ann",
+    senderPhoneE164: "+61412345678",
+    sentAt: new Date("2026-11-21T01:00:00Z"),
+    text: "Is the slab poured?",
+    unsupportedType: null,
+    ...overrides,
+  };
 }
 
 describe("inbound media", () => {
@@ -322,342 +383,167 @@ describe("copying media into storage", () => {
   });
 });
 
-describe("project groups", () => {
-  test("with groups off, asking for one is refused and writes nothing", async () => {
+describe("creating a project group", () => {
+  test("with no bridge configured it is refused and writes nothing", async () => {
     const fake = seedProject();
     await assert.rejects(
-      requestProjectWhatsAppGroup(admin, { projectId: "p1" }, fake.db, {
-        channel: channel(false),
+      createProjectWhatsAppGroup(admin, { projectId: "p1" }, fake.db, {
+        bridge: null,
       }),
       (error: unknown) =>
         error instanceof DomainTransitionError
-        && /Official Business Account/.test(error.message),
+        && /bridge isn't configured/.test(error.message),
     );
     assert.deepEqual(fake.rows("projectWhatsAppGroup"), []);
   });
 
-  test("two requests and two workflow runs ask Meta for one group", async () => {
+  test("adds the owners with a mobile, maps it to the project, and links it", async () => {
     const fake = seedProject();
-    const first = await requestProjectWhatsAppGroup(
+    const { calls, port } = bridgePort();
+    const result = await createProjectWhatsAppGroup(
       admin,
       { projectId: "p1" },
       fake.db,
-      { channel: channel() },
+      { bridge: port },
     );
-    const second = await requestProjectWhatsAppGroup(
-      systemPrincipal("project-created"),
-      { projectId: "p1" },
-      fake.db,
-      { channel: channel() },
-    );
-    assert.equal(first.group.id, second.group.id);
-    assert.equal(fake.rows("projectWhatsAppGroup").length, 1);
+    assert.equal(calls.create.length, 1);
+    // Ann has a mobile; Bob gave none.
+    assert.deepEqual(calls.create[0].participantsE164, ["+61412345678"]);
+    // The bridge maps it before answering, so no early message is lost.
+    assert.equal(calls.create[0].projectId, "p1");
     assert.equal(
-      first.group.subject,
+      calls.create[0].subject,
       "Royal Constructions · 12 Smith St, Kellyville",
     );
+    assert.equal(result.ownersAsked, 1);
+    assert.equal(result.group.status, "ACTIVE");
+    assert.equal(result.group.providerGroupId, GROUP);
+    assert.equal(result.group.inviteLink, LINK);
+    assert.equal(fake.rows("projectWhatsAppParticipant").length, 2);
+    assert.equal(fake.rows("outboxEvent")[0].status, "SUCCEEDED");
 
-    const { calls, port } = groupsPort();
-    const a = await submitProjectWhatsAppGroupCreate(
-      workflow,
-      { groupRowId: first.group.id },
-      fake.db,
-      { groups: port },
+    await assert.rejects(
+      createProjectWhatsAppGroup(admin, { projectId: "p1" }, fake.db, {
+        bridge: port,
+      }),
+      (error: unknown) =>
+        error instanceof DomainTransitionError
+        && /already has a WhatsApp group/.test(error.message),
     );
-    const b = await submitProjectWhatsAppGroupCreate(
-      workflow,
-      { groupRowId: first.group.id },
-      fake.db,
-      { groups: port },
-    );
-    assert.equal(a.outcome, "submitted");
-    assert.equal(b.outcome, "already_submitted");
-    assert.equal(calls.create, 1);
-
-    // Meta confirms on the lifecycle webhook, naming the request.
-    await applyWhatsAppGroupEvent(
-      webhook,
-      {
-        at: new Date(),
-        groupId: "GROUP-1",
-        inviteLink: "https://chat.whatsapp.com/LINK",
-        kind: "created",
-        requestId: "REQ-1",
-        subject: null,
-      },
-      fake.db,
-    );
-    const [row] = fake.rows("projectWhatsAppGroup");
-    assert.equal(row.status, "ACTIVE");
-    assert.equal(row.providerGroupId, "GROUP-1");
-    assert.equal(row.inviteLink, "https://chat.whatsapp.com/LINK");
+    assert.equal(calls.create.length, 1, "never a second group");
   });
 
-  test("a refused create is reported as failed with Meta's reason", async () => {
+  test("a refusal is reported with the bridge's reason, and pressing again is a fresh attempt", async () => {
     const fake = seedProject();
-    const { group } = await requestProjectWhatsAppGroup(
-      admin,
-      { projectId: "p1" },
-      fake.db,
-      { channel: channel() },
-    );
-    const { port } = groupsPort({
-      create: async () => {
+    const refusing = bridgePort({
+      createGroup: async () => {
         throw new WhatsAppSendError(
-          "Not an Official Business Account.",
+          "The WhatsApp bridge isn't connected.",
           "not_sent",
+          { code: "not_connected" },
         );
       },
     });
-    const result = await submitProjectWhatsAppGroupCreate(
-      workflow,
-      { groupRowId: group.id },
-      fake.db,
-      { groups: port },
+    await assert.rejects(
+      createProjectWhatsAppGroup(admin, { projectId: "p1" }, fake.db, {
+        bridge: refusing.port,
+      }),
+      (error: unknown) =>
+        error instanceof DomainSideEffectError
+        && error.retryable === true
+        && /isn't connected/.test(error.message),
     );
-    assert.equal(result.outcome, "refused");
-    const [row] = fake.rows("projectWhatsAppGroup");
-    assert.equal(row.status, "FAILED");
-    assert.match(String(row.failureReason), /Official Business Account/);
-  });
+    const [failed] = fake.rows("projectWhatsAppGroup");
+    assert.equal(failed.status, "FAILED");
+    assert.match(String(failed.failureReason), /isn't connected/);
 
-  test("an unconfirmed create is found by its subject instead of made twice", async () => {
-    const fake = seedProject();
-    const { group } = await requestProjectWhatsAppGroup(
+    const { calls, port } = bridgePort();
+    const retried = await createProjectWhatsAppGroup(
       admin,
       { projectId: "p1" },
       fake.db,
-      { channel: channel() },
+      { bridge: port },
     );
-    const requested = new Date("2026-11-04T00:00:00Z");
-    const { calls, port } = groupsPort({
-      create: async () => {
+    assert.equal(retried.group.status, "ACTIVE");
+    assert.equal(calls.create.length, 1);
+    assert.deepEqual(
+      fake.rows("outboxEvent").map((event) => event.key),
+      [
+        `project-whatsapp-group:${failed.id}:1`,
+        `project-whatsapp-group:${failed.id}:2`,
+      ],
+    );
+  });
+
+  test("an unconfirmed create is not repeated: the office is told where to look", async () => {
+    const fake = seedProject();
+    const { port } = bridgePort({
+      createGroup: async () => {
         throw new WhatsAppSendError("Timed out.", "ambiguous");
       },
-      list: async () => [
-        {
-          createdAt: new Date("2026-11-04T00:00:30Z"),
-          groupId: "GROUP-9",
-          subject: group.subject,
-        },
-      ],
     });
-    const submitted = await submitProjectWhatsAppGroupCreate(
-      workflow,
-      { groupRowId: group.id, now: requested },
-      fake.db,
-      { groups: port },
+    await assert.rejects(
+      createProjectWhatsAppGroup(admin, { projectId: "p1" }, fake.db, {
+        bridge: port,
+      }),
+      (error: unknown) =>
+        error instanceof DomainSideEffectError
+        && error.retryable === false
+        && /Admin › WhatsApp bridge/.test(error.message),
     );
-    assert.equal(submitted.outcome, "unconfirmed");
-    const resolved = await resolveCreatingProjectWhatsAppGroup(
-      workflow,
-      { groupRowId: group.id, now: new Date("2026-11-04T00:01:00Z") },
-      fake.db,
-      { groups: port },
-    );
-    assert.equal(resolved.outcome, "active");
-    assert.equal(calls.create, 0, "the throwing create is not counted");
-    assert.equal(
-      fake.rows("projectWhatsAppGroup")[0].providerGroupId,
-      "GROUP-9",
-    );
+    assert.equal(fake.rows("projectWhatsAppGroup")[0].status, "FAILED");
+    assert.equal(fake.rows("outboxEvent")[0].status, "FAILED");
   });
 
-  test("an unsent request's deadline runs from the request, not the last restart", async () => {
+  test("a create that died mid-way is marked failed past the deadline, not asked again", async () => {
     const fake = seedProject();
-    const now = new Date("2026-11-04T02:00:00Z");
-    const group = fake.seed("projectWhatsAppGroup", {
-      businessDisplayNumber: OFFICE.displayNumber,
-      businessPhoneNumberId: OFFICE.phoneNumberId,
-      createAttempt: 1,
-      createdAt: new Date("2026-11-04T01:00:00Z"),
+    fake.seed("projectWhatsAppGroup", {
+      createdAt: new Date(Date.now() - GROUP_CREATE_DEADLINE_MS - 1000),
       origin: "CREATED",
       projectId: "p1",
-      requestedAt: null,
       status: "CREATING",
       subject: "Royal Constructions · 12 Smith St, Kellyville",
-      // A restart a minute ago wrote the row.
-      updatedAt: new Date("2026-11-04T01:59:00Z"),
     });
-    const resolved = await resolveCreatingProjectWhatsAppGroup(
-      workflow,
-      { groupRowId: String(group.id), now },
-      fake.db,
-      { groups: null },
+    const { calls, port } = bridgePort();
+    await assert.rejects(
+      createProjectWhatsAppGroup(admin, { projectId: "p1" }, fake.db, {
+        bridge: port,
+      }),
+      DomainTransitionError,
     );
-    assert.equal(resolved.outcome, "failed");
+    assert.equal(calls.create.length, 0);
     assert.equal(fake.rows("projectWhatsAppGroup")[0].status, "FAILED");
   });
+});
 
-  test("a create WhatsApp confirms after it was given up on becomes the project's group", async () => {
+describe("linking and unlinking a group", () => {
+  test("tells the bridge first, then links it with its members", async () => {
     const fake = seedProject();
-    const { group } = await requestProjectWhatsAppGroup(
-      admin,
-      { projectId: "p1" },
-      fake.db,
-      { channel: channel() },
-    );
-    const { port } = groupsPort();
-    const requested = new Date("2026-11-04T00:00:00Z");
-    await submitProjectWhatsAppGroupCreate(
-      workflow,
-      { groupRowId: group.id, now: requested },
-      fake.db,
-      { groups: port },
-    );
-    const late = await resolveCreatingProjectWhatsAppGroup(
-      workflow,
-      { groupRowId: group.id, now: new Date("2026-11-04T00:31:00Z") },
-      fake.db,
-      { groups: port },
-    );
-    assert.equal(late.outcome, "failed");
-
-    await applyWhatsAppGroupEvent(
-      webhook,
-      {
-        at: new Date("2026-11-04T00:40:00Z"),
-        groupId: "GROUP-1",
-        inviteLink: "https://chat.whatsapp.com/LINK",
-        kind: "created",
-        requestId: "REQ-1",
-        subject: null,
+    const { calls, port } = bridgePort();
+    const order: string[] = [];
+    const watched = {
+      ...port,
+      setMapping: async (jid: string, projectId: string) => {
+        order.push(`map:${fake.rows("projectWhatsAppGroup").length}`);
+        await port.setMapping(jid, projectId);
       },
-      fake.db,
-    );
-    const [row] = fake.rows("projectWhatsAppGroup");
-    assert.equal(row.status, "ACTIVE");
-    assert.equal(row.failureReason, null);
-    assert.equal(row.inviteLink, "https://chat.whatsapp.com/LINK");
-  });
-
-  test("a late confirmation without a link goes back to CREATING, and the resolver activates it", async () => {
-    const fake = seedProject();
-    const { group } = await requestProjectWhatsAppGroup(
-      admin,
-      { projectId: "p1" },
-      fake.db,
-      { channel: channel() },
-    );
-    const { port } = groupsPort();
-    await submitProjectWhatsAppGroupCreate(
-      workflow,
-      { groupRowId: group.id, now: new Date("2026-11-04T00:00:00Z") },
-      fake.db,
-      { groups: port },
-    );
-    await resolveCreatingProjectWhatsAppGroup(
-      workflow,
-      { groupRowId: group.id, now: new Date("2026-11-04T00:31:00Z") },
-      fake.db,
-      { groups: port },
-    );
-    assert.equal(fake.rows("projectWhatsAppGroup")[0].status, "FAILED");
-
-    await applyWhatsAppGroupEvent(
-      webhook,
-      {
-        at: new Date("2026-11-04T00:40:00Z"),
-        groupId: "GROUP-1",
-        inviteLink: null,
-        kind: "created",
-        requestId: "REQ-1",
-        subject: null,
-      },
-      fake.db,
-    );
-    // Not left FAILED with its reason wiped: the sweep picks CREATING up.
-    assert.equal(fake.rows("projectWhatsAppGroup")[0].status, "CREATING");
-
-    const resolved = await resolveCreatingProjectWhatsAppGroup(
-      workflow,
-      { groupRowId: group.id, now: new Date("2026-11-04T00:41:00Z") },
-      fake.db,
-      { groups: port },
-    );
-    assert.equal(resolved.outcome, "active");
-    const [row] = fake.rows("projectWhatsAppGroup");
-    assert.equal(row.providerGroupId, "GROUP-1");
-    assert.equal(row.inviteLink, "https://chat.whatsapp.com/LINK");
-  });
-
-  test("asking again after a failed group starts the new one with no members", async () => {
-    const fake = seedProject();
-    const old = fake.seed("projectWhatsAppGroup", {
-      businessDisplayNumber: OFFICE.displayNumber,
-      businessPhoneNumberId: OFFICE.phoneNumberId,
-      createAttempt: 1,
-      failureReason: "WhatsApp couldn't create the group: no.",
-      origin: "CREATED",
-      projectId: "p1",
-      status: "FAILED",
-      subject: "Royal Constructions · 12 Smith St, Kellyville",
-    });
-    fake.seed("projectWhatsAppParticipant", {
-      groupId: old.id,
-      joinedAt: new Date("2026-10-01T00:00:00Z"),
-      leftAt: null,
-      phoneE164: "+61412345678",
-      waId: "61412345678",
-    });
-    const { group } = await requestProjectWhatsAppGroup(
-      admin,
-      { projectId: "p1" },
-      fake.db,
-      { channel: channel() },
-    );
-    assert.equal(group.id, old.id);
-    assert.equal(group.status, "CREATING");
-    assert.deepEqual(fake.rows("projectWhatsAppParticipant"), []);
-  });
-
-  test("a group message is the project's; an unlinked group's waits and is filed on link", async () => {
-    const fake = seedProject();
-    const message = {
-      businessPhoneNumberId: OFFICE.phoneNumberId,
-      fromWaId: "61412345678",
-      groupId: "GROUP-7",
-      profileName: "Ann",
-      providerMessageId: "wamid.g1",
-      sentAt: new Date("2026-11-04T01:00:00Z"),
-      text: "Is the slab poured?",
-      type: "text",
     };
-    const waiting = await recordInboundProjectWhatsAppMessage(
-      webhook,
-      message,
-      fake.transactionalDb,
-    );
-    assert.equal(waiting.outcome, "unlinked");
-    const replay = await recordInboundProjectWhatsAppMessage(
-      webhook,
-      message,
-      fake.transactionalDb,
-    );
-    assert.equal(replay.outcome, "duplicate");
-
-    const { port } = groupsPort({
-      list: async () => [
-        { createdAt: null, groupId: "GROUP-7", subject: "Lee" },
-      ],
-    });
-    const linked = await linkProjectWhatsAppGroup(
+    const result = await linkProjectWhatsAppGroup(
       admin,
-      { projectId: "p1", providerGroupId: "GROUP-7" },
+      { groupJid: GROUP, projectId: "p1" },
       fake.transactionalDb,
-      { channel: channel(), groups: port },
+      { bridge: watched },
     );
-    assert.equal(linked.filedMessages, 1);
-    assert.equal(linked.group.status, "ACTIVE");
-    const [filed] = fake.rows("projectWhatsAppMessage");
-    assert.equal(filed.body, "Is the slab poured?");
-    assert.equal(fake.rows("whatsAppUnmatchedMessage")[0].status, "ATTACHED");
+    assert.deepEqual(order, ["map:0"], "mapped before any row was written");
+    assert.deepEqual(calls.setMapping, [[GROUP, "p1"]]);
+    assert.equal(result.group.status, "ACTIVE");
+    assert.equal(result.group.origin, "LINKED");
 
     const thread = await getProjectWhatsAppThread(
       admin,
       { projectId: "p1" },
       fake.db,
-      { channel: channel() },
+      { bridge: port },
     );
     // Ann's number is in the group; Bob gave none.
     assert.deepEqual(
@@ -669,58 +555,362 @@ describe("project groups", () => {
     );
   });
 
-  test("a group that is not the business's own is refused, and nothing is written", async () => {
+  test("a group Royal's number is not in is refused, and nothing is written or mapped", async () => {
     const fake = seedProject();
-    const { port } = groupsPort({ list: async () => [] });
+    const { calls, port } = bridgePort({
+      group: async () => {
+        throw new WhatsAppBridgeError(
+          "That group isn't on this WhatsApp account.",
+          "not_found",
+          404,
+        );
+      },
+    });
     await assert.rejects(
       linkProjectWhatsAppGroup(
         admin,
-        { projectId: "p1", providerGroupId: "SOMEONE-ELSES" },
+        { groupJid: OTHER_GROUP, projectId: "p1" },
         fake.transactionalDb,
-        { channel: channel(), groups: port },
+        { bridge: port },
       ),
       DomainValidationError,
     );
     assert.deepEqual(fake.rows("projectWhatsAppGroup"), []);
+    assert.deepEqual(calls.setMapping, []);
+  });
+
+  test("a group already on another project is refused", async () => {
+    const fake = seedProject();
+    fake.seed("project", {
+      customerId: "c1",
+      id: "p2",
+      leadId: 2,
+      location: "1 Other St",
+      name: "Other",
+      siteManagerId: null,
+    });
+    fake.seed("projectWhatsAppGroup", {
+      origin: "CREATED",
+      projectId: "p2",
+      providerGroupId: GROUP,
+      status: "ACTIVE",
+      subject: "Other",
+    });
+    const { calls, port } = bridgePort();
+    await assert.rejects(
+      linkProjectWhatsAppGroup(
+        admin,
+        { groupJid: GROUP, projectId: "p1" },
+        fake.transactionalDb,
+        { bridge: port },
+      ),
+      (error: unknown) =>
+        error instanceof DomainTransitionError
+        && /another project/.test(error.message),
+    );
+    assert.deepEqual(calls.setMapping, []);
+  });
+
+  test("a link whose save fails takes the bridge's mapping back", async () => {
+    const fake = seedProject();
+    const { calls, port } = bridgePort();
+    const failing = new Proxy(fake.transactionalDb, {
+      get: (target, key) =>
+        key === "$transaction"
+          ? async () => {
+              throw new Error("database unavailable");
+            }
+          : Reflect.get(target, key),
+    });
+    await assert.rejects(
+      linkProjectWhatsAppGroup(
+        admin,
+        { groupJid: GROUP, projectId: "p1" },
+        failing,
+        { bridge: port },
+      ),
+      /database unavailable/,
+    );
+    assert.deepEqual(calls.setMapping, [[GROUP, "p1"]]);
+    assert.deepEqual(calls.removeMapping, [GROUP]);
+  });
+
+  test("unlinking keeps the history, releases the group and tells the bridge", async () => {
+    const fake = seedProject();
+    activeGroup(fake);
+    const { calls, port } = bridgePort();
+    const result = await unlinkProjectWhatsAppGroup(
+      admin,
+      { projectId: "p1" },
+      fake.db,
+      { bridge: port },
+    );
+    assert.equal(result.bridgeUpdated, true);
+    assert.equal(result.group.status, "UNLINKED");
+    assert.equal(result.group.providerGroupId, null);
+    assert.deepEqual(calls.removeMapping, [GROUP]);
+  });
+
+  test("an unlink the bridge could not hear still unlinks, and says so", async () => {
+    const fake = seedProject();
+    activeGroup(fake);
+    const { port } = bridgePort({
+      removeMapping: async () => {
+        throw new WhatsAppBridgeError("unreachable", "unreachable");
+      },
+    });
+    const result = await unlinkProjectWhatsAppGroup(
+      admin,
+      { projectId: "p1" },
+      fake.db,
+      { bridge: port },
+    );
+    assert.equal(result.bridgeUpdated, false);
+    assert.equal(fake.rows("projectWhatsAppGroup")[0].status, "UNLINKED");
+  });
+
+  test("resync hands the bridge exactly the live links", async () => {
+    const fake = seedProject();
+    activeGroup(fake);
+    fake.seed("project", {
+      customerId: "c1",
+      id: "p2",
+      leadId: 2,
+      location: "1 Other St",
+      name: "Other",
+      siteManagerId: null,
+    });
+    fake.seed("projectWhatsAppGroup", {
+      origin: "LINKED",
+      projectId: "p2",
+      providerGroupId: null,
+      status: "UNLINKED",
+      subject: "Old",
+    });
+    const { calls, port } = bridgePort();
+    const result = await reconcileWhatsAppBridgeMappings(admin, fake.db, {
+      bridge: port,
+    });
+    assert.deepEqual(calls.replace, [[{ groupJid: GROUP, projectId: "p1" }]]);
+    assert.equal(result.total, 1);
+  });
+
+  test("the group list says which project each group is on, and when the bridge disagrees", async () => {
+    const fake = seedProject();
+    activeGroup(fake);
+    const { port } = bridgePort({
+      listGroups: async () => [
+        { ...bridgeGroup(GROUP), mappedProjectId: "p1" },
+        { ...bridgeGroup(OTHER_GROUP), mappedProjectId: "p9" },
+      ],
+    });
+    const groups = await listWhatsAppBridgeGroups(admin, fake.db, {
+      bridge: port,
+    });
+    assert.deepEqual(
+      groups.map((group) => [
+        group.groupJid,
+        group.linkedProject?.id ?? null,
+        group.mappingDrift,
+      ]),
+      [
+        [GROUP, "p1", false],
+        [OTHER_GROUP, null, true],
+      ],
+    );
+  });
+});
+
+describe("messages from the bridge", () => {
+  test("a message in a linked group is the project's, once", async () => {
+    const fake = seedProject();
+    activeGroup(fake);
+    const first = await recordInboundProjectWhatsAppMessage(
+      bridgeWebhook,
+      groupMessage(),
+      fake.transactionalDb,
+    );
+    assert.equal(first.outcome, "attached");
+    const replay = await recordInboundProjectWhatsAppMessage(
+      bridgeWebhook,
+      groupMessage(),
+      fake.transactionalDb,
+    );
+    assert.equal(replay.outcome, "duplicate");
+    const [message] = fake.rows("projectWhatsAppMessage");
+    assert.equal(message.direction, "INBOUND");
+    assert.equal(message.body, "Is the slab poured?");
+    assert.equal(fake.rows("projectWhatsAppGroup")[0].unreadCount, 1);
+  });
+
+  test("a group no project has linked is not filed anywhere", async () => {
+    const fake = seedProject();
+    const result = await recordInboundProjectWhatsAppMessage(
+      bridgeWebhook,
+      groupMessage({ groupJid: OTHER_GROUP }),
+      fake.transactionalDb,
+    );
+    assert.equal(result.outcome, "unknown_group");
+    assert.deepEqual(fake.rows("projectWhatsAppMessage"), []);
+    assert.deepEqual(fake.rows("whatsAppUnmatchedMessage"), []);
+  });
+
+  test("Royal's own words from the phone are outbound and not unread", async () => {
+    const fake = seedProject();
+    activeGroup(fake);
+    await recordInboundProjectWhatsAppMessage(
+      bridgeWebhook,
+      groupMessage({ fromMe: true, senderJid: "61280001234@s.whatsapp.net" }),
+      fake.transactionalDb,
+    );
+    const [message] = fake.rows("projectWhatsAppMessage");
+    assert.equal(message.direction, "OUTBOUND");
+    assert.equal(message.status, "SENT");
+    assert.equal(fake.rows("projectWhatsAppGroup")[0].unreadCount, 0);
+  });
+
+  test("a file the bridge has waits to be copied; one it could not download is failed with why", async () => {
+    const fake = seedProject();
+    activeGroup(fake);
+    const media = {
+      caption: null,
+      fileName: null,
+      mimeType: "image/jpeg",
+      providerMediaId: "3EB0PHOTO",
+      sha256: null,
+      type: "IMAGE" as const,
+      voice: false,
+    };
+    const stored = await recordInboundProjectWhatsAppMessage(
+      bridgeWebhook,
+      groupMessage({
+        media: { ...media, unavailableReason: null },
+        providerMessageId: "3EB0PHOTO",
+        text: "",
+      }),
+      fake.transactionalDb,
+    );
+    assert.ok(stored.outcome === "attached" && stored.mediaId);
+    const tooBig = await recordInboundProjectWhatsAppMessage(
+      bridgeWebhook,
+      groupMessage({
+        media: {
+          ...media,
+          providerMediaId: "3EB0BIG",
+          unavailableReason: "The file is larger than the bridge keeps.",
+        },
+        providerMessageId: "3EB0BIG",
+        text: "",
+      }),
+      fake.transactionalDb,
+    );
+    assert.equal(tooBig.outcome === "attached" && tooBig.mediaId, null);
+    assert.deepEqual(
+      fake
+        .rows("whatsAppMedia")
+        .map((row) => [row.providerMediaId, row.status]),
+      [
+        ["3EB0PHOTO", "PENDING"],
+        ["3EB0BIG", "FAILED"],
+      ],
+    );
+    assert.equal(fake.rows("projectWhatsAppMessage")[0].body, "Photo");
+  });
+
+  test("only the bridge webhook may record one", async () => {
+    const fake = seedProject();
+    activeGroup(fake);
+    await assert.rejects(
+      recordInboundProjectWhatsAppMessage(
+        admin,
+        groupMessage(),
+        fake.transactionalDb,
+      ),
+      DomainAuthorizationError,
+    );
+  });
+
+  test("members come and go as the bridge reports, and a subject change is kept", async () => {
+    const fake = seedProject();
+    activeGroup(fake);
+    const at = new Date("2026-11-21T02:00:00Z");
+    await applyWhatsAppGroupEvent(
+      bridgeWebhook,
+      {
+        at,
+        groupJid: GROUP,
+        kind: "participants_added",
+        participants: [
+          { jid: "61499999999@s.whatsapp.net", phoneE164: "+61499999999" },
+        ],
+      },
+      fake.db,
+    );
+    await applyWhatsAppGroupEvent(
+      bridgeWebhook,
+      {
+        at,
+        groupJid: GROUP,
+        kind: "participants_removed",
+        participants: [{ jid: "61499999999@s.whatsapp.net", phoneE164: null }],
+      },
+      fake.db,
+    );
+    await applyWhatsAppGroupEvent(
+      bridgeWebhook,
+      { groupJid: GROUP, kind: "subject_changed", subject: "Lee build" },
+      fake.db,
+    );
+    const [participant] = fake.rows("projectWhatsAppParticipant");
+    assert.equal(participant.leftAt?.toString(), at.toString());
+    assert.equal(fake.rows("projectWhatsAppGroup")[0].subject, "Lee build");
+    const unknown = await applyWhatsAppGroupEvent(
+      bridgeWebhook,
+      { groupJid: OTHER_GROUP, kind: "subject_changed", subject: "x" },
+      fake.db,
+    );
+    assert.equal(unknown.outcome, "unknown_group");
   });
 });
 
 describe("sending into a group", () => {
-  test("the same key sends once and says so", async () => {
+  test("the same key sends once, and the bridge gets the same key", async () => {
     const fake = seedProject();
     activeGroup(fake);
-    const { calls, port } = groupsPort();
-    const whatsapp = whatsappPort(port);
+    const { calls, port } = bridgePort();
+    const input = {
+      body: "Concrete pour Friday 7am.",
+      idempotencyKey: "k1",
+      projectId: "p1",
+    };
     const first = await sendProjectWhatsAppMessage(
       admin,
-      {
-        body: "Concrete pour Friday 7am.",
-        idempotencyKey: "k1",
-        projectId: "p1",
-      },
+      input,
       fake.transactionalDb,
-      { whatsapp },
+      {
+        bridge: port,
+      },
     );
     const replay = await sendProjectWhatsAppMessage(
       admin,
-      {
-        body: "Concrete pour Friday 7am.",
-        idempotencyKey: "k1",
-        projectId: "p1",
-      },
+      input,
       fake.transactionalDb,
-      { whatsapp },
+      {
+        bridge: port,
+      },
     );
     assert.equal(first.alreadySent, false);
     assert.equal(first.message.status, "SENT");
     assert.equal(replay.alreadySent, true);
-    assert.equal(calls.sendText, 1);
+    assert.equal(calls.send.length, 1);
+    assert.equal(calls.send[0].groupJid, GROUP);
+    assert.equal(calls.send[0].idempotencyKey, "project-whatsapp:p1:k1");
   });
 
   test("an ambiguous failure is held for a person, not retried", async () => {
     const fake = seedProject();
     activeGroup(fake);
-    const { port } = groupsPort({
+    const { port } = bridgePort({
       sendText: async () => {
         throw new WhatsAppSendError("Timed out.", "ambiguous");
       },
@@ -730,7 +920,7 @@ describe("sending into a group", () => {
         admin,
         { body: "Hello", idempotencyKey: "k2", projectId: "p1" },
         fake.transactionalDb,
-        { whatsapp: whatsappPort(port) },
+        { bridge: port },
       ),
       (error: unknown) =>
         error instanceof DomainSideEffectError && error.retryable === false,
@@ -744,10 +934,32 @@ describe("sending into a group", () => {
         admin,
         { body: "Hello", idempotencyKey: "k2", projectId: "p1" },
         fake.transactionalDb,
-        { whatsapp: whatsappPort(port) },
+        { bridge: port },
       ),
       DomainTransitionError,
     );
+  });
+
+  test("an unlinked group takes no messages", async () => {
+    const fake = seedProject();
+    fake.seed("projectWhatsAppGroup", {
+      origin: "LINKED",
+      projectId: "p1",
+      providerGroupId: null,
+      status: "UNLINKED",
+      subject: "Old",
+    });
+    const { calls, port } = bridgePort();
+    await assert.rejects(
+      sendProjectWhatsAppMessage(
+        admin,
+        { body: "Hello", idempotencyKey: "k3", projectId: "p1" },
+        fake.transactionalDb,
+        { bridge: port },
+      ),
+      DomainTransitionError,
+    );
+    assert.equal(calls.send.length, 0);
   });
 });
 

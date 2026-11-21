@@ -5,7 +5,7 @@ import { signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
 import { sendProjectWhatsAppMessage } from "@/lib/domain/projects/whatsapp/send";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
-import { createWhatsAppPortFromEnv } from "@/lib/whatsapp/cloud-api";
+import { createWhatsAppBridgePortFromEnv } from "@/lib/whatsapp-bridge/client";
 import {
   badRequestResponse,
   errorResponse,
@@ -45,7 +45,7 @@ export async function POST(
       principal,
       { body: parsed.data.body, idempotencyKey, projectId },
       prisma,
-      { whatsapp: createWhatsAppPortFromEnv() },
+      { bridge: createWhatsAppBridgePortFromEnv() },
     );
     return successResponse(result);
   } catch (error) {

@@ -22,9 +22,11 @@ import { updateMilestone } from "@/lib/domain/projects/milestones";
 import { assessProjectAttention } from "@/lib/domain/projects/attention";
 import { draftProjectWhatsAppInvite } from "@/lib/domain/projects/whatsapp/invite";
 import {
+  createProjectWhatsAppGroup,
   linkProjectWhatsAppGroup,
-  listLinkableWhatsAppGroups,
-  requestProjectWhatsAppGroup,
+  listWhatsAppBridgeGroups,
+  refreshProjectWhatsAppInviteLink,
+  unlinkProjectWhatsAppGroup,
 } from "@/lib/domain/projects/whatsapp/groups";
 import { dismissTradieScheduleAlerts } from "@/lib/domain/tradies/alerts";
 import { sendTradieScheduleReminder } from "@/lib/domain/tradies/reminders";
@@ -221,20 +223,26 @@ test("the booking writes the screens and Eve reach all check the booking rule", 
 
 test("a site manager posts in the WhatsApp group but does not set one up", async () => {
   const sm = siteManagerPrincipal(SM);
-  const context = { channel: null, groups: null };
-  await refusedBeforeReading("requestProjectWhatsAppGroup", (db) =>
-    requestProjectWhatsAppGroup(sm, { projectId: "p_1" }, db, context),
+  const context = { bridge: null };
+  await refusedBeforeReading("createProjectWhatsAppGroup", (db) =>
+    createProjectWhatsAppGroup(sm, { projectId: "p_1" }, db, context),
   );
-  await refusedBeforeReading("listLinkableWhatsAppGroups", (db) =>
-    listLinkableWhatsAppGroups(sm, { projectId: "p_1" }, db, context),
+  await refusedBeforeReading("listWhatsAppBridgeGroups", (db) =>
+    listWhatsAppBridgeGroups(sm, db, context),
   );
   await refusedBeforeReading("linkProjectWhatsAppGroup", (db) =>
     linkProjectWhatsAppGroup(
       sm,
-      { projectId: "p_1", providerGroupId: "g" },
+      { groupJid: "120363000000000001@g.us", projectId: "p_1" },
       db as never,
       context,
     ),
+  );
+  await refusedBeforeReading("unlinkProjectWhatsAppGroup", (db) =>
+    unlinkProjectWhatsAppGroup(sm, { projectId: "p_1" }, db, context),
+  );
+  await refusedBeforeReading("refreshProjectWhatsAppInviteLink", (db) =>
+    refreshProjectWhatsAppInviteLink(sm, { projectId: "p_1" }, db, context),
   );
   await refusedBeforeReading("draftProjectWhatsAppInvite", (db) =>
     draftProjectWhatsAppInvite(sm, { projectId: "p_1" }, db),
