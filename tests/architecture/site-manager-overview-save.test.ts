@@ -98,3 +98,17 @@ test("the project detail route answers a refusal, not a 500", () => {
     /try \{[\s\S]*getCachedProjectById[\s\S]*domainErrorResponse\(error\)/,
   );
 });
+
+test("the cached project read asks the read rule before the cache, so a refusal is a real DomainError", () => {
+  // CodeRabbit (#582): an error thrown inside a "use cache" body may reach the
+  // route as something other than the DomainError it was. The read rule is
+  // asked first, outside the cache, for the caller's principal.
+  const data = readFileSync(join(REPO_ROOT, "lib/data/projects.ts"), "utf8");
+  const wrapper = data.slice(
+    data.indexOf("export async function getCachedProjectById"),
+  );
+  assert.match(
+    wrapper.slice(0, wrapper.indexOf("}\n")),
+    /projectReadScope\(principal\);[\s\S]*cachedProjectById\(principal, id\)/,
+  );
+});

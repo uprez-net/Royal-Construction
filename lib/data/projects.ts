@@ -1,5 +1,6 @@
 import "server-only";
 
+import { projectReadScope } from "@/lib/domain/access/projects";
 import { cache } from "react";
 import { cacheTag, cacheLife } from "next/cache";
 
@@ -212,7 +213,13 @@ async function cachedProjectById(principal: DomainPrincipal, id: string) {
 }
 
 export async function getCachedProjectById(id: string) {
-  return cachedProjectById(await currentPrincipal(), id);
+  const principal = await currentPrincipal();
+  // The read rule, asked here and not only inside the cached read below: an
+  // account that may not read projects at all (a GUEST past the proxy) is
+  // refused as a `DomainError` the route can answer, instead of one thrown
+  // inside the cache, which the caller may not see as one.
+  projectReadScope(principal);
+  return cachedProjectById(principal, id);
 }
 
 async function cachedProjectKPIs(principal: DomainPrincipal) {
