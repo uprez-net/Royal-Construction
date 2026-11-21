@@ -1,6 +1,8 @@
 "use client";
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
+import { useState } from "react";
 
 import {
   Card,
@@ -15,7 +17,8 @@ import { SessionCard } from "./session-card";
 
 // Admin › WhatsApp bridge: the bridge's session and login QR (session-card),
 // and every group with the project it belongs to (groups-card). Server state
-// lives in React Query (bridge-queries.ts).
+// lives in React Query (bridge-queries.ts), under this page's own client: the
+// app shell's provider only wraps the notification bell.
 
 export type WhatsAppBridgeAdminConfig = {
   readonly configured: boolean;
@@ -31,15 +34,18 @@ export function WhatsAppBridgeAdmin({
 }: {
   config: WhatsAppBridgeAdminConfig;
 }) {
+  const [queryClient] = useState(() => new QueryClient());
   if (!config.configured) return <NotConfigured config={config} />;
   return (
-    <div className="space-y-6">
-      {config.problems.length > 0 ? (
-        <Problems problems={config.problems} />
-      ) : null}
-      <SessionCard bridgeHost={config.bridgeHost} />
-      <GroupsCard />
-    </div>
+    <QueryClientProvider client={queryClient}>
+      <div className="space-y-6">
+        {config.problems.length > 0 ? (
+          <Problems problems={config.problems} />
+        ) : null}
+        <SessionCard bridgeHost={config.bridgeHost} />
+        <GroupsCard />
+      </div>
+    </QueryClientProvider>
   );
 }
 
