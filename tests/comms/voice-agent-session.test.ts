@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 
 import {
+  CALLER_SILENCE_MS,
   isSpeech,
+  SILENCE_GOODBYE_TIMEOUT_MS,
   START_TIMEOUT_MS,
   TURN_QUIET_MS,
 } from "@/lib/comms/voice-agent/session";
@@ -11,6 +13,9 @@ import {
   VOICE_AGENT_GREETING,
   VOICE_AGENT_GREETING_CUE,
   VOICE_AGENT_MAX_SECONDS,
+  VOICE_AGENT_SILENCE_FOLLOW_UP_CUE,
+  VOICE_AGENT_SILENCE_FOLLOW_UPS,
+  VOICE_AGENT_SILENCE_GOODBYE_CUE,
   VOICE_AGENT_WRAP_UP_INSTRUCTION,
 } from "@/lib/domain/comms/calls/voice-agent";
 
@@ -55,7 +60,7 @@ test("Live starts as Mili, in phone μ-law, with client delegation", async () =>
   const start = h.modelOut[0];
   assert.equal(start.type, "session.start");
   if (start.type !== "session.start") return;
-  assert.equal(start.session.model, "openai/gpt-live-1");
+  assert.equal(start.session.model, "openai/gpt-live-1.1");
   assert.deepEqual(start.session.audio, {
     format: { rate: 8000, type: "audio/pcmu" },
     output: { voice: "marin" },
@@ -346,4 +351,119 @@ test("the transcript is one line per turn, capped", () => {
     { speaker: "caller", text: "x".repeat(30_000) },
   ]);
   assert.ok(long && long.length <= 20_000);
+});
+
+// ── A silent caller ──────────────────────────────────────────────────
+
+const commentary = (h: Awaited<ReturnType<typeof started>>, content: string) =>
+  h.modelOut.filter(
+    (e) => e.type === "session.commentary.append" && e.content === content,
+  ).length;
+
+test("a silent caller is followed up, then told the team will get back to them, and the call ends", async () => {
+  const h = await started();
+  for (let i = 1; i <= VOICE_AGENT_SILENCE_FOLLOW_UPS; i += 1) {
+    h.advance(CALLER_SILENCE_MS);
+    h.fire(CALLER_SILENCE_MS);
+    assert.equal(commentary(h, VOICE_AGENT_SILENCE_FOLLOW_UP_CUE), i);
+  }
+  assert.equal(commentary(h, VOICE_AGENT_SILENCE_GOODBYE_CUE), 0);
+  h.advance(CALLER_SILENCE_MS);
+  h.fire(CALLER_SILENCE_MS);
+  assert.equal(commentary(h, VOICE_AGENT_SILENCE_GOODBYE_CUE), 1);
+  assert.ok(/recorded/.test(VOICE_AGENT_SILENCE_GOODBYE_CUE));
+  assert.ok(/team will get back/.test(VOICE_AGENT_SILENCE_GOODBYE_CUE));
+
+  // She says it; once it has played the call ends, without asking the desk.
+  const asked = h.asked.length;
+  h.session.handleModelEvent({
+    delta: Buffer.alloc(160, SPEECH).toString("base64"),
+    type: "session.output_audio.delta",
+  });
+  h.fire(TURN_QUIET_MS);
+  await h.tick();
+  assert.equal(h.asked.length, asked);
+  assert.equal(h.reports.length, 0, "waits for her goodbye to finish playing");
+  h.fireLast();
+  await h.session.done;
+  assert.equal(h.reports[0]?.outcome, "completed");
+});
+
+test("the caller speaking puts the silence back to the start, follow-ups included", async () => {
+  const h = await started();
+  h.advance(CALLER_SILENCE_MS);
+  h.fire(CALLER_SILENCE_MS);
+  assert.equal(commentary(h, VOICE_AGENT_SILENCE_FOLLOW_UP_CUE), 1);
+
+  // Five seconds later the caller answers.
+  h.advance(5_000);
+  h.session.handleModelEvent({
+    delta: " Sorry, I'm here.",
+    endMs: null,
+    startMs: null,
+    type: "session.input_transcript.delta",
+  });
+  h.advance(CALLER_SILENCE_MS - 5_000);
+  h.fire(CALLER_SILENCE_MS);
+  assert.equal(
+    commentary(h, VOICE_AGENT_SILENCE_FOLLOW_UP_CUE),
+    1,
+    "only three seconds have been quiet",
+  );
+  for (let i = 0; i < VOICE_AGENT_SILENCE_FOLLOW_UPS; i += 1) {
+    h.advance(CALLER_SILENCE_MS);
+    h.fireLast();
+  }
+  assert.equal(
+    commentary(h, VOICE_AGENT_SILENCE_GOODBYE_CUE),
+    0,
+    "the follow-ups start again after the caller spoke",
+  );
+  assert.equal(
+    commentary(h, VOICE_AGENT_SILENCE_FOLLOW_UP_CUE),
+    1 + VOICE_AGENT_SILENCE_FOLLOW_UPS,
+  );
+});
+
+test("caller audio loud enough to be speech counts as the caller talking", async () => {
+  const h = await started();
+  h.advance(CALLER_SILENCE_MS - 1_000);
+  h.session.handleCarrierText(
+    JSON.stringify({
+      event: "media",
+      media: {
+        payload: Buffer.alloc(160, SPEECH).toString("base64"),
+        track: "inbound",
+      },
+    }),
+  );
+  h.advance(1_000);
+  h.fire(CALLER_SILENCE_MS);
+  assert.equal(commentary(h, VOICE_AGENT_SILENCE_FOLLOW_UP_CUE), 0);
+});
+
+test("no follow-up while Mili is still talking", async () => {
+  const h = await started();
+  // Ten seconds of her speech queued at the carrier.
+  h.session.handleModelEvent({
+    delta: Buffer.alloc(80_000, SPEECH).toString("base64"),
+    type: "session.output_audio.delta",
+  });
+  h.advance(CALLER_SILENCE_MS);
+  h.fire(CALLER_SILENCE_MS);
+  assert.equal(commentary(h, VOICE_AGENT_SILENCE_FOLLOW_UP_CUE), 0);
+});
+
+test("a silent caller's call still ends if Mili never says goodbye", async () => {
+  const h = await started();
+  for (let i = 0; i <= VOICE_AGENT_SILENCE_FOLLOW_UPS; i += 1) {
+    h.advance(CALLER_SILENCE_MS);
+    h.fire(CALLER_SILENCE_MS);
+  }
+  assert.equal(commentary(h, VOICE_AGENT_SILENCE_GOODBYE_CUE), 1);
+  h.advance(SILENCE_GOODBYE_TIMEOUT_MS);
+  h.fire(SILENCE_GOODBYE_TIMEOUT_MS);
+  h.fireLast();
+  await h.session.done;
+  assert.equal(h.reports[0]?.outcome, "completed");
 });

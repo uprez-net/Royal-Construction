@@ -35,6 +35,28 @@ export const VOICE_AGENT_WRAP_UP_SECONDS = 45;
 export const VOICE_AGENT_WRAP_UP_INSTRUCTION =
   "Time is nearly up. Briefly confirm the caller's name and number, tell them someone from the team will call them back, and say goodbye.";
 
+/**
+ * The caller saying nothing for this long, after Mili has finished speaking,
+ * is a silence: she follows up, and after VOICE_AGENT_SILENCE_FOLLOW_UPS
+ * unanswered follow-ups she says goodbye and the call ends.
+ */
+export const VOICE_AGENT_SILENCE_SECONDS = 8;
+
+/** Follow-ups Mili tries on a silent caller before ending the call. */
+export const VOICE_AGENT_SILENCE_FOLLOW_UPS = 2;
+
+/** What makes Mili follow up when the caller has gone quiet. */
+export const VOICE_AGENT_SILENCE_FOLLOW_UP_CUE =
+  "The caller has gone quiet and has not said anything for a few seconds. Gently check they are still there, then ask one short follow-up question to keep the conversation going: the next thing you need to take their message, or whether there is anything else you can help with. Keep it to one or two short sentences.";
+
+/**
+ * What Mili is told when the caller has stayed silent through every
+ * follow-up. The call is ended once she has said it, whatever the desk
+ * thinks: a silent caller cannot say they have nothing else.
+ */
+export const VOICE_AGENT_SILENCE_GOODBYE_CUE =
+  "The caller has stayed silent for too long, so the call is ending now. Tell them briefly that their query has been recorded and someone from the team will get back to them, thank them for calling, and say goodbye. Do not ask any more questions.";
+
 /** The transcript kept on the call, at most. Longer ones keep their start. */
 export const VOICE_AGENT_TRANSCRIPT_MAX_CHARS = 20_000;
 

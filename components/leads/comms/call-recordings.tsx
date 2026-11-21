@@ -93,7 +93,6 @@ export function CallRecordings({
               <CallTranscript
                 transcript={recording.transcript}
                 label={`${label} transcript`}
-                speakers={false}
                 defaultOpen={
                   openTranscripts
                   && (recording.kind === "VOICEMAIL" || !call.agentTranscript)
