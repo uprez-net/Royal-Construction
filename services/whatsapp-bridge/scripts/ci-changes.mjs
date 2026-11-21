@@ -19,7 +19,7 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const SERVICE_DIR = path
   .relative(
@@ -30,8 +30,14 @@ const SERVICE_DIR = path
 const WORKFLOW = ".github/workflows/whatsapp-bridge.yml";
 
 const prettier = await import(
-  path.resolve(SERVICE_DIR, "node_modules/prettier/index.mjs")
+  pathToFileURL(path.resolve(SERVICE_DIR, "node_modules/prettier/index.mjs"))
+    .href
 ).catch(() => null);
+if (!prettier) {
+  console.warn(
+    "Prettier is not installed in the service; only whitespace counts as cosmetic.",
+  );
+}
 
 function git(args) {
   return execFileSync("git", args, {
