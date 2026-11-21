@@ -80,7 +80,7 @@ callers the records recognise, within their role (below).
 
 Two models on AI Gateway, and nothing else:
 
-- **Her voice is `openai/gpt-live-1`** (GPT-Live, $3 per session hour), on the
+- **Her voice is `openai/gpt-live-1.1`** (GPT-Live 1.1, $3 per session hour), on the
   Gateway's native Live socket — not the realtime API, where the Gateway
   refuses it with `invalid_model`. The app mints a single-use Live client
   secret with its own Gateway credential (`AI_GATEWAY_API_KEY`, else the
@@ -98,6 +98,17 @@ that Vercel upgrades and keeps alive for the conversation (up to 270 s, inside
 the route's 300 s limit; she is asked to wrap up 45 s before). Each stream must
 present a token the app signed for that call. When she finishes, the
 transcript is saved and the call moves on (hang up, mobile, voicemail).
+
+A caller who goes quiet: 8 s of silence after she has finished speaking and
+she follows up (are they still there, the next thing she needs); after two
+unanswered follow-ups she tells them their query has been recorded and someone
+from the team will get back to them, says goodbye, and the call hangs up.
+Anything from the caller loud enough to be speech starts the count again.
+
+Recording transcripts: speech-to-text gives one block of prose, so a text model
+then splits a call recording into `Royal:` / `Caller:` / `Mili:` / `Contact:`
+lines. The split is kept only if it holds every word of the prose in the same
+order; otherwise the prose is kept. Voicemails stay as prose.
 
 To try her without a phone, the session tests in
 `tests/comms/voice-agent.test.ts` drive one conversation end to end with fakes.

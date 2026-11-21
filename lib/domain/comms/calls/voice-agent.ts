@@ -18,6 +18,8 @@
 // say how to use them: recorded dates are the current schedule, never a
 // promise; nothing beyond what was given; the team for everything else.
 
+import type { AgentOutcome } from "../../ports/comms";
+
 export const VOICE_AGENT_NAME = "Mili";
 
 /**
@@ -34,6 +36,116 @@ export const VOICE_AGENT_WRAP_UP_SECONDS = 45;
 /** What Mili is told when the conversation is nearly out of time. */
 export const VOICE_AGENT_WRAP_UP_INSTRUCTION =
   "Time is nearly up. Briefly confirm the caller's name and number, tell them someone from the team will call them back, and say goodbye.";
+
+/**
+ * The caller saying nothing for this long, after Mili has finished speaking,
+ * is a silence: she follows up, and after VOICE_AGENT_SILENCE_FOLLOW_UPS
+ * unanswered follow-ups she says goodbye and the call ends.
+ */
+export const VOICE_AGENT_SILENCE_SECONDS = 8;
+
+/** Follow-ups Mili tries on a silent caller before ending the call. */
+export const VOICE_AGENT_SILENCE_FOLLOW_UPS = 2;
+
+/** What makes Mili follow up when the caller has gone quiet. */
+export const VOICE_AGENT_SILENCE_FOLLOW_UP_CUE =
+  "The caller has gone quiet and has not said anything for a few seconds. Gently check they are still there, then ask one short follow-up question to keep the conversation going: the next thing you need to take their message, or whether there is anything else you can help with. Keep it to one or two short sentences.";
+
+/**
+ * What Mili is told when the caller has stayed silent through every
+ * follow-up. The call is ended once she has said it, whatever the desk
+ * thinks: a silent caller cannot say they have nothing else.
+ */
+export const VOICE_AGENT_SILENCE_GOODBYE_CUE =
+  "The caller has stayed silent for too long, so the call is ending now. Tell them briefly that their query has been recorded and someone from the team will get back to them, thank them for calling, and say goodbye. Do not ask any more questions.";
+
+/** Mili never saying the silence goodbye: the call ends anyway after this. */
+export const VOICE_AGENT_SILENCE_GOODBYE_TIMEOUT_SECONDS = 15;
+
+/** How a call ended for silence is reported: hang up, nobody rings. */
+export const VOICE_AGENT_SILENCE_OUTCOME: AgentOutcome = "completed";
+
+const SILENCE_MS = VOICE_AGENT_SILENCE_SECONDS * 1000;
+
+/** Where a call stands on caller silence. Times are ms on the session clock. */
+export type VoiceSilenceState = {
+  /** When the caller last spoke (0: not yet). */
+  readonly callerSpokeAt: number;
+  /** When Mili was last cued about a silence, or the session started. */
+  readonly cuedAt: number;
+  /** Follow-ups sent since the caller last spoke. */
+  readonly followUps: number;
+  /** Mili has been told to say goodbye; the call ends once she has. */
+  readonly saidGoodbye: boolean;
+};
+
+/**
+ * What to do about the silence now:
+ * - `wait`: check again in `ms`.
+ * - `follow_up`: cue VOICE_AGENT_SILENCE_FOLLOW_UP_CUE, check again in `ms`.
+ * - `goodbye`: cue VOICE_AGENT_SILENCE_GOODBYE_CUE, then end the call with
+ *   VOICE_AGENT_SILENCE_OUTCOME once she has said it, or after
+ *   VOICE_AGENT_SILENCE_GOODBYE_TIMEOUT_SECONDS.
+ * - `none`: the goodbye is already under way; nothing to watch.
+ */
+export type VoiceSilenceAction =
+  | { readonly kind: "wait"; readonly ms: number }
+  | { readonly kind: "follow_up"; readonly ms: number }
+  | { readonly kind: "goodbye" }
+  | { readonly kind: "none" };
+
+/** The session has started and Mili is greeting the caller. */
+export function voiceSilenceStart(now: number): VoiceSilenceState {
+  return { callerSpokeAt: 0, cuedAt: now, followUps: 0, saidGoodbye: false };
+}
+
+/**
+ * The caller spoke. The count starts again, follow-ups included, and a
+ * goodbye not yet under way is called off: a caller who answers is not hung
+ * up on.
+ */
+export function voiceSilenceCallerSpoke(
+  state: VoiceSilenceState,
+  now: number,
+): VoiceSilenceState {
+  return { ...state, callerSpokeAt: now, followUps: 0, saidGoodbye: false };
+}
+
+/**
+ * The silence decision. Nothing happens while Mili is speaking (her speech
+ * has not finished playing) or waiting on the call desk; the caller silent
+ * for VOICE_AGENT_SILENCE_SECONDS after that gets a follow-up, and after
+ * VOICE_AGENT_SILENCE_FOLLOW_UPS unanswered ones, a single goodbye.
+ */
+export function voiceSilenceCheck(
+  state: VoiceSilenceState,
+  input: {
+    readonly now: number;
+    /** When Mili's queued speech finishes playing. */
+    readonly agentSpeechEndsAt: number;
+    /** The call desk (or a lookup) is still working. */
+    readonly busy: boolean;
+  },
+): { readonly state: VoiceSilenceState; readonly action: VoiceSilenceAction } {
+  if (state.saidGoodbye) return { action: { kind: "none" }, state };
+  if (input.busy) return { action: { kind: "wait", ms: SILENCE_MS }, state };
+  const due =
+    Math.max(input.agentSpeechEndsAt, state.callerSpokeAt, state.cuedAt)
+    + SILENCE_MS;
+  if (input.now < due) {
+    return { action: { kind: "wait", ms: due - input.now }, state };
+  }
+  if (state.followUps < VOICE_AGENT_SILENCE_FOLLOW_UPS) {
+    return {
+      action: { kind: "follow_up", ms: SILENCE_MS },
+      state: { ...state, cuedAt: input.now, followUps: state.followUps + 1 },
+    };
+  }
+  return {
+    action: { kind: "goodbye" },
+    state: { ...state, cuedAt: input.now, saidGoodbye: true },
+  };
+}
 
 /** The transcript kept on the call, at most. Longer ones keep their start. */
 export const VOICE_AGENT_TRANSCRIPT_MAX_CHARS = 20_000;
