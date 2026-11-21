@@ -95,7 +95,7 @@ test("the project detail route answers a refusal, not a 500", () => {
   const handler = get.slice(0, get.indexOf("export async function", 10));
   assert.match(
     handler,
-    /try \{[\s\S]*getCachedProjectById[\s\S]*domainErrorResponse\(error\)/,
+    /try \{[\s\S]*getCachedProjectById[\s\S]*const refusal = domainErrorResponse\(error\);\s*if \(refusal\) return refusal;/,
   );
 });
 
@@ -110,5 +110,29 @@ test("the cached project read asks the read rule before the cache, so a refusal 
   assert.match(
     wrapper.slice(0, wrapper.indexOf("}\n")),
     /projectReadScope\(principal\);[\s\S]*cachedProjectById\(principal, id\)/,
+  );
+});
+
+test("a GUEST's refusal to read projects is a 403 with the domain's words", async () => {
+  // The rule the route's handler maps: projectReadScope refuses a GUEST, and
+  // domainErrorResponse answers that refusal as a 403, not a 500.
+  const { projectReadScope } = await import("@/lib/domain/access/projects");
+  const { domainErrorResponse } = await import("@/lib/http/domain-response");
+  let refusal: unknown;
+  try {
+    projectReadScope({
+      kind: "user",
+      role: "GUEST",
+      userId: "u_guest",
+    } as never);
+  } catch (error) {
+    refusal = error;
+  }
+  const response = domainErrorResponse(refusal);
+  assert.ok(response, "the refusal must map to a response");
+  assert.equal(response.status, 403);
+  assert.match(
+    JSON.stringify(await response.json()),
+    /Viewing projects requires a signed-in user/,
   );
 });
