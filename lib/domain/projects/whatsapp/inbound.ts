@@ -1,5 +1,6 @@
 import {
   ProjectWhatsAppGroupStatus,
+  WhatsAppMediaSource,
   WhatsAppMediaStatus,
   WhatsAppMessageDirection,
   WhatsAppMessageKind,
@@ -16,21 +17,30 @@ import {
   whatsappMediaCreateData,
   type InboundWhatsAppMedia,
 } from "../../whatsapp/media";
+import { GROUP_CREATE_DEADLINE_MS } from "./group-shared";
 
 // A message posted in a project's WhatsApp group, arriving from the bridge.
 //
 // The same promises as a lead's inbound message: never stored twice — the
 // bridge redelivers until the app answers, and WhatsApp's message id is
-// unique — and never dropped for a group the project has. The bridge forwards
-// only groups mapped to a project, so a message for a group the app has no
-// live link for means the two disagree: it is reported, not filed, and the
-// next resync tells the bridge to stop.
+// unique — and never dropped for a group the project has:
+//
+//   - a group still being set up (created, or a link being claimed) has its
+//     messages HELD: the app answers "try again" and the bridge redelivers
+//     once the group is saved, so the first seconds of a new group are kept;
+//   - a group the app has no live link for means the two disagree: reported,
+//     not filed, and the next resync tells the bridge to stop;
+//   - a message the bridge queued for one project is never filed on another
+//     after the group was relinked;
+//   - a message sent before the group was linked is not imported.
 //
 // Royal's own number writing in the group from the phone arrives here too
 // (`fromMe`), so the project's thread shows the whole conversation.
 
 export type InboundProjectWhatsAppMessage = {
   readonly groupJid: string;
+  /** The project the bridge forwarded it for. Checked against the link. */
+  readonly projectId: string;
   /** WhatsApp's message id. */
   readonly providerMessageId: string;
   /** Royal's own number wrote it, on the phone rather than through the app. */
@@ -60,7 +70,16 @@ export type InboundProjectWhatsAppOutcome =
       readonly mediaId: string | null;
     }
   | { readonly outcome: "unknown_group" }
+  /** The group is still being saved: not recorded, ask the bridge to retry. */
+  | { readonly outcome: "group_pending" }
+  /** Queued for another project than the group's link now: not filed. */
+  | { readonly outcome: "project_mismatch" }
+  /** Sent before the group was linked: not imported. */
+  | { readonly outcome: "before_link" }
   | { readonly outcome: "duplicate" };
+
+/** Phones' clocks drift; a message this close to the link still counts. */
+const LINK_CLOCK_GRACE_MS = 2 * 60 * 1000;
 
 function classify(input: InboundProjectWhatsAppMessage): {
   kind: WhatsAppMessageKind;
@@ -105,6 +124,8 @@ export async function recordInboundProjectWhatsAppMessage(
         media: {
           create: {
             ...whatsappMediaCreateData(input.media),
+            // Fetched from the bridge by message id, never from Meta.
+            source: WhatsAppMediaSource.BRIDGE,
             // The bridge could not download it (too large, or WhatsApp
             // refused): recorded as failed with the reason, never retried
             // into the same answer.
@@ -127,15 +148,46 @@ export async function recordInboundProjectWhatsAppMessage(
 
       const group = await tx.projectWhatsAppGroup.findUnique({
         select: {
+          createdAt: true,
           id: true,
           lastMessageAt: true,
+          linkedAt: true,
           projectId: true,
           status: true,
         },
         where: { providerGroupId: groupJid },
       });
-      if (!group || group.status !== ProjectWhatsAppGroupStatus.ACTIVE) {
+      const fresh = (createdAt: Date) =>
+        Date.now() - createdAt.getTime() < GROUP_CREATE_DEADLINE_MS;
+      if (!group) {
+        // A group just created: the bridge knows its id before the app does.
+        const pending = await tx.projectWhatsAppGroup.findUnique({
+          select: { createdAt: true, status: true },
+          where: { projectId: input.projectId },
+        });
+        return pending?.status === ProjectWhatsAppGroupStatus.CREATING
+          && fresh(pending.createdAt)
+          ? { outcome: "group_pending" as const }
+          : { outcome: "unknown_group" as const };
+      }
+      if (
+        group.status === ProjectWhatsAppGroupStatus.CREATING
+        && fresh(group.createdAt)
+      ) {
+        return { outcome: "group_pending" as const };
+      }
+      if (group.status !== ProjectWhatsAppGroupStatus.ACTIVE) {
         return { outcome: "unknown_group" as const };
+      }
+      if (group.projectId !== input.projectId) {
+        return { outcome: "project_mismatch" as const };
+      }
+      if (
+        group.linkedAt
+        && input.sentAt.getTime()
+          < group.linkedAt.getTime() - LINK_CLOCK_GRACE_MS
+      ) {
+        return { outcome: "before_link" as const };
       }
 
       const message = await tx.projectWhatsAppMessage.create({

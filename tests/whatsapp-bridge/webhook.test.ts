@@ -254,6 +254,56 @@ describe("the webhook", () => {
     assert.match(errors.join(" "), /logged out/);
   });
 
+  test("a message for a group still being created answers 503, so the bridge keeps it", async () => {
+    const fake = fakeWhatsAppDb();
+    fake.seed("project", {
+      id: "p1",
+      leadId: 1,
+      location: "12 Smith St",
+      name: "Lee",
+    });
+    fake.seed("projectWhatsAppGroup", {
+      origin: "CREATED",
+      projectId: "p1",
+      status: "CREATING",
+      subject: "S",
+    });
+    const response = await handleWhatsAppBridgeWebhook(
+      signed(message()),
+      deps(fake),
+    );
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get("retry-after"), "5");
+    assert.equal(fake.rows("projectWhatsAppMessage").length, 0);
+  });
+
+  test("Royal's own removal from a group ends the link and is reported", async () => {
+    const fake = seeded();
+    const errors: string[] = [];
+    const response = await handleWhatsAppBridgeWebhook(
+      signed({
+        data: {
+          action: "remove",
+          groupJid: GROUP,
+          includesSelf: true,
+          participants: [
+            { jid: "61280001234@s.whatsapp.net", phoneE164: "+61280001234" },
+          ],
+          projectId: "p1",
+        },
+        id: "p:1",
+        occurredAt: "2026-11-21T00:59:00.000Z",
+        type: "group.participants",
+      }),
+      deps(fake, {
+        log: { ...quiet, error: (line: string) => errors.push(line) },
+      }),
+    );
+    assert.deepEqual(await response.json(), { outcome: "removed" });
+    assert.equal(fake.rows("projectWhatsAppGroup")[0].status, "DELETED");
+    assert.match(errors.join(" "), /removed from a linked group/);
+  });
+
   test("a database failure answers 500 so the bridge keeps the event", async () => {
     const fake = seeded();
     const broken = new Proxy(fake.transactionalDb, {

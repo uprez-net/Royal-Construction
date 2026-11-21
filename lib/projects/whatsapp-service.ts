@@ -65,10 +65,20 @@ export function fetchProjectWhatsApp(
 /** Create the project's group on Royal's number (the owners are added). */
 export function createProjectWhatsAppGroup(
   projectId: string,
+  options: {
+    /** After an unconfirmed create, the office checked: there is no group. */
+    confirmNoGroup?: boolean;
+  } = {},
 ): Promise<ProjectWhatsAppCreateResultDto> {
   return unwrap<ProjectWhatsAppCreateResultDto>(
     base(projectId),
-    { method: "POST" },
+    options.confirmNoGroup
+      ? {
+          body: JSON.stringify({ confirmNoGroup: true }),
+          headers: JSON_HEADERS,
+          method: "POST",
+        }
+      : { method: "POST" },
     "The WhatsApp group could not be created.",
   );
 }
@@ -100,12 +110,18 @@ export function linkProjectWhatsAppGroup(
   );
 }
 
+/** `groupJid` is the group the person confirmed; refused if it changed. */
 export function unlinkProjectWhatsAppGroup(
   projectId: string,
+  groupJid: string,
 ): Promise<{ group: ProjectWhatsAppGroupDto; bridgeUpdated: boolean }> {
   return unwrap(
     `${base(projectId)}/link`,
-    { method: "DELETE" },
+    {
+      body: JSON.stringify({ groupJid }),
+      headers: JSON_HEADERS,
+      method: "DELETE",
+    },
     "The WhatsApp group could not be unlinked.",
   );
 }

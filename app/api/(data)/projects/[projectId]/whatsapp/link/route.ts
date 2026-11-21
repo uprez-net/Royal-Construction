@@ -6,7 +6,7 @@ import {
   linkProjectWhatsAppGroup,
   listWhatsAppBridgeGroups,
   unlinkProjectWhatsAppGroup,
-} from "@/lib/domain/projects/whatsapp/groups";
+} from "@/lib/domain/projects/whatsapp/group-links";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
 import { createWhatsAppBridgePortFromEnv } from "@/lib/whatsapp-bridge/client";
@@ -84,17 +84,27 @@ export async function POST(
   }
 }
 
+const unlinkSchema = z.object({
+  /** The group the person confirmed; refused if the project's group changed. */
+  groupJid: z
+    .string()
+    .trim()
+    .regex(/^[0-9-]{5,40}@g\.us$/),
+});
+
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   ctx: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await ctx.params;
+  const parsed = await parseBodyWithResponse(request, unlinkSchema);
+  if (!parsed.success) return parsed.response;
   try {
     const principal = await signedInUserPrincipal();
     if (!principal) return unauthorizedResponse();
     const result = await unlinkProjectWhatsAppGroup(
       principal,
-      { projectId },
+      { groupJid: parsed.data.groupJid, projectId },
       prisma,
       { bridge: createWhatsAppBridgePortFromEnv() },
     );

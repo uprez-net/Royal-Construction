@@ -2,7 +2,7 @@ import { WhatsAppMediaType } from "@prisma/client";
 import { z } from "zod";
 
 import type { WhatsAppStatusUpdate } from "@/lib/domain/leads/whatsapp/status";
-import type { WhatsAppGroupEvent } from "@/lib/domain/projects/whatsapp/groups";
+import type { WhatsAppGroupEvent } from "@/lib/domain/projects/whatsapp/group-events";
 import type { InboundProjectWhatsAppMessage } from "@/lib/domain/projects/whatsapp/inbound";
 
 // The WhatsApp bridge's event JSON → the domain's inputs.
@@ -66,6 +66,8 @@ const groupUpdated = z.object({
 const groupParticipants = z.object({
   action: z.enum(["add", "remove", "promote", "demote"]),
   groupJid,
+  /** Royal's own number is among them (bridges before this field: false). */
+  includesSelf: z.boolean().default(false),
   participants: z
     .array(z.object({ jid: z.string().min(1).max(200), phoneE164: phone }))
     .max(1024),
@@ -177,6 +179,7 @@ export function parseBridgeEvent(body: unknown): BridgeEventParse {
             fromMe: value.fromMe,
             groupJid: value.groupJid,
             media,
+            projectId: value.projectId,
             providerMessageId: value.messageId,
             senderJid: value.sender.jid,
             senderName: value.sender.name,
@@ -245,6 +248,7 @@ export function parseBridgeEvent(body: unknown): BridgeEventParse {
           event: {
             at: new Date(occurredAt),
             groupJid: parsed.data.groupJid,
+            includesSelf: parsed.data.includesSelf,
             kind:
               action === "add" ? "participants_added" : "participants_removed",
             participants: parsed.data.participants,

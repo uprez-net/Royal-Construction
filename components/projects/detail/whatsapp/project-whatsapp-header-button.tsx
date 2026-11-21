@@ -105,7 +105,9 @@ export function ProjectWhatsAppHeaderButton({
     if (busy) return;
     setBusy("unlink");
     try {
-      const result = await unlinkProjectWhatsAppGroup(projectId);
+      const groupJid = thread?.group?.providerGroupId;
+      if (!groupJid) return;
+      const result = await unlinkProjectWhatsAppGroup(projectId, groupJid);
       toast.success(
         result.bridgeUpdated
           ? "Group unlinked from this project."
@@ -305,7 +307,8 @@ export function ProjectWhatsAppHeaderButton({
   }
 
   // No group yet, or the last one failed, was unlinked, or Royal's number
-  // is no longer in it.
+  // is no longer in it. After an unconfirmed create the group may exist, so
+  // the first offer is to find it, not to make another.
   if (!isAdmin) return null;
 
   return (
@@ -313,7 +316,9 @@ export function ProjectWhatsAppHeaderButton({
       <div className="inline-flex">
         <Button
           type="button"
-          onClick={() => void create()}
+          onClick={() =>
+            group?.needsReconciliation ? setLinking(true) : void create()
+          }
           disabled={creating}
           className={cn(GREEN, "rounded-r-none")}
           title={
@@ -332,9 +337,11 @@ export function ProjectWhatsAppHeaderButton({
           ) : (
             <WhatsAppGlyph className="mr-1.5 size-4" />
           )}
-          {group?.status === "FAILED"
-            ? "Retry WhatsApp group"
-            : "Create WhatsApp group"}
+          {group?.needsReconciliation
+            ? "Find the WhatsApp group"
+            : group?.status === "FAILED"
+              ? "Retry WhatsApp group"
+              : "Create WhatsApp group"}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -363,6 +370,15 @@ export function ProjectWhatsAppHeaderButton({
               <Link2 className="size-4" aria-hidden="true" />
               Link an existing group
             </DropdownMenuItem>
+            {group?.needsReconciliation ? (
+              <DropdownMenuItem
+                disabled={creating}
+                onSelect={() => void create({ confirmNoGroup: true })}
+              >
+                <Plus className="size-4" aria-hidden="true" />
+                It isn&apos;t there — create again
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem onSelect={openChat}>
               <MessageCircle className="size-4" aria-hidden="true" />
               Open the client&apos;s 1:1 chat

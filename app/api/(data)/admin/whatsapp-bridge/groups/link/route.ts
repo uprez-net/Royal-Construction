@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
-import { linkProjectWhatsAppGroup } from "@/lib/domain/projects/whatsapp/groups";
+import { linkProjectWhatsAppGroup } from "@/lib/domain/projects/whatsapp/group-links";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
 import { createWhatsAppBridgePortFromEnv } from "@/lib/whatsapp-bridge/client";

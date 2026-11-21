@@ -8,13 +8,25 @@ import { ModalShell } from "@/components/common/modal-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { WhatsAppBridgeGroupDto } from "@/lib/projects/whatsapp-types";
-import {
-  linkBridgeGroup,
-  searchProjects,
-} from "@/lib/whatsapp-bridge/admin-service";
 import { cn } from "@/lib/utils";
 
+import {
+  errorText,
+  useLinkBridgeGroup,
+  useProjectSearch,
+} from "./bridge-queries";
+
 type ProjectOption = { id: string; name: string; location: string };
+
+/** Debounce a typed value, so a search is not sent per keystroke. */
+function useDebounced(value: string, ms: number): string {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), ms);
+    return () => window.clearTimeout(timer);
+  }, [value, ms]);
+  return debounced;
+}
 
 /**
  * Pick the project a group belongs to. A project has one group, so linking
@@ -30,52 +42,26 @@ export function LinkGroupToProjectModal({
   onLinked: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [options, setOptions] = useState<ProjectOption[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const search = useProjectSearch(useDebounced(query, 200));
+  const link = useLinkBridgeGroup();
   const [chosen, setChosen] = useState<ProjectOption | null>(null);
-  const [linking, setLinking] = useState(false);
+  const options = search.data;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      searchProjects(query, controller.signal)
-        .then((result) => {
-          setOptions(result.items);
-          setError(null);
-        })
-        .catch((loadError) => {
-          if (controller.signal.aborted) return;
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Could not search projects.",
+  function submit() {
+    if (!chosen || link.isPending) return;
+    link.mutate(
+      { groupJid: group.groupJid, projectId: chosen.id },
+      {
+        onError: (error) =>
+          toast.error(errorText(error, "The group could not be linked.")),
+        onSuccess: () => {
+          toast.success(
+            `“${group.subject}” linked to ${chosen.location || chosen.name}.`,
           );
-        });
-    }, 200);
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [query]);
-
-  async function link() {
-    if (!chosen || linking) return;
-    setLinking(true);
-    try {
-      await linkBridgeGroup(group.groupJid, chosen.id);
-      toast.success(
-        `“${group.subject}” linked to ${chosen.location || chosen.name}.`,
-      );
-      onLinked();
-    } catch (linkError) {
-      toast.error(
-        linkError instanceof Error
-          ? linkError.message
-          : "The group could not be linked.",
-      );
-    } finally {
-      setLinking(false);
-    }
+          onLinked();
+        },
+      },
+    );
   }
 
   return (
@@ -102,9 +88,9 @@ export function LinkGroupToProjectModal({
           />
         </div>
 
-        {error ? (
+        {search.isError ? (
           <p role="alert" className="text-sm text-destructive-ink">
-            {error}
+            {errorText(search.error, "Could not search projects.")}
           </p>
         ) : !options ? (
           <p className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
@@ -158,11 +144,11 @@ export function LinkGroupToProjectModal({
           </Button>
           <Button
             type="button"
-            disabled={!chosen || linking}
-            onClick={() => void link()}
+            disabled={!chosen || link.isPending}
+            onClick={submit}
             className="bg-primary text-primary-foreground"
           >
-            {linking ? (
+            {link.isPending ? (
               <Loader2
                 className="mr-1.5 size-4 animate-spin"
                 aria-hidden="true"

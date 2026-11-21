@@ -406,6 +406,14 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
             rows[index] = updated;
             return withRelations(model, updated);
           },
+          deleteMany: async (args: Row = {}) => {
+            log.push(`${model}.deleteMany`);
+            const before = table(model).length;
+            tables[model] = table(model).filter(
+              (row) => !matches(row, args.where as Row),
+            );
+            return { count: before - table(model).length };
+          },
           updateMany: async (args: Row) => {
             log.push(`${model}.updateMany`);
             const rows = table(model);

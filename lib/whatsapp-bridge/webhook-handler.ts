@@ -2,7 +2,7 @@ import type { TransactionalDomainDb } from "@/lib/domain/db";
 import { isDomainError } from "@/lib/domain/errors";
 import { recordWhatsAppDeliveryStatus } from "@/lib/domain/leads/whatsapp/status";
 import { systemPrincipal } from "@/lib/domain/principal";
-import { applyWhatsAppGroupEvent } from "@/lib/domain/projects/whatsapp/groups";
+import { applyWhatsAppGroupEvent } from "@/lib/domain/projects/whatsapp/group-events";
 import { recordInboundProjectWhatsAppMessage } from "@/lib/domain/projects/whatsapp/inbound";
 import { readBoundedBody } from "@/lib/http/bounded-body";
 import {
@@ -127,6 +127,28 @@ export async function handleWhatsAppBridgeWebhook(
           event.message,
           deps.db,
         );
+        if (result.outcome === "group_pending") {
+          // The group is still being saved. Not recorded yet: "try again"
+          // keeps the event on the bridge, which redelivers in seconds.
+          return new Response(JSON.stringify({ outcome: "group_pending" }), {
+            headers: {
+              "Cache-Control": "no-store",
+              "Content-Type": "application/json",
+              "Retry-After": "5",
+            },
+            status: 503,
+          });
+        }
+        if (result.outcome === "project_mismatch") {
+          log.warn(
+            `[whatsapp-bridge-webhook] Message ${event.message.providerMessageId} was queued for another project than its group's link now; not filed.`,
+          );
+        }
+        if (result.outcome === "before_link") {
+          log.info(
+            `[whatsapp-bridge-webhook] Message ${event.message.providerMessageId} predates the group's link; not imported.`,
+          );
+        }
         if (result.outcome === "unknown_group") {
           // The bridge forwards only mapped groups, so the two disagree. Not
           // retried — it would hold up every event behind it — and the next
@@ -162,6 +184,12 @@ export async function handleWhatsAppBridgeWebhook(
           event.event,
           deps.db,
         );
+        if (result.outcome === "removed") {
+          // The office needs to know: the group no longer reaches the app.
+          log.error(
+            `[whatsapp-bridge-webhook] Royal's number was removed from a linked group (${event.event.groupJid}); the project's group is no longer live.`,
+          );
+        }
         return json(200, { outcome: result.outcome });
       }
       case "session":

@@ -14,7 +14,7 @@ import { PROJECT_OWNER_SELECT, projectOwnerRows } from "../owners";
 import {
   projectWhatsAppGroupAvailability,
   type ProjectWhatsAppGroupAvailability,
-} from "./groups";
+} from "./group-shared";
 import {
   PROJECT_WHATSAPP_GROUP_SELECT,
   PROJECT_WHATSAPP_MESSAGE_SELECT,
@@ -167,9 +167,16 @@ export async function markProjectWhatsAppRead(
   await authorizeProjectRecording(principal, input.projectId, db);
   await db.projectWhatsAppGroup.updateMany({
     data: { unreadCount: 0 },
+    // Every status whose chat the tab can show, or the count never clears.
     where: {
       projectId: input.projectId,
-      status: ProjectWhatsAppGroupStatus.ACTIVE,
+      status: {
+        in: [
+          ProjectWhatsAppGroupStatus.ACTIVE,
+          ProjectWhatsAppGroupStatus.UNLINKED,
+          ProjectWhatsAppGroupStatus.DELETED,
+        ],
+      },
     },
   });
 }

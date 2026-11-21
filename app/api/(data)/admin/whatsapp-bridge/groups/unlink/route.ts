@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
-import { unlinkProjectWhatsAppGroup } from "@/lib/domain/projects/whatsapp/groups";
+import { unlinkProjectWhatsAppGroup } from "@/lib/domain/projects/whatsapp/group-links";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
 import { createWhatsAppBridgePortFromEnv } from "@/lib/whatsapp-bridge/client";
@@ -13,7 +13,14 @@ import {
   unauthorizedResponse,
 } from "@/utils/validators/response";
 
-const schema = z.object({ projectId: z.string().trim().min(1).max(100) });
+const schema = z.object({
+  /** The group the admin confirmed; refused if the project's group changed. */
+  groupJid: z
+    .string()
+    .trim()
+    .regex(/^[0-9-]{5,40}@g\.us$/),
+  projectId: z.string().trim().min(1).max(100),
+});
 
 /** Take a project's group off it, from Admin › WhatsApp bridge. */
 export async function POST(request: NextRequest) {

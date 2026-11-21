@@ -78,6 +78,11 @@ export type WhatsAppBridgeSendReceipt = {
 };
 
 export type WhatsAppBridgePort = {
+  /**
+   * The app can verify the bridge's events (its webhook secret is set).
+   * False: calls work, but no group message would ever reach the app.
+   */
+  readonly receivesEvents: boolean;
   readonly session: () => Promise<WhatsAppBridgeSession>;
   /** Start connecting, so a QR appears when the number is not linked. */
   readonly connect: () => Promise<WhatsAppBridgeSession>;
@@ -112,7 +117,14 @@ export type WhatsAppBridgePort = {
     readonly idempotencyKey: string;
   }) => Promise<WhatsAppBridgeSendReceipt>;
   readonly setMapping: (groupJid: string, projectId: string) => Promise<void>;
-  readonly removeMapping: (groupJid: string) => Promise<void>;
+  /**
+   * Unmap a group. With `projectId`, only while it is still that project's,
+   * so a late unlink cannot undo a newer link elsewhere.
+   */
+  readonly removeMapping: (
+    groupJid: string,
+    projectId?: string,
+  ) => Promise<void>;
   readonly replaceMappings: (
     mappings: readonly { groupJid: string; projectId: string }[],
   ) => Promise<{ added: number; removed: number; changed: number }>;

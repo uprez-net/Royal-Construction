@@ -1,7 +1,7 @@
 import { connection } from "next/server";
 
 import { signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
-import { listWhatsAppBridgeGroups } from "@/lib/domain/projects/whatsapp/groups";
+import { listWhatsAppBridgeGroups } from "@/lib/domain/projects/whatsapp/group-links";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
 import { createWhatsAppBridgePortFromEnv } from "@/lib/whatsapp-bridge/client";

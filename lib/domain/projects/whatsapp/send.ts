@@ -34,7 +34,7 @@ import {
 } from "../../principal";
 import { MAX_WHATSAPP_TEXT_LENGTH } from "../../leads/whatsapp/policy";
 import { applyPendingWhatsAppStatuses } from "../../leads/whatsapp/status";
-import { projectWhatsAppGroupAvailability } from "./groups";
+import { projectWhatsAppGroupAvailability } from "./group-shared";
 import {
   PROJECT_WHATSAPP_MESSAGE_SELECT,
   toProjectWhatsAppMessageRecord,

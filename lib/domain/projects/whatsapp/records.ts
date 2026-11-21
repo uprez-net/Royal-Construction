@@ -97,6 +97,8 @@ export const PROJECT_WHATSAPP_GROUP_SELECT = {
   id: true,
   inviteLink: true,
   lastMessageAt: true,
+  linkedAt: true,
+  needsReconciliation: true,
   origin: true,
   participants: {
     orderBy: { joinedAt: "asc" },
@@ -136,6 +138,13 @@ export type ProjectWhatsAppGroupRecord = {
   /** The group's WhatsApp id (…@g.us). */
   readonly providerGroupId: string | null;
   readonly failureReason: string | null;
+  /** When it started belonging to the project; earlier messages are not imported. */
+  readonly linkedAt: Date | null;
+  /**
+   * The last create was never confirmed, so the group may exist: the office
+   * links it, or confirms there is none, before creating again.
+   */
+  readonly needsReconciliation: boolean;
   readonly lastMessageAt: Date | null;
   readonly unreadCount: number;
   readonly participants: readonly ProjectWhatsAppParticipantRecord[];
@@ -149,6 +158,8 @@ export function toProjectWhatsAppGroupRecord(
     id: row.id,
     inviteLink: row.inviteLink,
     lastMessageAt: row.lastMessageAt,
+    linkedAt: row.linkedAt,
+    needsReconciliation: row.needsReconciliation,
     origin: row.origin,
     participants: row.participants.map((participant) => ({
       joinedAt: participant.joinedAt,

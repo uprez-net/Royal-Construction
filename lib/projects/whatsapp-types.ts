@@ -1,7 +1,5 @@
-import type {
-  CreateProjectWhatsAppGroupResult,
-  WhatsAppBridgeGroupListing,
-} from "@/lib/domain/projects/whatsapp/groups";
+import type { WhatsAppBridgeGroupListing } from "@/lib/domain/projects/whatsapp/group-links";
+import type { CreateProjectWhatsAppGroupResult } from "@/lib/domain/projects/whatsapp/groups";
 import type {
   ProjectWhatsAppInviteDraft,
   SendProjectWhatsAppInviteResult,

@@ -29,14 +29,18 @@ const CREATE_TIMEOUT_MS = 45_000;
 const SEND_TIMEOUT_MS = 30_000;
 const MEDIA_TIMEOUT_MS = 60_000;
 
-/** Bridge codes that mean nothing was sent. Everything else might have been. */
+/**
+ * Bridge codes that mean nothing was sent. Everything else might have been —
+ * including `send_in_progress` (another request is sending that key right
+ * now) and `send_unconfirmed`.
+ */
 const NOT_SENT_CODES = new Set([
   "bad_request",
   "not_connected",
   "not_found",
   "not_admin",
   "whatsapp_refused",
-  "in_progress",
+  "key_conflict",
   "unauthorized",
 ]);
 
@@ -90,6 +94,8 @@ export function createWhatsAppBridgePort(
       timeoutMs?: number;
       /** Statuses answered with null instead of thrown. */
       allow?: readonly number[];
+      /** Leave a successful body unread (a media download). */
+      raw?: boolean;
     } = {},
   ): Promise<{ status: number; body: unknown; response: Response } | null> {
     let response: Response;
@@ -115,6 +121,9 @@ export function createWhatsAppBridgePort(
       throw error;
     }
     if (init.allow?.includes(response.status)) return null;
+    if (response.ok && init.raw) {
+      return { body: null, response, status: response.status };
+    }
     if (response.ok) {
       const contentType = response.headers.get("content-type") ?? "";
       const body = contentType.includes("application/json")
@@ -158,7 +167,7 @@ export function createWhatsAppBridgePort(
       const result = await call(
         "media",
         `/v1/media/${encodeURIComponent(messageId)}`,
-        { allow: [404], timeoutMs: MEDIA_TIMEOUT_MS },
+        { allow: [404], raw: true, timeoutMs: MEDIA_TIMEOUT_MS },
       );
       response = result?.response ?? null;
     } catch (error) {
@@ -230,8 +239,17 @@ export function createWhatsAppBridgePort(
         }
         throw error;
       }
+      const raw = body.group;
+      if (!raw || typeof raw.jid !== "string" || !raw.jid) {
+        // A 2xx without the group's id: it may exist, and the app cannot
+        // know which. Unconfirmed, so the office checks before retrying.
+        throw new WhatsAppSendError(
+          "The WhatsApp bridge answered without the new group's id.",
+          "ambiguous",
+        );
+      }
       return {
-        group: groupFrom(body.group ?? {}),
+        group: groupFrom(raw),
         inviteLink:
           typeof body.inviteLink === "string" ? body.inviteLink : null,
       };
@@ -283,13 +301,16 @@ export function createWhatsAppBridgePort(
         : null;
     },
 
-    removeMapping: async (groupJid) => {
+    receivesEvents: Boolean(config.webhookSecret),
+
+    removeMapping: async (groupJid, projectId) => {
+      const query = projectId
+        ? `?projectId=${encodeURIComponent(projectId)}`
+        : "";
       await call(
         "removeMapping",
-        `/v1/mappings/${encodeURIComponent(groupJid)}`,
-        {
-          method: "DELETE",
-        },
+        `/v1/mappings/${encodeURIComponent(groupJid)}${query}`,
+        { method: "DELETE" },
       );
     },
 

@@ -2476,11 +2476,20 @@ enum WhatsAppMediaStatus {
 /// One file attached to one WhatsApp message. Exactly one of the three
 /// message references is set; attaching an unmatched message to a lead moves
 /// its media row across rather than copying it.
+/// Who issued a file's `providerMediaId`, and so where it is fetched from.
+enum WhatsAppMediaSource {
+  /// Meta's Cloud API (a lead's or an unmatched message's file).
+  META
+  /// Royal's WhatsApp bridge (a project group's file, by message id).
+  BRIDGE
+}
+
 model WhatsAppMedia {
   id                 String              @id @default(uuid())
-  /// Where to fetch the file: Meta's media id for a lead's or an unmatched
-  /// message, the bridge's message id for a project group's.
+  /// Where to fetch the file: Meta's media id, or the bridge's message id.
   providerMediaId    String
+  /// Which of the two issued `providerMediaId`; the copy uses that one.
+  source             WhatsAppMediaSource @default(META)
   type               WhatsAppMediaType
   mimeType           String?
   /// Meta's SHA-256 of the file, checked against what was downloaded.
@@ -2532,24 +2541,31 @@ enum ProjectWhatsAppGroupOrigin {
 
 /// A project's WhatsApp group. One per project.
 model ProjectWhatsAppGroup {
-  id              String                     @id @default(uuid())
-  projectId       String                     @unique
+  id                  String                     @id @default(uuid())
+  projectId           String                     @unique
   /// The group's WhatsApp id (…@g.us). Null while CREATING.
-  providerGroupId String?                    @unique
-  subject         String
-  inviteLink      String?
-  inviteLinkAt    DateTime?
-  status          ProjectWhatsAppGroupStatus
-  origin          ProjectWhatsAppGroupOrigin
-  failureReason   String?
+  providerGroupId     String?                    @unique
+  subject             String
+  inviteLink          String?
+  inviteLinkAt        DateTime?
+  status              ProjectWhatsAppGroupStatus
+  origin              ProjectWhatsAppGroupOrigin
+  failureReason       String?
   /// Bumped by every create request, so each attempt is its own outbox
   /// intent and a replayed request never asks for a second group.
-  createAttempt   Int                        @default(0)
-  lastMessageAt   DateTime?
-  unreadCount     Int                        @default(0)
-  createdById     String?
-  createdAt       DateTime                   @default(now())
-  updatedAt       DateTime                   @updatedAt
+  createAttempt       Int                        @default(0)
+  /// When this group started belonging to the project (the create request,
+  /// or the link). Messages sent before it are not imported.
+  linkedAt            DateTime?
+  /// The last create went to the bridge and was never confirmed: the group
+  /// may exist. Another create is refused until staff link the group they
+  /// find, or confirm there is none.
+  needsReconciliation Boolean                    @default(false)
+  lastMessageAt       DateTime?
+  unreadCount         Int                        @default(0)
+  createdById         String?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
 
   project      Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy    User?                        @relation("ProjectWhatsAppGroupCreator", fields: [createdById], references: [id])

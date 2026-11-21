@@ -121,7 +121,9 @@ describe("calls", () => {
     const cases: [() => Response | Promise<Response>, string][] = [
       [() => refusal(503, "not_connected"), "not_sent"],
       [() => refusal(502, "whatsapp_refused"), "not_sent"],
-      [() => refusal(409, "in_progress"), "not_sent"],
+      // Another request holds the key and may still reach the group.
+      [() => refusal(409, "send_in_progress"), "ambiguous"],
+      [() => refusal(409, "key_conflict"), "not_sent"],
       [() => refusal(504, "send_unconfirmed"), "ambiguous"],
       [() => refusal(500, "internal"), "ambiguous"],
       [
@@ -161,7 +163,64 @@ describe("calls", () => {
   });
 });
 
+describe("groups and mappings", () => {
+  test("a create answered without the group's id is unconfirmed, never a group with no id", async () => {
+    for (const answer of [
+      () => json({ inviteLink: null }, 201),
+      () => json({ group: { jid: "" } }, 201),
+      () => new Response("not json", { status: 201 }),
+    ]) {
+      const { bridge } = port(answer);
+      await assert.rejects(
+        bridge.createGroup({
+          description: null,
+          participantsE164: [],
+          projectId: "p1",
+          subject: "S",
+        }),
+        (error: unknown) =>
+          error instanceof WhatsAppSendError && error.outcome === "ambiguous",
+      );
+    }
+  });
+
+  test("unmapping names the project, so a newer link elsewhere survives", async () => {
+    const { bridge, seen } = port(() =>
+      json({ mappedTo: null, removed: true }),
+    );
+    await bridge.removeMapping(GROUP, "p1");
+    await bridge.removeMapping(GROUP);
+    assert.match(seen[0].url, /\?projectId=p1$/);
+    assert.doesNotMatch(seen[1].url, /\?/);
+  });
+
+  test("events can be received only with the webhook secret", () => {
+    assert.equal(createWhatsAppBridgePort(config)?.receivesEvents, true);
+    const noSecret = createWhatsAppBridgePort(
+      readWhatsAppBridgeConfig({
+        WHATSAPP_BRIDGE_API_TOKEN: TOKEN,
+        WHATSAPP_BRIDGE_URL: "https://bridge.example",
+      }),
+    );
+    assert.equal(noSecret?.receivesEvents, false);
+  });
+});
+
 describe("media", () => {
+  test("a file served as JSON is returned as a file, not parsed", async () => {
+    const { bridge } = port(
+      () =>
+        new Response('{"a":1}', {
+          headers: {
+            "content-length": "7",
+            "content-type": "application/json",
+          },
+        }),
+    );
+    const file = await bridge.downloadMedia("3EB0JSON", { maxBytes: 1000 });
+    assert.equal(new TextDecoder().decode(file.bytes), '{"a":1}');
+  });
+
   test("a file the bridge no longer has is permanent; a timeout is not", async () => {
     const gone = port(() => refusal(404, "not_found"));
     await assert.rejects(

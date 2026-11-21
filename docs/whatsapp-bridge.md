@@ -46,14 +46,25 @@ This page is the agreement both sides code to. Change it, the bridge
 - **The bridge keeps a copy of that mapping** (`DATA_DIR/mappings.json`) for one
   reason: it forwards events **only for mapped groups**. Every other chat on
   Royal's number — family, suppliers, a lead's 1:1 — never leaves the bridge.
-- The app pushes each link (`PUT /v1/mappings/:jid`) **before** it commits it,
-  and each unlink (`DELETE`) after. Creating a group passes `projectId`, so the
+- A link first **claims** the group on the project's row (the unique key on
+  the group id means two links of one group cannot both win), then pushes it
+  (`PUT /v1/mappings/:jid`), then goes live; if going live fails, the mapping
+  is taken back. An unlink goes after the commit, as
+  `DELETE /v1/mappings/:jid?projectId=…`, so it removes the mapping only while
+  it is still that project's. Creating a group passes `projectId`, so the
   bridge maps it before answering. `PUT /v1/mappings` replaces the whole set
-  and is run by the daily sweep and by *Resync* on the admin page, so a missed
-  push is repaired within a day.
-- A message the bridge forwards for a group the app has no live link for is
-  answered `200 {"outcome":"unknown_group"}` and logged: not retried (it would
-  block the queue), not filed anywhere.
+  (live links and links mid-claim) and is run by the daily sweep and by
+  *Resync*; the app re-reads its list afterwards and sends it again if a link
+  landed in between.
+- A message for a group **still being created** (or mid-claim) is answered
+  `503` with `Retry-After: 5`: not recorded yet, kept by the bridge, delivered
+  again once the group is saved — so the first seconds of a new group are not
+  lost.
+- A message for a group the app has no live link for is answered
+  `200 {"outcome":"unknown_group"}` and logged: not retried (it would block the
+  queue), not filed anywhere. One queued for another project than the group's
+  link now (`project_mismatch`) or sent before the link (`before_link`) is the
+  same: acknowledged, logged, not filed.
 
 ## 2. Authentication
 
@@ -93,7 +104,8 @@ on:
 | `unauthorized` | 401 | Wrong or missing token | was not sent |
 | `bad_request` | 400 | The input is wrong (not a group id, not E.164, no `Idempotency-Key`) | was not sent |
 | `not_found` | 404 | Royal's number is not in that group / no such file | was not sent |
-| `in_progress` | 409 | The same `Idempotency-Key` is being sent right now | was not sent |
+| `send_in_progress` | 409 | Another request is sending this `Idempotency-Key` right now | **may be sent** — treated as unconfirmed |
+| `key_conflict` | 409 | The `Idempotency-Key` was used for another group | was not sent |
 | `not_admin` | 422 | Royal's number must be an admin (invite link, adding people) | was not sent |
 | `not_connected` | 503 | The session is not open — scan the QR | was not sent |
 | `whatsapp_refused` | 502 | WhatsApp refused before anything left | was not sent |
@@ -143,12 +155,16 @@ number) or `…@lid` (a private id). `phoneE164` is set only when WhatsApp share
 the number; a `@lid`'s digits are never a phone number.
 
 **Sending once.** `Idempotency-Key` is required. The bridge chooses the
-WhatsApp message id before sending, remembers each successful key for seven
-days, and answers a repeat with the first send's id and `replayed: true`
-instead of posting again. The app uses its outbox key
-(`project-whatsapp:<projectId>:<composer key>`) as the `Idempotency-Key`. An
-unconfirmed send is not remembered — the app holds it for *Mark sent / Mark not
-sent* and never retries it by itself.
+WhatsApp message id and **writes the intent to disk before calling WhatsApp**,
+then counts the message as sent only when WhatsApp's server acknowledges that
+id (a failed ack is `whatsapp_refused`; no ack within 15 seconds, or the
+connection dropping first, is `send_unconfirmed`). A repeat of a sent key
+answers the first send's id with `replayed: true`. A repeat of an
+**unconfirmed** key is refused with `send_unconfirmed` and never sent again;
+only a definite refusal frees the key. Keys are kept for seven days. The app
+uses its outbox key (`project-whatsapp:<projectId>:<composer key>`) as the
+`Idempotency-Key`, and holds an unconfirmed send for *Mark sent / Mark not
+sent*.
 
 **Creating.** Owners' numbers go in `participants`; WhatsApp refuses anyone
 whose privacy settings forbid being added (their `status` in the result is not
@@ -162,10 +178,10 @@ the group is mapped before the response, so no early message is missed.
 | `GET /v1/mappings` | — | `{ mappings: [{ groupJid, projectId, mappedAt }] }` |
 | `PUT /v1/mappings` | `{ mappings: [{ groupJid, projectId }] }` | `{ added, changed, removed, mappings }` — replaces all |
 | `PUT /v1/mappings/:jid` | `{ projectId }` | `{ mapping }` — a project's previous group is released |
-| `DELETE /v1/mappings/:jid` | — | `{ removed }` |
+| `DELETE /v1/mappings/:jid[?projectId=…]` | — | `{ removed, mappedTo }` — with `projectId`, only while the group is still that project's (`mappedTo` names who holds it otherwise); a blank `projectId` is a 400 |
 
-A project has at most one group; `PUT /v1/mappings` refuses a list that names a
-project twice.
+A project has at most one group and a group one project: `PUT /v1/mappings`
+refuses (400, nothing changed) a list that names either twice.
 
 ### Media
 
@@ -197,7 +213,7 @@ id.
 | `message.received` | Someone (including Royal's own number, from the phone) posts in a **mapped** group | below |
 | `message.status` | A message the app sent is sent / delivered / read / failed | `{ groupJid, messageId, status, at }` |
 | `group.updated` | A mapped group's subject changes | `{ groupJid, projectId, subject }` |
-| `group.participants` | People are added to / removed from / promoted in a mapped group | `{ groupJid, projectId, action, participants: [{ jid, phoneE164 }] }` |
+| `group.participants` | People are added to / removed from / promoted in a mapped group | `{ groupJid, projectId, action, participants: [{ jid, phoneE164 }], includesSelf }` — `includesSelf` with `remove` means Royal's number was removed: the app ends the link (`DELETED`) and logs an error |
 | `session.updated` | The session opens, drops, or is logged out | `{ status, account, reason }` |
 
 `message.received`:
@@ -228,13 +244,18 @@ id.
 - `projectId` is the bridge's mapping, a hint only: the app resolves the group
   by `groupJid` against its own links.
 
-Reactions, edits, deletions, receipts and protocol traffic are not forwarded.
+View Once media is never downloaded, stored or forwarded — the app gets an
+`unsupported` placeholder (`viewOnceMessage`), however it is wrapped.
+Reactions, edits, deletions and protocol traffic are not forwarded; delivery
+and read receipts arrive as `message.status` (one per message and status, not
+one per participant).
 
 ### What the app answers, and what the bridge does with it
 
 | App answers | Means | The bridge |
 | --- | --- | --- |
-| `200` | Recorded, or deliberately ignored (`unknown_group`, an unknown `type`) | deletes the event |
+| `200` | Recorded, or deliberately ignored (`unknown_group`, `project_mismatch`, `before_link`, an unknown `type`) | deletes the event |
+| `503` + `Retry-After` | The group is still being saved (`group_pending`) | keeps it, retries with back-off |
 | `400` | Will never be acceptable (does not parse) | moves it to `DATA_DIR/outbox-dead/` and logs an error |
 | `401` | Signature or secret problem — fixable | keeps it, retries with back-off |
 | `408`, `429`, `5xx`, no answer | Try again | keeps it, retries with back-off (2 s doubling to 5 min) |

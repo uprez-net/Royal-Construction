@@ -1,4 +1,8 @@
-import { WhatsAppMediaStatus, WhatsAppMediaType } from "@prisma/client";
+import {
+  WhatsAppMediaSource,
+  WhatsAppMediaStatus,
+  WhatsAppMediaType,
+} from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import {
@@ -235,8 +239,8 @@ export async function storeWhatsAppMedia(
       fileName: true,
       id: true,
       mimeType: true,
-      projectMessageId: true,
       providerMediaId: true,
+      source: true,
       status: true,
     },
     where: { id: input.mediaId },
@@ -249,7 +253,8 @@ export async function storeWhatsAppMedia(
   if (row.status !== WhatsAppMediaStatus.PENDING) {
     return { outcome: "not_pending" };
   }
-  const fromBridge = row.projectMessageId !== null;
+  // From whoever issued the id: a project row can still hold a Meta id.
+  const fromBridge = row.source === WhatsAppMediaSource.BRIDGE;
   const download = fromBridge ? (ports.bridgeDownload ?? null) : ports.download;
   if (!download) {
     // Not configured in this runtime. Left PENDING for the sweep, which runs
@@ -394,7 +399,15 @@ export async function retryWhatsAppMedia(
 /** Files still waiting to be copied, oldest first, for the sweep. */
 export async function findPendingWhatsAppMedia(
   db: DomainDb,
-  options: { readonly olderThan: Date; readonly limit: number },
+  options: {
+    readonly olderThan: Date;
+    readonly limit: number;
+    /**
+     * Only files this runtime can fetch. Without it, files whose source is
+     * off would stay PENDING at the head of the queue and starve the rest.
+     */
+    readonly sources?: readonly WhatsAppMediaSource[];
+  },
 ): Promise<string[]> {
   const rows = await db.whatsAppMedia.findMany({
     orderBy: { createdAt: "asc" },
@@ -402,6 +415,7 @@ export async function findPendingWhatsAppMedia(
     take: options.limit,
     where: {
       createdAt: { lt: options.olderThan },
+      ...(options.sources ? { source: { in: [...options.sources] } } : {}),
       status: WhatsAppMediaStatus.PENDING,
     },
   });

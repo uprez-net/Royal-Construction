@@ -1,10 +1,11 @@
 import { cronOutcome, withCronReporting } from "@/lib/observability/cron";
+import { WhatsAppMediaSource } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { start } from "workflow/api";
 
 import { isDomainError } from "@/lib/domain/errors";
 import { systemPrincipal } from "@/lib/domain/principal";
-import { reconcileWhatsAppBridgeMappings } from "@/lib/domain/projects/whatsapp/groups";
+import { reconcileWhatsAppBridgeMappings } from "@/lib/domain/projects/whatsapp/group-links";
 import { findPendingWhatsAppMedia } from "@/lib/domain/whatsapp/media";
 import prisma from "@/lib/prisma";
 import { createWhatsAppBridgePortFromEnv } from "@/lib/whatsapp-bridge/client";
@@ -52,6 +53,11 @@ async function handle(request: Request) {
   const media = await findPendingWhatsAppMedia(prisma, {
     limit: BATCH,
     olderThan: new Date(Date.now() - MEDIA_GRACE_MS),
+    // Only files this runtime can fetch.
+    sources: [
+      ...(meta.enabled ? [WhatsAppMediaSource.META] : []),
+      ...(bridge ? [WhatsAppMediaSource.BRIDGE] : []),
+    ],
   });
   let mediaRun: string | null = null;
   if (media.length > 0) {

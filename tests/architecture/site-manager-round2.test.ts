@@ -22,12 +22,12 @@ import { updateMilestone } from "@/lib/domain/projects/milestones";
 import { assessProjectAttention } from "@/lib/domain/projects/attention";
 import { draftProjectWhatsAppInvite } from "@/lib/domain/projects/whatsapp/invite";
 import {
-  createProjectWhatsAppGroup,
   linkProjectWhatsAppGroup,
   listWhatsAppBridgeGroups,
   refreshProjectWhatsAppInviteLink,
   unlinkProjectWhatsAppGroup,
-} from "@/lib/domain/projects/whatsapp/groups";
+} from "@/lib/domain/projects/whatsapp/group-links";
+import { createProjectWhatsAppGroup } from "@/lib/domain/projects/whatsapp/groups";
 import { dismissTradieScheduleAlerts } from "@/lib/domain/tradies/alerts";
 import { sendTradieScheduleReminder } from "@/lib/domain/tradies/reminders";
 import { sendTradieRequests } from "@/lib/domain/tradies/requests";
@@ -225,7 +225,7 @@ test("a site manager posts in the WhatsApp group but does not set one up", async
   const sm = siteManagerPrincipal(SM);
   const context = { bridge: null };
   await refusedBeforeReading("createProjectWhatsAppGroup", (db) =>
-    createProjectWhatsAppGroup(sm, { projectId: "p_1" }, db, context),
+    createProjectWhatsAppGroup(sm, { projectId: "p_1" }, db as never, context),
   );
   await refusedBeforeReading("listWhatsAppBridgeGroups", (db) =>
     listWhatsAppBridgeGroups(sm, db, context),

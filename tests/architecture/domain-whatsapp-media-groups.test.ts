@@ -9,15 +9,15 @@ import {
   DomainValidationError,
 } from "@/lib/domain/errors";
 import { recordInboundLeadWhatsAppMessage } from "@/lib/domain/leads/whatsapp/inbound";
+import { applyWhatsAppGroupEvent } from "@/lib/domain/projects/whatsapp/group-events";
 import {
-  applyWhatsAppGroupEvent,
-  createProjectWhatsAppGroup,
-  GROUP_CREATE_DEADLINE_MS,
   linkProjectWhatsAppGroup,
   listWhatsAppBridgeGroups,
   reconcileWhatsAppBridgeMappings,
   unlinkProjectWhatsAppGroup,
-} from "@/lib/domain/projects/whatsapp/groups";
+} from "@/lib/domain/projects/whatsapp/group-links";
+import { GROUP_CREATE_DEADLINE_MS } from "@/lib/domain/projects/whatsapp/group-shared";
+import { createProjectWhatsAppGroup } from "@/lib/domain/projects/whatsapp/groups";
 import {
   recordInboundProjectWhatsAppMessage,
   type InboundProjectWhatsAppMessage,
@@ -101,6 +101,7 @@ function bridgePort(overrides: Partial<WhatsAppBridgePort> = {}) {
   const calls = {
     create: [] as Parameters<WhatsAppBridgePort["createGroup"]>[0][],
     removeMapping: [] as string[],
+    removeMappingFor: [] as (string | null)[],
     replace: [] as { groupJid: string; projectId: string }[][],
     send: [] as Parameters<WhatsAppBridgePort["sendText"]>[0][],
     setMapping: [] as [string, string][],
@@ -118,7 +119,11 @@ function bridgePort(overrides: Partial<WhatsAppBridgePort> = {}) {
     listGroups: async () => [bridgeGroup()],
     logout: unused,
     qr: unused,
-    removeMapping: async (jid) => void calls.removeMapping.push(jid),
+    receivesEvents: true,
+    removeMapping: async (jid, projectId) => {
+      calls.removeMapping.push(jid);
+      calls.removeMappingFor.push(projectId ?? null);
+    },
     replaceMappings: async (mappings) => {
       calls.replace.push([...mappings]);
       return { added: mappings.length, changed: 0, removed: 0 };
@@ -195,6 +200,7 @@ function groupMessage(
     fromMe: false,
     groupJid: GROUP,
     media: null,
+    projectId: "p1",
     providerMessageId: "3EB0IN1",
     senderJid: "123456789012345@lid",
     senderName: "Ann",
@@ -387,9 +393,14 @@ describe("creating a project group", () => {
   test("with no bridge configured it is refused and writes nothing", async () => {
     const fake = seedProject();
     await assert.rejects(
-      createProjectWhatsAppGroup(admin, { projectId: "p1" }, fake.db, {
-        bridge: null,
-      }),
+      createProjectWhatsAppGroup(
+        admin,
+        { projectId: "p1" },
+        fake.transactionalDb,
+        {
+          bridge: null,
+        },
+      ),
       (error: unknown) =>
         error instanceof DomainTransitionError
         && /bridge isn't configured/.test(error.message),
@@ -403,7 +414,7 @@ describe("creating a project group", () => {
     const result = await createProjectWhatsAppGroup(
       admin,
       { projectId: "p1" },
-      fake.db,
+      fake.transactionalDb,
       { bridge: port },
     );
     assert.equal(calls.create.length, 1);
@@ -423,9 +434,14 @@ describe("creating a project group", () => {
     assert.equal(fake.rows("outboxEvent")[0].status, "SUCCEEDED");
 
     await assert.rejects(
-      createProjectWhatsAppGroup(admin, { projectId: "p1" }, fake.db, {
-        bridge: port,
-      }),
+      createProjectWhatsAppGroup(
+        admin,
+        { projectId: "p1" },
+        fake.transactionalDb,
+        {
+          bridge: port,
+        },
+      ),
       (error: unknown) =>
         error instanceof DomainTransitionError
         && /already has a WhatsApp group/.test(error.message),
@@ -445,9 +461,14 @@ describe("creating a project group", () => {
       },
     });
     await assert.rejects(
-      createProjectWhatsAppGroup(admin, { projectId: "p1" }, fake.db, {
-        bridge: refusing.port,
-      }),
+      createProjectWhatsAppGroup(
+        admin,
+        { projectId: "p1" },
+        fake.transactionalDb,
+        {
+          bridge: refusing.port,
+        },
+      ),
       (error: unknown) =>
         error instanceof DomainSideEffectError
         && error.retryable === true
@@ -461,7 +482,7 @@ describe("creating a project group", () => {
     const retried = await createProjectWhatsAppGroup(
       admin,
       { projectId: "p1" },
-      fake.db,
+      fake.transactionalDb,
       { bridge: port },
     );
     assert.equal(retried.group.status, "ACTIVE");
@@ -483,9 +504,14 @@ describe("creating a project group", () => {
       },
     });
     await assert.rejects(
-      createProjectWhatsAppGroup(admin, { projectId: "p1" }, fake.db, {
-        bridge: port,
-      }),
+      createProjectWhatsAppGroup(
+        admin,
+        { projectId: "p1" },
+        fake.transactionalDb,
+        {
+          bridge: port,
+        },
+      ),
       (error: unknown) =>
         error instanceof DomainSideEffectError
         && error.retryable === false
@@ -506,9 +532,14 @@ describe("creating a project group", () => {
     });
     const { calls, port } = bridgePort();
     await assert.rejects(
-      createProjectWhatsAppGroup(admin, { projectId: "p1" }, fake.db, {
-        bridge: port,
-      }),
+      createProjectWhatsAppGroup(
+        admin,
+        { projectId: "p1" },
+        fake.transactionalDb,
+        {
+          bridge: port,
+        },
+      ),
       DomainTransitionError,
     );
     assert.equal(calls.create.length, 0);
@@ -524,7 +555,10 @@ describe("linking and unlinking a group", () => {
     const watched = {
       ...port,
       setMapping: async (jid: string, projectId: string) => {
-        order.push(`map:${fake.rows("projectWhatsAppGroup").length}`);
+        const [row] = fake.rows("projectWhatsAppGroup");
+        order.push(
+          `map:${String(row?.status)}:${String(row?.providerGroupId)}`,
+        );
         await port.setMapping(jid, projectId);
       },
     };
@@ -534,7 +568,11 @@ describe("linking and unlinking a group", () => {
       fake.transactionalDb,
       { bridge: watched },
     );
-    assert.deepEqual(order, ["map:0"], "mapped before any row was written");
+    assert.deepEqual(
+      order,
+      [`map:CREATING:${GROUP}`],
+      "the group is claimed first, the bridge told before it goes live",
+    );
     assert.deepEqual(calls.setMapping, [[GROUP, "p1"]]);
     assert.equal(result.group.status, "ACTIVE");
     assert.equal(result.group.origin, "LINKED");
@@ -614,11 +652,15 @@ describe("linking and unlinking a group", () => {
   test("a link whose save fails takes the bridge's mapping back", async () => {
     const fake = seedProject();
     const { calls, port } = bridgePort();
+    let transactions = 0;
     const failing = new Proxy(fake.transactionalDb, {
       get: (target, key) =>
         key === "$transaction"
-          ? async () => {
-              throw new Error("database unavailable");
+          ? async (work: (tx: unknown) => Promise<unknown>) => {
+              transactions += 1;
+              // The claim commits; making it live fails.
+              if (transactions === 2) throw new Error("database unavailable");
+              return (Reflect.get(target, key) as typeof work)(work as never);
             }
           : Reflect.get(target, key),
     });
@@ -633,6 +675,10 @@ describe("linking and unlinking a group", () => {
     );
     assert.deepEqual(calls.setMapping, [[GROUP, "p1"]]);
     assert.deepEqual(calls.removeMapping, [GROUP]);
+    assert.deepEqual(calls.removeMappingFor, ["p1"], "only this project's");
+    const [row] = fake.rows("projectWhatsAppGroup");
+    assert.equal(row.status, "FAILED");
+    assert.equal(row.providerGroupId, null, "the claim is released");
   });
 
   test("unlinking keeps the history, releases the group and tells the bridge", async () => {
@@ -844,7 +890,7 @@ describe("messages from the bridge", () => {
           { jid: "61499999999@s.whatsapp.net", phoneE164: "+61499999999" },
         ],
       },
-      fake.db,
+      fake.transactionalDb,
     );
     await applyWhatsAppGroupEvent(
       bridgeWebhook,
@@ -854,12 +900,12 @@ describe("messages from the bridge", () => {
         kind: "participants_removed",
         participants: [{ jid: "61499999999@s.whatsapp.net", phoneE164: null }],
       },
-      fake.db,
+      fake.transactionalDb,
     );
     await applyWhatsAppGroupEvent(
       bridgeWebhook,
       { groupJid: GROUP, kind: "subject_changed", subject: "Lee build" },
-      fake.db,
+      fake.transactionalDb,
     );
     const [participant] = fake.rows("projectWhatsAppParticipant");
     assert.equal(participant.leftAt?.toString(), at.toString());
@@ -867,7 +913,7 @@ describe("messages from the bridge", () => {
     const unknown = await applyWhatsAppGroupEvent(
       bridgeWebhook,
       { groupJid: OTHER_GROUP, kind: "subject_changed", subject: "x" },
-      fake.db,
+      fake.transactionalDb,
     );
     assert.equal(unknown.outcome, "unknown_group");
   });

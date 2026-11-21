@@ -27,11 +27,12 @@ import type { ProjectWhatsAppThreadDto } from "@/lib/projects/whatsapp-types";
  */
 export function useCreateProjectWhatsAppGroup(projectId: string) {
   const [creating, setCreating] = useState(false);
-  async function create() {
+  /** `confirmNoGroup`: after an unconfirmed create, the office checked. */
+  async function create(options: { confirmNoGroup?: boolean } = {}) {
     if (creating) return;
     setCreating(true);
     try {
-      const result = await createProjectWhatsAppGroup(projectId);
+      const result = await createProjectWhatsAppGroup(projectId, options);
       const others = Math.max(0, result.memberCount - 1);
       toast.success(
         result.ownersAsked === 0
@@ -137,9 +138,41 @@ export function ProjectWhatsAppGroupSetup({
         <AlertTriangle className="size-7" aria-hidden="true" />
       </span>
     );
-    title = "The group wasn't created";
+    title = group.needsReconciliation
+      ? "The group may already exist"
+      : "The group wasn't created";
     body =
       group.failureReason ?? "The WhatsApp bridge didn't create the group.";
+    if (group.needsReconciliation) {
+      // The bridge may have made it: find it before making another.
+      actions = isAdmin ? (
+        <>
+          <Button
+            type="button"
+            onClick={onLink}
+            className="rounded-full bg-primary px-5 text-primary-foreground"
+          >
+            <Link2 className="mr-1.5 size-4" aria-hidden="true" />
+            Find and link it
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void create({ confirmNoGroup: true })}
+            disabled={creating}
+            className="rounded-full bg-card px-5"
+          >
+            {creating ? (
+              <Loader2
+                className="mr-1.5 size-4 animate-spin"
+                aria-hidden="true"
+              />
+            ) : null}
+            It isn&apos;t there — create again
+          </Button>
+        </>
+      ) : null;
+    }
   } else if (group?.status === "DELETED") {
     icon = (
       <span className="inline-flex size-14 items-center justify-center rounded-full bg-warning-light text-warning-ink">

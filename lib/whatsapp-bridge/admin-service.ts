@@ -77,11 +77,12 @@ export function linkBridgeGroup(groupJid: string, projectId: string) {
   );
 }
 
-export function unlinkBridgeGroup(projectId: string) {
+/** `groupJid` is the group the admin confirmed; refused if it changed. */
+export function unlinkBridgeGroup(projectId: string, groupJid: string) {
   return unwrap<{ group: ProjectWhatsAppGroupDto; bridgeUpdated: boolean }>(
     `${BASE}/groups/unlink`,
     {
-      body: JSON.stringify({ projectId }),
+      body: JSON.stringify({ groupJid, projectId }),
       headers: JSON_HEADERS,
       method: "POST",
     },
