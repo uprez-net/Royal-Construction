@@ -71,10 +71,10 @@ function publish(decision) {
   }
 
   console.log(
-    `CI decision: ${decision.reason}; ${decision.changedFiles} changed file(s); ` +
-      `${decision.runChecks ? "run" : "skip"} quality checks; ` +
-      `${runNextBuild ? "run" : "skip"} the Next.js build; ` +
-      `${decision.deploy ? "allow" : "skip"} deployment.`,
+    `CI decision: ${decision.reason}; ${decision.changedFiles} changed file(s); `
+      + `${decision.runChecks ? "run" : "skip"} quality checks; `
+      + `${runNextBuild ? "run" : "skip"} the Next.js build; `
+      + `${decision.deploy ? "allow" : "skip"} deployment.`,
   );
 }
 
@@ -133,6 +133,31 @@ if (changedFiles.length === 0) {
     deploy: false,
     reason: "no-changes",
     changedFiles: 0,
+  });
+  process.exit(0);
+}
+
+/**
+ * A standalone package under services/ (and its own workflow) is checked and
+ * deployed by that workflow — .github/workflows/whatsapp-bridge.yml for the
+ * bridge. Nothing in the Next.js app imports it, so a change there alone
+ * neither runs the app's suite nor redeploys the app.
+ *
+ * @param {string} file
+ */
+function isStandaloneService(file) {
+  return (
+    file.startsWith("services/")
+    || file === ".github/workflows/whatsapp-bridge.yml"
+  );
+}
+
+if (changedFiles.every(isStandaloneService)) {
+  publish({
+    runChecks: false,
+    deploy: false,
+    reason: "standalone-services-only",
+    changedFiles: changedFiles.length,
   });
   process.exit(0);
 }

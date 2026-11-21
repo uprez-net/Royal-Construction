@@ -1,7 +1,5 @@
-import type {
-  LinkableWhatsAppGroup,
-  RequestProjectWhatsAppGroupResult,
-} from "@/lib/domain/projects/whatsapp/groups";
+import type { WhatsAppBridgeGroupListing } from "@/lib/domain/projects/whatsapp/group-links";
+import type { CreateProjectWhatsAppGroupResult } from "@/lib/domain/projects/whatsapp/groups";
 import type {
   ProjectWhatsAppInviteDraft,
   SendProjectWhatsAppInviteResult,
@@ -21,9 +19,9 @@ export type ProjectWhatsAppThreadDto = Jsonified<ProjectWhatsAppThread>;
 export type ProjectWhatsAppGroupDto = Jsonified<ProjectWhatsAppGroupRecord>;
 export type ProjectWhatsAppMessageDto = Jsonified<ProjectWhatsAppMessageRecord>;
 export type ProjectWhatsAppSendResultDto = Jsonified<SendProjectWhatsAppResult>;
-export type ProjectWhatsAppRequestResultDto =
-  Jsonified<RequestProjectWhatsAppGroupResult>;
-export type LinkableWhatsAppGroupDto = Jsonified<LinkableWhatsAppGroup>;
+export type ProjectWhatsAppCreateResultDto =
+  Jsonified<CreateProjectWhatsAppGroupResult>;
+export type WhatsAppBridgeGroupDto = Jsonified<WhatsAppBridgeGroupListing>;
 export type ProjectWhatsAppInviteDraftDto =
   Jsonified<ProjectWhatsAppInviteDraft>;
 export type ProjectWhatsAppInviteResultDto =

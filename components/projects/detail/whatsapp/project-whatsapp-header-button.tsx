@@ -9,9 +9,12 @@ import {
   Mail,
   MessageCircle,
   Plus,
+  RefreshCw,
   Settings2,
+  Unlink,
 } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 
 import { CopyButton } from "@/components/common/copy-button";
 import { Button } from "@/components/ui/button";
@@ -23,11 +26,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { UnlinkWhatsAppGroupDialog } from "@/components/whatsapp/unlink-whatsapp-group-dialog";
 import { WhatsAppGlyph } from "@/components/whatsapp/whatsapp-logo";
 import {
   PROJECT_WHATSAPP_HEADER_POLL_MS,
   useProjectWhatsApp,
 } from "@/hooks/use-project-whatsapp";
+import {
+  announceProjectWhatsAppChange,
+  refreshProjectWhatsAppInviteLink,
+  unlinkProjectWhatsAppGroup,
+} from "@/lib/projects/whatsapp-service";
 import { cn } from "@/lib/utils";
 
 import { useCreateProjectWhatsAppGroup } from "./project-whatsapp-group-setup";
@@ -40,9 +49,9 @@ const OUTLINE = "h-9 rounded-lg px-3.5 text-sm font-medium";
 
 /**
  * The project's WhatsApp group, from the header: invite the owners by email,
- * copy the link, jump to the chat — or create or link a group when there is
- * none. Follows the group's state, so it never offers an action that would
- * only end in "not yet".
+ * copy the link, jump to the chat, refresh the link or unlink the group — or
+ * create or link one when there is none. Follows the group's state, so it
+ * never offers an action that would only end in "not yet".
  */
 export function ProjectWhatsAppHeaderButton({
   projectId,
@@ -58,6 +67,8 @@ export function ProjectWhatsAppHeaderButton({
   const { create, creating } = useCreateProjectWhatsAppGroup(projectId);
   const [inviting, setInviting] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [unlinkOpen, setUnlinkOpen] = useState(false);
+  const [busy, setBusy] = useState<"refresh" | "unlink" | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -72,6 +83,45 @@ export function ProjectWhatsAppHeaderButton({
         .getElementById("comms-panel-whatsapp")
         ?.scrollIntoView({ behavior: "smooth", block: "start" }),
     );
+  }
+
+  async function refreshLink() {
+    if (busy) return;
+    setBusy("refresh");
+    try {
+      await refreshProjectWhatsAppInviteLink(projectId);
+      toast.success("Invite link refreshed.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not refresh the link.",
+      );
+    } finally {
+      announceProjectWhatsAppChange(projectId);
+      setBusy(null);
+    }
+  }
+
+  async function unlink() {
+    if (busy) return;
+    setBusy("unlink");
+    try {
+      const groupJid = thread?.group?.providerGroupId;
+      if (!groupJid) return;
+      const result = await unlinkProjectWhatsAppGroup(projectId, groupJid);
+      toast.success(
+        result.bridgeUpdated
+          ? "Group unlinked from this project."
+          : "Group unlinked. The WhatsApp bridge couldn't be told right now; it catches up on its next resync.",
+      );
+      setUnlinkOpen(false);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not unlink the group.",
+      );
+    } finally {
+      announceProjectWhatsAppChange(projectId);
+      setBusy(null);
+    }
   }
 
   if (!thread) {
@@ -98,6 +148,17 @@ export function ProjectWhatsAppHeaderButton({
           onClose={() => setLinking(false)}
         />
       ) : null}
+      {group ? (
+        <UnlinkWhatsAppGroupDialog
+          open={unlinkOpen}
+          subject={group.subject}
+          pending={busy === "unlink"}
+          onOpenChange={(open) => {
+            if (!open && busy !== "unlink") setUnlinkOpen(false);
+          }}
+          onConfirm={() => void unlink()}
+        />
+      ) : null}
     </>
   );
 
@@ -119,7 +180,7 @@ export function ProjectWhatsAppHeaderButton({
         <DropdownMenuContent align="end" className="w-72">
           <DropdownMenuLabel className="font-normal">
             <p className="text-sm font-medium text-foreground">
-              Groups aren&apos;t available yet
+              Groups aren&apos;t set up yet
             </p>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               {thread.availability.reason}
@@ -127,9 +188,9 @@ export function ProjectWhatsAppHeaderButton({
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
-            <Link href="/admin/whatsapp">
+            <Link href="/admin/whatsapp-bridge">
               <Settings2 className="size-4" aria-hidden="true" />
-              WhatsApp settings
+              WhatsApp bridge settings
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={openChat}>
@@ -141,7 +202,7 @@ export function ProjectWhatsAppHeaderButton({
     );
   }
 
-  if (group?.status === "ACTIVE" && (!isAdmin || group.inviteLink)) {
+  if (group?.status === "ACTIVE") {
     const unread = group.unreadCount;
     return (
       <>
@@ -184,6 +245,52 @@ export function ProjectWhatsAppHeaderButton({
               </span>
             ) : null}
           </Button>
+          {isAdmin ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn(OUTLINE, "px-2")}
+                  aria-label="More WhatsApp group options"
+                >
+                  {busy ? (
+                    <Loader2
+                      className="size-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <ChevronDown className="size-4" aria-hidden="true" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                {!group.inviteLink ? (
+                  <>
+                    <DropdownMenuLabel className="text-xs font-normal leading-relaxed text-muted-foreground">
+                      {group.failureReason
+                        ?? "There's no invite link yet. Royal's number must be an admin of the group."}
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                  </>
+                ) : null}
+                <DropdownMenuItem
+                  disabled={busy !== null}
+                  onSelect={() => void refreshLink()}
+                >
+                  <RefreshCw className="size-4" aria-hidden="true" />
+                  {group.inviteLink ? "Refresh invite link" : "Get invite link"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={busy !== null}
+                  onSelect={() => setUnlinkOpen(true)}
+                >
+                  <Unlink className="size-4" aria-hidden="true" />
+                  Unlink this group
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
         {modals}
       </>
@@ -199,21 +306,9 @@ export function ProjectWhatsAppHeaderButton({
     );
   }
 
-  if (group?.status === "SUSPENDED") {
-    return (
-      <Button
-        type="button"
-        variant="outline"
-        onClick={openChat}
-        className={OUTLINE}
-      >
-        <WhatsAppGlyph className="mr-1.5 size-4 text-warning-ink" />
-        Group suspended
-      </Button>
-    );
-  }
-
-  // No group yet, or the last one failed or was deleted.
+  // No group yet, or the last one failed, was unlinked, or Royal's number
+  // is no longer in it. After an unconfirmed create the group may exist, so
+  // the first offer is to find it, not to make another.
   if (!isAdmin) return null;
 
   return (
@@ -221,7 +316,9 @@ export function ProjectWhatsAppHeaderButton({
       <div className="inline-flex">
         <Button
           type="button"
-          onClick={() => void create()}
+          onClick={() =>
+            group?.needsReconciliation ? setLinking(true) : void create()
+          }
           disabled={creating}
           className={cn(GREEN, "rounded-r-none")}
           title={
@@ -240,9 +337,11 @@ export function ProjectWhatsAppHeaderButton({
           ) : (
             <WhatsAppGlyph className="mr-1.5 size-4" />
           )}
-          {group?.status === "FAILED"
-            ? "Retry WhatsApp group"
-            : "Create WhatsApp group"}
+          {group?.needsReconciliation
+            ? "Find the WhatsApp group"
+            : group?.status === "FAILED"
+              ? "Retry WhatsApp group"
+              : "Create WhatsApp group"}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -258,7 +357,8 @@ export function ProjectWhatsAppHeaderButton({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
-            {group?.status === "FAILED" && group.failureReason ? (
+            {(group?.status === "FAILED" || group?.status === "DELETED")
+            && group.failureReason ? (
               <>
                 <DropdownMenuLabel className="text-xs font-normal leading-relaxed text-muted-foreground">
                   {group.failureReason}
@@ -270,6 +370,15 @@ export function ProjectWhatsAppHeaderButton({
               <Link2 className="size-4" aria-hidden="true" />
               Link an existing group
             </DropdownMenuItem>
+            {group?.needsReconciliation ? (
+              <DropdownMenuItem
+                disabled={creating}
+                onSelect={() => void create({ confirmNoGroup: true })}
+              >
+                <Plus className="size-4" aria-hidden="true" />
+                It isn&apos;t there — create again
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem onSelect={openChat}>
               <MessageCircle className="size-4" aria-hidden="true" />
               Open the client&apos;s 1:1 chat

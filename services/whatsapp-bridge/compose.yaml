@@ -1,0 +1,57 @@
+# Royal's WhatsApp bridge on a server.
+#
+#   cp .env.example .env    # fill in the tokens and the app's webhook URL
+#   docker compose up -d                 # bridge only, on 127.0.0.1:8080
+#   docker compose --profile tls up -d   # plus Caddy with automatic HTTPS
+#
+# CI deploys by copying this file to the server and running
+# `docker compose pull && docker compose up -d` with BRIDGE_IMAGE_TAG set.
+# See README.md, "Deploying".
+
+services:
+  whatsapp-bridge:
+    image: ${BRIDGE_IMAGE:-ghcr.io/uprez-net/royal-construction-whatsapp-bridge}:${BRIDGE_IMAGE_TAG:-latest}
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    # These win over env_file: inside the container it must listen on every
+    # interface and keep its state on the volume, whatever .env says.
+    environment:
+      DATA_DIR: /data
+      HOST: 0.0.0.0
+      PORT: "8080"
+    # Loopback only: the internet reaches it through Caddy (or your own proxy).
+    ports:
+      - "127.0.0.1:${BRIDGE_PORT:-8080}:8080"
+    volumes:
+      - bridge-data:/data
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  caddy:
+    profiles: ["tls"]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - whatsapp-bridge
+    # Compose interpolates every service, profile or not, so a required-variable
+    # check here would break `docker compose up` without the tls profile. An
+    # empty BRIDGE_DOMAIN makes Caddy refuse its config and exit instead.
+    environment:
+      BRIDGE_DOMAIN: ${BRIDGE_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  bridge-data:
+  caddy-data:
+  caddy-config:

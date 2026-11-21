@@ -23,8 +23,6 @@ const REASON_LABELS: Record<WhatsAppUnmatchedDto["reason"], string> = {
   AMBIGUOUS: "More than one lead has this number",
   NO_MATCH: "No lead has this number",
   UNKNOWN_BUSINESS_NUMBER: "Sent to a number this app isn't configured for",
-  // Never listed here (the queue excludes them), but the type is exhaustive.
-  UNLINKED_GROUP: "Posted in a WhatsApp group no project is linked to",
 };
 
 /**

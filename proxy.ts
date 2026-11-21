@@ -25,6 +25,10 @@ const isPublicRoute = createRouteMatcher([
   // WHATSAPP_WEBHOOK_VERIFY_TOKEN; every POST is authenticated by the
   // X-Hub-Signature-256 HMAC over the raw body (lib/whatsapp/webhook-handler.ts).
   "/api/whatsapp/webhook(.*)",
+  // WhatsApp bridge events — Royal's own bridge service calls it. Every POST
+  // is authenticated by an HMAC over the timestamp and raw body, keyed with
+  // WHATSAPP_BRIDGE_WEBHOOK_SECRET (lib/whatsapp-bridge/webhook-handler.ts).
+  "/api/whatsapp-bridge/webhook(.*)",
   // SMS and call callbacks — Twilio or Telnyx calls them. Every request is
   // authenticated by the carrier's signature (X-Twilio-Signature HMAC, Telnyx
   // Ed25519) over the exact URL and raw body (lib/comms/webhook-handler.ts).

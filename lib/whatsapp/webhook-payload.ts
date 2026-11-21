@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import type { InboundWhatsAppMessage } from "@/lib/domain/leads/whatsapp/inbound";
 import type { WhatsAppStatusUpdate } from "@/lib/domain/leads/whatsapp/status";
-import type { WhatsAppGroupEvent } from "@/lib/domain/projects/whatsapp/groups";
 import type { WhatsAppCallPermissionReply } from "@/lib/domain/leads/whatsapp/call-permissions";
 import type { WhatsAppCallEvent } from "@/lib/domain/leads/whatsapp/calls";
 import {
@@ -75,7 +74,10 @@ const messageSchema = z
     id: z.string().min(1),
     timestamp: metaTimestamp,
     type: z.string().min(1),
-    /** Present when it was posted in a group. */
+    /**
+     * Present when it was posted in a group. Project groups come through the
+     * WhatsApp bridge, never Meta, so such a message is skipped.
+     */
     group_id: z.string().min(1).optional(),
     text: metaText.optional(),
     image: metaMedia.optional(),
@@ -142,57 +144,10 @@ const valueSchema = z
       .optional(),
     messages: z.array(z.unknown()).optional(),
     statuses: z.array(z.unknown()).optional(),
-    /** The group_* fields carry their events here. */
-    groups: z.array(z.unknown()).optional(),
     /** The `calls` field carries its events here. */
     calls: z.array(z.unknown()).optional(),
   })
   .passthrough();
-
-const groupErrors = z
-  .array(
-    z
-      .object({
-        code: z.union([z.number(), z.string()]).optional(),
-        title: z.string().optional(),
-        message: z.string().optional(),
-      })
-      .passthrough(),
-  )
-  .optional();
-
-const participantList = z
-  .array(z.object({ wa_id: z.string().optional() }).passthrough())
-  .optional();
-
-const groupEventSchema = z
-  .object({
-    timestamp: z.union([z.string(), z.number()]).optional(),
-    group_id: z.string().optional(),
-    type: z.string().min(1),
-    request_id: z.string().optional(),
-    subject: z.string().optional(),
-    invite_link: z.string().optional(),
-    errors: groupErrors,
-    added_participants: participantList,
-    removed_participants: participantList,
-    group_subject: z
-      .object({
-        text: z.string().optional(),
-        update_successful: z.boolean().optional(),
-      })
-      .partial()
-      .optional(),
-  })
-  .passthrough();
-
-/** The webhook fields that carry group events. */
-const GROUP_FIELDS = new Set([
-  "group_lifecycle_update",
-  "group_participants_update",
-  "group_settings_update",
-  "group_status_update",
-]);
 
 const payloadSchema = z
   .object({
@@ -221,7 +176,6 @@ export type ParsedWhatsAppWebhook = {
   readonly entriesWithoutAccountId: number;
   readonly messages: readonly InboundWhatsAppMessage[];
   readonly statuses: readonly WhatsAppStatusUpdate[];
-  readonly groupEvents: readonly WhatsAppGroupEvent[];
   readonly callEvents: readonly WhatsAppCallEvent[];
   readonly callPermissionReplies: readonly WhatsAppCallPermissionReply[];
   /** Why parts of the delivery were skipped. Safe to log. */
@@ -283,106 +237,9 @@ function inboundMedia(
   };
 }
 
-/** Optional on group and call events: missing or invalid means "now". */
+/** Optional on call events: missing or invalid means "now". */
 function eventTime(timestamp: string | number | undefined): Date {
   return webhookTimestamp(timestamp) ?? new Date();
-}
-
-function participantIds(list: z.infer<typeof participantList>): string[] {
-  return (list ?? [])
-    .map((participant) => participant.wa_id?.trim())
-    .filter((id): id is string => Boolean(id));
-}
-
-/** One groups[] entry, as the domain's event or a reason it was skipped. */
-function groupEvent(
-  raw: unknown,
-): { event: WhatsAppGroupEvent } | { ignored: string } {
-  const parsed = groupEventSchema.safeParse(raw);
-  if (!parsed.success) return { ignored: "group event without a type" };
-  const value = parsed.data;
-  const at = eventTime(value.timestamp);
-  const groupId = value.group_id?.trim() || null;
-  const error = value.errors?.[0];
-
-  switch (value.type) {
-    case "group_create":
-      if (error) {
-        return {
-          event: {
-            at,
-            groupId,
-            kind: "create_failed",
-            reason: describeWhatsAppError(
-              error.code === undefined ? undefined : Number(error.code),
-              error.title ?? error.message,
-            ),
-            requestId: value.request_id ?? null,
-          },
-        };
-      }
-      if (!groupId) return { ignored: "group_create without a group_id" };
-      return {
-        event: {
-          at,
-          groupId,
-          inviteLink: value.invite_link ?? null,
-          kind: "created",
-          requestId: value.request_id ?? null,
-          subject: value.subject ?? null,
-        },
-      };
-    case "group_delete":
-      if (error || !groupId) {
-        return { ignored: "group_delete failed or unnamed" };
-      }
-      return { event: { at, groupId, kind: "deleted" } };
-    case "group_participants_add":
-      if (!groupId) return { ignored: "participants_add without a group_id" };
-      return {
-        event: {
-          at,
-          groupId,
-          kind: "participants_added",
-          waIds: participantIds(value.added_participants),
-        },
-      };
-    case "group_participants_remove":
-      if (!groupId) {
-        return { ignored: "participants_remove without a group_id" };
-      }
-      return {
-        event: {
-          at,
-          groupId,
-          kind: "participants_removed",
-          waIds: participantIds(value.removed_participants),
-        },
-      };
-    case "group_suspend":
-    case "group_suspend_cleared":
-      if (!groupId) return { ignored: "suspension event without a group_id" };
-      return {
-        event: {
-          at,
-          groupId,
-          kind:
-            value.type === "group_suspend" ? "suspended" : "suspension_cleared",
-        },
-      };
-    case "group_settings_update": {
-      const subject = value.group_subject;
-      if (!groupId || !subject?.update_successful || !subject.text) {
-        return { ignored: "group_settings_update with no subject change" };
-      }
-      return {
-        event: { at, groupId, kind: "subject_changed", subject: subject.text },
-      };
-    }
-    default:
-      // Join requests and anything newer: nothing this app acts on yet.
-      return { ignored: "group event type is not handled" };
-  }
 }
 
 const callSchema = z
@@ -483,7 +340,6 @@ export function parseWhatsAppWebhook(
   const businessAccountIds: string[] = [];
   const messages: InboundWhatsAppMessage[] = [];
   const statuses: WhatsAppStatusUpdate[] = [];
-  const groupEvents: WhatsAppGroupEvent[] = [];
   const callEvents: WhatsAppCallEvent[] = [];
   const callPermissionReplies: WhatsAppCallPermissionReply[] = [];
   const ignored: string[] = [];
@@ -494,19 +350,6 @@ export function parseWhatsAppWebhook(
     else entriesWithoutAccountId += 1;
     (entry.changes ?? []).forEach((change, changeIndex) => {
       const where = `entry ${entryIndex} change ${changeIndex}`;
-      if (change.field && GROUP_FIELDS.has(change.field)) {
-        const groupValue = valueSchema.safeParse(change.value);
-        if (!groupValue.success) {
-          ignored.push(where + ": value did not match the groups shape");
-          return;
-        }
-        (groupValue.data.groups ?? []).forEach((raw, index) => {
-          const result = groupEvent(raw);
-          if ("event" in result) groupEvents.push(result.event);
-          else ignored.push(where + " group " + index + ": " + result.ignored);
-        });
-        return;
-      }
       if (change.field === "calls") {
         const callValue = valueSchema.safeParse(change.value);
         const callNumber = callValue.success
@@ -577,13 +420,18 @@ export function parseWhatsAppWebhook(
           });
           return;
         }
+        if (message.data.group_id) {
+          ignored.push(
+            `${where} message ${index}: posted in a group (project groups use the WhatsApp bridge)`,
+          );
+          return;
+        }
         const contact = value.data.contacts?.find(
           (candidate) => candidate.wa_id === message.data.from,
         );
         messages.push({
           businessPhoneNumberId: phoneNumberId,
           fromWaId: message.data.from,
-          groupId: message.data.group_id ?? null,
           media: inboundMedia(message.data),
           profileName: contact?.profile?.name ?? null,
           providerMessageId: message.data.id,
@@ -634,7 +482,6 @@ export function parseWhatsAppWebhook(
     callEvents,
     entriesWithoutAccountId,
     callPermissionReplies,
-    groupEvents,
     ignored,
     messages,
     statuses,

@@ -37,12 +37,7 @@ const UNIQUE_KEYS: Record<string, string[][]> = {
     ["unmatchedMessageId"],
   ],
   project: [["id"], ["leadId"]],
-  projectWhatsAppGroup: [
-    ["id"],
-    ["projectId"],
-    ["providerGroupId"],
-    ["createRequestId"],
-  ],
+  projectWhatsAppGroup: [["id"], ["projectId"], ["providerGroupId"]],
   projectWhatsAppMessage: [["id"], ["providerMessageId"], ["idempotencyKey"]],
   projectWhatsAppParticipant: [["id"], ["groupId", "waId"]],
   leadEmails: [["id"]],
@@ -411,6 +406,14 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
             rows[index] = updated;
             return withRelations(model, updated);
           },
+          deleteMany: async (args: Row = {}) => {
+            log.push(`${model}.deleteMany`);
+            const before = table(model).length;
+            tables[model] = table(model).filter(
+              (row) => !matches(row, args.where as Row),
+            );
+            return { count: before - table(model).length };
+          },
           updateMany: async (args: Row) => {
             log.push(`${model}.updateMany`);
             const rows = table(model);
@@ -506,13 +509,11 @@ function defaultsFor(model: string): Row {
     case "projectWhatsAppGroup":
       return {
         createAttempt: 0,
-        createRequestId: null,
         failureReason: null,
         inviteLink: null,
         inviteLinkAt: null,
         lastMessageAt: null,
         providerGroupId: null,
-        requestedAt: null,
         unreadCount: 0,
       };
     case "projectWhatsAppMessage":
@@ -536,7 +537,6 @@ function defaultsFor(model: string): Row {
       return {
         resolvedAt: null,
         resolvedById: null,
-        providerGroupId: null,
         resolvedLeadId: null,
         status: "PENDING",
       };

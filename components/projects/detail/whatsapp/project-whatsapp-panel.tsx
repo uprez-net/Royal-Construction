@@ -68,11 +68,13 @@ export function ProjectWhatsAppPanel({
   }, [leadId, isAdmin, open]);
 
   const group = thread?.group ?? null;
+  // A group that is no longer live still opens as a (read-only) chat while
+  // it has history; with none, the setup pane offers what to do next.
   const groupReady =
     group
     && (group.status === "ACTIVE"
-      || group.status === "SUSPENDED"
-      || (group.status === "DELETED" && messages.length > 0));
+      || ((group.status === "DELETED" || group.status === "UNLINKED")
+        && messages.length > 0));
   const lastGroupMessage = messages.at(-1);
   const name = thread?.leadName ?? leadName;
 
@@ -93,9 +95,11 @@ export function ProjectWhatsAppPanel({
           ? "Creating the group…"
           : group?.status === "FAILED"
             ? "Group not created"
-            : group
-              ? "No messages yet"
-              : "No group yet",
+            : group?.status === "UNLINKED"
+              ? "No group linked"
+              : group
+                ? "No messages yet"
+                : "No group yet",
       time: lastGroupMessage ? chatTime(lastGroupMessage.occurredAt) : null,
       title: group?.subject ?? "Project group",
       unread: open === "group" ? 0 : (group?.unreadCount ?? 0),

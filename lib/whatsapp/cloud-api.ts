@@ -2,8 +2,6 @@ import {
   WhatsAppMediaError,
   WhatsAppSendError,
   type WhatsAppCallsPort,
-  type WhatsAppGroupsPort,
-  type WhatsAppGroupSummary,
   type WhatsAppMediaPort,
   type WhatsAppPort,
   type WhatsAppSendReceipt,
@@ -25,8 +23,8 @@ import { describeWhatsAppError } from "./errors";
 // (lib/domain/leads/whatsapp/send.ts). Logs carry codes and trace ids, never a
 // token, a body or a customer's number.
 //
-// The same judgement covers creating a group: a create that timed out may
-// have made one, and the domain looks for it before asking again.
+// Leads only. Project groups go through the WhatsApp bridge
+// (lib/whatsapp-bridge/client.ts).
 
 const SEND_TIMEOUT_MS = 15_000;
 const MEDIA_TIMEOUT_MS = 60_000;
@@ -188,134 +186,6 @@ async function sendMessage(
   );
 }
 
-function createGroupsPort(
-  config: WhatsAppConfig,
-  fetchImpl: Fetch,
-): WhatsAppGroupsPort {
-  return {
-    create: async (request) => {
-      const body = await graph(
-        config,
-        {
-          body: {
-            description: request.description,
-            messaging_product: "whatsapp",
-            subject: request.subject,
-          },
-          method: "POST",
-          path: `${encodeURIComponent(request.fromPhoneNumberId)}/groups`,
-          what: "a group create",
-        },
-        fetchImpl,
-      );
-      return {
-        groupId: stringOrNull(body.group_id) ?? stringOrNull(body.id),
-        inviteLink: stringOrNull(body.invite_link),
-        requestId: stringOrNull(body.request_id),
-      };
-    },
-    info: async (groupId) => {
-      const body = await graph(
-        config,
-        {
-          method: "GET",
-          path: `${encodeURIComponent(groupId)}?fields=subject,suspended,participants`,
-          what: "a group read",
-        },
-        fetchImpl,
-      );
-      const participants = Array.isArray(body.participants)
-        ? body.participants
-        : [];
-      return {
-        groupId,
-        participantWaIds: participants
-          .map((row) => stringOrNull((row as Json)?.wa_id))
-          .filter((id): id is string => Boolean(id)),
-        subject: stringOrNull(body.subject) ?? "",
-        suspended: body.suspended === true || body.suspended === "true",
-      };
-    },
-    inviteLink: async (groupId) => {
-      const body = await graph(
-        config,
-        {
-          method: "GET",
-          path: `${encodeURIComponent(groupId)}/invite_link`,
-          what: "an invite-link read",
-        },
-        fetchImpl,
-      );
-      const link = stringOrNull(body.invite_link);
-      if (!link) {
-        throw new WhatsAppSendError(
-          "WhatsApp returned no invite link for this group.",
-          "not_sent",
-        );
-      }
-      return link;
-    },
-    list: async (phoneNumberId) => {
-      const groups: WhatsAppGroupSummary[] = [];
-      let after: string | null = null;
-      // A business number holds at most a few hundred project groups; ten
-      // pages of 100 is far beyond what this business will ever have.
-      for (let page = 0; page < 10; page += 1) {
-        const query = new URLSearchParams({ limit: "100" });
-        if (after) query.set("after", after);
-        const body = await graph(
-          config,
-          {
-            method: "GET",
-            path: `${encodeURIComponent(phoneNumberId)}/groups?${query.toString()}`,
-            what: "a group list",
-          },
-          fetchImpl,
-        );
-        const data = (body.data ?? {}) as { groups?: unknown };
-        const rows = Array.isArray(data.groups) ? data.groups : [];
-        for (const row of rows as Json[]) {
-          const groupId = stringOrNull(row.id);
-          if (!groupId) continue;
-          const created = stringOrNull(row.created_at);
-          const seconds =
-            created && /^\d+$/.test(created) ? Number(created) : null;
-          groups.push({
-            createdAt:
-              seconds !== null
-                ? new Date(seconds * 1000)
-                : created
-                  ? new Date(created)
-                  : null,
-            groupId,
-            subject: stringOrNull(row.subject) ?? "",
-          });
-        }
-        const paging = body.paging as
-          | { next?: unknown; cursors?: { after?: unknown } }
-          | undefined;
-        after = paging?.next ? stringOrNull(paging.cursors?.after) : null;
-        if (!after) break;
-      }
-      return groups.sort(
-        (a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0),
-      );
-    },
-    sendText: (message) =>
-      sendMessage(
-        config,
-        message.fromPhoneNumberId,
-        {
-          recipient_type: "group",
-          text: { body: message.body, preview_url: false },
-          to: message.groupId,
-          type: "text",
-        },
-        fetchImpl,
-      ),
-  };
-}
-
 /**
  * Meta's Calling API: signalling for calls a staff browser carries over
  * WebRTC. POST /{phone-number-id}/calls with an action (VERIFY the field
@@ -426,10 +296,6 @@ export function createCloudApiWhatsAppPort(
         ? createCallsPort(config, fetchImpl)
         : null,
     channel: config.channel,
-    groups:
-      config.channel.groupsEnabled && config.accessToken
-        ? createGroupsPort(config, fetchImpl)
-        : null,
     sendTemplate: (message) =>
       sendMessage(
         config,

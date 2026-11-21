@@ -3,7 +3,7 @@ import { ProjectWhatsAppGroupStatus } from "@prisma/client";
 import { authorizeProjectRecording } from "../../access/projects";
 import type { DomainDb } from "../../db";
 import { DomainAuthorizationError, DomainValidationError } from "../../errors";
-import type { WhatsAppChannel } from "../../ports/whatsapp";
+import type { WhatsAppBridgePort } from "../../ports/whatsapp-bridge";
 import {
   isInternalPrincipal,
   isOfficePrincipal,
@@ -14,7 +14,7 @@ import { PROJECT_OWNER_SELECT, projectOwnerRows } from "../owners";
 import {
   projectWhatsAppGroupAvailability,
   type ProjectWhatsAppGroupAvailability,
-} from "./groups";
+} from "./group-shared";
 import {
   PROJECT_WHATSAPP_GROUP_SELECT,
   PROJECT_WHATSAPP_MESSAGE_SELECT,
@@ -70,7 +70,7 @@ export async function getProjectWhatsAppThread(
     readonly limit?: number;
   },
   db: DomainDb,
-  context: { readonly channel: WhatsAppChannel | null },
+  context: { readonly bridge: WhatsAppBridgePort | null | undefined },
 ): Promise<ProjectWhatsAppThread> {
   requireStaff(principal);
   await authorizeProjectRecording(principal, input.projectId, db);
@@ -138,7 +138,7 @@ export async function getProjectWhatsAppThread(
   );
 
   return {
-    availability: projectWhatsAppGroupAvailability(context.channel),
+    availability: projectWhatsAppGroupAvailability(context.bridge),
     group,
     leadId: isOfficePrincipal(principal) ? project.Lead.id : null,
     leadName: project.Lead.name,
@@ -167,9 +167,16 @@ export async function markProjectWhatsAppRead(
   await authorizeProjectRecording(principal, input.projectId, db);
   await db.projectWhatsAppGroup.updateMany({
     data: { unreadCount: 0 },
+    // Every status whose chat the tab can show, or the count never clears.
     where: {
       projectId: input.projectId,
-      status: { not: ProjectWhatsAppGroupStatus.DELETED },
+      status: {
+        in: [
+          ProjectWhatsAppGroupStatus.ACTIVE,
+          ProjectWhatsAppGroupStatus.UNLINKED,
+          ProjectWhatsAppGroupStatus.DELETED,
+        ],
+      },
     },
   });
 }

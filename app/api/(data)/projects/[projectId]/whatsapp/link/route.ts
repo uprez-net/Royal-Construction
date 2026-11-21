@@ -4,12 +4,12 @@ import { z } from "zod";
 import { signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
 import {
   linkProjectWhatsAppGroup,
-  listLinkableWhatsAppGroups,
-} from "@/lib/domain/projects/whatsapp/groups";
+  listWhatsAppBridgeGroups,
+  unlinkProjectWhatsAppGroup,
+} from "@/lib/domain/projects/whatsapp/group-links";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
-import { createWhatsAppPortFromEnv } from "@/lib/whatsapp/cloud-api";
-import { whatsappChannelFromEnv } from "@/lib/whatsapp/config";
+import { createWhatsAppBridgePortFromEnv } from "@/lib/whatsapp-bridge/client";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -18,39 +18,38 @@ import {
 } from "@/utils/validators/response";
 
 /**
- * Linking an existing WhatsApp group to a project already underway.
+ * Linking a project to one of the groups Royal's WhatsApp number is in.
  *
- * GET lists the business's own API-made groups no project has; POST links
- * one. A group made on a phone never appears — Meta's API cannot see it.
+ * GET lists the groups no project has linked; POST links one; DELETE unlinks
+ * the project's group (the group itself stays in WhatsApp).
  */
 
 const linkSchema = z.object({
-  providerGroupId: z.string().trim().min(1).max(200),
+  groupJid: z
+    .string()
+    .trim()
+    .regex(/^[0-9-]{5,40}@g\.us$/, "Choose a group to link."),
 });
 
 export async function GET(
   _request: NextRequest,
   ctx: { params: Promise<{ projectId: string }> },
 ) {
-  const { projectId } = await ctx.params;
+  await ctx.params;
   try {
     const principal = await signedInUserPrincipal();
     if (!principal) return unauthorizedResponse();
-    const groups = await listLinkableWhatsAppGroups(
-      principal,
-      { projectId },
-      prisma,
-      {
-        channel: whatsappChannelFromEnv(),
-        groups: createWhatsAppPortFromEnv()?.groups ?? null,
-      },
-    );
-    return successResponse({ groups });
+    const groups = await listWhatsAppBridgeGroups(principal, prisma, {
+      bridge: createWhatsAppBridgePortFromEnv(),
+    });
+    return successResponse({
+      groups: groups.filter((group) => !group.linkedProject),
+    });
   } catch (error) {
     const refusal = domainErrorResponse(error);
     if (refusal) return refusal;
-    console.error("[whatsapp] Listing linkable groups failed", error);
-    return errorResponse("Could not list the business's WhatsApp groups.", {
+    console.error("[whatsapp] Listing the bridge's groups failed", error);
+    return errorResponse("Could not list the WhatsApp groups.", {
       code: "PROJECT_WHATSAPP_LIST_FAILED",
       status: 500,
     });
@@ -69,12 +68,9 @@ export async function POST(
     if (!principal) return unauthorizedResponse();
     const result = await linkProjectWhatsAppGroup(
       principal,
-      { projectId, providerGroupId: parsed.data.providerGroupId },
+      { groupJid: parsed.data.groupJid, projectId },
       prisma,
-      {
-        channel: whatsappChannelFromEnv(),
-        groups: createWhatsAppPortFromEnv()?.groups ?? null,
-      },
+      { bridge: createWhatsAppBridgePortFromEnv() },
     );
     return successResponse(result);
   } catch (error) {
@@ -83,6 +79,42 @@ export async function POST(
     console.error("[whatsapp] Linking a group failed", error);
     return errorResponse("The WhatsApp group could not be linked.", {
       code: "PROJECT_WHATSAPP_LINK_FAILED",
+      status: 500,
+    });
+  }
+}
+
+const unlinkSchema = z.object({
+  /** The group the person confirmed; refused if the project's group changed. */
+  groupJid: z
+    .string()
+    .trim()
+    .regex(/^[0-9-]{5,40}@g\.us$/),
+});
+
+export async function DELETE(
+  request: NextRequest,
+  ctx: { params: Promise<{ projectId: string }> },
+) {
+  const { projectId } = await ctx.params;
+  const parsed = await parseBodyWithResponse(request, unlinkSchema);
+  if (!parsed.success) return parsed.response;
+  try {
+    const principal = await signedInUserPrincipal();
+    if (!principal) return unauthorizedResponse();
+    const result = await unlinkProjectWhatsAppGroup(
+      principal,
+      { groupJid: parsed.data.groupJid, projectId },
+      prisma,
+      { bridge: createWhatsAppBridgePortFromEnv() },
+    );
+    return successResponse(result);
+  } catch (error) {
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
+    console.error("[whatsapp] Unlinking a group failed", error);
+    return errorResponse("The WhatsApp group could not be unlinked.", {
+      code: "PROJECT_WHATSAPP_UNLINK_FAILED",
       status: 500,
     });
   }
