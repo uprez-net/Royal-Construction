@@ -35,8 +35,11 @@ services:
     restart: unless-stopped
     depends_on:
       - whatsapp-bridge
+    # Compose interpolates every service, profile or not, so a required-variable
+    # check here would break `docker compose up` without the tls profile. An
+    # empty BRIDGE_DOMAIN makes Caddy refuse its config and exit instead.
     environment:
-      BRIDGE_DOMAIN: ${BRIDGE_DOMAIN:?Set BRIDGE_DOMAIN to the bridge's public hostname}
+      BRIDGE_DOMAIN: ${BRIDGE_DOMAIN:-}
     ports:
       - "80:80"
       - "443:443"
