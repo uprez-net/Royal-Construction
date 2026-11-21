@@ -82,3 +82,57 @@ test("an unsigned Clerk webhook call is a 401, not a 500", () => {
     /const evt = await verifyWebhook\(request\)\.catch\(\(\) => null\);\s*if \(!evt\) \{[\s\S]*?status: 401/,
   );
 });
+
+test("the project detail route answers a refusal, not a 500", () => {
+  // Found on staging with a GUEST past the proxy: the handler had no error
+  // handling, so the domain's refusal escaped as a 500 (an incident in
+  // production). Same family as #569.
+  const route = readFileSync(
+    join(REPO_ROOT, "app/api/(data)/projects/[projectId]/route.ts"),
+    "utf8",
+  );
+  const get = route.slice(route.indexOf("export async function GET"));
+  const handler = get.slice(0, get.indexOf("export async function", 10));
+  assert.match(
+    handler,
+    /try \{[\s\S]*getCachedProjectById[\s\S]*const refusal = domainErrorResponse\(error\);\s*if \(refusal\) return refusal;/,
+  );
+});
+
+test("the cached project read asks the read rule before the cache, so a refusal is a real DomainError", () => {
+  // CodeRabbit (#582): an error thrown inside a "use cache" body may reach the
+  // route as something other than the DomainError it was. The read rule is
+  // asked first, outside the cache, for the caller's principal.
+  const data = readFileSync(join(REPO_ROOT, "lib/data/projects.ts"), "utf8");
+  const wrapper = data.slice(
+    data.indexOf("export async function getCachedProjectById"),
+  );
+  assert.match(
+    wrapper.slice(0, wrapper.indexOf("}\n")),
+    /projectReadScope\(principal\);[\s\S]*cachedProjectById\(principal, id\)/,
+  );
+});
+
+test("a GUEST's refusal to read projects is a 403 with the domain's words", async () => {
+  // The rule the route's handler maps: projectReadScope refuses a GUEST, and
+  // domainErrorResponse answers that refusal as a 403, not a 500.
+  const { projectReadScope } = await import("@/lib/domain/access/projects");
+  const { domainErrorResponse } = await import("@/lib/http/domain-response");
+  let refusal: unknown;
+  try {
+    projectReadScope({
+      kind: "user",
+      role: "GUEST",
+      userId: "u_guest",
+    } as never);
+  } catch (error) {
+    refusal = error;
+  }
+  const response = domainErrorResponse(refusal);
+  assert.ok(response, "the refusal must map to a response");
+  assert.equal(response.status, 403);
+  assert.match(
+    JSON.stringify(await response.json()),
+    /Viewing projects requires a signed-in user/,
+  );
+});

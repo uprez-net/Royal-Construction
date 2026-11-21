@@ -185,10 +185,18 @@ export async function GET(
   );
   if (!routeParams.success) return routeParams.response;
 
-  const project = await getCachedProjectById(routeParams.data.projectId);
-  if (!project) {
-    return notFoundResponse("Project");
-  }
+  try {
+    const project = await getCachedProjectById(routeParams.data.projectId);
+    if (!project) {
+      return notFoundResponse("Project");
+    }
 
-  return successResponse(project);
+    return successResponse(project);
+  } catch (error) {
+    // A refusal (an account that may not read projects) is a 403 with its own
+    // words, not a 500 that reports an incident.
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
+    throw error;
+  }
 }
