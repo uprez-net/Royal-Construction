@@ -18,6 +18,8 @@ import type { Logger } from "pino";
 import type { EventOutbox } from "../events/outbox.js";
 import type {
   BridgeAccount,
+  BridgeEventMap,
+  BridgeEventType,
   BridgeMedia,
   MessageStatus,
 } from "../events/types.js";
@@ -66,6 +68,23 @@ type Options = {
 const GROUP_CACHE_MS = 5 * 60 * 1000;
 const RECENT_MESSAGES = 500;
 const MAX_RECONNECT_DELAY_MS = 60_000;
+/** Files downloaded at once: each is held in memory until it is saved. */
+const MAX_CONCURRENT_DOWNLOADS = 2;
+const MAX_ENQUEUE_DELAY_MS = 60_000;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Whether saved keys belong to a linked device. A QR login records the
+ * account in `creds.me`; `creds.registered` is set only by a pairing-code
+ * login, so it alone would forget a QR-linked session at every restart.
+ */
+function isLinked(creds: {
+  me?: { id?: string } | null;
+  registered?: boolean;
+}) {
+  return Boolean(creds.me?.id || creds.registered);
+}
 
 /** Baileys' errors are Boom errors; the HTTP-like status is the useful part. */
 function statusOf(error: unknown): number | null {
@@ -102,6 +121,14 @@ export class BaileysSession implements WhatsAppClient {
   private reconnectAttempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private registered = false;
+  /**
+   * Bumped by logout, restart and stop. Work begun under an older value — a
+   * slow auth read, a reconnect timer — finds it changed and gives up, so it
+   * cannot bring a socket back after the session was ended.
+   */
+  private generation = 0;
+  private activeDownloads = 0;
+  private readonly downloadWaiters: (() => void)[] = [];
   private readonly groupCache = new Map<
     string,
     { metadata: GroupMetadata; at: number }
@@ -122,7 +149,7 @@ export class BaileysSession implements WhatsAppClient {
   /** Connect with saved keys if there are any; otherwise wait for a QR request. */
   async start(): Promise<void> {
     const { state } = await useMultiFileAuthState(this.authDir);
-    if (state.creds.registered) {
+    if (isLinked(state.creds)) {
       await this.connect();
     } else {
       this.setState({ status: "logged_out" });
@@ -131,6 +158,7 @@ export class BaileysSession implements WhatsAppClient {
 
   async stop(): Promise<void> {
     this.stopping = true;
+    this.generation += 1;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     const sock = this.sock;
     this.sock = null;
@@ -146,6 +174,15 @@ export class BaileysSession implements WhatsAppClient {
     if (this.current.status === "open" || this.connecting) {
       return this.connecting ?? undefined;
     }
+    // A socket already connecting, or showing a QR, is the one to scan:
+    // another would leave the first running beside it.
+    if (
+      this.sock
+      && (this.current.status === "connecting"
+        || this.current.status === "awaiting_qr")
+    ) {
+      return;
+    }
     this.stopping = false;
     this.connecting = this.openSocket().finally(() => {
       this.connecting = null;
@@ -154,9 +191,14 @@ export class BaileysSession implements WhatsAppClient {
   }
 
   async restart(): Promise<void> {
+    this.generation += 1;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     const sock = this.sock;
     this.sock = null;
     this.stopping = true;
+    // Detached first, so its close event cannot touch the new socket; the
+    // state is cleared here because that close event will not.
+    this.setState({ qr: null, qrIssuedAt: null, status: "connecting" });
     await sock?.end(undefined).catch(() => undefined);
     this.stopping = false;
     this.reconnectAttempts = 0;
@@ -165,33 +207,40 @@ export class BaileysSession implements WhatsAppClient {
 
   async logout(): Promise<void> {
     this.stopping = true;
+    this.generation += 1;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     const sock = this.sock;
     this.sock = null;
+    let reason = "Disconnected from Royal admin.";
     if (sock && this.current.status === "open") {
       // Tells WhatsApp to unlink this device; the phone's list updates.
-      await sock.logout("Disconnected from Royal admin").catch((error) => {
+      try {
+        await sock.logout("Disconnected from Royal admin");
+      } catch (error) {
         this.log.warn(
           { error: describe(error) },
-          "logout call failed; wiping keys anyway",
+          "logout call failed; closing the socket and wiping keys anyway",
         );
-      });
-    } else {
-      await sock?.end(undefined).catch(() => undefined);
+        reason =
+          "Disconnected here, but WhatsApp didn't confirm it. Also remove the device under WhatsApp › Linked devices on the phone.";
+      }
     }
+    // Always close it locally: a rejected logout can leave the socket open,
+    // still forwarding messages.
+    await sock?.end(undefined).catch(() => undefined);
     await this.wipeAuth();
     this.setState({
       account: null,
       lastDisconnect: {
         at: new Date().toISOString(),
         code: DisconnectReason.loggedOut,
-        reason: "Disconnected from Royal admin.",
+        reason,
       },
       qr: null,
       qrIssuedAt: null,
       status: "logged_out",
     });
-    await this.announceSession("Disconnected from Royal admin.");
+    await this.announceSession(reason);
     this.stopping = false;
   }
 
@@ -225,10 +274,13 @@ export class BaileysSession implements WhatsAppClient {
   }
 
   private async openSocket(): Promise<void> {
+    const generation = this.generation;
     this.setState({ status: "connecting" });
     const blog = baileysLogger(this.options.logger);
     const { state, saveCreds } = await useMultiFileAuthState(this.authDir);
-    this.registered = Boolean(state.creds.registered);
+    // Logged out, restarted or stopped while the keys were being read.
+    if (generation !== this.generation || this.stopping) return;
+    this.registered = isLinked(state.creds);
 
     const sock = makeWASocket({
       auth: {
@@ -236,9 +288,11 @@ export class BaileysSession implements WhatsAppClient {
         keys: makeCacheableSignalKeyStore(state.keys, blog),
       },
       browser: Browsers.ubuntu("Chrome"),
-      cachedGroupMetadata: async (jid) => this.cachedGroup(jid),
-      getMessage: async (key) =>
-        (key.id ? this.recent.get(key.id)?.message : undefined) ?? undefined,
+      cachedGroupMetadata: (jid) => Promise.resolve(this.cachedGroup(jid)),
+      getMessage: (key) =>
+        Promise.resolve(
+          (key.id ? this.recent.get(key.id)?.message : undefined) ?? undefined,
+        ),
       logger: blog,
       // The office keeps getting notifications on the phone.
       markOnlineOnConnect: false,
@@ -249,9 +303,19 @@ export class BaileysSession implements WhatsAppClient {
     });
     this.sock = sock;
 
-    sock.ev.on("creds.update", saveCreds);
+    // Every listener catches its own failures: an unhandled rejection here
+    // would take the whole process down.
+    const guard = (what: string, work: Promise<unknown>) =>
+      void work.catch((error) =>
+        this.log.error({ error: describe(error) }, `could not handle ${what}`),
+      );
+    sock.ev.on("creds.update", () => {
+      // Keys change on every message; a save that fails means the next
+      // connection may not decrypt. Loud, but not fatal.
+      guard("saving the session keys", saveCreds());
+    });
     sock.ev.on("connection.update", (update) => {
-      void this.onConnectionUpdate(sock, update);
+      guard("a connection update", this.onConnectionUpdate(sock, update));
     });
     sock.ev.on("messages.upsert", ({ messages }) => {
       for (const message of messages) {
@@ -266,17 +330,22 @@ export class BaileysSession implements WhatsAppClient {
     sock.ev.on("messages.update", (updates) => {
       for (const { key, update } of updates) {
         if (update.status === undefined || update.status === null) continue;
-        void this.onStatus(key.remoteJid, key.id, key.fromMe, update.status);
+        guard(
+          "a delivery status",
+          this.onStatus(key.remoteJid, key.id, key.fromMe, update.status),
+        );
       }
     });
     sock.ev.on("groups.upsert", (groups) => {
       for (const group of groups) this.cacheGroup(group);
     });
     sock.ev.on("groups.update", (updates) => {
-      for (const update of updates) void this.onGroupUpdate(update);
+      for (const update of updates) {
+        guard("a group update", this.onGroupUpdate(update));
+      }
     });
     sock.ev.on("group-participants.update", (event) => {
-      void this.onParticipants(event);
+      guard("a participants update", this.onParticipants(event));
     });
   }
 
@@ -310,6 +379,7 @@ export class BaileysSession implements WhatsAppClient {
     }
     if (update.connection !== "close") return;
 
+    const generation = this.generation;
     const code = statusOf(update.lastDisconnect?.error);
     const reason = describe(
       update.lastDisconnect?.error ?? "Connection closed.",
@@ -328,6 +398,7 @@ export class BaileysSession implements WhatsAppClient {
       // revoked the session. The keys are useless now.
       this.log.error("WhatsApp unlinked this device; a new QR scan is needed");
       await this.wipeAuth();
+      if (generation !== this.generation) return;
       this.setState({ account: null, status: "logged_out" });
       await this.announceSession("WhatsApp unlinked this device.");
       return;
@@ -346,11 +417,14 @@ export class BaileysSession implements WhatsAppClient {
     this.setState({ status: "connecting" });
     if (wasOpen)
       await this.announceSession(`Connection dropped (${code ?? "no code"}).`);
+    // Logged out or restarted while the drop was being announced.
+    if (generation !== this.generation || this.stopping) return;
     this.scheduleReconnect();
   }
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    const generation = this.generation;
     const delay = Math.min(
       1000 * 2 ** this.reconnectAttempts,
       MAX_RECONNECT_DELAY_MS,
@@ -359,6 +433,7 @@ export class BaileysSession implements WhatsAppClient {
     this.log.warn({ delay, attempt: this.reconnectAttempts }, "reconnecting");
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
+      if (generation !== this.generation || this.stopping) return;
       void this.connect().catch((error) => {
         this.log.error({ error: describe(error) }, "reconnect failed");
         this.scheduleReconnect();
@@ -367,6 +442,53 @@ export class BaileysSession implements WhatsAppClient {
   }
 
   // ── incoming ────────────────────────────────────────────────────────
+
+  /**
+   * Queue an event, retrying until it is on disk. A client's message must
+   * not be lost because the volume hiccuped; it waits here instead.
+   */
+  private async enqueueDurably<T extends BridgeEventType>(
+    type: T,
+    data: BridgeEventMap[T],
+    id?: string,
+  ): Promise<void> {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        await this.options.outbox.enqueue(type, data, id);
+        return;
+      } catch (error) {
+        this.log.error(
+          { attempt, error: describe(error), event: id ?? type },
+          "could not queue an event for the app; retrying",
+        );
+        if (this.stopping) throw error;
+        await sleep(Math.min(1000 * 2 ** (attempt - 1), MAX_ENQUEUE_DELAY_MS));
+      }
+    }
+  }
+
+  /** The ids Royal's own account goes by, without device suffixes. */
+  private ownIds(): Set<string> {
+    const me = this.sock?.user;
+    return new Set(
+      [me?.id, me?.lid, me?.phoneNumber, this.current.account?.jid]
+        .filter((jid): jid is string => Boolean(jid))
+        .map((jid) => bareJid(jid)),
+    );
+  }
+
+  private async withDownloadSlot<T>(work: () => Promise<T>): Promise<T> {
+    if (this.activeDownloads >= MAX_CONCURRENT_DOWNLOADS) {
+      await new Promise<void>((resolve) => this.downloadWaiters.push(resolve));
+    }
+    this.activeDownloads += 1;
+    try {
+      return await work();
+    } finally {
+      this.activeDownloads -= 1;
+      this.downloadWaiters.shift()?.();
+    }
+  }
 
   private remember(message: WAMessage): void {
     if (!message.key.id || !message.message) return;
@@ -392,7 +514,7 @@ export class BaileysSession implements WhatsAppClient {
 
     const fromMe = Boolean(message.key.fromMe);
     const account = this.current.account;
-    const key = message.key as typeof message.key & { participantAlt?: string };
+    const key = message.key;
     const senderJid = fromMe
       ? (account?.jid ?? "me")
       : (key.participant ?? key.participantAlt ?? "unknown");
@@ -411,7 +533,7 @@ export class BaileysSession implements WhatsAppClient {
       media = await this.download(sock, message, messageId, content.media);
     }
 
-    await this.options.outbox.enqueue(
+    await this.enqueueDurably(
       "message.received",
       {
         fromMe,
@@ -452,16 +574,31 @@ export class BaileysSession implements WhatsAppClient {
       };
     }
     try {
-      const bytes = await downloadMediaMessage(
-        message,
-        "buffer",
-        {},
-        {
-          logger: baileysLogger(this.options.logger),
-          reuploadRequest: sock.updateMediaMessage,
-        },
-      );
-      if (bytes.byteLength > this.options.mediaMaxBytes) {
+      // At most a few at once, and each stopped the moment it passes the
+      // limit: a burst of large files must not exhaust the bridge's memory.
+      const bytes = await this.withDownloadSlot(async () => {
+        const stream = await downloadMediaMessage(
+          message,
+          "stream",
+          {},
+          {
+            logger: baileysLogger(this.options.logger),
+            reuploadRequest: sock.updateMediaMessage,
+          },
+        );
+        const chunks: Buffer[] = [];
+        let total = 0;
+        for await (const chunk of stream as AsyncIterable<Buffer>) {
+          total += chunk.length;
+          if (total > this.options.mediaMaxBytes) {
+            stream.destroy();
+            return null;
+          }
+          chunks.push(chunk);
+        }
+        return Buffer.concat(chunks);
+      });
+      if (!bytes) {
         return {
           ...base,
           unavailableReason: "The file is larger than the bridge keeps.",
@@ -499,15 +636,11 @@ export class BaileysSession implements WhatsAppClient {
     const name = STATUS_NAMES[status];
     if (!name) return;
     if (!(await this.options.mappings.get(groupJid))) return;
-    await this.options.outbox
-      .enqueue(
-        "message.status",
-        { at: new Date().toISOString(), groupJid, messageId, status: name },
-        `status:${messageId}:${name}`,
-      )
-      .catch((error) =>
-        this.log.error({ error: describe(error) }, "could not queue a status"),
-      );
+    await this.enqueueDurably(
+      "message.status",
+      { at: new Date().toISOString(), groupJid, messageId, status: name },
+      `status:${messageId}:${name}`,
+    );
   }
 
   private async onGroupUpdate(update: Partial<GroupMetadata>): Promise<void> {
@@ -515,7 +648,7 @@ export class BaileysSession implements WhatsAppClient {
     this.groupCache.delete(update.id);
     const mapping = await this.options.mappings.get(update.id);
     if (!mapping || update.subject === undefined) return;
-    await this.options.outbox.enqueue("group.updated", {
+    await this.enqueueDurably("group.updated", {
       groupJid: update.id,
       projectId: mapping.projectId,
       subject: update.subject ?? null,
@@ -524,16 +657,23 @@ export class BaileysSession implements WhatsAppClient {
 
   private async onParticipants(event: {
     id: string;
-    participants: { id: string; phoneNumber?: string }[];
+    participants: { id: string; phoneNumber?: string; lid?: string }[];
     action: string;
   }): Promise<void> {
     this.groupCache.delete(event.id);
     const mapping = await this.options.mappings.get(event.id);
     if (!mapping) return;
     if (!["add", "remove", "promote", "demote"].includes(event.action)) return;
-    await this.options.outbox.enqueue("group.participants", {
+    const mine = this.ownIds();
+    const includesSelf = event.participants.some((participant) =>
+      [participant.id, participant.phoneNumber, participant.lid]
+        .filter((jid): jid is string => Boolean(jid))
+        .some((jid) => mine.has(bareJid(jid))),
+    );
+    await this.enqueueDurably("group.participants", {
       action: event.action as "add" | "remove" | "promote" | "demote",
       groupJid: event.id,
+      includesSelf,
       participants: event.participants.map((participant) => ({
         jid: bareJid(participant.id),
         phoneE164: firstPhone(participant.phoneNumber, participant.id),
@@ -555,7 +695,7 @@ export class BaileysSession implements WhatsAppClient {
     this.groupCache.set(metadata.id, { at: Date.now(), metadata });
   }
 
-  private async cachedGroup(jid: string): Promise<GroupMetadata | undefined> {
+  private cachedGroup(jid: string): GroupMetadata | undefined {
     const hit = this.groupCache.get(jid);
     if (hit && Date.now() - hit.at < GROUP_CACHE_MS) return hit.metadata;
     return undefined;
@@ -732,7 +872,6 @@ export class BaileysSession implements WhatsAppClient {
     messageId: string,
   ): Promise<{ messageId: string; sentAt: string }> {
     const sock = this.requireSocket();
-    this.options.sent.expect(messageId);
     try {
       const sent = await sock.sendMessage(groupJid, { text }, { messageId });
       return {

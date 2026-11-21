@@ -100,6 +100,8 @@ jobs:
       - run: pnpm install --frozen-lockfile --prefer-offline
       - name: Formatting
         run: pnpm format:check
+      - name: Lint
+        run: pnpm lint
       - name: Typecheck
         run: pnpm typecheck
       - name: Tests
@@ -206,8 +208,11 @@ jobs:
              docker compose pull whatsapp-bridge
              docker compose up -d --remove-orphans
              docker logout ghcr.io >/dev/null
+             # The port Compose actually published (BRIDGE_PORT lives in .env,
+             # which this shell does not read).
+             port=\$(docker compose port whatsapp-bridge 8080 | sed 's/.*://')
              for i in \$(seq 1 30); do
-               if curl -fsS http://127.0.0.1:\${BRIDGE_PORT:-8080}/healthz; then echo; exit 0; fi
+               if curl -fsS http://127.0.0.1:\${port:-8080}/healthz; then echo; exit 0; fi
                sleep 2
              done
              echo 'The bridge did not become healthy.'; docker compose logs --tail 80 whatsapp-bridge; exit 1"

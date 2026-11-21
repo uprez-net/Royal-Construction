@@ -166,7 +166,7 @@ export function createApp(deps: AppDeps) {
 
   v1.get("/session", (c) => c.json(sessionView()));
 
-  v1.post("/session/connect", async (c) => {
+  v1.post("/session/connect", (c) => {
     // Opening the socket can take seconds; the caller polls /session/qr.
     void client
       .connect()
@@ -269,41 +269,66 @@ export function createApp(deps: AppDeps) {
     }
     const input = await body(c, messageSchema);
 
-    const prior = await sent.find(key);
-    if (prior) {
-      if (prior.groupJid !== jid) {
-        throw new BridgeError(
-          409,
-          "in_progress",
-          "That Idempotency-Key was used for another group.",
-        );
-      }
-      return c.json({
-        messageId: prior.messageId,
-        replayed: true,
-        sentAt: prior.sentAt,
-      });
-    }
     if (!sent.claim(key)) {
+      // Another request is sending this key right now; it may reach the
+      // group, so the caller must not treat this as "nothing was sent".
       throw new BridgeError(
         409,
-        "in_progress",
-        "This message is already being sent.",
+        "send_in_progress",
+        "This message is already being sent. Wait for it to finish before trying again.",
       );
     }
     try {
-      const result = await client.sendText(
-        jid,
-        input.text,
-        client.newMessageId(),
-      );
-      await sent.record({
-        groupJid: jid,
-        key,
-        messageId: result.messageId,
-        sentAt: result.sentAt,
+      const prior = await sent.find(key);
+      if (prior) {
+        if (prior.groupJid !== jid) {
+          throw new BridgeError(
+            409,
+            "key_conflict",
+            "That Idempotency-Key was used for another group.",
+          );
+        }
+        if (prior.status === "sent") {
+          return c.json({
+            messageId: prior.messageId,
+            replayed: true,
+            sentAt: prior.sentAt,
+          });
+        }
+        // An earlier attempt with this key went to WhatsApp and was never
+        // confirmed. Sending again could post it twice.
+        throw new BridgeError(
+          504,
+          "send_unconfirmed",
+          "An earlier attempt to send this message was never confirmed by WhatsApp. Check the group before sending it again.",
+        );
+      }
+      // The intent, with the message id chosen up front, is on disk before
+      // WhatsApp is called: a lost answer cannot become a second send.
+      const messageId = client.newMessageId();
+      await sent.begin(key, jid, messageId);
+      let result: { messageId: string; sentAt: string };
+      try {
+        result = await client.sendText(jid, input.text, messageId);
+      } catch (error) {
+        if (
+          error instanceof BridgeError
+          && (error.code === "not_connected"
+            || error.code === "whatsapp_refused")
+        ) {
+          // Refused before anything left: the key may be used again.
+          await sent.discard(key);
+        } else {
+          await sent.markUnconfirmed(key);
+        }
+        throw error;
+      }
+      const record = await sent.confirm(key, result.sentAt);
+      return c.json({
+        messageId: record.messageId,
+        replayed: false,
+        sentAt: record.sentAt,
       });
-      return c.json({ ...result, replayed: false });
     } finally {
       sent.release(key);
     }
@@ -336,9 +361,12 @@ export function createApp(deps: AppDeps) {
     return c.json({ mapping: await mappings.set(jid, input.projectId) });
   });
 
+  // `?projectId=` removes the mapping only while it is still that project's,
+  // so a late unlink cannot undo a newer link to another project.
   v1.delete("/mappings/:jid", async (c) => {
-    const removed = await mappings.remove(groupJidParam(c));
-    return c.json({ removed });
+    const projectId = c.req.query("projectId")?.trim() || undefined;
+    const result = await mappings.remove(groupJidParam(c), projectId);
+    return c.json(result);
   });
 
   // ── media ───────────────────────────────────────────────────────────

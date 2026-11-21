@@ -60,10 +60,33 @@ function text(value: string | null | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
+/** WhatsApp's "view once" wrappers: shown once on the phone, then gone. */
+const VIEW_ONCE = [
+  "viewOnceMessage",
+  "viewOnceMessageV2",
+  "viewOnceMessageV2Extension",
+] as const;
+
+function isViewOnce(message: proto.IMessage): boolean {
+  if (VIEW_ONCE.some((key) => message[key])) return true;
+  // A view-once flag can also sit on the media itself.
+  const inner = normalizeMessageContent(message);
+  return Boolean(
+    inner?.imageMessage?.viewOnce
+    || inner?.videoMessage?.viewOnce
+    || inner?.audioMessage?.viewOnce,
+  );
+}
+
 /** The message's content, or null when there is nothing a person wrote. */
 export function normaliseContent(
   message: proto.IMessage | null | undefined,
 ): NormalisedContent | null {
+  // View Once media is never stored or forwarded: keeping a copy would defeat
+  // what the sender chose. The app shows a placeholder instead.
+  if (message && isViewOnce(message)) {
+    return { kind: "unsupported", type: "viewOnceMessage" };
+  }
   const content = normalizeMessageContent(message);
   if (!content) return null;
   const type = getContentType(content);
@@ -114,13 +137,7 @@ export function messageSentAt(
   message: WAMessage,
   fallback = new Date(),
 ): string {
-  const seconds = toNumber(
-    message.messageTimestamp as
-      | number
-      | { toNumber(): number }
-      | null
-      | undefined,
-  );
+  const seconds = toNumber(message.messageTimestamp);
   return seconds
     ? new Date(seconds * 1000).toISOString()
     : fallback.toISOString();

@@ -3,6 +3,7 @@ import {
   mkdir,
   readdir,
   readFile,
+  rename,
   rm,
   stat,
   writeFile,
@@ -15,6 +16,10 @@ import path from "node:path";
 // Downloaded eagerly because WhatsApp's media links expire: by the time the
 // app asks, the encrypted original may be gone. Kept only for
 // MEDIA_RETENTION_DAYS — the app's copy is the durable one.
+//
+// Each file is written once, to a temporary name in the same directory and
+// renamed into place, so a reader never sees half a file — not even when
+// WhatsApp delivers the same message twice.
 
 export type StoredMediaMeta = {
   readonly messageId: string;
@@ -29,6 +34,8 @@ export type StoredMediaMeta = {
 export function isSafeMediaId(id: string): boolean {
   return /^[A-Za-z0-9_-]{6,128}$/.test(id);
 }
+
+export type PruneResult = { readonly removed: number; readonly failed: number };
 
 export class MediaStore {
   private readonly dir: string;
@@ -45,11 +52,19 @@ export class MediaStore {
     };
   }
 
+  private async publish(file: string, data: Uint8Array | string) {
+    const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
+    await writeFile(temp, data);
+    await rename(temp, file);
+  }
+
   async save(
     messageId: string,
     bytes: Uint8Array,
     info: { mimeType: string | null; fileName: string | null },
   ): Promise<StoredMediaMeta> {
+    const existing = await this.read(messageId);
+    if (existing) return existing.meta;
     await mkdir(this.dir, { recursive: true });
     const files = this.paths(messageId);
     const meta: StoredMediaMeta = {
@@ -60,9 +75,9 @@ export class MediaStore {
       sha256: createHash("sha256").update(bytes).digest("base64"),
       storedAt: new Date().toISOString(),
     };
-    await writeFile(files.body, bytes);
+    await this.publish(files.body, bytes);
     // Meta last: a file is only "there" once both halves are.
-    await writeFile(files.meta, JSON.stringify(meta), "utf8");
+    await this.publish(files.meta, JSON.stringify(meta));
     return meta;
   }
 
@@ -82,24 +97,34 @@ export class MediaStore {
     }
   }
 
-  /** Delete files older than the retention. Returns how many went. */
-  async prune(retentionDays: number, now = Date.now()): Promise<number> {
+  /**
+   * Delete files older than the retention. One file that cannot be deleted
+   * does not stop the rest; it is counted so the caller can report it.
+   */
+  async prune(retentionDays: number, now = Date.now()): Promise<PruneResult> {
     let names: string[];
     try {
       names = await readdir(this.dir);
-    } catch {
-      return 0;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return { failed: 0, removed: 0 };
+      }
+      throw error;
     }
     const cutoff = now - retentionDays * 24 * 60 * 60 * 1000;
     let removed = 0;
+    let failed = 0;
     for (const name of names) {
       const file = path.join(this.dir, name);
-      const info = await stat(file).catch(() => null);
-      if (info && info.mtimeMs < cutoff) {
+      try {
+        const info = await stat(file);
+        if (info.mtimeMs >= cutoff) continue;
         await rm(file, { force: true });
         if (name.endsWith(".bin")) removed += 1;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") failed += 1;
       }
     }
-    return removed;
+    return { failed, removed };
   }
 }

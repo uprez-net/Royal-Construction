@@ -74,6 +74,27 @@ describe("message content", () => {
     assert.deepEqual(content, { kind: "text", text: "Gone soon" });
   });
 
+  test("View Once media is never offered for download", () => {
+    for (const message of [
+      {
+        viewOnceMessage: {
+          message: { imageMessage: { mimetype: "image/jpeg" } },
+        },
+      },
+      {
+        viewOnceMessageV2: {
+          message: { videoMessage: { mimetype: "video/mp4" } },
+        },
+      },
+      { imageMessage: { mimetype: "image/jpeg", viewOnce: true } },
+    ]) {
+      assert.deepEqual(normaliseContent(message), {
+        kind: "unsupported",
+        type: "viewOnceMessage",
+      });
+    }
+  });
+
   test("anything else is unsupported, with its type", () => {
     assert.deepEqual(
       normaliseContent({ locationMessage: { degreesLatitude: 1 } }),
@@ -86,7 +107,7 @@ describe("message content", () => {
 
   test("the timestamp is WhatsApp's seconds", () => {
     assert.equal(
-      messageSentAt({ key: {}, messageTimestamp: 1_790_000_000 } as never),
+      messageSentAt({ key: {}, messageTimestamp: 1_790_000_000 }),
       new Date(1_790_000_000_000).toISOString(),
     );
   });

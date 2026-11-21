@@ -202,7 +202,7 @@ describe("sending", () => {
     assert.equal(second.messageId, first.messageId);
   });
 
-  test("an unconfirmed send is not remembered, and says so with its code", async () => {
+  test("an unconfirmed send holds its key: a retry is refused, never sent again", async () => {
     client.sendFailure = new BridgeError(
       504,
       "send_unconfirmed",
@@ -212,6 +212,48 @@ describe("sending", () => {
     assert.equal(response.status, 504);
     const body = (await response.json()) as { error: { code: string } };
     assert.equal(body.error.code, "send_unconfirmed");
+
+    client.sendFailure = null;
+    const retry = await send("k-2");
+    assert.equal(retry.status, 504);
+    assert.equal(client.sends.length, 0, "nothing posted on the retry");
+  });
+
+  test("a definite refusal frees the key for a real retry", async () => {
+    client.sendFailure = new BridgeError(502, "whatsapp_refused", "Refused.");
+    assert.equal((await send("k-3")).status, 502);
+    client.sendFailure = null;
+    assert.equal((await send("k-3")).status, 200);
+    assert.equal(client.sends.length, 1);
+  });
+
+  test("the same key for another group is a conflict, not a send", async () => {
+    await send("k-4");
+    const other = await request("/v1/groups/120363099999999999@g.us/messages", {
+      body: JSON.stringify({ text: "x" }),
+      headers: { "idempotency-key": "k-4" },
+      method: "POST",
+    });
+    assert.equal(other.status, 409);
+    const body = (await other.json()) as { error: { code: string } };
+    assert.equal(body.error.code, "key_conflict");
+  });
+
+  test("a key already being sent answers send_in_progress", async () => {
+    let release: () => void = () => undefined;
+    const original = client.sendText.bind(client);
+    client.sendText = async (...args) => {
+      await new Promise<void>((resolve) => (release = resolve));
+      return original(...args);
+    };
+    const first = send("k-5");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const second = await send("k-5");
+    assert.equal(second.status, 409);
+    const body = (await second.json()) as { error: { code: string } };
+    assert.equal(body.error.code, "send_in_progress");
+    release();
+    assert.equal((await first).status, 200);
   });
 });
 
@@ -264,7 +306,28 @@ describe("mappings", () => {
     const response = await request(`/v1/mappings/${GROUP}`, {
       method: "DELETE",
     });
-    assert.deepEqual(await response.json(), { removed: true });
+    assert.deepEqual(await response.json(), { mappedTo: null, removed: true });
+  });
+
+  test("a late unlink from one project leaves another project's newer link alone", async () => {
+    await mappings.set(GROUP, "p2");
+    const response = await request(`/v1/mappings/${GROUP}?projectId=p1`, {
+      method: "DELETE",
+    });
+    assert.deepEqual(await response.json(), { mappedTo: "p2", removed: false });
+    assert.equal((await mappings.get(GROUP))?.projectId, "p2");
+  });
+
+  test("two links at once for different projects both survive", async () => {
+    await Promise.all([
+      mappings.set("120363011111111111@g.us", "p1"),
+      mappings.set("120363022222222222@g.us", "p2"),
+    ]);
+    const reread = new MappingStore(dir);
+    assert.deepEqual(
+      (await reread.list()).map((mapping) => mapping.projectId),
+      ["p1", "p2"],
+    );
   });
 });
 

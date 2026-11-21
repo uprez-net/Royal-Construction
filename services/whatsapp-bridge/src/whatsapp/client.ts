@@ -85,7 +85,8 @@ export class BridgeError extends Error {
     readonly code:
       | "bad_request"
       | "not_found"
-      | "in_progress"
+      | "send_in_progress"
+      | "key_conflict"
       | "not_connected"
       | "not_admin"
       | "whatsapp_refused"

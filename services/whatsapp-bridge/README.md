@@ -10,7 +10,8 @@ project groups, post in them, and receive what the owners post. Built on
 about running the service.
 
 This folder is a standalone package: its own `package.json`, lockfile,
-TypeScript config, tests, Prettier config, Dockerfile and compose file. The
+TypeScript config, tests, ESLint and Prettier config, Dockerfile and compose
+file. The
 Next.js app's typecheck, lint, tests and build never look in here, and this
 service imports nothing from the app.
 
@@ -49,6 +50,7 @@ set `APP_WEBHOOK_URL=http://localhost:3000/api/whatsapp-bridge/webhook` and
 | --- | --- |
 | `pnpm test` / `pnpm test:watch` | Vitest |
 | `pnpm typecheck` | `tsc --noEmit` |
+| `pnpm lint` | ESLint (type-aware), with this folder's config |
 | `pnpm format` / `pnpm format:check` | Prettier, with this folder's config |
 | `pnpm build` / `pnpm start` | compile to `dist/`, run it |
 

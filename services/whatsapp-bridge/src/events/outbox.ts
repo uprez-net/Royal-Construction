@@ -1,12 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  mkdir,
-  readdir,
-  readFile,
-  rename,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { mkdir, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 
 import type { Logger } from "pino";
@@ -23,11 +16,16 @@ import type { BridgeEvent, BridgeEventMap, BridgeEventType } from "./types.js";
 //
 // A client's message must not vanish because the app was deploying, or
 // Vercel answered 500, or the network blinked. So each event is a file in
-// DATA_DIR/outbox, delivered in order and deleted only when the app answers
-// 2xx. Anything else is retried with backoff for as long as it takes, except
-// a definite refusal (4xx other than 408/429), which is moved to
+// DATA_DIR/outbox — written, flushed to disk and renamed into place before
+// `enqueue` resolves — delivered in order and deleted only when the app
+// answers 2xx. Anything else is retried with backoff for as long as it takes,
+// except a definite refusal (4xx other than 401/408/429), which is moved to
 // outbox-dead/ and logged as an error — retrying a request the app rejects
 // would block every event behind it.
+//
+// Order: enqueues are serialised, so a file becomes visible to the drain only
+// after every earlier one has; and a drain stops at the first event it cannot
+// deliver — or cannot even read — rather than send a later one first.
 //
 // The app deduplicates on the event's id and on WhatsApp's message id, so a
 // delivery that landed but whose answer was lost is harmless to repeat.
@@ -56,6 +54,33 @@ export type OutboxOptions = {
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
 const BASE_BACKOFF_MS = 2_000;
 
+type Outcome = "delivered" | "rejected" | "retry";
+
+/** Write a file and flush it to disk, so a crash after this cannot lose it. */
+async function writeDurably(file: string, data: string): Promise<void> {
+  const handle = await open(file, "w");
+  try {
+    await handle.writeFile(data, "utf8");
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+/** Flush a directory's entries (the rename). Not supported on Windows. */
+async function syncDirectory(dir: string): Promise<void> {
+  try {
+    const handle = await open(dir, "r");
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    // EISDIR/EPERM on platforms that cannot fsync a directory.
+  }
+}
+
 export class EventOutbox {
   private readonly dir: string;
   private readonly deadDir: string;
@@ -63,6 +88,7 @@ export class EventOutbox {
   private readonly now: () => number;
   private timer: NodeJS.Timeout | null = null;
   private running: Promise<void> | null = null;
+  private writes: Promise<unknown> = Promise.resolve();
   private started = false;
   private stopped = false;
   private failures = 0;
@@ -108,28 +134,38 @@ export class EventOutbox {
     };
   }
 
-  /** Queue one event. Resolves once it is on disk, not once it is delivered. */
-  async enqueue<T extends BridgeEventType>(
+  /**
+   * Queue one event. Resolves once it is durably on disk and visible to the
+   * drain after every earlier event — not once it is delivered.
+   */
+  enqueue<T extends BridgeEventType>(
     type: T,
     data: BridgeEventMap[T],
     id: string = randomUUID(),
   ): Promise<BridgeEvent<T>> {
-    const event: BridgeEvent<T> = {
-      data,
-      id,
-      occurredAt: new Date(this.now()).toISOString(),
-      type,
-    };
-    await mkdir(this.dir, { recursive: true });
-    // Sortable names keep delivery in arrival order.
-    const name = `${String(this.now()).padStart(15, "0")}-${String(this.sequence++).padStart(6, "0")}-${randomUUID()}.json`;
-    const temp = path.join(this.dir, `${name}.tmp`);
-    await writeFile(temp, JSON.stringify(event), "utf8");
-    await rename(temp, path.join(this.dir, name));
-    this.pendingCount += 1;
-    // While backing off, the timer already owns the next attempt.
-    if (this.started && this.failures === 0) this.schedule(0);
-    return event;
+    const run = this.writes.then(async () => {
+      const event: BridgeEvent<T> = {
+        data,
+        id,
+        occurredAt: new Date(this.now()).toISOString(),
+        type,
+      };
+      await mkdir(this.dir, { recursive: true });
+      // Named inside the serialised step, so name order is call order.
+      const name = `${String(this.now()).padStart(15, "0")}-${String(this.sequence++).padStart(6, "0")}-${randomUUID()}.json`;
+      const temp = path.join(this.dir, `${name}.tmp`);
+      await writeDurably(temp, JSON.stringify(event));
+      await rename(temp, path.join(this.dir, name));
+      await syncDirectory(this.dir);
+      this.pendingCount += 1;
+      return event;
+    });
+    this.writes = run.catch(() => undefined);
+    return run.then((event) => {
+      // While backing off, the timer already owns the next attempt.
+      if (this.started && this.failures === 0) this.schedule(0);
+      return event;
+    });
   }
 
   /** Deliver everything waiting, now. One drain at a time, in order. */
@@ -147,21 +183,40 @@ export class EventOutbox {
       .sort();
   }
 
+  private backoffMs(): number {
+    return Math.min(
+      BASE_BACKOFF_MS * 2 ** Math.max(0, this.failures - 1),
+      MAX_BACKOFF_MS,
+    );
+  }
+
   private schedule(delayMs: number): void {
     if (this.stopped) return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.timer = null;
-      void this.flush().then(() => {
-        if (this.failures > 0) {
-          this.schedule(
-            Math.min(
-              BASE_BACKOFF_MS * 2 ** (this.failures - 1),
-              MAX_BACKOFF_MS,
-            ),
+      void this.flush()
+        .catch((error: unknown) => {
+          // Deleting a delivered file or moving a refused one failed: keep
+          // the file (it is redelivered, which the app deduplicates) and
+          // back off rather than stop.
+          this.failures += 1;
+          this.noteError(
+            `Outbox storage error: ${error instanceof Error ? error.message : String(error)}`,
           );
-        }
-      });
+          this.options.logger.error(
+            { lastError: this.lastError },
+            "The outbox could not update its files; retrying with backoff.",
+          );
+        })
+        .then(async () => {
+          if (this.failures > 0) {
+            this.schedule(this.backoffMs());
+          } else if ((await this.files()).length > 0) {
+            // Events queued while this pass ran (or while it was retrying).
+            this.schedule(0);
+          }
+        });
     }, delayMs);
     this.timer.unref?.();
   }
@@ -175,8 +230,19 @@ export class EventOutbox {
       let body: string;
       try {
         body = await readFile(file, "utf8");
-      } catch {
-        continue;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+        // Unreadable right now (EIO, EMFILE…): never skip it and send a
+        // later event first. Stop and retry with backoff.
+        this.failures += 1;
+        this.noteError(
+          `Could not read a queued event: ${(error as Error).message}`,
+        );
+        logger.error(
+          { event: name, lastError: this.lastError },
+          "Could not read a queued event; retrying with backoff.",
+        );
+        return;
       }
       const outcome = await this.deliver(url, secret, body);
       if (outcome === "delivered") {
@@ -210,7 +276,7 @@ export class EventOutbox {
     url: string,
     secret: string,
     body: string,
-  ): Promise<"delivered" | "rejected" | "retry"> {
+  ): Promise<Outcome> {
     let eventId = "";
     try {
       eventId = (JSON.parse(body) as { id?: string }).id ?? "";

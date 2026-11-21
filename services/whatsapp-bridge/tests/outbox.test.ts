@@ -61,7 +61,7 @@ describe("event outbox", () => {
     assert.equal(seen.length, 2);
     const bodies = await Promise.all(seen.map((request) => request.text()));
     assert.deepEqual(
-      bodies.map((body) => JSON.parse(body).id),
+      bodies.map((body) => (JSON.parse(body) as { id: string }).id),
       ["e1", "e2"],
     );
     const first = seen[0]!;

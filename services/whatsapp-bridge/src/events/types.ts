@@ -81,6 +81,11 @@ export type GroupParticipants = {
     readonly jid: string;
     readonly phoneE164: string | null;
   }[];
+  /**
+   * Royal's own number is among `participants`. With `remove`, Royal is no
+   * longer in the group: it can neither read nor post there any more.
+   */
+  readonly includesSelf: boolean;
 };
 
 export type SessionUpdated = {

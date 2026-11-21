@@ -42,6 +42,9 @@ if (!config.appWebhookUrl) {
 }
 
 await outbox.start();
+// Before the session connects: a delayed echo of a message sent before the
+// restart must be recognised as the bridge's own, not forwarded as received.
+await sent.init();
 await session.start();
 
 const app = createApp({
@@ -62,8 +65,21 @@ const server = serve(
 );
 
 const prune = async () => {
-  const removed = await media.prune(config.mediaRetentionDays).catch(() => 0);
-  if (removed > 0) logger.info({ removed }, "pruned old media");
+  try {
+    const { removed, failed } = await media.prune(config.mediaRetentionDays);
+    if (removed > 0) logger.info({ removed }, "pruned old media");
+    if (failed > 0) {
+      logger.error(
+        { failed },
+        "could not delete some expired media files; they stay on the volume",
+      );
+    }
+  } catch (error) {
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      "the media retention sweep failed",
+    );
+  }
 };
 void prune();
 const pruneTimer = setInterval(() => void prune(), 6 * 60 * 60 * 1000);
