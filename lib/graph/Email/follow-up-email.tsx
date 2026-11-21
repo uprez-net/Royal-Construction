@@ -31,7 +31,7 @@ import {
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 
 const ICONS = {
-  chat: `https://api.iconify.design/lucide/message-square.svg?color=%23C6923A&width=18&height=18`,
+  chat: `https://api.iconify.design/lucide/message-square.svg?color=%23926100&width=18&height=18`,
 };
 
 // ─── Main Component ─────────────────────────────────────────────────────────
@@ -106,11 +106,10 @@ export default function FollowUpEmail({
               <Text
                 className="mobile_font-40 m-0 uppercase"
                 style={{
-                  fontFamily: FONTS.condensed,
+                  fontFamily: FONTS.heading,
                   fontWeight: 500,
                   fontSize: 48,
                   lineHeight: 1,
-                  letterSpacing: "-1.2px",
                   color: RC_COLORS.textOnLight,
                 }}
               >
@@ -152,13 +151,13 @@ export default function FollowUpEmail({
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderRadius: 6,
-                  border: "1px solid #E2E8F0",
+                  border: "1px solid #E6E2D9",
                   padding: "1.5rem",
                 }}
               >
                 <Row
                   style={{
-                    borderBottom: "1px solid #E2E8F0",
+                    borderBottom: "1px solid #E6E2D9",
                     paddingBottom: "0.75rem",
                     marginBottom: "0.75rem",
                   }}
@@ -186,7 +185,7 @@ export default function FollowUpEmail({
                     <Text
                       className="m-0 uppercase"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.label,
                         fontWeight: 500,
                         fontSize: 13,
                         letterSpacing: "0.6px",
@@ -222,7 +221,7 @@ export default function FollowUpEmail({
                 style={{
                   backgroundColor: RC_COLORS.light,
                   borderRadius: 6,
-                  border: `2px solid ${RC_COLORS.gold}`,
+                  border: `1px solid ${RC_COLORS.border}`,
                   padding: "1.5rem",
                 }}
               >
@@ -231,7 +230,7 @@ export default function FollowUpEmail({
                     <Text
                       className="m-0 mb-3 uppercase"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.label,
                         fontWeight: 500,
                         fontSize: 13,
                         letterSpacing: "0.6px",
@@ -243,7 +242,7 @@ export default function FollowUpEmail({
                     <Text
                       className="m-0 mb-4 uppercase"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.heading,
                         fontWeight: 500,
                         fontSize: 26,
                         lineHeight: 1.1,
@@ -294,7 +293,7 @@ export default function FollowUpEmail({
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
-                  borderLeft: `3px solid ${RC_COLORS.gold}`,
+                  borderLeft: `3px solid ${RC_COLORS.border}`,
                   padding: "1rem 1.25rem",
                 }}
               >
@@ -330,7 +329,7 @@ export default function FollowUpEmail({
             <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
               <Section
                 style={{
-                  borderTop: "1px solid #E2E8F0",
+                  borderTop: "1px solid #E6E2D9",
                   paddingTop: "1.5rem",
                 }}
               >
@@ -345,7 +344,7 @@ export default function FollowUpEmail({
                     <Text
                       className="m-0"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.label,
                         fontSize: 16,
                         color: RC_COLORS.gold,
                       }}

@@ -167,7 +167,7 @@ export default function PortfolioEmail({
                 style={{
                   backgroundColor: RC_COLORS.light,
                   borderRadius: 6,
-                  border: `2px solid ${RC_COLORS.gold}`,
+                  border: `1px solid ${RC_COLORS.border}`,
                   padding: "1.5rem",
                 }}
               >
@@ -176,7 +176,7 @@ export default function PortfolioEmail({
                     <Text
                       className="m-0 mb-3 uppercase"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.label,
                         fontWeight: 500,
                         fontSize: 13,
                         letterSpacing: "0.6px",
@@ -188,7 +188,7 @@ export default function PortfolioEmail({
                     <Text
                       className="m-0 mb-5 uppercase"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.heading,
                         fontWeight: 500,
                         fontSize: 26,
                         lineHeight: 1.1,
@@ -245,7 +245,7 @@ export default function PortfolioEmail({
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
-                  borderLeft: `3px solid ${RC_COLORS.gold}`,
+                  borderLeft: `3px solid ${RC_COLORS.border}`,
                   padding: "1rem 1.25rem",
                 }}
               >
@@ -274,7 +274,7 @@ export default function PortfolioEmail({
             <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
               <Section
                 style={{
-                  borderTop: "1px solid #E2E8F0",
+                  borderTop: "1px solid #E6E2D9",
                   paddingTop: "1.5rem",
                 }}
               >
@@ -305,7 +305,7 @@ export default function PortfolioEmail({
                     <Text
                       className="m-0"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.label,
                         fontSize: 16,
                         color: RC_COLORS.gold,
                       }}

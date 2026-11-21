@@ -58,7 +58,7 @@ export function EmailHeader({
           <Row>
             <Column
               style={{
-                backgroundColor: RC_COLORS.gold,
+                backgroundColor: RC_COLORS.brandGold,
                 height: 3,
                 fontSize: 0,
                 lineHeight: 0,

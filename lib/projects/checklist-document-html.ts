@@ -10,11 +10,18 @@ import type { ChecklistDocumentData } from "@/lib/domain/ports/checklist";
 // Self-contained HTML with inline CSS, rendered to PDF by headless Chromium.
 // A checklist that is not closed prints as a draft on every page.
 
-const NAVY = "#1e2b4d";
-const GOLD = "#b8873b";
-const BORDER = "#9a9a9a";
-const MUTED = "#5f5f5f";
-const RED = "#9f2a2a";
+const BODY_FONT = 'Manrope, "Segoe UI", Helvetica, Arial, sans-serif';
+const HEAD_FONT = 'Georgia, "Times New Roman", serif';
+const MONO_FONT = '"IBM Plex Mono", Menlo, Consolas, monospace';
+// DESIGN.md section 2 and 5: charcoal on white; gold only as a letterhead rule
+// or a table-header underline; status colours for status words.
+const CHARCOAL = "#343434";
+const GOLD = "#C6923A";
+const SUNK = "#F1EFE9";
+const BORDER_STRONG = "#D3CEC3";
+const MUTED = "#6B675F";
+const STATUS_DANGER = "#ac0f0f";
+const STATUS_OK = "#1e7a45";
 
 function esc(value: string): string {
   return value
@@ -137,44 +144,44 @@ export function buildChecklistDocumentHtml(
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   @page { size: A4; margin: 12mm 12mm 14mm; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #1d1d1d; background: #fff; font-size: 10.5px; }
-  .watermark { position: fixed; top: 42%; left: 0; right: 0; text-align: center; font-size: 120px; font-weight: 700; color: rgba(159, 42, 42, 0.08); transform: rotate(-30deg); letter-spacing: 12px; z-index: 0; pointer-events: none; }
+  body { font-family: ${BODY_FONT}; color: ${CHARCOAL}; background: #fff; font-size: 10.5px; }
+  .watermark { position: fixed; top: 42%; left: 0; right: 0; text-align: center; font-size: 120px; font-weight: 700; color: rgba(172, 15, 15, 0.08); transform: rotate(-30deg); letter-spacing: 12px; z-index: 0; pointer-events: none; }
   .content { position: relative; z-index: 1; }
-  .company { font-size: 15px; font-weight: 700; color: ${NAVY}; border-bottom: 2px solid ${GOLD}; padding-bottom: 5px; }
-  h1 { font-size: 19px; color: ${NAVY}; margin-top: 10px; }
+  .company { font-family: ${HEAD_FONT}; font-size: 15px; font-weight: 700; color: ${CHARCOAL}; border-bottom: 2px solid ${GOLD}; padding-bottom: 5px; }
+  h1 { font-family: ${HEAD_FONT}; font-size: 19px; color: ${CHARCOAL}; margin-top: 10px; }
   .note { margin-top: 4px; color: ${MUTED}; font-style: italic; }
   .badge { display: inline-block; margin-top: 8px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; padding: 3px 8px; border: 1px solid; }
-  .badge.final { color: #1f6b3a; border-color: #1f6b3a; background: #eef7f0; }
-  .badge.draft { color: ${RED}; border-color: ${RED}; background: #fbefef; }
+  .badge.final { color: ${STATUS_OK}; border-color: ${STATUS_OK}; background: #e6f4ec; }
+  .badge.draft { color: ${STATUS_DANGER}; border-color: ${STATUS_DANGER}; background: #fbeaea; }
   table { border-collapse: collapse; width: 100%; }
   .header { margin-top: 10px; }
-  .header td { border: 1px solid ${BORDER}; padding: 6px 8px; vertical-align: top; }
-  .header td.lbl { width: 46mm; font-weight: 700; background: #f2f3f5; }
+  .header td { border: 1px solid ${BORDER_STRONG}; padding: 6px 8px; vertical-align: top; }
+  .header td.lbl { width: 46mm; font-weight: 700; background: ${SUNK}; }
   .columns { column-count: 2; column-gap: 6mm; margin-top: 10px; }
   .room { break-inside: avoid; margin-bottom: 6px; }
-  .room th, .room td { border: 1px solid ${BORDER}; padding: 3px 6px; text-align: left; vertical-align: top; }
-  .room th { background: ${NAVY}; color: #fff; font-size: 10.5px; }
+  .room th, .room td { border: 1px solid ${BORDER_STRONG}; padding: 3px 6px; text-align: left; vertical-align: top; }
+  .room th { background: ${SUNK}; color: ${CHARCOAL}; font-size: 10.5px; border-bottom: 1px solid ${GOLD}; }
   .room th.chk, .room td.chk { width: 17mm; text-align: center; }
   .room.blank { margin-top: 10px; }
   .room.blank td { height: 22px; }
   .reason { color: ${MUTED}; font-size: 9px; margin-top: 2px; }
-  .box { display: inline-block; width: 11px; height: 11px; border: 1px solid #333; line-height: 10px; font-size: 10px; font-weight: 700; text-align: center; vertical-align: middle; }
-  .box.on { color: ${NAVY}; }
+  .box { display: inline-block; width: 11px; height: 11px; border: 1px solid ${CHARCOAL}; line-height: 10px; font-size: 10px; font-weight: 700; text-align: center; vertical-align: middle; }
+  .box.on { color: ${CHARCOAL}; }
   .na { font-weight: 700; font-size: 9px; color: ${MUTED}; }
-  .flag { display: block; color: ${RED}; font-size: 8.5px; font-weight: 700; margin-top: 1px; }
+  .flag { display: block; color: ${STATUS_DANGER}; font-size: 8.5px; font-weight: 700; margin-top: 1px; }
   .block { break-inside: avoid; margin-top: 10px; }
-  .block h2, .appendix h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: ${NAVY}; margin-bottom: 4px; }
-  .comments-body { border: 1px solid ${BORDER}; min-height: 26mm; padding: 6px 8px; white-space: pre-wrap; line-height: 1.45; }
-  .signoff td { border: 1px solid ${BORDER}; padding: 6px 8px; vertical-align: top; width: 33.3%; }
+  .block h2, .appendix h2 { font-family: ${HEAD_FONT}; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: ${CHARCOAL}; margin-bottom: 4px; }
+  .comments-body { border: 1px solid ${BORDER_STRONG}; min-height: 26mm; padding: 6px 8px; white-space: pre-wrap; line-height: 1.45; }
+  .signoff td { border: 1px solid ${BORDER_STRONG}; padding: 6px 8px; vertical-align: top; width: 33.3%; }
   .signoff .lbl { font-weight: 700; display: block; margin-bottom: 4px; }
   .signoff img { max-height: 18mm; max-width: 100%; display: block; }
   .muted { color: ${MUTED}; font-size: 9px; }
   .appendix { margin-top: 12px; break-before: auto; }
-  .issues th, .issues td { border: 1px solid ${BORDER}; padding: 4px 6px; text-align: left; vertical-align: top; }
-  .issues th { background: #f2f3f5; }
+  .issues th, .issues td { border: 1px solid ${BORDER_STRONG}; padding: 4px 6px; text-align: left; vertical-align: top; }
+  .issues th { background: ${SUNK}; }
   .issues .num { width: 8mm; }
   .issues .desc { width: 40%; white-space: pre-wrap; }
-  .foot { margin-top: 10px; border-top: 1px solid ${GOLD}; padding-top: 4px; font-family: monospace; font-size: 8px; color: ${MUTED}; }
+  .foot { margin-top: 10px; border-top: 1px solid ${BORDER_STRONG}; padding-top: 4px; font-family: ${MONO_FONT}; font-size: 8px; color: ${MUTED}; }
 </style></head><body>
 ${watermark}
 <div class="content">

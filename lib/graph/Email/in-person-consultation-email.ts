@@ -1,4 +1,4 @@
-import { LOGO_EMAIL, RC_COLORS, RC_URLS } from "./email-theme";
+import { FONTS, LOGO_EMAIL, RC_COLORS, RC_URLS } from "./email-theme";
 
 // The confirmation a client gets for an in-person consultation. An online
 // booking is confirmed by the Teams invitation Graph sends; an in-person one
@@ -73,7 +73,7 @@ export function generateInPersonConsultationEmail(
             <title>${escapeHtml(subject)}</title>
             </head>
 
-            <body style="margin:0;padding:0;background:${RC_COLORS.dark};font-family:Arial,sans-serif;">
+            <body style="margin:0;padding:0;background:${RC_COLORS.dark};font-family:${FONTS.body};">
 
             <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${RC_COLORS.dark};padding:40px 20px;">
             <tr>
@@ -105,6 +105,7 @@ export function generateInPersonConsultationEmail(
             <h1 style="
             margin:0 0 24px;
             color:${RC_COLORS.text};
+            font-family:${FONTS.heading};
             font-size:30px;
             font-weight:bold;
             line-height:38px;">
@@ -138,8 +139,9 @@ export function generateInPersonConsultationEmail(
             <td colspan="2"
             style="
             padding:16px 20px;
-            background:${RC_COLORS.gold};
-            color:${RC_COLORS.white};
+            background:${RC_COLORS.dark};
+            color:${RC_COLORS.text};
+            border-bottom:2px solid ${RC_COLORS.brandGold};
             font-weight:bold;
             font-size:18px;">
             Meeting Details
@@ -161,7 +163,7 @@ export function generateInPersonConsultationEmail(
             margin:0 0 32px;
             padding:22px;
             background:${RC_COLORS.card};
-            border-left:4px solid ${RC_COLORS.gold};">
+            border-left:4px solid ${RC_COLORS.border};">
 
             <p style="margin:0 0 12px;color:${RC_COLORS.text};font-weight:bold;">
             Helpful to bring along

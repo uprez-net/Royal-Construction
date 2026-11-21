@@ -78,14 +78,14 @@ export function EmailLeadContextSummary({
         style={{
           backgroundColor: RC_COLORS.white,
           borderRadius: 6,
-          border: "1px solid #E2E8F0",
+          border: "1px solid #E6E2D9",
           padding: "1.25rem 1.5rem",
         }}
       >
         <Text
           className="m-0 mb-3 uppercase"
           style={{
-            fontFamily: FONTS.condensed,
+            fontFamily: FONTS.label,
             fontWeight: 500,
             fontSize: 16,
             lineHeight: 1,
@@ -101,7 +101,7 @@ export function EmailLeadContextSummary({
         {/* {notes && (
           <Section
             style={{
-              borderTop: details.length ? '1px solid #E2E8F0' : undefined,
+              borderTop: details.length ? '1px solid #E6E2D9' : undefined,
               marginTop: details.length ? '0.75rem' : 0,
               paddingTop: details.length ? '0.75rem' : 0,
             }}

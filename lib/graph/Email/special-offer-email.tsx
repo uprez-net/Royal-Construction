@@ -30,13 +30,13 @@ import {
 } from "./email-lead-context";
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
-// Updated stroke color to match RC_COLORS.gold (#C9A84C) and Navy (#1B2D45)
+// Stroke colours: gold-ink (#926100) on white, white on the gold urgency bar
 
 const ICONS = {
-  star: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'%3E%3C/polygon%3E%3C/svg%3E`,
-  tree: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 8c.7-1 1-2.2 1-3.5C18 2.5 16.5 1 14.5 1c-1 0-1.8.4-2.5 1C11.3 1.4 10.5 1 9.5 1 7.5 1 6 2.5 6 4.5 6 5.8 6.3 7 7 8'%3E%3C/path%3E%3Cpath d='M12 2v20'%3E%3C/path%3E%3Cpath d='M7 8h10l-5 8-5-8z'%3E%3C/path%3E%3C/svg%3E`,
-  clock: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E`,
-  clockDark: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%231B2D45' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E`,
+  star: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23926100' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'%3E%3C/polygon%3E%3C/svg%3E`,
+  tree: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23926100' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 8c.7-1 1-2.2 1-3.5C18 2.5 16.5 1 14.5 1c-1 0-1.8.4-2.5 1C11.3 1.4 10.5 1 9.5 1 7.5 1 6 2.5 6 4.5 6 5.8 6.3 7 7 8'%3E%3C/path%3E%3Cpath d='M12 2v20'%3E%3C/path%3E%3Cpath d='M7 8h10l-5 8-5-8z'%3E%3C/path%3E%3C/svg%3E`,
+  clock: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23926100' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E`,
+  clockDark: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23FFFFFF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E`,
 };
 
 // ─── Sub-Components ─────────────────────────────────────────────────────────
@@ -62,7 +62,7 @@ function OfferCard({
       <Section
         style={{
           backgroundColor: RC_COLORS.light,
-          border: "1px solid #E2E8F0",
+          border: "1px solid #E6E2D9",
           borderRadius: 6,
           height: "100%",
         }}
@@ -79,7 +79,7 @@ function OfferCard({
             <Text
               className="m-0 mb-2 text-[13px] leading-tight"
               style={{
-                fontFamily: FONTS.condensed,
+                fontFamily: FONTS.label,
                 fontWeight: 500,
                 color: RC_COLORS.textOnLight,
               }}
@@ -96,11 +96,11 @@ function OfferCard({
                     <Text
                       className="m-0 uppercase tracking-[0.5px]"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.label,
                         fontWeight: 500,
                         fontSize: 11,
                         lineHeight: 1,
-                        color: "#FFFFFF",
+                        color: RC_COLORS.white,
                         padding: "0.25rem 0.5rem",
                       }}
                     >
@@ -114,15 +114,15 @@ function OfferCard({
                 <Row>
                   <Column
                     style={{
-                      backgroundColor: "#FFFFFF",
-                      border: "1px solid #E2E8F0",
+                      backgroundColor: RC_COLORS.white,
+                      border: "1px solid #E6E2D9",
                       borderRadius: 4,
                     }}
                   >
                     <Text
                       className="m-0 uppercase tracking-[0.5px]"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.label,
                         fontWeight: 500,
                         fontSize: 11,
                         lineHeight: 1,
@@ -212,11 +212,10 @@ export default function SpecialOfferEmail({
                   <Text
                     className="mobile_font-40 m-0 mb-6 uppercase"
                     style={{
-                      fontFamily: FONTS.condensed,
+                      fontFamily: FONTS.heading,
                       fontWeight: 500,
                       fontSize: 48,
                       lineHeight: 1,
-                      letterSpacing: "-1.4px",
                       color: RC_COLORS.textOnLight,
                     }}
                   >
@@ -254,7 +253,7 @@ export default function SpecialOfferEmail({
                     className="mx-auto"
                     style={{
                       backgroundColor: RC_COLORS.light,
-                      border: `2px solid ${RC_COLORS.gold}`,
+                      border: `1px solid ${RC_COLORS.border}`,
                       borderRadius: 6,
                       display: "inline-block",
                     }}
@@ -275,9 +274,9 @@ export default function SpecialOfferEmail({
                           You could save up to
                         </Text>
                         <Text
-                          className="m-0"
+                          className="m-0 mobile_font-56"
                           style={{
-                            fontFamily: FONTS.condensed,
+                            fontFamily: FONTS.mono,
                             fontWeight: 500,
                             fontSize: 56,
                             lineHeight: 1,
@@ -369,11 +368,11 @@ export default function SpecialOfferEmail({
                               <Text
                                 className="m-0 uppercase tracking-[0.8px]"
                                 style={{
-                                  fontFamily: FONTS.condensed,
+                                  fontFamily: FONTS.label,
                                   fontWeight: 500,
                                   fontSize: 14,
                                   lineHeight: 1,
-                                  color: "#1B2D45", // Navy text on gold for premium contrast
+                                  color: RC_COLORS.white,
                                 }}
                               >
                                 Confirm within 7 days to unlock this offer
@@ -449,7 +448,7 @@ export default function SpecialOfferEmail({
             {/* ── Sign-off ── */}
             <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
               <Section
-                style={{ borderTop: "1px solid #E2E8F0", paddingTop: "1.5rem" }}
+                style={{ borderTop: "1px solid #E6E2D9", paddingTop: "1.5rem" }}
               >
                 <Row>
                   <Column>
@@ -475,7 +474,7 @@ export default function SpecialOfferEmail({
                     <Text
                       className="m-0"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.label,
                         fontSize: 16,
                         color: RC_COLORS.gold,
                       }}
