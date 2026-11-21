@@ -11,6 +11,7 @@ import { MediaStore } from "../src/store/media.js";
 import { SentMessageStore } from "../src/store/sent-messages.js";
 
 let dir: string;
+const silent = pino({ level: "silent" });
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(tmpdir(), "bridge-stores-"));
@@ -33,7 +34,7 @@ describe("sent messages", () => {
   test("a confirmed send is replayable; a discarded one is forgotten", async () => {
     const store = new SentMessageStore(dir);
     await store.begin("k1", "g@g.us", "3EB0A");
-    await store.confirm("k1", "2026-11-21T00:00:00.000Z");
+    await store.confirm("k1", new Date().toISOString());
     await store.begin("k2", "g@g.us", "3EB0B");
     await store.discard("k2");
     const reread = new SentMessageStore(dir);
@@ -79,9 +80,65 @@ describe("media", () => {
   });
 });
 
-describe("outbox order and recovery", () => {
-  const silent = pino({ level: "silent" });
+describe("mapping store cold start", () => {
+  test("a reader's first load cannot undo a write that finished first", async () => {
+    const { MappingStore } = await import("../src/store/mappings.js");
+    const store = new MappingStore(dir);
+    const [, written] = await Promise.all([
+      store.get("120363000000000001@g.us"),
+      store.set("120363000000000001@g.us", "p1"),
+    ]);
+    assert.equal(written.projectId, "p1");
+    assert.equal((await store.get("120363000000000001@g.us"))?.projectId, "p1");
+  });
+});
 
+describe("media downloader", () => {
+  test("one file over the limit is stopped; the slot is held until the save", async () => {
+    const { MediaDownloader } =
+      await import("../src/whatsapp/media-downloader.js");
+    const store = new MediaStore(dir);
+    const downloader = new MediaDownloader({
+      logger: silent,
+      maxBytes: 4,
+      maxConcurrent: 1,
+      media: store,
+    });
+    const info = {
+      byteSize: null,
+      caption: null,
+      fileName: null,
+      kind: "image" as const,
+      mimeType: "image/jpeg",
+      sha256: null,
+      voice: false,
+    };
+    async function* chunks(...parts: number[][]) {
+      for (const part of parts) yield Buffer.from(part);
+    }
+    const big = await downloader.fetch("3EB0BIGG", info, async () =>
+      chunks([1, 2, 3], [4, 5, 6]),
+    );
+    assert.equal(big.available, false);
+    assert.match(big.unavailableReason ?? "", /larger/);
+
+    const order: string[] = [];
+    const first = downloader.fetch("3EB0AAAA", info, async () => {
+      order.push("open-1");
+      return chunks([1]);
+    });
+    const second = downloader.fetch("3EB0BBBB", info, async () => {
+      order.push("open-2");
+      return chunks([2]);
+    });
+    const [a, b] = await Promise.all([first, second]);
+    assert.equal(a.available && b.available, true);
+    assert.deepEqual(order, ["open-1", "open-2"]);
+    assert.ok(await store.read("3EB0AAAA"));
+  });
+});
+
+describe("outbox order and recovery", () => {
   test("events enqueued at once are delivered in call order", async () => {
     const seen: string[] = [];
     const box = new EventOutbox({

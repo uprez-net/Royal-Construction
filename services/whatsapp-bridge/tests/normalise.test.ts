@@ -87,6 +87,16 @@ describe("message content", () => {
         },
       },
       { imageMessage: { mimetype: "image/jpeg", viewOnce: true } },
+      // A disappearing-message wrapper around a view-once layer.
+      {
+        ephemeralMessage: {
+          message: {
+            viewOnceMessageV2: {
+              message: { imageMessage: { mimetype: "image/jpeg" } },
+            },
+          },
+        },
+      },
     ]) {
       assert.deepEqual(normaliseContent(message), {
         kind: "unsupported",

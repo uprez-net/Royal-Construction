@@ -241,13 +241,17 @@ describe("sending", () => {
 
   test("a key already being sent answers send_in_progress", async () => {
     let release: () => void = () => undefined;
+    let entered: () => void = () => undefined;
+    const sending = new Promise<void>((resolve) => (entered = resolve));
     const original = client.sendText.bind(client);
     client.sendText = async (...args) => {
-      await new Promise<void>((resolve) => (release = resolve));
+      const held = new Promise<void>((resolve) => (release = resolve));
+      entered(); // release is in place: the first send is mid-flight.
+      await held;
       return original(...args);
     };
     const first = send("k-5");
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await sending;
     const second = await send("k-5");
     assert.equal(second.status, 409);
     const body = (await second.json()) as { error: { code: string } };
@@ -286,6 +290,30 @@ describe("mappings", () => {
     assert.equal(body.added, 1);
     assert.equal(body.removed, 1);
     assert.equal(await mappings.get(GROUP), null);
+  });
+
+  test("replace refuses one group listed twice, and changes nothing", async () => {
+    await mappings.set(GROUP, "p1");
+    const response = await request("/v1/mappings", {
+      body: JSON.stringify({
+        mappings: [
+          { groupJid: "120363011111111111@g.us", projectId: "p2" },
+          { groupJid: "120363011111111111@g.us", projectId: "p3" },
+        ],
+      }),
+      method: "PUT",
+    });
+    assert.equal(response.status, 400);
+    assert.equal((await mappings.get(GROUP))?.projectId, "p1");
+  });
+
+  test("an unlink with a blank projectId is refused, not widened", async () => {
+    await mappings.set(GROUP, "p1");
+    const response = await request(`/v1/mappings/${GROUP}?projectId=%20`, {
+      method: "DELETE",
+    });
+    assert.equal(response.status, 400);
+    assert.equal((await mappings.get(GROUP))?.projectId, "p1");
   });
 
   test("replace refuses one project on two groups", async () => {

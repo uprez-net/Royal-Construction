@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { z } from "zod";
 
 import type { OutboxHealth } from "../events/outbox.js";
-import type { MappingStore } from "../store/mappings.js";
+import { DuplicateMappingError, type MappingStore } from "../store/mappings.js";
 import type { MediaStore } from "../store/media.js";
 import type { SentMessageStore } from "../store/sent-messages.js";
 import {
@@ -351,7 +351,15 @@ export function createApp(deps: AppDeps) {
       }
       projects.add(mapping.projectId);
     }
-    const changes = await mappings.replace(input.mappings);
+    let changes;
+    try {
+      changes = await mappings.replace(input.mappings);
+    } catch (error) {
+      if (error instanceof DuplicateMappingError) {
+        throw new BridgeError(400, "bad_request", error.message);
+      }
+      throw error;
+    }
     return c.json({ ...changes, mappings: await mappings.list() });
   });
 
@@ -364,8 +372,13 @@ export function createApp(deps: AppDeps) {
   // `?projectId=` removes the mapping only while it is still that project's,
   // so a late unlink cannot undo a newer link to another project.
   v1.delete("/mappings/:jid", async (c) => {
-    const projectId = c.req.query("projectId")?.trim() || undefined;
-    const result = await mappings.remove(groupJidParam(c), projectId);
+    const raw = c.req.query("projectId");
+    // Omitted: remove unconditionally. Supplied but blank: a caller bug that
+    // must not quietly widen into an unconditional removal.
+    if (raw !== undefined && !raw.trim()) {
+      throw new BridgeError(400, "bad_request", "projectId must not be blank.");
+    }
+    const result = await mappings.remove(groupJidParam(c), raw?.trim());
     return c.json(result);
   });
 

@@ -23,9 +23,15 @@ export type GroupMapping = {
 
 type Document = { version: 1; mappings: Record<string, GroupMapping> };
 
+export class DuplicateMappingError extends Error {
+  override name = "DuplicateMappingError";
+}
+
 export class MappingStore {
   private readonly file: JsonFile<Document>;
   private cache: Map<string, GroupMapping> | null = null;
+  /** The one cold-start read, shared, so a late reader cannot undo a write. */
+  private loading: Promise<Map<string, GroupMapping>> | null = null;
   private queue: Promise<unknown> = Promise.resolve();
 
   constructor(dataDir: string) {
@@ -35,12 +41,19 @@ export class MappingStore {
     );
   }
 
-  private async load(): Promise<Map<string, GroupMapping>> {
-    if (!this.cache) {
-      const document = await this.file.read();
-      this.cache = new Map(Object.entries(document.mappings));
-    }
-    return this.cache;
+  private load(): Promise<Map<string, GroupMapping>> {
+    if (this.cache) return Promise.resolve(this.cache);
+    this.loading ??= this.file
+      .read()
+      .then((document) => {
+        // A write that finished first already published a newer copy.
+        this.cache ??= new Map(Object.entries(document.mappings));
+        return this.cache;
+      })
+      .finally(() => {
+        this.loading = null;
+      });
+    return this.loading;
   }
 
   /** Run one change: edit a copy, write it, and only then publish it. */
@@ -122,10 +135,22 @@ export class MappingStore {
     );
   }
 
-  /** Replace every mapping with the app's list. Returns what changed. */
+  /**
+   * Replace every mapping with the app's list. Returns what changed. A list
+   * that names one group twice is refused and nothing changes.
+   */
   replace(
     mappings: readonly { groupJid: string; projectId: string }[],
   ): Promise<{ added: number; removed: number; changed: number }> {
+    const seen = new Set<string>();
+    for (const { groupJid } of mappings) {
+      if (seen.has(groupJid)) {
+        return Promise.reject(
+          new DuplicateMappingError(`Group ${groupJid} is listed twice.`),
+        );
+      }
+      seen.add(groupJid);
+    }
     return this.mutate((before) => {
       const next = new Map<string, GroupMapping>();
       let added = 0;

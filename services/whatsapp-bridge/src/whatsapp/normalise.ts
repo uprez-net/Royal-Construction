@@ -67,15 +67,36 @@ const VIEW_ONCE = [
   "viewOnceMessageV2Extension",
 ] as const;
 
+/** Wrappers that carry another message inside them. */
+const WRAPPERS = [
+  "ephemeralMessage",
+  "documentWithCaptionMessage",
+  "editedMessage",
+  "groupMentionedMessage",
+  "botInvokeMessage",
+] as const;
+
+/**
+ * View Once anywhere in the message: each wrapper is checked before it is
+ * unwrapped, so an ephemeral (disappearing) wrapper cannot hide a view-once
+ * layer inside it.
+ */
 function isViewOnce(message: proto.IMessage): boolean {
-  if (VIEW_ONCE.some((key) => message[key])) return true;
-  // A view-once flag can also sit on the media itself.
-  const inner = normalizeMessageContent(message);
-  return Boolean(
-    inner?.imageMessage?.viewOnce
-    || inner?.videoMessage?.viewOnce
-    || inner?.audioMessage?.viewOnce,
-  );
+  let layer: proto.IMessage | null | undefined = message;
+  for (let depth = 0; layer && depth < 6; depth += 1) {
+    const current: proto.IMessage = layer;
+    if (VIEW_ONCE.some((key) => current[key])) return true;
+    if (
+      current.imageMessage?.viewOnce
+      || current.videoMessage?.viewOnce
+      || current.audioMessage?.viewOnce
+    ) {
+      return true;
+    }
+    const wrapper = WRAPPERS.find((key) => current[key]);
+    layer = wrapper ? current[wrapper]?.message : null;
+  }
+  return false;
 }
 
 /** The message's content, or null when there is nothing a person wrote. */

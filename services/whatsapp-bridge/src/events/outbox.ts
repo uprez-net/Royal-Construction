@@ -67,18 +67,45 @@ async function writeDurably(file: string, data: string): Promise<void> {
   }
 }
 
-/** Flush a directory's entries (the rename). Not supported on Windows. */
+/** Errors that mean "this platform cannot fsync a directory", not a fault. */
+const UNSUPPORTED_DIR_SYNC = new Set([
+  "EISDIR",
+  "EPERM",
+  "EACCES",
+  "EINVAL",
+  "ENOTSUP",
+  "EOPNOTSUPP",
+  "EBADF",
+]);
+
+/**
+ * Flush a directory's entries, so the rename survives a crash. Retried once;
+ * a platform that cannot do it (Windows) is fine, but a storage fault such as
+ * EIO is thrown, so enqueue never reports a write it could not make durable.
+ */
 async function syncDirectory(dir: string): Promise<void> {
-  try {
-    const handle = await open(dir, "r");
+  for (let attempt = 1; ; attempt += 1) {
     try {
-      await handle.sync();
-    } finally {
-      await handle.close();
+      const handle = await open(dir, "r");
+      try {
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? "";
+      if (UNSUPPORTED_DIR_SYNC.has(code)) return;
+      if (attempt >= 2) throw error;
     }
-  } catch {
-    // EISDIR/EPERM on platforms that cannot fsync a directory.
   }
+}
+
+/** The sequence number a queued file's name starts with. */
+const SEQUENCE_DIGITS = 16;
+function sequenceOf(name: string): number {
+  const match = /^(\d{16})-/.exec(name);
+  return match ? Number(match[1]) : -1;
 }
 
 export class EventOutbox {
@@ -92,7 +119,12 @@ export class EventOutbox {
   private started = false;
   private stopped = false;
   private failures = 0;
-  private sequence = 0;
+  /**
+   * The next file's sequence number. Monotonic across restarts — it resumes
+   * after the highest queued or dead-lettered file — and independent of the
+   * clock, so a later event can never sort before an earlier one.
+   */
+  private sequence: number | null = null;
   private lastDeliveredAt: string | null = null;
   private lastError: string | null = null;
   private lastErrorAt: string | null = null;
@@ -109,8 +141,9 @@ export class EventOutbox {
   async start(): Promise<void> {
     await mkdir(this.dir, { recursive: true });
     await mkdir(this.deadDir, { recursive: true });
+    await this.renameLegacyFiles();
     this.pendingCount = (await this.files()).length;
-    this.deadCount = (await readdir(this.deadDir)).filter((f) =>
+    this.deadCount = (await this.list(this.deadDir)).filter((f) =>
       f.endsWith(".json"),
     ).length;
     this.started = true;
@@ -152,7 +185,8 @@ export class EventOutbox {
       };
       await mkdir(this.dir, { recursive: true });
       // Named inside the serialised step, so name order is call order.
-      const name = `${String(this.now()).padStart(15, "0")}-${String(this.sequence++).padStart(6, "0")}-${randomUUID()}.json`;
+      if (this.sequence === null) this.sequence = await this.nextSequence();
+      const name = `${String(this.sequence++).padStart(SEQUENCE_DIGITS, "0")}-${randomUUID()}.json`;
       const temp = path.join(this.dir, `${name}.tmp`);
       await writeDurably(temp, JSON.stringify(event));
       await rename(temp, path.join(this.dir, name));
@@ -162,8 +196,11 @@ export class EventOutbox {
     });
     this.writes = run.catch(() => undefined);
     return run.then((event) => {
-      // While backing off, the timer already owns the next attempt.
-      if (this.started && this.failures === 0) this.schedule(0);
+      // While backing off, the timer already owns the next attempt; with no
+      // app configured, events wait on disk and nothing polls.
+      if (this.started && this.failures === 0 && this.configured) {
+        this.schedule(0);
+      }
       return event;
     });
   }
@@ -177,10 +214,52 @@ export class EventOutbox {
     await this.running;
   }
 
+  /** Directory entries, where only a missing directory counts as empty. */
+  private async list(dir: string): Promise<string[]> {
+    try {
+      return await readdir(dir);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
+  }
+
   private async files(): Promise<string[]> {
-    return (await readdir(this.dir).catch(() => [] as string[]))
+    return (await this.list(this.dir))
       .filter((name) => name.endsWith(".json"))
       .sort();
+  }
+
+  private async nextSequence(): Promise<number> {
+    const names = [
+      ...(await this.list(this.dir)),
+      ...(await this.list(this.deadDir)),
+    ];
+    return names.reduce((max, name) => Math.max(max, sequenceOf(name)), -1) + 1;
+  }
+
+  /**
+   * Files queued by an earlier version were named by the clock. Renumber them,
+   * in their existing order, so they keep their place ahead of new ones.
+   */
+  private async renameLegacyFiles(): Promise<void> {
+    const legacy = (await this.files()).filter((name) => sequenceOf(name) < 0);
+    if (legacy.length === 0) return;
+    const current = (await this.files()).filter(
+      (name) => sequenceOf(name) >= 0,
+    );
+    let next =
+      current.reduce((max, name) => Math.max(max, sequenceOf(name)), -1) + 1;
+    // Legacy files predate every numbered one, so numbered files move after.
+    for (const name of [...legacy, ...current]) {
+      const renamed = `${String(next++).padStart(SEQUENCE_DIGITS, "0")}-${randomUUID()}.json`;
+      await rename(path.join(this.dir, name), path.join(this.dir, renamed));
+    }
+    await syncDirectory(this.dir);
+  }
+
+  private get configured(): boolean {
+    return Boolean(this.options.url && this.options.secret);
   }
 
   private backoffMs(): number {
@@ -210,10 +289,17 @@ export class EventOutbox {
           );
         })
         .then(async () => {
+          if (!this.configured) return;
           if (this.failures > 0) {
             this.schedule(this.backoffMs());
-          } else if ((await this.files()).length > 0) {
-            // Events queued while this pass ran (or while it was retrying).
+            return;
+          }
+          // Events queued while this pass ran (or while it was retrying).
+          const remaining = await this.files().catch(() => null);
+          if (remaining === null) {
+            this.failures += 1;
+            this.schedule(this.backoffMs());
+          } else if (remaining.length > 0) {
             this.schedule(0);
           }
         });

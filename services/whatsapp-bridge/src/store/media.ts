@@ -39,6 +39,8 @@ export type PruneResult = { readonly removed: number; readonly failed: number };
 
 export class MediaStore {
   private readonly dir: string;
+  /** Saves in progress, by message id: a duplicate waits for the first. */
+  private readonly saving = new Map<string, Promise<StoredMediaMeta>>();
 
   constructor(dataDir: string) {
     this.dir = path.join(dataDir, "media");
@@ -58,7 +60,22 @@ export class MediaStore {
     await rename(temp, file);
   }
 
-  async save(
+  /** Save once per message id; a concurrent duplicate gets the same result. */
+  save(
+    messageId: string,
+    bytes: Uint8Array,
+    info: { mimeType: string | null; fileName: string | null },
+  ): Promise<StoredMediaMeta> {
+    const inFlight = this.saving.get(messageId);
+    if (inFlight) return inFlight;
+    const run = this.saveOnce(messageId, bytes, info).finally(() => {
+      this.saving.delete(messageId);
+    });
+    this.saving.set(messageId, run);
+    return run;
+  }
+
+  private async saveOnce(
     messageId: string,
     bytes: Uint8Array,
     info: { mimeType: string | null; fileName: string | null },

@@ -2,6 +2,7 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 
 import makeWASocket, {
+  type BinaryNode,
   Browsers,
   DisconnectReason,
   downloadMediaMessage,
@@ -36,6 +37,7 @@ import {
   type WhatsAppClient,
 } from "./client.js";
 import { bareJid, firstPhone, isGroupJid, phoneFromJid } from "./jid.js";
+import { MediaDownloader } from "./media-downloader.js";
 import { messageSentAt, normaliseContent } from "./normalise.js";
 
 // The one WhatsApp session this bridge holds: Royal's number, linked as a
@@ -71,6 +73,10 @@ const MAX_RECONNECT_DELAY_MS = 60_000;
 /** Files downloaded at once: each is held in memory until it is saved. */
 const MAX_CONCURRENT_DOWNLOADS = 2;
 const MAX_ENQUEUE_DELAY_MS = 60_000;
+/** How long a send waits for WhatsApp's server to acknowledge it. */
+const SEND_ACK_TIMEOUT_MS = 15_000;
+/** Group receipts arrive once per participant; one status per message is enough. */
+const FORWARDED_STATUS_MEMORY = 5_000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -127,8 +133,17 @@ export class BaileysSession implements WhatsAppClient {
    * cannot bring a socket back after the session was ended.
    */
   private generation = 0;
-  private activeDownloads = 0;
-  private readonly downloadWaiters: (() => void)[] = [];
+  private readonly downloader: MediaDownloader;
+  /** A logout in progress: a connect waits for it to finish wiping the keys. */
+  private loggingOut: Promise<void> | null = null;
+  /** Sends waiting for WhatsApp's server ack, by message id. */
+  private readonly acks = new Map<
+    string,
+    { resolve: () => void; reject: (error: BridgeError) => void }
+  >();
+  /** Events reach the outbox one at a time, in the order they happened. */
+  private events: Promise<unknown> = Promise.resolve();
+  private readonly forwardedStatuses = new Set<string>();
   private readonly groupCache = new Map<
     string,
     { metadata: GroupMetadata; at: number }
@@ -138,6 +153,12 @@ export class BaileysSession implements WhatsAppClient {
 
   constructor(private readonly options: Options) {
     this.log = options.logger.child({ component: "session" });
+    this.downloader = new MediaDownloader({
+      logger: this.log,
+      maxBytes: options.mediaMaxBytes,
+      maxConcurrent: MAX_CONCURRENT_DOWNLOADS,
+      media: options.media,
+    });
   }
 
   private get authDir(): string {
@@ -171,6 +192,9 @@ export class BaileysSession implements WhatsAppClient {
 
   /** Start a connection (and so a QR, when not linked). Idempotent. */
   async connect(): Promise<void> {
+    // Never beside a logout: wait until it has closed the old socket and
+    // wiped the keys, so this attempt reads the auth state after the wipe.
+    while (this.loggingOut) await this.loggingOut.catch(() => undefined);
     if (this.current.status === "open" || this.connecting) {
       return this.connecting ?? undefined;
     }
@@ -191,8 +215,11 @@ export class BaileysSession implements WhatsAppClient {
   }
 
   async restart(): Promise<void> {
-    this.generation += 1;
+    const generation = ++this.generation;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    // A connect already reading the auth state now belongs to an old
+    // generation and will give up; wait for it to clear rather than return it.
+    const stale = this.connecting;
     const sock = this.sock;
     this.sock = null;
     this.stopping = true;
@@ -200,12 +227,23 @@ export class BaileysSession implements WhatsAppClient {
     // state is cleared here because that close event will not.
     this.setState({ qr: null, qrIssuedAt: null, status: "connecting" });
     await sock?.end(undefined).catch(() => undefined);
+    await stale?.catch(() => undefined);
     this.stopping = false;
     this.reconnectAttempts = 0;
+    // Another restart or a logout overtook this one: it owns the session now.
+    if (generation !== this.generation) return;
     await this.connect();
   }
 
   async logout(): Promise<void> {
+    while (this.loggingOut) await this.loggingOut.catch(() => undefined);
+    this.loggingOut = this.performLogout().finally(() => {
+      this.loggingOut = null;
+    });
+    return this.loggingOut;
+  }
+
+  private async performLogout(): Promise<void> {
     this.stopping = true;
     this.generation += 1;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
@@ -336,6 +374,42 @@ export class BaileysSession implements WhatsAppClient {
         );
       }
     });
+    // In groups, delivery and read receipts come per participant here, not
+    // as messages.update.
+    sock.ev.on("message-receipt.update", (receipts) => {
+      for (const { key, receipt } of receipts) {
+        const status =
+          receipt.readTimestamp || receipt.playedTimestamp
+            ? WAMessageStatus.READ
+            : receipt.receiptTimestamp
+              ? WAMessageStatus.DELIVERY_ACK
+              : null;
+        if (status === null) continue;
+        guard(
+          "a group receipt",
+          this.onStatus(key.remoteJid, key.id, key.fromMe, status),
+        );
+      }
+    });
+    // WhatsApp's server acknowledging a message we sent: the only proof it
+    // left this device. Baileys reports only failed acks, so listen directly.
+    sock.ws.on("CB:ack,class:message", (node: BinaryNode) => {
+      const id = typeof node.attrs.id === "string" ? node.attrs.id : null;
+      const waiter = id ? this.acks.get(id) : undefined;
+      if (!id || !waiter) return;
+      this.acks.delete(id);
+      if (node.attrs.error) {
+        waiter.reject(
+          new BridgeError(
+            502,
+            "whatsapp_refused",
+            `WhatsApp refused the message (${String(node.attrs.error)}).`,
+          ),
+        );
+      } else {
+        waiter.resolve();
+      }
+    });
     sock.ev.on("groups.upsert", (groups) => {
       for (const group of groups) this.cacheGroup(group);
     });
@@ -385,6 +459,8 @@ export class BaileysSession implements WhatsAppClient {
       update.lastDisconnect?.error ?? "Connection closed.",
     );
     this.sock = null;
+    // Sends still waiting for an ack will never get one on this socket.
+    this.failPendingAcks();
     const wasOpen = this.current.status === "open";
     this.setState({
       lastDisconnect: { at: new Date().toISOString(), code, reason },
@@ -447,24 +523,32 @@ export class BaileysSession implements WhatsAppClient {
    * Queue an event, retrying until it is on disk. A client's message must
    * not be lost because the volume hiccuped; it waits here instead.
    */
-  private async enqueueDurably<T extends BridgeEventType>(
+  private enqueueDurably<T extends BridgeEventType>(
     type: T,
     data: BridgeEventMap[T],
     id?: string,
   ): Promise<void> {
-    for (let attempt = 1; ; attempt += 1) {
-      try {
-        await this.options.outbox.enqueue(type, data, id);
-        return;
-      } catch (error) {
-        this.log.error(
-          { attempt, error: describe(error), event: id ?? type },
-          "could not queue an event for the app; retrying",
-        );
-        if (this.stopping) throw error;
-        await sleep(Math.min(1000 * 2 ** (attempt - 1), MAX_ENQUEUE_DELAY_MS));
+    // One chain: an event that cannot be written stays at the head, and the
+    // ones after it wait, so the app still receives them in order.
+    const run = this.events.then(async () => {
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          await this.options.outbox.enqueue(type, data, id);
+          return;
+        } catch (error) {
+          this.log.error(
+            { attempt, error: describe(error), event: id ?? type },
+            "could not queue an event for the app; retrying",
+          );
+          if (this.stopping) throw error;
+          await sleep(
+            Math.min(1000 * 2 ** (attempt - 1), MAX_ENQUEUE_DELAY_MS),
+          );
+        }
       }
-    }
+    });
+    this.events = run.catch(() => undefined);
+    return run;
   }
 
   /** The ids Royal's own account goes by, without device suffixes. */
@@ -477,16 +561,16 @@ export class BaileysSession implements WhatsAppClient {
     );
   }
 
-  private async withDownloadSlot<T>(work: () => Promise<T>): Promise<T> {
-    if (this.activeDownloads >= MAX_CONCURRENT_DOWNLOADS) {
-      await new Promise<void>((resolve) => this.downloadWaiters.push(resolve));
-    }
-    this.activeDownloads += 1;
-    try {
-      return await work();
-    } finally {
-      this.activeDownloads -= 1;
-      this.downloadWaiters.shift()?.();
+  private failPendingAcks(): void {
+    for (const [id, waiter] of this.acks) {
+      this.acks.delete(id);
+      waiter.reject(
+        new BridgeError(
+          504,
+          "send_unconfirmed",
+          "The connection to WhatsApp dropped before it confirmed the message. It may have been delivered; check the group before sending again.",
+        ),
+      );
     }
   }
 
@@ -530,7 +614,17 @@ export class BaileysSession implements WhatsAppClient {
 
     let media: BridgeMedia | null = null;
     if (content.kind === "media") {
-      media = await this.download(sock, message, messageId, content.media);
+      media = await this.downloader.fetch(messageId, content.media, () =>
+        downloadMediaMessage(
+          message,
+          "stream",
+          {},
+          {
+            logger: baileysLogger(this.options.logger),
+            reuploadRequest: sock.updateMediaMessage,
+          },
+        ),
+      );
     }
 
     await this.enqueueDurably(
@@ -557,75 +651,6 @@ export class BaileysSession implements WhatsAppClient {
     );
   }
 
-  private async download(
-    sock: WASocket,
-    message: WAMessage,
-    messageId: string,
-    info: Extract<
-      ReturnType<typeof normaliseContent>,
-      { kind: "media" }
-    >["media"],
-  ): Promise<BridgeMedia> {
-    const base = { ...info, available: false, unavailableReason: null };
-    if (info.byteSize !== null && info.byteSize > this.options.mediaMaxBytes) {
-      return {
-        ...base,
-        unavailableReason: `The file is larger than the bridge keeps (${Math.round(this.options.mediaMaxBytes / 1024 / 1024)} MB).`,
-      };
-    }
-    try {
-      // At most a few at once, and each stopped the moment it passes the
-      // limit: a burst of large files must not exhaust the bridge's memory.
-      const bytes = await this.withDownloadSlot(async () => {
-        const stream = await downloadMediaMessage(
-          message,
-          "stream",
-          {},
-          {
-            logger: baileysLogger(this.options.logger),
-            reuploadRequest: sock.updateMediaMessage,
-          },
-        );
-        const chunks: Buffer[] = [];
-        let total = 0;
-        for await (const chunk of stream as AsyncIterable<Buffer>) {
-          total += chunk.length;
-          if (total > this.options.mediaMaxBytes) {
-            stream.destroy();
-            return null;
-          }
-          chunks.push(chunk);
-        }
-        return Buffer.concat(chunks);
-      });
-      if (!bytes) {
-        return {
-          ...base,
-          unavailableReason: "The file is larger than the bridge keeps.",
-        };
-      }
-      const stored = await this.options.media.save(messageId, bytes, {
-        fileName: info.fileName,
-        mimeType: info.mimeType,
-      });
-      return {
-        ...base,
-        available: true,
-        byteSize: stored.byteSize,
-        sha256: stored.sha256,
-      };
-    } catch (error) {
-      this.log.warn(
-        { error: describe(error), messageId },
-        "media download failed",
-      );
-      return {
-        ...base,
-        unavailableReason: "WhatsApp didn't let the bridge download the file.",
-      };
-    }
-  }
-
   private async onStatus(
     groupJid: string | null | undefined,
     messageId: string | null | undefined,
@@ -636,6 +661,13 @@ export class BaileysSession implements WhatsAppClient {
     const name = STATUS_NAMES[status];
     if (!name) return;
     if (!(await this.options.mappings.get(groupJid))) return;
+    const seen = `${messageId}:${name}`;
+    if (this.forwardedStatuses.has(seen)) return;
+    this.forwardedStatuses.add(seen);
+    if (this.forwardedStatuses.size > FORWARDED_STATUS_MEMORY) {
+      const oldest = this.forwardedStatuses.values().next().value;
+      if (oldest) this.forwardedStatuses.delete(oldest);
+    }
     await this.enqueueDurably(
       "message.status",
       { at: new Date().toISOString(), groupJid, messageId, status: name },
@@ -872,13 +904,34 @@ export class BaileysSession implements WhatsAppClient {
     messageId: string,
   ): Promise<{ messageId: string; sentAt: string }> {
     const sock = this.requireSocket();
+    // Registered before sending: the ack can beat sendMessage's own return.
+    let timer: NodeJS.Timeout | undefined;
+    const acked = new Promise<void>((resolve, reject) => {
+      this.acks.set(messageId, { reject, resolve });
+      timer = setTimeout(() => {
+        this.acks.delete(messageId);
+        reject(
+          new BridgeError(
+            504,
+            "send_unconfirmed",
+            "WhatsApp didn't confirm the message. It may have been delivered; check the group before sending again.",
+          ),
+        );
+      }, SEND_ACK_TIMEOUT_MS);
+      timer.unref?.();
+    });
+    // A rejection before anyone awaits it must not crash the process.
+    acked.catch(() => undefined);
     try {
       const sent = await sock.sendMessage(groupJid, { text }, { messageId });
+      // Written to the socket is not received: only the server's ack is.
+      await acked;
       return {
         messageId: sent?.key.id ?? messageId,
         sentAt: new Date().toISOString(),
       };
     } catch (error) {
+      if (error instanceof BridgeError) throw error;
       const status = statusOf(error);
       // A refusal WhatsApp gave before anything left: not in the group, or
       // no such group. Anything else may have been delivered.
@@ -899,6 +952,9 @@ export class BaileysSession implements WhatsAppClient {
         "send_unconfirmed",
         "WhatsApp didn't confirm the message. It may have been delivered; check the group before sending again.",
       );
+    } finally {
+      clearTimeout(timer);
+      this.acks.delete(messageId);
     }
   }
 }
