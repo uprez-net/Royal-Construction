@@ -8,7 +8,7 @@ import { complianceDocumentLabel } from "@/constants/complianceDocuments";
 import { classifyDocumentAtUrl } from "@/lib/agent/documentClassifierAgent";
 import {
   complianceAccessResponse,
-  requireComplianceAccess,
+  requireComplianceMutation,
 } from "@/lib/compliance/access";
 import { assertCanFileComplianceDocument } from "@/lib/domain/access/projects";
 import { assertCanMoveComplianceFile } from "@/lib/domain/compliance/file-ownership";
@@ -63,7 +63,7 @@ export async function POST(
   const { documentType } = body.data;
 
   try {
-    const { engagement, user } = await requireComplianceAccess(projectId);
+    const { engagement, user } = await requireComplianceMutation(projectId);
     // Looking is filing: a found file is claimed onto the row.
     const principal = userPrincipal(user);
     assertCanFileComplianceDocument(principal, documentType);

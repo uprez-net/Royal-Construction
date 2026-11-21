@@ -5,6 +5,7 @@ import type { InvitationJSON, UserJSON } from "@clerk/backend";
 import { createUser, deleteUser, updateUser } from "@/lib/data/user";
 import { Role } from "@prisma/client";
 import { clerkClient, updateUserMetadata } from "@/lib/auth";
+import { clerkRoleToStore } from "@/lib/domain/identity/team";
 import {
   acceptTeamInvitation,
   markTeamInvitationUsed,
@@ -143,9 +144,18 @@ async function handleInvitationEvent({ type, data }: InvitationEvent) {
 
 export async function POST(request: NextRequest) {
   try {
-    const evt = await verifyWebhook(request);
+    // Our own misconfiguration is not the caller's fault: with no signing
+    // secret every real event would be refused as "unsigned" and nobody told.
+    // Thrown here it reaches the 500 handler below, which is reported.
+    if (!process.env.CLERK_WEBHOOK_SIGNING_SECRET) {
+      throw new Error("CLERK_WEBHOOK_SIGNING_SECRET is not configured.");
+    }
+    // An unsigned or wrongly signed call is the caller's fault, not ours:
+    // `verifyWebhook` throws for it, which used to answer 500 and report an
+    // incident for every probe of this public route.
+    const evt = await verifyWebhook(request).catch(() => null);
     if (!evt) {
-      console.error("Invalid webhook event");
+      console.warn("Clerk webhook refused: missing or invalid signature");
       return errorResponse("Invalid webhook signature", {
         status: 401,
         code: "INVALID_SIGNATURE",
@@ -200,7 +210,13 @@ export async function POST(request: NextRequest) {
         // GUEST, so any update Clerk sent before `user.created` had written the
         // invited role back (they can arrive out of order) demoted the new
         // account to GUEST.
-        const role = current?.role;
+        // A dashboard role change the team screen's rules refuse is not stored;
+        // the stored role is written back to Clerk below.
+        const roleDecision = await clerkRoleToStore(
+          { clerkRole: current?.role, clerkUserId: updatedId },
+          prisma,
+        );
+        const role = roleDecision.write;
 
         // The phone used to be replaced with a fresh random number on every
         // Clerk update — a role change, a name edit, a new phone set from the
@@ -218,6 +234,20 @@ export async function POST(request: NextRequest) {
         });
         // The role every guard reads comes from this cached row.
         revalidateTag(`user-${updatedId}`, CACHE_PROFILES.MEDIUM);
+
+        if (roleDecision.refusedRole) {
+          // The stored role stands, and Clerk is left as it is. Writing the
+          // stored role back to Clerk cannot be made safe here: a change the
+          // team screen accepts between this decision and that write would be
+          // undone by the write's own echo, restoring the higher role. So the
+          // two disagree until someone sets the role on the team screen, and
+          // that needs a person: logged as an error (ids and roles only) so it
+          // reaches the office inbox. The app keeps deciding from the stored
+          // role, the narrower of the two only ever for page redirects.
+          console.error(
+            `[clerk-webhook] A Clerk dashboard role change was refused for ${updatedId}: Clerk says ${current?.role}, the app keeps ${roleDecision.refusedRole}. Set the role on the team screen (hand over their leads and open tasks first).`,
+          );
+        }
 
         return successResponse({ message: "User updated" });
       }

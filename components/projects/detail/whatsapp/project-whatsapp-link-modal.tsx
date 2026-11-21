@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Info, Loader2, RefreshCw, Users } from "lucide-react";
+import { Info, Loader2, RefreshCw, Search, Users } from "lucide-react";
 
 import { ModalShell } from "@/components/common/modal-shell";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   announceProjectWhatsAppChange,
   fetchLinkableWhatsAppGroups,
   linkProjectWhatsAppGroup,
 } from "@/lib/projects/whatsapp-service";
-import type { LinkableWhatsAppGroupDto } from "@/lib/projects/whatsapp-types";
+import type { WhatsAppBridgeGroupDto } from "@/lib/projects/whatsapp-types";
 import { cn } from "@/lib/utils";
 
 const CREATED = new Intl.DateTimeFormat("en-AU", {
@@ -22,10 +23,9 @@ const CREATED = new Intl.DateTimeFormat("en-AU", {
 });
 
 /**
- * Link one of the business's existing WhatsApp groups to a project already
- * underway. Only groups made through WhatsApp's API are listed — that is all
- * WhatsApp lets an app see — and the modal says so, so nobody hunts for a
- * group they made on their phone.
+ * Link one of the groups Royal's WhatsApp number is in to this project — one
+ * made on the phone included. Groups already on a project are not offered;
+ * Admin › WhatsApp bridge shows those and can move them.
  */
 export function ProjectWhatsAppLinkModal({
   projectId,
@@ -36,10 +36,11 @@ export function ProjectWhatsAppLinkModal({
   onClose: () => void;
   onLinked?: () => void;
 }) {
-  const [groups, setGroups] = useState<LinkableWhatsAppGroupDto[] | null>(null);
+  const [groups, setGroups] = useState<WhatsAppBridgeGroupDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
+  const [query, setQuery] = useState("");
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
@@ -54,11 +55,18 @@ export function ProjectWhatsAppLinkModal({
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "Could not list the business's WhatsApp groups.",
+            : "Could not list the WhatsApp groups.",
         );
       });
     return () => controller.abort();
   }, [projectId, version]);
+
+  const shown = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return (groups ?? []).filter(
+      (group) => !needle || group.subject.toLowerCase().includes(needle),
+    );
+  }, [groups, query]);
 
   async function link() {
     if (!chosen || linking) return;
@@ -66,9 +74,9 @@ export function ProjectWhatsAppLinkModal({
     try {
       const result = await linkProjectWhatsAppGroup(projectId, chosen);
       toast.success(
-        result.filedMessages > 0
-          ? `Group linked. ${result.filedMessages} earlier message${result.filedMessages === 1 ? " was" : "s were"} filed onto this project.`
-          : "Group linked to this project.",
+        result.alreadyLinked
+          ? "That group was already linked to this project."
+          : "Group linked. New messages in it now come into this project.",
       );
       announceProjectWhatsAppChange(projectId);
       onLinked?.();
@@ -89,16 +97,31 @@ export function ProjectWhatsAppLinkModal({
       open
       onClose={onClose}
       title="Link an existing WhatsApp group"
-      subtitle="Groups created through the app or WhatsApp's API that aren't on a project yet."
+      subtitle="Groups Royal's WhatsApp number is in that aren't on a project yet."
       maxWidthClass="max-w-[560px]"
     >
       <div className="space-y-4">
-        <p className="flex gap-2 rounded-xl bg-warning-light px-3 py-2.5 text-[13px] text-foreground">
-          <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />A group
-          someone made on their phone can&apos;t be linked — WhatsApp
-          doesn&apos;t let apps read those. Create a new group for the project
-          instead and invite the owners.
+        <p className="flex gap-2 rounded-xl bg-info-light px-3 py-2.5 text-[13px] text-foreground">
+          <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          Not listed? Add Royal&apos;s number to the group on the phone first.
+          Messages from before it was linked aren&apos;t brought across.
         </p>
+
+        {groups && groups.length > 6 ? (
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search groups"
+              aria-label="Search groups"
+              className="pl-9"
+            />
+          </div>
+        ) : null}
 
         {error ? (
           <div className="space-y-2 text-center">
@@ -118,11 +141,15 @@ export function ProjectWhatsAppLinkModal({
         ) : !groups ? (
           <p className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            Asking WhatsApp for the business&apos;s groups…
+            Asking WhatsApp for Royal&apos;s groups…
           </p>
         ) : groups.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-            Every group this business has is already on a project.
+            Every group Royal&apos;s number is in is already on a project.
+          </p>
+        ) : shown.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            No group matches “{query}”.
           </p>
         ) : (
           <ul
@@ -130,15 +157,15 @@ export function ProjectWhatsAppLinkModal({
             role="radiogroup"
             aria-label="Groups"
           >
-            {groups.map((group) => {
-              const selected = chosen === group.providerGroupId;
+            {shown.map((group) => {
+              const selected = chosen === group.groupJid;
               return (
-                <li key={group.providerGroupId}>
+                <li key={group.groupJid}>
                   <button
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    onClick={() => setChosen(group.providerGroupId)}
+                    onClick={() => setChosen(group.groupJid)}
                     className={cn(
                       "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition",
                       selected
@@ -154,10 +181,12 @@ export function ProjectWhatsAppLinkModal({
                         {group.subject || "Untitled group"}
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        {group.businessLabel}
+                        {group.memberCount} member
+                        {group.memberCount === 1 ? "" : "s"}
                         {group.createdAt
                           ? ` · created ${CREATED.format(new Date(group.createdAt))}`
                           : ""}
+                        {group.isAdmin ? "" : " · Royal isn't an admin"}
                       </span>
                     </span>
                     <span

@@ -17,8 +17,9 @@ import {
 // toOfferListRow instead of spreading the whole Offer row.
 
 // The office: INTERNAL_ROLES minus SITE_MANAGER (`isOfficeRole`). A site manager
-// is staff for projects and has no business with a prospect's details.
-const OFFICE_ROLES: Role[] = ["ADMIN", "GUEST"];
+// is staff for projects and has no business with a prospect's details. GUEST
+// ("Access pending") is neither (#561).
+const OFFICE_ROLES: Role[] = ["ADMIN"];
 const INTERNAL_ROLES = OFFICE_ROLES;
 
 test("office roles list every lead", () => {

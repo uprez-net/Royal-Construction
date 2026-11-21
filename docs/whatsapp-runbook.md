@@ -17,8 +17,8 @@ short on purpose; the reasoning lives in the code it names.
 | Webhook | `app/api/whatsapp/webhook/route.ts` → `lib/whatsapp/webhook-handler.ts` |
 | Phone backfill | `pnpm whatsapp:backfill-phones` (`scripts/backfill-lead-phone-e164.ts`) |
 | Media copied to Blob | `lib/domain/whatsapp/media.ts`, `lib/workflow/whatsapp-media.ts` |
-| Project groups | `lib/domain/projects/whatsapp/`, `lib/workflow/whatsapp-group.ts` |
-| Daily sweep (media, unconfirmed groups) | `app/api/cron/whatsapp-sweep/route.ts` |
+| Project groups (through the WhatsApp bridge, not Meta) | `lib/domain/projects/whatsapp/`, `lib/whatsapp-bridge/`, `services/whatsapp-bridge/`, [docs/whatsapp-bridge.md](./whatsapp-bridge.md) |
+| Daily sweep (media, bridge group resync) | `app/api/cron/whatsapp-sweep/route.ts` |
 | Status page | Admin › WhatsApp (`app/(main)/admin/whatsapp/page.tsx`) |
 
 ---
@@ -222,64 +222,44 @@ days).
   (`/api/cron/whatsapp-sweep`, 19:30 UTC).
 - Files are stored at `whatsapp-media/<yyyy>/<mm>/<row id>.<ext>` with public,
   unguessable URLs — the same model as email attachments.
+- A project group's files come from the WhatsApp bridge instead of Meta: the
+  bridge downloads each one when it arrives and keeps it for
+  `MEDIA_RETENTION_DAYS` (14) for the same workflow to copy.
 - Outbound stays text and templates; staff cannot attach files yet.
 
 ## 11. Project WhatsApp groups
 
-One WhatsApp group per project, so the owners, the office and site talk in one
-place and the chat is kept with the project (Communications → WhatsApp).
+Project groups do **not** use Meta. Meta's Groups API needed an Official
+Business Account Royal never had, capped groups at eight people, and could not
+see a group made on a phone. Groups now run on Royal's own WhatsApp number
+through the **WhatsApp bridge** — a small separate service
+(`services/whatsapp-bridge`) linked to the number by QR code, the way WhatsApp
+Web is. Meta stays for lead messages and calls (everything above).
 
-**Eligibility — verify this first.** The app was built against Meta's Groups
-API as documented when it was written (late 2026). Meta changes these terms,
-so treat each of the following as something to confirm against Meta's current
-Groups API documentation and Royal's own account, not as settled fact:
+Everything about the bridge — setting it up, the API, the events, the tokens,
+what to do when it is logged out — is in
+[`docs/whatsapp-bridge.md`](./whatsapp-bridge.md) and
+[`services/whatsapp-bridge/README.md`](../services/whatsapp-bridge/README.md).
+In short:
 
-- the API is open only to **Official Business Accounts**, on a number running
-  on the Cloud API (not the WhatsApp Business app or coexistence);
-- a group holds at most **8 participants**;
-- people join **only through the invite link**;
-- the API sees only groups **it created**, so a group made on a phone can never
-  be linked or read;
-- the webhook fields below are the ones that carry group events.
-
-If any of these has changed, the code may need changing before groups are
-turned on. Admin › WhatsApp shows whether Meta reports the number as an OBA.
-
-Turning it on — only once every point above is confirmed:
-
-1. Confirm OBA status on Admin › WhatsApp.
-2. In the Meta app → WhatsApp → Configuration → Webhook, check that these
-   fields still exist and subscribe them as well as `messages`:
-   `group_lifecycle_update`, `group_participants_update`,
-   `group_settings_update` and `group_status_update`.
-3. Set `WHATSAPP_GROUPS_ENABLED="true"` and redeploy.
-
-How it behaves:
-
-- **New projects** ask for a group as soon as they are created (the wizard and
-  the offer handoff). Eve's handoff records the request; the App starts it the
-  first time anyone opens the project. The daily sweep starts one that is still
-  inside its 30 minutes, and marks one older than that **failed** — it can be
-  created again from the project header.
-- **Ongoing projects**: the project header offers *Create WhatsApp group* and
-  *Link an existing group*. Linking lists only the business's own API-made
-  groups that no project has. Messages posted in a group before it was linked
-  wait as `UNLINKED_GROUP` and are filed onto the project when it is linked.
-- Creating is asynchronous: Meta answers with a request id and confirms on
-  `group_lifecycle_update` with the group id and invite link. If that webhook
-  never arrives, the workflow (`lib/workflow/whatsapp-group.ts`) looks for the
-  group by its subject (`Royal Constructions · <site>`) on a widening timer;
-  after 30 minutes unconfirmed it is marked **failed** with the reason, never
-  asked for twice. A create is one outbox intent per attempt
-  (`PROJECT_WHATSAPP_GROUP_CREATE`, key `project-whatsapp-group:<row>:<n>`).
-- **Inviting owners**: *Invite owners* opens an email pre-filled with the
-  owners on the contract and the link, which staff edit before sending. It only
-  goes to the contract's owners and must keep the group's current link; it is
-  sent once per intent and lands on the project's email trail. *Copy link* puts
-  the link on the clipboard.
-- **Sending** into the group follows the same once-only rules as a lead send
-  (§6): an unconfirmed send waits for *Mark sent / Mark not sent*. Meta does not
-  document a 24-hour window for groups, so the app does not apply one; a refusal
-  from Meta is shown as "Nothing was sent".
-- A **suspended** group is read-only until WhatsApp clears it; a **deleted**
-  group keeps its history and a new one can be created.
+- **Admin › WhatsApp bridge** shows whether the number is linked, the login QR
+  code, a *Disconnect* button, and every group the number is in with the
+  project it belongs to. A group can be linked to a project, unlinked, or moved
+  from there; *Resync* tells the bridge exactly which groups to forward.
+- **The project's WhatsApp tab and header** create a group (the owners with a
+  mobile on file are added straight away), link an existing one — including one
+  made on the phone — refresh the invite link, or unlink the group. A new
+  project no longer gets a group automatically: the office creates it when
+  ready, because creating one puts the client's number in it.
+- **Only linked groups reach the app.** The bridge forwards messages only for
+  groups mapped to a project; family and supplier chats on the same number
+  never leave it. Messages from before a group was linked are not brought in.
+- **Inviting owners** is unchanged: an email with the group's link, edited
+  before it goes, sent once per intent. Royal's number must be an admin of the
+  group for there to be a link.
+- **Sending** follows the once-only rules of §6; the outbox key is also the
+  bridge's `Idempotency-Key`, so a retry the bridge already sent posts nothing.
+- **Logged out** (unlinked on the phone, or *Disconnect*): group messages stop
+  and the app reports it as an error (Sentry → office inbox). Scan a new QR on
+  Admin › WhatsApp bridge; nothing else is lost — the bridge queues events on
+  disk until the app accepts them.

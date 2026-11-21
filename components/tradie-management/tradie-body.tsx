@@ -53,7 +53,7 @@ function matchesTradieQuery(tradie: TradieRow, query: TradieTableQuery) {
   return true;
 }
 
-export function TradieBody() {
+export function TradieBody({ isOffice }: { isOffice: boolean }) {
   const dispatch = useAppDispatch();
   const { query, activeTab, tradies, tradiesByCategory } = useAppSelector(
     (state) => state.tradieManagement,
@@ -90,7 +90,9 @@ export function TradieBody() {
         <p className="text-xs text-muted-foreground">
           {filtersActive
             ? "Try a broader search, or clear the filters to see every trade category."
-            : "Add your first tradie to start tracking rates, jobs and incidents."}
+            : isOffice
+              ? "Add your first tradie to start tracking rates, jobs and incidents."
+              : "The office adds tradies. They appear here once registered."}
         </p>
       </div>
 
@@ -114,7 +116,9 @@ export function TradieBody() {
           groupedEmptyState
         );
       case "list":
-        return <TradieTable filteredTradies={filteredTradies} />;
+        return (
+          <TradieTable filteredTradies={filteredTradies} isOffice={isOffice} />
+        );
       default:
         return null;
     }

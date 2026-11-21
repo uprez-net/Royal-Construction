@@ -13,6 +13,7 @@ import {
   EMAIL_FOOTER_HTML,
   EMAIL_HEADER_HTML,
 } from "@/constants/email-artifacts";
+import { FONTS, RC_COLORS } from "@/lib/graph/Email/email-theme";
 import { getAllEmailThreads } from "@/utils/email-parser";
 import { normalizeEmailAddress } from "@/utils/formatters";
 import { generateEmailChecksum } from "@/utils/generator";
@@ -111,7 +112,7 @@ export function renderClientEmailHtml(body: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body style="margin:0;padding:0;">
-  <div style="background-color:#f7f6f2;margin:0;padding:0">
+  <div style="background-color:${RC_COLORS.container};margin:0;padding:0;font-family:${FONTS.body};color:${RC_COLORS.text};">
     ${EMAIL_HEADER_HTML}
     ${markdownToHtml(body)}
     ${EMAIL_FOOTER_HTML}
@@ -180,7 +181,7 @@ export async function sendComposedLeadEmail(
       max-width: 90%;
       align-items: center;
       gap: 8px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: ${FONTS.body};
     }
     .rc-hover-toolbar span { font-weight: 600; white-space: nowrap; }
     .rc-hover-toolbar input {
@@ -196,13 +197,13 @@ export async function sendComposedLeadEmail(
       font-family: monospace;
     }
     .rc-hover-toolbar input:focus {
-      border-color: #c6923a;
+      border-color: ${RC_COLORS.brandGold};
       background: rgba(255,255,255,0.15);
     }
   </style>
 </head>
 <body>
-  <div style="background-color:#f7f6f2;margin:0;padding:0">
+  <div style="background-color:${RC_COLORS.container};margin:0;padding:0;font-family:${FONTS.body};color:${RC_COLORS.text};">
     ${EMAIL_HEADER_HTML}
     <p>Hi ${escapeEmailHtml(authorized.leadName)},</p>
     ${buildLeadEmailHtml(input.body, input.senderName)}

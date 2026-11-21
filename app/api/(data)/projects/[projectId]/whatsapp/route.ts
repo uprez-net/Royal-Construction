@@ -1,17 +1,14 @@
-import { ProjectWhatsAppGroupStatus } from "@prisma/client";
-import { after, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
+import { z } from "zod";
 
 import { signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
-import { requestProjectWhatsAppGroup } from "@/lib/domain/projects/whatsapp/groups";
+import { createProjectWhatsAppGroup } from "@/lib/domain/projects/whatsapp/groups";
 import { getProjectWhatsAppThread } from "@/lib/domain/projects/whatsapp/queries";
 import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
-import { whatsappChannelFromEnv } from "@/lib/whatsapp/config";
+import { createWhatsAppBridgePortFromEnv } from "@/lib/whatsapp-bridge/client";
 import {
-  restartStalledProjectWhatsAppGroup,
-  startProjectWhatsAppGroupWorkflow,
-} from "@/lib/whatsapp/project-groups";
-import {
+  badRequestResponse,
   errorResponse,
   successResponse,
   unauthorizedResponse,
@@ -19,7 +16,8 @@ import {
 
 /**
  * A project's WhatsApp group: GET reads it (and a page of messages), POST
- * asks for one to be created. Rules: lib/domain/projects/whatsapp.
+ * creates one on Royal's number through the WhatsApp bridge and links it.
+ * Rules: lib/domain/projects/whatsapp.
  */
 
 export async function GET(
@@ -40,17 +38,8 @@ export async function GET(
         projectId,
       },
       prisma,
-      { channel: whatsappChannelFromEnv() },
+      { bridge: createWhatsAppBridgePortFromEnv() },
     );
-    // A request Eve recorded, or one whose start failed, is started by the
-    // first person to look at it.
-    const group = thread.group;
-    if (
-      group?.status === ProjectWhatsAppGroupStatus.CREATING
-      && !group.requestedAt
-    ) {
-      after(() => restartStalledProjectWhatsAppGroup(group.id));
-    }
     return successResponse(thread);
   } catch (error) {
     const refusal = domainErrorResponse(error);
@@ -63,36 +52,49 @@ export async function GET(
   }
 }
 
+const createSchema = z
+  .object({
+    /** After an unconfirmed create, the office checked: there is no group. */
+    confirmNoGroup: z.boolean().optional(),
+  })
+  .strict();
+
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   ctx: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await ctx.params;
+  // The body is optional: a plain create sends none.
+  const raw = await request.text();
+  let confirmNoGroup = false;
+  if (raw.trim()) {
+    let json: unknown;
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      return badRequestResponse("The body must be JSON.");
+    }
+    const parsed = createSchema.safeParse(json);
+    if (!parsed.success) return badRequestResponse("Unexpected body.");
+    confirmNoGroup = parsed.data.confirmNoGroup === true;
+  }
   try {
     const principal = await signedInUserPrincipal();
     if (!principal) return unauthorizedResponse();
-    const result = await requestProjectWhatsAppGroup(
+    const result = await createProjectWhatsAppGroup(
       principal,
-      { projectId },
+      { confirmNoGroup, projectId },
       prisma,
-      { channel: whatsappChannelFromEnv() },
+      { bridge: createWhatsAppBridgePortFromEnv() },
     );
-    if (result.start) {
-      try {
-        await startProjectWhatsAppGroupWorkflow(result.group.id);
-      } catch (error) {
-        // The request is recorded; opening the project restarts it.
-        console.error("[whatsapp] Could not start the group workflow", error);
-      }
-    }
     return successResponse(result);
   } catch (error) {
     const refusal = domainErrorResponse(error);
     if (refusal) return refusal;
-    console.error("[whatsapp] Project group request failed", error);
-    return errorResponse("The WhatsApp group could not be requested.", {
-      code: "PROJECT_WHATSAPP_GROUP_FAILED",
-      status: 500,
-    });
+    console.error("[whatsapp] Project group create failed", error);
+    return errorResponse(
+      "The WhatsApp group could not be created, and whether it exists is unknown. Check Admin › WhatsApp bridge before trying again.",
+      { code: "PROJECT_WHATSAPP_GROUP_FAILED", status: 500 },
+    );
   }
 }

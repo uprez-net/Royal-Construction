@@ -26,9 +26,8 @@ export const maxDuration = 120;
 async function handle(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (
-    process.env.NODE_ENV === "production"
-    && (!cronSecret
-      || request.headers.get("authorization") !== `Bearer ${cronSecret}`)
+    !cronSecret
+    || request.headers.get("authorization") !== `Bearer ${cronSecret}`
   ) {
     if (!cronSecret)
       console.error("[comms-sweep] cron: CRON_SECRET is not configured.");

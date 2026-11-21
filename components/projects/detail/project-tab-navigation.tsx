@@ -57,10 +57,28 @@ export const VISIBLE_PROJECT_DETAIL_TABS = [
 export type VisibleProjectDetailTabKey =
   (typeof VISIBLE_PROJECT_DETAIL_TABS)[number];
 
+/**
+ * Whether this viewer may open the tab on this project. Compliance and History
+ * depend on the project's `viewerAccess`; the rest are open to any viewer who
+ * reaches the page (the admin-only tabs are dropped in the tab bar itself).
+ */
+export function canOpenProjectDetailTab(
+  key: VisibleProjectDetailTabKey,
+  project: ProjectDetail,
+): boolean {
+  if (key === "compliance") return project.viewerAccess.compliance;
+  if (key === "history") return project.viewerAccess.history;
+  return true;
+}
+
 export function isVisibleProjectDetailTab(
   value: string,
+  project: ProjectDetail,
 ): value is VisibleProjectDetailTabKey {
-  return (VISIBLE_PROJECT_DETAIL_TABS as readonly string[]).includes(value);
+  return (
+    (VISIBLE_PROJECT_DETAIL_TABS as readonly string[]).includes(value)
+    && canOpenProjectDetailTab(value as VisibleProjectDetailTabKey, project)
+  );
 }
 
 export const projectTabTriggerId = (key: VisibleProjectDetailTabKey) =>
@@ -407,9 +425,16 @@ export function ProjectTabNavigation({
   activeTab: VisibleProjectDetailTabKey;
   onTabChange: (tab: VisibleProjectDetailTabKey) => void;
 }) {
+  // Filtered here, not per button, so the arrow keys skip a tab the viewer
+  // cannot open as well as the mouse.
   const projectDetailTabs = useMemo(
-    () => generateProjectDetailTabs(project),
-    [project],
+    () =>
+      generateProjectDetailTabs(project).filter(
+        (tab) =>
+          canOpenProjectDetailTab(tab.key, project)
+          && (!tab.isAdminOnly || isAdmin),
+      ),
+    [isAdmin, project],
   );
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const listRef = useRef<HTMLDivElement>(null);
@@ -487,9 +512,6 @@ export function ProjectTabNavigation({
         {projectDetailTabs.map((tab) => {
           const Icon = TabIcons[tab.key];
           const isActive = activeTab === tab.key;
-          if (tab.isAdminOnly && !isAdmin) {
-            return null;
-          }
 
           return (
             <button

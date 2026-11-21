@@ -1,12 +1,15 @@
 import {
   badRequestResponse,
   errorResponse,
-  notFoundResponse,
   successResponse,
   updateLeadSchema,
 } from "@/utils/validators";
-import { findLeadById, updateLead, deleteLead } from "@/lib/data/leads";
+import { currentLeadPrincipal } from "@/lib/data/current-principal";
+import { updateLead, deleteLead } from "@/lib/data/leads";
+import { authorizeLead } from "@/lib/domain/access/leads";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import { isLeadValidationError } from "@/lib/leads/lead-validation-error";
+import prisma from "@/lib/prisma";
 
 export async function PATCH(
   request: Request,
@@ -20,10 +23,11 @@ export async function PATCH(
       return badRequestResponse("Invalid lead id.");
     }
 
-    const existing = await findLeadById(id);
-    if (!existing) return notFoundResponse("Lead");
+    // Access before anything else: a site manager is refused the same way for
+    // every id, rather than learning from a 404 which leads exist.
+    await authorizeLead(await currentLeadPrincipal(), id, prisma);
 
-    const json = await request.json();
+    const json = await request.json().catch(() => null);
     const parsed = updateLeadSchema.safeParse(json);
 
     if (!parsed.success) {
@@ -52,6 +56,8 @@ export async function PATCH(
       console.warn("/api/leads PATCH rejected", { reason: error.message });
       return badRequestResponse(error.message);
     }
+    const refused = domainErrorResponse(error);
+    if (refused) return refused;
     console.error("/api/leads PATCH error", error);
     return errorResponse("Failed to update lead", {
       status: 500,
@@ -72,8 +78,9 @@ export async function DELETE(
       return badRequestResponse("Invalid lead id.");
     }
 
-    const existing = await findLeadById(id);
-    if (!existing) return notFoundResponse("Lead");
+    // Access before anything else: a site manager is refused the same way for
+    // every id, rather than learning from a 404 which leads exist.
+    await authorizeLead(await currentLeadPrincipal(), id, prisma);
 
     await deleteLead(id);
 
@@ -82,6 +89,8 @@ export async function DELETE(
       message: "Lead deleted successfully",
     });
   } catch (error) {
+    const refused = domainErrorResponse(error);
+    if (refused) return refused;
     console.error("/api/leads DELETE error", error);
     return errorResponse("Failed to delete lead", {
       status: 500,

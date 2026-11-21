@@ -35,12 +35,12 @@ import {
 // four different paragraph treatments.
 
 /** The light-theme hairline shared across the RC email templates. */
-export const BORDER_ON_LIGHT = "#E2E8F0";
+export const BORDER_ON_LIGHT = "#E6E2D9";
 
 export const TYPE = {
   /** Hero headline. One per email. */
   display: {
-    fontFamily: FONTS.condensed,
+    fontFamily: FONTS.heading,
     fontWeight: 500,
     fontSize: 48,
     lineHeight: 1,
@@ -49,7 +49,7 @@ export const TYPE = {
   },
   /** Every section heading. */
   sectionTitle: {
-    fontFamily: FONTS.condensed,
+    fontFamily: FONTS.heading,
     fontWeight: 500,
     fontSize: 24,
     lineHeight: 1.1,
@@ -58,7 +58,7 @@ export const TYPE = {
   },
   /** Heading of a row inside a list. */
   itemTitle: {
-    fontFamily: FONTS.condensed,
+    fontFamily: FONTS.label,
     fontWeight: 500,
     fontSize: 15,
     lineHeight: 1.3,
@@ -74,7 +74,7 @@ export const TYPE = {
   },
   /** The value under a label. */
   value: {
-    fontFamily: FONTS.condensed,
+    fontFamily: FONTS.label,
     fontWeight: 500,
     fontSize: 16,
     lineHeight: 1.3,
@@ -155,7 +155,7 @@ function QuoteItem({
       <Column
         align="right"
         style={{
-          fontFamily: FONTS.condensed,
+          fontFamily: FONTS.mono,
           fontWeight: isTotal ? 600 : 500,
           fontSize: isTotal ? 18 : 15,
           color: isTotal ? RC_COLORS.gold : RC_COLORS.textOnLight,
@@ -375,7 +375,7 @@ export default function QuotationEmail({
 
                     <Section
                       style={{
-                        borderTop: `2px solid ${RC_COLORS.gold}`,
+                        borderTop: `2px solid ${RC_COLORS.brandGold}`,
                         marginTop: "1rem",
                         paddingTop: "1rem",
                       }}
@@ -425,7 +425,7 @@ export default function QuotationEmail({
                 style={{
                   ...CARD,
                   backgroundColor: RC_COLORS.white,
-                  borderLeft: `3px solid ${RC_COLORS.gold}`,
+                  borderLeft: `3px solid ${RC_COLORS.border}`,
                   padding: "1rem 1.25rem",
                 }}
               >

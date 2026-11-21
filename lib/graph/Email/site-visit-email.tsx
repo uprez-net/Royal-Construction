@@ -30,13 +30,13 @@ import {
 } from "./email-lead-context";
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
-// Updated stroke color to match RC_COLORS.gold (#C9A84C)
+// Updated stroke color to match RC_COLORS.gold (#926100)
 
 const ICONS = {
-  calendar: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'%3E%3C/rect%3E%3Cline x1='16' y1='2' x2='16' y2='6'%3E%3C/line%3E%3Cline x1='8' y1='2' x2='8' y2='6'%3E%3C/line%3E%3Cline x1='3' y1='10' x2='21' y2='10'%3E%3C/line%3E%3C/svg%3E`,
-  clock: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E`,
-  pin: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'%3E%3C/path%3E%3Ccircle cx='12' cy='10' r='3'%3E%3C/circle%3E%3C/svg%3E`,
-  check: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E`,
+  calendar: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23926100' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'%3E%3C/rect%3E%3Cline x1='16' y1='2' x2='16' y2='6'%3E%3C/line%3E%3Cline x1='8' y1='2' x2='8' y2='6'%3E%3C/line%3E%3Cline x1='3' y1='10' x2='21' y2='10'%3E%3C/line%3E%3C/svg%3E`,
+  clock: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23926100' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E`,
+  pin: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23926100' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'%3E%3C/path%3E%3Ccircle cx='12' cy='10' r='3'%3E%3C/circle%3E%3C/svg%3E`,
+  check: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23926100' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E`,
 };
 
 // ─── Sub-Components ─────────────────────────────────────────────────────────
@@ -53,7 +53,7 @@ function DetailRow({
   showBorder?: boolean;
 }) {
   return (
-    <Row style={{ borderBottom: showBorder ? "1px solid #E2E8F0" : undefined }}>
+    <Row style={{ borderBottom: showBorder ? "1px solid #E6E2D9" : undefined }}>
       <Column className="py-5 px-6">
         <Row>
           <Column
@@ -84,7 +84,7 @@ function DetailRow({
             <Text
               className="m-0"
               style={{
-                fontFamily: FONTS.condensed,
+                fontFamily: FONTS.label,
                 fontWeight: 500,
                 fontSize: 16,
                 lineHeight: 1.2,
@@ -113,7 +113,7 @@ function ExpectItem({
     <Section
       style={{
         padding: "1.25rem 0",
-        borderBottom: showBorder ? "1px solid #E2E8F0" : undefined,
+        borderBottom: showBorder ? "1px solid #E6E2D9" : undefined,
       }}
     >
       <Row>
@@ -133,7 +133,7 @@ function ExpectItem({
           <Text
             className="m-0"
             style={{
-              fontFamily: FONTS.condensed,
+              fontFamily: FONTS.label,
               fontWeight: 500,
               fontSize: 15,
               lineHeight: 1.3,
@@ -231,11 +231,10 @@ export default function SiteVisitEmail({
               <Text
                 className="mobile_font-40 m-0 uppercase"
                 style={{
-                  fontFamily: FONTS.condensed,
+                  fontFamily: FONTS.heading,
                   fontWeight: 500,
                   fontSize: 48,
                   lineHeight: 1,
-                  letterSpacing: "-1.4px",
                   color: RC_COLORS.textOnLight,
                 }}
               >
@@ -289,23 +288,26 @@ export default function SiteVisitEmail({
               <Row>
                 <Column
                   className="rounded-md overflow-hidden"
-                  style={{ border: "1px solid #E2E8F0" }}
+                  style={{ border: "1px solid #E6E2D9" }}
                 >
                   {/* Card Header */}
                   <Row>
                     <Column
                       className="py-3.5 px-6"
-                      style={{ backgroundColor: RC_COLORS.gold }}
+                      style={{
+                        backgroundColor: RC_COLORS.dark,
+                        borderBottom: `2px solid ${RC_COLORS.brandGold}`,
+                      }}
                     >
                       <Text
                         className="m-0 uppercase"
                         style={{
-                          fontFamily: FONTS.condensed,
+                          fontFamily: FONTS.label,
                           fontWeight: 500,
                           fontSize: 13,
                           lineHeight: 1,
                           letterSpacing: "0.6px",
-                          color: "#FFFFFF",
+                          color: RC_COLORS.textOnLight,
                         }}
                       >
                         Appointment Details
@@ -341,7 +343,7 @@ export default function SiteVisitEmail({
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderRadius: 6,
-                  border: "1px solid #E2E8F0",
+                  border: "1px solid #E6E2D9",
                   padding: "1.5rem",
                 }}
               >
@@ -350,11 +352,10 @@ export default function SiteVisitEmail({
                     <Text
                       className="mobile_font-24 m-0 mb-6 uppercase"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.heading,
                         fontWeight: 500,
                         fontSize: 26,
                         lineHeight: 1,
-                        letterSpacing: "0.3px",
                         color: RC_COLORS.textOnLight,
                       }}
                     >
@@ -402,7 +403,7 @@ export default function SiteVisitEmail({
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
-                  borderLeft: `3px solid ${RC_COLORS.gold}`,
+                  borderLeft: `3px solid ${RC_COLORS.border}`,
                   padding: "1rem 1.25rem",
                 }}
               >
@@ -479,7 +480,7 @@ export default function SiteVisitEmail({
             {/* ── Sign-off ── */}
             <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
               <Section
-                style={{ borderTop: "1px solid #E2E8F0", paddingTop: "1.5rem" }}
+                style={{ borderTop: "1px solid #E6E2D9", paddingTop: "1.5rem" }}
               >
                 <Row>
                   <Column>
@@ -504,7 +505,7 @@ export default function SiteVisitEmail({
                     <Text
                       className="m-0"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.label,
                         fontSize: 16,
                         color: RC_COLORS.gold,
                       }}

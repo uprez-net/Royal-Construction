@@ -417,17 +417,13 @@ test("restricted staff see only what their screens show, by vector and by name",
     ],
     agentContextChunk: { findMany: async () => [tradie, leadRow] },
   } as unknown as DomainDb;
-  // A guest is staff, but may not open the tradie directory.
+  // Access pending (GUEST) is not staff, so it reads neither leads nor tradies.
   const guest = userPrincipal({ id: "g1", role: Role.GUEST });
 
   for (const embedding of [countingEmbedding().port, undefined]) {
-    const hits = await searchAgentContext(guest, { query: "Smith" }, db, {
-      embedding,
-    });
-    assert.deepEqual(
-      hits.map((hit) => `${hit.kind}:${hit.entityId}`),
-      ["lead:42"],
-      embedding ? "embedding search" : "name-match search",
+    await assert.rejects(
+      searchAgentContext(guest, { query: "Smith" }, db, { embedding }),
+      /staff only/,
     );
   }
 

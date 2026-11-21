@@ -1,5 +1,8 @@
 // The WhatsApp Business Platform, as the domain sees it (issue #333).
 //
+// Leads only: their 1:1 messages and calls. Project groups go through Royal's
+// WhatsApp bridge instead (ports/whatsapp-bridge.ts).
+//
 // lib/domain/leads/whatsapp decides who may be messaged, from which Royal
 // number, with what, and how many times. This port is only the capability to
 // hand a decided message to the provider. The production adapter is
@@ -38,12 +41,6 @@ export type WhatsAppChannel = {
    */
   readonly sendingAvailable: boolean;
   /**
-   * WHATSAPP_GROUPS_ENABLED. Meta's Groups API is only open to Official
-   * Business Accounts, so project groups stay off until the account has that
-   * status and someone turns this on.
-   */
-  readonly groupsEnabled: boolean;
-  /**
    * WHATSAPP_CALLING_ENABLED. Calling must also be switched on for the
    * number in WhatsApp Manager; Meta refuses calls on a number without it.
    */
@@ -79,8 +76,6 @@ export type WhatsAppPort = {
   readonly sendTemplate: (
     message: WhatsAppTemplateMessage,
   ) => Promise<WhatsAppSendReceipt>;
-  /** Present only when `channel.groupsEnabled` and sending is available. */
-  readonly groups?: WhatsAppGroupsPort | null;
   /** Present only when `channel.callingEnabled` and sending is available. */
   readonly calls?: WhatsAppCallsPort | null;
 };
@@ -120,64 +115,6 @@ export type WhatsAppCallsPort = {
   ) => Promise<WhatsAppSendReceipt>;
 };
 
-// ── Groups (Meta's Groups API) ────────────────────────────────────────
-//
-// Only groups the API itself created are visible to it: a group somebody made
-// on a phone cannot be listed, read or linked, whatever this port offers.
-
-export type WhatsAppGroupCreateRequest = {
-  readonly fromPhoneNumberId: string;
-  /** At most 100 characters, as WhatsApp shows it. */
-  readonly subject: string;
-  readonly description: string;
-};
-
-/**
- * What Meta answered to a create. The group id and invite link normally
- * arrive later, on the `group_lifecycle_update` webhook that names the same
- * request id; either may be present here if Meta answered synchronously.
- */
-export type WhatsAppGroupCreateReceipt = {
-  readonly requestId: string | null;
-  readonly groupId: string | null;
-  readonly inviteLink: string | null;
-};
-
-export type WhatsAppGroupSummary = {
-  readonly groupId: string;
-  readonly subject: string;
-  readonly createdAt: Date | null;
-};
-
-export type WhatsAppGroupInfo = {
-  readonly groupId: string;
-  readonly subject: string;
-  readonly suspended: boolean;
-  readonly participantWaIds: readonly string[];
-};
-
-export type WhatsAppGroupTextMessage = {
-  readonly fromPhoneNumberId: string;
-  readonly groupId: string;
-  readonly body: string;
-};
-
-export type WhatsAppGroupsPort = {
-  /** May throw WhatsAppSendError; `ambiguous` means a group may exist. */
-  readonly create: (
-    request: WhatsAppGroupCreateRequest,
-  ) => Promise<WhatsAppGroupCreateReceipt>;
-  readonly inviteLink: (groupId: string) => Promise<string>;
-  /** Active groups owned by one Royal number, newest first. */
-  readonly list: (
-    phoneNumberId: string,
-  ) => Promise<readonly WhatsAppGroupSummary[]>;
-  readonly info: (groupId: string) => Promise<WhatsAppGroupInfo>;
-  readonly sendText: (
-    message: WhatsAppGroupTextMessage,
-  ) => Promise<WhatsAppSendReceipt>;
-};
-
 // ── Media ─────────────────────────────────────────────────────────────
 
 export type WhatsAppMediaDownload = {
@@ -187,8 +124,9 @@ export type WhatsAppMediaDownload = {
 };
 
 /**
- * Fetch one inbound file by Meta's media id. Meta's download URL lives for
- * five minutes, so the adapter resolves and downloads in one call.
+ * Fetch one inbound file by its media id: Meta's (the adapter resolves and
+ * downloads in one call, since Meta's URL lives five minutes), or the bridge's
+ * message id for a project group's file.
  */
 export type WhatsAppMediaPort = (
   providerMediaId: string,

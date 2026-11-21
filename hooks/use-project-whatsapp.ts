@@ -77,7 +77,9 @@ export function useProjectWhatsApp(
   } = options;
   const [state, setState] = useState<State>(INITIAL);
   const inFlight = useRef<AbortController | null>(null);
-  const whatsappEnabled = useWhatsAppAvailability().enabled;
+  // Project groups go through the WhatsApp bridge, not Meta: they poll when
+  // the bridge is configured, whether or not lead messaging is on.
+  const whatsappEnabled = useWhatsAppAvailability().groups;
 
   const refresh = useCallback(async () => {
     inFlight.current?.abort();

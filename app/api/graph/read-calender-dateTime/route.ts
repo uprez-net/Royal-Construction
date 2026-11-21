@@ -29,8 +29,10 @@ const PAGE_TIMEOUT_MS = 15_000;
 // deadline and each page is capped by whatever budget is left.
 const TOTAL_BUDGET_MS = 60_000;
 
+/** The widest window the public booking page may read (it asks for 60). */
+const MAX_DAYS = 90;
+
 interface CalendarEvent {
-  subject?: string;
   start: unknown;
   end: unknown;
   isAllDay?: boolean;
@@ -57,7 +59,13 @@ export async function GET(req: NextRequest) {
     "Received request to read calendar with query:",
     searchParams.toString(),
   );
-  const daysToFetch = parseInt(searchParams.get("days") || "30", 10);
+  // Public route: the booking page asks for 60 days. Anything else is clamped
+  // to 1..MAX_DAYS, so a caller cannot sweep the office calendar for years
+  // (or push Graph past its own range limit, which used to answer 500).
+  const requestedDays = parseInt(searchParams.get("days") || "30", 10);
+  const daysToFetch = Number.isFinite(requestedDays)
+    ? Math.min(Math.max(requestedDays, 1), MAX_DAYS)
+    : 30;
 
   const config = getGraphConfig();
 
@@ -106,8 +114,9 @@ export async function GET(req: NextRequest) {
     const endDateTime = futureDate.toISOString();
 
     // 3. Call Microsoft Graph API - calendarView endpoint
-    // $select ensures we only download the data we need (subject, times, and if it's all day)
-    const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.senderUpn)}/calendar/calendarView?startDateTime=${startDateTime}&endDateTime=${endDateTime}&$select=subject,start,end,isAllDay&$top=${GRAPH_MAX_PAGE_SIZE}`;
+    // Times only. This route is public, and an event's subject names the
+    // client a consultation is booked with (#567), so it is never read.
+    const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.senderUpn)}/calendar/calendarView?startDateTime=${startDateTime}&endDateTime=${endDateTime}&$select=start,end,isAllDay&$top=${GRAPH_MAX_PAGE_SIZE}`;
 
     // @odata.nextLink already encodes every query parameter, so it is requested
     // verbatim. Headers are not part of the URL though — Prefer has to be
@@ -202,7 +211,6 @@ export async function GET(req: NextRequest) {
 
     // 4. Format the response for the frontend
     const events = rawEvents.map((event) => ({
-      subject: event.subject || "(No Title)",
       start: event.start,
       end: event.end,
       isAllDay: event.isAllDay || false,

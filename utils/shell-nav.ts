@@ -10,6 +10,7 @@ const SCREEN_TITLES: Readonly<Record<string, string>> = {
   agent: "Operations Agent",
   comms: "Phone & SMS",
   whatsapp: "WhatsApp",
+  "whatsapp-bridge": "WhatsApp bridge",
   xero: "Xero Accounting",
 };
 

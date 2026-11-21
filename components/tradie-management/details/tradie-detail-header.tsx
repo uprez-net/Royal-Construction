@@ -23,7 +23,7 @@ import { openModal } from "@/lib/store/slices/uiSlice";
 import { TRADE_AVATAR_CLASS } from "@/constants/tradeChip";
 import { cn } from "@/lib/utils";
 
-export function TradieCard() {
+export function TradieCard({ isOffice }: { isOffice: boolean }) {
   const dispatch = useAppDispatch();
   const tradieDetails = useAppSelector(
     (state) => state.tradieManagement.selectedTradieDetails,
@@ -117,10 +117,12 @@ export function TradieCard() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <Button onClick={handleEditTradie}>
-            <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
-            Edit details
-          </Button>
+          {isOffice && (
+            <Button onClick={handleEditTradie}>
+              <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
+              Edit details
+            </Button>
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -130,22 +132,31 @@ export function TradieCard() {
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={handlePriceChange}>
-                <Tag className="mr-2 h-4 w-4" aria-hidden="true" />
-                Price change
-              </DropdownMenuItem>
+              {isOffice && (
+                <DropdownMenuItem onClick={handlePriceChange}>
+                  <Tag className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Price change
+                </DropdownMenuItem>
+              )}
 
               <DropdownMenuItem onClick={handleReport}>
                 <AlertTriangle className="mr-2 h-4 w-4" aria-hidden="true" />
                 Report incident
               </DropdownMenuItem>
 
-              <DropdownMenuSeparator />
+              {isOffice && (
+                <>
+                  <DropdownMenuSeparator />
 
-              <DropdownMenuItem onClick={handleDelete} variant="destructive">
-                <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                Delete tradie
-              </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={handleDelete}
+                    variant="destructive"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Delete tradie
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

@@ -11,6 +11,7 @@ import { toast } from "sonner";
 
 import { StatusPill } from "@/components/common/status-pill";
 import { UploadButton } from "@/components/common/upload-button";
+import { HBCF_RECORDED_BY_OFFICE } from "@/components/projects/detail/document-attention-panel";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -232,7 +233,9 @@ export function PriorComplianceSection({
                       </p>
                     ) : (
                       <p className="text-xs text-muted-foreground">
-                        {row.hint}
+                        {/* The row's own hint points at an upload this
+                            caller does not have (#572). */}
+                        {officeOnly ? HBCF_RECORDED_BY_OFFICE : row.hint}
                       </p>
                     )}
                   </div>
@@ -261,11 +264,6 @@ export function PriorComplianceSection({
             );
           })}
         </ul>
-        {project.financialsHidden ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            The office uploads the HBCF certificate.
-          </p>
-        ) : null}
         {recorded ? (
           // As on every compliance row: one document per row.
           <p className="mt-2 text-xs text-muted-foreground">

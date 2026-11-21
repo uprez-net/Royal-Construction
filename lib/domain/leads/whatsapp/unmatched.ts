@@ -31,15 +31,8 @@ import { isUniqueViolation } from "./records";
 // the webhook would have (same conversation, window and unread effects);
 // dismissing keeps the row, marked, so "we looked at it" is on record.
 //
-// Messages posted in a WhatsApp group no project is linked to wait here too
-// (UNLINKED_GROUP), but not in this queue: they belong to a project, not a
-// lead, and are filed onto the project when someone links the group
-// (lib/domain/projects/whatsapp/groups.ts).
-
-/** The lead review queue: everything except messages from unlinked groups. */
-const LEAD_QUEUE = {
-  reason: { not: WhatsAppUnmatchedReason.UNLINKED_GROUP },
-} as const;
+// Group messages never come here: project groups go through the WhatsApp
+// bridge, which forwards only groups linked to a project.
 
 export type UnmatchedWhatsAppRecord = {
   readonly id: string;
@@ -78,10 +71,10 @@ export async function listUnmatchedWhatsAppMessages(
       include: { media: { select: WHATSAPP_MEDIA_SELECT } },
       orderBy: { receivedAt: "desc" },
       take: Math.max(1, Math.min(input.limit ?? 50, 100)),
-      where: { ...LEAD_QUEUE, status },
+      where: { status },
     }),
     db.whatsAppUnmatchedMessage.count({
-      where: { ...LEAD_QUEUE, status: WhatsAppUnmatchedStatus.PENDING },
+      where: { status: WhatsAppUnmatchedStatus.PENDING },
     }),
   ]);
 
@@ -143,11 +136,6 @@ export async function attachUnmatchedWhatsAppMessage(
       "This message has already been reviewed.",
       row.status,
       WhatsAppUnmatchedStatus.ATTACHED,
-    );
-  }
-  if (row.reason === WhatsAppUnmatchedReason.UNLINKED_GROUP) {
-    throw new DomainTransitionError(
-      "This was posted in a WhatsApp group. Link the group to its project and it is filed there.",
     );
   }
   const business = context.channel?.numbers.find(

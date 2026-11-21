@@ -2,7 +2,7 @@ import type { VariationDocumentData } from "@/lib/domain/ports/variation";
 import { COMPANY_LINE } from "@/lib/offer/workspace-print-template";
 
 // The variation document the client receives: one A4 page in the offer's own
-// livery — the same masthead, navy and gold, cover table and mono footer as
+// livery — the same masthead, charcoal with a gold rule, cover table and mono footer as
 // the Building Proposal — so it reads as the next page of the contract they
 // signed rather than a form from somewhere else.
 //
@@ -10,14 +10,20 @@ import { COMPANY_LINE } from "@/lib/offer/workspace-print-template";
 // (`generatePDF`) and shown as-is in the wizard's preview, so what the office
 // approves on screen is byte-for-byte the page the client is sent.
 
-const NAVY = "#1e2b4d";
-const GOLD = "#b8873b";
-const GOLD_DARK = "#8f6a24";
-const GOLD_LIGHT = "#f6efe0";
-const BORDER = "#e3e3e0";
-const MUTED = "#6b6b6b";
-const RED = "#9f2a2a";
-const GREEN = "#1f6b3a";
+const BODY_FONT = 'Manrope, "Segoe UI", Helvetica, Arial, sans-serif';
+const HEAD_FONT = 'Georgia, "Times New Roman", serif';
+const MONO_FONT = '"IBM Plex Mono", Menlo, Consolas, monospace';
+// DESIGN.md section 2 and 5: charcoal on white; gold only as a rule or a table
+// underline; gold-ink where gold is read; status colours for status words.
+const CHARCOAL = "#343434";
+const GOLD = "#C6923A";
+const GOLD_INK = "#926100";
+const SUNK = "#F1EFE9";
+const HAIRLINE = "#E6E2D9";
+const BORDER_STRONG = "#D3CEC3";
+const MUTED = "#6B675F";
+const STATUS_DANGER = "#ac0f0f";
+const STATUS_OK = "#1e7a45";
 
 function esc(value: string): string {
   return value
@@ -88,32 +94,32 @@ export function buildVariationDocumentHtml(
 <title>${esc(`Variation ${data.number}`)}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #222; background: #fff; }
+  body { font-family: ${BODY_FONT}; color: ${CHARCOAL}; background: #fff; }
   .page { width: 210mm; min-height: 297mm; padding: 13mm 18mm; display: flex; flex-direction: column; }
-  .masthead { border-bottom: 1px solid ${GOLD}; padding-bottom: 6px; font-size: 11px; font-weight: 700; color: ${NAVY}; }
-  .foot { margin-top: auto; border-top: 1px solid ${GOLD}; padding-top: 6px; font-family: monospace; font-size: 8px; color: ${MUTED}; }
-  .eyebrow { font-family: monospace; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: ${GOLD_DARK}; margin-top: 26px; }
-  h1.title { font-size: 26px; color: ${NAVY}; margin-top: 6px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .badge { font-family: monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; border: 1px solid ${GOLD}; background: ${GOLD_LIGHT}; color: ${GOLD_DARK}; padding: 4px 8px; }
+  .masthead { border-bottom: 1px solid ${GOLD}; padding-bottom: 6px; font-size: 11px; font-weight: 700; color: ${CHARCOAL}; }
+  .foot { margin-top: auto; border-top: 1px solid ${HAIRLINE}; padding-top: 6px; font-family: ${MONO_FONT}; font-size: 8px; color: ${MUTED}; }
+  .eyebrow { font-family: ${BODY_FONT}; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: ${GOLD_INK}; margin-top: 26px; }
+  h1.title { font-family: ${HEAD_FONT}; font-size: 26px; color: ${CHARCOAL}; margin-top: 6px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .badge { font-family: ${BODY_FONT}; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; border: 1px solid ${HAIRLINE}; background: ${SUNK}; color: ${GOLD_INK}; padding: 4px 8px; }
   p { line-height: 1.55; font-size: 13px; }
   .muted { color: ${MUTED}; }
   table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
   .cover td { padding: 8px 12px; vertical-align: top; }
-  .cover .lbl { background: ${NAVY}; color: #fff; font-weight: 700; width: 50mm; }
-  .cover .val { background: #f4f5f7; }
+  .cover .lbl { background: ${SUNK}; color: ${CHARCOAL}; font-weight: 700; width: 50mm; }
+  .cover td { border-bottom: 1px solid ${HAIRLINE}; }
   .cover .sub { color: ${MUTED}; }
-  .reason { border-left: 3px solid ${GOLD}; background: #fafaf8; padding: 12px 16px; margin-top: 10px; white-space: pre-wrap; }
-  .price th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: #f2f3f5; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; padding: 10px; }
-  .price td { border-bottom: 1px solid ${BORDER}; padding: 11px 10px; }
+  .reason { border-left: 3px solid ${BORDER_STRONG}; background: #fff; padding: 12px 16px; margin-top: 10px; white-space: pre-wrap; }
+  .price th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: ${SUNK}; border-top: 1px solid ${HAIRLINE}; border-bottom: 1px solid ${GOLD}; padding: 10px; }
+  .price td { border-bottom: 1px solid ${HAIRLINE}; padding: 11px 10px; }
   .price th.amt, .price td.amt { text-align: right; white-space: nowrap; width: 55mm; }
-  .price td.amt { font-family: monospace; color: ${NAVY}; }
+  .price td.amt { font-family: ${MONO_FONT}; color: ${CHARCOAL}; }
   .was { text-decoration: line-through; color: ${MUTED}; margin-right: 10px; }
   .now { font-weight: 700; }
-  .credit { color: ${GREEN} !important; }
-  .increase { color: ${promotional ? RED : NAVY} !important; }
-  .pricebox { border: 1px solid ${BORDER}; background: ${GOLD_LIGHT}; padding: 20px 24px; margin-top: 22px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .credit { color: ${STATUS_OK} !important; }
+  .increase { color: ${promotional ? STATUS_DANGER : CHARCOAL} !important; }
+  .pricebox { border: 1px solid ${HAIRLINE}; background: ${SUNK}; padding: 20px 24px; margin-top: 22px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
   .pricebox .lbl { text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; }
-  .pricebox .big { font-size: 34px; font-weight: 700; color: ${NAVY}; font-family: monospace; white-space: nowrap; }
+  .pricebox .big { font-size: 34px; font-weight: 700; color: ${CHARCOAL}; font-family: ${MONO_FONT}; white-space: nowrap; }
   .pricebox p { font-size: 12px; margin-top: 6px; max-width: 95mm; }
 </style></head><body>
 <div class="page">

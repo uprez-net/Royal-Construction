@@ -54,11 +54,6 @@ export type InboundWhatsAppMessage = {
   readonly text: string | null;
   /** The attached file, for image/video/audio/document/sticker messages. */
   readonly media?: InboundWhatsAppMedia | null;
-  /**
-   * Meta's group id when it was posted in a group. Group messages are a
-   * project's (lib/domain/projects/whatsapp/inbound.ts), never a lead's.
-   */
-  readonly groupId?: string | null;
 };
 
 export type InboundWhatsAppOutcome =
@@ -116,12 +111,6 @@ export async function recordInboundLeadWhatsAppMessage(
   if (principal.kind !== "system") {
     throw new DomainAuthorizationError(
       "Only the verified WhatsApp webhook may record an inbound message.",
-    );
-  }
-
-  if (input.groupId) {
-    throw new DomainAuthorizationError(
-      "A group message belongs to a project, not a lead.",
     );
   }
 

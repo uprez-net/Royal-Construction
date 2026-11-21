@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 
 import {
   complianceAccessResponse,
-  requireComplianceAccess,
+  requireComplianceMutation,
 } from "@/lib/compliance/access";
 import { sendPartyReply } from "@/lib/data/compliance-outreach";
 import { userPrincipal } from "@/lib/domain/principal";
@@ -42,7 +42,7 @@ export async function POST(
   const { outreachId, ...input } = body.data;
 
   try {
-    const { user } = await requireComplianceAccess(projectId);
+    const { user } = await requireComplianceMutation(projectId);
     const engagement = await sendPartyReply(
       userPrincipal(user),
       projectId,

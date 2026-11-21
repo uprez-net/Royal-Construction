@@ -1,16 +1,20 @@
 import { ProjectWhatsAppGroupStatus } from "@prisma/client";
 
-import { authorizeProject } from "../../access/projects";
+import { authorizeProjectRecording } from "../../access/projects";
 import type { DomainDb } from "../../db";
 import { DomainAuthorizationError, DomainValidationError } from "../../errors";
-import type { WhatsAppChannel } from "../../ports/whatsapp";
-import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
+import type { WhatsAppBridgePort } from "../../ports/whatsapp-bridge";
+import {
+  isInternalPrincipal,
+  isOfficePrincipal,
+  type DomainPrincipal,
+} from "../../principal";
 import { leadPhoneE164 } from "../../leads/whatsapp/phone";
 import { PROJECT_OWNER_SELECT, projectOwnerRows } from "../owners";
 import {
   projectWhatsAppGroupAvailability,
   type ProjectWhatsAppGroupAvailability,
-} from "./groups";
+} from "./group-shared";
 import {
   PROJECT_WHATSAPP_GROUP_SELECT,
   PROJECT_WHATSAPP_MESSAGE_SELECT,
@@ -35,8 +39,12 @@ export type ProjectWhatsAppOwner = {
 
 export type ProjectWhatsAppThread = {
   readonly projectId: string;
-  /** The lead the project came from, whose 1:1 chat sits beside the group. */
-  readonly leadId: number;
+  /**
+   * The lead the project came from, whose 1:1 chat sits beside the group.
+   * Null for a caller outside the office: the 1:1 chat is the sales
+   * conversation, and the lead is the sales record (#570).
+   */
+  readonly leadId: number | null;
   readonly leadName: string;
   readonly availability: ProjectWhatsAppGroupAvailability;
   readonly group: ProjectWhatsAppGroupRecord | null;
@@ -62,10 +70,10 @@ export async function getProjectWhatsAppThread(
     readonly limit?: number;
   },
   db: DomainDb,
-  context: { readonly channel: WhatsAppChannel | null },
+  context: { readonly bridge: WhatsAppBridgePort | null | undefined },
 ): Promise<ProjectWhatsAppThread> {
   requireStaff(principal);
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   const limit = Math.max(1, Math.min(input.limit ?? 40, MAX_PAGE));
 
   const project = await db.project.findUniqueOrThrow({
@@ -114,9 +122,15 @@ export async function getProjectWhatsAppThread(
   // Newest first from the query; the oldest on this page is the cursor.
   const olderCursor = rows.length > limit ? (page.at(-1)?.id ?? null) : null;
 
-  const group = project.whatsappGroup
+  const record = project.whatsappGroup
     ? toProjectWhatsAppGroupRecord(project.whatsappGroup)
     : null;
+  // The invite link lets anyone holding it join the client's group; inviting
+  // is the office's (`canSetUpProjectWhatsAppGroup`).
+  const group =
+    record && !isOfficePrincipal(principal)
+      ? { ...record, inviteLink: null }
+      : record;
   const inGroup = new Set(
     (group?.participants ?? [])
       .filter((participant) => !participant.leftAt && participant.phoneE164)
@@ -124,9 +138,9 @@ export async function getProjectWhatsAppThread(
   );
 
   return {
-    availability: projectWhatsAppGroupAvailability(context.channel),
+    availability: projectWhatsAppGroupAvailability(context.bridge),
     group,
-    leadId: project.Lead.id,
+    leadId: isOfficePrincipal(principal) ? project.Lead.id : null,
     leadName: project.Lead.name,
     messages: [...page].reverse().map(toProjectWhatsAppMessageRecord),
     olderCursor,
@@ -150,12 +164,19 @@ export async function markProjectWhatsAppRead(
   db: DomainDb,
 ): Promise<void> {
   requireStaff(principal);
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   await db.projectWhatsAppGroup.updateMany({
     data: { unreadCount: 0 },
+    // Every status whose chat the tab can show, or the count never clears.
     where: {
       projectId: input.projectId,
-      status: { not: ProjectWhatsAppGroupStatus.DELETED },
+      status: {
+        in: [
+          ProjectWhatsAppGroupStatus.ACTIVE,
+          ProjectWhatsAppGroupStatus.UNLINKED,
+          ProjectWhatsAppGroupStatus.DELETED,
+        ],
+      },
     },
   });
 }

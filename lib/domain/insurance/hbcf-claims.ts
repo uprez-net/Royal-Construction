@@ -71,6 +71,13 @@ export function projectHbcfCertificateFileId(
   return readHbcfClaimDocuments(legal)[0]?.fileId || null;
 }
 
+/**
+ * The tag the Overview's HBCF upload files every certificate and claim
+ * document under. A replaced certificate leaves its file behind, no longer
+ * named by the legal section, so the tag is how it is still known as HBCF.
+ */
+export const HBCF_FILE_TAG = "HBCF insurance";
+
 /** Every file the project's HBCF record points at: certificate and claims. */
 export function projectHbcfFileIds(
   legal: LegalAdministrationDraft,

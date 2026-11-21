@@ -203,7 +203,7 @@ test("a GPT-Live secret is minted with the server's Gateway key, else its OIDC t
 });
 
 test("Mili runs on GPT-Live, never a realtime model the Gateway refuses", () => {
-  assert.equal(VOICE_AGENT_MODEL, "openai/gpt-live-1");
+  assert.equal(VOICE_AGENT_MODEL, "openai/gpt-live-1.1");
 });
 
 // ── The route ─────────────────────────────────────────────────────────

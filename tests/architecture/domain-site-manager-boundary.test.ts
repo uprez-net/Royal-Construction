@@ -41,9 +41,9 @@ import {
 
 /* ------------------------------------------------------------ the rule -- */
 
-test("the office is ADMIN and GUEST; a site manager and a customer are not in it", () => {
+test("the office is ADMIN; a site manager, a GUEST and a customer are not in it", () => {
   assert.equal(isOfficeRole(Role.ADMIN), true);
-  assert.equal(isOfficeRole(Role.GUEST), true);
+  assert.equal(isOfficeRole(Role.GUEST), false);
   assert.equal(isOfficeRole(Role.SITE_MANAGER), false);
   assert.equal(isOfficeRole(Role.CUSTOMER), false);
 
@@ -193,12 +193,33 @@ test("a hidden detail carries no money anywhere in its tree", () => {
         type: "variationUpdated",
       },
     ],
+    customer: { email: "client@example.com", id: "c1", phone: "0412 000 000" },
+    documents: [
+      { fileId: "f_photo", key: "f_photo", source: "milestone" },
+      { fileId: "f_hbcf", key: "f_hbcf", source: "project" },
+      { fileId: "f_da", key: "f_da", source: "compliance" },
+      { fileId: null, key: "invoice:1", source: "tradie-invoice" },
+      { fileId: "f_var", key: "f_var", source: "variation" },
+      { fileId: "f_lead", key: "f_lead", source: "lead" },
+    ],
+    files: [
+      { complianceDocumentId: null, id: "f_photo", leadId: null },
+      { complianceDocumentId: null, id: "f_hbcf", leadId: null },
+    ],
     lead: { emails: [{ body: "Your quotation is 880000" }], id: 4 },
+    leadId: 4,
     invoices: [{ total: "654321" }],
     materials: [{ id: "x", totalCost: "123456", unitCost: "777.77" }],
     milestones: [milestone],
     name: "12 Rose St",
-    requirements: { commercialsAndClaims: COMMERCIALS },
+    requirements: {
+      commercialsAndClaims: COMMERCIALS,
+      legalAdministration: {
+        hbcfInsuranceDocument: { fileId: "f_hbcf", url: "u" },
+        hbcfInsuranceNumber: "HB-1",
+        siteAddress: "12 Rose St",
+      },
+    },
     siteUpdates: [{ id: "s1", milestone }],
     spent: "777.77",
     totalBudget: "123456",
@@ -221,12 +242,31 @@ test("a hidden detail carries no money anywhere in its tree", () => {
   assert.equal(hidden.milestones[0]?.name, "Slab");
   assert.equal(hidden.tradieSchedules[0]?.tradie.name, "Raj");
   assert.deepEqual(hidden.variations, []);
-  // Ordinary history stays; the entries that spell out an amount do not.
+  // The History tab is the office's (canSeeProjectHistory): none of it.
+  assert.deepEqual(hidden.activityLogs, []);
+  // HBCF goes whole (number, certificate, its file); the office's documents
+  // (compliance file, lead, tradie invoices, variations) go too.
+  const legal = hidden.requirements?.legalAdministration as unknown as Record<
+    string,
+    unknown
+  >;
+  assert.equal("hbcfInsuranceNumber" in legal, false);
+  assert.equal("hbcfInsuranceDocument" in legal, false);
+  assert.equal(legal.siteAddress, "12 Rose St");
   assert.deepEqual(
-    hidden.activityLogs.map((entry) => entry.id),
-    ["a1"],
+    hidden.documents.map((document) => document.key),
+    ["f_photo"],
   );
-  assert.deepEqual(hidden.lead.emails, []);
+  assert.deepEqual(
+    hidden.files.map((file) => file.id),
+    ["f_photo"],
+  );
+  // The sales record is gone, not just its thread; the client's contact
+  // details stay on `customer` (#570).
+  assert.equal(hidden.lead, null);
+  assert.equal(hidden.leadId, null);
+  assert.equal(hidden.customer.phone, "0412 000 000");
+  assert.equal(hidden.customer.email, "client@example.com");
 });
 
 test("tradie quotes come out of a booking payload wherever they sit, and dates stay dates", () => {

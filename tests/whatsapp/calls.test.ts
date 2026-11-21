@@ -304,7 +304,6 @@ test("calling needs a grant; asking needs an open window and respects Meta's rat
     callingEnabled: true,
     defaultPhoneNumberId: NUMBER_ID,
     enabledTemplateNames: null,
-    groupsEnabled: false,
     numbers: [
       {
         displayNumber: "+61280001234",

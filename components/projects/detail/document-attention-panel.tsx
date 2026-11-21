@@ -19,9 +19,16 @@ export type DocumentGapTarget =
 type GapGuide = {
   /** How to put it right, in the words of the screen it is put right on. */
   hint: string;
-  action: string;
-  target: DocumentGapTarget;
+  /** The button that takes you there; absent when it is not this caller's to fix. */
+  go: { action: string; target: DocumentGapTarget } | null;
 };
+
+/**
+ * Said instead of a how-to to a caller who cannot file HBCF (#572): the
+ * Compliance tab's HBCF row.
+ */
+export const HBCF_RECORDED_BY_OFFICE =
+  "The office records the HBCF certificate.";
 
 /**
  * The how-to for each gap. The rule that finds the gap is
@@ -42,31 +49,37 @@ function guideFor(
     case "signed_date_unparseable":
       return {
         hint: "Pick the date the contract was signed in Signed (contract executed) under Legal and administration, then press Save changes.",
-        action: "Go to signed date",
-        target: {
-          kind: "field",
-          section: "legalAdministration",
-          field: "signedDate",
+        go: {
+          action: "Go to signed date",
+          target: {
+            kind: "field",
+            section: "legalAdministration",
+            field: "signedDate",
+          },
         },
       };
     case "pca_missing":
       return {
         hint: "Enter the principal certifier's inspector in PCA inspector under Legal and administration, then press Save changes.",
-        action: "Go to PCA inspector",
-        target: {
-          kind: "field",
-          section: "legalAdministration",
-          field: "pcaInspector",
+        go: {
+          action: "Go to PCA inspector",
+          target: {
+            kind: "field",
+            section: "legalAdministration",
+            field: "pcaInspector",
+          },
         },
       };
     case "hbcf_missing":
       return {
         hint: "Upload the HBCF certificate in the HBCF claim block and the number is read off it, or type it into HBCF insurance no. Then press Save changes.",
-        action: "Go to HBCF number",
-        target: {
-          kind: "field",
-          section: "legalAdministration",
-          field: "hbcfInsuranceNumber",
+        go: {
+          action: "Go to HBCF number",
+          target: {
+            kind: "field",
+            section: "legalAdministration",
+            field: "hbcfInsuranceNumber",
+          },
         },
       };
     case "construction_certificate_missing":
@@ -74,19 +87,23 @@ function guideFor(
         hint: uploadOnCompliance(
           "the Construction Certificate (or the Complying Development Certificate)",
         ),
-        action: "Open Compliance tab",
-        target: { kind: "tab", tab: "compliance" },
+        go: {
+          action: "Open Compliance tab",
+          target: { kind: "tab", tab: "compliance" },
+        },
       };
     case "hbcf_certificate_missing":
       return {
         // Either upload counts. The Overview one is here, needs no compliance
         // file, and reads the number and cover date off the certificate.
         hint: "Upload the HBCF certificate in the HBCF claim block under Legal and administration. It is also accepted against Home Insurance on the Compliance tab.",
-        action: "Go to HBCF claim",
-        target: {
-          kind: "field",
-          section: "legalAdministration",
-          field: "hbcfInsuranceNumber",
+        go: {
+          action: "Go to HBCF claim",
+          target: {
+            kind: "field",
+            section: "legalAdministration",
+            field: "hbcfInsuranceNumber",
+          },
         },
       };
   }
@@ -169,21 +186,25 @@ export function DocumentAttentionPanel({
                     aria-hidden="true"
                   />
                   <span>
-                    <span className="font-medium">How to fix: </span>
+                    {guide.go ? (
+                      <span className="font-medium">How to fix: </span>
+                    ) : null}
                     {guide.hint}
                   </span>
                 </p>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="min-h-11 shrink-0 self-start sm:min-h-0"
-                onClick={() => onGo(guide.target)}
-              >
-                {guide.action}
-                <ArrowRight className="size-3.5" aria-hidden="true" />
-              </Button>
+              {guide.go ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="min-h-11 shrink-0 self-start sm:min-h-0"
+                  onClick={() => guide.go && onGo(guide.go.target)}
+                >
+                  {guide.go.action}
+                  <ArrowRight className="size-3.5" aria-hidden="true" />
+                </Button>
+              ) : null}
             </li>
           );
         })}

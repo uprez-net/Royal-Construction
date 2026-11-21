@@ -22,7 +22,9 @@ export type ExternalService =
   | "mistral"
   | "google"
   | "geoscape"
-  | "clerk";
+  | "clerk"
+  // Royal's own WhatsApp bridge (services/whatsapp-bridge), for project groups.
+  | "whatsapp-bridge";
 
 export interface ExternalFailureContext {
   /**

@@ -31,7 +31,7 @@ import {
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 
 const ICONS = {
-  trend: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='23 6 13.5 15.5 8.5 10.5 1 18'%3E%3C/polyline%3E%3Cpolyline points='17 6 23 6 23 12'%3E%3C/polyline%3E%3C/svg%3E`,
+  trend: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23926100' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='23 6 13.5 15.5 8.5 10.5 1 18'%3E%3C/polyline%3E%3Cpolyline points='17 6 23 6 23 12'%3E%3C/polyline%3E%3C/svg%3E`,
 };
 
 // ─── Main Component ─────────────────────────────────────────────────────────
@@ -107,11 +107,10 @@ export default function VariationQuoteEmail({
               <Text
                 className="mobile_font-40 m-0 uppercase"
                 style={{
-                  fontFamily: FONTS.condensed,
+                  fontFamily: FONTS.heading,
                   fontWeight: 500,
                   fontSize: 48,
                   lineHeight: 1,
-                  letterSpacing: "-1.4px",
                   color: RC_COLORS.textOnLight,
                 }}
               >
@@ -170,21 +169,26 @@ export default function VariationQuoteEmail({
               <Row>
                 <Column
                   className="rounded-md overflow-hidden"
-                  style={{ border: "1px solid #E2E8F0" }}
+                  style={{ border: "1px solid #E6E2D9" }}
                 >
                   {/* Card Header */}
                   <Row>
-                    <Column style={{ backgroundColor: RC_COLORS.gold }}>
+                    <Column
+                      style={{
+                        backgroundColor: RC_COLORS.dark,
+                        borderBottom: `2px solid ${RC_COLORS.brandGold}`,
+                      }}
+                    >
                       <Section className="py-3.5 px-6">
                         <Text
                           className="m-0 uppercase"
                           style={{
-                            fontFamily: FONTS.condensed,
+                            fontFamily: FONTS.label,
                             fontWeight: 500,
                             fontSize: 13,
                             lineHeight: 1,
                             letterSpacing: "0.6px",
-                            color: "#FFFFFF",
+                            color: RC_COLORS.textOnLight,
                           }}
                         >
                           Variation Summary
@@ -194,7 +198,7 @@ export default function VariationQuoteEmail({
                   </Row>
 
                   {/* Row 1 — Original Quote */}
-                  <Row style={{ borderBottom: "1px solid #E2E8F0" }}>
+                  <Row style={{ borderBottom: "1px solid #E6E2D9" }}>
                     <Column className="py-5 px-6">
                       <Row>
                         <Column
@@ -221,7 +225,7 @@ export default function VariationQuoteEmail({
                           <Text
                             className="m-0"
                             style={{
-                              fontFamily: FONTS.condensed,
+                              fontFamily: FONTS.mono,
                               fontWeight: 500,
                               fontSize: 18,
                               lineHeight: 1.2,
@@ -240,8 +244,8 @@ export default function VariationQuoteEmail({
                   {/* Row 2 — Variation Amount */}
                   <Row
                     style={{
-                      borderBottom: "1px solid #E2E8F0",
-                      backgroundColor: "#FDF6E3",
+                      borderBottom: "1px solid #E6E2D9",
+                      backgroundColor: RC_COLORS.goldWash,
                     }}
                   >
                     {" "}
@@ -288,7 +292,7 @@ export default function VariationQuoteEmail({
                           <Text
                             className="m-0"
                             style={{
-                              fontFamily: FONTS.condensed,
+                              fontFamily: FONTS.mono,
                               fontWeight: 500,
                               fontSize: 20,
                               lineHeight: 1.2,
@@ -330,7 +334,7 @@ export default function VariationQuoteEmail({
                           <Text
                             className="m-0"
                             style={{
-                              fontFamily: FONTS.condensed,
+                              fontFamily: FONTS.mono,
                               fontWeight: 500,
                               fontSize: 28,
                               lineHeight: 1,
@@ -352,7 +356,7 @@ export default function VariationQuoteEmail({
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
-                  borderLeft: `3px solid ${RC_COLORS.gold}`,
+                  borderLeft: `3px solid ${RC_COLORS.border}`,
                   padding: "1rem 1.25rem",
                 }}
               >
@@ -416,7 +420,7 @@ export default function VariationQuoteEmail({
             {/* ── Sign-off ── */}
             <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
               <Section
-                style={{ borderTop: "1px solid #E2E8F0", paddingTop: "1.5rem" }}
+                style={{ borderTop: "1px solid #E6E2D9", paddingTop: "1.5rem" }}
               >
                 <Row>
                   <Column>
@@ -441,7 +445,7 @@ export default function VariationQuoteEmail({
                     <Text
                       className="m-0"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.label,
                         fontSize: 16,
                         color: RC_COLORS.gold,
                       }}

@@ -21,7 +21,11 @@ import {
   recordTradieActivity,
   viaOf,
 } from "../audit/tradie-activity-log";
-import { authorizeProject, canManageProject } from "../access/projects";
+import {
+  assertCanBookTradies,
+  authorizeProject,
+  canManageProject,
+} from "../access/projects";
 import { assertCanReadTradieDirectory } from "../access/tradies";
 import { INACTIVE_SCHEDULE_STATUSES, requireBookableTradie } from "./lifecycle";
 import {
@@ -267,6 +271,7 @@ export async function createTradieSchedule(
   input: CreateScheduleInput,
   db: DomainDb,
 ): Promise<CreatedSchedule> {
+  assertCanBookTradies(principal);
   const write = async (transactionDb: DomainDb): Promise<CreatedSchedule> => {
     const project = await authorizeProject(
       principal,
@@ -372,6 +377,7 @@ export async function createTradieSchedules(
   inputs: readonly CreateScheduleInput[],
   db: DomainDb,
 ): Promise<CreatedSchedule[]> {
+  assertCanBookTradies(principal);
   if (inputs.length === 0) {
     throw new DomainValidationError(
       "No schedules were provided for bulk creation.",
@@ -427,6 +433,7 @@ export async function transitionTradieSchedule(
   input: Parameters<typeof applyScheduleTransition>[1],
   db: DomainDb,
 ): Promise<ScheduleMutationResult> {
+  assertCanBookTradies(principal);
   // The booking, quote and approval must commit together. A failed approval
   // used to leave the booking awaiting an approval that did not exist.
   return "$transaction" in db
@@ -698,6 +705,7 @@ export async function rescheduleTradieSchedule(
   },
   db: DomainDb,
 ): Promise<RescheduleScheduleResult> {
+  assertCanBookTradies(principal);
   const write = async (
     transactionDb: DomainDb,
   ): Promise<RescheduleScheduleResult> => {
@@ -881,6 +889,7 @@ export async function requestTradieScheduleDeletion(
   projectName: string;
 }> {
   const schedule = await findSchedule(input.scheduleId, db);
+  assertCanBookTradies(principal);
   await authorizeProject(principal, schedule.projectId, db);
   if (schedule.status === TradieScheduleStatus.CANCELLED) {
     throw new DomainTransitionError(

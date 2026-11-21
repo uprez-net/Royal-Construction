@@ -125,9 +125,11 @@ describe("prepareTradieInvoiceRecheck", () => {
     assert.equal(recheck.to, "ace@example.com");
     assert.match(recheck.subject, /Invoice query/);
     assert.match(recheck.subject, /\[RCTBK-0123456789AB\]$/);
-    assert.match(recheck.html, /\$4,000\.00 ex GST/);
-    assert.match(recheck.html, /\$4,500\.00/);
-    assert.match(recheck.html, /\$500\.00 over the approved quote/);
+    // Money is wrapped in a monospace span, so read the words a person reads.
+    const text = recheck.html.replace(/<[^>]+>/g, "");
+    assert.match(text, /\$4,000\.00 ex GST/);
+    assert.match(text, /\$4,500\.00/);
+    assert.match(text, /\$500\.00 over the approved quote/);
     assert.match(recheck.html, /ACE-101/);
     assert.match(recheck.html, /ACE-102/);
     // A voided invoice is withdrawn: not listed, not counted.
@@ -146,7 +148,10 @@ describe("prepareTradieInvoiceRecheck", () => {
       { projectId: PROJECT.id, scheduleId: "schedule-1" },
       recorder.db,
     );
-    assert.match(recheck.html, /\$4,000\.00 \(as quoted\)/);
+    assert.match(
+      recheck.html.replace(/<[^>]+>/g, ""),
+      /\$4,000\.00 \(as quoted\)/,
+    );
   });
 
   test("refuses a booking whose invoices are within its quote", async () => {

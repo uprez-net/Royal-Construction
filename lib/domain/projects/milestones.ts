@@ -10,8 +10,11 @@ import { v4 as randomUUID } from "uuid";
 import type { OfferWorkspaceCostLine } from "@/lib/offer/workspace-model";
 
 import {
-  authorizeMilestone,
+  authorizeMilestoneRecording,
   authorizeProject,
+  authorizeProjectRecording,
+  canBookTradies,
+  canManageProject,
   canSeeProjectFinancials,
 } from "../access/projects";
 import type { DomainDb } from "../db";
@@ -20,6 +23,7 @@ import {
   DomainNotFoundError,
   DomainTransitionError,
   DomainValidationError,
+  DomainAuthorizationError,
 } from "../errors";
 import {
   resolveDueStageClaim,
@@ -178,7 +182,12 @@ export async function createMilestone(
 ): Promise<CreatedMilestone> {
   await authorizeProject(principal, input.projectId, db);
 
-  if (!(input.budget >= 0)) {
+  // A budget is the office's figure. From anyone else it is dropped, as
+  // `withoutFinancialEdits` does for a save, and stored as 0 for the office to
+  // set: the column's $10,000 default would be summed into the stage and
+  // tender figures on the Financials tab as if someone had priced it.
+  const seesMoney = canSeeProjectFinancials(principal);
+  if (seesMoney && !(input.budget >= 0)) {
     throw new DomainValidationError(
       "Budget must be a non-negative number.",
       "budget",
@@ -226,7 +235,7 @@ export async function createMilestone(
       name: input.name,
       description: input.description,
       targetDate,
-      budget: new Prisma.Decimal(input.budget),
+      budget: new Prisma.Decimal(seesMoney ? input.budget : 0),
       order,
       projectId: input.projectId,
       parentId,
@@ -234,11 +243,12 @@ export async function createMilestone(
     },
   });
 
-  return {
+  const row = {
     ...created,
     budget: created.budget.toString(),
     spend: created.spend?.toString(),
   };
+  return seesMoney ? row : hideMilestoneFinancials(row);
 }
 
 export type UpdateMilestoneInput = {
@@ -441,6 +451,56 @@ function toDate(value: string | undefined, field: string): Date | undefined {
 }
 
 /**
+ * What a site manager may change on an activity of a project they record on
+ * but do not manage (`canRecordOnProject` without `canManageProject`): its
+ * progress — starting it (with the day it started), finishing it, the day it
+ * finished — and not its plan: re-dating the target or an existing start stays
+ * with the office and the project's own site manager. (Waiving it is the
+ * office's alone; see `updateMilestone`.) Dates are compared as Sydney
+ * days, because the form sends back the stored ones it was opened with.
+ */
+function assertRecordingOnlyUpdate(
+  input: { status: MilestoneStatus; targetDate?: string; startDate?: string },
+  current: {
+    status: MilestoneStatus;
+    startDate: Date | null;
+    targetDate: Date | null;
+  },
+  statusChanged: boolean,
+): void {
+  const sameDay = (
+    sent: string | undefined,
+    stored: Date | null,
+    field: string,
+  ) => {
+    const date = toDate(sent, field);
+    if (date === undefined) return true;
+    return stored !== null && sydneyDateOnly(date) === sydneyDateOnly(stored);
+  };
+  if (!sameDay(input.targetDate, current.targetDate, "targetDate")) {
+    throw new DomainAuthorizationError(
+      "An activity's target date is changed by the office or the project's site manager.",
+    );
+  }
+  // Recording when it started is progress: on the move to Active, on the move
+  // out of Pending (finished without being started first), or the first time
+  // a start is written at all.
+  const recordsStart =
+    (statusChanged
+      && (input.status === MilestoneStatus.ACTIVE
+        || current.status === MilestoneStatus.PENDING))
+    || current.startDate === null;
+  if (
+    !recordsStart
+    && !sameDay(input.startDate, current.startDate, "startDate")
+  ) {
+    throw new DomainAuthorizationError(
+      "An activity's planned start is changed by the office or the project's site manager.",
+    );
+  }
+}
+
+/**
  * Update a milestone, and everything settling it means for its project.
  *
  * Must run inside the caller's transaction: the milestone row, the parent
@@ -453,9 +513,12 @@ export async function updateMilestone(
   rawInput: UpdateMilestoneInput,
   db: DomainDb,
 ): Promise<UpdateMilestoneOutcome> {
-  const {
-    project: { id: projectId },
-  } = await authorizeMilestone(principal, rawInput.milestoneId, db);
+  const { project: authorized } = await authorizeMilestoneRecording(
+    principal,
+    rawInput.milestoneId,
+    db,
+  );
+  const projectId = authorized.id;
 
   const current = await db.milestone.findUniqueOrThrow({
     where: { id: rawInput.milestoneId },
@@ -467,6 +530,8 @@ export async function updateMilestone(
       status: true,
       spend: true,
       actualDate: true,
+      startDate: true,
+      targetDate: true,
       childrenMilestones: { select: { status: true } },
     },
   });
@@ -491,6 +556,22 @@ export async function updateMilestone(
   }
 
   assertMilestoneFieldsForStatus(input);
+  // Waiving an activity cancels its open bookings and rejects their pending
+  // approvals: booking work, so the office's (owner, 2026-11-20).
+  // Saving a waived activity settles its bookings again (cancelling any that
+  // were made after the waiver), so it is refused too, not only the move.
+  if (
+    input.status === MilestoneStatus.NOT_REQUIRED
+    && !canBookTradies(principal)
+  ) {
+    throw new DomainAuthorizationError(
+      "Marking an activity not required is for the office, because it cancels its tradie bookings.",
+    );
+  }
+  const managesProject = canManageProject(principal, authorized);
+  if (!managesProject) {
+    assertRecordingOnlyUpdate(input, current, statusChanged);
+  }
 
   const targetDate = toDate(input.targetDate, "targetDate");
   const startDate = toDate(input.startDate, "startDate");
@@ -520,7 +601,9 @@ export async function updateMilestone(
     where: { id: input.milestoneId },
     data: {
       status: input.status,
-      targetDate,
+      // A recording-only caller cannot change it (checked above), so it is not
+      // written back: a replan another tab made meanwhile would be undone.
+      targetDate: managesProject ? targetDate : undefined,
       startDate,
       actualDate: clearsFutureCompletion ? null : actualDate,
       spend:
@@ -768,7 +851,7 @@ export async function attachMilestonePhotos(
 ): Promise<AttachedMilestonePhotos> {
   const {
     project: { id: projectId, siteManagerId },
-  } = await authorizeMilestone(principal, input.milestoneId, db);
+  } = await authorizeMilestoneRecording(principal, input.milestoneId, db);
 
   const fileIds = [...new Set(input.fileIds.map((id) => id.trim()))].filter(
     Boolean,
@@ -1068,7 +1151,7 @@ export async function listProjectMilestones(
   projectId: string,
   db: DomainDb,
 ) {
-  await authorizeProject(principal, projectId, db);
+  await authorizeProjectRecording(principal, projectId, db);
   return db.milestone.findMany({
     where: { projectId },
     orderBy: { order: "asc" },

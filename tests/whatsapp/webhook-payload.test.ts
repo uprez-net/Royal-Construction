@@ -58,7 +58,6 @@ test("an inbound text becomes one inbound message with the profile name", () => 
     {
       businessPhoneNumberId: "109876543210987",
       fromWaId: "61412345678",
-      groupId: null,
       media: null,
       profileName: "Sam Customer",
       providerMessageId: "wamid.TEXT",
@@ -309,7 +308,7 @@ test("a photo, a voice note and a document carry what the media copy needs", () 
   );
 });
 
-test("a message posted in a group names its group", () => {
+test("a message posted in a group is skipped: project groups use the WhatsApp bridge", () => {
   const parsed = parseWhatsAppWebhook(
     delivery({
       contacts: CONTACTS,
@@ -326,26 +325,18 @@ test("a message posted in a group names its group", () => {
     }),
   );
   assert.ok(parsed);
-  assert.equal(parsed.messages[0]?.groupId, "GROUP-1");
-  assert.equal(parsed.messages[0]?.media, null);
+  assert.deepEqual(parsed.messages, []);
+  assert.match(parsed.ignored.join("; "), /posted in a group/);
 });
 
-test("group lifecycle, participant and status webhooks become group events", () => {
-  const lifecycle = parseWhatsAppWebhook(
+test("Meta's group webhook fields are no longer read", () => {
+  const parsed = parseWhatsAppWebhook(
     delivery(
       {
         groups: [
           {
             group_id: "GROUP-1",
-            invite_link: "https://chat.whatsapp.com/LINK",
             request_id: "REQ-1",
-            subject: "Royal Constructions · 12 Smith St",
-            timestamp: "1758528000",
-            type: "group_create",
-          },
-          {
-            errors: [{ code: 131000, title: "Something went wrong" }],
-            request_id: "REQ-2",
             timestamp: "1758528000",
             type: "group_create",
           },
@@ -354,64 +345,9 @@ test("group lifecycle, participant and status webhooks become group events", () 
       "group_lifecycle_update",
     ),
   );
-  assert.ok(lifecycle);
-  assert.equal(lifecycle.groupEvents.length, 2);
-  assert.deepEqual(lifecycle.groupEvents[0], {
-    at: new Date(1758528000 * 1000),
-    groupId: "GROUP-1",
-    inviteLink: "https://chat.whatsapp.com/LINK",
-    kind: "created",
-    requestId: "REQ-1",
-    subject: "Royal Constructions · 12 Smith St",
-  });
-  assert.equal(lifecycle.groupEvents[1]?.kind, "create_failed");
-
-  const participants = parseWhatsAppWebhook(
-    delivery(
-      {
-        groups: [
-          {
-            added_participants: [{ wa_id: "61412345678" }],
-            group_id: "GROUP-1",
-            reason: "invite_link",
-            timestamp: "1758528000",
-            type: "group_participants_add",
-          },
-          {
-            group_id: "GROUP-1",
-            initiated_by: "participant",
-            removed_participants: [{ wa_id: "61499999999" }],
-            timestamp: "1758528000",
-            type: "group_participants_remove",
-          },
-        ],
-      },
-      "group_participants_update",
-    ),
-  );
-  assert.ok(participants);
-  assert.deepEqual(
-    participants.groupEvents.map((event) => event.kind),
-    ["participants_added", "participants_removed"],
-  );
-
-  const status = parseWhatsAppWebhook(
-    delivery(
-      {
-        groups: [
-          {
-            group_id: "GROUP-1",
-            timestamp: "1758528000",
-            type: "group_suspend",
-          },
-        ],
-      },
-      "group_status_update",
-    ),
-  );
-  assert.equal(status?.groupEvents[0]?.kind, "suspended");
-  // Group fields carry no messages; nothing is mistaken for one.
-  assert.deepEqual(status?.messages, []);
+  assert.ok(parsed);
+  assert.deepEqual(parsed.messages, []);
+  assert.equal("groupEvents" in parsed, false);
 });
 
 test("timestamps must be a real date near now; optional ones fall back to now", () => {

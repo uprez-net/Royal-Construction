@@ -113,13 +113,17 @@ async function assertMilestoneAccess(actor: ProjectActor, milestoneId: string) {
 }
 
 /** A project's lead as the project specialist reads it: no email content. */
-export function projectLeadSummary(lead: {
-  id: number;
-  email: string | null;
-  type: string;
-  location: string | null;
-  emails: readonly { sentAt: Date }[];
-}) {
+export function projectLeadSummary(
+  lead: {
+    id: number;
+    email: string | null;
+    type: string;
+    location: string | null;
+    emails: readonly { sentAt: Date }[];
+  } | null,
+) {
+  // Null for a caller who is not the office: the lead is the sales record.
+  if (!lead) return null;
   const latest = lead.emails.reduce<Date | null>(
     (newest, email) =>
       newest === null || email.sentAt > newest ? email.sentAt : newest,

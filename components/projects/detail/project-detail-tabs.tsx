@@ -20,6 +20,8 @@ import { canSeeMilestoneNotes } from "@/lib/domain/projects/milestone-note-rules
 import { UploadHintScope } from "@/components/common/upload-hints";
 import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 
+import { ProjectNotAssignedNotice } from "./project-not-assigned-notice";
+
 /** Shown for the moment a tab's code is fetched, the first time it opens. */
 function TabLoading() {
   return (
@@ -137,7 +139,7 @@ export function ProjectDetailTabs({
   // VISIBLE_PROJECT_DETAIL_TABS) falls back rather than rendering nothing.
   const urlTab = searchParams.get("activeTab");
   const activeTab: VisibleProjectDetailTabKey =
-    urlTab && isVisibleProjectDetailTab(urlTab) ? urlTab : "overview";
+    urlTab && isVisibleProjectDetailTab(urlTab, project) ? urlTab : "overview";
 
   // replaceState rather than router.replace: every tab renders from data
   // already on the page, and router.replace re-renders the whole server page
@@ -223,8 +225,15 @@ export function ProjectDetailTabs({
           {activeTab === "history" ? (
             <ProjectHistoryTabs project={project} />
           ) : null}
+          {/* Both tabs fetch and act through rules this caller may fail on
+              a project they are not assigned to (#568): say so rather than
+              draw a panel whose every button is refused. */}
           {activeTab === "communications" ? (
-            <ProjectCommunicationTabs project={project} />
+            project.viewerAccess.record ? (
+              <ProjectCommunicationTabs project={project} isAdmin={isAdmin} />
+            ) : (
+              <ProjectNotAssignedNotice what="use its WhatsApp group" />
+            )
           ) : null}
           {activeTab === "compliance" ? (
             <ProjectComplianceTab project={project} isAdmin={isAdmin} />

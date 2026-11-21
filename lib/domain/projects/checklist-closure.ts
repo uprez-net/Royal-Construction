@@ -1,6 +1,6 @@
 import { ChecklistSignaturePurpose, ChecklistStatus } from "@prisma/client";
 
-import { authorizeProject } from "../access/projects";
+import { authorizeProjectRecording } from "../access/projects";
 import { logActionOrThrow } from "../audit/action-log";
 import type { TransactionalDomainDb } from "../db";
 import {
@@ -48,7 +48,11 @@ export async function closeChecklist(
   const signature = requireSignature(input.signatureDataUrl);
 
   return db.$transaction(async (tx) => {
-    const project = await authorizeProject(principal, input.projectId, tx);
+    const project = await authorizeProjectRecording(
+      principal,
+      input.projectId,
+      tx,
+    );
     const actor = await checklistActor(principal, tx);
     const checklist = await loadChecklist(input, tx);
     if (checklist.version !== input.expectedVersion) {
@@ -148,7 +152,11 @@ export async function reopenChecklist(
     );
   }
   return db.$transaction(async (tx) => {
-    const project = await authorizeProject(principal, input.projectId, tx);
+    const project = await authorizeProjectRecording(
+      principal,
+      input.projectId,
+      tx,
+    );
     const actor = await checklistActor(principal, tx);
     const checklist = await loadChecklist(input, tx);
     if (checklist.status !== ChecklistStatus.CLOSED) {

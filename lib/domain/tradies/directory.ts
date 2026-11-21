@@ -186,7 +186,9 @@ export async function toggleTradieFavourite(
   isFavourite: boolean,
   db: DomainDb,
 ): Promise<Tradie> {
-  assertCanReadTradieDirectory(principal);
+  // The favourites are the office's shortlist for booking, shared by
+  // everyone, and bookings are the office's (`canBookTradies`).
+  requireAdminPrincipal(principal);
   await requireTradie(tradieId, db);
 
   return db.tradie.update({

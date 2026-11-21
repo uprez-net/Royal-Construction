@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 
 import {
   complianceAccessResponse,
-  requireComplianceAccess,
+  requireComplianceMutation,
 } from "@/lib/compliance/access";
 import { sendComplianceFollowUp } from "@/lib/data/compliance-follow-up";
 import { userPrincipal } from "@/lib/domain/principal";
@@ -44,7 +44,7 @@ export async function POST(
   const { projectId, alertId } = routeParams.data;
 
   try {
-    const { user } = await requireComplianceAccess(projectId);
+    const { user } = await requireComplianceMutation(projectId);
     const engagement = await sendComplianceFollowUp(
       projectId,
       alertId,
