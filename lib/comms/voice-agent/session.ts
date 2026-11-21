@@ -1,15 +1,20 @@
 import {
   VOICE_AGENT_GREETING_CUE,
   VOICE_AGENT_SILENCE_FOLLOW_UP_CUE,
-  VOICE_AGENT_SILENCE_FOLLOW_UPS,
   VOICE_AGENT_SILENCE_GOODBYE_CUE,
+  VOICE_AGENT_SILENCE_GOODBYE_TIMEOUT_SECONDS,
+  VOICE_AGENT_SILENCE_OUTCOME,
   VOICE_AGENT_SILENCE_SECONDS,
   VOICE_AGENT_WRAP_UP_INSTRUCTION,
   VOICE_AGENT_WRAP_UP_SECONDS,
   VOICE_LOOKUP_FAILED_CUE,
   voiceAgentInstructions,
   voiceLookupResultCue,
+  voiceSilenceCallerSpoke,
+  voiceSilenceCheck,
+  voiceSilenceStart,
   type VoiceAgentTurn,
+  type VoiceSilenceState,
 } from "@/lib/domain/comms/calls/voice-agent";
 import type {
   VoiceLookupDefinition,
@@ -36,7 +41,8 @@ import { verifyStreamToken, type StreamTokenClaims } from "./token";
 //   → desk: a lookup (admins only), whose answer Mili then reads out, or
 //     end_call / transfer_to_team; caller hangs up, time, or a failure
 //   → the caller silent after she has finished: she follows up, and after
-//     enough unanswered follow-ups says goodbye and the call ends
+//     enough unanswered follow-ups says goodbye and the call ends (when and
+//     what is the domain's voiceSilenceCheck; the timers are here)
 //   → outcome reported (the call router decides what the caller hears next)
 //   → sockets closed
 //
@@ -132,13 +138,11 @@ const SPEECH_FLOOR = 600;
 const SPEECH_SHARE = 0.1;
 /** A 20 ms frame of phone audio. */
 const FRAME_BYTES = PHONE_BYTES_PER_MS * 20;
-/**
- * The caller saying nothing for this long, counted from the end of Mili's
- * speech, the caller's last sound or the last follow-up, is a silence.
- */
+/** A caller silent this long after Mili has finished is followed up. */
 export const CALLER_SILENCE_MS = VOICE_AGENT_SILENCE_SECONDS * 1000;
 /** Mili never saying the silence goodbye: the call ends anyway after this. */
-export const SILENCE_GOODBYE_TIMEOUT_MS = 15_000;
+export const SILENCE_GOODBYE_TIMEOUT_MS =
+  VOICE_AGENT_SILENCE_GOODBYE_TIMEOUT_SECONDS * 1000;
 /** After Mili's last word, before hanging up or transferring. */
 const PLAYBACK_TAIL_MS = 600;
 const MAX_PLAYBACK_WAIT_MS = 15_000;
@@ -224,14 +228,10 @@ export class VoiceAgentSession {
   private setup: VoiceCallerSetup = MESSAGE_ONLY_SETUP;
   /** Lookups already answered on this call, so the desk never repeats one. */
   private readonly lookupsRun = new Set<string>();
-  /** When the caller last made a sound (or was transcribed saying something). */
-  private callerSpokeAt = 0;
-  /** When Mili was last cued about a silence (or the session started). */
-  private silenceCueAt = 0;
-  /** Follow-ups sent since the caller last spoke. */
-  private silenceFollowUps = 0;
-  /** Mili has been told to say goodbye to a silent caller. */
-  private silenceEnding = false;
+  /** Caller silence: follow-ups sent, and whether the goodbye is under way. */
+  private silence: VoiceSilenceState = voiceSilenceStart(0);
+  /** Ends a silent caller's call if Mili never says her goodbye. */
+  private silenceGoodbyeTimer: unknown = null;
 
   /** In the order spoken. */
   get turns(): VoiceAgentTurn[] {
@@ -427,7 +427,7 @@ export class VoiceAgentSession {
           delegation_id: null,
           type: "session.commentary.append",
         });
-        this.silenceCueAt = this.now();
+        this.silence = voiceSilenceStart(this.now());
         this.watchSilence(CALLER_SILENCE_MS);
         return;
       case "session.output_audio.delta":
@@ -542,8 +542,8 @@ export class VoiceAgentSession {
     this.quietTimer = this.after(TURN_QUIET_MS, () => {
       this.quietTimer = null;
       // Her goodbye to a silent caller is done: nothing left to ask the desk.
-      if (this.silenceEnding) {
-        this.moveOn("completed");
+      if (this.silence.saidGoodbye) {
+        this.moveOn(VOICE_AGENT_SILENCE_OUTCOME);
         return;
       }
       void this.askDesk(null);
@@ -653,59 +653,71 @@ export class VoiceAgentSession {
   /**
    * The caller is talking again. Line noise loud enough to pass as speech
    * counts too: holding off a follow-up is better than talking over them.
+   * A goodbye cued but not yet moving the call on is called off, and the
+   * silence is watched again from here.
    */
   private callerSpoke(): void {
-    this.callerSpokeAt = this.now();
-    this.silenceFollowUps = 0;
+    if (this.finished || this.ending) return;
+    const calledOff = this.silence.saidGoodbye;
+    this.silence = voiceSilenceCallerSpoke(this.silence, this.now());
+    if (!calledOff) return;
+    if (this.silenceGoodbyeTimer !== null) {
+      this.clearTimer(this.silenceGoodbyeTimer);
+      this.timers.delete(this.silenceGoodbyeTimer);
+      this.silenceGoodbyeTimer = null;
+    }
+    this.watchSilence(CALLER_SILENCE_MS);
   }
 
   private watchSilence(ms: number): void {
     this.after(ms, () => this.checkSilence());
   }
 
-  /**
-   * Nobody has spoken for CALLER_SILENCE_MS since Mili finished: follow up,
-   * or, once the follow-ups are spent, have her say goodbye and end the call.
-   * Never while she is still talking or waiting on the desk.
-   */
+  /** Act on the domain's silence decision: a cue, a goodbye, or another wait. */
   private checkSilence(): void {
-    if (this.finished || this.ending || this.silenceEnding) return;
-    if (this.deskBusy) {
-      this.watchSilence(CALLER_SILENCE_MS);
-      return;
-    }
-    const now = this.now();
-    const quietSince = Math.max(
-      this.speechEndsAt,
-      this.callerSpokeAt,
-      this.silenceCueAt,
-    );
-    const due = quietSince + CALLER_SILENCE_MS;
-    if (now < due) {
-      this.watchSilence(due - now);
-      return;
-    }
-    this.silenceCueAt = now;
-    if (this.silenceFollowUps < VOICE_AGENT_SILENCE_FOLLOW_UPS) {
-      this.silenceFollowUps += 1;
-      this.sendModel({
-        content: VOICE_AGENT_SILENCE_FOLLOW_UP_CUE,
-        delegation_id: null,
-        type: "session.commentary.append",
-      });
-      this.watchSilence(CALLER_SILENCE_MS);
-      return;
-    }
-    this.log.info("[voice-agent] the caller stayed silent; ending the call.");
-    this.silenceEnding = true;
-    this.sendModel({
-      content: VOICE_AGENT_SILENCE_GOODBYE_CUE,
-      delegation_id: null,
-      type: "session.commentary.append",
+    if (this.finished || this.ending) return;
+    const { action, state } = voiceSilenceCheck(this.silence, {
+      agentSpeechEndsAt: this.speechEndsAt,
+      busy: this.deskBusy,
+      now: this.now(),
     });
-    // Her goodbye ending is what normally moves the call on (the quiet
-    // timer); this ends it if she never says one.
-    this.after(SILENCE_GOODBYE_TIMEOUT_MS, () => this.moveOn("completed"));
+    this.silence = state;
+    switch (action.kind) {
+      case "wait":
+        this.watchSilence(action.ms);
+        return;
+      case "follow_up":
+        this.sendModel({
+          content: VOICE_AGENT_SILENCE_FOLLOW_UP_CUE,
+          delegation_id: null,
+          type: "session.commentary.append",
+        });
+        this.watchSilence(action.ms);
+        return;
+      case "goodbye":
+        this.log.info(
+          "[voice-agent] the caller stayed silent; ending the call.",
+        );
+        this.sendModel({
+          content: VOICE_AGENT_SILENCE_GOODBYE_CUE,
+          delegation_id: null,
+          type: "session.commentary.append",
+        });
+        // Her goodbye ending is what normally moves the call on (the quiet
+        // timer); this ends it if she never says one.
+        this.silenceGoodbyeTimer = this.after(
+          SILENCE_GOODBYE_TIMEOUT_MS,
+          () => {
+            this.silenceGoodbyeTimer = null;
+            if (this.silence.saidGoodbye) {
+              this.moveOn(VOICE_AGENT_SILENCE_OUTCOME);
+            }
+          },
+        );
+        return;
+      case "none":
+        return;
+    }
   }
 
   /** Let her last words finish playing (her speech, not the silence after), then hand the call back. */

@@ -128,16 +128,47 @@ test("a label that was not offered, or a failed split, keeps the prose", async (
 });
 
 test("a voicemail, an over-long call or a call with no row is not split", async () => {
-  const never: TranscriptSpeakerPort = async () => assert.fail("not asked");
-  assert.equal(
-    (await run(stored(INBOUND_STAFF, "VOICEMAIL"), never)).transcript,
-    PROSE,
-  );
-  assert.equal((await run(stored(null), never)).transcript, PROSE);
+  // A port that throws would be caught and the prose kept anyway, so whether
+  // it was reached is read from `seen`.
+  const split: TranscriptSpeakerPort = async () => TURNS;
+  const voicemail = await run(stored(INBOUND_STAFF, "VOICEMAIL"), split);
+  assert.equal(voicemail.transcript, PROSE);
+  assert.equal(voicemail.seen.length, 0);
+  const noRow = await run(stored(null), split);
+  assert.equal(noRow.transcript, PROSE);
+  assert.equal(noRow.seen.length, 0);
   const long = "word ".repeat(MAX_SPEAKER_SPLIT_CHARS / 4).trim();
+  const overLong = await run(stored(INBOUND_STAFF), split, long);
+  assert.equal(overLong.transcript, long);
+  assert.equal(overLong.seen.length, 0);
+});
+
+test("a split that changes a number's separators, sign or currency keeps the prose", async () => {
+  const prose = "The deposit is $1,500 and the slab is 1.5 metres.";
+  for (const changed of [
+    "The deposit is $1.500 and the slab is 1.5 metres.",
+    "The deposit is 1,500 and the slab is 1.5 metres.",
+    "The deposit is $1,500 and the slab is 1,5 metres.",
+    "The deposit is $1500 and the slab is 1.5 metres.",
+  ]) {
+    const { transcript } = await run(
+      stored(INBOUND_STAFF),
+      async () => [{ speaker: "Royal", text: changed }],
+      prose,
+    );
+    assert.equal(transcript, prose, changed);
+  }
+  const kept = await run(
+    stored(INBOUND_STAFF),
+    async () => [
+      { speaker: "Royal", text: "The deposit is $1,500," },
+      { speaker: "Caller", text: "and the slab is 1.5 metres?" },
+    ],
+    prose,
+  );
   assert.equal(
-    (await run(stored(INBOUND_STAFF), never, long)).transcript,
-    long,
+    kept.transcript,
+    "Royal: The deposit is $1,500,\nCaller: and the slab is 1.5 metres?",
   );
 });
 

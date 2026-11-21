@@ -241,9 +241,18 @@ export function recordingSpeakers(recording: {
   };
 }
 
-/** Lower-cased words and numbers, punctuation and spacing ignored. */
+/**
+ * Lower-cased words and numbers, other punctuation and spacing ignored. A
+ * number keeps its sign, currency and separators ("$1,500", "1.5", "-3",
+ * "10%", "9:30"), so a split that turns "$1,500" into "$1.500" or drops the
+ * "$" does not match.
+ */
 function words(text: string): string[] {
-  return text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  return (
+    text
+      .toLowerCase()
+      .match(/[$£€+\-−]?\p{N}+(?:[.,:/'\-]\p{N}+)*%?|[\p{L}\p{M}]+/gu) ?? []
+  );
 }
 
 /**

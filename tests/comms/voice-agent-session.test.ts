@@ -467,3 +467,39 @@ test("a silent caller's call still ends if Mili never says goodbye", async () =>
   await h.session.done;
   assert.equal(h.reports[0]?.outcome, "completed");
 });
+
+test("a caller who answers the goodbye is not hung up on", async () => {
+  const h = await started();
+  for (let i = 0; i <= VOICE_AGENT_SILENCE_FOLLOW_UPS; i += 1) {
+    h.advance(CALLER_SILENCE_MS);
+    h.fire(CALLER_SILENCE_MS);
+  }
+  assert.equal(commentary(h, VOICE_AGENT_SILENCE_GOODBYE_CUE), 1);
+
+  // Before she has said it, the caller speaks up.
+  h.advance(500);
+  h.session.handleModelEvent({
+    delta: " Wait, I'm still here.",
+    endMs: null,
+    startMs: null,
+    type: "session.input_transcript.delta",
+  });
+  // Her reply ending asks the desk (which carries on), not a hang-up.
+  h.session.handleModelEvent({
+    delta: Buffer.alloc(160, SPEECH).toString("base64"),
+    type: "session.output_audio.delta",
+  });
+  h.fire(TURN_QUIET_MS);
+  await h.tick();
+  assert.equal(h.asked.length, 1);
+  // The goodbye's 15-second fallback is gone.
+  h.advance(SILENCE_GOODBYE_TIMEOUT_MS);
+  h.fire(SILENCE_GOODBYE_TIMEOUT_MS);
+  await h.tick();
+  assert.deepEqual(h.reports, []);
+  assert.equal(h.state.carrierClosed, false);
+  // Silence is watched again, starting from follow-ups.
+  h.fire(CALLER_SILENCE_MS);
+  assert.equal(commentary(h, VOICE_AGENT_SILENCE_FOLLOW_UP_CUE), 3);
+  assert.equal(commentary(h, VOICE_AGENT_SILENCE_GOODBYE_CUE), 1);
+});
