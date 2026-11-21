@@ -215,6 +215,24 @@ Graph calls that do not go through `withGraphRetry` or `sendEmail` (they
 inside Next's `after()` (unverified); and `step.attempt.failed`, which is a retry, not an
 incident.
 
+## Standalone services live in `services/`, apart from the app
+
+`services/whatsapp-bridge` is Royal's WhatsApp bridge: a Baileys session on its
+own server that carries **project groups** (Meta's API is for leads only). It
+is a separate package — its own `package.json`, lockfile, tsconfig, Vitest
+suite, Prettier config, Dockerfile and workflow
+(`.github/workflows/whatsapp-bridge.yml`).
+
+- The app's typecheck, lint, Prettier, tests and CI decision exclude
+  `services/`; a change only there runs only the service's workflow. Keep it
+  that way: never import across the boundary in either direction.
+- They talk over HTTP only, and
+  [`docs/whatsapp-bridge.md`](./docs/whatsapp-bridge.md) is the contract. A
+  change to a route or an event changes the bridge, `lib/whatsapp-bridge/` and
+  that doc together.
+- Group rules stay in `lib/domain/projects/whatsapp`; the bridge decides
+  nothing about projects, it only forwards the groups the app has mapped.
+
 ## The suite runs on Vitest
 
 `node:test` is gone (issue #326). A new test imports `test`/`describe`/`it` and
