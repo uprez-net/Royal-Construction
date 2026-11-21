@@ -14,8 +14,11 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
+    # These win over env_file: inside the container it must listen on every
+    # interface and keep its state on the volume, whatever .env says.
     environment:
       DATA_DIR: /data
+      HOST: 0.0.0.0
       PORT: "8080"
     # Loopback only: the internet reaches it through Caddy (or your own proxy).
     ports:

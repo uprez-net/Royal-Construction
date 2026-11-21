@@ -29,6 +29,13 @@ export type BridgeConfig = {
 
 export const MIN_SECRET_LENGTH = 32;
 
+/**
+ * Hosts the app may be reached on over plain http: this machine, and this
+ * machine as seen from inside a Docker container. Anything else needs https,
+ * because the events carry clients' messages.
+ */
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "host.docker.internal"]);
+
 type Env = Record<string, string | undefined>;
 
 function value(env: Env, name: string): string | null {
@@ -62,8 +69,10 @@ export function readConfig(env: Env = process.env): BridgeConfig {
   const appWebhookUrl = value(env, "APP_WEBHOOK_URL");
   if (appWebhookUrl) {
     const url = new URL(appWebhookUrl);
-    if (url.protocol !== "https:" && url.hostname !== "localhost") {
-      throw new Error("APP_WEBHOOK_URL must be https (or localhost).");
+    if (url.protocol !== "https:" && !LOCAL_HOSTS.has(url.hostname)) {
+      throw new Error(
+        "APP_WEBHOOK_URL must be https (plain http only for localhost or host.docker.internal).",
+      );
     }
     if (!webhookSecret) {
       throw new Error(
