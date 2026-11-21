@@ -71,10 +71,10 @@ function publish(decision) {
   }
 
   console.log(
-    `CI decision: ${decision.reason}; ${decision.changedFiles} changed file(s); ` +
-      `${decision.runChecks ? "run" : "skip"} quality checks; ` +
-      `${runNextBuild ? "run" : "skip"} the Next.js build; ` +
-      `${decision.deploy ? "allow" : "skip"} deployment.`,
+    `CI decision: ${decision.reason}; ${decision.changedFiles} changed file(s); `
+      + `${decision.runChecks ? "run" : "skip"} quality checks; `
+      + `${runNextBuild ? "run" : "skip"} the Next.js build; `
+      + `${decision.deploy ? "allow" : "skip"} deployment.`,
   );
 }
 
