@@ -32,9 +32,12 @@ async function handle(request: Request) {
     });
     // The run answers 200 even when some reminders failed, so the monitor has to
     // be told: a non-zero `failed` is a run that did not do its job.
-    return cronOutcome(successResponse({ ...result, staleInvoices: invoices }), {
-      failed: result.failed + invoices.failed,
-    });
+    return cronOutcome(
+      successResponse({ ...result, staleInvoices: invoices }),
+      {
+        failed: result.failed + invoices.failed,
+      },
+    );
   } catch (error) {
     console.error("/api/cron/tradie-reminders GET error", error);
     return errorResponse("Failed to send tradie reminders", {

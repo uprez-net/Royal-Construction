@@ -411,8 +411,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 export function invoiceReminderDue(receivedAt: Date, now: Date): boolean {
   const days = Math.floor((now.getTime() - receivedAt.getTime()) / DAY_MS);
-  return days >= STALE_INVOICE_REMIND_EVERY_DAYS
-    && days % STALE_INVOICE_REMIND_EVERY_DAYS === 0;
+  return (
+    days >= STALE_INVOICE_REMIND_EVERY_DAYS
+    && days % STALE_INVOICE_REMIND_EVERY_DAYS === 0
+  );
 }
 
 export type StaleInvoiceReminder = {
@@ -472,6 +474,39 @@ export async function staleInvoiceReminders(
       projectId,
       projectName: entry.name,
     }));
+}
+
+export type StaleInvoicePorts = {
+  /** Who to tell. An empty list must mean nobody here, not everyone. */
+  readonly adminIds: () => Promise<readonly string[]>;
+  /** True when the notification went; false (or a throw) counts as failed. */
+  readonly notify: (
+    admins: readonly string[],
+    entry: StaleInvoiceReminder,
+  ) => Promise<boolean>;
+};
+
+/**
+ * Nudge the office about every project whose emailed invoices are due one.
+ * A failed nudge is counted, not thrown, so one project cannot hide another.
+ */
+export async function nudgeStaleInvoices(
+  db: DomainDb,
+  now: Date,
+  ports: StaleInvoicePorts,
+): Promise<{ failed: number; reminded: number }> {
+  const due = await staleInvoiceReminders(db, now);
+  if (due.length === 0) return { failed: 0, reminded: 0 };
+
+  const admins = await ports.adminIds();
+  if (admins.length === 0) return { failed: 0, reminded: 0 };
+
+  let failed = 0;
+  for (const entry of due) {
+    const sent = await ports.notify(admins, entry).catch(() => false);
+    if (!sent) failed += 1;
+  }
+  return { failed, reminded: due.length - failed };
 }
 
 /** The project's emailed invoices still waiting for the office, oldest first. */
