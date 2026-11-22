@@ -1,16 +1,14 @@
 # Royal's WhatsApp bridge on a server.
 #
 #   cp .env.example .env    # fill in the tokens and the app's webhook URL
-#   docker compose up -d                 # bridge only, on 127.0.0.1:8080
-#   docker compose --profile tls up -d   # plus Caddy with automatic HTTPS
+#   docker compose up -d --build         # bridge only, on 127.0.0.1:8080
+#   docker compose --profile tls up -d --build   # plus Caddy with automatic HTTPS
 #
-# CI deploys by copying this file to the server and running
-# `docker compose pull && docker compose up -d` with BRIDGE_IMAGE_TAG set.
+# Builds the image from this folder; add --build to `up` after pulling changes.
 # See README.md, "Deploying".
 
 services:
   whatsapp-bridge:
-    image: ${BRIDGE_IMAGE:-ghcr.io/uprez-net/royal-construction-whatsapp-bridge}:${BRIDGE_IMAGE_TAG:-latest}
     build: .
     restart: unless-stopped
     env_file: .env

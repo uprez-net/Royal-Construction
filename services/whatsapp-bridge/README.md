@@ -71,53 +71,48 @@ match" until then.
 
 ## Deploying
 
-Any Linux server with Docker. The bridge must be reachable by the app over
-HTTPS; `compose.yaml` can run Caddy in front with an automatic certificate.
+The bridge runs from its Dockerfile anywhere that keeps a persistent disk at
+`/data` and reaches the app over HTTPS. CI only checks that the image builds;
+it does not deploy.
 
-### First time, on the server
+### Railway
+
+1. New service from this repo, **Root Directory** `services/whatsapp-bridge`.
+   Railway finds the Dockerfile.
+2. Add a **Volume** mounted at `/data`. Without it the linked device is lost
+   on every deploy and the QR has to be scanned again.
+3. Variables: `BRIDGE_API_TOKEN`, `BRIDGE_WEBHOOK_SECRET`, `APP_WEBHOOK_URL`
+   (see `.env.example`). Railway sets `PORT`; the bridge listens on it.
+4. Networking: generate a public domain. Settings › Deploy: health check path
+   `/healthz`.
+5. Set the app's `WHATSAPP_BRIDGE_URL=https://<that domain>` and the two
+   tokens, and scan the QR on Admin › WhatsApp bridge.
+
+Railway mounts the volume root-owned; `docker-entrypoint.sh` hands it to the
+`node` user before the bridge starts, so no `RAILWAY_RUN_UID` is needed. Keep
+the service at one replica: two would fight over one WhatsApp session.
+
+### A server with Docker Compose
 
 ```sh
 sudo mkdir -p /opt/royal-whatsapp-bridge && cd /opt/royal-whatsapp-bridge
-# copy compose.yaml, Caddyfile and .env.example here (CI copies the first two
-# on every deploy), then:
+# copy this folder here, then:
 cp .env.example .env && nano .env     # tokens, APP_WEBHOOK_URL, BRIDGE_DOMAIN
-docker compose --profile tls up -d    # or without the profile behind your own proxy
+docker compose --profile tls up -d --build   # or without the profile behind your own proxy
 ```
 
 Point `BRIDGE_DOMAIN`'s DNS at the server and open ports 80 and 443. Then set
 the app's `WHATSAPP_BRIDGE_URL=https://<BRIDGE_DOMAIN>` and the two tokens, and
 scan the QR on Admin › WhatsApp bridge.
 
-Everything that must survive a redeploy is in the `bridge-data` volume
-(`/data`): the linked device's keys (`auth/`), `mappings.json`, the event
-outbox, sent-message keys and media. **Back up `auth/` like a password** —
-whoever has it can act as Royal's number.
+### Either way
 
-### From CI
+Everything that must survive a redeploy is in `/data` (the Railway Volume, or
+the `bridge-data` volume under Compose): the linked device's keys (`auth/`),
+`mappings.json`, the event outbox, sent-message keys and media. **Back up
+`auth/` like a password** — whoever has it can act as Royal's number.
 
-`.github/workflows/whatsapp-bridge.yml` runs only when this folder (or the
-workflow) changes, and skips a change that is only formatting or docs. On a
-push to `staging` or `main` that passes, it builds
-`ghcr.io/uprez-net/royal-construction-whatsapp-bridge:sha-<commit>`, copies
-`compose.yaml` and `Caddyfile` to the server, and runs
-`docker compose pull && up -d`, then waits for `/healthz`.
-
-Configure each GitHub environment (`whatsapp-bridge-staging`,
-`whatsapp-bridge-production`):
-
-| Secret / variable | Value |
-| --- | --- |
-| `BRIDGE_SSH_HOST` (secret) | the server |
-| `BRIDGE_SSH_USER` (secret) | a user in the `docker` group |
-| `BRIDGE_SSH_KEY` (secret) | its private key |
-| `BRIDGE_SSH_KNOWN_HOSTS` (secret) | `ssh-keyscan <host>` output |
-| `BRIDGE_DEPLOY_PATH` (variable, optional) | defaults to `/opt/royal-whatsapp-bridge` |
-| `BRIDGE_COMPOSE_PROFILES` (variable, optional) | `tls` to run Caddy |
-
-Until those are set the deploy job publishes the image and stops with a notice
-instead of failing. The server's `.env` is never sent by CI.
-
-Staging and production need **separate servers and separate WhatsApp
+Staging and production need **separate services and separate WhatsApp
 numbers**.
 
 ## Operating it
