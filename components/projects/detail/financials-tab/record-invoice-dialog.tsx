@@ -43,6 +43,7 @@ import {
 import type { ClientPayload } from "@/utils/validators";
 
 import { formatCents } from "./money";
+import { fileHref } from "@/lib/files/file-href";
 
 /** An emailed invoice the dialog opens on, to check and record. */
 export type RecordInvoicePrefill = {
@@ -284,7 +285,7 @@ export function RecordInvoiceDialog({
         `${tradieInvoiceDocumentFolder(projectId)}${file.name}`,
         file,
         {
-          access: "public",
+          access: "private",
           clientPayload: JSON.stringify({
             fileName: file.name,
             fileSize: file.size,
@@ -489,7 +490,7 @@ export function RecordInvoiceDialog({
                 </span>
                 {document.status === "ready" ? (
                   <a
-                    href={document.url}
+                    href={fileHref(document.url)}
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs font-medium text-primary underline-offset-2 hover:underline"

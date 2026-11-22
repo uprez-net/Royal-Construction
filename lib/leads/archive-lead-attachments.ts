@@ -111,7 +111,7 @@ export async function archiveLeadAttachments(
         buildBlobPath({ fileId, fileName: file.name, leadId: String(leadId) }),
         data,
         {
-          access: "public",
+          access: "private",
           // The path is already unique through fileId, and a suffix here would
           // break the `leads/<id>/<fileId>-` shape the delete path checks for.
           addRandomSuffix: false,

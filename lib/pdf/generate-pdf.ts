@@ -6,6 +6,8 @@
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 
+import { signBlobUrlsInHtml } from "@/lib/blob-port";
+
 type GeneratePDFOptions = {
   html?: string;
 };
@@ -38,7 +40,9 @@ export async function generatePDF({
   }
 
   const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: "load" });
+  // Offer images, checklist photos and the like are private files (#571), and
+  // this browser has no session: each is handed a short-lived read link.
+  await page.setContent(await signBlobUrlsInHtml(html), { waitUntil: "load" });
 
   const pdf = await page.pdf({
     format: "A4",

@@ -206,7 +206,7 @@ export default function AddMilestonePictureModal({
             }),
             queuedFile.file,
             {
-              access: "public",
+              access: "private",
               handleUploadUrl: "/api/upload",
               clientPayload: JSON.stringify({
                 projectId,

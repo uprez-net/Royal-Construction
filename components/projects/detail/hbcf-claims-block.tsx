@@ -29,6 +29,7 @@ import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { cn } from "@/lib/utils";
 import type { HbcfClaimDocument } from "@/types/project-flow";
+import { fileHref } from "@/lib/files/file-href";
 
 /** How many HBCF PDFs one upload may carry. */
 const MAX_HBCF_UPLOAD = 10;
@@ -243,7 +244,7 @@ export function HbcfClaimsBlock({
                       className="h-7 px-2 text-xs text-primary"
                     >
                       <a
-                        href={doc.url}
+                        href={fileHref(doc.url)}
                         download={doc.fileName || true}
                         target="_blank"
                         rel="noreferrer"

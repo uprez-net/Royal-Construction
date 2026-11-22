@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
 import { COMPANY_LINE } from "@/lib/offer/workspace-print-template";
+import { storedImageProps } from "@/lib/files/file-href";
 
 export function ImageSlot({
   src,
@@ -27,7 +28,7 @@ export function ImageSlot({
           className="object-cover"
           fill
           sizes="794px"
-          src={src}
+          {...storedImageProps(src)}
         />
       </div>
       {caption ? (

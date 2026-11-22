@@ -139,6 +139,90 @@ export function canReadFile(
   );
 }
 
+const READABLE_PROJECT_SELECT = {
+  siteManagerId: true,
+  customerId: true,
+  requirements: true,
+  Lead: { select: { assignedId: true } },
+} as const;
+
+/**
+ * The columns `canReadFile` decides from, as a Prisma `select`: the file's
+ * own project or, for a file received by email onto the compliance file, the
+ * engagement's.
+ */
+export const READABLE_FILE_SELECT = {
+  id: true,
+  url: true,
+  filename: true,
+  tags: true,
+  uploadedBy: true,
+  leadId: true,
+  complianceDocument: {
+    select: {
+      documentType: true,
+      engagement: {
+        select: { project: { select: READABLE_PROJECT_SELECT } },
+      },
+    },
+  },
+  project: { select: READABLE_PROJECT_SELECT },
+} as const;
+
+/**
+ * May this caller be handed a readable link to this stored object (#571)?
+ *
+ * Every stored file is private, and `/api/files/signed-url` turns a stored
+ * URL into a fifteen-minute read link. The URL alone is not enough to say
+ * whose file it is: a dozen tables hold one (File rows, invoices, variations,
+ * offer images, site-update photos, WhatsApp media). So:
+ *
+ * - The office (`isOfficePrincipal`) may open any of them, as every screen
+ *   that links one already lets it.
+ * - Anyone else signed in as staff — today, the one site manager — may open a
+ *   file only when it is recognisably theirs to see: a File row
+ *   `canReadFile` admits, a site-update photo, or media from a project's
+ *   WhatsApp group. A File row that exists but is refused is refused, not
+ *   looked up elsewhere: that is the HBCF certificate or the tender.
+ *   Everything else stored (offer images, invoices, variations, a lead's
+ *   media) is the office's, as its screen is.
+ * - A customer, a guest or an anonymous caller is never handed one.
+ *
+ * Refused as not found rather than forbidden, so the answer does not confirm
+ * that a guessed URL exists.
+ */
+export async function authorizeStoredFileRead(
+  principal: DomainPrincipal,
+  url: string,
+  db: DomainDb,
+): Promise<void> {
+  if (isOfficePrincipal(principal)) return;
+  if (!isInternalPrincipal(principal) || !isUserPrincipal(principal)) {
+    throw new DomainNotFoundError("File not found.");
+  }
+  const files = await db.file.findMany({
+    select: READABLE_FILE_SELECT,
+    take: 10,
+    where: { url },
+  });
+  if (files.length > 0) {
+    if (files.some((file) => canReadFile(principal, file))) return;
+    throw new DomainNotFoundError("File not found.");
+  }
+  const [siteUpdate, projectMedia] = await Promise.all([
+    db.siteUpdate.findFirst({
+      select: { id: true },
+      where: { photoUrls: { has: url } },
+    }),
+    db.whatsAppMedia.findFirst({
+      select: { id: true },
+      where: { blobUrl: url, projectMessageId: { not: null } },
+    }),
+  ]);
+  if (siteUpdate || projectMedia) return;
+  throw new DomainNotFoundError("File not found.");
+}
+
 /**
  * Decide whether one Blob URL is this lead's to delete.
  *

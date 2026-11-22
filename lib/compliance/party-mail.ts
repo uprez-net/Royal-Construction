@@ -12,6 +12,7 @@ import type {
 } from "@/types/compliance";
 import { normalizeEmailAddress } from "@/utils/formatters";
 import { generateEmailChecksum } from "@/utils/generator";
+import { fetchStoredFile } from "@/lib/blob-port";
 
 /**
  * Sending on a party thread, in one place.
@@ -72,7 +73,7 @@ export async function toEmailAttachment(file: {
   filename: string;
   fileType: string;
 }): Promise<EmailAttachment> {
-  const response = await fetch(file.url);
+  const response = await fetchStoredFile(file.url);
   if (!response.ok) {
     throw new Error(
       `Could not read "${file.filename}" back from storage (${response.status}).`,

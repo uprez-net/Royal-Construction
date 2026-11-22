@@ -350,7 +350,7 @@ async function archiveInvoicePdfToBlob(
       `projects/${projectId}/invoices/${xeroInvoiceId}.pdf`,
       pdf.body,
       {
-        access: "public",
+        access: "private",
         // The Xero invoice id already makes the path unique.
         addRandomSuffix: false,
         // Re-archiving after the invoice changed overwrites in place rather

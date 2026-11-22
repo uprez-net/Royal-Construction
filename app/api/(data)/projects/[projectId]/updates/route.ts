@@ -102,7 +102,7 @@ export async function POST(
             `projects/${projectId}/${randomUUID()}-${file.name}`,
             file,
             {
-              access: "public",
+              access: "private",
             },
           );
           return blob.url;

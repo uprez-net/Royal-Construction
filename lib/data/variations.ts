@@ -45,6 +45,7 @@ import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";
 import { createNotification } from "@/types/notification";
 import { currency } from "@/utils/formatters";
+import { fetchStoredFile } from "@/lib/blob-port";
 
 // The Next adapter over the variation commands in `lib/domain/projects/`.
 //
@@ -167,7 +168,7 @@ async function storeVariationDocument(
     `projects/${input.projectId}/variations/${input.variationId}.pdf`,
     Buffer.from(pdfBase64, "base64"),
     {
-      access: "public",
+      access: "private",
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: "application/pdf",
@@ -185,7 +186,7 @@ export function renderVariationEmailHtml(
 async function sendVariationEmail(
   input: Parameters<VariationIssuePorts["sendEmail"]>[0],
 ): Promise<void> {
-  const pdf = await fetch(input.documentUrl);
+  const pdf = await fetchStoredFile(input.documentUrl);
   if (!pdf.ok) {
     throw new Error(`the document could not be attached (${pdf.status})`);
   }

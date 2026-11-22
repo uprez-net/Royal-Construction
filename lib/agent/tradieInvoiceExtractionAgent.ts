@@ -7,6 +7,7 @@ import type {
 } from "@/lib/domain/tradies/invoice-document";
 import { gateway, TEXT_MODEL_ID } from "@/lib/model";
 import { ocrFile, ocrPagesToText, processPDFWithMistral } from "@/lib/ocr";
+import { fetchStoredFile } from "@/lib/blob-port";
 
 // Reads a tradie's invoice so the Record invoice form fills itself in. OCR
 // first (Mistral, which reads scans and photos as well as born-digital PDFs),
@@ -78,7 +79,7 @@ async function invoiceText(input: {
       await processPDFWithMistral(input.url, { timeoutMs: OCR_TIMEOUT_MS }),
     );
   }
-  const response = await fetch(input.url, {
+  const response = await fetchStoredFile(input.url, {
     signal: AbortSignal.timeout(OCR_TIMEOUT_MS),
   });
   if (!response.ok) {

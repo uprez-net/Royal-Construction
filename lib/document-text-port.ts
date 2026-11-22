@@ -4,6 +4,7 @@ import type {
 } from "@/lib/domain/ports/document-text";
 import { isOcrConfigured, ocrDocumentAtUrl } from "@/lib/ocr";
 import { readWorkbookGrid } from "@/lib/spreadsheet/workbook-grid";
+import { fetchStoredFile } from "@/lib/blob-port";
 
 // How the agent's document index reads an uploaded file.
 //
@@ -92,7 +93,7 @@ export function documentReading(
 }
 
 async function download(url: string): Promise<ArrayBuffer> {
-  const response = await fetch(url, {
+  const response = await fetchStoredFile(url, {
     signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
   });
   if (!response.ok) {

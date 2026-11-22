@@ -21,6 +21,7 @@ import { dateFormat } from "@/utils/formatters";
 
 import { formatCents } from "./money";
 import type { BookingOption } from "./record-invoice-dialog";
+import { fileHref } from "@/lib/files/file-href";
 
 /**
  * Tradie invoices that arrived by email, read off the attachment and matched
@@ -97,7 +98,7 @@ export function EmailedInvoices({
               <span className="flex flex-wrap items-center gap-1">
                 <Button asChild variant="ghost" size="sm">
                   <a
-                    href={invoice.documentUrl}
+                    href={fileHref(invoice.documentUrl)}
                     target="_blank"
                     rel="noreferrer"
                     title={invoice.documentName}

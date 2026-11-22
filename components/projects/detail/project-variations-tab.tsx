@@ -67,6 +67,7 @@ import { cn } from "@/lib/utils";
 import type { ProjectDetail } from "@/types/project";
 import { dateFormat, formatStatus } from "@/utils/formatters";
 import type { VariationKind } from "@prisma/client";
+import { fileHref } from "@/lib/files/file-href";
 
 const MONEY = new Intl.NumberFormat("en-AU", {
   currency: "AUD",
@@ -352,7 +353,7 @@ function columnsFor(actions: VariationActions) {
             {variation.documentUrl ? (
               <Button asChild variant="ghost" size="sm">
                 <a
-                  href={variation.documentUrl}
+                  href={fileHref(variation.documentUrl)}
                   target="_blank"
                   rel="noreferrer"
                   aria-label={`Open the ${variation.number} document`}

@@ -98,7 +98,7 @@ async function processAttachment(
     `${tradieInvoiceDocumentFolder(placement.projectId)}email/${input.graphMessageId.slice(-24).replace(/[^\w-]/g, "_")}-${file.id.slice(-12).replace(/[^\w-]/g, "_")}-${safeName}`,
     data,
     {
-      access: "public",
+      access: "private",
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: file.contentType,
