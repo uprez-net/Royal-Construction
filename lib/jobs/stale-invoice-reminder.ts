@@ -20,21 +20,21 @@ export async function remindStaleInvoices(
 
   let failed = 0;
   for (const entry of due) {
-    try {
-      await triggerNotification(
-        admins,
-        createNotification("tradieInvoiceWaiting", {
-          count: entry.count,
-          days: entry.oldestDays,
-          projectId: entry.projectId,
-          projectName: entry.projectName,
-        }),
-      );
-    } catch (error) {
+    // triggerNotification does not throw: it answers { success: false }, so
+    // that is what a failed nudge looks like (#588).
+    const result = await triggerNotification(
+      admins,
+      createNotification("tradieInvoiceWaiting", {
+        count: entry.count,
+        days: entry.oldestDays,
+        projectId: entry.projectId,
+        projectName: entry.projectName,
+      }),
+    ).catch(() => ({ success: false as const }));
+    if (!result.success) {
       failed += 1;
       console.error(
         `[stale-invoices] could not notify for project ${entry.projectId}`,
-        error,
       );
     }
   }
