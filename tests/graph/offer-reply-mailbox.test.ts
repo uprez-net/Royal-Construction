@@ -20,7 +20,10 @@ describe("offer replies in either mailbox (#585)", () => {
       route,
       /const offerReplyToken = extractOfferReplyToken\(message\.subject\);/,
     );
-    assert.doesNotMatch(route, /mailbox === "business"\s*\?\s*extractOfferReplyToken/);
+    assert.doesNotMatch(
+      route,
+      /mailbox === "business"\s*\?\s*extractOfferReplyToken/,
+    );
   });
 
   test("the attachment workflow is told which mailbox holds the message", () => {
