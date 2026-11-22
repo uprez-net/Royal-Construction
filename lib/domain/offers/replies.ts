@@ -139,6 +139,29 @@ export async function recordOfferReply(
   }
 
   const receivedAt = input.receivedAt ? new Date(input.receivedAt) : new Date();
+
+  // The same email in both watched mailboxes (a client reply-all that copies
+  // admin@ as well as info@) arrives as two messages with two Graph ids, which
+  // the lookup above cannot tie together. The same sender, subject and body
+  // for this send within the hour is that message again, not a second reply:
+  // recording it would show the client twice and store its files twice (#585).
+  const copy = await db.offerDocumentReply.findFirst({
+    select: { id: true },
+    where: {
+      body: input.body,
+      fromEmail: sender,
+      receivedAt: {
+        gte: new Date(receivedAt.getTime() - 60 * 60 * 1000),
+        lte: new Date(receivedAt.getTime() + 60 * 60 * 1000),
+      },
+      sendId: send.id,
+      subject: input.subject,
+    },
+  });
+  if (copy) {
+    return { outcome: "already-recorded" };
+  }
+
   const pending: OfferReplyAttachment[] = input.hasAttachments
     ? [
         {
