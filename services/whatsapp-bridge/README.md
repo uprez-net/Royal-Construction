@@ -83,6 +83,8 @@ it does not deploy.
    on every deploy and the QR has to be scanned again.
 3. Variables: `BRIDGE_API_TOKEN`, `BRIDGE_WEBHOOK_SECRET`, `APP_WEBHOOK_URL`
    (see `.env.example`). Railway sets `PORT`; the bridge listens on it.
+   Leave `HOST` unset (or `0.0.0.0`): `127.0.0.1` hides the bridge from
+   Railway's healthcheck and domain, and the deploy never goes live.
 4. Networking: generate a public domain. Settings › Deploy: health check path
    `/healthz`.
 5. Set the app's `WHATSAPP_BRIDGE_URL=https://<that domain>` and the two
