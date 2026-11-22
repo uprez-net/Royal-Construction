@@ -397,6 +397,83 @@ export type EmailedTradieInvoice = {
 
 const ymd = (date: Date | null) => date?.toISOString().slice(0, 10) ?? null;
 
+/** How long an emailed invoice may wait before the office is nudged, and how often after. */
+export const STALE_INVOICE_REMIND_EVERY_DAYS = 3;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Whether an invoice that arrived at `receivedAt` is due a nudge today.
+ *
+ * Stateless on purpose: the daily cron asks, and the answer is yes on day 3, 6,
+ * 9… so there is no "last reminded" column to keep honest. A skipped run costs
+ * one reminder, which is the right size for an internal prompt.
+ */
+export function invoiceReminderDue(receivedAt: Date, now: Date): boolean {
+  const days = Math.floor((now.getTime() - receivedAt.getTime()) / DAY_MS);
+  return days >= STALE_INVOICE_REMIND_EVERY_DAYS
+    && days % STALE_INVOICE_REMIND_EVERY_DAYS === 0;
+}
+
+export type StaleInvoiceReminder = {
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly count: number;
+  readonly oldestDays: number;
+};
+
+/**
+ * Projects with emailed invoices still PENDING that are due a nudge today.
+ *
+ * The only alert at arrival is one in-app notification, and a $350 invoice sat
+ * unconfirmed for 17 days after it (#588). Nothing counts until the office
+ * confirms, so a forgotten one is money not tracked, not a wrong figure.
+ */
+export async function staleInvoiceReminders(
+  db: DomainDb,
+  now: Date,
+): Promise<StaleInvoiceReminder[]> {
+  const rows = await db.tradieInvoiceInbox.findMany({
+    select: {
+      projectId: true,
+      project: { select: { name: true } },
+      receivedAt: true,
+    },
+    where: {
+      receivedAt: {
+        lte: new Date(now.getTime() - STALE_INVOICE_REMIND_EVERY_DAYS * DAY_MS),
+      },
+      status: TradieInvoiceInboxStatus.PENDING,
+    },
+  });
+
+  // One message per project, due on the day its OLDEST waiting invoice is;
+  // the count covers everything pending there.
+  const byProject = new Map<
+    string,
+    { count: number; name: string; oldest: Date }
+  >();
+  for (const row of rows) {
+    const current = byProject.get(row.projectId);
+    byProject.set(row.projectId, {
+      count: (current?.count ?? 0) + 1,
+      name: row.project.name,
+      oldest:
+        current && current.oldest < row.receivedAt
+          ? current.oldest
+          : row.receivedAt,
+    });
+  }
+  return [...byProject.entries()]
+    .filter(([, entry]) => invoiceReminderDue(entry.oldest, now))
+    .map(([projectId, entry]) => ({
+      count: entry.count,
+      oldestDays: Math.floor((now.getTime() - entry.oldest.getTime()) / DAY_MS),
+      projectId,
+      projectName: entry.name,
+    }));
+}
+
 /** The project's emailed invoices still waiting for the office, oldest first. */
 export async function listPendingEmailedInvoices(
   projectId: string,
