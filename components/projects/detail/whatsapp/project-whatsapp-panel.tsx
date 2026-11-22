@@ -32,9 +32,12 @@ type ChatKey = "group" | "lead";
 export function ProjectWhatsAppPanel({
   projectId,
   leadName,
+  isAdmin,
 }: {
   projectId: string;
   leadName: string;
+  /** The 1:1 client chat and group setup are the office's: a site manager gets the group only. */
+  isAdmin: boolean;
 }) {
   const [open, setOpen] = useState<ChatKey>("group");
   const [linking, setLinking] = useState(false);
@@ -56,20 +59,22 @@ export function ProjectWhatsAppPanel({
   );
   // The 1:1 chat's line in the list: when it last moved, and what is unread.
   useEffect(() => {
-    if (!leadId) return;
+    if (!leadId || !isAdmin) return;
     const controller = new AbortController();
     fetchWhatsAppSummaries([leadId], controller.signal)
       .then((rows) => setLeadSummary(rows[0] ?? null))
       .catch(() => undefined);
     return () => controller.abort();
-  }, [leadId, open]);
+  }, [leadId, isAdmin, open]);
 
   const group = thread?.group ?? null;
+  // A group that is no longer live still opens as a (read-only) chat while
+  // it has history; with none, the setup pane offers what to do next.
   const groupReady =
     group
     && (group.status === "ACTIVE"
-      || group.status === "SUSPENDED"
-      || (group.status === "DELETED" && messages.length > 0));
+      || ((group.status === "DELETED" || group.status === "UNLINKED")
+        && messages.length > 0));
   const lastGroupMessage = messages.at(-1);
   const name = thread?.leadName ?? leadName;
 
@@ -90,9 +95,11 @@ export function ProjectWhatsAppPanel({
           ? "Creating the group…"
           : group?.status === "FAILED"
             ? "Group not created"
-            : group
-              ? "No messages yet"
-              : "No group yet",
+            : group?.status === "UNLINKED"
+              ? "No group linked"
+              : group
+                ? "No messages yet"
+                : "No group yet",
       time: lastGroupMessage ? chatTime(lastGroupMessage.occurredAt) : null,
       title: group?.subject ?? "Project group",
       unread: open === "group" ? 0 : (group?.unreadCount ?? 0),
@@ -115,11 +122,15 @@ export function ProjectWhatsAppPanel({
     },
   ];
 
+  const shownChats = isAdmin
+    ? chats
+    : chats.filter((chat) => chat.key === "group");
+
   return (
     <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/4">
       {/* Phone: the chat list as chips. */}
       <div className="flex gap-2 overflow-x-auto border-b border-black/5 bg-muted p-2 md:hidden">
-        {chats.map((chat) => (
+        {shownChats.map((chat) => (
           <button
             key={chat.key}
             type="button"
@@ -157,7 +168,7 @@ export function ProjectWhatsAppPanel({
             className="min-h-0 flex-1 overflow-y-auto"
             aria-label="WhatsApp chats"
           >
-            {chats.map((chat) => (
+            {shownChats.map((chat) => (
               <li key={chat.key}>
                 <button
                   type="button"
@@ -203,8 +214,9 @@ export function ProjectWhatsAppPanel({
             ))}
           </ul>
           <p className="shrink-0 border-t border-black/5 px-4 py-3 text-[12px] leading-snug text-muted-foreground">
-            The group is where the owners, the office and site talk. The 1:1
-            chat is the conversation from before the contract.
+            {isAdmin
+              ? "The group is where the owners, the office and site talk. The 1:1 chat is the conversation from before the contract."
+              : "The group is where the owners, the office and site talk."}
           </p>
         </aside>
 
@@ -258,6 +270,7 @@ export function ProjectWhatsAppPanel({
               onSent={addLocal}
               onChanged={() => void refresh()}
               onInvite={() => setInviting(true)}
+              isAdmin={isAdmin}
             />
           ) : (
             <WhatsAppChatFrame
@@ -276,6 +289,7 @@ export function ProjectWhatsAppPanel({
             >
               <ProjectWhatsAppGroupSetup
                 thread={thread}
+                isAdmin={isAdmin}
                 onLink={() => setLinking(true)}
               />
             </WhatsAppChatFrame>

@@ -39,13 +39,13 @@ export function EmailCtaButton({
                     style={{
                       display: "inline-block",
                       padding: "16px 48px",
-                      fontFamily: FONTS.condensed,
+                      fontFamily: FONTS.label,
                       fontWeight: 500,
                       fontSize: 15,
                       lineHeight: 1,
                       letterSpacing: "1px",
                       textTransform: "uppercase",
-                      color: RC_COLORS.ctaText,
+                      color: RC_COLORS.white,
                       textDecoration: "none",
                     }}
                   >

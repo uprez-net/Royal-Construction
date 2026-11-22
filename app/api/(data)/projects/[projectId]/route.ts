@@ -3,9 +3,9 @@ import prisma from "@/lib/prisma";
 import { currentPrincipal } from "@/lib/data/current-principal";
 import { getCachedProjectById, getProjectById } from "@/lib/data/projects";
 import { projectExtractionSchema } from "@/lib/agent/projectExtraction-validators";
-import { isDomainError } from "@/lib/domain/errors";
 import { updateProject } from "@/lib/domain/projects/commands";
 import { ProjectDateBlockerError } from "@/lib/domain/projects/readiness";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
 import {
@@ -72,6 +72,7 @@ const updateProjectBodySchema = z.object({
   estimatedEndDate: z.string().optional(),
   totalBudget: z.number().optional(),
   requirements: projectRequirementsPayloadSchema.optional(),
+  expectedRequirementsVersion: z.string().optional(),
 });
 
 export async function PATCH(
@@ -103,6 +104,7 @@ export async function PATCH(
         council: body.data.council,
         description: body.data.description,
         estimatedEndDate: body.data.estimatedEndDate,
+        expectedRequirementsVersion: body.data.expectedRequirementsVersion,
         location: body.data.location,
         name: body.data.name,
         projectId,
@@ -126,13 +128,18 @@ export async function PATCH(
     // `data` stays the project the screens read; what the save did to the
     // start date rides beside it, so the Overview can say whether the start
     // followed the HBCF claim date or stayed because work had started.
-    return successResponse(updatedProject, {
-      meta: {
-        rescheduledMilestones: outcome.rescheduledMilestones,
-        startDateFollowedHbcfClaim: outcome.startDateFollowedHbcfClaim,
-        startDateHeldByStartedWork: outcome.startDateHeldByStartedWork,
+    // The fingerprint of what this save committed, not of the re-read, which
+    // may already include a later save (issue #562).
+    return successResponse(
+      { ...updatedProject, requirementsVersion: outcome.requirementsVersion },
+      {
+        meta: {
+          rescheduledMilestones: outcome.rescheduledMilestones,
+          startDateFollowedHbcfClaim: outcome.startDateFollowedHbcfClaim,
+          startDateHeldByStartedWork: outcome.startDateHeldByStartedWork,
+        },
       },
-    });
+    );
   } catch (error) {
     // The blocker list is worth more to the operator than the status code:
     // the Overview tab binds each entry to the field that caused it. Kept at
@@ -156,12 +163,8 @@ export async function PATCH(
     // Every other domain refusal answers with its own status and its own
     // message. "You do not have access to update this project." is useless to
     // the one person who can act on it as an opaque INTERNAL_ERROR.
-    if (isDomainError(error)) {
-      return errorResponse(error.message, {
-        status: error.status,
-        code: error.code.toUpperCase(),
-      });
-    }
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
 
     console.error(`PATCH /api/projects/${projectId} error`, error);
     return errorResponse("Failed to update project", {
@@ -182,10 +185,18 @@ export async function GET(
   );
   if (!routeParams.success) return routeParams.response;
 
-  const project = await getCachedProjectById(routeParams.data.projectId);
-  if (!project) {
-    return notFoundResponse("Project");
-  }
+  try {
+    const project = await getCachedProjectById(routeParams.data.projectId);
+    if (!project) {
+      return notFoundResponse("Project");
+    }
 
-  return successResponse(project);
+    return successResponse(project);
+  } catch (error) {
+    // A refusal (an account that may not read projects) is a 403 with its own
+    // words, not a 500 that reports an incident.
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
+    throw error;
+  }
 }

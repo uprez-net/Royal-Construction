@@ -1075,7 +1075,8 @@ test("schedule reminders resolve only the stored tradie recipient", async () => 
         recordingDb().db,
         async () => {},
       ),
-    DomainTransitionError,
+    // Reminding a tradie is booking work: the office's (canBookTradies).
+    DomainAuthorizationError,
   );
 });
 

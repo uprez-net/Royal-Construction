@@ -1,9 +1,13 @@
 import { VariationStatus } from "@prisma/client";
 import { addDays, differenceInCalendarDays } from "date-fns";
 
-import { authorizeProject } from "../access/projects";
+import { authorizeProject, canSeeProjectFinancials } from "../access/projects";
 import type { DomainDb } from "../db";
-import { DomainNotFoundError, DomainTransitionError } from "../errors";
+import {
+  DomainAuthorizationError,
+  DomainNotFoundError,
+  DomainTransitionError,
+} from "../errors";
 import type { DomainPrincipal } from "../principal";
 
 // Variations: deciding one raised the old way, and what an approval does to
@@ -67,6 +71,14 @@ export async function decideVariation(
   },
   db: DomainDb,
 ): Promise<VariationDecisionOutcome> {
+  // Approving moves the contract value and the programme, which is the
+  // office's money (`canSeeProjectFinancials`), the same rule that lets only
+  // the office raise one (`raiseVariation`). Checked before the project is
+  // read, and before `authorizeProject`, so a site manager on the project is
+  // still refused.
+  if (!canSeeProjectFinancials(principal)) {
+    throw new DomainAuthorizationError("Variations are decided by the office.");
+  }
   const project = await authorizeProject(principal, input.projectId, db);
 
   const variation = await db.variation.findFirst({

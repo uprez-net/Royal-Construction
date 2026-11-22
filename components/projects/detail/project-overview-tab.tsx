@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { fetchJson } from "@/utils/fetch";
+import { FetchError, fetchJson } from "@/utils/fetch";
 import { formatValue, toLabel } from "@/utils/formatters";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -87,7 +87,10 @@ import {
   hbcfClaimDate,
   readHbcfClaimDocuments,
 } from "@/lib/domain/insurance/hbcf-claims";
-import { projectDocumentGaps } from "@/lib/domain/projects/document-gaps";
+import {
+  gapsVisibleTo,
+  projectDocumentGaps,
+} from "@/lib/domain/projects/document-gaps";
 import { normalizeDateString } from "@/utils/date";
 import {
   DOCUMENT_ATTENTION_ID,
@@ -454,10 +457,13 @@ function StartDateField({
   milestones,
   locked,
   claimDate,
+  canEdit,
   onSaved,
 }: {
   projectId: string;
   value: unknown;
+  /** `viewerAccess.edit`: without it the date is shown, not offered. */
+  canEdit: boolean;
   milestones: ProjectDetail["milestones"];
   /** Work has started on site: the date is the day it began, and fixed. */
   locked: boolean;
@@ -553,7 +559,7 @@ function StartDateField({
     </p>
   );
 
-  if (!editing || locked || followsClaim) {
+  if (!editing || locked || followsClaim || !canEdit) {
     return (
       <FieldShell label="Start date (on-site)">
         <div
@@ -573,7 +579,7 @@ function StartDateField({
               ? displayDate(parse(current, "yyyy-MM-dd", new Date()))
               : "Not set"}
           </span>
-          {locked || followsClaim ? (
+          {!canEdit ? null : locked || followsClaim ? (
             <span className="mr-2 flex items-center">
               <Lock
                 className="size-3.5 text-muted-foreground"
@@ -1549,6 +1555,14 @@ export function ProjectOverviewTab({
   useEffect(() => {
     estimatedEndDateRef.current = stateEstimatedEndDate;
   }, [stateEstimatedEndDate]);
+  // The fingerprint of the requirements this form's draft was made from
+  // (issue #562). It is paired with the draft, not the store: the draft is
+  // taken once when the tab opens and replaced only by a save's response, so
+  // the fingerprint moves at exactly those two points. Following the store
+  // instead would pair a stale draft with a fresh fingerprint and let it
+  // overwrite a change made elsewhere. Read at save time through the ref, so
+  // a flow that awaits (the HBCF upload's OCR) sends the current one.
+  const requirementsVersionRef = useRef(project.requirementsVersion);
 
   // Open while a save would move the start date onto a changed HBCF claim
   // date, which reschedules every milestone: the same deliberate step the
@@ -1710,6 +1724,7 @@ export function ProjectOverviewTab({
             // through the ref: the HBCF upload saves after a long OCR wait,
             // and the value captured when it began may be out of date.
             estimatedEndDate: estimatedEndDateAtSave,
+            expectedRequirementsVersion: requirementsVersionRef.current,
           }),
         },
         "Unable to update project",
@@ -1734,6 +1749,7 @@ export function ProjectOverviewTab({
       // "Not set" until a full reload. The PATCH returns the whole project,
       // so hand it to the store the header actually reads.
       dispatch(setActiveProject(response.data));
+      requirementsVersionRef.current = response.data.requirementsVersion;
       // Edits made while the request was in flight are newer than what was
       // saved; replacing them with the response would lose them silently.
       // Every edit makes a new draft object, so the draft is unedited only
@@ -1750,8 +1766,13 @@ export function ProjectOverviewTab({
       }
       return true;
     } catch (error) {
+      // Nothing was written and the form keeps what was typed; say why.
       toast.error(
-        error instanceof Error ? error.message : "Unable to update project",
+        error instanceof FetchError && error.status === 409
+          ? "Someone else saved this project since you opened it. Reload to see their change."
+          : error instanceof Error
+            ? error.message
+            : "Unable to update project",
       );
       return false;
     } finally {
@@ -2064,28 +2085,32 @@ export function ProjectOverviewTab({
   const documentGaps = useMemo(() => {
     const savedLegal = (project.requirements as RequirementsData | null)
       ?.legalAdministration;
-    return projectDocumentGaps({
-      status: project.status,
-      started: hasWorkStarted(project.milestones),
-      legal: {
-        signedDate: savedLegal?.signedDate,
-        pcaInspector: savedLegal?.pcaInspector,
-        hbcfInsuranceNumber: savedLegal?.hbcfInsuranceNumber,
-        // A certificate uploaded in the HBCF claim block counts as held.
-        hbcfInsuranceDocument: savedLegal?.hbcfInsuranceDocument,
-        hbcfClaimDocuments: savedLegal?.hbcfClaimDocuments,
-      },
-      heldDocuments: new Set(
-        (project.certifierEngagement?.documents ?? [])
-          .filter((document) => document.files.length > 0)
-          .map((document) => document.documentType),
-      ),
-    });
+    return gapsVisibleTo(
+      projectDocumentGaps({
+        status: project.status,
+        started: hasWorkStarted(project.milestones),
+        legal: {
+          signedDate: savedLegal?.signedDate,
+          pcaInspector: savedLegal?.pcaInspector,
+          hbcfInsuranceNumber: savedLegal?.hbcfInsuranceNumber,
+          // A certificate uploaded in the HBCF claim block counts as held.
+          hbcfInsuranceDocument: savedLegal?.hbcfInsuranceDocument,
+          hbcfClaimDocuments: savedLegal?.hbcfClaimDocuments,
+        },
+        heldDocuments: new Set(
+          (project.certifierEngagement?.documents ?? [])
+            .filter((document) => document.files.length > 0)
+            .map((document) => document.documentType),
+        ),
+      }),
+      project.financialsHidden === true,
+    );
   }, [
     project.requirements,
     project.status,
     project.milestones,
     project.certifierEngagement,
+    project.financialsHidden,
   ]);
 
   /**
@@ -2216,20 +2241,24 @@ export function ProjectOverviewTab({
                 Unsaved
               </Badge>
             ) : null}
-            <Button
-              onClick={requestSave}
-              disabled={!dirty || saving}
-              aria-busy={saving}
-            >
-              {saving ? (
-                "Saving…"
-              ) : (
-                <>
-                  <span className="sm:hidden">Save</span>
-                  <span className="hidden sm:inline">Save changes</span>
-                </>
-              )}
-            </Button>
+            {/* The save is `authorizeProjectEdit`'s: not offered to a caller
+                it would refuse (#568). */}
+            {project.viewerAccess.edit ? (
+              <Button
+                onClick={requestSave}
+                disabled={!dirty || saving}
+                aria-busy={saving}
+              >
+                {saving ? (
+                  "Saving…"
+                ) : (
+                  <>
+                    <span className="sm:hidden">Save</span>
+                    <span className="hidden sm:inline">Save changes</span>
+                  </>
+                )}
+              </Button>
+            ) : null}
           </div>
         </CardHeader>
 
@@ -2265,6 +2294,7 @@ export function ProjectOverviewTab({
               milestones={project.milestones}
               locked={hasWorkStarted(project.milestones)}
               claimDate={savedClaimDate}
+              canEdit={project.viewerAccess.edit}
               // The header and the milestone tab read the store, not this
               // tab, so the saved project goes back there.
               onSaved={(saved) => dispatch(setActiveProject(saved))}
@@ -2416,10 +2446,12 @@ export function ProjectOverviewTab({
                       />
                     ) : null}
 
-                    {key === "legalAdministration" ? (
+                    {key === "legalAdministration"
+                    && !project.financialsHidden ? (
                       // The number input is the block's first control, which
                       // is what the attention panel's "Go to HBCF number"
-                      // focuses.
+                      // focuses. Not offered to a caller who cannot see the
+                      // money: HBCF is the office's (#559).
                       <div id={fieldAnchorId("hbcfInsuranceNumber")}>
                         <HbcfClaimsBlock
                           projectId={project.id}
@@ -2432,7 +2464,6 @@ export function ProjectOverviewTab({
                           )}
                           extracting={hbcfExtracting}
                           canRemove={isAdmin}
-                          readOnly={Boolean(project.financialsHidden)}
                           onNumberChange={(value) =>
                             updateSectionField(
                               "legalAdministration",

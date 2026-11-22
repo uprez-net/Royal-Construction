@@ -46,7 +46,6 @@ const customerUser = { id: "u_customer", role: Role.CUSTOMER };
 const channel = {
   defaultPhoneNumberId: "1000000000001",
   enabledTemplateNames: null,
-  groupsEnabled: false,
   numbers: [
     {
       displayNumber: "+61280001234",

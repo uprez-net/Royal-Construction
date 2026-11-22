@@ -34,8 +34,8 @@ import {
 const ICONS = {
   checkNavySmall: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%231B2D45' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E`,
   checkWhiteSmall: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23FFFFFF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E`,
-  calendar: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'%3E%3C/rect%3E%3Cline x1='16' y1='2' x2='16' y2='6'%3E%3C/line%3E%3Cline x1='8' y1='2' x2='8' y2='6'%3E%3C/line%3E%3Cline x1='3' y1='10' x2='21' y2='10'%3E%3C/line%3E%3C/svg%3E`,
-  camera: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z'%3E%3C/path%3E%3Ccircle cx='12' cy='13' r='4'%3E%3C/circle%3E%3C/svg%3E`,
+  calendar: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23926100' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'%3E%3C/rect%3E%3Cline x1='16' y1='2' x2='16' y2='6'%3E%3C/line%3E%3Cline x1='8' y1='2' x2='8' y2='6'%3E%3C/line%3E%3Cline x1='3' y1='10' x2='21' y2='10'%3E%3C/line%3E%3C/svg%3E`,
+  camera: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='%23926100' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z'%3E%3C/path%3E%3Ccircle cx='12' cy='13' r='4'%3E%3C/circle%3E%3C/svg%3E`,
 };
 
 // ─── Sub-Components ─────────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ function ProgressStep({
               backgroundColor: isCompleted ? RC_COLORS.gold : RC_COLORS.white,
               border: isCompleted
                 ? "none"
-                : `2px solid ${isCurrent ? RC_COLORS.gold : "#E2E8F0"}`,
+                : `2px solid ${isCurrent ? RC_COLORS.gold : "#E6E2D9"}`,
             }}
           >
             {isCompleted ? (
@@ -83,7 +83,7 @@ function ProgressStep({
                       width: 8,
                       height: 8,
                       borderRadius: "50%",
-                      backgroundColor: isCurrent ? RC_COLORS.gold : "#CBD5E1",
+                      backgroundColor: isCurrent ? RC_COLORS.gold : "#D3CEC3",
                       fontSize: 0,
                       lineHeight: 0,
                     }}
@@ -97,7 +97,7 @@ function ProgressStep({
       <Text
         className="m-0 mt-2 uppercase text-[11px] leading-tight"
         style={{
-          fontFamily: FONTS.condensed,
+          fontFamily: FONTS.label,
           fontWeight: 500,
           color: isCompleted
             ? RC_COLORS.gold
@@ -205,11 +205,11 @@ export default function ProjectUpdateEmail({
                         <Text
                           className="m-0 uppercase tracking-[1px]"
                           style={{
-                            fontFamily: FONTS.condensed,
+                            fontFamily: FONTS.label,
                             fontWeight: 500,
                             fontSize: 12,
                             lineHeight: 1,
-                            color: RC_COLORS.textOnLight,
+                            color: RC_COLORS.white,
                           }}
                         >
                           Milestone Achieved
@@ -239,11 +239,10 @@ export default function ProjectUpdateEmail({
               <Text
                 className="mobile_font-40 m-0 uppercase"
                 style={{
-                  fontFamily: FONTS.condensed,
+                  fontFamily: FONTS.heading,
                   fontWeight: 500,
                   fontSize: 48,
                   lineHeight: 1,
-                  letterSpacing: "-1.4px",
                   color: RC_COLORS.textOnLight,
                 }}
               >
@@ -302,21 +301,26 @@ export default function ProjectUpdateEmail({
               <Row>
                 <Column
                   className="rounded-md overflow-hidden"
-                  style={{ border: "1px solid #E2E8F0" }}
+                  style={{ border: "1px solid #E6E2D9" }}
                 >
                   {/* Card Header */}
                   <Row>
-                    <Column style={{ backgroundColor: RC_COLORS.gold }}>
+                    <Column
+                      style={{
+                        backgroundColor: RC_COLORS.dark,
+                        borderBottom: `2px solid ${RC_COLORS.brandGold}`,
+                      }}
+                    >
                       <Section className="py-3.5 px-6">
                         <Text
                           className="m-0 uppercase"
                           style={{
-                            fontFamily: FONTS.condensed,
+                            fontFamily: FONTS.label,
                             fontWeight: 500,
                             fontSize: 13,
                             lineHeight: 1,
                             letterSpacing: "0.6px",
-                            color: "#FFFFFF",
+                            color: RC_COLORS.textOnLight,
                           }}
                         >
                           Milestone Completed
@@ -326,7 +330,7 @@ export default function ProjectUpdateEmail({
                   </Row>
 
                   {/* Milestone Name */}
-                  <Row style={{ borderBottom: "1px solid #E2E8F0" }}>
+                  <Row style={{ borderBottom: "1px solid #E6E2D9" }}>
                     <Column className="pt-7 pb-5 px-6">
                       <Row>
                         <Column
@@ -376,7 +380,7 @@ export default function ProjectUpdateEmail({
                           <Text
                             className="m-0"
                             style={{
-                              fontFamily: FONTS.condensed,
+                              fontFamily: FONTS.heading,
                               fontWeight: 500,
                               fontSize: 22,
                               lineHeight: 1.2,
@@ -422,7 +426,7 @@ export default function ProjectUpdateEmail({
                           <Text
                             className="m-0"
                             style={{
-                              fontFamily: FONTS.condensed,
+                              fontFamily: FONTS.label,
                               fontWeight: 500,
                               fontSize: 16,
                               lineHeight: 1.2,
@@ -444,7 +448,7 @@ export default function ProjectUpdateEmail({
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
-                  border: "1px solid #E2E8F0",
+                  border: "1px solid #E6E2D9",
                   borderRadius: 6,
                   padding: "1.5rem",
                 }}
@@ -454,11 +458,10 @@ export default function ProjectUpdateEmail({
                     <Text
                       className="mobile_font-24 m-0 mb-7 uppercase"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.heading,
                         fontWeight: 500,
                         fontSize: 26,
                         lineHeight: 1,
-                        letterSpacing: "0.3px",
                         color: RC_COLORS.textOnLight,
                       }}
                     >
@@ -469,7 +472,7 @@ export default function ProjectUpdateEmail({
                     <Section
                       className="mb-8"
                       style={{
-                        backgroundColor: "#E2E8F0",
+                        backgroundColor: "#E6E2D9",
                         borderRadius: 100,
                         height: 6,
                         fontSize: 0,
@@ -519,7 +522,7 @@ export default function ProjectUpdateEmail({
                   style={{
                     backgroundColor: RC_COLORS.light,
                     borderRadius: 6,
-                    border: "1px solid #E2E8F0",
+                    border: "1px solid #E6E2D9",
                   }}
                 >
                   <Section className="p-6">
@@ -540,7 +543,7 @@ export default function ProjectUpdateEmail({
                         <Text
                           className="m-0 mb-1.5"
                           style={{
-                            fontFamily: FONTS.condensed,
+                            fontFamily: FONTS.label,
                             fontWeight: 500,
                             fontSize: 15,
                             lineHeight: 1.2,
@@ -589,7 +592,7 @@ export default function ProjectUpdateEmail({
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
-                  borderLeft: `3px solid ${RC_COLORS.gold}`,
+                  borderLeft: `3px solid ${RC_COLORS.border}`,
                   padding: "1rem 1.25rem",
                 }}
               >
@@ -636,7 +639,7 @@ export default function ProjectUpdateEmail({
             {/* ── Sign-off ── */}
             <EmailSectionWhite style={{ padding: "0 1.5rem 2.5rem" }}>
               <Section
-                style={{ borderTop: "1px solid #E2E8F0", paddingTop: "1.5rem" }}
+                style={{ borderTop: "1px solid #E6E2D9", paddingTop: "1.5rem" }}
               >
                 <Row>
                   <Column>
@@ -662,7 +665,7 @@ export default function ProjectUpdateEmail({
                     <Text
                       className="m-0"
                       style={{
-                        fontFamily: FONTS.condensed,
+                        fontFamily: FONTS.label,
                         fontSize: 16,
                         color: RC_COLORS.gold,
                       }}

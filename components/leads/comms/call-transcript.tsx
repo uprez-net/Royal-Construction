@@ -1,50 +1,60 @@
+import {
+  isRoyalSpeaker,
+  transcriptTurns,
+} from "@/lib/domain/comms/calls/transcript-lines";
+
 // What was said on a call, folded away until someone opens it.
 //
-// Two sources: Mili's live transcript ("Caller: …" / "Mili: …" lines), and
-// the speech-to-text of a stored recording or voicemail, which is plain prose
-// with no speakers. `speakers` says which this is, so a recording that happens
-// to contain "Note: …" is not split into a speaker called "Note".
+// Mili's live transcript and a recording's speaker split are stored as one
+// "Speaker: text" line per turn; a recording that could not be split, or a
+// voicemail, is plain prose. Which it is comes from the lines themselves
+// (transcript-lines.ts): only when every line starts with a known speaker is
+// it shown by speaker, so prose that says "Note: …" is not split into a
+// speaker called "Note".
 
 export function CallTranscript({
   transcript,
   label = "Transcript",
-  speakers = true,
   defaultOpen = false,
 }: {
   transcript: string | null;
   label?: string;
-  speakers?: boolean;
   defaultOpen?: boolean;
 }) {
   if (!transcript) return null;
-  const lines = transcript.split("\n").filter(Boolean);
-  const count = speakers
-    ? `${lines.length} ${lines.length === 1 ? "line" : "lines"}`
+  const turns = transcriptTurns(transcript);
+  const count = turns
+    ? `${turns.length} ${turns.length === 1 ? "line" : "lines"}`
     : `${transcript.split(/\s+/).filter(Boolean).length} words`;
   return (
     <details className="group text-xs" open={defaultOpen}>
       <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground">
         {label} ({count})
       </summary>
-      <div className="mt-1.5 space-y-1 rounded-md bg-muted/50 p-2.5">
-        {lines.map((line, index) => {
-          const split = speakers ? line.indexOf(": ") : -1;
-          const speaker = split > 0 ? line.slice(0, split) : null;
-          const text = split > 0 ? line.slice(split + 2) : line;
-          return (
+      <div className="mt-1.5 space-y-1.5 rounded-md bg-muted/50 p-2.5">
+        {turns ? (
+          turns.map((turn, index) => (
             <p
               key={index}
               className="whitespace-pre-wrap break-words leading-relaxed text-foreground"
             >
-              {speaker ? (
-                <span className="font-medium text-muted-foreground">
-                  {speaker}:{" "}
-                </span>
-              ) : null}
-              {text}
+              <span
+                className={
+                  isRoyalSpeaker(turn.speaker)
+                    ? "font-semibold text-primary"
+                    : "font-semibold text-muted-foreground"
+                }
+              >
+                {turn.speaker}:{" "}
+              </span>
+              {turn.text}
             </p>
-          );
-        })}
+          ))
+        ) : (
+          <p className="whitespace-pre-wrap break-words leading-relaxed text-foreground">
+            {transcript}
+          </p>
+        )}
       </div>
     </details>
   );

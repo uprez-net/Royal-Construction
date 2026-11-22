@@ -345,7 +345,8 @@ test("a GUEST never sees the team's numbers or routes a call to one", async () =
       recorder.transactionalDb,
       { channel: channel(), voice },
     ),
-    /Only staff can put a call through to a team phone/,
+    // Refused earlier now: a GUEST ("Access pending") is not staff (#561).
+    /Calling a lead requires a signed-in member of staff/,
   );
   assert.deepEqual(recorder.writes(), []);
 });

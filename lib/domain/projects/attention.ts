@@ -24,7 +24,7 @@ import { canSeeProjectFinancials, projectReadScope } from "../access/projects";
 import { BUILD_START_DOCUMENT_TYPES } from "../compliance/lifecycle";
 import type { DomainDb } from "../db";
 import type { DomainPrincipal } from "../principal";
-import { projectDocumentGaps } from "./document-gaps";
+import { gapsVisibleTo, projectDocumentGaps } from "./document-gaps";
 import {
   hasWorkStarted,
   milestoneEndDate,
@@ -306,6 +306,8 @@ function legalAdministration(requirements: Prisma.JsonValue) {
 export function assessProjectAttention(
   project: AttentionSource,
   now: Date,
+  /** False for a caller who may not see project money (a site manager). */
+  seesMoney = true,
 ): ProjectAttention {
   const started = hasWorkStarted(project.milestones);
   const conditions: AttentionCondition[] = [];
@@ -403,16 +405,19 @@ export function assessProjectAttention(
   }
 
   // The same entries the project page lists one by one.
-  const missing = projectDocumentGaps({
-    status: project.status,
-    started,
-    legal: legalAdministration(project.requirements),
-    heldDocuments: new Set(
-      (project.certifierEngagement?.documents ?? [])
-        .filter((document) => document._count.files > 0)
-        .map((document) => document.documentType),
-    ),
-  }).map((gap) => gap.title);
+  const missing = gapsVisibleTo(
+    projectDocumentGaps({
+      status: project.status,
+      started,
+      legal: legalAdministration(project.requirements),
+      heldDocuments: new Set(
+        (project.certifierEngagement?.documents ?? [])
+          .filter((document) => document._count.files > 0)
+          .map((document) => document.documentType),
+      ),
+    }),
+    !seesMoney,
+  ).map((gap) => gap.title);
   if (missing.length > 0) {
     conditions.push(
       condition(
@@ -538,7 +543,11 @@ export async function readProjectAttention(
   // manager) is not alerted to them; the variation is the office's to chase.
   const seesMoney = canSeeProjectFinancials(principal);
   return rows.map((row) =>
-    assessProjectAttention(seesMoney ? row : { ...row, variations: [] }, now),
+    assessProjectAttention(
+      seesMoney ? row : { ...row, variations: [] },
+      now,
+      seesMoney,
+    ),
   );
 }
 

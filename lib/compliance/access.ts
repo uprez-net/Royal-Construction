@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma";
 import {
   authorizeComplianceAccess,
   authorizeComplianceDecision,
+  authorizeComplianceMutation,
 } from "@/lib/domain/access/compliance";
 import { isDomainError } from "@/lib/domain/errors";
 import { userPrincipal } from "@/lib/domain/principal";
@@ -103,6 +104,30 @@ export async function requireComplianceAccess(
       projectId,
       prisma,
       options,
+    );
+    return { user, project, engagement };
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
+    throw new ComplianceAccessError(
+      error.message,
+      error.status === 404 ? 404 : 403,
+    );
+  }
+}
+
+/**
+ * The user, plus the engagement, for an act that goes out under the office's
+ * name: a certifier or developer email, or an AI run over the file. Staff only.
+ * A client may work the file (`requireComplianceAccess`) and supply evidence,
+ * but may not send it to a certifier or a developer, or set the AI on it.
+ */
+export async function requireComplianceMutation(projectId: string) {
+  const user = await requireUser();
+  try {
+    const { engagement, project } = await authorizeComplianceMutation(
+      userPrincipal(user),
+      projectId,
+      prisma,
     );
     return { user, project, engagement };
   } catch (error) {

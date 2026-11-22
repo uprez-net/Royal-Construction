@@ -1,4 +1,9 @@
-import { LOGO_EMAIL, RC_COLORS, RC_URLS } from "@/lib/graph/Email/email-theme";
+import {
+  FONTS,
+  LOGO_EMAIL,
+  RC_COLORS,
+  RC_URLS,
+} from "@/lib/graph/Email/email-theme";
 import { subjectWithTradieRef } from "@/lib/domain/tradies/reply-reference";
 import type { RescheduleNotice } from "@/lib/domain/tradies/reschedule-rules";
 import { TradieScheduleListItem } from "@/types/project";
@@ -74,7 +79,7 @@ function copyHtml(
       return token(
         name,
         name === "reference"
-          ? `<strong style="font-family:Consolas,Menlo,monospace;letter-spacing:0.5px;">${escapeHtml(value)}</strong>`
+          ? `<strong style="font-family:${FONTS.mono};letter-spacing:0.5px;">${escapeHtml(value)}</strong>`
           : escapeHtml(value),
       );
     })
@@ -133,7 +138,7 @@ function referenceNote(copy: CopyWrite): string {
             margin:0 0 24px;
             padding:16px 20px;
             background:${RC_COLORS.card};
-            border:1px dashed ${RC_COLORS.gold};
+            border:1px solid ${RC_COLORS.border};
             border-radius:8px;">
 
             <p style="margin:0 0 6px;color:${RC_COLORS.text};font-size:15px;line-height:24px;">
@@ -208,7 +213,7 @@ function renderTradieEmail(input: {
             margin:36px 0;
             padding:22px;
             background:${RC_COLORS.card};
-            border-left:4px solid ${RC_COLORS.gold};">
+            border-left:4px solid ${RC_COLORS.border};">
 
             <p style="margin:0 0 12px;color:${RC_COLORS.text};font-weight:bold;">
             ${copy("siteManager:heading", "Site Manager")}
@@ -232,7 +237,7 @@ function renderTradieEmail(input: {
             <title>${escapeHtml(input.subject)}</title>
             </head>
 
-            <body style="margin:0;padding:0;background:${RC_COLORS.dark};font-family:Arial,sans-serif;">
+            <body style="margin:0;padding:0;background:${RC_COLORS.dark};font-family:${FONTS.body};">
 
             <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${RC_COLORS.dark};padding:40px 20px;">
             <tr>
@@ -260,6 +265,7 @@ function renderTradieEmail(input: {
             <h1 style="
             margin:0 0 24px;
             color:${RC_COLORS.text};
+            font-family:${FONTS.heading};
             font-size:30px;
             font-weight:bold;
             line-height:38px;">
@@ -280,8 +286,9 @@ function renderTradieEmail(input: {
             <td colspan="2"
             style="
             padding:16px 20px;
-            background:${RC_COLORS.gold};
-            color:${RC_COLORS.dark};
+            background:${RC_COLORS.dark};
+            color:${RC_COLORS.text};
+            border-bottom:2px solid ${RC_COLORS.brandGold};
             font-weight:bold;
             font-size:18px;">
             ${copy("details:heading", "Project Details")}
@@ -742,7 +749,7 @@ function requestedWorksSections(
   },
 ): string {
   // The start date and duration are what the tradie checks first.
-  const dateStyle = `display:inline-block;padding:2px 8px;background:${RC_COLORS.dark};border:1px solid ${RC_COLORS.gold};border-radius:4px;color:${RC_COLORS.ctaText};font-size:15px;`;
+  const dateStyle = `display:inline-block;padding:2px 8px;background:${RC_COLORS.dark};border:1px solid ${RC_COLORS.border};border-radius:4px;color:${RC_COLORS.ctaText};font-size:15px;`;
   const activityRows = input.activities
     .map((activity, index) => {
       const key = `activity:${activity.milestoneId ?? index}`;
@@ -799,8 +806,9 @@ function requestedWorksSections(
             <td colspan="2"
             style="
             padding:16px 20px;
-            background:${RC_COLORS.gold};
-            color:${RC_COLORS.dark};
+            background:${RC_COLORS.dark};
+            color:${RC_COLORS.text};
+            border-bottom:2px solid ${RC_COLORS.brandGold};
             font-weight:bold;
             font-size:18px;">
             ${copy("works:heading", wording.heading)}
@@ -979,6 +987,8 @@ const invoiceMoney = new Intl.NumberFormat("en-AU", {
   style: "currency",
 });
 const centsLabel = (cents: number) => invoiceMoney.format(cents / 100);
+const moneyHtml = (cents: number) =>
+  `<span style="font-family:${FONTS.mono};">${centsLabel(cents)}</span>`;
 
 /** The subject a recheck goes out with; the booking's reference is added. */
 export function tradieInvoiceRecheckSubject(input: {
@@ -1018,13 +1028,13 @@ export function generateTradieInvoiceRecheckEmail(
       (invoice) => `
             <tr>
             <td style="padding:12px 20px;border-top:1px solid ${RC_COLORS.border};color:${RC_COLORS.text};">
-            ${escapeHtml(invoice.invoiceNumber ?? "No number")}
+            <span style="font-family:${FONTS.mono};">${escapeHtml(invoice.invoiceNumber ?? "No number")}</span>
             </td>
             <td style="padding:12px 20px;border-top:1px solid ${RC_COLORS.border};color:${RC_COLORS.muted};">
             ${shortRequestDate(invoice.issuedDate)}
             </td>
             <td style="padding:12px 20px;border-top:1px solid ${RC_COLORS.border};color:${RC_COLORS.text};text-align:right;">
-            ${centsLabel(invoice.subTotalCents)}
+            ${moneyHtml(invoice.subTotalCents)}
             </td>
             </tr>`,
     )
@@ -1043,8 +1053,9 @@ export function generateTradieInvoiceRecheckEmail(
             <td colspan="3"
             style="
             padding:16px 20px;
-            background:${RC_COLORS.gold};
-            color:${RC_COLORS.dark};
+            background:${RC_COLORS.dark};
+            color:${RC_COLORS.text};
+            border-bottom:2px solid ${RC_COLORS.brandGold};
             font-weight:bold;
             font-size:18px;">
             Invoices Received
@@ -1056,7 +1067,7 @@ ${invoiceRows}
             Total invoiced (ex GST)
             </td>
             <td style="padding:14px 20px;border-top:1px solid ${RC_COLORS.border};color:${RC_COLORS.text};font-weight:bold;text-align:right;">
-            ${centsLabel(invoicedCents)}
+            ${moneyHtml(invoicedCents)}
             </td>
             </tr>
 
@@ -1091,16 +1102,16 @@ ${invoiceRows}
         {
           label: "Approved Quote",
           value: input.quoteGstStated
-            ? `${centsLabel(input.quotedCents)} ex GST`
-            : `${centsLabel(input.quotedCents)} (as quoted)`,
+            ? `${moneyHtml(input.quotedCents)} ex GST`
+            : `${moneyHtml(input.quotedCents)} (as quoted)`,
         },
         {
           label: "Invoiced to Date",
-          value: `${centsLabel(invoicedCents)} ex GST`,
+          value: `${moneyHtml(invoicedCents)} ex GST`,
         },
         {
           label: "Difference",
-          value: `<strong>${centsLabel(overCents)} over the approved quote</strong>`,
+          value: `<strong>${moneyHtml(overCents)} over the approved quote</strong>`,
         },
       ],
       sections: invoicesTable,

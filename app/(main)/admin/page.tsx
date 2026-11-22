@@ -19,7 +19,7 @@ import AdminHubSkeleton from "./loading";
 
 export const metadata: Metadata = {
   title: "Admin",
-  description: "Eight tools for the office.",
+  description: "Nine tools for the office.",
 };
 
 const TOOLS: {
@@ -69,8 +69,15 @@ const TOOLS: {
     id: "whatsapp",
     label: "WhatsApp",
     description:
-      "The connected number, its webhook, and which features are on.",
+      "Lead messaging and calls: the connected number, its webhook, and which features are on.",
     href: "/admin/whatsapp",
+  },
+  {
+    id: "whatsapp-bridge",
+    label: "WhatsApp bridge",
+    description:
+      "Project groups: link Royal's number by QR, and choose which group belongs to which project.",
+    href: "/admin/whatsapp-bridge",
   },
   {
     id: "phone-sms",
@@ -149,7 +156,7 @@ async function AdminHub() {
       <PageHeader
         headingLevel="h1"
         title="Admin"
-        description="Eight tools for the office."
+        description="Nine tools for the office."
       />
       <AdminToolList statuses={statuses} />
     </div>

@@ -582,8 +582,8 @@ enum OutboxEventKind {
   /// One attempt at emailing a variation to the client. Keyed per attempt,
   /// like TRADIE_REQUEST_SEND, so a resend is something somebody pressed.
   VARIATION_EMAIL_SEND
-  /// Asking Meta to create a project's WhatsApp group. Keyed per request, so
-  /// a crashed create is never repeated into a second group.
+  /// Asking the WhatsApp bridge to create a project's group. Keyed per
+  /// attempt, so a crashed create is never repeated into a second group.
   PROJECT_WHATSAPP_GROUP_CREATE
   /// One message sent into a project's WhatsApp group.
   PROJECT_WHATSAPP_SEND
@@ -2317,9 +2317,6 @@ enum WhatsAppUnmatchedReason {
   /// The message reached a business number this deployment is not configured
   /// for. Retained rather than dropped so a misconfiguration is visible.
   UNKNOWN_BUSINESS_NUMBER
-  /// Posted in a WhatsApp group no project is linked to. Filed onto the
-  /// project automatically when someone links that group.
-  UNLINKED_GROUP
 }
 
 enum WhatsAppUnmatchedStatus {
@@ -2436,8 +2433,6 @@ model WhatsAppUnmatchedMessage {
   resolvedById          String?
   resolvedAt            DateTime?
   receivedAt            DateTime
-  /// Meta's group id when the message was posted in a group.
-  providerGroupId       String?
   createdAt             DateTime                @default(now())
 
   resolvedBy User?          @relation("WhatsAppUnmatchedResolver", fields: [resolvedById], references: [id])
@@ -2445,7 +2440,6 @@ model WhatsAppUnmatchedMessage {
 
   @@index([status, receivedAt])
   @@index([fromPhoneE164])
-  @@index([providerGroupId, status])
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -2456,9 +2450,11 @@ model WhatsAppUnmatchedMessage {
 // Blob storage afterwards — Meta's download URL lasts five minutes and the
 // media id thirty days, so the copy is what the office can still open later.
 //
-// Groups: one WhatsApp group per project, created through Meta's Groups API
-// (Official Business Accounts only, so behind WHATSAPP_GROUPS_ENABLED). Rules
-// live in lib/domain/projects/whatsapp.
+// Groups: one WhatsApp group per project, reached through Royal's WhatsApp
+// bridge (services/whatsapp-bridge, a Baileys session linked to Royal's
+// number). Meta's Cloud API is for leads only. Rules live in
+// lib/domain/projects/whatsapp; the bridge's contract in
+// docs/whatsapp-bridge.md.
 // ─────────────────────────────────────────────────────────────────────
 
 enum WhatsAppMediaType {
@@ -2480,10 +2476,20 @@ enum WhatsAppMediaStatus {
 /// One file attached to one WhatsApp message. Exactly one of the three
 /// message references is set; attaching an unmatched message to a lead moves
 /// its media row across rather than copying it.
+/// Who issued a file's `providerMediaId`, and so where it is fetched from.
+enum WhatsAppMediaSource {
+  /// Meta's Cloud API (a lead's or an unmatched message's file).
+  META
+  /// Royal's WhatsApp bridge (a project group's file, by message id).
+  BRIDGE
+}
+
 model WhatsAppMedia {
   id                 String              @id @default(uuid())
-  /// Meta's media id, from the webhook. Used to fetch the file.
+  /// Where to fetch the file: Meta's media id, or the bridge's message id.
   providerMediaId    String
+  /// Which of the two issued `providerMediaId`; the copy uses that one.
+  source             WhatsAppMediaSource @default(META)
   type               WhatsAppMediaType
   mimeType           String?
   /// Meta's SHA-256 of the file, checked against what was downloaded.
@@ -2513,65 +2519,68 @@ model WhatsAppMedia {
 }
 
 enum ProjectWhatsAppGroupStatus {
-  /// Asked Meta to create it; waiting for the group id and invite link.
+  /// The bridge is creating it right now (one request, a few seconds).
   CREATING
   ACTIVE
-  /// Meta refused, or never confirmed. `failureReason` says which.
+  /// The bridge refused, or never answered. `failureReason` says which.
   FAILED
-  /// WhatsApp suspended the group. Messages cannot be sent until it clears.
-  SUSPENDED
-  /// Deleted in WhatsApp. Kept so the history stays readable.
+  /// Royal's number is no longer in the group (removed, or the group was
+  /// deleted). Kept so the history stays readable.
   DELETED
+  /// Staff unlinked it from the project. Kept so the history stays readable;
+  /// the group itself is untouched in WhatsApp and may be linked elsewhere.
+  UNLINKED
 }
 
 enum ProjectWhatsAppGroupOrigin {
   /// Created by the app for this project.
   CREATED
-  /// An existing API-created group someone linked to this project.
+  /// An existing group on Royal's WhatsApp someone linked to this project.
   LINKED
 }
 
 /// A project's WhatsApp group. One per project.
 model ProjectWhatsAppGroup {
-  id                    String                     @id @default(uuid())
-  projectId             String                     @unique
-  /// The Royal number that owns the group, as configured when it was made.
-  businessPhoneNumberId String
-  businessDisplayNumber String
-  /// Meta's group id. Null while CREATING.
-  providerGroupId       String?                    @unique
-  /// Meta's request id for the create call; the lifecycle webhook names it.
-  createRequestId       String?                    @unique
-  subject               String
-  inviteLink            String?
-  inviteLinkAt          DateTime?
-  status                ProjectWhatsAppGroupStatus
-  origin                ProjectWhatsAppGroupOrigin
-  failureReason         String?
-  /// When the current create request went to Meta.
-  requestedAt           DateTime?
+  id                  String                     @id @default(uuid())
+  projectId           String                     @unique
+  /// The group's WhatsApp id (…@g.us). Null while CREATING.
+  providerGroupId     String?                    @unique
+  subject             String
+  inviteLink          String?
+  inviteLinkAt        DateTime?
+  status              ProjectWhatsAppGroupStatus
+  origin              ProjectWhatsAppGroupOrigin
+  failureReason       String?
   /// Bumped by every create request, so each attempt is its own outbox
-  /// intent and a replayed step never asks Meta for a second group.
-  createAttempt         Int                        @default(0)
-  lastMessageAt         DateTime?
-  unreadCount           Int                        @default(0)
-  createdById           String?
-  createdAt             DateTime                   @default(now())
-  updatedAt             DateTime                   @updatedAt
+  /// intent and a replayed request never asks for a second group.
+  createAttempt       Int                        @default(0)
+  /// When this group started belonging to the project (the create request,
+  /// or the link). Messages sent before it are not imported.
+  linkedAt            DateTime?
+  /// The last create went to the bridge and was never confirmed: the group
+  /// may exist. Another create is refused until staff link the group they
+  /// find, or confirm there is none.
+  needsReconciliation Boolean                    @default(false)
+  lastMessageAt       DateTime?
+  unreadCount         Int                        @default(0)
+  createdById         String?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
 
   project      Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy    User?                        @relation("ProjectWhatsAppGroupCreator", fields: [createdById], references: [id])
   messages     ProjectWhatsAppMessage[]
   participants ProjectWhatsAppParticipant[]
 
-  @@index([status, requestedAt])
+  @@index([status])
 }
 
-/// Who is in a project's group, as the participants webhook reported it.
+/// Who is in a project's group, as the bridge last reported it.
 model ProjectWhatsAppParticipant {
   id        String    @id @default(uuid())
   groupId   String
-  /// The participant's WhatsApp id (digits with the country code).
+  /// The participant's WhatsApp id: a phone JID (…@s.whatsapp.net) or a
+  /// private one (…@lid). Never parsed for a number — `phoneE164` is that.
   waId      String
   phoneE164 String?
   joinedAt  DateTime?
@@ -2592,11 +2601,13 @@ model ProjectWhatsAppMessage {
   kind                WhatsAppMessageKind
   /// As the participant sent it, or as Royal sent it. Never HTML.
   body                String                   @db.Text
-  /// Inbound: who in the group wrote it.
+  /// Inbound: who in the group wrote it (their WhatsApp id, as on the
+  /// participant row).
   senderWaId          String?
   senderPhoneE164     String?
   senderName          String?
-  /// Meta's wamid. Unique so a replayed webhook cannot insert a second row.
+  /// WhatsApp's message id, from the bridge. Unique so a redelivered event
+  /// cannot insert a second row.
   providerMessageId   String?                  @unique
   status              WhatsAppMessageStatus
   statusAt            DateTime

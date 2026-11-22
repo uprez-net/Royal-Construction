@@ -1,4 +1,5 @@
 import {
+  errorResponse,
   parseBodyWithResponse,
   parseRouteParamsWithResponse,
   successResponse,
@@ -8,6 +9,7 @@ import { NextRequest } from "next/server";
 import { milestoneCreationSchema } from "@/utils/validators";
 import { MilestoneWithFilesTradiesUpdates } from "@/types/project";
 import { getMilestonesByProject, createMilestone } from "@/lib/data/milestones";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 
 export async function GET(
   _request: NextRequest,
@@ -20,9 +22,15 @@ export async function GET(
   );
   if (!routeParams.success) return routeParams.response;
 
-  const milestones = await getMilestonesByProject(routeParams.data.projectId);
-
-  return successResponse(milestones);
+  try {
+    const milestones = await getMilestonesByProject(routeParams.data.projectId);
+    return successResponse(milestones);
+  } catch (error) {
+    const refused = domainErrorResponse(error);
+    if (refused) return refused;
+    console.error("Milestone list failed", error);
+    return errorResponse("Could not load the activities.", { status: 500 });
+  }
 }
 
 export async function POST(
@@ -37,8 +45,16 @@ export async function POST(
 
   if (!milestoneCreationResult.success) return milestoneCreationResult.response;
 
-  const creationData = milestoneCreationResult.data;
-  const newMilestone = await createMilestone(projectId, creationData);
-
-  return successResponse(newMilestone as MilestoneWithFilesTradiesUpdates);
+  try {
+    const newMilestone = await createMilestone(
+      projectId,
+      milestoneCreationResult.data,
+    );
+    return successResponse(newMilestone as MilestoneWithFilesTradiesUpdates);
+  } catch (error) {
+    const refused = domainErrorResponse(error);
+    if (refused) return refused;
+    console.error("Milestone create failed", error);
+    return errorResponse("Could not add the activity.", { status: 500 });
+  }
 }

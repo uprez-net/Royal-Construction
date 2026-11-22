@@ -539,18 +539,8 @@ test("a copy that cannot be started never fails the delivery", async () => {
   assert.equal(response.status, 200);
 });
 
-test("a group message goes to the project that owns the group, not a lead", async () => {
-  const recorder = recordingDb({
-    "projectWhatsAppGroup.findUnique": {
-      id: "grp-row",
-      lastMessageAt: null,
-      projectId: "p1",
-      status: "ACTIVE",
-    },
-    "projectWhatsAppMessage.create": { id: "pmsg-1", media: null },
-    "projectWhatsAppMessage.findUnique": null,
-    "whatsAppUnmatchedMessage.findUnique": null,
-  });
+test("a group message from Meta is acknowledged and written nowhere: groups use the bridge", async () => {
+  const recorder = recordingDb({});
   const body = delivery({
     contacts: [{ profile: { name: "Ann" }, wa_id: "61412345678" }],
     messages: [
@@ -571,17 +561,15 @@ test("a group message goes to the project that owns the group, not a lead", asyn
     log: quiet,
   });
   assert.equal(response.status, 200);
-  assert.ok(
-    !recorder.calls.some((call) => call.operation === "lead.findMany"),
-    "a group message is never matched to a lead by phone",
+  assert.deepEqual(
+    recorder.calls.filter(
+      (call) =>
+        !call.operation.endsWith("find")
+        && /create|update|upsert/.test(call.operation),
+    ),
+    [],
+    "nothing is filed on a lead or a project",
   );
-  const created = recorder.calls.find(
-    (call) => call.operation === "projectWhatsAppMessage.create",
-  );
-  const data = (created?.args as { data: Record<string, unknown> }).data;
-  assert.equal(data.projectId, "p1");
-  assert.equal(data.body, "Slab looks great");
-  assert.equal(data.senderName, "Ann");
 });
 
 test("a redelivered call-permission reply changes the permission once and writes one history row", async () => {

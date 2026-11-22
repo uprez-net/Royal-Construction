@@ -1,4 +1,4 @@
-import { authorizeMilestone } from "../access/projects";
+import { authorizeMilestoneRecording } from "../access/projects";
 import type { DomainDb } from "../db";
 import {
   DomainAuthorizationError,
@@ -65,7 +65,7 @@ export async function addMilestoneNote(
       "body",
     );
   }
-  await authorizeMilestone(principal, input.milestoneId, db);
+  await authorizeMilestoneRecording(principal, input.milestoneId, db);
 
   return db.milestoneNote.create({
     data: {
@@ -99,7 +99,7 @@ export async function deleteMilestoneNote(
   if (!note || note.milestoneId !== input.milestoneId) {
     throw new DomainNotFoundError("This note was already deleted.");
   }
-  await authorizeMilestone(principal, note.milestoneId, db);
+  await authorizeMilestoneRecording(principal, note.milestoneId, db);
   if (!canDeleteMilestoneNote(principal, note)) {
     throw new DomainAuthorizationError(
       "Only the person who wrote this note, or an admin, can delete it.",

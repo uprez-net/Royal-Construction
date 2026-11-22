@@ -22,11 +22,14 @@ interface TradieManagementClientProps {
     incidentLodged: DataPoint;
     favouriteTradies: DataPoint;
   };
+  /** The office (prices, directory writes); false for a site manager. */
+  isOffice: boolean;
 }
 
 export function TradieManagementClient({
   tradies,
   tradieKPIData,
+  isOffice,
 }: TradieManagementClientProps) {
   const dispatch = useAppDispatch();
 
@@ -52,11 +55,11 @@ export function TradieManagementClient({
 
   return (
     <div className="space-y-6">
-      <TradieHeader />
+      <TradieHeader isOffice={isOffice} />
       <TradieKPI />
       <UnresolvedIncidentsCard />
       <TradieTabs />
-      <TradieBody />
+      <TradieBody isOffice={isOffice} />
     </div>
   );
 }

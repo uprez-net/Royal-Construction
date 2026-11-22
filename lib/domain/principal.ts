@@ -142,16 +142,13 @@ export function requireUserPrincipal(
  * SITE_MANAGER holds the role, so this set separates staff from "a customer"
  * and nothing more: it does NOT say who may see leads, offers, client
  * messages or a project's money. Those ask `isOfficeRole` and
- * `canSeeProjectFinancials`, which leave a site manager out. GUEST is inside
- * this set because that is how `lib/offer/access.ts` has always scoped lead
- * access, and splitting the two rules apart is a change of behaviour, not a
- * refactor.
+ * `canSeeProjectFinancials`, which leave a site manager out. GUEST is not in
+ * this set. It is "Access pending": an account nobody has
+ * approved yet, which the team screen can also set a person back to. It is
+ * not staff, and no channel grants it staff access, the operations agent's
+ * MCP bearer tokens included.
  */
-export const INTERNAL_ROLES: readonly Role[] = [
-  Role.ADMIN,
-  Role.SITE_MANAGER,
-  Role.GUEST,
-];
+export const INTERNAL_ROLES: readonly Role[] = [Role.ADMIN, Role.SITE_MANAGER];
 
 const INTERNAL_ROLE_SET: ReadonlySet<Role> = new Set(INTERNAL_ROLES);
 
@@ -189,9 +186,8 @@ export function isInternalPrincipal(principal: DomainPrincipal): boolean {
  * widening one into the other is how a site manager ended up reading every
  * client's pending calls.
  *
- * GUEST stays inside, for the same reason it stays in `INTERNAL_ROLES`: that is
- * how lead access has always been scoped, and `proxy.ts` already turns a GUEST
- * away from every page.
+ * GUEST is not in here either: it is not office, so it cannot see leads,
+ * offers, the agent or the office's figures, and it cannot be assigned a lead.
  */
 export const OFFICE_ROLES: readonly Role[] = INTERNAL_ROLES.filter(
   (role) => role !== Role.SITE_MANAGER,

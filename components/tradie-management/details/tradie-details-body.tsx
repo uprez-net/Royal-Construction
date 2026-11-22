@@ -140,7 +140,7 @@ export function TradieBusinessDetailsCard() {
   );
 }
 
-export function TradiePriorityCard() {
+export function TradiePriorityCard({ isOffice }: { isOffice: boolean }) {
   const dispatch = useAppDispatch();
   const tradieDetails = useAppSelector(
     (state) => state.tradieManagement.selectedTradieDetails,
@@ -206,21 +206,23 @@ export function TradiePriorityCard() {
         </div>
 
         <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-          <div>
-            <div className="text-xs text-muted-foreground">
-              Last quoted price
-            </div>
+          {isOffice && (
+            <div>
+              <div className="text-xs text-muted-foreground">
+                Last quoted price
+              </div>
 
-            {lastQuotedPriceLabel ? (
-              <div className="font-mono text-lg font-semibold tabular-nums">
-                {lastQuotedPriceLabel}
-              </div>
-            ) : (
-              <div className="text-lg font-semibold text-muted-foreground">
-                Not set
-              </div>
-            )}
-          </div>
+              {lastQuotedPriceLabel ? (
+                <div className="font-mono text-lg font-semibold tabular-nums">
+                  {lastQuotedPriceLabel}
+                </div>
+              ) : (
+                <div className="text-lg font-semibold text-muted-foreground">
+                  Not set
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <div className="text-xs text-muted-foreground">Total jobs</div>

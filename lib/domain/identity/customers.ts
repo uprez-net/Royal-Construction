@@ -35,17 +35,28 @@ export type PaginatedLookupResult<T> = {
 
 const defaultPageSize = 10;
 
+/**
+ * May this caller browse every customer? The office only: a site manager is
+ * staff for projects, not for the client list.
+ *
+ * Exported so the cached adapter can ask before entering its cache boundary,
+ * and the route answers the refusal as a 403 rather than a 500 (#569).
+ */
+export function assertCanBrowseCustomers(principal: DomainPrincipal): void {
+  if (!isOfficePrincipal(principal)) {
+    throw new DomainAuthorizationError(
+      "Only staff can browse the customer list.",
+    );
+  }
+}
+
 /** The customer picker on the project wizard. Staff only — it lists everyone. */
 export async function listCustomersForDropdown(
   principal: DomainPrincipal,
   input: { page?: number; limit?: number; query?: string },
   db: DomainDb,
 ): Promise<PaginatedLookupResult<CustomerDropdownItem>> {
-  if (!isOfficePrincipal(principal)) {
-    throw new DomainAuthorizationError(
-      "Only staff can browse the customer list.",
-    );
-  }
+  assertCanBrowseCustomers(principal);
 
   const page =
     Number.isFinite(input.page ?? 1) && (input.page ?? 1) > 0

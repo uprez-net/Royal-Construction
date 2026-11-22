@@ -1,6 +1,6 @@
 import type { DomainDb } from "../db";
 import { DomainNotFoundError } from "../errors";
-import { authorizeProject } from "../access/projects";
+import { assertCanBookTradies, authorizeProject } from "../access/projects";
 import type { DomainPrincipal } from "../principal";
 
 /**
@@ -21,6 +21,7 @@ export async function dismissTradieScheduleAlerts(
   },
   db: DomainDb,
 ): Promise<{ readonly dismissed: readonly string[] }> {
+  assertCanBookTradies(principal);
   await authorizeProject(principal, input.projectId, db);
 
   const ids = [...new Set(input.scheduleIds)];

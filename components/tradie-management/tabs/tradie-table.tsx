@@ -32,13 +32,20 @@ function formatPrice(price: string | null, unit: "HOURLY" | "FIXED") {
 
 export function TradieTable({
   filteredTradies,
+  isOffice,
 }: {
   filteredTradies: TradieRow[];
+  isOffice: boolean;
 }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { query } = useAppSelector((state) => state.tradieManagement);
   const filtersActive = hasActiveTradieFilters(query);
+  // The last quoted price is the office's: a site manager gets no price column
+  // (index 2 in each of the header, align and cell lists below).
+  const align = isOffice
+    ? COLUMN_ALIGN
+    : COLUMN_ALIGN.filter((_, index) => index !== 2);
 
   // Below md the rows are ring cards, which need the card's padding; from md the
   // table sits edge to edge in the card. Same split as the Leads skeleton.
@@ -48,17 +55,21 @@ export function TradieTable({
         flush
         mobileLayout="cards"
         mobileActionsPlacement="header"
-        caption="Tradies with their trade, last quoted price, rating, completed jobs and incident counts."
+        caption={
+          isOffice
+            ? "Tradies with their trade, last quoted price, rating, completed jobs and incident counts."
+            : "Tradies with their trade, rating, completed jobs and incident counts."
+        }
         headers={[
           "Tradie",
           "Trade",
-          "Last Quoted Price",
+          ...(isOffice ? ["Last Quoted Price"] : []),
           "Rating",
           "Jobs",
           "Incidents",
           "Actions",
         ]}
-        align={COLUMN_ALIGN}
+        align={align}
         rows={filteredTradies.map((tradie) => [
           <Link
             key={`name-${tradie.id}`}
@@ -75,11 +86,18 @@ export function TradieTable({
               <TradieBadge key={trade} trade={trade} />
             ))}
           </span>,
-          <span key={`rate-${tradie.id}`} className="whitespace-nowrap">
-            <span className="font-mono tabular-nums">
-              {formatPrice(tradie.lastQuotedPrice, tradie.lastQuotedPriceUnit)}
-            </span>
-          </span>,
+          ...(isOffice
+            ? [
+                <span key={`rate-${tradie.id}`} className="whitespace-nowrap">
+                  <span className="font-mono tabular-nums">
+                    {formatPrice(
+                      tradie.lastQuotedPrice,
+                      tradie.lastQuotedPriceUnit,
+                    )}
+                  </span>
+                </span>,
+              ]
+            : []),
           <RatingStars
             rating={parseFloat(tradie.rating ?? "0")}
             key={`rating-${tradie.id}`}
@@ -106,6 +124,7 @@ export function TradieTable({
           </span>,
           <TradieActionsDropdown
             tradieRow={tradie}
+            isOffice={isOffice}
             key={`actions-${tradie.id}`}
           />,
         ])}
@@ -126,7 +145,9 @@ export function TradieTable({
               <p className="text-xs text-muted-foreground">
                 {filtersActive
                   ? "Try a broader search, or clear the filters to see every tradie."
-                  : "Add your first tradie to start tracking rates, jobs and incidents."}
+                  : isOffice
+                    ? "Add your first tradie to start tracking rates, jobs and incidents."
+                    : "The office adds tradies. They appear here once registered."}
               </p>
             </div>
 

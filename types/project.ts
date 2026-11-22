@@ -32,8 +32,13 @@ import type { ProjectDocument } from "@/lib/domain/projects/document-tags";
 
 export interface SafeProject extends Omit<
   Project,
-  "totalBudget" | "spent" | "lotSize" | "requirements"
+  "totalBudget" | "spent" | "lotSize" | "requirements" | "leadId"
 > {
+  /**
+   * The lead this project was converted from. Null on a payload for a caller
+   * who is not the office (a site manager): the lead is the sales record.
+   */
+  leadId: number | null;
   totalBudget: string;
   spent: string;
   lotSize?: string;
@@ -310,7 +315,7 @@ export interface MilestoneWithFilesTradiesUpdates extends SafeMilestone {
 
 export interface ProjectWithStats extends SafeProject {
   customer: Customer;
-  siteManager: User | null;
+  siteManager: SiteManagerSummary | null;
   milestones: {
     id: string;
     name: string;
@@ -343,14 +348,52 @@ export interface ActivityLogWithAuthor extends ActivityLog {
 export interface ProjectDetail extends SafeProject {
   customer: Customer;
   siteManager: SiteManagerSummary | null;
+  /**
+   * The lead this project came from and its sales email thread. Null for a
+   * caller who is not the office: the customer's own contact details are on
+   * `customer`, and the lead is the sales side's (#570).
+   */
   lead: {
     id: number;
     email: string;
     type: string;
     location: string;
     emails: LeadEmails[];
+  } | null;
+  /**
+   * What the caller may record on this project, decided by the rules the
+   * commands enforce, so the page draws only actions that will be accepted.
+   * A site manager reads every project and records site work on every one
+   * (`record`); the rest of managing it stays with the office or the assigned
+   * site manager (`manage`).
+   */
+  viewerAccess: {
+    /** `canManageProject`: planning activities, variations, materials. */
+    manage: boolean;
+    /**
+     * `canRecordOnProject`: checklists, an activity's progress, notes and
+     * photos, and posting in the WhatsApp group. Every site manager, every
+     * project.
+     */
+    record: boolean;
+    /** `canBookTradies`: quotes, bookings, reminders. The office only. */
+    book: boolean;
+    /** `canSeeProjectHistory`: the History tab. The office only. */
+    history: boolean;
+    /**
+     * `canEditProject`: the Overview tab's own fields and start date. Wider
+     * than `manage` by the lead's assignee, so it is decided on its own.
+     */
+    edit: boolean;
+    /** `canWorkComplianceFile`: the Compliance tab's uploads and sends. */
+    compliance: boolean;
   };
   activityLogs: ActivityLogWithAuthor[];
+  /**
+   * Fingerprint of `requirements` as this caller was shown them; the Overview
+   * sends it back so a save from an out-of-date copy is refused (#562).
+   */
+  requirementsVersion?: string;
   milestones: MilestoneWithFilesTradiesUpdates[];
   siteUpdates: SiteUpdateWithAuthorAndMilestone[];
   variations: SafeVariation[];

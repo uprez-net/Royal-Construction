@@ -10,8 +10,11 @@
  * swapping a realtime model's slug for this one does not select it (AI
  * Gateway refuses it there with `invalid_model`). It cannot call tools
  * either — the call desk below decides when the call moves on.
+ *
+ * GPT-Live 1.1 since 2026-11-21: same socket, protocol and per-hour price as
+ * GPT-Live 1 on AI Gateway, so only the slug changed.
  */
-export const VOICE_AGENT_MODEL = "openai/gpt-live-1";
+export const VOICE_AGENT_MODEL = "openai/gpt-live-1.1";
 
 /**
  * The call desk (desk.ts): a fast text model on AI Gateway that reads the

@@ -182,13 +182,14 @@ test("no port is built while WhatsApp is off", () => {
   );
 });
 
-// ── Groups and media ─────────────────────────────────────────────────────────
+// ── Media ────────────────────────────────────────────────────────────────────
+// Leads only: project groups go through the WhatsApp bridge, and the Cloud API
+// port no longer has a groups capability at all.
 
-const groupsConfig = readWhatsAppConfig({
+const mediaConfig = readWhatsAppConfig({
   WHATSAPP_ACCESS_TOKEN: TOKEN,
   WHATSAPP_APP_SECRET: "secret",
   WHATSAPP_ENABLED: "true",
-  WHATSAPP_GROUPS_ENABLED: "true",
   WHATSAPP_PHONE_NUMBERS: "109876543210987=+61280001234=Office",
   WHATSAPP_WEBHOOK_VERIFY_TOKEN: "verify",
 });
@@ -200,53 +201,16 @@ function json(body: unknown, status = 200) {
   });
 }
 
-test("groups exist on the port only when WHATSAPP_GROUPS_ENABLED is on", () => {
-  assert.equal(createCloudApiWhatsAppPort(config)?.groups ?? null, null);
-  assert.ok(createCloudApiWhatsAppPort(groupsConfig)?.groups);
-});
-
-test("a group message is addressed to the group id with recipient_type group", async () => {
-  const calls: { url: string; body: Record<string, unknown> }[] = [];
-  const port = createCloudApiWhatsAppPort(groupsConfig, (async (
-    url: string | URL | Request,
-    init?: RequestInit,
-  ) => {
-    calls.push({ body: JSON.parse(String(init?.body)), url: String(url) });
-    return json({ messages: [{ id: "wamid.G" }] });
-  }) as typeof fetch);
-  const receipt = await port?.groups?.sendText({
-    body: "Pour is Friday",
-    fromPhoneNumberId: "109876543210987",
-    groupId: "GROUP-1",
-  });
-  assert.equal(receipt?.providerMessageId, "wamid.G");
-  assert.match(calls[0].url, /\/109876543210987\/messages$/);
-  assert.equal(calls[0].body.recipient_type, "group");
-  assert.equal(calls[0].body.to, "GROUP-1");
-});
-
-test("a group create answers with Meta's request id", async () => {
-  const port = createCloudApiWhatsAppPort(groupsConfig, (async () =>
-    json({
-      messaging_product: "whatsapp",
-      request_id: "REQ-1",
-    })) as typeof fetch);
-  const receipt = await port?.groups?.create({
-    description: "d",
-    fromPhoneNumberId: "109876543210987",
-    subject: "s",
-  });
-  assert.deepEqual(receipt, {
-    groupId: null,
-    inviteLink: null,
-    requestId: "REQ-1",
-  });
+test("the Cloud API port has no groups capability", () => {
+  const port = createCloudApiWhatsAppPort(mediaConfig);
+  assert.ok(port);
+  assert.equal("groups" in port, false);
 });
 
 test("media larger than the limit is refused as permanent before downloading", async () => {
   const { createCloudApiMediaPort } = await import("@/lib/whatsapp/cloud-api");
   const urls: string[] = [];
-  const download = createCloudApiMediaPort(groupsConfig, (async (
+  const download = createCloudApiMediaPort(mediaConfig, (async (
     url: string | URL | Request,
   ) => {
     urls.push(String(url));
@@ -267,7 +231,7 @@ test("media larger than the limit is refused as permanent before downloading", a
 
 test("expired media (code 100) is permanent; the token goes on the download too", async () => {
   const { createCloudApiMediaPort } = await import("@/lib/whatsapp/cloud-api");
-  const expired = createCloudApiMediaPort(groupsConfig, (async () =>
+  const expired = createCloudApiMediaPort(mediaConfig, (async () =>
     json(
       { error: { code: 100, message: "Unsupported get request" } },
       400,
@@ -278,7 +242,7 @@ test("expired media (code 100) is permanent; the token goes on the download too"
   );
 
   const auth: (string | null)[] = [];
-  const ok = createCloudApiMediaPort(groupsConfig, (async (
+  const ok = createCloudApiMediaPort(mediaConfig, (async (
     url: string | URL | Request,
     init?: RequestInit,
   ) => {
@@ -303,7 +267,7 @@ test("media with no declared size stops downloading once it passes the limit", a
   const { createCloudApiMediaPort } = await import("@/lib/whatsapp/cloud-api");
   let pulled = 0;
   let cancelled = false;
-  const download = createCloudApiMediaPort(groupsConfig, (async (
+  const download = createCloudApiMediaPort(mediaConfig, (async (
     url: string | URL | Request,
   ) =>
     String(url).includes("lookaside")

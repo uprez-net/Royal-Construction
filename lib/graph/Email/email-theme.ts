@@ -3,25 +3,33 @@
 export const RC_SITE = "https://royalconstructions.com.au";
 export const RC_MAIN_APP = "https://royal-construction-chi.vercel.app";
 
+/**
+ * Client-document palette, DESIGN.md §5. Charcoal on white, warm neutrals.
+ * `gold` is the gold-ink #926100: text, links, buttons and indicators all
+ * read against white (5.34:1). The brand gold #c6923a is `brandGold`, and it
+ * is only the letterhead bar, the footer rule and table-header underlines:
+ * as text it measures 2.77:1, and it never carries white text.
+ */
 export const RC_COLORS = {
-  dark: "#F1EDE3",
-  container: "#F7F5EF",
-  card: "#FCFBF7",
-  border: "#DED9CE",
-  footer: "#EEEAE1",
-  gold: "#C6923A",
-  goldLight: "#D4A034",
+  dark: "#F1EFE9",
+  container: "#F7F6F2",
+  card: "#FFFFFF",
+  border: "#E6E2D9",
+  footer: "#F1EFE9",
+  gold: "#926100",
+  brandGold: "#C6923A",
+  goldWash: "#FBF6EC",
   white: "#FFFFFF",
-  text: "#334155",
-  muted: "#667085",
-  dimmed: "#98A2B3",
+  text: "#343434",
+  muted: "#6B675F",
+  dimmed: "#6B675F",
   light: "#F7F6F2",
-  label: "#5B6573",
-  highlight: "#E8E4DA",
-  ctaText: "#2F3742",
-  accreditedLabel: "#5B6573",
-  textOnLight: "#2F3742",
-  textMutedOnLight: "#667085",
+  label: "#6B675F",
+  highlight: "#F1EFE9",
+  ctaText: "#343434",
+  accreditedLabel: "#6B675F",
+  textOnLight: "#343434",
+  textMutedOnLight: "#6B675F",
 } as const;
 
 export const RC_URLS = {
@@ -57,8 +65,8 @@ export const LOGO_EMAIL = {
 
 export function getAppAssetUrl(path: string): string {
   const base =
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ??
-    "http://localhost:3000";
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "")
+    ?? "http://localhost:3000";
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
@@ -71,9 +79,18 @@ export const RC_URLS_APP = {
     "https://udafiztdzg1cn8u2.public.blob.vercel-storage.com/public-file/Royal_Constructions_Builder_Profile_1.pdf",
 } as const;
 
+/**
+ * DESIGN.md §5: email clients may not load web fonts, so every stack falls back.
+ * Names are single-quoted so a stack can sit inside a double-quoted style="".
+ */
 export const FONTS = {
-  condensed: '"IBM Plex Sans Condensed", "Arial Narrow", Arial, sans-serif',
-  body: "Inter, Arial, sans-serif",
+  /** Headings. Georgia stands in for Fraunces, which email clients do not load. */
+  heading: "Georgia, 'Times New Roman', serif",
+  /** Small uppercase labels and button text. */
+  label: "Manrope, 'Segoe UI', Helvetica, Arial, sans-serif",
+  body: "Manrope, 'Segoe UI', Helvetica, Arial, sans-serif",
+  /** Money, dates and reference codes. */
+  mono: "'IBM Plex Mono', Menlo, Consolas, monospace",
 } as const;
 
 export const RESPONSIVE_CSS = `
@@ -96,24 +113,19 @@ export const RESPONSIVE_CSS = `
 
 export const FONT_FACES_CSS = `
 @font-face {
-  font-family: 'IBM Plex Sans Condensed'; font-style: normal; font-weight: 500;
+  font-family: 'Manrope'; font-style: normal; font-weight: 400;
   mso-font-alt: 'Arial';
-  src: url(https://fonts.gstatic.com/s/ibmplexsanscondensed/v15/Gg8gN4UfRSqiPg7Jn2ZI12V4DCEwkj1E4LVeHY5a64vr.ttf) format('truetype');
+  src: url(https://fonts.gstatic.com/s/manrope/v23/xn7_YHE41ni1AdIRqAuZuw1Bx9mbZk79FN_C-b8.woff) format('woff');
 }
 @font-face {
-  font-family: 'Inter'; font-style: normal; font-weight: 300;
+  font-family: 'Manrope'; font-style: normal; font-weight: 500;
   mso-font-alt: 'Arial';
-  src: url(https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuOKfMZg.ttf) format('truetype');
+  src: url(https://fonts.gstatic.com/s/manrope/v23/xn7_YHE41ni1AdIRqAuZuw1Bx9mbZk7PFN_C-b8.woff) format('woff');
 }
 @font-face {
-  font-family: 'Inter'; font-style: normal; font-weight: 400;
+  font-family: 'Manrope'; font-style: normal; font-weight: 600;
   mso-font-alt: 'Arial';
-  src: url(https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2) format('woff2');
-}
-@font-face {
-  font-family: 'Inter'; font-style: normal; font-weight: 500;
-  mso-font-alt: 'Arial';
-  src: url(https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuI6fMZg.ttf) format('truetype');
+  src: url(https://fonts.gstatic.com/s/manrope/v23/xn7_YHE41ni1AdIRqAuZuw1Bx9mbZk4jE9_C-b8.woff) format('woff');
 }`;
 
 export const TAILWIND_CONFIG = {

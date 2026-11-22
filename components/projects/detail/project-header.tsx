@@ -190,41 +190,46 @@ export function ProjectHeader({
                 <span className="font-mono tabular-nums">{pcaInspector}</span>
               )}
             </span>
-            <span aria-hidden="true" className="hidden sm:inline">
-              |
-            </span>
-            <span
-              className="inline-flex items-center gap-1"
-              key={hbcfInsuranceNumber}
-            >
-              <ShieldCheck className="size-3.5" aria-hidden="true" />
-              HBCF Number{" "}
-              {hbcfInsuranceMissing ? (
-                showHbcfWarning ? (
-                  <Link
-                    href={legalSectionAnchor}
-                    aria-label="HBCF number not set — click to add"
-                    className="inline-flex items-center gap-1 rounded-md text-warning-ink transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                  >
-                    <StatusPill tone="warning">
-                      <Plus className="size-3" aria-hidden="true" />
-                      Not set
-                    </StatusPill>
-                  </Link>
-                ) : (
-                  <Link
-                    href={legalSectionAnchor}
-                    className="rounded-md text-warning-ink transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                  >
-                    {NOT_SET}
-                  </Link>
-                )
-              ) : (
-                <span className="font-mono tabular-nums">
-                  {hbcfInsuranceNumber}
+            {/* HBCF is the office's to file: a site manager sees no HBCF number. */}
+            {project.financialsHidden ? null : (
+              <>
+                <span aria-hidden="true" className="hidden sm:inline">
+                  |
                 </span>
-              )}
-            </span>
+                <span
+                  className="inline-flex items-center gap-1"
+                  key={hbcfInsuranceNumber}
+                >
+                  <ShieldCheck className="size-3.5" aria-hidden="true" />
+                  HBCF Number{" "}
+                  {hbcfInsuranceMissing ? (
+                    showHbcfWarning ? (
+                      <Link
+                        href={legalSectionAnchor}
+                        aria-label="HBCF number not set — click to add"
+                        className="inline-flex items-center gap-1 rounded-md text-warning-ink transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      >
+                        <StatusPill tone="warning">
+                          <Plus className="size-3" aria-hidden="true" />
+                          Not set
+                        </StatusPill>
+                      </Link>
+                    ) : (
+                      <Link
+                        href={legalSectionAnchor}
+                        className="rounded-md text-warning-ink transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      >
+                        {NOT_SET}
+                      </Link>
+                    )
+                  ) : (
+                    <span className="font-mono tabular-nums">
+                      {hbcfInsuranceNumber}
+                    </span>
+                  )}
+                </span>
+              </>
+            )}
           </div>
           {/* Its own line: who runs the build is a different kind of fact
               from the contract dates and certificates above it. */}
@@ -310,7 +315,10 @@ export function ProjectHeader({
           )}
         </div>
         <div className="flex flex-wrap gap-2 pt-1">
-          <ProjectWhatsAppHeaderButton projectId={project.id} />
+          <ProjectWhatsAppHeaderButton
+            projectId={project.id}
+            isAdmin={canAssignSiteManager}
+          />
           <UploadButton
             projectId={project.id}
             maxFiles={5}

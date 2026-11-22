@@ -55,6 +55,8 @@ export type ProjectDocument = {
   readonly tags: string[];
   /** Whether this tab may delete it: only a file the project owns outright. */
   readonly deletable: boolean;
+  /** For a file filed on the compliance file: what it was filed as. */
+  readonly complianceDocumentType?: ComplianceDocumentType | null;
 };
 
 /** The File columns describing one needs. */
@@ -146,6 +148,7 @@ export function describeProjectFile(
       file.projectId === context.projectId
       && !file.complianceDocumentId
       && !file.incidentId,
+    complianceDocumentType: context.compliance?.documentType ?? null,
   };
 }
 
@@ -175,4 +178,15 @@ export function mergeDocumentsByUrl(
     });
   }
   return [...byUrl.values()];
+}
+
+/**
+ * The filename rule for the tender and the contract, which carry the price in
+ * full. A guess from the name, so the redaction tries the file id and tags
+ * first; the Documents tab hides the same files from a non-admin with it.
+ */
+export function isTenderOrContractName(name: string | null | undefined) {
+  if (!name) return false;
+  const lower = name.toLowerCase();
+  return lower.includes("tender") || lower.includes("contract");
 }

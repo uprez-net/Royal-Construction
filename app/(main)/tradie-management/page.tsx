@@ -30,14 +30,14 @@ export default async function TradieManagementPage() {
 
   // Each row carries the tradie's last quoted price; a site manager does not
   // see tradie prices (`canSeeProjectFinancials`). The KPIs are counts only.
+  // `isOffice` also gates the directory writes and the export, which are the
+  // office's (a site manager records site work, not tradie commercials).
+  const isOffice = canSeeProjectFinancials(principal);
   return (
     <TradieManagementClient
-      tradies={
-        canSeeProjectFinancials(principal)
-          ? tradies
-          : withoutTradieQuotes(tradies)
-      }
+      tradies={isOffice ? tradies : withoutTradieQuotes(tradies)}
       tradieKPIData={kpiData}
+      isOffice={isOffice}
     />
   );
 }

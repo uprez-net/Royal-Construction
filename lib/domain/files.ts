@@ -1,4 +1,8 @@
-import type { File as PrismaFile, Role } from "@prisma/client";
+import {
+  type ComplianceDocumentType,
+  type File as PrismaFile,
+  Role,
+} from "@prisma/client";
 
 import type { DomainDb } from "./db";
 import {
@@ -7,10 +11,19 @@ import {
   DomainSideEffectError,
   DomainValidationError,
 } from "./errors";
-import { authorizeFileAttachment } from "./access/projects";
+import {
+  authorizeFileAttachment,
+  canSeeProjectFinancials,
+} from "./access/projects";
 import { authorizeLead } from "./access/leads";
+import { canWorkComplianceFile } from "./access/compliance";
+import {
+  isBuildDocumentType,
+  officeOnlyFileMatcher,
+} from "./projects/financial-redaction";
 import {
   isInternalPrincipal,
+  isOfficePrincipal,
   isUserPrincipal,
   requireUserPrincipal,
   type DomainPrincipal,
@@ -35,6 +48,96 @@ export type SaveFileInput = {
   readonly tags?: readonly unknown[] | null;
   readonly origin?: string | null;
 };
+
+/** The part of a File row that decides who may open it. */
+export type ReadableFile = {
+  readonly id: string;
+  readonly url: string;
+  readonly filename: string;
+  readonly tags: readonly string[] | null;
+  readonly uploadedBy: string;
+  readonly leadId: number | null;
+  readonly complianceDocument: {
+    readonly documentType: ComplianceDocumentType;
+    /**
+     * A file received by email is filed on the compliance file with no
+     * `projectId` of its own; its project is the engagement's.
+     */
+    readonly engagement: { readonly project: ReadableProject } | null;
+  } | null;
+  readonly project: ReadableProject | null;
+};
+
+type ReadableProject = {
+  readonly siteManagerId: string | null;
+  readonly customerId: string;
+  readonly Lead: { readonly assignedId: string | null } | null;
+  /** For the HBCF and tender/contract links (`officeOnlyFileMatcher`). */
+  readonly requirements: unknown;
+};
+
+/**
+ * May this caller open this stored file?
+ *
+ * Three kinds of file, three owners. A lead's file is the office's, as the
+ * lead is (`isOfficePrincipal`), even one now linked to a project: the project
+ * detail hides those from a site manager too (`files` in
+ * `hideDetailProjectFinancials`). A compliance file follows
+ * `canWorkComplianceFile`, with one exception the owner set on 2026-11-20: the
+ * build documents (plans, survey, approvals) stay with the site manager of
+ * that project. Any other project file is open to whoever uploaded it and to
+ * the project's site manager.
+ */
+export function canReadFile(
+  principal: DomainPrincipal,
+  file: ReadableFile,
+): boolean {
+  if (principal.kind === "system") return true;
+  if (!isUserPrincipal(principal)) return false;
+  if (file.leadId !== null) return isOfficePrincipal(principal);
+  if (principal.role === Role.ADMIN) return true;
+  // A file received by email onto the compliance file has no projectId of its
+  // own; its project is the engagement's.
+  const project =
+    file.project ?? file.complianceDocument?.engagement?.project ?? null;
+  // The HBCF certificate and claims, and the tender and contract, are the
+  // office's however and wherever they were filed — the compliance file
+  // included: the project detail hides them from anyone who cannot see the
+  // money (`hideDetailProjectFinancials`), so the download does too. Checked
+  // before the compliance rule, which would otherwise admit them.
+  if (
+    !canSeeProjectFinancials(principal)
+    && officeOnlyFileMatcher(project?.requirements)({
+      id: file.id,
+      name: file.filename,
+      tags: file.tags,
+      url: file.url,
+    })
+  ) {
+    return false;
+  }
+  if (file.complianceDocument !== null) {
+    if (
+      project !== null
+      && canWorkComplianceFile(principal, {
+        customerId: project.customerId,
+        leadAssignedId: project.Lead?.assignedId ?? null,
+        siteManagerId: project.siteManagerId,
+      })
+    ) {
+      return true;
+    }
+    return (
+      principal.role === Role.SITE_MANAGER
+      && project?.siteManagerId === principal.userId
+      && isBuildDocumentType(file.complianceDocument.documentType)
+    );
+  }
+  return (
+    file.uploadedBy === principal.userId
+    || file.project?.siteManagerId === principal.userId
+  );
+}
 
 /**
  * Decide whether one Blob URL is this lead's to delete.

@@ -16,6 +16,7 @@ import {
   describePrincipal,
   isOfficeRole,
   requireAdminPrincipal,
+  systemPrincipal,
   type DomainPrincipal,
 } from "../principal";
 import {
@@ -317,7 +318,9 @@ async function assertRoleChangeAllowed(
   // the office's (`assertOfficeAssignee`), so someone leaving the office —
   // to site manager most often — hands theirs over first. Refused rather
   // than reassigned here: who takes them is the office's call.
-  if (isOfficeRole(current.role) && !isOfficeRole(newRole)) {
+  // Any move to a role outside the office, from wherever: a GUEST (not office
+  // since #561) can still hold leads assigned before then.
+  if (current.role !== newRole && !isOfficeRole(newRole)) {
     const [leads, tasks] = await Promise.all([
       db.lead.count({ where: { assignedId: current.id } }),
       db.leadTask.count({
@@ -358,6 +361,43 @@ export async function checkTeamMemberRoleChange(
   });
   if (!current) throw new DomainNotFoundError("Team member not found.");
   await assertRoleChangeAllowed(current, input.newRole, db);
+}
+
+/**
+ * The role the Clerk webhook may store for a `user.updated` event.
+ *
+ * A role changed directly in the Clerk dashboard arrives here without the team
+ * screen's checks, so this runs the same two rules before the write. A refusal
+ * keeps the stored role and says so in `refusedRole`, so the route can write
+ * that role back to Clerk and the two agree. The echo of that write carries the
+ * stored role, so it takes the no-change branch and does not loop.
+ *
+ * A missing row or an unreadable role is left to the caller as before. Only a
+ * domain refusal is caught; a database error propagates, so Clerk retries.
+ */
+export async function clerkRoleToStore(
+  input: { clerkUserId: string; clerkRole: Role | undefined },
+  db: DomainDb,
+): Promise<{ write: Role | undefined; refusedRole: Role | null }> {
+  if (!input.clerkRole) return { refusedRole: null, write: undefined };
+  const stored = await db.user.findUnique({
+    select: { id: true, role: true },
+    where: { clerkId: input.clerkUserId },
+  });
+  if (!stored || stored.role === input.clerkRole) {
+    return { refusedRole: null, write: input.clerkRole };
+  }
+  try {
+    await checkTeamMemberRoleChange(
+      systemPrincipal("clerk-webhook"),
+      { newRole: input.clerkRole, userId: stored.id },
+      db,
+    );
+    return { refusedRole: null, write: input.clerkRole };
+  } catch (error) {
+    if (!(error instanceof DomainTransitionError)) throw error;
+    return { refusedRole: stored.role, write: undefined };
+  }
 }
 
 /**

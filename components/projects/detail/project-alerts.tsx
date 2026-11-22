@@ -356,6 +356,13 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
     );
   };
 
+  // Every line here is a booking to chase or a compliance condition, and the
+  // Send reminder and Resolve controls act on them. A caller who cannot book
+  // (a site manager) is not offered the card at all.
+  if (!project.viewerAccess.book) {
+    return null;
+  }
+
   // Empty chrome was eating a full card slot between the budget cards and the
   // tabs on every quiet project. Alerts only earn the surface when there is
   // something to act on; the "none" case is silence, not a placeholder panel.

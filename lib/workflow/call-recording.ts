@@ -3,7 +3,10 @@ import { FatalError, RetryableError, getStepMetadata } from "workflow";
 
 import { vercelRecordingBlobPut } from "@/lib/blob-port";
 import { commsRuntimeFromEnv } from "@/lib/comms/factory";
-import { gatewayCallTranscription } from "@/lib/comms/transcription";
+import {
+  gatewayCallTranscription,
+  gatewayTranscriptSpeakers,
+} from "@/lib/comms/transcription";
 import { storeCallRecording } from "@/lib/domain/comms/calls/recordings";
 import { transcribeCallRecording } from "@/lib/domain/comms/calls/transcripts";
 import { DomainSideEffectError, isDomainError } from "@/lib/domain/errors";
@@ -64,7 +67,10 @@ async function transcribeOne(recordingId: string): Promise<string> {
       systemPrincipal("workflow:call-recording"),
       { recordingId },
       prisma,
-      { transcribe: gatewayCallTranscription },
+      {
+        speakers: gatewayTranscriptSpeakers,
+        transcribe: gatewayCallTranscription,
+      },
     );
   } catch (error) {
     // A model failure was already reported by the wrapped gateway (vendor ai,

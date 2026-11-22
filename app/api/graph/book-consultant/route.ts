@@ -396,7 +396,17 @@ async function upsertBookingNotes({
 
 export async function POST(req: NextRequest): Promise<Response> {
   try {
-    const body = await req.json();
+    // This route is on the open internet: a body that is not a JSON object is
+    // the sender's mistake (400), not ours, and must not reach Sentry as a 500.
+    const parsed: unknown = await req.json().catch(() => undefined);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return NextResponse.json(
+        { error: "The request body must be a JSON object." },
+        { status: 400 },
+      );
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the fields are checked one by one below, as they were when this was `req.json()`'s own `any`
+    const body = parsed as Record<string, any>;
     const { name = "Client", email, startDateTime, notes } = body;
 
     if (!name || !email || !startDateTime) {

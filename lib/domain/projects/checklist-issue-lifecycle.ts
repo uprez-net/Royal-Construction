@@ -5,7 +5,7 @@ import {
   ChecklistSignaturePurpose,
 } from "@prisma/client";
 
-import { authorizeProject } from "../access/projects";
+import { authorizeProjectRecording } from "../access/projects";
 import type { DomainDb, TransactionalDomainDb } from "../db";
 import { DomainTransitionError, DomainValidationError } from "../errors";
 import type { DomainPrincipal } from "../principal";
@@ -47,7 +47,7 @@ export async function changeChecklistIssueStatus(
   db: DomainDb,
   now: Date = new Date(),
 ): Promise<{ readonly status: ChecklistIssueStatus }> {
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   const actor = await checklistActor(principal, db);
   const issue = await loadIssue(input, db);
   await loadChecklist(
@@ -133,7 +133,7 @@ export async function verifyChecklistIssue(
   const note = text(input.note, CHECKLIST_LIMITS.note, "note") || null;
 
   return db.$transaction(async (tx) => {
-    await authorizeProject(principal, input.projectId, tx);
+    await authorizeProjectRecording(principal, input.projectId, tx);
     const actor = await checklistActor(principal, tx);
     const issue = await loadIssue(input, tx);
     await loadChecklist(
@@ -206,7 +206,7 @@ export async function assignChecklistIssue(
   db: DomainDb,
   now: Date = new Date(),
 ): Promise<{ readonly assignedTradieId: string | null }> {
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   const actor = await checklistActor(principal, db);
   const issue = await loadIssue(input, db);
   await loadChecklist(
@@ -254,7 +254,7 @@ export async function commentOnChecklistIssue(
   db: DomainDb,
   now: Date = new Date(),
 ): Promise<{ readonly issueId: string }> {
-  await authorizeProject(principal, input.projectId, db);
+  await authorizeProjectRecording(principal, input.projectId, db);
   const actor = await checklistActor(principal, db);
   const issue = await loadIssue(input, db);
   await loadChecklist(

@@ -170,7 +170,8 @@ const ALLOWLIST: Record<string, string> = {
   "lib/data/tradies.ts#getTradieScheduleKPIs": TRADIE_SCHEDULES,
   "lib/data/tradies.ts#getTradieSchedules": TRADIE_SCHEDULES,
   "lib/data/tradies.ts#getTradies": TRADIE_SCHEDULES,
-  "lib/data/tradies.ts#getTradiesForLookup": TRADIE_SCHEDULES,
+  "lib/data/tradies.ts#getTradiesForLookup":
+    "checks its caller with signedInUserPrincipal and assertCanReadTradieDirectory (#558), which this scan does not recognise",
 };
 
 type Check = "caller" | "signed-in" | "none";

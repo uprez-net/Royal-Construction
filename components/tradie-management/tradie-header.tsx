@@ -10,7 +10,7 @@ import { Download, Plus } from "lucide-react";
 import { useTransition } from "react";
 import { toast } from "sonner";
 
-export function TradieHeader() {
+export function TradieHeader({ isOffice }: { isOffice: boolean }) {
   const dispatch = useAppDispatch();
   const [isPending, startTransition] = useTransition();
 
@@ -56,29 +56,37 @@ export function TradieHeader() {
     <PageHeader
       headingLevel="h1"
       title="Tradie management"
-      description="Browse by trade category or switch views. Add tradies, track incidents, update priority levels and update pricing."
+      description={
+        isOffice
+          ? "Browse by trade category or switch views. Add tradies, track incidents, update priority levels and update pricing."
+          : "Browse by trade category or switch views. Track incidents and rate tradies."
+      }
+      // Export writes every tradie's last quoted price into the sheet, so it is
+      // the office's too; a site manager gets no actions here.
       actions={
-        <>
-          <Button
-            size="lg"
-            onClick={() => dispatch(openModal({ type: "addTradie" }))}
-          >
-            <Plus className="mr-2 size-4" aria-hidden="true" />
-            Add tradie
-          </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            onClick={() => startTransition(handleExport)}
-            disabled={isPending}
-          >
-            <Download
-              className={cn("mr-2 size-4", isPending && "animate-pulse")}
-              aria-hidden="true"
-            />
-            {isPending ? "Exporting…" : "Export"}
-          </Button>
-        </>
+        isOffice ? (
+          <>
+            <Button
+              size="lg"
+              onClick={() => dispatch(openModal({ type: "addTradie" }))}
+            >
+              <Plus className="mr-2 size-4" aria-hidden="true" />
+              Add tradie
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={() => startTransition(handleExport)}
+              disabled={isPending}
+            >
+              <Download
+                className={cn("mr-2 size-4", isPending && "animate-pulse")}
+                aria-hidden="true"
+              />
+              {isPending ? "Exporting…" : "Export"}
+            </Button>
+          </>
+        ) : undefined
       }
     />
   );

@@ -4,10 +4,12 @@ import { DashboardHeader } from "./dashboard-header";
 import { DashboardKPI } from "./dashboard-kpi";
 import { DashboardProjectTable } from "./dashboard-project-table";
 import { DashboardFollowUps } from "./dashboard-follow-ups";
-import { DashboardSiteManagerTable } from "./dashboard-site-manager-table";
+import {
+  DashboardSiteManagerTable,
+  type SiteManagerPerformance,
+} from "./dashboard-site-manager-table";
 import { DashboardKPI as DashboardKPIType } from "@/types/dashboard";
 import type { PaginatedProjectsResult } from "@/lib/data/projects";
-import { siteManagersMock } from "@/lib/mock-data";
 import type { FollowUpItem } from "./dashboard-follow-ups";
 import { DashboardGraphCards } from "./dashboard-graph-cards";
 import type { DashboardGraphData } from "@/lib/data/dashboard";
@@ -18,6 +20,7 @@ interface DashboardHomeProps {
   kpiData: DashboardKPIType;
   projectsData: PaginatedProjectsResult;
   followUpItems: FollowUpItem[];
+  siteManagers: SiteManagerPerformance[];
   graphData: DashboardGraphData;
   dataWarnings?: string[];
 }
@@ -49,6 +52,7 @@ export function DashboardHome({
   kpiData,
   projectsData,
   followUpItems,
+  siteManagers,
   graphData,
   dataWarnings = [],
 }: DashboardHomeProps) {
@@ -78,7 +82,7 @@ export function DashboardHome({
       <DashboardProjectTable isAdmin={isAdmin} initialProjects={projectsData} />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)]">
-        <DashboardSiteManagerTable siteManagers={siteManagersMock} />
+        <DashboardSiteManagerTable siteManagers={siteManagers} />
 
         <DashboardFollowUps
           followUpTone={followUpItems.length === 0 ? "positive" : "negative"}

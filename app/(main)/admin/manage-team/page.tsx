@@ -295,9 +295,13 @@ function SelectRole({
   onValueChange: (value: Role | undefined) => void;
   selectedRole: Role | undefined;
 }) {
+  // GUEST is what an uninvited sign-up starts as. Without it here a guest's
+  // row showed an empty picker ("Select role"), so the table hid who was
+  // waiting to be let in, and nobody could be set back to Guest.
   const options = [
     { label: "Admin", value: Role.ADMIN },
     { label: "Site Manager", value: Role.SITE_MANAGER },
+    { label: "Guest", value: Role.GUEST },
   ];
 
   return (

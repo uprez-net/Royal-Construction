@@ -2,10 +2,18 @@ import { MilestoneStatus, Prisma } from "@prisma/client";
 
 import type { SafeMaterial } from "@/types/project";
 
-import { authorizeProject } from "../access/projects";
+import {
+  authorizeProject,
+  authorizeProjectRecording,
+  canSeeProjectFinancials,
+} from "../access/projects";
 import { logActionOrThrow } from "../audit/action-log";
 import type { DomainDb } from "../db";
-import { DomainNotFoundError, DomainValidationError } from "../errors";
+import {
+  DomainAuthorizationError,
+  DomainNotFoundError,
+  DomainValidationError,
+} from "../errors";
 import { requireUserPrincipal, type DomainPrincipal } from "../principal";
 
 // The two smaller project resources: materials, and the site updates a site
@@ -34,6 +42,13 @@ export async function addMaterialToProject(
   input: AddMaterialInput,
   db: DomainDb,
 ): Promise<SafeMaterial> {
+  // Materials carry a unit and total cost, so they are the office's figures
+  // (`canSeeProjectFinancials`). No screen a site manager can reach offers this
+  // form: `AddMaterialModal` is registered in modal-manager but nothing opens
+  // it. Refused before any read, so a forged POST writes nothing.
+  if (!canSeeProjectFinancials(principal)) {
+    throw new DomainAuthorizationError("Materials are costed by the office.");
+  }
   await authorizeProject(principal, input.projectId, db);
 
   if (!Number.isFinite(input.quantity) || input.quantity <= 0) {
@@ -115,7 +130,13 @@ export async function createProjectUpdate(
   input: CreateProjectUpdateInput,
   db: DomainDb,
 ): Promise<ProjectUpdateOutcome> {
-  const project = await authorizeProject(principal, input.projectId, db);
+  // A site update (notes, photos) is site recording: any site manager, every
+  // project (`canRecordOnProject`).
+  const project = await authorizeProjectRecording(
+    principal,
+    input.projectId,
+    db,
+  );
 
   const notes = input.notes?.trim() ?? "";
   const photoUrls = [...(input.photoUrls ?? [])];

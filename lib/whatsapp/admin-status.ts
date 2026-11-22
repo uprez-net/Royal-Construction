@@ -1,22 +1,16 @@
 import { availableWhatsAppTemplates } from "@/lib/domain/leads/whatsapp/templates";
-import { projectWhatsAppGroupAvailability } from "@/lib/domain/projects/whatsapp/groups";
 
 import { readWhatsAppConfig, type WhatsAppConfig } from "./config";
 
 // What Admin › WhatsApp shows: how this deployment is configured, and what
 // Meta says about the account right now. Read-only, and it never returns a
-// secret — only whether each one is set.
+// secret — only whether each one is set. Meta is for leads; project groups
+// have their own page (Admin › WhatsApp bridge).
 
 export const WHATSAPP_WEBHOOK_PATH = "/api/whatsapp/webhook";
 
 /** The webhook fields the Meta app must subscribe for each feature. */
 export const WHATSAPP_WEBHOOK_FIELDS = {
-  groups: [
-    "group_lifecycle_update",
-    "group_participants_update",
-    "group_settings_update",
-    "group_status_update",
-  ],
   messages: ["messages"],
 } as const;
 
@@ -58,7 +52,6 @@ export function whatsappAdminConfig(
   appUrl: string | undefined = process.env.NEXT_PUBLIC_APP_URL,
 ): WhatsAppAdminConfig {
   const channel = config.channel;
-  const groups = projectWhatsAppGroupAvailability(channel);
   const base = appUrl?.trim().replace(/\/$/, "") || null;
   const mb = Math.floor(config.mediaMaxBytes / 1_048_576);
   const sending = Boolean(channel?.sendingAvailable);
@@ -90,14 +83,6 @@ export function whatsappAdminConfig(
         key: "media",
         label: "Media attachments",
       },
-      {
-        detail: groups.available
-          ? "Each new project gets a WhatsApp group; ongoing projects can create or link one."
-          : (groups.reason ?? "Off."),
-        enabled: groups.available,
-        key: "groups",
-        label: "Project groups",
-      },
     ],
     numbers: (channel?.numbers ?? []).map((number) => ({
       displayNumber: number.displayNumber,
@@ -116,10 +101,7 @@ export function whatsappAdminConfig(
     ),
     webhook: {
       callbackUrl: base ? `${base}${WHATSAPP_WEBHOOK_PATH}` : null,
-      fields: [
-        ...WHATSAPP_WEBHOOK_FIELDS.messages,
-        ...(channel?.groupsEnabled ? WHATSAPP_WEBHOOK_FIELDS.groups : []),
-      ],
+      fields: [...WHATSAPP_WEBHOOK_FIELDS.messages],
       path: WHATSAPP_WEBHOOK_PATH,
     },
   };
@@ -135,8 +117,6 @@ export type WhatsAppNumberHealth = {
   readonly messagingLimitTier: string | null;
   readonly nameStatus: string | null;
   readonly platformType: string | null;
-  /** True when Meta reports an Official Business Account — groups need it. */
-  readonly officialBusinessAccount: boolean | null;
 };
 
 export type WhatsAppMetaHealth = {
@@ -197,7 +177,7 @@ export async function checkWhatsAppWithMeta(
       async (number): Promise<WhatsAppNumberHealth> => {
         const result = await graphGet(
           config,
-          `${encodeURIComponent(number.phoneNumberId)}?fields=verified_name,display_phone_number,quality_rating,messaging_limit_tier,name_status,platform_type,is_official_business_account`,
+          `${encodeURIComponent(number.phoneNumberId)}?fields=verified_name,display_phone_number,quality_rating,messaging_limit_tier,name_status,platform_type`,
           fetchImpl,
         );
         if (!result.ok) {
@@ -206,7 +186,6 @@ export async function checkWhatsAppWithMeta(
             error: result.error,
             messagingLimitTier: null,
             nameStatus: null,
-            officialBusinessAccount: null,
             ok: false,
             phoneNumberId: number.phoneNumberId,
             platformType: null,
@@ -220,10 +199,6 @@ export async function checkWhatsAppWithMeta(
           error: null,
           messagingLimitTier: str(body.messaging_limit_tier),
           nameStatus: str(body.name_status),
-          officialBusinessAccount:
-            typeof body.is_official_business_account === "boolean"
-              ? body.is_official_business_account
-              : null,
           ok: true,
           phoneNumberId: number.phoneNumberId,
           platformType: str(body.platform_type),

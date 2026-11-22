@@ -184,12 +184,8 @@ export function WhatsAppStatusPanel({
           />
           <Stat
             label="Waiting for a person"
-            value={
-              counts.unmatchedPending
-              + counts.needsReconciliation
-              + counts.unlinkedGroupMessages
-            }
-            hint={`${counts.unmatchedPending} unmatched · ${counts.needsReconciliation} unconfirmed · ${counts.unlinkedGroupMessages} in unlinked groups`}
+            value={counts.unmatchedPending + counts.needsReconciliation}
+            hint={`${counts.unmatchedPending} unmatched · ${counts.needsReconciliation} unconfirmed`}
             tone="warning"
           />
         </div>
@@ -254,7 +250,7 @@ export function WhatsAppStatusPanel({
         <Section
           icon={Webhook}
           title="Webhook"
-          description="Where Meta delivers messages, delivery ticks and group events."
+          description="Where Meta delivers lead messages, delivery ticks and calls."
         >
           <div className="space-y-4">
             <div>
@@ -435,25 +431,6 @@ export function WhatsAppMetaHealthPanel({
                       {number.displayPhoneNumber}
                     </p>
                     <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                      <div>
-                        <dt className="text-xs text-muted-foreground">
-                          Official Business Account
-                        </dt>
-                        <dd
-                          className={cn(
-                            "font-medium",
-                            number.officialBusinessAccount
-                              ? "text-success-ink"
-                              : "text-warning-ink",
-                          )}
-                        >
-                          {number.officialBusinessAccount === null
-                            ? "Unknown"
-                            : number.officialBusinessAccount
-                              ? "Yes — groups available"
-                              : "No — groups unavailable"}
-                        </dd>
-                      </div>
                       <div>
                         <dt className="text-xs text-muted-foreground">
                           Messaging limit

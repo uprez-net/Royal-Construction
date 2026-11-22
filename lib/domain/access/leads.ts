@@ -38,10 +38,22 @@ export function canAccessLead(
 ): boolean {
   if (isOfficePrincipal(principal)) return true;
   return (
-    isUserPrincipal(principal)
-    && principal.role !== Role.SITE_MANAGER
+    canOpenAnyLead(principal)
+    && isUserPrincipal(principal)
     && lead.assignedId === principal.userId
   );
+}
+
+/**
+ * Could this caller open any lead at all? `canAccessLead` without the lead:
+ * false for a site manager and for an anonymous caller, whatever the id.
+ *
+ * Asked before a lead is looked up, so the answer to a caller who may open
+ * none is the same refusal for every id and does not tell them which exist.
+ */
+function canOpenAnyLead(principal: DomainPrincipal): boolean {
+  if (isOfficePrincipal(principal)) return true;
+  return isUserPrincipal(principal) && principal.role !== Role.SITE_MANAGER;
 }
 
 /**
@@ -88,13 +100,18 @@ export function leadListScope(principal: DomainPrincipal): LeadListScope {
  *
  * Missing and forbidden stay distinct here — both are refusals the operator
  * sees, and "no such lead" is not information worth hiding from staff who can
- * list every lead anyway.
+ * list every lead anyway. A caller who may open no lead at all (a site
+ * manager) is refused before the lookup, so a missing id and a real one
+ * answer alike.
  */
 export async function authorizeLead(
   principal: DomainPrincipal,
   leadId: number,
   db: DomainDb,
 ): Promise<AccessibleLead> {
+  if (!canOpenAnyLead(principal)) {
+    throw new DomainAuthorizationError("You do not have access to this lead");
+  }
   const lead = await db.lead.findUnique({
     select: { assignedId: true, id: true },
     where: { id: leadId },

@@ -4,7 +4,9 @@ import { createContext, useContext, type ReactNode } from "react";
 
 /**
  * Whether this deployment has WhatsApp at all, read once on the server from
- * WHATSAPP_ENABLED (and WHATSAPP_CALLING_ENABLED) and handed down by the shell.
+ * WHATSAPP_ENABLED (and WHATSAPP_CALLING_ENABLED) for leads, and from the
+ * WhatsApp bridge's configuration for project groups, and handed down by the
+ * shell.
  *
  * Every WhatsApp poller reads this before it starts a timer. A deployment with
  * WhatsApp off then spends no function invocations and no database reads on
@@ -16,11 +18,14 @@ export type WhatsAppAvailability = {
   readonly enabled: boolean;
   /** WhatsApp is on and WHATSAPP_CALLING_ENABLED is "true". */
   readonly calling: boolean;
+  /** The WhatsApp bridge is configured: project groups are on. */
+  readonly groups: boolean;
 };
 
 export const WHATSAPP_OFF: WhatsAppAvailability = {
   calling: false,
   enabled: false,
+  groups: false,
 };
 
 // Outside the shell nothing has said WhatsApp is on, so nothing polls.

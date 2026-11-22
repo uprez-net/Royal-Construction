@@ -1,0 +1,122 @@
+# The WhatsApp bridge (services/whatsapp-bridge) — its own checks, apart from
+# the Next.js app's Quality Checks.
+#
+# Runs only when the bridge (or this file) changed, and then only when the
+# change is more than formatting: scripts/ci-changes.mjs prints each changed
+# file as Prettier would, before and after, and skips the run when they match.
+#
+# CI does not deploy. Railway builds and deploys the bridge from its Dockerfile
+# on its own; the Image job here only proves that Dockerfile still builds.
+
+name: WhatsApp Bridge
+
+on:
+  push:
+    branches: [main, staging]
+    paths:
+      - "services/whatsapp-bridge/**"
+      - ".github/workflows/whatsapp-bridge.yml"
+  pull_request:
+    branches: [main, staging]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "services/whatsapp-bridge/**"
+      - ".github/workflows/whatsapp-bridge.yml"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Run every check even if nothing substantive changed
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  SERVICE_DIR: services/whatsapp-bridge
+
+jobs:
+  changes:
+    name: Decide
+    runs-on: ubuntu-latest
+    outputs:
+      substantive: ${{ steps.decide.outputs.substantive }}
+      reason: ${{ steps.decide.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v5
+        with:
+          package_json_file: services/whatsapp-bridge/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: services/whatsapp-bridge/pnpm-lock.yaml
+      - name: Install the bridge's dependencies (for Prettier)
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Is this more than formatting?
+        id: decide
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+        run: |
+          if [ "$FORCE" = "true" ]; then
+            echo "substantive=true" >> "$GITHUB_OUTPUT"
+            echo "reason=forced" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node "$SERVICE_DIR/scripts/ci-changes.mjs"
+
+  verify:
+    name: Verify
+    needs: changes
+    if: needs.changes.outputs.substantive == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/whatsapp-bridge
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+        with:
+          package_json_file: services/whatsapp-bridge/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: services/whatsapp-bridge/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Formatting
+        run: pnpm format:check
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Tests
+        run: pnpm test
+      - name: Build
+        run: pnpm build
+
+  image:
+    name: Image
+    needs: [changes, verify]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      # Builds the image to prove the Dockerfile works, and pushes nothing.
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.SERVICE_DIR }}
+          push: false
+          cache-from: type=gha,scope=whatsapp-bridge
+          cache-to: type=gha,mode=max,scope=whatsapp-bridge

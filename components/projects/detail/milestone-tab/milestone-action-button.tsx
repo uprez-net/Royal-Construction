@@ -57,7 +57,8 @@ export function MilestoneActionGroup({
   onOpenAddUpdateModal: (id: string) => void;
   onStatusUpdate: (id: string, status?: MilestoneStatus) => void;
   onStartMilestone: (id: string) => void;
-  onMarkasNotRequired: (id: string) => void;
+  /** Absent for a caller who may not cancel bookings (`viewerAccess.book`). */
+  onMarkasNotRequired?: (id: string) => void;
 }) {
   const hasChildren = milestone.childrenMilestones.length > 0;
 
@@ -78,13 +79,15 @@ export function MilestoneActionGroup({
           <Check aria-hidden="true" /> Complete
           <span className="sr-only">{milestone.name}</span>
         </Button>
-        <Button
-          variant="outline"
-          onClick={() => onMarkasNotRequired(milestone.id)}
-        >
-          <BanIcon aria-hidden="true" /> Not required
-          <span className="sr-only">{milestone.name}</span>
-        </Button>
+        {onMarkasNotRequired ? (
+          <Button
+            variant="outline"
+            onClick={() => onMarkasNotRequired(milestone.id)}
+          >
+            <BanIcon aria-hidden="true" /> Not required
+            <span className="sr-only">{milestone.name}</span>
+          </Button>
+        ) : null}
       </>
     );
   }
@@ -161,14 +164,16 @@ export function MilestoneActionGroup({
           <span className="sr-only">{milestone.name}</span>
         </Button>
 
-        <Button
-          size="icon"
-          variant="ghost"
-          aria-label={`Mark ${milestone.name} as not required`}
-          onClick={() => onMarkasNotRequired(milestone.id)}
-        >
-          <BanIcon className="size-4" aria-hidden="true" />
-        </Button>
+        {onMarkasNotRequired ? (
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={`Mark ${milestone.name} as not required`}
+            onClick={() => onMarkasNotRequired(milestone.id)}
+          >
+            <BanIcon className="size-4" aria-hidden="true" />
+          </Button>
+        ) : null}
       </>
     );
   }

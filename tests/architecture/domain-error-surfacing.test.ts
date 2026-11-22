@@ -128,7 +128,6 @@ const ADMIN_CONTENT =
   "returns its own {ok,error} result that the admin editor renders; worth reconciling with domainActionFailure when the admin surface is revisited";
 
 const UNMAPPED: Record<string, string> = {
-  "app/api/(data)/leads/[leadId]/route.ts": LEADS_RESULT_SHAPE,
   "app/api/(data)/leads/tasks/route.ts": LEADS_RESULT_SHAPE,
   "app/api/(workflow)/extract-checklist/route.ts": MACHINE_CALLER,
   "app/api/(workflow)/extract-project-data/route.ts": MACHINE_CALLER,
@@ -138,7 +137,6 @@ const UNMAPPED: Record<string, string> = {
   "app/api/cron/meeting-review-reminder/route.ts": MACHINE_CALLER,
   "app/api/cron/sync-sent-mail/route.ts": MACHINE_CALLER,
   "app/api/cron/tradie-reminders/route.ts": MACHINE_CALLER,
-  "app/api/cron/whatsapp-sweep/route.ts": MACHINE_CALLER,
   "app/api/graph/notifications/route.ts": MACHINE_CALLER,
   "app/api/webhook/clerk/route.ts": MACHINE_CALLER,
   "app/api/xero/notification/route.ts": MACHINE_CALLER,
