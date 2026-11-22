@@ -219,7 +219,12 @@ async function saveInboundEmails(
   const rows = await buildInboundCertifierRows({
     attachments,
     engagementId,
-    fallback: { sentAt, subject: message.subject, from: message.from, to: message.to },
+    fallback: {
+      sentAt,
+      subject: message.subject,
+      from: message.from,
+      to: message.to,
+    },
     graphMailbox,
     threads,
   });

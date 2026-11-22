@@ -8,7 +8,11 @@ import { buildInboundCertifierRows } from "@/lib/compliance/inbound-rows";
 // send itself wrote.
 const saved: Record<string, string | undefined> = {};
 beforeEach(() => {
-  for (const key of ["BUSINESS_EMAIL", "BUSINESS_ADMIN_EMAIL", "GRAPH_SENDER_UPN"]) {
+  for (const key of [
+    "BUSINESS_EMAIL",
+    "BUSINESS_ADMIN_EMAIL",
+    "GRAPH_SENDER_UPN",
+  ]) {
     saved[key] = process.env[key];
   }
   process.env.BUSINESS_EMAIL = "info@royal.test";
@@ -51,7 +55,9 @@ test("the reply and the certifier's quoted history are stored as inbound", async
   assert.equal(rows.length, 2);
   assert.ok(rows.every((row) => row.direction === "INBOUND"));
   // Only the message that just arrived carries the attachments.
-  assert.deepEqual(rows[0]?.attachments, [{ name: "a.pdf", url: "https://x/a.pdf" }]);
+  assert.deepEqual(rows[0]?.attachments, [
+    { name: "a.pdf", url: "https://x/a.pdf" },
+  ]);
   assert.deepEqual(rows[1]?.attachments, []);
 });
 
