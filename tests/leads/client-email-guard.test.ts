@@ -44,20 +44,34 @@ describe("own mailbox as a client email", () => {
 
   test("an edit is judged only when it changes the address", () => {
     // A lead already holding info@ stays editable until it is corrected.
-    assert.equal(introducesOwnMailbox("info@royal.test", "info@royal.test"), false);
+    assert.equal(
+      introducesOwnMailbox("info@royal.test", "info@royal.test"),
+      false,
+    );
     assert.equal(introducesOwnMailbox(undefined, "info@royal.test"), false);
     assert.equal(introducesOwnMailbox("", "info@royal.test"), false);
     // Setting one is refused; moving off one is fine.
-    assert.equal(introducesOwnMailbox("admin@royal.test", "c@gmail.test"), true);
-    assert.equal(introducesOwnMailbox("c@gmail.test", "info@royal.test"), false);
+    assert.equal(
+      introducesOwnMailbox("admin@royal.test", "c@gmail.test"),
+      true,
+    );
+    assert.equal(
+      introducesOwnMailbox("c@gmail.test", "info@royal.test"),
+      false,
+    );
   });
 
   test("a booking from our own address is refused before the calendar is touched", () => {
-    const slot = { email: "Info@Royal.test", name: "Test", startsAt: new Date() };
+    const slot = {
+      email: "Info@Royal.test",
+      name: "Test",
+      startsAt: new Date(),
+    };
     assert.throws(
       () => consultationBookingKey(slot),
       (error) =>
-        error instanceof DomainValidationError && /own mailboxes/.test(error.message),
+        error instanceof DomainValidationError
+        && /own mailboxes/.test(error.message),
     );
     assert.match(
       consultationBookingKey({ ...slot, email: "client@gmail.test" }),

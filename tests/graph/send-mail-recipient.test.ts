@@ -55,7 +55,10 @@ describe("sendMail with no recipient", () => {
         /has no recipient/,
       );
     }
-    assert.deepEqual(calls.filter((url) => url.includes("sendMail")), []);
+    assert.deepEqual(
+      calls.filter((url) => url.includes("sendMail")),
+      [],
+    );
   });
 
   test("a real To is sent", async () => {
