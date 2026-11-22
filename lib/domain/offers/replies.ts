@@ -140,28 +140,6 @@ export async function recordOfferReply(
 
   const receivedAt = input.receivedAt ? new Date(input.receivedAt) : new Date();
 
-  // The same email in both watched mailboxes (a client reply-all that copies
-  // admin@ as well as info@) arrives as two messages with two Graph ids, which
-  // the lookup above cannot tie together. The same sender, subject and body
-  // for this send within the hour is that message again, not a second reply:
-  // recording it would show the client twice and store its files twice (#585).
-  const copy = await db.offerDocumentReply.findFirst({
-    select: { id: true },
-    where: {
-      body: input.body,
-      fromEmail: sender,
-      receivedAt: {
-        gte: new Date(receivedAt.getTime() - 60 * 60 * 1000),
-        lte: new Date(receivedAt.getTime() + 60 * 60 * 1000),
-      },
-      sendId: send.id,
-      subject: input.subject,
-    },
-  });
-  if (copy) {
-    return { outcome: "already-recorded" };
-  }
-
   const pending: OfferReplyAttachment[] = input.hasAttachments
     ? [
         {
@@ -179,6 +157,30 @@ export async function recordOfferReply(
     // the next notification for this message records both rather than finding
     // the row and stopping.
     const replyId = await db.$transaction(async (tx) => {
+      // The same email in both watched mailboxes (a client reply-all that
+      // copies admin@ as well as info@) arrives as two messages with two Graph
+      // ids, which the lookup above cannot tie together. The same sender,
+      // subject and body for this send within the hour is that message again,
+      // not a second reply: recording it would show the client twice and store
+      // its files twice (#585). Checked under a lock on the send, because the
+      // two notifications can be processed at the same moment and the unique
+      // index cannot see them as the same row.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`offer-reply:${send.id}`}, 0))`;
+      const copy = await tx.offerDocumentReply.findFirst({
+        select: { id: true },
+        where: {
+          body: input.body,
+          fromEmail: sender,
+          receivedAt: {
+            gte: new Date(receivedAt.getTime() - 60 * 60 * 1000),
+            lte: new Date(receivedAt.getTime() + 60 * 60 * 1000),
+          },
+          sendId: send.id,
+          subject: input.subject,
+        },
+      });
+      if (copy) return null;
+
       const reply = await tx.offerDocumentReply.create({
         data: {
           attachments: pending as unknown as Prisma.InputJsonValue,
@@ -212,6 +214,7 @@ export async function recordOfferReply(
 
       return reply.id;
     });
+    if (replyId === null) return { outcome: "already-recorded" };
     return { outcome: "recorded", replyId };
   } catch (error) {
     // The duplicate notification that lost the race to the one above.
