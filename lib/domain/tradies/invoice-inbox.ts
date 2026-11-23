@@ -498,7 +498,14 @@ export async function nudgeStaleInvoices(
 
   let failed = 0;
   for (const entry of due) {
-    const sent = await ports.notify(admins, entry).catch(() => false);
+    const sent = await ports.notify(admins, entry).catch((error: unknown) => {
+      // Ids only: the project's name is client data.
+      console.error(
+        `Stale invoice reminder failed for project ${entry.projectId}`,
+        error instanceof Error ? error.message : String(error),
+      );
+      return false;
+    });
     if (!sent) failed += 1;
   }
   return { failed, reminded: due.length - failed };
