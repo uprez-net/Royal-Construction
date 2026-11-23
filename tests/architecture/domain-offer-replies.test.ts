@@ -429,6 +429,7 @@ test("the same email arriving in the other mailbox is not recorded twice", async
     {
       ...REPLY,
       graphMessageId: "graph_msg_in_admin_mailbox",
+      hasAttachments: false,
       receivedAt: "2026-09-24T01:00:03.000Z",
     },
     recorder.transactionalDb,
@@ -436,4 +437,23 @@ test("the same email arriving in the other mailbox is not recorded twice", async
 
   assert.equal(record.outcome, "already-recorded");
   assert.deepEqual(recorder.writes(), []);
+});
+
+test("a second reply with the same text but a file is never dropped as a copy", async () => {
+  // The text cannot tell a mailbox copy from a second reply that attaches a
+  // different file, so a message with attachments is always recorded.
+  const recorder = recordingDb({
+    "offerDocumentReply.create": { id: "reply_2" },
+    "offerDocumentReply.findFirst": { id: "reply_1" },
+    "offerDocumentReply.findUnique": null,
+    "offerDocumentSend.findUnique": SEND,
+  });
+
+  const record = await recordOfferReply(
+    WEBHOOK,
+    { ...REPLY, graphMessageId: "graph_msg_2", hasAttachments: true },
+    recorder.transactionalDb,
+  );
+
+  assert.deepEqual(record, { outcome: "recorded", replyId: "reply_2" });
 });

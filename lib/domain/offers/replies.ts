@@ -165,20 +165,27 @@ export async function recordOfferReply(
       // its files twice (#585). Checked under a lock on the send, because the
       // two notifications can be processed at the same moment and the unique
       // index cannot see them as the same row.
+      //
+      // Only for a message with no attachments: the text alone cannot tell a
+      // copy from a second reply that attaches a different file, and dropping
+      // that would lose the file. A reply-all that carries a file is recorded
+      // once per mailbox, as it was before admin@ was watched.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`offer-reply:${send.id}`}, 0))`;
-      const copy = await tx.offerDocumentReply.findFirst({
-        select: { id: true },
-        where: {
-          body: input.body,
-          fromEmail: sender,
-          receivedAt: {
-            gte: new Date(receivedAt.getTime() - 60 * 60 * 1000),
-            lte: new Date(receivedAt.getTime() + 60 * 60 * 1000),
-          },
-          sendId: send.id,
-          subject: input.subject,
-        },
-      });
+      const copy = input.hasAttachments
+        ? null
+        : await tx.offerDocumentReply.findFirst({
+            select: { id: true },
+            where: {
+              body: input.body,
+              fromEmail: sender,
+              receivedAt: {
+                gte: new Date(receivedAt.getTime() - 60 * 60 * 1000),
+                lte: new Date(receivedAt.getTime() + 60 * 60 * 1000),
+              },
+              sendId: send.id,
+              subject: input.subject,
+            },
+          });
       if (copy) return null;
 
       const reply = await tx.offerDocumentReply.create({
