@@ -10,7 +10,7 @@ import {
 } from "@/lib/domain/offers/replies";
 import { systemPrincipal } from "@/lib/domain/principal";
 import { createGraphContext } from "@/lib/graph/client";
-import { getGraphConfig } from "@/lib/graph/config";
+import { getGraphConfig, type GraphMailbox } from "@/lib/graph/config";
 import { withGraphRetry } from "@/lib/graph/retry";
 import prisma from "@/lib/prisma";
 
@@ -26,17 +26,25 @@ import prisma from "@/lib/prisma";
 export interface OfferReplyAttachmentsInput {
   readonly replyId: string;
   readonly graphMessageId: string;
+  /**
+   * The mailbox the reply landed in; a Graph message id only resolves there.
+   * Absent on a run queued before #585, which was always the business one.
+   */
+  readonly mailbox?: GraphMailbox;
 }
 
 const PRINCIPAL = systemPrincipal("workflow:offer-reply-attachments");
 
 /**
  * The Graph client is rebuilt inside each step rather than passed between them.
- * It holds a credential and a token cache — neither serializable. Offer mail
- * is only ever correlated on the business mailbox (see the Graph webhook).
+ * It holds a credential and a token cache — neither serializable. The reply's
+ * mailbox is passed in: a message id belongs to the mailbox it arrived in.
  */
-async function mailPort(graphMessageId: string): Promise<OfferReplyMailPort> {
-  const client = await createGraphContext(getGraphConfig("business"));
+async function mailPort(
+  graphMessageId: string,
+  mailbox: GraphMailbox = "business",
+): Promise<OfferReplyMailPort> {
+  const client = await createGraphContext(getGraphConfig(mailbox));
   return {
     downloadAttachment: (attachmentId) =>
       withGraphRetry("download offer reply attachment", () =>
@@ -57,17 +65,18 @@ async function planAttachments(
     PRINCIPAL,
     { replyId: input.replyId },
     prisma,
-    { mail: await mailPort(input.graphMessageId) },
+    { mail: await mailPort(input.graphMessageId, input.mailbox) },
   );
 }
 
 async function storeAttachment(
   plan: Omit<OfferReplyAttachmentPlan, "files">,
   file: PlannedReplyAttachment,
+  mailbox?: GraphMailbox,
 ): Promise<{ url: string }> {
   "use step";
   return storeOfferReplyAttachment(PRINCIPAL, { file, plan }, prisma, {
-    mail: await mailPort(plan.graphMessageId),
+    mail: await mailPort(plan.graphMessageId, mailbox),
     put: ({ allowOverwrite, body, contentType, pathname }) =>
       put(
         pathname,
@@ -110,7 +119,7 @@ const runStoreOfferReplyAttachments = async (
   let stored = 0;
   for (const file of files) {
     try {
-      await storeAttachment(plan, file);
+      await storeAttachment(plan, file, input.mailbox);
       stored += 1;
     } catch (error) {
       // Out of retries. The plan left this file's note as "Not saved", which

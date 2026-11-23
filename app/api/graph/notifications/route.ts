@@ -816,10 +816,10 @@ async function processNotifications(
 
           // Offer proposal reply: the subject carries [RCOFR-…]. Correlate it
           // back to the send and stop — it is not a lead/tradie message.
-          const offerReplyToken =
-            mailbox === "business"
-              ? extractOfferReplyToken(message.subject)
-              : null;
+          // Either watched mailbox: a client's reply can land in admin@ as
+          // well as info@, and left to fall through it never marked the offer
+          // as answered (#585). The own-mailbox guards above already ran.
+          const offerReplyToken = extractOfferReplyToken(message.subject);
           if (offerReplyToken) {
             const record = await recordOfferReply(
               systemPrincipal("graph:offer-reply"),
@@ -843,7 +843,11 @@ async function processNotifications(
               // stays, open the email in Outlook", which is the truth.
               try {
                 const run = await start(storeOfferReplyAttachments, [
-                  { graphMessageId: message.id, replyId: record.replyId },
+                  {
+                    graphMessageId: message.id,
+                    mailbox,
+                    replyId: record.replyId,
+                  },
                 ]);
                 console.log(
                   `  Offer ${offerReplyToken}: attachment workflow started: run ${run.runId}`,

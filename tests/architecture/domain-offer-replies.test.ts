@@ -155,6 +155,7 @@ test("a repeated notification for the same message records nothing", async () =>
 test("a reply is stored with its message and hands back the row to finish", async () => {
   const recorder = recordingDb({
     "offerDocumentReply.create": { id: "reply_1" },
+    "offerDocumentReply.findFirst": null,
     "offerDocumentReply.findUnique": null,
     "offerDocumentSend.findUnique": SEND,
   });
@@ -184,6 +185,7 @@ test("a reply is stored with its message and hands back the row to finish", asyn
 test("the reply timestamps are decided by the database, not by the read", async () => {
   const recorder = recordingDb({
     "offerDocumentReply.create": { id: "reply_1" },
+    "offerDocumentReply.findFirst": null,
     "offerDocumentReply.findUnique": null,
     "offerDocumentSend.findUnique": SEND,
   });
@@ -216,6 +218,7 @@ test("the reply timestamps are decided by the database, not by the read", async 
 test("a failed timestamp write fails the record, so the row rolls back with it", async () => {
   const recorder = recordingDb({
     "offerDocumentReply.create": { id: "reply_1" },
+    "offerDocumentReply.findFirst": null,
     "offerDocumentReply.findUnique": null,
     "offerDocumentSend.findUnique": SEND,
     "offerDocumentSend.updateMany": () => {
@@ -234,6 +237,7 @@ test("the notification that loses the insert race reports already-recorded", asy
     "offerDocumentReply.create": () => {
       throw Object.assign(new Error("Unique constraint"), { code: "P2002" });
     },
+    "offerDocumentReply.findFirst": null,
     "offerDocumentReply.findUnique": null,
     "offerDocumentSend.findUnique": SEND,
   });
@@ -409,4 +413,47 @@ test("a stored attachment only ever links to https", () => {
       ["bad.pdf", null],
     ],
   );
+});
+
+test("the same email arriving in the other mailbox is not recorded twice", async () => {
+  // Same send, sender, subject and body; a different Graph id, as it has in
+  // each mailbox, and a moment later.
+  const recorder = recordingDb({
+    "offerDocumentReply.findFirst": { id: "reply_1" },
+    "offerDocumentReply.findUnique": null,
+    "offerDocumentSend.findUnique": SEND,
+  });
+
+  const record = await recordOfferReply(
+    WEBHOOK,
+    {
+      ...REPLY,
+      graphMessageId: "graph_msg_in_admin_mailbox",
+      hasAttachments: false,
+      receivedAt: "2026-09-24T01:00:03.000Z",
+    },
+    recorder.transactionalDb,
+  );
+
+  assert.equal(record.outcome, "already-recorded");
+  assert.deepEqual(recorder.writes(), []);
+});
+
+test("a second reply with the same text but a file is never dropped as a copy", async () => {
+  // The text cannot tell a mailbox copy from a second reply that attaches a
+  // different file, so a message with attachments is always recorded.
+  const recorder = recordingDb({
+    "offerDocumentReply.create": { id: "reply_2" },
+    "offerDocumentReply.findFirst": { id: "reply_1" },
+    "offerDocumentReply.findUnique": null,
+    "offerDocumentSend.findUnique": SEND,
+  });
+
+  const record = await recordOfferReply(
+    WEBHOOK,
+    { ...REPLY, graphMessageId: "graph_msg_2", hasAttachments: true },
+    recorder.transactionalDb,
+  );
+
+  assert.deepEqual(record, { outcome: "recorded", replyId: "reply_2" });
 });
