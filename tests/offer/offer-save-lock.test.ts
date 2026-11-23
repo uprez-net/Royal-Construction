@@ -35,6 +35,8 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
+import { TEST_BLOB_STORE, pinBlobStoreTokens } from "./blob-store-env";
+
 // saveOfferWorkspace wrote the client's whole snapshot at every editable status.
 // A tab still showing an offer as pending after another tab had sent it could
 // change a cost line, and the save repriced an issued offer in place, money
@@ -47,8 +49,9 @@ import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 // legacy offer's price moved a cent on its first save. These also pin that a
 // same-tab edit goes through and an issued offer's price stays put.
 
-const BLOB_URL =
-  "https://royalstore01.private.blob.vercel-storage.com/offer/hero.png";
+pinBlobStoreTokens();
+
+const BLOB_URL = `https://${TEST_BLOB_STORE}.private.blob.vercel-storage.com/offer/hero.png`;
 
 const BASE: OfferWorkspaceSnapshot = {
   job: { ...INITIAL_OFFER_JOB, reference: "RC-Q-2026-001", revision: "R1" },

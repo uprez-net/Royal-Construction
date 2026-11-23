@@ -25,12 +25,15 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 
+import { TEST_BLOB_STORE, pinBlobStoreTokens } from "./blob-store-env";
+
 // The customer PDF renderers fetch every offer image URL from inside our
 // network, and the URL arrives in a client-supplied snapshot. Any URL used to be
 // accepted, so a hand-built save could point the renderer at an internal address.
 
-const BLOB_URL =
-  "https://royalstore01.private.blob.vercel-storage.com/offer-ai/hero.png";
+pinBlobStoreTokens();
+
+const BLOB_URL = `https://${TEST_BLOB_STORE}.private.blob.vercel-storage.com/offer-ai/hero.png`;
 
 test("accepts an image in Royal's Blob storage", () => {
   assert.equal(isAllowedOfferImageUrl(BLOB_URL), true);
