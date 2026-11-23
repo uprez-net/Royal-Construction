@@ -340,8 +340,9 @@ export async function placeStaffCall(
         staffUserId: principal.userId,
       },
       select: { id: true },
-      // Only reachable after a definite refusal: nothing rang.
-      update: fields,
+      // Only reachable after a definite refusal: nothing rang. The link is
+      // written again too, so the row always names who this attempt rings.
+      update: { ...plan.link, ...fields },
       where: { idempotencyKey: outboxKey },
     });
     return { callId: call.id, claimed, replay: false as const };

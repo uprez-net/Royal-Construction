@@ -33,7 +33,7 @@ import { ProjectDetail } from "@/types/project";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ProjectDetailTabKey } from "@/utils/validators/projects";
 
-import { useProjectCallsUnread } from "./calls/project-calls-events";
+import { useProjectCallsUnread } from "./calls/project-calls-queries";
 
 /**
  * The tabs that are actually navigable. `projectTabsValidator` still accepts

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Loader2, Phone, PhoneCall, RefreshCw, Sparkles } from "lucide-react";
 
 import {
@@ -13,23 +13,19 @@ import {
 import { CallRecordings } from "@/components/leads/comms/call-recordings";
 import { Button } from "@/components/ui/button";
 import { formatE164ForDisplay } from "@/lib/domain/leads/whatsapp/phone";
-import {
-  fetchProjectCalls,
-  markProjectCallsRead,
-} from "@/lib/leads/comms-service";
+import { markProjectCallsRead } from "@/lib/leads/comms-service";
 import type {
   CallDto,
   ProjectCallContactKindDto,
-  ProjectCallsDto,
 } from "@/lib/leads/comms-types";
 import { formatSydneyStamp } from "@/lib/leads/whatsapp-format";
 import { cn } from "@/lib/utils";
 
+import { requestProjectDialer } from "./project-calls-events";
 import {
-  announceProjectCallsChange,
-  requestProjectDialer,
-  useProjectCallsChange,
-} from "./project-calls-events";
+  useProjectCalls,
+  useRefreshProjectCalls,
+} from "./project-calls-queries";
 
 // Every call on a project (ADMIN only): the ones placed from its dialer, and
 // the inbound ones Mili or the voicemail took that the matcher filed here.
@@ -138,60 +134,40 @@ function ProjectCallRow({
 }
 
 export function ProjectCallsPanel({ projectId }: { projectId: string }) {
-  const [data, setData] = useState<ProjectCallsDto | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const refresh = useRefreshProjectCalls(projectId);
+  // Polled fast while a call is live, slowly otherwise. React Query owns the
+  // requests, so an older response never overwrites a newer list.
+  const query = useProjectCalls(projectId, {
+    refetchInterval: (calls) =>
+      calls?.calls.some((call) => LIVE_CALL_STATUSES.has(call.status))
+        ? LIVE_POLL_MS
+        : POLL_MS,
+  });
+  const data = query.data ?? null;
+  const error = query.error
+    ? query.error instanceof Error
+      ? query.error.message
+      : "Could not load the calls."
+    : null;
+  const reload = () => void query.refetch();
 
-  const load = useCallback(
-    async (signal?: AbortSignal) => {
-      try {
-        setData(await fetchProjectCalls(projectId, signal));
-        setError(null);
-      } catch (loadError) {
-        if (signal?.aborted) return;
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Could not load the calls.",
-        );
-      }
-    },
-    [projectId],
-  );
-  const reload = useCallback(() => void load(), [load]);
-  useProjectCallsChange(projectId, reload);
-
-  // Opening the log reads the new inbound calls. The rows loaded first still
-  // say "New", so the person sees which ones they were; the badge clears.
+  // Reading the new inbound calls waits until they are on screen: a load
+  // that fails or never arrives must not clear the badge. Once per project.
+  // The rows loaded first still say "New", so the person sees which they were.
+  const markedFor = useRef<string | null>(null);
+  const loaded = query.isSuccess;
   useEffect(() => {
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      void markProjectCallsRead(projectId)
-        .then(({ marked }) => {
-          if (!cancelled && marked > 0) announceProjectCallsChange(projectId);
-        })
-        .catch(() => {});
-    }, 1_500);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [projectId]);
-
-  const hasLiveCall =
-    data?.calls.some((call) => LIVE_CALL_STATUSES.has(call.status)) ?? false;
-  useEffect(() => {
-    const controller = new AbortController();
-    const first = window.setTimeout(() => void load(controller.signal), 0);
-    const timer = window.setInterval(
-      () => void load(),
-      hasLiveCall ? LIVE_POLL_MS : POLL_MS,
-    );
-    return () => {
-      window.clearTimeout(first);
-      controller.abort();
-      window.clearInterval(timer);
-    };
-  }, [load, hasLiveCall]);
+    if (!loaded || markedFor.current === projectId) return;
+    markedFor.current = projectId;
+    void markProjectCallsRead(projectId)
+      .then(({ marked }) => {
+        if (marked > 0) refresh();
+      })
+      .catch(() => {
+        // Not marked: the badge stays, and the next open tries again.
+        markedFor.current = null;
+      });
+  }, [loaded, projectId, refresh]);
 
   return (
     <div className="flex flex-col gap-3">

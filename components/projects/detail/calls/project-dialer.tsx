@@ -1,22 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  Delete,
-  HardHat,
   Loader2,
   Minus,
   Phone,
   PhoneCall,
   RefreshCw,
-  UserRound,
-  Wrench,
   X,
 } from "lucide-react";
-import { toast } from "sonner";
 
-import { checkMicrophone } from "@/components/comms/microphone";
 import { useOptionalPhone } from "@/components/comms/phone-provider";
 import { phoneKey } from "@/components/leads/comms/call-via-phone-button";
 import { Button } from "@/components/ui/button";
@@ -27,61 +21,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useIdempotencyKeys } from "@/hooks/use-idempotency-key";
-import {
-  formatE164ForDisplay,
-  normaliseLeadPhone,
-} from "@/lib/domain/leads/whatsapp/phone";
-import { fetchProjectCalls, placeProjectCall } from "@/lib/leads/comms-service";
-import type {
-  ProjectCallContactDto,
-  ProjectCallContactKindDto,
-  ProjectCallsDto,
-} from "@/lib/leads/comms-types";
+import { formatE164ForDisplay } from "@/lib/domain/leads/whatsapp/phone";
 import { cn } from "@/lib/utils";
 
+import { useProjectDialerRequest } from "./project-calls-events";
+import { useProjectCalls } from "./project-calls-queries";
+import { DialerKeypad } from "./project-dialer-keypad";
+import { DialerPeople } from "./project-dialer-people";
 import {
-  announceProjectCallsChange,
-  useProjectCallsChange,
-  useProjectDialerRequest,
-} from "./project-calls-events";
+  useProjectCallPlacer,
+  type CallRoute,
+  type ProjectCallPlacer,
+} from "./use-project-call-placer";
 
 // The project's floating dialer (ADMIN only). Opened from the header's Call
 // button: the project's people — site manager, owners, connected tradies —
-// each one press from a call, and a keypad for any other number.
+// each one press from a call (./project-dialer-people.tsx), and a keypad for
+// any other number (./project-dialer-keypad.tsx).
 //
 // Like every call from the CRM, the server rings the other person first and
 // puts them through to this browser or a team phone once they answer
-// (lib/domain/comms/calls/project.ts). During a browser call the keypad sends
-// touch-tones instead, for a supplier's menu or an extension.
+// (lib/domain/comms/calls/project.ts). Placing lives on the button
+// (./use-project-call-placer.ts), so closing the panel mid-placement keeps
+// the attempt and its key.
 
 const TARGET_STORAGE_KEY = "comms:project-dialer-target";
 const BROWSER = "browser";
-
-const KEYS: readonly { digit: string; letters: string }[] = [
-  { digit: "1", letters: "" },
-  { digit: "2", letters: "ABC" },
-  { digit: "3", letters: "DEF" },
-  { digit: "4", letters: "GHI" },
-  { digit: "5", letters: "JKL" },
-  { digit: "6", letters: "MNO" },
-  { digit: "7", letters: "PQRS" },
-  { digit: "8", letters: "TUV" },
-  { digit: "9", letters: "WXYZ" },
-  { digit: "*", letters: "" },
-  { digit: "0", letters: "+" },
-  { digit: "#", letters: "" },
-];
-
-const GROUPS: readonly {
-  kind: ProjectCallContactKindDto;
-  label: string;
-  icon: React.ElementType;
-}[] = [
-  { icon: HardHat, kind: "SITE_MANAGER", label: "Site manager" },
-  { icon: UserRound, kind: "OWNER", label: "Owners" },
-  { icon: Wrench, kind: "TRADIE", label: "Tradies" },
-];
 
 function readTarget(): string | null {
   try {
@@ -108,7 +73,10 @@ export function ProjectDialerButton({
   projectName: string;
 }) {
   const [open, setOpen] = useState(false);
+  const phone = useOptionalPhone();
+  const placer = useProjectCallPlacer(projectId, phone);
   const openDialer = useCallback(() => setOpen(true), []);
+  const close = useCallback(() => setOpen(false), []);
   useProjectDialerRequest(projectId, openDialer);
   return (
     <>
@@ -120,14 +88,20 @@ export function ProjectDialerButton({
         aria-haspopup="dialog"
         onClick={() => setOpen((value) => !value)}
       >
-        <Phone className="mr-1.5 size-4" aria-hidden="true" />
+        {placer.placing ? (
+          <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />
+        ) : (
+          <Phone className="mr-1.5 size-4" aria-hidden="true" />
+        )}
         Call
       </Button>
       {open ? (
         <ProjectDialer
           projectId={projectId}
           projectName={projectName}
-          onClose={() => setOpen(false)}
+          phone={phone}
+          placer={placer}
+          onClose={close}
         />
       ) : null}
     </>
@@ -137,44 +111,28 @@ export function ProjectDialerButton({
 function ProjectDialer({
   projectId,
   projectName,
+  phone,
+  placer,
   onClose,
 }: {
   projectId: string;
   projectName: string;
+  phone: ReturnType<typeof useOptionalPhone>;
+  placer: ProjectCallPlacer;
   onClose: () => void;
 }) {
-  const phone = useOptionalPhone();
-  const keys = useIdempotencyKeys();
-  const [data, setData] = useState<ProjectCallsDto | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const query = useProjectCalls(projectId);
+  const data = query.data ?? null;
+  const error = query.error
+    ? query.error instanceof Error
+      ? query.error.message
+      : "Could not load the project's people."
+    : null;
   const [view, setView] = useState<"people" | "keypad">("people");
   const [collapsed, setCollapsed] = useState(false);
-  const [number, setNumber] = useState("");
-  const [placing, setPlacing] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(() =>
     typeof window === "undefined" ? null : readTarget(),
   );
-  const [tones, setTones] = useState("");
-  const input = useRef<HTMLInputElement>(null);
-
-  const load = useCallback(async () => {
-    try {
-      setData(await fetchProjectCalls(projectId));
-      setError(null);
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Could not load the project's people.",
-      );
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    const first = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(first);
-  }, [load]);
-  useProjectCallsChange(projectId, load);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -201,93 +159,20 @@ function ProjectDialer({
     targets.find((item) => item.value === picked)?.value
     ?? targets[0]?.value
     ?? null;
-  const viaPhone =
-    target && target !== BROWSER
-      ? (options?.phones.find((item) => phoneKey(item) === target) ?? null)
-      : null;
+  const route: CallRoute | null = !target
+    ? null
+    : target === BROWSER
+      ? { target: "browser" }
+      : {
+          phone:
+            options?.phones.find((item) => phoneKey(item) === target) ?? null,
+          target: "mobile",
+        };
 
   const onCall = phone?.active?.kind === "pstn" ? phone.active : null;
   const inBrowserCall = onCall?.phase === "active";
-  const busy = Boolean(phone?.active);
-
-  const typed = normaliseLeadPhone(number);
-  const typedContact = typed.usable
-    ? data?.contacts.find((contact) => contact.e164 === typed.e164)
-    : undefined;
-
-  async function place(
-    to: { contactRef: string } | { number: string },
-    label: string,
-    keyTarget: string,
-  ) {
-    if (placing || !target) return;
-    if (busy) {
-      toast.error("Finish the current call first.");
-      return;
-    }
-    const viaBrowser = target === BROWSER;
-    if (viaBrowser && phone?.status !== "ready") {
-      toast.error(
-        phone?.message
-          ?? "The browser phone isn't connected yet. Pick a phone to take the call, or wait a moment.",
-      );
-      return;
-    }
-    setPlacing(keyTarget);
-    try {
-      if (viaBrowser) {
-        // Before their phone rings: a blocked microphone found now costs
-        // nothing; found after they pick up, they hear silence.
-        const micProblem = await checkMicrophone();
-        if (micProblem) {
-          toast.error(micProblem);
-          return;
-        }
-      }
-      const result = await placeProjectCall(
-        projectId,
-        to,
-        viaBrowser ? "browser" : "mobile",
-        keys.current(keyTarget),
-        viaPhone?.id ?? null,
-      );
-      keys.rotate(keyTarget);
-      if (viaBrowser) {
-        phone?.expectOutboundCall({
-          callId: result.call.id,
-          leadName: result.call.contactName ?? label,
-        });
-      }
-      if (result.alreadyPlaced) {
-        toast.info("That call was already placed — it wasn't placed again.");
-      } else if (!viaBrowser) {
-        toast.success(
-          `Calling ${label}. ${viaPhone?.nickname ?? "The office mobile"} rings when they answer.`,
-        );
-      }
-      if ("number" in to) setNumber("");
-    } catch (placeError) {
-      toast.error(
-        placeError instanceof Error
-          ? placeError.message
-          : "The call couldn't be placed.",
-      );
-    } finally {
-      setPlacing(null);
-      announceProjectCallsChange(projectId);
-    }
-  }
-
-  function press(digit: string) {
-    if (inBrowserCall && phone?.sendDigits(digit)) {
-      setTones((value) => `${value}${digit}`.slice(-24));
-      return;
-    }
-    setNumber((value) => `${value}${digit}`.slice(0, 24));
-    input.current?.focus();
-  }
-
-  const canCall = Boolean(options?.allowed && target) && !busy;
+  const canCall = Boolean(options?.allowed && route) && !phone?.active;
+  const { placing } = placer;
 
   return (
     <div
@@ -331,307 +216,157 @@ function ProjectDialer({
         </Button>
       </div>
 
-      {collapsed ? null : (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div
-            role="tablist"
-            aria-label="Dialer"
-            className="mx-3 mt-3 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1"
-          >
-            {(["people", "keypad"] as const).map((key) => (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={view === key}
-                onClick={() => setView(key)}
-                className={cn(
-                  "rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
-                  view === key
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {key === "people" ? "People" : "Keypad"}
-              </button>
-            ))}
-          </div>
+      <div
+        className={cn("min-h-0 flex-1 flex-col", collapsed ? "hidden" : "flex")}
+      >
+        <div
+          role="tablist"
+          aria-label="Dialer"
+          className="mx-3 mt-3 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1"
+        >
+          {(["people", "keypad"] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={view === key}
+              onClick={() => setView(key)}
+              className={cn(
+                "rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+                view === key
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {key === "people" ? "People" : "Keypad"}
+            </button>
+          ))}
+        </div>
 
-          {inBrowserCall ? (
-            <p className="mx-3 mt-2 rounded-md bg-success-light px-2.5 py-1.5 text-xs text-success-ink">
-              On a call with {onCall?.leadName ?? "the other person"}. The
-              keypad sends tones
-              {tones ? (
-                <span className="ml-1 font-mono tabular-nums">{tones}</span>
-              ) : null}
-              .
+        {inBrowserCall ? (
+          <p className="mx-3 mt-2 rounded-md bg-success-light px-2.5 py-1.5 text-xs text-success-ink">
+            On a call with {onCall?.leadName ?? "the other person"}. The keypad
+            sends tones.
+          </p>
+        ) : null}
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+          {error ? (
+            <p className="mb-2 rounded-md bg-destructive/10 px-2.5 py-2 text-sm text-destructive">
+              {error}
             </p>
           ) : null}
-
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-            {error ? (
-              <p className="mb-2 rounded-md bg-destructive/10 px-2.5 py-2 text-sm text-destructive">
-                {error}
-              </p>
-            ) : null}
-            {!data && !error ? (
-              <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                Loading…
-              </div>
-            ) : null}
-
-            {data && view === "people" ? (
-              <PeopleList
-                contacts={data.contacts}
-                canCall={canCall}
-                placing={placing}
-                onCall={(contact) =>
-                  void place(
-                    { contactRef: contact.ref },
-                    contact.name,
-                    contact.ref,
-                  )
-                }
-              />
-            ) : null}
-
-            {data && view === "keypad" ? (
-              <div className="space-y-3">
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    if (typed.usable)
-                      void place(
-                        { number },
-                        typedContact?.name ?? formatE164ForDisplay(typed.e164),
-                        "keypad",
-                      );
-                  }}
-                >
-                  <div className="flex items-center gap-1 rounded-lg border border-border bg-background px-2">
-                    <input
-                      ref={input}
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="off"
-                      aria-label="Number to call"
-                      placeholder="Enter a number"
-                      value={number}
-                      maxLength={24}
-                      onChange={(event) =>
-                        setNumber(
-                          event.target.value.replace(/[^\d+*#\s()-]/g, ""),
+          {!data && !error ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              Loading…
+            </div>
+          ) : null}
+          {data ? (
+            <>
+              <div hidden={view !== "people"}>
+                <DialerPeople
+                  contacts={data.contacts}
+                  canCall={canCall}
+                  busy={placing !== null}
+                  placingKey={placing?.via === "people" ? placing.key : null}
+                  onCall={(contact) =>
+                    route
+                      ? void placer.place(
+                          {
+                            kind: "contact",
+                            label: contact.name,
+                            ref: contact.ref,
+                          },
+                          route,
                         )
-                      }
-                      className="h-11 min-w-0 flex-1 bg-transparent text-center font-mono text-lg tabular-nums tracking-wide outline-none placeholder:font-sans placeholder:text-sm placeholder:tracking-normal"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 shrink-0"
-                      aria-label="Delete the last digit"
-                      disabled={!number}
-                      onClick={() => setNumber((value) => value.slice(0, -1))}
-                    >
-                      <Delete className="size-4" aria-hidden="true" />
-                    </Button>
-                  </div>
-                  <p className="mt-1 h-4 truncate text-center text-xs text-muted-foreground">
-                    {typedContact
-                      ? `${typedContact.name} · ${typedContact.role}`
-                      : number && !typed.usable
-                        ? "Not a complete number yet"
-                        : typed.usable
-                          ? formatE164ForDisplay(typed.e164)
-                          : ""}
-                  </p>
-                  <div className="mt-2 grid grid-cols-3 gap-2">
-                    {KEYS.map((key) => (
-                      <button
-                        key={key.digit}
-                        type="button"
-                        onClick={() => press(key.digit)}
-                        className="flex h-12 flex-col items-center justify-center rounded-full bg-muted/60 text-foreground transition-colors hover:bg-muted active:bg-muted-foreground/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                        aria-label={
-                          inBrowserCall ? `Send tone ${key.digit}` : key.digit
-                        }
-                      >
-                        <span className="text-lg leading-none font-medium">
-                          {key.digit}
-                        </span>
-                        <span className="h-3 text-[9px] leading-3 tracking-widest text-muted-foreground">
-                          {key.letters}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  <Button
-                    type="submit"
-                    className="mt-3 h-11 w-full rounded-full bg-success-ink text-white hover:bg-success-ink/90"
-                    disabled={!canCall || !typed.usable || placing !== null}
-                  >
-                    {placing === "keypad" ? (
-                      <Loader2
-                        className="size-4 animate-spin"
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <Phone className="size-4" aria-hidden="true" />
-                    )}
-                    Call
-                  </Button>
-                </form>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="space-y-2 border-t border-border px-3 py-2.5">
-            {options && !options.allowed ? (
-              <p className="flex items-start gap-2 rounded-md bg-warning-light px-2.5 py-2 text-xs text-warning-ink">
-                <AlertTriangle
-                  className="mt-0.5 size-3.5 shrink-0"
-                  aria-hidden="true"
+                      : undefined
+                  }
                 />
-                {options.reason}
-              </p>
-            ) : null}
-            {targets.length > 0 ? (
-              <div className="flex items-center gap-2">
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  Take it on
-                </span>
-                <Select
-                  value={target ?? undefined}
-                  onValueChange={(value) => {
-                    setPicked(value);
-                    rememberTarget(value);
-                  }}
-                >
-                  <SelectTrigger
-                    size="sm"
-                    className="h-8 min-w-0 flex-1 text-xs"
-                    aria-label="Where the call is put through"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="z-60">
-                    {targets.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 shrink-0"
-                  aria-label="Reload the project's people"
-                  onClick={() => void load()}
-                >
-                  <RefreshCw className="size-3.5" aria-hidden="true" />
-                </Button>
               </div>
-            ) : null}
-            {target === BROWSER && phone && phone.status !== "ready" ? (
-              <p className="text-xs text-muted-foreground">
-                Browser phone:{" "}
-                {phone.status === "connecting"
-                  ? "connecting…"
-                  : (phone.message ?? phone.status)}
-              </p>
-            ) : null}
-          </div>
+              {/* Kept mounted while hidden, so a half-typed number survives
+                  a look at People. */}
+              <div hidden={view !== "keypad"}>
+                <DialerKeypad
+                  contacts={data.contacts}
+                  canCall={canCall}
+                  busy={placing !== null}
+                  placing={placing?.via === "keypad"}
+                  sendTone={
+                    inBrowserCall && phone
+                      ? (digit) => phone.sendDigits(digit)
+                      : null
+                  }
+                  onCall={(e164, label) =>
+                    route
+                      ? placer.place({ e164, kind: "number", label }, route)
+                      : Promise.resolve(false)
+                  }
+                />
+              </div>
+            </>
+          ) : null}
         </div>
-      )}
-    </div>
-  );
-}
 
-function PeopleList({
-  contacts,
-  canCall,
-  placing,
-  onCall,
-}: {
-  contacts: readonly ProjectCallContactDto[];
-  canCall: boolean;
-  placing: string | null;
-  onCall: (contact: ProjectCallContactDto) => void;
-}) {
-  if (contacts.length === 0) {
-    return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        Nobody on this project has a number yet. Use the keypad to call any
-        number.
-      </p>
-    );
-  }
-  return (
-    <div className="space-y-3">
-      {GROUPS.map((group) => {
-        const people = contacts.filter(
-          (contact) => contact.kind === group.kind,
-        );
-        if (people.length === 0) return null;
-        const Icon = group.icon;
-        return (
-          <section key={group.kind} aria-label={group.label}>
-            <h3 className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-              <Icon className="size-3.5" aria-hidden="true" />
-              {group.label}
-            </h3>
-            <ul className="divide-y divide-border/60 rounded-lg border border-border">
-              {people.map((contact) => (
-                <li
-                  key={contact.ref}
-                  className="flex items-center gap-2 px-2.5 py-2"
+        <div className="space-y-2 border-t border-border px-3 py-2.5">
+          {options && !options.allowed ? (
+            <p className="flex items-start gap-2 rounded-md bg-warning-light px-2.5 py-2 text-xs text-warning-ink">
+              <AlertTriangle
+                className="mt-0.5 size-3.5 shrink-0"
+                aria-hidden="true"
+              />
+              {options.reason}
+            </p>
+          ) : null}
+          {targets.length > 0 ? (
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-xs text-muted-foreground">
+                Take it on
+              </span>
+              <Select
+                value={target ?? undefined}
+                onValueChange={(value) => {
+                  setPicked(value);
+                  rememberTarget(value);
+                }}
+              >
+                <SelectTrigger
+                  size="sm"
+                  className="h-8 min-w-0 flex-1 text-xs"
+                  aria-label="Where the call is put through"
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {contact.name}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {contact.role}
-                      {" · "}
-                      {contact.e164 ? (
-                        <span className="font-mono tabular-nums">
-                          {formatE164ForDisplay(contact.e164)}
-                        </span>
-                      ) : (
-                        <span className="text-warning-ink">
-                          {contact.problem}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="icon"
-                    className="size-9 shrink-0 rounded-full bg-success-ink text-white hover:bg-success-ink/90"
-                    disabled={!canCall || !contact.e164 || placing !== null}
-                    aria-label={`Call ${contact.name}`}
-                    title={contact.problem ?? `Call ${contact.name}`}
-                    onClick={() => onCall(contact)}
-                  >
-                    {placing === contact.ref ? (
-                      <Loader2
-                        className="size-4 animate-spin"
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <Phone className="size-4" aria-hidden="true" />
-                    )}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        );
-      })}
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="z-60">
+                  {targets.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8 shrink-0"
+                aria-label="Reload the project's people"
+                onClick={() => void query.refetch()}
+              >
+                <RefreshCw className="size-3.5" aria-hidden="true" />
+              </Button>
+            </div>
+          ) : null}
+          {target === BROWSER && phone && phone.status !== "ready" ? (
+            <p className="text-xs text-muted-foreground">
+              Browser phone:{" "}
+              {phone.status === "connecting"
+                ? "connecting…"
+                : (phone.message ?? phone.status)}
+            </p>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

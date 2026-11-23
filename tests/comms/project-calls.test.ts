@@ -9,6 +9,7 @@ import {
 } from "@/lib/domain/comms/calls/project";
 import {
   matchCallToProject,
+  matchWaitingCallsToProjects,
   PROJECT_MATCH_MAX_ATTEMPTS,
 } from "@/lib/domain/comms/calls/project-matching";
 import {
@@ -240,6 +241,29 @@ test("calling a person rings the number on their record and files the call on th
   );
 });
 
+test("a retry after a definite refusal re-files the row as whoever this attempt rings", async () => {
+  const recorder = recordingDb(placingScript());
+  await requestProjectCall(
+    adminPrincipal(),
+    {
+      idempotencyKey: "k",
+      now: NOW,
+      projectId: PROJECT,
+      target: "browser",
+      to: { contactRef: "customer:cust-1" },
+    },
+    recorder.transactionalDb,
+    { channel: channel(), voice: voice() },
+  );
+  const upsert = recorder
+    .writes()
+    .find((call) => call.operation === "call.upsert");
+  const update = (upsert?.args as { update: Record<string, unknown> }).update;
+  assert.equal(update.contactName, "Olivia Owner");
+  assert.equal(update.contactRef, "customer:cust-1");
+  assert.equal(update.customerNumber, "+61412345678");
+});
+
 test("a typed number that belongs to someone on the project is filed as them", async () => {
   const recorder = recordingDb(placingScript());
   await requestProjectCall(
@@ -369,6 +393,17 @@ function candidateProject(id: string, name: string) {
   };
 }
 
+/** `project.findMany` for the two candidate reads: running, then finished. */
+function projects(
+  live: ReturnType<typeof candidateProject>[],
+  finished: ReturnType<typeof candidateProject>[] = [],
+) {
+  return (args: unknown) => {
+    const status = (args as { where: { status: unknown } }).where.status;
+    return status === "COMPLETED" ? finished : live;
+  };
+}
+
 function matchedWrite(recorder: ReturnType<typeof recordingDb>) {
   const write = recorder
     .writes()
@@ -381,10 +416,10 @@ test("the model picks one of the caller's projects, and the call is filed there 
     ...TRADIE_MATCH,
     "call.findUnique": inboundCall(),
     "call.updateMany": { count: 1 },
-    "project.findMany": [
+    "project.findMany": projects([
       candidateProject("p-smith", "12 Smith St"),
       candidateProject("p-jones", "4 Jones Ave"),
-    ],
+    ]),
   });
   let seen: string[] = [];
   const matchProject: ProjectCallMatcherPort = async (input) => {
@@ -411,7 +446,7 @@ test("a project the model names that is not the caller's files nothing", async (
     ...TRADIE_MATCH,
     "call.findUnique": inboundCall(),
     "call.updateMany": { count: 1 },
-    "project.findMany": [candidateProject("p-smith", "12 Smith St")],
+    "project.findMany": projects([candidateProject("p-smith", "12 Smith St")]),
   });
   const outcome = await matchCallToProject(
     SYSTEM,
@@ -458,7 +493,7 @@ test("with no transcript, a caller on exactly one project is filed there", async
     ...TRADIE_MATCH,
     "call.findUnique": inboundCall({ agentTranscript: null }),
     "call.updateMany": { count: 1 },
-    "project.findMany": [candidateProject("p-smith", "12 Smith St")],
+    "project.findMany": projects([candidateProject("p-smith", "12 Smith St")]),
   });
   const outcome = await matchCallToProject(
     SYSTEM,
@@ -497,31 +532,141 @@ test("a model that keeps failing is retried, then the call is marked FAILED", as
   const failing: ProjectCallMatcherPort = async () => {
     throw new Error("gateway down");
   };
-  const script = (attempts: number) => ({
+  // The database counts the attempts; the give-up write only lands once the
+  // count has reached the limit.
+  const script = (reachedLimit: boolean) => ({
     ...TRADIE_MATCH,
-    "call.findUnique": inboundCall({ projectMatchAttempts: attempts }),
-    "call.updateMany": { count: 1 },
-    "project.findMany": [candidateProject("p-smith", "12 Smith St")],
+    "call.findUnique": inboundCall(),
+    "call.updateMany": (args: unknown) => {
+      const where = (args as { where: Record<string, unknown> }).where;
+      return {
+        count: "projectMatchAttempts" in where && !reachedLimit ? 0 : 1,
+      };
+    },
+    "project.findMany": projects([candidateProject("p-smith", "12 Smith St")]),
   });
+  const writes = (recorder: ReturnType<typeof recordingDb>) =>
+    recorder
+      .writes()
+      .map((call) => (call.args as { data: Record<string, unknown> }).data);
 
-  const first = recordingDb(script(0));
+  const first = recordingDb(script(false));
   assert.equal(
     await matchCallToProject(SYSTEM, { callId: "in-1", now: NOW }, first.db, {
       matchProject: failing,
     }),
     "retry",
   );
-  assert.equal(matchedWrite(first)?.projectMatch, undefined);
-  assert.equal(matchedWrite(first)?.projectMatchAttempts, 1);
+  assert.deepEqual(writes(first)[0], {
+    projectMatchAttempts: { increment: 1 },
+  });
 
-  const last = recordingDb(script(PROJECT_MATCH_MAX_ATTEMPTS - 1));
+  const last = recordingDb(script(true));
   assert.equal(
     await matchCallToProject(SYSTEM, { callId: "in-1", now: NOW }, last.db, {
       matchProject: failing,
     }),
     "failed",
   );
-  assert.equal(matchedWrite(last)?.projectMatch, "FAILED");
+  assert.equal(writes(last)[1]?.projectMatch, "FAILED");
+  const giveUp = last.writes()[1]?.args as { where: Record<string, unknown> };
+  assert.deepEqual(giveUp.where.projectMatchAttempts, {
+    gte: PROJECT_MATCH_MAX_ATTEMPTS,
+  });
+});
+
+test("a call filed by another run while the model failed is left alone", async () => {
+  const recorder = recordingDb({
+    ...TRADIE_MATCH,
+    "call.findUnique": inboundCall(),
+    "call.updateMany": { count: 0 },
+    "project.findMany": projects([candidateProject("p-smith", "12 Smith St")]),
+  });
+  assert.equal(
+    await matchCallToProject(
+      SYSTEM,
+      { callId: "in-1", now: NOW },
+      recorder.db,
+      {
+        matchProject: async () => {
+          throw new Error("gateway down");
+        },
+      },
+    ),
+    "skipped",
+  );
+  assert.equal(recorder.writes().length, 1, "no give-up write");
+});
+
+test("a voicemail whose recording has not arrived yet waits", async () => {
+  const recorder = recordingDb({
+    "call.findUnique": inboundCall({
+      agentTranscript: null,
+      answeredBy: "VOICEMAIL",
+      recordings: [],
+    }),
+  });
+  const outcome = await matchCallToProject(
+    SYSTEM,
+    { callId: "in-1", now: NOW },
+    recorder.db,
+    { matchProject: async () => ({ projectId: null, reason: "" }) },
+  );
+  assert.equal(outcome, "waiting");
+  assert.deepEqual(recorder.writes(), []);
+});
+
+test("running builds are candidates before finished ones", async () => {
+  const done = {
+    ...candidateProject("p-old", "1 Old Rd"),
+    status: "COMPLETED",
+  };
+  const recorder = recordingDb({
+    ...TRADIE_MATCH,
+    "call.findUnique": inboundCall(),
+    "call.updateMany": { count: 1 },
+    "project.findMany": projects(
+      [candidateProject("p-smith", "12 Smith St")],
+      [done],
+    ),
+  });
+  let seen: string[] = [];
+  await matchCallToProject(SYSTEM, { callId: "in-1", now: NOW }, recorder.db, {
+    matchProject: async (input) => {
+      seen = input.candidates.map((candidate) => candidate.id);
+      return { projectId: null, reason: "" };
+    },
+  });
+  assert.deepEqual(seen, ["p-smith", "p-old"]);
+  const reads = recorder.calls.filter(
+    (call) => call.operation === "project.findMany",
+  );
+  assert.deepEqual(
+    (reads[0].args as { where: { status: unknown } }).where.status,
+    { not: "COMPLETED" },
+  );
+});
+
+test("one call the database fails on does not stop the run", async () => {
+  const recorder = recordingDb({
+    "call.findMany": [{ id: "bad" }, { id: "good" }],
+    "call.findUnique": (args: unknown) => {
+      if ((args as { where: { id: string } }).where.id === "bad")
+        throw new Error("connection reset");
+      return inboundCall({ customerNumber: "withheld", id: "good" });
+    },
+    "call.updateMany": { count: 1 },
+  });
+  const totals = await matchWaitingCallsToProjects(
+    SYSTEM,
+    recorder.db,
+    {
+      matchProject: async () => ({ projectId: null, reason: "" }),
+    },
+    { now: NOW },
+  );
+  assert.equal(totals.error, 1);
+  assert.equal(totals.no_match, 1);
 });
 
 test("a site manager cannot run the matcher", async () => {

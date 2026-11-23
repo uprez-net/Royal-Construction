@@ -49,8 +49,10 @@ async function handle(request: Request) {
   );
   console.info(`[project-call-matching] ${JSON.stringify(totals)}`);
   // A call that could not be read is retried next run; one that ran out of
-  // attempts is an incident.
-  return cronOutcome(NextResponse.json(totals), { failed: totals.failed });
+  // attempts, or hit an unexpected error, is an incident.
+  return cronOutcome(NextResponse.json(totals), {
+    failed: totals.failed + totals.error,
+  });
 }
 
 export const GET = withCronReporting("/api/cron/project-call-matching", handle);

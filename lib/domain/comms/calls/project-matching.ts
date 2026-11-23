@@ -1,4 +1,5 @@
 import {
+  CallAnsweredBy,
   CallContactKind,
   CallProjectMatch,
   CallRecordingStatus,
@@ -64,7 +65,9 @@ export type ProjectMatchOutcome =
   | "waiting"
   | "failed"
   | "retry"
-  | "skipped";
+  | "skipped"
+  /** The run hit an unexpected error on this call; it stays unfiled. */
+  | "error";
 
 function assertCanMatch(principal: DomainPrincipal): void {
   if (principal.kind === "system") return;
@@ -175,31 +178,44 @@ export async function projectCandidatesFor(
   ];
   if (or.length === 0) return [];
 
-  const projects = await db.project.findMany({
-    orderBy: { updatedAt: "desc" },
-    select: {
-      customers: { select: { customerId: true } },
-      id: true,
-      location: true,
-      milestones: {
-        select: { tradies: { select: { id: true } } },
-        where: { tradies: { some: { id: { in: tradieIds } } } },
-      },
-      name: true,
-      siteManagerId: true,
-      status: true,
-      tradieSchedules: {
-        select: { tradieId: true },
-        where: { tradieId: { in: tradieIds } },
-      },
-      tradies: {
-        select: { id: true, trade: true },
-        where: { id: { in: tradieIds } },
-      },
+  const select = {
+    customers: { select: { customerId: true } },
+    id: true,
+    location: true,
+    milestones: {
+      select: { tradies: { select: { id: true } } },
+      where: { tradies: { some: { id: { in: tradieIds } } } },
     },
+    name: true,
+    siteManagerId: true,
+    status: true,
+    tradieSchedules: {
+      select: { tradieId: true },
+      where: { tradieId: { in: tradieIds } },
+    },
+    tradies: {
+      select: { id: true, trade: true },
+      where: { id: { in: tradieIds } },
+    },
+  } as const;
+  // Builds still running first, then finished ones, each newest first, so a
+  // tradie with years of finished jobs cannot crowd out the one on site now.
+  const live = await db.project.findMany({
+    orderBy: { updatedAt: "desc" },
+    select,
     take: MAX_CANDIDATES * 2,
-    where: { OR: or },
+    where: { OR: or, status: { not: ProjectStatus.COMPLETED } },
   });
+  const finished =
+    live.length >= MAX_CANDIDATES * 2
+      ? []
+      : await db.project.findMany({
+          orderBy: { updatedAt: "desc" },
+          select,
+          take: MAX_CANDIDATES * 2 - live.length,
+          where: { OR: or, status: ProjectStatus.COMPLETED },
+        });
+  const projects = [...live, ...finished];
 
   const candidates = projects.map((project): Candidate | null => {
     const roles: string[] = [];
@@ -266,15 +282,9 @@ export async function projectCandidatesFor(
     };
   });
   // A project the caller has no role on (the OR matched something this
-  // mapping does not recognise) is no candidate. Finished builds go last:
-  // a call is more often about the job on site now.
+  // mapping does not recognise) is no candidate.
   return candidates
     .filter((candidate): candidate is Candidate => candidate !== null)
-    .sort(
-      (a, b) =>
-        Number(a.status === ProjectStatus.COMPLETED)
-        - Number(b.status === ProjectStatus.COMPLETED),
-    )
     .slice(0, MAX_CANDIDATES);
 }
 
@@ -314,6 +324,7 @@ export async function matchCallToProject(
   const call = await db.call.findUnique({
     select: {
       agentTranscript: true,
+      answeredBy: true,
       customerNumber: true,
       direction: true,
       endedAt: true,
@@ -337,13 +348,17 @@ export async function matchCallToProject(
     return "skipped";
   }
 
-  // A voicemail's words arrive with its recording's transcript. Give it an
-  // hour; after that, file on what there is.
-  const transcribing = call.recordings.some(
-    (recording) =>
-      recording.status !== CallRecordingStatus.FAILED
-      && recording.transcriptStatus === CallTranscriptStatus.PENDING,
-  );
+  // A voicemail's words arrive with its recording's transcript, and the
+  // recording itself may not have arrived yet. Give it an hour; after that,
+  // file on what there is.
+  const transcribing =
+    (call.answeredBy === CallAnsweredBy.VOICEMAIL
+      && call.recordings.length === 0)
+    || call.recordings.some(
+      (recording) =>
+        recording.status !== CallRecordingStatus.FAILED
+        && recording.transcriptStatus === CallTranscriptStatus.PENDING,
+    );
   if (
     transcribing
     && now.getTime() - call.endedAt.getTime() < PROJECT_MATCH_TRANSCRIPT_WAIT_MS
@@ -430,27 +445,31 @@ export async function matchCallToProject(
         transcript,
       });
     } catch (error) {
-      const attempts = call.projectMatchAttempts + 1;
-      const giveUp = attempts >= PROJECT_MATCH_MAX_ATTEMPTS;
+      // The message only: a model error can carry its output, which may
+      // repeat the transcript.
       console.error(
-        `[project-call-matching] Matching call ${call.id} failed (attempt ${attempts})`,
-        error,
+        `[project-call-matching] Matching call ${call.id} failed: ${error instanceof Error ? error.message : "unknown error"}`,
       );
-      await db.call.updateMany({
-        data: {
-          projectMatchAttempts: attempts,
-          ...(giveUp
-            ? {
-                projectMatch: CallProjectMatch.FAILED,
-                projectMatchReason:
-                  "The call couldn't be read to file it onto a project.",
-                projectMatchedAt: now,
-              }
-            : {}),
-        },
-        where: { id: call.id, projectId: null, projectMatch: null },
+      const unfiled = { id: call.id, projectId: null, projectMatch: null };
+      // Counted in the database, so two failures never write the same count.
+      const { count } = await db.call.updateMany({
+        data: { projectMatchAttempts: { increment: 1 } },
+        where: unfiled,
       });
-      return giveUp ? "failed" : "retry";
+      if (count === 0) return "skipped";
+      const gaveUp = await db.call.updateMany({
+        data: {
+          projectMatch: CallProjectMatch.FAILED,
+          projectMatchReason:
+            "The call couldn't be read to file it onto a project.",
+          projectMatchedAt: now,
+        },
+        where: {
+          ...unfiled,
+          projectMatchAttempts: { gte: PROJECT_MATCH_MAX_ATTEMPTS },
+        },
+      });
+      return gaveUp.count > 0 ? "failed" : "retry";
     }
     // Only a project from the list: a model that names another files
     // nothing.
@@ -495,6 +514,7 @@ export async function matchWaitingCallsToProjects(
   const now = options.now ?? new Date();
   assertCanMatch(principal);
   const totals: Record<ProjectMatchOutcome, number> = {
+    error: 0,
     failed: 0,
     matched: 0,
     no_match: 0,
@@ -505,7 +525,16 @@ export async function matchWaitingCallsToProjects(
   for (const callId of await callsAwaitingProjectMatch(db, now)) {
     // Out of time: the rest are still unfiled and the next run takes them.
     if (options.deadline !== undefined && Date.now() >= options.deadline) break;
-    totals[await matchCallToProject(principal, { callId, now }, db, ports)]++;
+    try {
+      totals[await matchCallToProject(principal, { callId, now }, db, ports)]++;
+    } catch (error) {
+      // One call the database chokes on must not hold up every call behind
+      // it, run after run. It stays unfiled and is tried again next run.
+      totals.error++;
+      console.error(
+        `[project-call-matching] Call ${callId} could not be matched: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
+    }
   }
   return totals;
 }

@@ -10,7 +10,7 @@ import { LeadEmailSection } from "@/components/leads/modal-ui/email-section";
 import { WhatsAppGlyph } from "@/components/whatsapp/whatsapp-logo";
 import { cn } from "@/lib/utils";
 
-import { useProjectCallsUnread } from "./calls/project-calls-events";
+import { useProjectCallsUnread } from "./calls/project-calls-queries";
 import { ProjectCallsPanel } from "./calls/project-calls-panel";
 import { ProjectWhatsAppPanel } from "./whatsapp/project-whatsapp-panel";
 
