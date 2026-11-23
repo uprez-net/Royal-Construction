@@ -42,7 +42,29 @@ export async function buildInboundCertifierRows(input: {
   const { fallback } = input;
   const rows: Prisma.CertifierEmailCreateManyInput[] = [];
 
-  for (const [index, thread] of input.threads.entries()) {
+  // A reply that is only an attachment has nothing above the quoted history,
+  // so the parser hands back our own earlier message as the newest one. The
+  // message that arrived is still the envelope's: keep a row for it, or the
+  // document is archived with no email in the thread to carry it.
+  const newest = input.threads[0];
+  const threads =
+    input.attachments.length > 0
+    && newest
+    && isOwnMailbox(normalizeEmailAddress(newest.from))
+    && !isOwnMailbox(normalizeEmailAddress(fallback.from))
+      ? [
+          {
+            body: "",
+            from: fallback.from,
+            sentAt: "",
+            subject: fallback.subject,
+            to: fallback.to,
+          },
+          ...input.threads,
+        ]
+      : input.threads;
+
+  for (const [index, thread] of threads.entries()) {
     const from = normalizeEmailAddress(thread.from || fallback.from);
     if (isOwnMailbox(from)) {
       continue;

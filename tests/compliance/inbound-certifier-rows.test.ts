@@ -86,3 +86,16 @@ test("nothing parsed from quoted text is ever filed as outbound", async () => {
   ]);
   assert.ok(rows.every((row) => row.direction !== "OUTBOUND"));
 });
+
+test("an attachment-only reply keeps a row for the message that arrived", async () => {
+  // The body is only our quoted mail, so the parser's newest entry is ours.
+  const rows = await build([
+    thread("Royal Constructions <admin@royal.test>", "Please send the plans."),
+  ]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.emailFrom, "cert@certco.test");
+  assert.equal(rows[0]?.body, "");
+  assert.deepEqual(rows[0]?.attachments, [
+    { name: "a.pdf", url: "https://x/a.pdf" },
+  ]);
+});
