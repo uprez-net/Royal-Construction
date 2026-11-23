@@ -160,6 +160,8 @@ function QuoteItem({
           fontSize: isTotal ? 18 : 15,
           color: isTotal ? RC_COLORS.gold : RC_COLORS.textOnLight,
           letterSpacing: isTotal ? "-0.3px" : undefined,
+          // "-$31,000" must not split after the sign on a narrow phone (#592).
+          whiteSpace: "nowrap",
         }}
       >
         {amount}
