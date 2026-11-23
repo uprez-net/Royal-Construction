@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import { reportError } from "@/lib/observability/report-error";
+
 // Short-lived proof that a public booking link was issued for a specific lead.
 // Without this, a caller-supplied numeric id is treated as authorisation.
 
@@ -31,12 +33,34 @@ function mac(payload: string, secret: string): string {
   return createHmac("sha256", secret).update(payload).digest("base64url");
 }
 
-/** Returns null when the secret is not configured. */
+/**
+ * Returns null when the secret is not configured.
+ *
+ * That null is not harmless: every caller puts the token in an emailed link,
+ * and the booking route answers a link with an id but no token "This booking
+ * link is no longer valid". 38 of 44 welcome emails went out that way while the
+ * secret was missing in production, and nothing said so (#590). So a missing
+ * secret is reported (production only; `reportError` is a no-op elsewhere), once
+ * per Sentry issue rather than once per email.
+ */
 export function signBookConsultationToken(
   leadId: number,
   secret: string | null = bookConsultationTokenSecret(),
 ): string | null {
-  if (!secret || !Number.isSafeInteger(leadId) || leadId <= 0) {
+  if (!Number.isSafeInteger(leadId) || leadId <= 0) {
+    return null;
+  }
+  if (!secret) {
+    reportError(
+      new Error(
+        `${BOOK_CONSULTATION_TOKEN_SECRET_ENV} is missing or too short: a booking link was built without its token and will be refused`,
+      ),
+      {
+        source: "leads:booking-token",
+        ids: { leadId },
+        fingerprint: ["booking-token-secret-missing"],
+      },
+    );
     return null;
   }
   const exp = Math.floor((Date.now() + TOKEN_TTL_MS) / 1000);

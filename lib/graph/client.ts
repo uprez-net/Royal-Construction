@@ -856,6 +856,21 @@ export async function createGraphContext(
       }
     },
     sendMail: async ({ to, subject, body, cc, bcc, attachments }) => {
+      // Refused here, not sent: the sender-copy CC below is added to every
+      // send, so a message with an empty To still goes out, to the office
+      // alone, carrying whatever was meant for a client (#590). BCC-only is
+      // allowed; a message with neither is a caller's bug, and it should
+      // fail where it can be seen rather than reach an inbox.
+      const hasAddress = (value?: string | string[]) =>
+        (Array.isArray(value) ? value : [value]).some(
+          (address) => typeof address === "string" && address.trim() !== "",
+        );
+      if (!hasAddress(to) && !hasAddress(bcc)) {
+        throw new Error(
+          "sendMail refused: the message has no recipient. Nothing was sent.",
+        );
+      }
+
       const formatRecipients = (value?: string | string[]) =>
         value
           ? (Array.isArray(value) ? value : [value]).map((email) => ({

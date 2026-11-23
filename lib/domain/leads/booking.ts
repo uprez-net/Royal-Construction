@@ -4,6 +4,7 @@ import type { TransactionalDomainDb } from "../db";
 import { DomainValidationError } from "../errors";
 import { runOutboxEffectWithOutcome } from "../outbox";
 import type { DomainPrincipal } from "../principal";
+import { ownMailboxRefusal } from "./client-email";
 
 // Booking a consultation from the public website.
 //
@@ -63,6 +64,12 @@ export function consultationBookingKey(slot: ConsultationSlot): string {
       "A booking needs the client's email address.",
       "email",
     );
+  }
+  // Before the calendar is touched: inside the effect this would fail after
+  // the meeting and the confirmation had already gone out (#590).
+  const ownMailbox = ownMailboxRefusal(email);
+  if (ownMailbox) {
+    throw new DomainValidationError(ownMailbox, "email");
   }
   if (Number.isNaN(slot.startsAt.getTime())) {
     throw new DomainValidationError(
