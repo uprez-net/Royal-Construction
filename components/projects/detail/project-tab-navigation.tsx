@@ -27,10 +27,13 @@ import {
   Mail,
   ShieldCheck,
   ClipboardCheck,
+  Phone,
 } from "lucide-react";
 import { ProjectDetail } from "@/types/project";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ProjectDetailTabKey } from "@/utils/validators/projects";
+
+import { useProjectCallsUnread } from "./calls/project-calls-events";
 
 /**
  * The tabs that are actually navigable. `projectTabsValidator` still accepts
@@ -119,6 +122,8 @@ type TabBadge = {
   tone: BadgeTone;
   /** Spells out what the bare number means for screen readers. */
   description: string;
+  /** Drawn before the number, when the count is of one kind of thing. */
+  icon?: React.ElementType;
 };
 
 type ProjectDetailTab = {
@@ -293,6 +298,7 @@ const calcComplianceOverviewData = (
 
 const generateProjectDetailTabs = (
   project: ProjectDetail,
+  unreadCalls: number,
 ): ProjectDetailTab[] => {
   const {
     totalStages: projectStagesCount,
@@ -410,7 +416,21 @@ const generateProjectDetailTabs = (
     },
     { key: "docs", label: "Documents" },
     { key: "history", label: "History" },
-    { key: "communications", label: "Communications" },
+    {
+      key: "communications",
+      label: "Communications",
+      ...(unreadCalls > 0
+        ? {
+            badge: {
+              count: unreadCalls.toString(),
+              // Somebody rang about this build and nobody has read it yet.
+              tone: "warning",
+              description: `${unreadCalls} new inbound call${unreadCalls === 1 ? "" : "s"} filed on this project`,
+              icon: Phone,
+            } satisfies TabBadge,
+          }
+        : {}),
+    },
   ];
 };
 
@@ -427,14 +447,16 @@ export function ProjectTabNavigation({
 }) {
   // Filtered here, not per button, so the arrow keys skip a tab the viewer
   // cannot open as well as the mouse.
+  // Matched inbound calls are the office's to read: nobody else is asked.
+  const unreadCalls = useProjectCallsUnread(project.id, isAdmin);
   const projectDetailTabs = useMemo(
     () =>
-      generateProjectDetailTabs(project).filter(
+      generateProjectDetailTabs(project, unreadCalls).filter(
         (tab) =>
           canOpenProjectDetailTab(tab.key, project)
           && (!tab.isAdminOnly || isAdmin),
       ),
-    [isAdmin, project],
+    [isAdmin, project, unreadCalls],
   );
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const listRef = useRef<HTMLDivElement>(null);
@@ -538,10 +560,13 @@ export function ProjectTabNavigation({
                   <span
                     aria-hidden="true"
                     className={cn(
-                      "ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium leading-none",
+                      "ml-1 inline-flex h-5 min-w-5 items-center justify-center gap-1 rounded-full px-1.5 text-xs font-medium leading-none",
                       BADGE_TONE_CLASS[tab.badge.tone],
                     )}
                   >
+                    {tab.badge.icon ? (
+                      <tab.badge.icon className="size-3" aria-hidden="true" />
+                    ) : null}
                     {tab.badge.count}
                   </span>
                   <span className="sr-only">{tab.badge.description}</span>

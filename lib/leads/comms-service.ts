@@ -10,6 +10,7 @@ import type {
   LeadCommsUnreadDto,
   PendingCommsDto,
   PlaceCallResultDto,
+  ProjectCallsDto,
   SmsMessageDto,
   SmsSendResultDto,
   SmsThreadDto,
@@ -117,6 +118,59 @@ export function placeLeadCall(
       method: "POST",
     },
     "The call could not be placed.",
+  );
+}
+
+// ── Project calls (ADMIN) ─────────────────────────────────────────────
+
+export function fetchProjectCalls(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<ProjectCallsDto> {
+  return unwrap(
+    `/api/projects/${encodeURIComponent(projectId)}/calls`,
+    { ...GET, signal },
+    "Could not load the project's calls.",
+  );
+}
+
+/** `to`: one of the project's people by `ref`, or a typed number. */
+export function placeProjectCall(
+  projectId: string,
+  to: { contactRef: string } | { number: string },
+  target: "browser" | "mobile",
+  idempotencyKey: string,
+  phoneId: string | null = null,
+): Promise<PlaceCallResultDto> {
+  return unwrap(
+    `/api/projects/${encodeURIComponent(projectId)}/calls`,
+    {
+      body: JSON.stringify({ phoneId, target, to }),
+      headers: { ...JSON_HEADERS, ...idempotencyHeader(idempotencyKey) },
+      method: "POST",
+    },
+    "The call could not be placed.",
+  );
+}
+
+export function fetchProjectCallsUnread(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<{ unread: number }> {
+  return unwrap(
+    `/api/projects/${encodeURIComponent(projectId)}/calls/unread`,
+    { ...GET, signal },
+    "Could not count the project's new calls.",
+  );
+}
+
+export function markProjectCallsRead(
+  projectId: string,
+): Promise<{ marked: number }> {
+  return unwrap(
+    `/api/projects/${encodeURIComponent(projectId)}/calls/unread`,
+    { method: "POST" },
+    "Could not mark the calls read.",
   );
 }
 

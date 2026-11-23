@@ -223,6 +223,8 @@ test("filing a pending call onto a lead moves it there and logs it", async () =>
     dismissedAt: null,
     id: "call-1",
     leadId: null,
+    // A call the matcher filed onto a project is no longer pending.
+    projectId: null,
   });
   assert.equal(history.operation, "leadHistory.create");
 });

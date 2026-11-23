@@ -44,6 +44,10 @@ export const PENDING_CALL_WHERE = {
   direction: CommsDirection.INBOUND,
   dismissedAt: null,
   leadId: null,
+  // Filed onto a project by the matcher (calls/project-matching.ts): a
+  // tradie or a site manager ringing about a build is not waiting to be
+  // filed onto a lead.
+  projectId: null,
 } satisfies Prisma.CallWhereInput;
 
 export const PENDING_SMS_WHERE = {

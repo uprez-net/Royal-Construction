@@ -5,10 +5,11 @@ import {
   CommsDirection,
   OutboxEventKind,
   OutboxEventStatus,
+  type CallContactKind,
 } from "@prisma/client";
 
 import { canAccessLead } from "../../access/leads";
-import type { TransactionalDomainDb } from "../../db";
+import type { DomainDb, TransactionalDomainDb } from "../../db";
 import {
   DomainAuthorizationError,
   DomainNotFoundError,
@@ -28,7 +29,11 @@ import {
   type CommsChannel,
   type VoicePort,
 } from "../../ports/comms";
-import { isOfficePrincipal, type DomainPrincipal } from "../../principal";
+import {
+  isOfficePrincipal,
+  type DomainPrincipal,
+  type UserPrincipal,
+} from "../../principal";
 import { normaliseLeadPhone } from "../../leads/whatsapp/phone";
 import { SMS_REFUSALS } from "../sms/policy";
 import { resolveCallablePhone } from "../team-phones";
@@ -90,7 +95,7 @@ export function callOutboxKey(leadId: number, idempotencyKey: string) {
   return `lead-call:${leadId}:${idempotencyKey}`;
 }
 
-async function readCall(
+export async function readCall(
   db: TransactionalDomainDb,
   where: { id: string } | { idempotencyKey: string },
 ) {
@@ -114,14 +119,10 @@ export async function requestLeadCall(
       "Calling a lead requires a signed-in member of staff.",
     );
   }
-  const idempotencyKey = input.idempotencyKey.trim();
-  if (!idempotencyKey || idempotencyKey.length > 200) {
-    throw new DomainValidationError(
-      "A call needs an idempotency key so a retry cannot ring the customer twice.",
-      "idempotencyKey",
-    );
-  }
-  const outboxKey = callOutboxKey(input.leadId, idempotencyKey);
+  const outboxKey = callOutboxKey(
+    input.leadId,
+    requireCallKey(input.idempotencyKey),
+  );
 
   const lead = await db.lead.findUnique({
     select: { assignedId: true, id: true, isArchived: true, phone: true },
@@ -132,6 +133,118 @@ export async function requestLeadCall(
     throw new DomainAuthorizationError("You do not have access to this lead");
   }
 
+  return placeStaffCall(
+    principal,
+    {
+      history: async (tx, placed) => {
+        await recordCommsHistory(tx, {
+          action: "Call placed",
+          at: now,
+          detail: placedDetail(placed),
+          leadId: lead.id,
+          principal,
+          type: "CALL",
+        });
+      },
+      kind: OutboxEventKind.LEAD_CALL_PLACE,
+      link: { leadId: lead.id },
+      now,
+      outboxKey,
+      payload: { leadId: lead.id },
+      phoneId: input.phoneId ?? null,
+      resolveTo: () => {
+        if (lead.isArchived) {
+          throw new DomainTransitionError(CALL_REFUSALS.archived);
+        }
+        const phone = normaliseLeadPhone(lead.phone);
+        if (!phone.usable) {
+          throw new DomainTransitionError(
+            phone.raw ? SMS_REFUSALS.invalidPhone : SMS_REFUSALS.noPhone,
+          );
+        }
+        return phone.e164;
+      },
+      target: input.target,
+    },
+    db,
+    ports,
+  );
+}
+
+/** The key a caller sent, checked: a call without one could ring twice. */
+export function requireCallKey(raw: string): string {
+  const idempotencyKey = raw.trim();
+  if (!idempotencyKey || idempotencyKey.length > 200) {
+    throw new DomainValidationError(
+      "A call needs an idempotency key so a retry cannot ring the customer twice.",
+      "idempotencyKey",
+    );
+  }
+  return idempotencyKey;
+}
+
+export type PlacedCall = {
+  readonly callId: string;
+  readonly to: string;
+  readonly sender: { readonly e164: string; readonly label: string };
+  readonly staffPhone: {
+    readonly e164: string;
+    readonly nickname: string;
+  } | null;
+};
+
+/** What a placed call's history line says, wherever it is written. */
+export function placedDetail(placed: PlacedCall): string {
+  return `Calling ${maskNumber(placed.to)} from ${placed.sender.label} (${placed.sender.e164}); ${
+    placed.staffPhone
+      ? `${placed.staffPhone.nickname} (${maskNumber(placed.staffPhone.e164)})`
+      : "the caller's browser"
+  } rings when they answer.`;
+}
+
+/**
+ * One outbound call, however it was asked for: a lead's Call button or the
+ * project dialer. Everything after "who is being rung" is one rule — the
+ * replay check, the outbox claim, the carrier call and what an ambiguous
+ * answer means — so it is written once, here.
+ *
+ * The caller has already authorised the principal for the record and turned
+ * the click into an outbox key. `resolveTo` answers the number to ring or
+ * throws the refusal; it runs after the replay check and the ports check, so
+ * a replayed key answers with the call it placed even if the record changed.
+ */
+export type StaffCallPlan = {
+  readonly outboxKey: string;
+  readonly kind: OutboxEventKind;
+  /** Extra fields for the outbox payload; provider and target are added. */
+  readonly payload: Record<string, string | number | null>;
+  readonly target: "browser" | "mobile";
+  readonly phoneId: string | null;
+  readonly now: Date;
+  readonly resolveTo: () => string;
+  /** What the Call row is filed against, written when it is created. */
+  readonly link: {
+    readonly leadId?: number | null;
+    readonly projectId?: string | null;
+    readonly contactKind?: CallContactKind | null;
+    readonly contactName?: string | null;
+    readonly contactRef?: string | null;
+    readonly projectSeenAt?: Date | null;
+  };
+  /** The history line, written in the transaction that confirms the call. */
+  readonly history: (tx: DomainDb, placed: PlacedCall) => Promise<void>;
+};
+
+export async function placeStaffCall(
+  principal: UserPrincipal,
+  plan: StaffCallPlan,
+  db: TransactionalDomainDb,
+  ports: {
+    readonly voice?: VoicePort | null;
+    readonly channel?: CommsChannel | null;
+  },
+): Promise<RequestLeadCallResult> {
+  const { now, outboxKey } = plan;
   const prior = await db.call.findUnique({
     select: { id: true },
     where: { idempotencyKey: outboxKey },
@@ -155,41 +268,30 @@ export async function requestLeadCall(
   if (!voice || !channel?.callsAvailable) {
     throw new DomainSideEffectError(CALL_REFUSALS.noCalls, "voice", false);
   }
-  if (lead.isArchived) throw new DomainTransitionError(CALL_REFUSALS.archived);
-  const phone = normaliseLeadPhone(lead.phone);
-  if (!phone.usable) {
-    throw new DomainTransitionError(
-      phone.raw ? SMS_REFUSALS.invalidPhone : SMS_REFUSALS.noPhone,
-    );
-  }
+  const to = plan.resolveTo();
   const sender = channel.defaultNumber;
   if (!sender || sender.provider !== voice.provider) {
     throw new DomainTransitionError(CALL_REFUSALS.noSender);
   }
-  if (input.target === "browser" && !channel.browserCalling) {
+  if (plan.target === "browser" && !channel.browserCalling) {
     throw new DomainTransitionError(CALL_REFUSALS.noBrowser);
   }
   const staffPhone =
-    input.target === "mobile"
-      ? await resolveCallablePhone(
-          principal,
-          input.phoneId ?? null,
-          channel,
-          db,
-        )
+    plan.target === "mobile"
+      ? await resolveCallablePhone(principal, plan.phoneId, channel, db)
       : null;
-  if (input.target === "mobile" && !staffPhone) {
+  if (plan.target === "mobile" && !staffPhone) {
     throw new DomainTransitionError(CALL_REFUSALS.noMobile);
   }
 
   const prepared = await db.$transaction(async (tx) => {
     const intent = await enqueueOutboxEvent(tx, {
       key: outboxKey,
-      kind: OutboxEventKind.LEAD_CALL_PLACE,
+      kind: plan.kind,
       payload: {
-        leadId: lead.id,
+        ...plan.payload,
         provider: voice.provider,
-        target: input.target,
+        target: plan.target,
       },
     });
     if (intent.status === OutboxEventStatus.SUCCEEDED)
@@ -212,7 +314,7 @@ export async function requestLeadCall(
     }
     const fields = {
       businessNumber: sender.e164,
-      customerNumber: phone.e164,
+      customerNumber: to,
       endedAt: null,
       flowStep: CallFlowStep.DIALING_CUSTOMER,
       providerErrorCode: null,
@@ -222,7 +324,7 @@ export async function requestLeadCall(
       staffPhoneLabel: staffPhone?.nickname ?? null,
       staffPhoneNumber: staffPhone?.e164 ?? null,
       staffTarget:
-        input.target === "mobile"
+        plan.target === "mobile"
           ? CallStaffTarget.MOBILE
           : CallStaffTarget.BROWSER,
       startedAt: now,
@@ -230,10 +332,10 @@ export async function requestLeadCall(
     };
     const call = await tx.call.upsert({
       create: {
+        ...plan.link,
         ...fields,
         direction: CommsDirection.OUTBOUND,
         idempotencyKey: outboxKey,
-        leadId: lead.id,
         provider: providerColumn(voice.provider),
         staffUserId: principal.userId,
       },
@@ -260,7 +362,7 @@ export async function requestLeadCall(
       from: sender.e164,
       timeLimitSeconds: CALL_TIME_LIMIT_SECONDS,
       timeoutSeconds: OUTBOUND_RING_SECONDS,
-      to: phone.e164,
+      to,
     }));
   } catch (error) {
     const definite = commsDefinitelyNotSent(error);
@@ -318,17 +420,13 @@ export async function requestLeadCall(
       data: { status: CallStatus.INITIATED },
       where: { id: prepared.callId, status: CallStatus.QUEUED },
     });
-    await recordCommsHistory(tx, {
-      action: "Call placed",
-      at: now,
-      detail: `Calling ${maskNumber(phone.e164)} from ${sender.label} (${sender.e164}); ${
-        staffPhone
-          ? `${staffPhone.nickname} (${maskNumber(staffPhone.e164)})`
-          : "the caller's browser"
-      } rings when they answer.`,
-      leadId: lead.id,
-      principal,
-      type: "CALL",
+    await plan.history(tx, {
+      callId: prepared.callId,
+      sender,
+      staffPhone: staffPhone
+        ? { e164: staffPhone.e164, nickname: staffPhone.nickname }
+        : null,
+      to,
     });
   });
   return {

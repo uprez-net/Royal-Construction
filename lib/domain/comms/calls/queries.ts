@@ -27,6 +27,32 @@ export type LeadCallOptions = {
   readonly phones: readonly CallablePhone[];
 };
 
+/** Whether this runtime can place a call at all, and how it can be taken. */
+export type ChannelCallOptions = Omit<LeadCallOptions, "to">;
+
+/**
+ * The half of "can this be rung?" that is about the phone system rather than
+ * who is being rung: is calling on, is there a number to call from, and can
+ * the person take it in a browser or on a phone. Shared by a lead's Call
+ * button and the project dialer so they cannot disagree.
+ */
+export function channelCallOptions(
+  channel: CommsChannel | null,
+  teamPhones: readonly TeamPhoneRecord[] = [],
+): ChannelCallOptions {
+  const browser = Boolean(channel?.browserCalling);
+  const phones = callablePhones(teamPhones, channel);
+  const mobile = phones.length > 0;
+  const reason = !channel?.callsAvailable
+    ? CALL_REFUSALS.noCalls
+    : !channel.defaultNumber
+      ? CALL_REFUSALS.noSender
+      : !browser && !mobile
+        ? CALL_REFUSALS.noMobile
+        : null;
+  return { allowed: reason === null, browser, mobile, phones, reason };
+}
+
 /** Whether this lead can be rung now, and how — for the Call button. */
 export function evaluateLeadCallOptions(
   lead: { readonly phone: string; readonly isArchived: boolean },
@@ -34,27 +60,17 @@ export function evaluateLeadCallOptions(
   teamPhones: readonly TeamPhoneRecord[] = [],
 ): LeadCallOptions {
   const phone = normaliseLeadPhone(lead.phone);
-  const browser = Boolean(channel?.browserCalling);
-  const phones = callablePhones(teamPhones, channel);
-  const mobile = phones.length > 0;
+  const options = channelCallOptions(channel, teamPhones);
   const reason = lead.isArchived
     ? CALL_REFUSALS.archived
     : !phone.usable
       ? phone.raw
         ? SMS_REFUSALS.invalidPhone
         : SMS_REFUSALS.noPhone
-      : !channel?.callsAvailable
-        ? CALL_REFUSALS.noCalls
-        : !channel.defaultNumber
-          ? CALL_REFUSALS.noSender
-          : !browser && !mobile
-            ? CALL_REFUSALS.noMobile
-            : null;
+      : options.reason;
   return {
+    ...options,
     allowed: reason === null,
-    browser,
-    mobile,
-    phones,
     reason,
     to: phone.e164,
   };

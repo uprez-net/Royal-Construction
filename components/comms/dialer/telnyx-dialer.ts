@@ -103,6 +103,9 @@ export function createTelnyxDialer(events: DialerEvents): Dialer {
       else current?.unmuteAudio();
     },
     provider: "telnyx",
+    sendDigits: (digits) => {
+      current?.dtmf(digits);
+    },
     // A login token cannot be swapped on a live socket; reconnect between calls.
     refresh: async (credential) => {
       if (!current) await connect(credential);

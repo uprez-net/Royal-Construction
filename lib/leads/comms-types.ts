@@ -100,6 +100,41 @@ export type CallDto = {
   seenAt: string | null;
   /** Mili or the voicemail took it and nobody has opened it yet. */
   unread: boolean;
+  /** The project it is filed on: placed from its dialer, or matched. */
+  projectId: string | null;
+  projectName: string | null;
+  /** Who on the project was called, or who called. */
+  contactKind: ProjectCallContactKindDto | null;
+  contactName: string | null;
+  /** Inbound: whether the project matcher filed it, and why. */
+  projectMatch: "MATCHED" | "NO_MATCH" | "FAILED" | null;
+  projectMatchReason: string | null;
+  /** A matched inbound call nobody has opened on the project yet. */
+  projectUnread: boolean;
+};
+
+export type ProjectCallContactKindDto =
+  | "SITE_MANAGER"
+  | "OWNER"
+  | "TRADIE"
+  | "OTHER";
+
+/** One of a project's people, as the dialer lists them. */
+export type ProjectCallContactDto = {
+  /** What a call is placed to; the server looks the number up again. */
+  ref: string;
+  kind: ProjectCallContactKindDto;
+  name: string;
+  role: string;
+  e164: string | null;
+  problem: string | null;
+};
+
+export type ProjectCallsDto = {
+  calls: CallDto[];
+  contacts: ProjectCallContactDto[];
+  options: Omit<LeadCallsDto["options"], "to">;
+  unread: number;
 };
 
 /** "Pending Calls/Messages": what came in from numbers no lead owns. */
