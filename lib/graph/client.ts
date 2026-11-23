@@ -867,7 +867,7 @@ export async function createGraphContext(
         );
       if (!hasAddress(to) && !hasAddress(bcc)) {
         throw new Error(
-          `sendMail refused: "${subject}" has no recipient. Nothing was sent.`,
+          "sendMail refused: the message has no recipient. Nothing was sent.",
         );
       }
 

@@ -240,7 +240,9 @@ export async function createLead(
     );
   }
   const normalizedEmail = emailCheck.data;
-  const ownMailbox = ownMailboxRefusal(normalizedEmail);
+  const ownMailbox =
+    ownMailboxRefusal(normalizedEmail)
+    ?? ownMailboxRefusal(input.secondaryEmail);
   if (ownMailbox) throw new LeadValidationError(ownMailbox);
   const normalizedPhone = (input.phone ?? "").trim();
 
