@@ -58,6 +58,23 @@ describe("staleInvoiceReminders", () => {
     ]);
   });
 
+  test("reads every pending invoice, so a newer one is counted too", async () => {
+    // The fake ignores `where`, so assert the query itself: a date filter here
+    // would drop the 1-day-old invoice and report "1 waiting" for two.
+    let where: unknown;
+    const db = {
+      tradieInvoiceInbox: {
+        findMany: async (args: { where: unknown }) => {
+          where = args.where;
+          return [row("p1", "Alpha", 6), row("p1", "Alpha", 1)];
+        },
+      },
+    } as unknown as DomainDb;
+    const result = await staleInvoiceReminders(db, NOW);
+    assert.deepEqual(where, { status: "PENDING" });
+    assert.equal(result[0]?.count, 2);
+  });
+
   test("nothing pending, nothing to say", async () => {
     assert.deepEqual(await staleInvoiceReminders(dbWith([]), NOW), []);
   });

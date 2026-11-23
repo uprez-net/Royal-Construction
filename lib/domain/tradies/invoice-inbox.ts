@@ -441,12 +441,7 @@ export async function staleInvoiceReminders(
       project: { select: { name: true } },
       receivedAt: true,
     },
-    where: {
-      receivedAt: {
-        lte: new Date(now.getTime() - STALE_INVOICE_REMIND_EVERY_DAYS * DAY_MS),
-      },
-      status: TradieInvoiceInboxStatus.PENDING,
-    },
+    where: { status: TradieInvoiceInboxStatus.PENDING },
   });
 
   // One message per project, due on the day its OLDEST waiting invoice is;
