@@ -48,7 +48,7 @@ import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 // same-tab edit goes through and an issued offer's price stays put.
 
 const BLOB_URL =
-  "https://udafiztdzg1cn8u2.public.blob.vercel-storage.com/offer/hero.png";
+  "https://royalstore01.private.blob.vercel-storage.com/offer/hero.png";
 
 const BASE: OfferWorkspaceSnapshot = {
   job: { ...INITIAL_OFFER_JOB, reference: "RC-Q-2026-001", revision: "R1" },

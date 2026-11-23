@@ -2,9 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 
 import {
-  LEGACY_BLOB_HOSTS,
-  ROYAL_BLOB_HOST,
-  allowedOfferImageHosts,
+  allowedOfferImageStores,
   isAllowedOfferImageUrl,
 } from "@/lib/offer/offer-image-url";
 import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
@@ -32,7 +30,7 @@ import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 // accepted, so a hand-built save could point the renderer at an internal address.
 
 const BLOB_URL =
-  "https://udafiztdzg1cn8u2.public.blob.vercel-storage.com/offer-ai/hero.png";
+  "https://royalstore01.private.blob.vercel-storage.com/offer-ai/hero.png";
 
 test("accepts an image in Royal's Blob storage", () => {
   assert.equal(isAllowedOfferImageUrl(BLOB_URL), true);
@@ -45,11 +43,14 @@ test("rejects anything outside Blob storage", () => {
     "https://169.254.169.254/latest/meta-data/",
     "https://example.com/hero.png",
     // The suffix must be the host's, not part of a path or a lookalike host.
-    "https://evil.example/x.public.blob.vercel-storage.com/hero.png",
-    "https://public.blob.vercel-storage.com.evil.example/hero.png",
-    // Another Vercel Blob tenant: same domain, someone else's storage.
+    "https://evil.example/x.private.blob.vercel-storage.com/hero.png",
+    "https://private.blob.vercel-storage.com.evil.example/hero.png",
+    // A public store: Royal's images are private since #571, and the old
+    // public stores were emptied, so no legitimate image names one.
     "https://attacker.public.blob.vercel-storage.com/x.png",
-    "https://user:pass@udafiztdzg1cn8u2.public.blob.vercel-storage.com/a.png",
+    "https://udafiztdzg1cn8u2.public.blob.vercel-storage.com/offer/hero.png",
+    "https://b7mydymu5fx66ove.public.blob.vercel-storage.com/offer/hero.png",
+    "https://user:pass@royalstore01.private.blob.vercel-storage.com/a.png",
     "javascript:alert(1)",
     "/images/hero.png",
     "",
@@ -60,8 +61,7 @@ test("rejects anything outside Blob storage", () => {
   assert.equal(isAllowedOfferImageUrl(42), false);
 });
 
-test("follows the stores in the Blob tokens, public or private, and always allows Royal's", () => {
-  assert.equal(BLOB_URL.startsWith(`https://${ROYAL_BLOB_HOST}/`), true);
+test("follows the stores in the Blob tokens, and nothing else", () => {
   // process.env is typed here with the app's keys required, so go through a
   // view that admits one can be absent — the case this test is about.
   const env = process.env as Record<string, string | undefined>;
@@ -70,55 +70,34 @@ test("follows the stores in the Blob tokens, public or private, and always allow
     recordings: env.BLOB_PRIVATE_READ_WRITE_TOKEN,
   };
   try {
-    // A token names the store that writes the images; the hosts follow it, so
-    // replacing the store (#571) doesn't leave the allowlist on the old one.
+    // A token names the store that writes the images; the allowlist follows
+    // it, so replacing the store (#571) doesn't leave it on the old one.
     env.BLOB_READ_WRITE_TOKEN = "vercel_blob_rw_Rep1acement_secret";
-    delete env.BLOB_PRIVATE_READ_WRITE_TOKEN;
-    assert.deepEqual(
-      [...allowedOfferImageHosts()].sort(),
-      [
-        ...LEGACY_BLOB_HOSTS,
-        "rep1acement.private.blob.vercel-storage.com",
-        "rep1acement.public.blob.vercel-storage.com",
-      ].sort(),
-    );
-    // Production's pre-#571 store stays allowed until its URLs are rewritten,
-    // so an offer opened between the deploy and the rewrite keeps its images.
-    assert.equal(
-      isAllowedOfferImageUrl(
-        "https://b7mydymu5fx66ove.public.blob.vercel-storage.com/offer/hero.png",
-      ),
-      true,
-    );
+    env.BLOB_PRIVATE_READ_WRITE_TOKEN = "vercel_blob_rw_Recordings9_secret";
+    assert.deepEqual(allowedOfferImageStores(), ["rep1acement", "recordings9"]);
     for (const url of [
-      "https://rep1acement.public.blob.vercel-storage.com/a.png",
       "https://rep1acement.private.blob.vercel-storage.com/a.png",
-      // Royal's original store: an offer saved before the move still names it.
-      BLOB_URL,
+      "https://recordings9.private.blob.vercel-storage.com/a.png",
     ]) {
       assert.equal(isAllowedOfferImageUrl(url), true, url);
     }
-    // With the tokens in hand, a stranger's private store is still a stranger's.
-    assert.equal(
-      isAllowedOfferImageUrl(
-        "https://attacker.private.blob.vercel-storage.com/a.png",
-      ),
-      false,
-    );
+    // With the tokens in hand, a stranger's private store is still a
+    // stranger's, and the store the token does not name is not ours.
+    for (const url of [
+      "https://attacker.private.blob.vercel-storage.com/a.png",
+      BLOB_URL,
+    ]) {
+      assert.equal(isAllowedOfferImageUrl(url), false, url);
+    }
 
-    // No token (build, tests, the browser) or an unreadable one: Royal's host,
-    // and any private host — dropping those would empty a slot on autosave,
-    // and the server re-checks every save with the tokens.
+    // No token (build, tests, the browser) or an unreadable one: any private
+    // host — dropping those would empty a slot on autosave, and the server
+    // re-checks every save with the tokens. Still never a public one.
+    delete env.BLOB_PRIVATE_READ_WRITE_TOKEN;
     for (const token of [undefined, "not-a-blob-token"]) {
       if (token === undefined) delete env.BLOB_READ_WRITE_TOKEN;
       else env.BLOB_READ_WRITE_TOKEN = token;
       assert.equal(isAllowedOfferImageUrl(BLOB_URL), true);
-      assert.equal(
-        isAllowedOfferImageUrl(
-          "https://rep1acement.private.blob.vercel-storage.com/a.png",
-        ),
-        true,
-      );
       assert.equal(
         isAllowedOfferImageUrl(
           "https://attacker.public.blob.vercel-storage.com/x.png",

@@ -11,7 +11,7 @@
 // that is not fetching — a file's name, its extension, a save payload — and
 // wrap only where the browser loads it.
 
-import { isPrivateBlobUrl } from "@/lib/blob-url";
+import { isBlobStorageUrl, isPrivateBlobUrl } from "@/lib/blob-url";
 
 export const SIGNED_FILE_ROUTE = "/api/files/signed-url";
 
@@ -24,13 +24,15 @@ export function fileHref(url: string | null | undefined): string | undefined {
 }
 
 /**
- * Props for a `next/image` showing a stored file. A private one is loaded
- * through the signing route without the optimiser: the optimiser fetches
- * server-side with no session, and the signed link it would cache expires.
+ * Props for a `next/image` showing a stored file. Any Blob file is loaded
+ * without the optimiser: a private one goes through the signing route, which
+ * the optimiser cannot follow (it fetches server-side with no session, and the
+ * signed link it would cache expires), and no Blob host is in
+ * `images.remotePatterns` any more.
  */
 export function storedImageProps(url: string): {
   src: string;
   unoptimized: boolean;
 } {
-  return { src: fileHref(url), unoptimized: isPrivateBlobUrl(url) };
+  return { src: fileHref(url), unoptimized: isBlobStorageUrl(url) };
 }

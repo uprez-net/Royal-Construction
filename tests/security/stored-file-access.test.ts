@@ -95,12 +95,14 @@ describe("fileHref", () => {
     assert.equal(fileHref(""), "");
   });
 
-  test("a private image skips the optimiser, which has no session", () => {
+  test("a stored image skips the optimiser, which has no session and no Blob host", () => {
     assert.equal(storedImageProps(`${PRIVATE}/a.png`).unoptimized, true);
     assert.deepEqual(storedImageProps(`${PUBLIC}/a.png`), {
       src: `${PUBLIC}/a.png`,
-      unoptimized: false,
+      unoptimized: true,
     });
+    // Anything else (an app asset) keeps the optimiser.
+    assert.equal(storedImageProps("/images/logo.png").unoptimized, false);
   });
 });
 

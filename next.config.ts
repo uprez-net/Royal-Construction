@@ -79,10 +79,12 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "picsum.photos",
       },
-      {
-        protocol: "https",
-        hostname: "**.public.blob.vercel-storage.com",
-      },
+      // No Blob host. Stored files are private (#571): a screen loads one
+      // through /api/files/signed-url with `unoptimized` (`storedImageProps`),
+      // which never reaches the optimiser, and the optimiser could not read a
+      // private object anyway — it has no session and a signed link expires.
+      // Allowing `**.public.blob.vercel-storage.com` would only let anyone run
+      // any Vercel tenant's public file through our optimiser.
     ],
   },
 };
