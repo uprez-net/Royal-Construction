@@ -48,6 +48,9 @@ export function createTwilioDialer(events: DialerEvents): Dialer {
     refresh: async (credential) => {
       device?.updateToken(credential.token);
     },
+    sendDigits: (digits) => {
+      current?.sendDigits(digits);
+    },
     register: async (credential: DialerCredential) => {
       const { Device } = await import("@twilio/voice-sdk");
       device?.destroy();

@@ -28,6 +28,7 @@ import { appendFileToProject } from "@/lib/store/slices/projectsSlice";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { projectsListHref } from "@/components/projects/projects-list-url";
 import { ProjectWhatsAppHeaderButton } from "@/components/projects/detail/whatsapp/project-whatsapp-header-button";
+import { ProjectDialerButton } from "@/components/projects/detail/calls/project-dialer";
 
 type ProjectRequirementsHeader = {
   legalAdministration?: {
@@ -315,6 +316,13 @@ export function ProjectHeader({
           )}
         </div>
         <div className="flex flex-wrap gap-2 pt-1">
+          {/* Calling is the office's (ADMIN): a site manager never sees it. */}
+          {canAssignSiteManager ? (
+            <ProjectDialerButton
+              projectId={project.id}
+              projectName={project.name}
+            />
+          ) : null}
           <ProjectWhatsAppHeaderButton
             projectId={project.id}
             isAdmin={canAssignSiteManager}

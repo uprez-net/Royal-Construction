@@ -7,6 +7,7 @@ import {
   type Prisma,
 } from "@prisma/client";
 
+import { logActionOrThrow } from "../../audit/action-log";
 import type { DomainDb, TransactionalDomainDb } from "../../db";
 import { DomainAuthorizationError } from "../../errors";
 import {
@@ -87,12 +88,14 @@ const CALL_FOR_EVENT = {
   answeredBy: true,
   businessNumber: true,
   connectedAt: true,
+  contactName: true,
   customerNumber: true,
   direction: true,
   durationSeconds: true,
   flowStep: true,
   id: true,
   leadId: true,
+  projectId: true,
   recordingConsent: true,
   staffPhoneNumber: true,
   staffTarget: true,
@@ -378,6 +381,28 @@ export async function applyCallEvent(
             principal,
             type: "CALL",
           });
+        }
+        // A call placed from a project's dialer ends on the project's log.
+        // An inbound call is logged there when the matcher files it.
+        if (
+          terminal
+          && call.projectId !== null
+          && call.direction === CommsDirection.OUTBOUND
+        ) {
+          const ended = describeEnd(
+            call,
+            next,
+            event.durationSeconds ?? call.durationSeconds,
+          );
+          await logActionOrThrow(
+            {
+              message: `${ended.action}${call.contactName ? ` (${call.contactName})` : ""}: ${ended.detail}`,
+              projectId: call.projectId,
+              timestamp: event.occurredAt,
+              type: "call",
+            },
+            tx,
+          );
         }
         return {
           callId: call.id,

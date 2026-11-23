@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
@@ -38,6 +39,9 @@ export function ProjectDetailScreen({
   viewerId: string;
 }) {
   const dispatch = useAppDispatch();
+  // The project's calls (dialer, Calls log, Comms badge) are React Query's;
+  // the app shell's provider only wraps the notification bell.
+  const [queryClient] = useState(() => new QueryClient());
   const activeProject = useAppSelector((state) => state.projects.activeProject);
   // Prefer the store copy once it has been hydrated for this project so
   // in-page mutations are reflected; fall back to the server payload.
@@ -73,25 +77,27 @@ export function ProjectDetailScreen({
   }, [dispatch, project.id]);
 
   return (
-    <UploadHintScope trail="Project">
-      <div className="space-y-4 pb-4">
-        <ProjectHeader
-          project={displayedProject}
-          canAssignSiteManager={role === Role.ADMIN}
-          key={`header-${siteAddress}-${signedDate}-${pcaInspector}-${insuranceClaimStartDate}-${insuranceClaimEndDate}-${hbcfInsuranceNumber}`}
-        />
-        <ProjectStatCards role={role} />
-        {displayedProject.viewerAccess.record ? null : (
-          <ProjectNotAssignedNotice />
-        )}
-        <ProjectComplianceAlert project={displayedProject} />
-        <ProjectAlerts project={displayedProject} />
-        <ProjectDetailTabs
-          project={displayedProject}
-          role={role}
-          viewerId={viewerId}
-        />
-      </div>
-    </UploadHintScope>
+    <QueryClientProvider client={queryClient}>
+      <UploadHintScope trail="Project">
+        <div className="space-y-4 pb-4">
+          <ProjectHeader
+            project={displayedProject}
+            canAssignSiteManager={role === Role.ADMIN}
+            key={`header-${siteAddress}-${signedDate}-${pcaInspector}-${insuranceClaimStartDate}-${insuranceClaimEndDate}-${hbcfInsuranceNumber}`}
+          />
+          <ProjectStatCards role={role} />
+          {displayedProject.viewerAccess.record ? null : (
+            <ProjectNotAssignedNotice />
+          )}
+          <ProjectComplianceAlert project={displayedProject} />
+          <ProjectAlerts project={displayedProject} />
+          <ProjectDetailTabs
+            project={displayedProject}
+            role={role}
+            viewerId={viewerId}
+          />
+        </div>
+      </UploadHintScope>
+    </QueryClientProvider>
   );
 }

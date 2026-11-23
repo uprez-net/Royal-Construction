@@ -39,6 +39,8 @@ export interface Dialer {
   reject(): void;
   hangup(): void;
   mute(muted: boolean): void;
+  /** Touch-tones on the live call: a supplier's menu, an extension. */
+  sendDigits(digits: string): void;
   /** The live call's audio, for the level meters; null before the SDK has it. */
   audioStreams(): CallAudioStreams;
   destroy(): void;

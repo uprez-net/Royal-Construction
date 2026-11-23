@@ -100,6 +100,58 @@ export type CallDto = {
   seenAt: string | null;
   /** Mili or the voicemail took it and nobody has opened it yet. */
   unread: boolean;
+  /** The project it is filed on: placed from its dialer, or matched. */
+  projectId: string | null;
+  projectName: string | null;
+  /** Who on the project was called, or who called. */
+  contactKind: ProjectCallContactKindDto | null;
+  contactName: string | null;
+  /** Inbound: whether the project matcher filed it, and why. */
+  projectMatch: "MATCHED" | "NO_MATCH" | "FAILED" | null;
+  projectMatchReason: string | null;
+  /** A matched inbound call nobody has opened on the project yet. */
+  projectUnread: boolean;
+};
+
+export type ProjectCallContactKindDto =
+  | "SITE_MANAGER"
+  | "OWNER"
+  | "TRADIE"
+  | "OTHER";
+
+/** One of a project's people, as the dialer lists them. */
+export type ProjectCallContactDto = {
+  /** What a call is placed to; the server looks the number up again. */
+  ref: string;
+  kind: ProjectCallContactKindDto;
+  name: string;
+  role: string;
+  e164: string | null;
+  problem: string | null;
+};
+
+export type ProjectCallsDto = {
+  calls: CallDto[];
+  contacts: ProjectCallContactDto[];
+  options: Omit<LeadCallsDto["options"], "to">;
+  unread: number;
+};
+
+/** Whose number a team call came from (lib/domain/comms/team-callers.ts). */
+export type TeamCallerDto = {
+  e164: string;
+  name: string;
+  kind: "staff" | "team_phone" | "office_mobile";
+  role: "ADMIN" | "SITE_MANAGER" | "CUSTOMER" | "GUEST" | null;
+};
+
+/** The admin page's inbound lists. */
+export type UnmatchedCommsDto = {
+  sms: SmsMessageDto[];
+  /** From numbers no single lead owns, and not the team's. */
+  calls: CallDto[];
+  /** From the team's own numbers. */
+  teamCalls: { call: CallDto; caller: TeamCallerDto }[];
 };
 
 /** "Pending Calls/Messages": what came in from numbers no lead owns. */

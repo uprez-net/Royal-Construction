@@ -1,5 +1,6 @@
 import { connection } from "next/server";
 
+import { commsRuntimeFromEnv } from "@/lib/comms/factory";
 import { signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
 import { countPendingCommsUnread } from "@/lib/domain/comms/pending";
 import { domainErrorResponse } from "@/lib/http/domain-response";
@@ -17,7 +18,9 @@ export async function GET() {
     const principal = await signedInUserPrincipal();
     if (!principal) return unauthorizedResponse();
     return successResponse({
-      unread: await countPendingCommsUnread(principal, prisma),
+      unread: await countPendingCommsUnread(principal, prisma, {
+        channel: commsRuntimeFromEnv().channel,
+      }),
     });
   } catch (error) {
     const refusal = domainErrorResponse(error);

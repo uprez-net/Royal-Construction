@@ -1,4 +1,9 @@
-import { CallAnsweredBy, CommsDirection, type Prisma } from "@prisma/client";
+import {
+  CallAnsweredBy,
+  CallProjectMatch,
+  CommsDirection,
+  type Prisma,
+} from "@prisma/client";
 
 import { authorizeLead, leadListScope } from "../access/leads";
 import type { DomainDb } from "../db";
@@ -23,6 +28,30 @@ export const UNREAD_CALL_ANSWERS = [
   CallAnsweredBy.AGENT,
   CallAnsweredBy.VOICEMAIL,
 ] as const;
+
+/**
+ * An inbound call the project matcher filed onto a project that nobody has
+ * opened there yet: the number beside the call icon on the project's Comms
+ * tab. Separate from `seenAt`, which is the lead side's: opening the lead
+ * does not mean the project's Calls were read, nor the other way round.
+ */
+export const PROJECT_UNREAD_CALL_WHERE = {
+  direction: CommsDirection.INBOUND,
+  projectMatch: CallProjectMatch.MATCHED,
+  projectSeenAt: null,
+} satisfies Prisma.CallWhereInput;
+
+export function isProjectUnreadCall(call: {
+  readonly direction: CommsDirection;
+  readonly projectMatch?: CallProjectMatch | null;
+  readonly projectSeenAt?: Date | null;
+}): boolean {
+  return (
+    call.direction === CommsDirection.INBOUND
+    && call.projectMatch === CallProjectMatch.MATCHED
+    && !call.projectSeenAt
+  );
+}
 
 export const UNREAD_SMS_WHERE = {
   direction: CommsDirection.INBOUND,

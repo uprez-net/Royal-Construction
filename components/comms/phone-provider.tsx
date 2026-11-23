@@ -78,7 +78,7 @@ function isTerminal(call: CallDto): boolean {
 
 /** Why a placed call ended before this browser was put through. */
 function outboundEndedText(call: CallDto): string {
-  const who = call.leadName ?? "The customer";
+  const who = call.leadName ?? call.contactName ?? "The customer";
   switch (call.status) {
     case "NO_ANSWER":
       return `${who} didn't answer.`;
@@ -137,6 +137,11 @@ type PhoneContextValue = {
   decline: () => Promise<void>;
   hangup: () => Promise<void>;
   toggleMute: () => void;
+  /**
+   * Touch-tones on a live browser call (a supplier's menu, an extension).
+   * False when there is no browser call to send them on.
+   */
+  sendDigits: (digits: string) => boolean;
   /** The live call's audio, for the level meters. */
   audioStreams: () => CallAudioStreams;
   /**
@@ -299,7 +304,13 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
                   .then((call) =>
                     setActive((current) =>
                       current?.kind === "pstn" && current.callId === call.id
-                        ? { ...current, leadName: call.leadName }
+                        ? {
+                            ...current,
+                            leadName:
+                              call.leadName
+                              ?? call.contactName
+                              ?? current.leadName,
+                          }
                         : current,
                     ),
                   )
@@ -586,6 +597,14 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const sendDigits = useCallback((digits: string): boolean => {
+    const call = activeRef.current;
+    if (call?.kind !== "pstn" || call.phase !== "active" || !dialer.current)
+      return false;
+    dialer.current.sendDigits(digits);
+    return true;
+  }, []);
+
   const audioStreams = useCallback((): CallAudioStreams => {
     const call = activeRef.current;
     if (!call) return NO_AUDIO;
@@ -671,6 +690,7 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
       hangup,
       message,
       provider,
+      sendDigits,
       startWhatsAppCall,
       status,
       toggleMute,
@@ -684,6 +704,7 @@ export function PhoneProvider({ children }: { children: ReactNode }) {
       hangup,
       message,
       provider,
+      sendDigits,
       startWhatsAppCall,
       status,
       toggleMute,

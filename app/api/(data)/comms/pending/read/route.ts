@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
+import { commsRuntimeFromEnv } from "@/lib/comms/factory";
 import { signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
 import { markPendingCommsRead } from "@/lib/domain/comms/pending";
 import { domainErrorResponse } from "@/lib/http/domain-response";
@@ -25,7 +26,9 @@ export async function POST(request: NextRequest) {
     const principal = await signedInUserPrincipal();
     if (!principal) return unauthorizedResponse();
     return successResponse({
-      marked: await markPendingCommsRead(principal, parsed.data, prisma),
+      marked: await markPendingCommsRead(principal, parsed.data, prisma, {
+        channel: commsRuntimeFromEnv().channel,
+      }),
     });
   } catch (error) {
     const refusal = domainErrorResponse(error);

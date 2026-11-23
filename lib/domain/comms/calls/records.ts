@@ -1,6 +1,8 @@
 import type {
   CallAnsweredBy,
+  CallContactKind,
   CallFlowStep,
+  CallProjectMatch,
   CallRecordingKind,
   CallRecordingStatus,
   CallStaffTarget,
@@ -13,7 +15,7 @@ import type {
 
 import type { CommsProviderName } from "../../ports/comms";
 import { providerName } from "../shared";
-import { isUnreadCall } from "../unread";
+import { isProjectUnreadCall, isUnreadCall } from "../unread";
 
 export const CALL_SELECT = {
   agentTranscript: true,
@@ -22,6 +24,8 @@ export const CALL_SELECT = {
   businessNumber: true,
   candidateLeadIds: true,
   connectedAt: true,
+  contactKind: true,
+  contactName: true,
   customerNumber: true,
   direction: true,
   durationSeconds: true,
@@ -32,6 +36,11 @@ export const CALL_SELECT = {
   lead: { select: { id: true, name: true } },
   leadId: true,
   needsReconciliation: true,
+  project: { select: { id: true, name: true } },
+  projectId: true,
+  projectMatch: true,
+  projectMatchReason: true,
+  projectSeenAt: true,
   provider: true,
   providerErrorTitle: true,
   recordingConsent: true,
@@ -102,6 +111,17 @@ export type CallRecord = {
   readonly seenAt: Date | null;
   /** Mili or the voicemail took it and nobody has opened it (../unread). */
   readonly unread: boolean;
+  /** The project it is filed on: placed from its dialer, or matched. */
+  readonly projectId: string | null;
+  readonly projectName: string | null;
+  /** Who on the project was called, or who called. */
+  readonly contactKind: CallContactKind | null;
+  readonly contactName: string | null;
+  /** Inbound: whether the project matcher has filed it, and why. */
+  readonly projectMatch: CallProjectMatch | null;
+  readonly projectMatchReason: string | null;
+  /** A matched inbound call nobody has opened on the project yet. */
+  readonly projectUnread: boolean;
 };
 
 export function toCallRecord(row: CallRow): CallRecord {
@@ -112,6 +132,8 @@ export function toCallRecord(row: CallRow): CallRecord {
     businessNumber: row.businessNumber,
     candidateLeadIds: row.candidateLeadIds,
     connectedAt: row.connectedAt,
+    contactKind: row.contactKind ?? null,
+    contactName: row.contactName ?? null,
     customerNumber: row.customerNumber,
     direction: row.direction,
     durationSeconds: row.durationSeconds,
@@ -123,6 +145,11 @@ export function toCallRecord(row: CallRow): CallRecord {
     leadName: row.lead?.name ?? null,
     needsReconciliation: row.needsReconciliation,
     problem: row.providerErrorTitle,
+    projectId: row.projectId ?? null,
+    projectMatch: row.projectMatch ?? null,
+    projectMatchReason: row.projectMatchReason ?? null,
+    projectName: row.project?.name ?? null,
+    projectUnread: isProjectUnreadCall(row),
     provider: providerName(row.provider),
     recordingConsent: row.recordingConsent,
     recordings: row.recordings.map((recording) => ({
