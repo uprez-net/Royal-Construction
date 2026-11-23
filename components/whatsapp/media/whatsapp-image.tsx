@@ -11,11 +11,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { fileHref, storedImageProps } from "@/lib/files/file-href";
 
-// Photos and stickers through next/image. The Blob host is already allowed in
-// next.config.ts `images.remotePatterns`, so the optimiser serves a resized
-// WebP/AVIF for the bubble and a larger one for the lightbox instead of the
-// phone's full-size original.
+// Photos and stickers through next/image. `src` is the stored URL. A public
+// one (a row from before #571) goes through the optimiser, which serves a
+// resized WebP/AVIF for the bubble and a larger one for the lightbox; a
+// private one is loaded through the signing route as it is
+// (`storedImageProps`).
 
 /** The bubble's photo; opens the lightbox. Keeps the photo's own shape. */
 export function WhatsAppPhoto({
@@ -41,7 +43,7 @@ export function WhatsAppPhoto({
         aria-label={caption ? `Open photo: ${caption}` : "Open photo"}
       >
         <Image
-          src={src}
+          {...storedImageProps(src)}
           alt={alt}
           // The real proportions aren't known until it loads; these reserve a
           // square and `h-auto` then follows the photo's own shape.
@@ -62,7 +64,7 @@ export function WhatsAppPhoto({
           <DialogDescription className="sr-only">{alt}</DialogDescription>
           <div className="relative h-[78vh] w-full">
             <Image
-              src={src}
+              {...storedImageProps(src)}
               alt={alt}
               fill
               sizes="94vw"
@@ -72,7 +74,7 @@ export function WhatsAppPhoto({
           <div className="flex items-center justify-between gap-3 px-1 pt-2 text-sm text-white/80">
             <span className="truncate">{caption}</span>
             <a
-              href={src}
+              href={fileHref(src)}
               target="_blank"
               rel="noreferrer"
               download
@@ -95,7 +97,7 @@ export function WhatsAppPhoto({
 export function WhatsAppSticker({ src }: { src: string }) {
   return (
     <Image
-      src={src}
+      src={fileHref(src)}
       alt="Sticker"
       width={128}
       height={128}

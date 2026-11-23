@@ -103,6 +103,13 @@ export const notificationSchemas = {
     count: z.number().int().min(1),
   }),
 
+  tradieInvoiceWaiting: z.object({
+    projectId: z.string(),
+    projectName: z.string(),
+    count: z.number().int().min(1),
+    days: z.number().int().min(1),
+  }),
+
   tradieInvoiceEmailUnmatched: z.object({
     tradieId: z.string(),
     tradieName: z.string(),

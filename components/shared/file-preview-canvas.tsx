@@ -102,6 +102,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import { fileHref } from "@/lib/files/file-href";
 
 // The PDF engine (react-pdf → pdfjs-dist) touches browser-only globals the
 // moment its module is evaluated, which crashes Next.js SSR even inside a
@@ -447,6 +448,9 @@ export default function FilePreviewCanvas({
     [url, fileName],
   );
   const meta = FILE_META[kind];
+  // Where the browser loads it from: a stored file is private, so through the
+  // signing route (#571). `url` itself still names the file and its kind.
+  const href = React.useMemo(() => fileHref(url), [url]);
 
   const [open, setOpen] = React.useState(true);
   const handleOpenChange = React.useCallback(
@@ -491,7 +495,7 @@ export default function FilePreviewCanvas({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(url);
+        const res = await fetch(href);
         if (!res.ok) throw new Error(String(res.status));
         const buffer = await res.arrayBuffer();
         const workbook = await readWorkbookGrid(buffer);
@@ -516,7 +520,7 @@ export default function FilePreviewCanvas({
     return () => {
       cancelled = true;
     };
-  }, [url, kind]);
+  }, [href, kind]);
 
   // Keyboard shortcuts.
   React.useEffect(() => {
@@ -542,8 +546,26 @@ export default function FilePreviewCanvas({
   const resetZoom = React.useCallback(() => setZoom(1), []);
 
   const handleDownload = React.useCallback(async () => {
+    let res: Response;
     try {
-      const res = await fetch(url);
+      res = await fetch(href);
+    } catch {
+      // The browser could not fetch it itself (offline, CORS): let it try
+      // the link directly.
+      window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    // A refusal or an expired link must not be saved as if it were the file.
+    if (!res.ok) {
+      setError(
+        res.status === 404 || res.status === 403
+          ? "This file is not available to you, or it no longer exists."
+          : `The download failed (HTTP ${res.status}). Try again in a moment.`,
+      );
+      setLoading(false);
+      return;
+    }
+    try {
       const blob = await res.blob();
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -554,9 +576,9 @@ export default function FilePreviewCanvas({
       a.remove();
       URL.revokeObjectURL(objectUrl);
     } catch {
-      window.open(url, "_blank", "noopener,noreferrer");
+      window.open(href, "_blank", "noopener,noreferrer");
     }
-  }, [url, displayFileName]);
+  }, [href, displayFileName]);
 
   const handlePrint = React.useCallback(() => {
     const iframe = document.createElement("iframe");
@@ -566,14 +588,14 @@ export default function FilePreviewCanvas({
     iframe.style.width = "0";
     iframe.style.height = "0";
     iframe.style.border = "0";
-    iframe.src = url;
+    iframe.src = href;
     iframe.onload = () => {
       iframe.contentWindow?.focus();
       iframe.contentWindow?.print();
       setTimeout(() => iframe.remove(), 1000);
     };
     document.body.appendChild(iframe);
-  }, [url]);
+  }, [href]);
 
   if (!open) return null;
 
@@ -751,7 +773,7 @@ export default function FilePreviewCanvas({
                         size="sm"
                         variant="outline"
                         onClick={() =>
-                          window.open(url, "_blank", "noopener,noreferrer")
+                          window.open(href, "_blank", "noopener,noreferrer")
                         }
                       >
                         Open original
@@ -784,7 +806,7 @@ export default function FilePreviewCanvas({
                   <div className="min-h-full min-w-full p-6">
                     {kind === "pdf" && (
                       <PdfViewer
-                        url={url}
+                        url={href}
                         zoom={zoom}
                         rotation={rotation}
                         page={page}
@@ -800,7 +822,7 @@ export default function FilePreviewCanvas({
                     )}
                     {kind === "docx" && (
                       <DocxViewer
-                        url={url}
+                        url={href}
                         zoom={zoom}
                         onReady={() => setLoading(false)}
                         onError={(msg) => {

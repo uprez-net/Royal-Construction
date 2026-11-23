@@ -15,6 +15,7 @@ import {
   type OfferImageSlotKey,
 } from "@/lib/offer/workspace-images";
 import { useDropboxChooser } from "./use-dropbox-chooser";
+import { storedImageProps } from "@/lib/files/file-href";
 
 type OfferWorkspaceImagesProps = {
   readonly images: OfferImageMap;
@@ -125,7 +126,7 @@ export function OfferWorkspaceImages({
         buildBlobPath({ fileId, fileName: file.name, leadId: leadIdStr }),
         file,
         {
-          access: "public",
+          access: "private",
           handleUploadUrl: "/api/upload",
           clientPayload: JSON.stringify({
             fileId,
@@ -190,7 +191,7 @@ export function OfferWorkspaceImages({
                     className="object-cover"
                     fill
                     sizes="200px"
-                    src={url}
+                    {...storedImageProps(url)}
                   />
                 ) : (
                   <span className="absolute inset-0 flex items-center justify-center px-2 text-center text-xs text-muted-foreground">

@@ -8,6 +8,7 @@ import type { ChecklistPhoto } from "@/lib/domain/projects/checklists";
 import { cn } from "@/lib/utils";
 
 import { PHOTO_ACCEPT, type PhotoUploadState } from "./checklist-client";
+import { fileHref } from "@/lib/files/file-href";
 
 // The evidence for a new issue: photos already on the row to pick from, and
 // new ones to add. New photos land on the row first, so cancelling the issue
@@ -64,7 +65,7 @@ export function IssueEvidencePicker({
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element -- Blob thumbnails */}
                   <img
-                    src={photo.url}
+                    src={fileHref(photo.url)}
                     alt=""
                     className="h-20 w-24 object-cover"
                   />

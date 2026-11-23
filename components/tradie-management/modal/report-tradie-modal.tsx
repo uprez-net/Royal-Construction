@@ -137,7 +137,7 @@ export default function ReportTradieModal({
         }),
         queuedFile.file,
         {
-          access: "public",
+          access: "private",
           handleUploadUrl: "/api/upload",
           clientPayload: JSON.stringify({
             tradieId: tradie.id,

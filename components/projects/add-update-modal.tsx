@@ -186,7 +186,7 @@ export function AddUpdateModal({
             }),
             queuedFile.file,
             {
-              access: "public",
+              access: "private",
               handleUploadUrl: "/api/upload",
               clientPayload: JSON.stringify({
                 projectId,

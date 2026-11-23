@@ -45,6 +45,7 @@ import { MilestoneNotes } from "./milestone-notes";
 import { missingMilestoneTrades } from "@/lib/domain/projects/tradie-dependencies";
 import { milestoneEndDate } from "@/lib/domain/projects/milestone-schedule";
 import { bookingTrade } from "@/lib/domain/tradies/request-rules";
+import { storedImageProps } from "@/lib/files/file-href";
 
 /** How many progress photos sit inline before the rest go behind a button. */
 const INLINE_PHOTO_LIMIT = 3;
@@ -348,7 +349,7 @@ export function MilestoneCard({
                     onClick={() => onOpenViewPicture(photoUrls, index)}
                   >
                     <Image
-                      src={photo.url}
+                      {...storedImageProps(photo.url)}
                       alt=""
                       className="h-full w-full object-cover"
                       loading="lazy"

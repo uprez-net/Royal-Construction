@@ -37,6 +37,7 @@ import {
   OFFER_STATUS_LABEL,
   type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
+import { fileHref } from "@/lib/files/file-href";
 
 // Negotiation activity for the active offer, on the Send & negotiate step. The
 // offer document is negotiated over email (in the builder's mailbox), so nothing
@@ -408,7 +409,7 @@ function ReplyAttachment({
         {attachment.url ? (
           <a
             className="font-medium text-royal-gold-ink-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
-            href={attachment.url}
+            href={fileHref(attachment.url)}
             rel="noopener noreferrer"
             target="_blank"
           >

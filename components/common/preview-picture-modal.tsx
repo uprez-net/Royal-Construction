@@ -12,6 +12,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { storedImageProps } from "@/lib/files/file-href";
 
 interface PreviewPictureModalProps {
   open: boolean;
@@ -175,7 +176,7 @@ export function PreviewPictureModal({
               }}
             >
               <Image
-                src={currentImageUrl}
+                {...storedImageProps(currentImageUrl)}
                 alt={`Preview image ${currentIndex + 1} of ${imageUrls.length}`}
                 fill
                 priority
@@ -276,7 +277,7 @@ export function PreviewPictureModal({
                   )}
                 >
                   <Image
-                    src={url}
+                    {...storedImageProps(url)}
                     alt={`Thumbnail ${index + 1}`}
                     fill
                     className="object-cover"

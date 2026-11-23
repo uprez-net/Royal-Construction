@@ -98,6 +98,7 @@ import type {
   StartEngagementInput,
 } from "@/utils/validators/compliance";
 import { logAction } from "./actionLog";
+import { fetchStoredFile } from "@/lib/blob-port";
 
 const engagementInclude = certifierEngagementInclude;
 
@@ -329,7 +330,7 @@ async function toEmailAttachment(file: {
   filename: string;
   fileType: string;
 }): Promise<EmailAttachment> {
-  const response = await fetch(file.url);
+  const response = await fetchStoredFile(file.url);
   if (!response.ok) {
     throw new Error(
       `Could not read "${file.filename}" back from storage (${response.status}).`,

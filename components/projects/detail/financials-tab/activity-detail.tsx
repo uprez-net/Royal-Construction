@@ -24,6 +24,7 @@ import {
 import { dateFormat, formatStatus } from "@/utils/formatters";
 
 import { formatCents, Money, MoneyWithGst } from "./money";
+import { fileHref } from "@/lib/files/file-href";
 
 const BILLING_TONE: Record<
   BookingBillingState,
@@ -120,7 +121,7 @@ export function InvoiceList({
           </span>
           {invoice.documentUrl ? (
             <a
-              href={invoice.documentUrl}
+              href={fileHref(invoice.documentUrl)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-2 hover:underline"

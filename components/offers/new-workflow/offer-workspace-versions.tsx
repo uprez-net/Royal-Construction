@@ -19,6 +19,7 @@ import {
 import { FileText, History, Loader2, ScrollText } from "lucide-react";
 import { formatCurrency } from "./offer-workspace-format";
 import { OfferRevisionViewerDialog } from "./offer-revision-viewer-dialog";
+import { fileHref } from "@/lib/files/file-href";
 
 // Revision timeline for the lead's offer family. Fetches on open (so it always
 // reflects a just-created revision) and lists each version's reference, status,
@@ -186,14 +187,14 @@ function VersionRow({
         <div className="flex flex-wrap gap-2 pt-0.5">
           {version.tenderPdfUrl ? (
             <PdfLink
-              href={version.tenderPdfUrl}
+              href={fileHref(version.tenderPdfUrl)}
               icon={<FileText className="size-3.5" aria-hidden="true" />}
               label="Tender PDF"
             />
           ) : null}
           {version.contractPdfUrl ? (
             <PdfLink
-              href={version.contractPdfUrl}
+              href={fileHref(version.contractPdfUrl)}
               icon={<ScrollText className="size-3.5" aria-hidden="true" />}
               label="Contract PDF"
             />

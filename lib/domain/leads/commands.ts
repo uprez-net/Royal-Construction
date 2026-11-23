@@ -11,6 +11,11 @@ import {
 import { authorizeLead } from "../access/leads";
 import { LEAD_ROW_INCLUDE, type LeadRow } from "./row-read";
 import {
+  introducesOwnMailbox,
+  OWN_MAILBOX_MESSAGE,
+  ownMailboxRefusal,
+} from "./client-email";
+import {
   closeDatePatch,
   isClosedUnsuccessful,
   stageDef,
@@ -235,6 +240,10 @@ export async function createLead(
     );
   }
   const normalizedEmail = emailCheck.data;
+  const ownMailbox =
+    ownMailboxRefusal(normalizedEmail)
+    ?? ownMailboxRefusal(input.secondaryEmail);
+  if (ownMailbox) throw new LeadValidationError(ownMailbox);
   const normalizedPhone = (input.phone ?? "").trim();
 
   const orConditions: Prisma.LeadWhereInput[] = [];
@@ -351,6 +360,12 @@ export async function updateLead(
     // Kept in step with `phone` on every write, or inbound WhatsApp would
     // match the number the lead used to have.
     updateData.phoneE164 = leadPhoneE164(input.phone);
+  }
+  if (
+    introducesOwnMailbox(input.email, existingLead.email)
+    || introducesOwnMailbox(input.secondaryEmail, existingLead.secondaryEmail)
+  ) {
+    throw new LeadValidationError(OWN_MAILBOX_MESSAGE);
   }
   if (input.email !== undefined) updateData.email = input.email ?? "";
   if (input.location !== undefined) updateData.location = input.location ?? "";

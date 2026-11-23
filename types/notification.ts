@@ -136,6 +136,12 @@ export const notificationTemplates: NotificationTemplateFactory = {
     url: `/projects/${data.projectId}?activeTab=financials`,
   }),
 
+  tradieInvoiceWaiting: (data) => ({
+    title: `Invoice still waiting: ${data.projectName}`,
+    message: `${data.count === 1 ? "An emailed invoice has" : `${data.count} emailed invoices have`} been waiting to be confirmed${data.count === 1 ? "" : ", the oldest"} for ${data.days} days. Nothing counts until it is recorded on the Financials tab, or dismissed there.`,
+    url: `/projects/${data.projectId}?activeTab=financials`,
+  }),
+
   tradieInvoiceEmailUnmatched: (data) => ({
     title: `Invoice by email not matched: ${data.tradieName}`,
     message: `${data.tradieName} emailed an invoice ("${data.subject}") that could not be matched to one project. Record it by hand on the right project's Financials tab.`,

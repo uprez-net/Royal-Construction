@@ -83,6 +83,9 @@ function PriceLine({
           fontWeight: isTotal ? 600 : 500,
           fontSize: isTotal ? 18 : 15,
           color: isTotal ? RC_COLORS.gold : RC_COLORS.textOnLight,
+          // A figure never splits from its sign: "−$1,000.00" broke after the
+          // minus on a narrow phone (#592).
+          whiteSpace: "nowrap",
         }}
       >
         {children}
@@ -278,11 +281,11 @@ export default function VariationInvoiceEmail({
                       {money(document.newPriceCents)}
                     </PriceLine>
                     <PriceLine label="Variation amount (ex GST)">
-                      +{money(document.differenceCents)}
+                      {`+${money(document.differenceCents)}`}
                     </PriceLine>
                     {promotional ? (
                       <PriceLine label="Covered by Royal Constructions">
-                        −{money(document.absorbedCents)}
+                        {`−${money(document.absorbedCents)}`}
                       </PriceLine>
                     ) : (
                       <PriceLine label="GST (10%)">

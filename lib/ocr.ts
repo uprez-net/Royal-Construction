@@ -1,6 +1,7 @@
 import { Mistral } from "@mistralai/mistralai";
 import type { OCRPageObject } from "@mistralai/mistralai/models/components";
 
+import { signedBlobReadUrl } from "@/lib/blob-port";
 import { reportExternalError } from "@/lib/observability/external";
 
 // Checked at call time rather than on import. The Graph webhook now reaches
@@ -25,6 +26,8 @@ export async function processPDFWithMistral(
   options: { readonly timeoutMs?: number } = {},
 ) {
   const client = new Mistral({ apiKey: requireApiKey() });
+  // Mistral fetches the document itself, and a stored file is private (#571).
+  const { url: documentUrl } = await signedBlobReadUrl(pdfLink);
 
   try {
     const response = await client.ocr.process(
@@ -32,7 +35,7 @@ export async function processPDFWithMistral(
         model: "mistral-ocr-latest",
         document: {
           type: "document_url",
-          documentUrl: pdfLink,
+          documentUrl,
         },
         includeImageBase64: false,
         tableFormat: "markdown",
@@ -72,7 +75,7 @@ export function ocrPageText(page: OCRPageObject): string {
 /**
  * Runs OCR over a document Mistral can fetch itself, page by page.
  *
- * For a public blob: the bytes never pass through us, which matters for a
+ * For a stored file, through a signed link: the bytes never pass through us, which matters for a
  * 40 MB plan set. `name` carries the extension Mistral picks a parser by, as
  * in ocrFile. Empty pages are kept so page numbers stay true.
  */
@@ -88,12 +91,14 @@ export async function ocrDocumentAtUrl({
   timeoutMs?: number;
 }): Promise<string[]> {
   const client = new Mistral({ apiKey: requireApiKey() });
+  // A stored file is private (#571): Mistral is handed a short-lived read link.
+  const { url: readable } = await signedBlobReadUrl(url);
   const response = await client.ocr.process(
     {
       model: "mistral-ocr-latest",
       document: isImage
-        ? { type: "image_url", imageUrl: url }
-        : { type: "document_url", documentUrl: url, documentName: name },
+        ? { type: "image_url", imageUrl: readable }
+        : { type: "document_url", documentUrl: readable, documentName: name },
       includeImageBase64: false,
       tableFormat: "markdown",
     },

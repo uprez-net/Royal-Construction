@@ -13,6 +13,7 @@ import { getGraphConfig } from "@/lib/graph/config";
 import { generatePDF } from "@/lib/pdf/generate-pdf";
 import { buildChecklistDocumentHtml } from "@/lib/projects/checklist-document-html";
 import { CACHE_PROFILES } from "@/types/cache";
+import { fetchStoredFile } from "@/lib/blob-port";
 
 // The providers behind the project checklists' ports (issue #420): Graph for
 // the tradie's email, Chromium for the downloaded document, Blob for removing
@@ -50,7 +51,7 @@ ${paragraphs}
 const sendChecklistIssueEmail: ChecklistIssueEmailPort = async (input) => {
   const attachments = await Promise.all(
     input.photos.map(async (photo, index) => {
-      const response = await fetch(photo.url);
+      const response = await fetchStoredFile(photo.url);
       if (!response.ok) {
         throw new Error(
           `photo ${index + 1} could not be attached (${response.status})`,
