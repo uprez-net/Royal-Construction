@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 
 import {
+  LEGACY_BLOB_HOSTS,
   ROYAL_BLOB_HOST,
-  allowedOfferImageHost,
+  allowedOfferImageHosts,
   isAllowedOfferImageUrl,
 } from "@/lib/offer/offer-image-url";
 import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
@@ -33,7 +34,7 @@ import { INITIAL_EXTRA_COSTS } from "@/lib/offer/extra-costs";
 const BLOB_URL =
   "https://udafiztdzg1cn8u2.public.blob.vercel-storage.com/offer-ai/hero.png";
 
-test("accepts an image in Royal's public Blob storage", () => {
+test("accepts an image in Royal's Blob storage", () => {
   assert.equal(isAllowedOfferImageUrl(BLOB_URL), true);
 });
 
@@ -59,39 +60,79 @@ test("rejects anything outside Blob storage", () => {
   assert.equal(isAllowedOfferImageUrl(42), false);
 });
 
-test("follows the store in BLOB_READ_WRITE_TOKEN, and falls back to Royal's", () => {
+test("follows the stores in the Blob tokens, public or private, and always allows Royal's", () => {
   assert.equal(BLOB_URL.startsWith(`https://${ROYAL_BLOB_HOST}/`), true);
   // process.env is typed here with the app's keys required, so go through a
   // view that admits one can be absent — the case this test is about.
   const env = process.env as Record<string, string | undefined>;
-  const before = env.BLOB_READ_WRITE_TOKEN;
+  const before = {
+    main: env.BLOB_READ_WRITE_TOKEN,
+    recordings: env.BLOB_PRIVATE_READ_WRITE_TOKEN,
+  };
   try {
-    // A token names the store that writes the images; the host follows it, so
-    // replacing the store doesn't leave the allowlist pointing at the old one.
+    // A token names the store that writes the images; the hosts follow it, so
+    // replacing the store (#571) doesn't leave the allowlist on the old one.
     env.BLOB_READ_WRITE_TOKEN = "vercel_blob_rw_Rep1acement_secret";
-    assert.equal(
-      allowedOfferImageHost(),
-      "rep1acement.public.blob.vercel-storage.com",
+    delete env.BLOB_PRIVATE_READ_WRITE_TOKEN;
+    assert.deepEqual(
+      [...allowedOfferImageHosts()].sort(),
+      [
+        ...LEGACY_BLOB_HOSTS,
+        "rep1acement.private.blob.vercel-storage.com",
+        "rep1acement.public.blob.vercel-storage.com",
+      ].sort(),
     );
+    // Production's pre-#571 store stays allowed until its URLs are rewritten,
+    // so an offer opened between the deploy and the rewrite keeps its images.
     assert.equal(
       isAllowedOfferImageUrl(
-        "https://rep1acement.public.blob.vercel-storage.com/a.png",
+        "https://b7mydymu5fx66ove.public.blob.vercel-storage.com/offer/hero.png",
       ),
       true,
     );
-    assert.equal(isAllowedOfferImageUrl(BLOB_URL), false);
+    for (const url of [
+      "https://rep1acement.public.blob.vercel-storage.com/a.png",
+      "https://rep1acement.private.blob.vercel-storage.com/a.png",
+      // Royal's original store: an offer saved before the move still names it.
+      BLOB_URL,
+    ]) {
+      assert.equal(isAllowedOfferImageUrl(url), true, url);
+    }
+    // With the tokens in hand, a stranger's private store is still a stranger's.
+    assert.equal(
+      isAllowedOfferImageUrl(
+        "https://attacker.private.blob.vercel-storage.com/a.png",
+      ),
+      false,
+    );
 
-    // No token (build, tests, the browser) or an unreadable one: Royal's host.
-    delete env.BLOB_READ_WRITE_TOKEN;
-    assert.equal(allowedOfferImageHost(), ROYAL_BLOB_HOST);
-    env.BLOB_READ_WRITE_TOKEN = "not-a-blob-token";
-    assert.equal(allowedOfferImageHost(), ROYAL_BLOB_HOST);
-    assert.equal(isAllowedOfferImageUrl(BLOB_URL), true);
+    // No token (build, tests, the browser) or an unreadable one: Royal's host,
+    // and any private host — dropping those would empty a slot on autosave,
+    // and the server re-checks every save with the tokens.
+    for (const token of [undefined, "not-a-blob-token"]) {
+      if (token === undefined) delete env.BLOB_READ_WRITE_TOKEN;
+      else env.BLOB_READ_WRITE_TOKEN = token;
+      assert.equal(isAllowedOfferImageUrl(BLOB_URL), true);
+      assert.equal(
+        isAllowedOfferImageUrl(
+          "https://rep1acement.private.blob.vercel-storage.com/a.png",
+        ),
+        true,
+      );
+      assert.equal(
+        isAllowedOfferImageUrl(
+          "https://attacker.public.blob.vercel-storage.com/x.png",
+        ),
+        false,
+      );
+    }
   } finally {
-    if (before === undefined) {
-      delete env.BLOB_READ_WRITE_TOKEN;
-    } else {
-      env.BLOB_READ_WRITE_TOKEN = before;
+    for (const [key, value] of [
+      ["BLOB_READ_WRITE_TOKEN", before.main],
+      ["BLOB_PRIVATE_READ_WRITE_TOKEN", before.recordings],
+    ] as const) {
+      if (value === undefined) delete env[key];
+      else env[key] = value;
     }
   }
 });

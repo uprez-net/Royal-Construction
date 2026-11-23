@@ -321,7 +321,7 @@ async function archiveAttachments(
         buildBlobPath({ fileId, fileName: file.name, projectId }),
         data,
         {
-          access: "public",
+          access: "private",
           // The path is already unique through fileId, and a suffix would
           // break the shape the blob cleanup cron matches on.
           addRandomSuffix: false,

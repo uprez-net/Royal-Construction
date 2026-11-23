@@ -334,7 +334,7 @@ async function archiveAttachments(
         buildBlobPath({ fileId, fileName: file.name, projectId }),
         data,
         {
-          access: "public",
+          access: "private",
           addRandomSuffix: false,
           allowOverwrite: true,
           contentType: file.mediaType,

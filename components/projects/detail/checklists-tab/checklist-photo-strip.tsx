@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { ChecklistPhoto } from "@/lib/domain/projects/checklists";
 
 import type { PhotoUploadState } from "./checklist-client";
+import { fileHref } from "@/lib/files/file-href";
 
 // Thumbnails for an inspection row or an issue, with any uploads in flight.
 // Evidence for an issue is never offered a remove button: it is the record.
@@ -28,14 +29,14 @@ export function PhotoStrip({
       {photos.map((photo) => (
         <li key={photo.id} className="group relative w-24">
           <a
-            href={photo.url}
+            href={fileHref(photo.url)}
             target="_blank"
             rel="noreferrer"
             className="block overflow-hidden rounded-md border border-border/70 focus-visible:outline-2 focus-visible:outline-ring"
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- Blob URLs, thumbnails only */}
             <img
-              src={photo.url}
+              src={fileHref(photo.url)}
               alt={photo.filename}
               loading="lazy"
               className="h-20 w-24 object-cover"

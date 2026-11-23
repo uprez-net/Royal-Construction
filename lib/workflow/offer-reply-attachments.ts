@@ -87,7 +87,7 @@ async function storeAttachment(
           // Same as every other stored email attachment here: the path is
           // already unique, and a suffix would stop a retry overwriting its
           // own object.
-          access: "public",
+          access: "private",
           addRandomSuffix: false,
           allowOverwrite,
           contentType,

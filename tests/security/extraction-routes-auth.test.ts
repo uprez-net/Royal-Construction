@@ -73,10 +73,18 @@ test("only a file in the pinned store passes", () => {
     "https://udafiztdzg1cn8u2.public.blob.vercel-storage.com./a.pdf",
     "http://udafiztdzg1cn8u2.public.blob.vercel-storage.com/a.pdf",
     "https://user:pass@udafiztdzg1cn8u2.public.blob.vercel-storage.com/a.pdf",
-    "https://udafiztdzg1cn8u2.private.blob.vercel-storage.com/a.pdf",
+    "https://someoneelse99.private.blob.vercel-storage.com/a.pdf",
   ]) {
     assert.equal(isBlobStoreUrl(url, "udafiztdzg1cn8u2"), false, url);
   }
+  // The same store created private (#571) is still the store.
+  assert.equal(
+    isBlobStoreUrl(
+      "https://udafiztdzg1cn8u2.private.blob.vercel-storage.com/a.pdf",
+      "udafiztdzg1cn8u2",
+    ),
+    true,
+  );
   // No token, no store: nothing passes.
   assert.equal(isBlobStoreUrl(own, null), false);
   assert.equal(isBlobStoreUrl(own, ""), false);

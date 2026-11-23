@@ -26,7 +26,7 @@ async function storeExecutedPdf(
   const context = await createDocusignContext(getDocusignConfig());
   const executed = await downloadCombinedDocument(context, docusignId);
   const blob = await put(pathname, executed, {
-    access: "public",
+    access: "private",
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType: "application/pdf",

@@ -20,6 +20,7 @@ import { fileKindLabel, formatFileSize } from "@/lib/whatsapp/chat-format";
 import { WhatsAppAudioPlayer } from "./media/whatsapp-audio-player";
 import { WhatsAppPhoto, WhatsAppSticker } from "./media/whatsapp-image";
 import { WhatsAppVideoPlayer } from "./media/whatsapp-video-player";
+import { fileHref } from "@/lib/files/file-href";
 
 // One WhatsApp attachment, as it sits inside a bubble: photos and stickers
 // through next/image, video and voice notes in the app's own players
@@ -122,13 +123,16 @@ export function WhatsAppMedia({
   onRetry?: (mediaId: string) => void;
 }) {
   if (!media.url) return <Placeholder media={media} onRetry={onRetry} />;
-  const url = media.url;
+  // Stored privately (#571): the browser loads it through the signing route.
+  // The photo components take the stored URL and do their own wrapping, so
+  // they can also skip the image optimiser.
+  const url = fileHref(media.url);
 
   switch (media.type) {
     case "IMAGE":
-      return <WhatsAppPhoto src={url} caption={media.caption} />;
+      return <WhatsAppPhoto src={media.url} caption={media.caption} />;
     case "STICKER":
-      return <WhatsAppSticker src={url} />;
+      return <WhatsAppSticker src={media.url} />;
     case "VIDEO":
       return <WhatsAppVideoPlayer src={url} caption={media.caption} />;
     case "AUDIO":

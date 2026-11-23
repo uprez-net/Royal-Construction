@@ -127,7 +127,7 @@ export function useChecklistPhotoUpload(
               buildBlobPath({ fileId: id, fileName: file.name, projectId }),
               file,
               {
-                access: "public",
+                access: "private",
                 clientPayload: JSON.stringify({
                   fileId: id,
                   fileName: file.name,

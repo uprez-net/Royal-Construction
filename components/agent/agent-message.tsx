@@ -37,6 +37,7 @@ import type { AgentResultAction } from "@/components/agent/agent-result";
 import { AgentSubagentPanel } from "@/components/agent/agent-subagent-panel";
 import { AgentToolCall } from "@/components/agent/agent-tool-call";
 import type { AgentAnnotation } from "@/components/agent/agent-mentions";
+import { fileHref } from "@/lib/files/file-href";
 
 export type { AgentInputResponse };
 
@@ -244,7 +245,7 @@ function AgentMessagePart({
           {part.url ? (
             <a
               className="ml-auto shrink-0 text-xs text-royal-gold-ink underline-offset-2 hover:underline"
-              href={part.url}
+              href={fileHref(part.url)}
               rel="noreferrer"
               target="_blank"
             >

@@ -1,20 +1,11 @@
 import { auth } from "@clerk/nextjs/server";
-import { get } from "@/lib/blob";
+import { readStoredBlob } from "@/lib/blob-port";
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getUserByClerkIdCached } from "@/lib/data/user";
-import { canReadFile } from "@/lib/domain/files";
+import { canReadFile, READABLE_FILE_SELECT } from "@/lib/domain/files";
 import { userPrincipal } from "@/lib/domain/principal";
 import { uuidSchema } from "@/utils/validators/common";
-
-// What `canReadFile` decides from, for the file's own project or, for a file
-// received by email onto the compliance file, the engagement's.
-const READABLE_PROJECT = {
-  siteManagerId: true,
-  customerId: true,
-  requirements: true,
-  Lead: { select: { assignedId: true } },
-} as const;
 
 export async function GET(
   _request: Request,
@@ -32,31 +23,13 @@ export async function GET(
     return NextResponse.json({ error: "Invalid file ID" }, { status: 400 });
   const file = await prisma.file.findUnique({
     where: { id: parsedFileId.data },
-    select: {
-      id: true,
-      url: true,
-      storagePath: true,
-      filename: true,
-      fileType: true,
-      tags: true,
-      uploadedBy: true,
-      leadId: true,
-      complianceDocument: {
-        select: {
-          documentType: true,
-          engagement: { select: { project: { select: READABLE_PROJECT } } },
-        },
-      },
-      project: { select: READABLE_PROJECT },
-    },
+    select: { ...READABLE_FILE_SELECT, fileType: true },
   });
   if (!file)
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   if (!canReadFile(userPrincipal(user), file))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const blob = await get(file.storagePath ?? file.url, {
-    access: file.storagePath ? "private" : "public",
-  });
+  const blob = await readStoredBlob(file.url);
   if (!blob)
     return NextResponse.json(
       { error: "File content not found" },
@@ -65,7 +38,7 @@ export async function GET(
   return new Response(blob.stream, {
     headers: {
       "Content-Type":
-        file.fileType || blob.blob.contentType || "application/octet-stream",
+        file.fileType || blob.contentType || "application/octet-stream",
       "Content-Disposition": `inline; filename="${file.filename.replaceAll(/[^a-zA-Z0-9._-]/g, "-")}"`,
       "Cache-Control": "private, no-store",
     },

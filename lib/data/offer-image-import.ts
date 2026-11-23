@@ -42,7 +42,7 @@ export async function importDropboxImage(input: {
             ? Buffer.from(body)
             : body;
         return put(pathname, putBody, {
-          access: "public",
+          access: "private",
           addRandomSuffix: false,
           allowOverwrite,
           contentType,

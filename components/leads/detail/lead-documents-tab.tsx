@@ -195,7 +195,7 @@ export function LeadDocumentsTab({
         }),
         queuedFile.file,
         {
-          access: "public",
+          access: "private",
           handleUploadUrl: "/api/upload",
           clientPayload: JSON.stringify({
             leadId: lead.id.toString(),

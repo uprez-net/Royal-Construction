@@ -180,7 +180,7 @@ async function storeAttachments(
         }),
         data,
         {
-          access: "public",
+          access: "private",
           addRandomSuffix: false,
           allowOverwrite: true,
           contentType: resolveMediaType(file.name, file.contentType),
