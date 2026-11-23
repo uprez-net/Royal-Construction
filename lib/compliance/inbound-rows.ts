@@ -37,6 +37,8 @@ export async function buildInboundCertifierRows(input: {
     to: string;
   };
   graphMailbox: GraphMailbox;
+  /** Graph's id for the message that arrived; keeps stand-in rows distinct. */
+  messageId: string;
   threads: readonly EmailThread[];
 }): Promise<Prisma.CertifierEmailCreateManyInput[]> {
   const { fallback } = input;
@@ -47,21 +49,19 @@ export async function buildInboundCertifierRows(input: {
   // message that arrived is still the envelope's: keep a row for it, or the
   // document is archived with no email in the thread to carry it.
   const newest = input.threads[0];
+  const standIn: EmailThread = {
+    body: "",
+    from: fallback.from,
+    sentAt: "",
+    subject: fallback.subject,
+    to: fallback.to,
+  };
   const threads =
     input.attachments.length > 0
     && newest
     && isOwnMailbox(normalizeEmailAddress(newest.from))
     && !isOwnMailbox(normalizeEmailAddress(fallback.from))
-      ? [
-          {
-            body: "",
-            from: fallback.from,
-            sentAt: "",
-            subject: fallback.subject,
-            to: fallback.to,
-          },
-          ...input.threads,
-        ]
+      ? [standIn, ...input.threads]
       : input.threads;
 
   for (const [index, thread] of threads.entries()) {
@@ -74,7 +74,9 @@ export async function buildInboundCertifierRows(input: {
     const to = normalizeEmailAddress(thread.to || fallback.to);
     const checksum = await generateEmailChecksum(
       subject,
-      thread.body,
+      // Empty, the stand-in would hash the same for every attachment-only
+      // reply on this subject, and the unique index would drop the second.
+      thread === standIn ? `attachment-only ${input.messageId}` : thread.body,
       from,
       to,
     );

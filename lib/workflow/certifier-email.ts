@@ -226,6 +226,7 @@ async function saveInboundEmails(
       to: message.to,
     },
     graphMailbox,
+    messageId: message.messageId,
     threads,
   });
 

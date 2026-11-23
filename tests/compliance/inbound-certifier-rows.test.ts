@@ -44,6 +44,7 @@ const build = (threads: ReturnType<typeof thread>[]) =>
       to: "admin@royal.test",
     },
     graphMailbox: "ADMIN",
+    messageId: "msg1",
     threads,
   });
 
@@ -98,4 +99,27 @@ test("an attachment-only reply keeps a row for the message that arrived", async 
   assert.deepEqual(rows[0]?.attachments, [
     { name: "a.pdf", url: "https://x/a.pdf" },
   ]);
+});
+
+test("two attachment-only replies on one subject get different checksums, and a retry the same", async () => {
+  const quoted = [thread("admin@royal.test", "Please send the plans.")];
+  const as = (messageId: string) =>
+    buildInboundCertifierRows({
+      attachments: [{ name: "a.pdf", url: "https://x/a.pdf" }],
+      engagementId: "eng1",
+      fallback: {
+        from: "cert@certco.test",
+        sentAt: new Date("2026-11-02T00:00:00Z"),
+        subject: "Re: Documents for the site",
+        to: "admin@royal.test",
+      },
+      graphMailbox: "ADMIN",
+      messageId,
+      threads: quoted,
+    });
+  const [first] = await as("msg1");
+  const [second] = await as("msg2");
+  const [retry] = await as("msg1");
+  assert.notEqual(first?.checksum, second?.checksum);
+  assert.equal(first?.checksum, retry?.checksum);
 });
