@@ -2,13 +2,11 @@ import { reportWorkflowError } from "@/lib/workflow/report-failure";
 import { createHash } from "node:crypto";
 
 import {
-  CertifierEmailDirection,
   CertifierEngagementStatus,
   ComplianceAlertSource,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
   GraphMailbox,
-  Prisma,
 } from "@prisma/client";
 import { put } from "@/lib/blob";
 import { FatalError } from "workflow";
@@ -39,8 +37,8 @@ import prisma from "@/lib/prisma";
 import { getAllAdminUsersIds } from "@/lib/data/user";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { getAllEmailThreads, parseEmailDate } from "@/utils/email-parser";
-import { buildBlobPath, normalizeEmailAddress } from "@/utils/formatters";
-import { generateEmailChecksum } from "@/utils/generator";
+import { buildInboundCertifierRows } from "@/lib/compliance/inbound-rows";
+import { buildBlobPath } from "@/utils/formatters";
 import { logAction } from "@/lib/data/actionLog";
 
 /**
@@ -218,39 +216,19 @@ async function saveInboundEmails(
     sentAt: message.receivedDateTime,
   });
 
-  const rows: Prisma.CertifierEmailCreateManyInput[] = [];
-  for (const [index, thread] of threads.entries()) {
-    const subject = thread.subject.trim() || message.subject;
-    const from = normalizeEmailAddress(thread.from || message.from);
-    const to = normalizeEmailAddress(thread.to || message.to);
-    const checksum = await generateEmailChecksum(
-      subject,
-      thread.body,
-      from,
-      to,
-    );
-
-    rows.push({
-      engagementId,
-      emailFrom: from,
-      emailTo: to,
-      subject,
-      body: thread.body,
-      checksum,
-      // getAllEmailThreads returns newest first, so only threads[0] is the
-      // message that just arrived. The quoted history behind it is whatever
-      // was said before, in both directions — but this system only ever sends
-      // through sendCertifierReply, which writes its own OUTBOUND row. A
-      // quoted copy of one of those collides on checksum and is skipped, so
-      // labelling the whole quoted tail INBOUND cannot flip an existing row.
-      direction: CertifierEmailDirection.INBOUND,
-      graphMailbox,
-      attachments: (index === 0
-        ? attachments
-        : []) as unknown as Prisma.InputJsonValue,
-      sentAt: parseEmailDate(thread.sentAt) ?? sentAt,
-    });
-  }
+  const rows = await buildInboundCertifierRows({
+    attachments,
+    engagementId,
+    fallback: {
+      sentAt,
+      subject: message.subject,
+      from: message.from,
+      to: message.to,
+    },
+    graphMailbox,
+    messageId: message.messageId,
+    threads,
+  });
 
   if (rows.length === 0) {
     return 0;
