@@ -13,11 +13,9 @@ import {
 import { cn } from "@/lib/utils";
 import { fileHref, storedImageProps } from "@/lib/files/file-href";
 
-// Photos and stickers through next/image. `src` is the stored URL. A public
-// one (a row from before #571) goes through the optimiser, which serves a
-// resized WebP/AVIF for the bubble and a larger one for the lightbox; a
-// private one is loaded through the signing route as it is
-// (`storedImageProps`).
+// Photos and stickers through next/image. `src` is the stored URL, which is
+// private (#571): it is loaded through the signing route as it is, without
+// the optimiser (`storedImageProps`).
 
 /** The bubble's photo; opens the lightbox. Keeps the photo's own shape. */
 export function WhatsAppPhoto({
