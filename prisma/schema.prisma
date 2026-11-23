@@ -595,6 +595,10 @@ enum OutboxEventKind {
   /// Asking the phone provider to ring a lead. Keyed per click: a second
   /// call somebody pressed is a new intent, a replayed request is not.
   LEAD_CALL_PLACE
+  /// Asking the phone provider to ring one of a project's people (the site
+  /// manager, an owner, a tradie) or a number typed into the project dialer.
+  /// Keyed per click, like LEAD_CALL_PLACE.
+  PROJECT_CALL_PLACE
   /// The WhatsApp message asking a customer for permission to call them.
   WHATSAPP_CALL_PERMISSION_REQUEST
   /// Asking Meta to ring a customer on WhatsApp.
@@ -686,6 +690,7 @@ model Project {
   whatsappGroup       ProjectWhatsAppGroup?
   checklists          ProjectChecklist[]
   tradieEmails        TradieEmail[]
+  calls               Call[]
 
   @@index([name])
   @@index([customerId])
@@ -2786,6 +2791,25 @@ enum CallAnsweredBy {
   AGENT
 }
 
+/// Who a project call was with (lib/domain/comms/calls/project.ts).
+enum CallContactKind {
+  SITE_MANAGER
+  OWNER
+  TRADIE
+  /// A number typed into the dialer that is none of the project's people.
+  OTHER
+}
+
+/// Filing an inbound call Mili or the voicemail took onto a project
+/// (lib/domain/comms/calls/project-matching.ts). Null: not tried yet.
+enum CallProjectMatch {
+  MATCHED
+  /// Tried, and the call is about none of the caller's projects.
+  NO_MATCH
+  /// The matcher kept failing; a person can still read it on the lead side.
+  FAILED
+}
+
 enum RecordingConsent {
   NOT_ASKED
   GRANTED
@@ -2853,52 +2877,72 @@ model CommsTeamPhone {
 
 /// One phone call with a customer. `providerCallId` is the customer's leg.
 model Call {
-  id                  String           @id @default(uuid())
-  provider            CommsProvider
-  direction           CommsDirection
-  leadId              Int?
+  id                   String            @id @default(uuid())
+  provider             CommsProvider
+  direction            CommsDirection
+  leadId               Int?
   /// Inbound calls whose number matched more than one lead.
-  candidateLeadIds    Int[]
-  businessNumber      String
-  customerNumber      String
+  candidateLeadIds     Int[]
+  businessNumber       String
+  customerNumber       String
   /// Twilio CallSid / Telnyx call_control_id. Opaque: never parsed.
-  providerCallId      String?
-  status              CallStatus
-  flowStep            CallFlowStep
-  staffTarget         CallStaffTarget?
+  providerCallId       String?
+  status               CallStatus
+  flowStep             CallFlowStep
+  staffTarget          CallStaffTarget?
   /// Outbound to a phone: the number it rings once the customer answers, and
   /// that phone's nickname. Copied when the call is placed, so editing the
   /// team list never re-routes a call in progress. Null on older calls and on
   /// inbound ones, which ring COMMS_STAFF_FORWARD_NUMBER.
-  staffPhoneNumber    String?
-  staffPhoneLabel     String?
+  staffPhoneNumber     String?
+  staffPhoneLabel      String?
   /// Who placed an outbound call.
-  staffUserId         String?
-  answeredBy          CallAnsweredBy?
-  recordingConsent    RecordingConsent @default(NOT_ASKED)
-  startedAt           DateTime
-  answeredAt          DateTime?
-  connectedAt         DateTime?
-  endedAt             DateTime?
-  durationSeconds     Int?
-  hangupCause         String?
-  providerErrorCode   String?
-  providerErrorTitle  String?
+  staffUserId          String?
+  answeredBy           CallAnsweredBy?
+  recordingConsent     RecordingConsent  @default(NOT_ASKED)
+  startedAt            DateTime
+  answeredAt           DateTime?
+  connectedAt          DateTime?
+  endedAt              DateTime?
+  durationSeconds      Int?
+  hangupCause          String?
+  providerErrorCode    String?
+  providerErrorTitle   String?
   /// The provider may have placed this call but never said so.
-  needsReconciliation Boolean          @default(false)
+  needsReconciliation  Boolean           @default(false)
   /// What the caller and Mili said, one "Speaker: text" line per turn.
-  agentTranscript     String?
+  agentTranscript      String?
   /// When someone first opened this call in the app. Only an inbound call
   /// Mili or the voicemail took counts as unread (lib/domain/comms/unread.ts).
-  seenAt              DateTime?
+  seenAt               DateTime?
   /// An inbound call no lead owns, taken off the pending list without filing
   /// it onto a lead. Filing sets `leadId` instead.
-  dismissedAt         DateTime?
-  dismissedById       String?
-  idempotencyKey      String?          @unique
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
+  dismissedAt          DateTime?
+  dismissedById        String?
+  idempotencyKey       String?           @unique
+  /// The project this call belongs to: placed from its dialer, or an inbound
+  /// call the project matcher filed onto it.
+  projectId            String?
+  /// Who on the project was called, or who called. Copied at the time, so
+  /// renaming a tradie never rewrites the call log.
+  contactKind          CallContactKind?
+  contactName          String?
+  /// "user:<id>", "customer:<id>", "tradie:<id>" or "lead:<id>"; null for a
+  /// typed number nobody on the project holds.
+  contactRef           String?
+  /// Inbound only: whether the project matcher has filed this call.
+  projectMatch         CallProjectMatch?
+  /// Why the matcher filed it where it did (or nowhere). Shown to the office.
+  projectMatchReason   String?
+  projectMatchedAt     DateTime?
+  projectMatchAttempts Int               @default(0)
+  /// When someone first opened the project's Calls. A matched inbound call
+  /// with this null is the badge on the project's Comms tab.
+  projectSeenAt        DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
+  project      Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
   lead         Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
   staffUser    User?               @relation("CallStaffUser", fields: [staffUserId], references: [id])
   dismissedBy  User?               @relation("CallDismissedBy", fields: [dismissedById], references: [id])
@@ -2910,6 +2954,8 @@ model Call {
   @@index([leadId, startedAt])
   @@index([status, startedAt])
   @@index([direction, leadId, dismissedAt])
+  @@index([projectId, startedAt])
+  @@index([direction, projectMatch, endedAt])
 }
 
 /// Who an inbound caller was resolved to (lib/domain/comms/callers).

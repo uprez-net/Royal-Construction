@@ -297,6 +297,28 @@ export function canSeeProjectHistory(principal: DomainPrincipal): boolean {
 }
 
 /**
+ * The project dialer and its call log — ringing the site manager, an owner,
+ * a tradie or a typed number, and hearing the recordings and reading the
+ * transcripts — are the office's. A call log holds a client's number and
+ * what they said, which is the sales side's (`isOfficeRole`), and placing a
+ * call spends the business number. A site manager sees none of it.
+ *
+ * A signed-in ADMIN only: a call is placed for a person, whose browser or
+ * phone rings, so a system principal has nothing to dial with.
+ */
+export function canUseProjectCalls(principal: DomainPrincipal): boolean {
+  return isUserPrincipal(principal) && principal.role === Role.ADMIN;
+}
+
+export function assertCanUseProjectCalls(principal: DomainPrincipal): void {
+  if (!canUseProjectCalls(principal)) {
+    throw new DomainAuthorizationError(
+      "Project calls are for the office's administrators.",
+    );
+  }
+}
+
+/**
  * Assert this caller may manage the project a milestone belongs to.
  *
  * The milestone is resolved to its own project rather than trusted to belong

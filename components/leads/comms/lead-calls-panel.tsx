@@ -4,15 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
-  Bot,
   Loader2,
   MonitorSmartphone,
   Phone,
-  PhoneIncoming,
-  PhoneMissed,
-  PhoneOutgoing,
   RefreshCw,
-  Voicemail,
 } from "lucide-react";
 
 import { checkMicrophone } from "@/components/comms/microphone";
@@ -28,6 +23,13 @@ import type {
 } from "@/lib/leads/comms-types";
 import { formatSydneyStamp } from "@/lib/leads/whatsapp-format";
 
+import {
+  CALL_STATUS_LABEL,
+  CallIcon,
+  callDuration,
+  LIVE_CALL_STATUSES,
+  recordingNote,
+} from "./call-display";
 import { CallRecordings } from "./call-recordings";
 import { CallViaPhoneButton } from "./call-via-phone-button";
 
@@ -39,45 +41,6 @@ import { CallViaPhoneButton } from "./call-via-phone-button";
 // show her transcript.
 
 const POLL_MS = 5_000;
-
-const STATUS_LABEL: Record<CallDto["status"], string> = {
-  BUSY: "Busy",
-  CANCELED: "Cancelled",
-  COMPLETED: "Completed",
-  FAILED: "Failed",
-  INITIATED: "Dialling",
-  IN_PROGRESS: "In progress",
-  NO_ANSWER: "No answer",
-  QUEUED: "Queued",
-  RINGING: "Ringing",
-};
-
-const LIVE = new Set<CallDto["status"]>([
-  "QUEUED",
-  "INITIATED",
-  "RINGING",
-  "IN_PROGRESS",
-]);
-
-function duration(seconds: number | null): string | null {
-  if (seconds === null) return null;
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-}
-
-function CallIcon({ call }: { call: CallDto }) {
-  if (call.answeredBy === "VOICEMAIL")
-    return <Voicemail className="size-4 text-warning-ink" aria-hidden="true" />;
-  if (call.answeredBy === "AGENT")
-    return <Bot className="size-4 text-success-ink" aria-hidden="true" />;
-  if (call.direction === "INBOUND") {
-    return call.connectedAt ? (
-      <PhoneIncoming className="size-4 text-success-ink" aria-hidden="true" />
-    ) : (
-      <PhoneMissed className="size-4 text-destructive" aria-hidden="true" />
-    );
-  }
-  return <PhoneOutgoing className="size-4 text-primary" aria-hidden="true" />;
-}
 
 function CallRow({
   call,
@@ -94,11 +57,11 @@ function CallRow({
           {call.direction === "INBOUND" ? "Incoming" : "Outgoing"}
         </span>
         <span className="text-muted-foreground">
-          · {STATUS_LABEL[call.status]}
+          · {CALL_STATUS_LABEL[call.status]}
         </span>
-        {duration(call.durationSeconds) ? (
+        {callDuration(call.durationSeconds) ? (
           <span className="font-mono text-xs tabular-nums text-muted-foreground">
-            {duration(call.durationSeconds)}
+            {callDuration(call.durationSeconds)}
           </span>
         ) : null}
         <span className="ml-auto text-xs text-muted-foreground">
@@ -114,11 +77,7 @@ function CallRow({
             }`
           : `From ${call.customerNumber === "withheld" ? "a withheld number" : formatE164ForDisplay(call.customerNumber)}`}
         {call.answeredBy === "AGENT" ? " · answered by Mili" : null}
-        {call.recordingConsent === "GRANTED" ? " · recording allowed" : null}
-        {call.recordingConsent === "DECLARED"
-          ? " · told it was recorded"
-          : null}
-        {call.recordingConsent === "DECLINED" ? " · not recorded" : null}
+        {recordingNote(call)}
       </p>
       {call.problem ? (
         <p
@@ -165,7 +124,7 @@ export function LeadCallsPanel({
   );
 
   const hasLiveCall =
-    data?.calls.some((call) => LIVE.has(call.status)) ?? false;
+    data?.calls.some((call) => LIVE_CALL_STATUSES.has(call.status)) ?? false;
   useEffect(() => {
     const controller = new AbortController();
     // Deferred a tick, like the WhatsApp thread: never setState in the effect body.
