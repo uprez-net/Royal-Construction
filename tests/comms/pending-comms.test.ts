@@ -111,7 +111,10 @@ test("opening a lead's Phone & SMS window marks its calls and texts read", async
 });
 
 test("the pending list marks read only what it showed, and only pending items", async () => {
-  const harness = recordingDb();
+  const harness = recordingDb({
+    "commsTeamPhone.findMany": [],
+    "user.findMany": [],
+  });
   const at = new Date("2026-11-16T01:00:00Z");
   await markPendingCommsRead(
     adminPrincipal(),

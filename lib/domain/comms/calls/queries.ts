@@ -16,6 +16,12 @@ import {
 } from "../team-phones";
 import { CALL_REFUSALS } from "./outbound";
 import { CALL_SELECT, toCallRecord, type CallRecord } from "./records";
+import {
+  fromTeam,
+  listTeamCallers,
+  notFromTeam,
+  type TeamCaller,
+} from "../team-callers";
 
 export type LeadCallOptions = {
   readonly allowed: boolean;
@@ -126,19 +132,62 @@ export async function getCall(
   return toCallRecord(row);
 }
 
-/** Recent calls from numbers that matched no single lead, for the admin page. */
-export async function listUnmatchedCalls(
+const ADMIN_CALL_LIMIT = 50;
+
+export type TeamCallRecord = {
+  readonly call: CallRecord;
+  readonly caller: TeamCaller;
+};
+
+export type AdminInboundCalls = {
+  /** From numbers that matched no single lead, and not the team's. */
+  readonly unknown: readonly CallRecord[];
+  /** From the team's own numbers, with whose number it was. */
+  readonly team: readonly TeamCallRecord[];
+};
+
+/**
+ * Recent inbound calls for the admin Phone & SMS page: those from numbers no
+ * single lead owns, and those from the team (./team-callers), each under the
+ * team member's name. A team member's call is never "unknown".
+ */
+export async function listAdminInboundCalls(
   principal: DomainPrincipal,
   db: DomainDb,
-): Promise<CallRecord[]> {
+  context: {
+    readonly channel?: Pick<CommsChannel, "staffForwardNumber"> | null;
+  } = {},
+): Promise<AdminInboundCalls> {
   if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError("Calls are for members of staff.");
   }
-  const rows = await db.call.findMany({
-    orderBy: { startedAt: "desc" },
-    select: CALL_SELECT,
-    take: 50,
-    where: { direction: CommsDirection.INBOUND, leadId: null },
-  });
-  return rows.map(toCallRecord);
+  const callers = await listTeamCallers(db, context);
+  const [unknown, team] = await Promise.all([
+    db.call.findMany({
+      orderBy: { startedAt: "desc" },
+      select: CALL_SELECT,
+      take: ADMIN_CALL_LIMIT,
+      where: {
+        direction: CommsDirection.INBOUND,
+        leadId: null,
+        ...notFromTeam(callers),
+      },
+    }),
+    callers.length === 0
+      ? []
+      : db.call.findMany({
+          orderBy: { startedAt: "desc" },
+          select: CALL_SELECT,
+          take: ADMIN_CALL_LIMIT,
+          where: { direction: CommsDirection.INBOUND, ...fromTeam(callers) },
+        }),
+  ]);
+  const byNumber = new Map(callers.map((caller) => [caller.e164, caller]));
+  return {
+    team: team.flatMap((row) => {
+      const caller = byNumber.get(row.customerNumber);
+      return caller ? [{ call: toCallRecord(row), caller }] : [];
+    }),
+    unknown: unknown.map(toCallRecord),
+  };
 }

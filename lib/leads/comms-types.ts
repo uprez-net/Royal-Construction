@@ -137,6 +137,23 @@ export type ProjectCallsDto = {
   unread: number;
 };
 
+/** Whose number a team call came from (lib/domain/comms/team-callers.ts). */
+export type TeamCallerDto = {
+  e164: string;
+  name: string;
+  kind: "staff" | "team_phone" | "office_mobile";
+  role: "ADMIN" | "SITE_MANAGER" | "CUSTOMER" | "GUEST" | null;
+};
+
+/** The admin page's inbound lists. */
+export type UnmatchedCommsDto = {
+  sms: SmsMessageDto[];
+  /** From numbers no single lead owns, and not the team's. */
+  calls: CallDto[];
+  /** From the team's own numbers. */
+  teamCalls: { call: CallDto; caller: TeamCallerDto }[];
+};
+
 /** "Pending Calls/Messages": what came in from numbers no lead owns. */
 export type PendingCommsDto = {
   calls: CallDto[];

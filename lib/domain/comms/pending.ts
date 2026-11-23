@@ -10,7 +10,9 @@ import {
 } from "../errors";
 import { isOfficePrincipal, type DomainPrincipal } from "../principal";
 import { CALL_SELECT, toCallRecord, type CallRecord } from "./calls/records";
+import type { CommsChannel } from "../ports/comms";
 import { recordCommsHistory } from "./shared";
+import { listTeamCallers, notFromTeam } from "./team-callers";
 import {
   SMS_MESSAGE_SELECT,
   toSmsMessageRecord,
@@ -29,6 +31,10 @@ import {
 //     lead (or more than one). A call nobody spoke on stays on the admin page
 //     only: there is nothing in it to read.
 //   - Texts in the SMS review queue (reviewStatus PENDING).
+//
+// A call from one of the team's own numbers (./team-callers) is never on the
+// list: a site manager ringing the office is not a prospect waiting to be
+// filed. The admin Phone & SMS page shows those calls under their name.
 //
 // Filing a call onto a lead sets its `leadId`; dismissing it sets
 // `dismissedAt`. Either way it leaves the list. Texts are filed by
@@ -63,6 +69,22 @@ export type PendingComms = {
   readonly unread: number;
 };
 
+/** Where the office mobile is configured; optional, as tests pass none. */
+export type PendingCommsContext = {
+  readonly channel?: Pick<CommsChannel, "staffForwardNumber"> | null;
+};
+
+/** The pending calls `where`, without the team's own numbers. */
+async function pendingCallWhere(
+  db: DomainDb,
+  context: PendingCommsContext,
+): Promise<Prisma.CallWhereInput> {
+  return {
+    ...PENDING_CALL_WHERE,
+    ...notFromTeam(await listTeamCallers(db, context)),
+  };
+}
+
 function requireStaff(principal: DomainPrincipal, what: string): void {
   if (!isOfficePrincipal(principal)) {
     throw new DomainAuthorizationError(`${what} is for members of staff.`);
@@ -73,14 +95,16 @@ function requireStaff(principal: DomainPrincipal, what: string): void {
 export async function listPendingComms(
   principal: DomainPrincipal,
   db: DomainDb,
+  context: PendingCommsContext = {},
 ): Promise<PendingComms> {
   requireStaff(principal, "The pending calls and messages list");
+  const callWhere = await pendingCallWhere(db, context);
   const [calls, sms, unread] = await Promise.all([
     db.call.findMany({
       orderBy: { startedAt: "desc" },
       select: CALL_SELECT,
       take: PENDING_LIMIT,
-      where: PENDING_CALL_WHERE,
+      where: callWhere,
     }),
     db.smsMessage.findMany({
       orderBy: { occurredAt: "desc" },
@@ -88,7 +112,7 @@ export async function listPendingComms(
       take: PENDING_LIMIT,
       where: PENDING_SMS_WHERE,
     }),
-    countUnread(db),
+    countUnread(db, callWhere),
   ]);
   return {
     calls: calls.map(toCallRecord),
@@ -101,14 +125,18 @@ export async function listPendingComms(
 export async function countPendingCommsUnread(
   principal: DomainPrincipal,
   db: DomainDb,
+  context: PendingCommsContext = {},
 ): Promise<number> {
   requireStaff(principal, "The pending calls and messages count");
-  return countUnread(db);
+  return countUnread(db, await pendingCallWhere(db, context));
 }
 
-async function countUnread(db: DomainDb): Promise<number> {
+async function countUnread(
+  db: DomainDb,
+  callWhere: Prisma.CallWhereInput,
+): Promise<number> {
   const [calls, sms] = await Promise.all([
-    db.call.count({ where: { ...PENDING_CALL_WHERE, ...UNREAD_CALL_WHERE } }),
+    db.call.count({ where: { ...callWhere, ...UNREAD_CALL_WHERE } }),
     db.smsMessage.count({
       where: { ...PENDING_SMS_WHERE, ...UNREAD_SMS_WHERE },
     }),
@@ -129,6 +157,7 @@ export async function markPendingCommsRead(
     readonly at?: Date;
   },
   db: DomainDb,
+  context: PendingCommsContext = {},
 ): Promise<{ calls: number; sms: number }> {
   requireStaff(principal, "Marking calls and messages read");
   if (input.callIds.length + input.smsIds.length > MAX_MARK_IDS) {
@@ -137,12 +166,14 @@ export async function markPendingCommsRead(
     );
   }
   const at = input.at ?? new Date();
+  const callWhere =
+    input.callIds.length > 0 ? await pendingCallWhere(db, context) : null;
   const [calls, sms] = await Promise.all([
-    input.callIds.length > 0
+    callWhere
       ? db.call.updateMany({
           data: { seenAt: at },
           where: {
-            ...PENDING_CALL_WHERE,
+            ...callWhere,
             ...UNREAD_CALL_WHERE,
             id: { in: [...input.callIds] },
           },

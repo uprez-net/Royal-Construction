@@ -15,6 +15,7 @@ import type {
   SmsSendResultDto,
   SmsThreadDto,
   TeamPhoneDto,
+  UnmatchedCommsDto,
   WhatsAppCallDto,
   WhatsAppCallPermissionDto,
 } from "./comms-types";
@@ -276,7 +277,7 @@ export function fetchCommsAvailability(
 
 export function fetchUnmatchedComms(
   signal?: AbortSignal,
-): Promise<{ sms: SmsMessageDto[]; calls: CallDto[] }> {
+): Promise<UnmatchedCommsDto> {
   return unwrap(
     "/api/comms/unmatched",
     { ...GET, signal },

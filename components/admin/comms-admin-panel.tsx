@@ -1,33 +1,31 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Loader2, XCircle } from "lucide-react";
 
 import { PageHeader } from "@/components/common/page-header";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { CallTranscript } from "@/components/leads/comms/call-transcript";
 import { formatE164ForDisplay } from "@/lib/domain/leads/whatsapp/phone";
 import {
   fetchCommsStatus,
   fetchUnmatchedComms,
-  fileUnmatchedSms,
-  recordingUrl,
 } from "@/lib/leads/comms-service";
 import type {
-  CallDto,
   CommsStatusDto,
-  SmsMessageDto,
+  UnmatchedCommsDto,
 } from "@/lib/leads/comms-types";
-import { formatSydneyStamp } from "@/lib/leads/whatsapp-format";
 
+import {
+  TeamCallsSection,
+  UnknownCallsSection,
+  UnmatchedTextsSection,
+} from "./comms-inbound-sections";
 import { TeamPhonesCard } from "./team-phones-card";
 
 // Phone & SMS, for the office: what is set up, where each carrier must send
-// its webhooks, and the texts and calls from numbers no lead has. Secrets are
-// never shown; the server answers configuration without them.
+// its webhooks, the texts and calls from numbers no lead has, and the calls
+// from the team's own numbers. Secrets are never shown; the server answers
+// configuration without them.
 
 const PROVIDER_LABEL = { telnyx: "Telnyx", twilio: "Twilio" } as const;
 
@@ -67,93 +65,9 @@ function Flag({ on, label }: { on: boolean; label: string }) {
   );
 }
 
-function UnmatchedSmsRow({
-  message,
-  onFiled,
-}: {
-  message: SmsMessageDto;
-  onFiled: () => void;
-}) {
-  const [leadId, setLeadId] = useState(
-    message.candidateLeadIds[0] ? String(message.candidateLeadIds[0]) : "",
-  );
-  const [busy, setBusy] = useState(false);
-  async function file(
-    body: { action: "attach"; leadId: number } | { action: "dismiss" },
-  ) {
-    setBusy(true);
-    try {
-      await fileUnmatchedSms(message.id, body);
-      toast.success(
-        body.action === "attach" ? "Filed onto the lead." : "Dismissed.",
-      );
-      onFiled();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not file the text.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-  const parsedLeadId = Number(leadId);
-  return (
-    <li className="flex flex-col gap-2 border-b border-border/60 py-3 last:border-0">
-      <div className="flex flex-wrap items-baseline gap-2 text-sm">
-        <span className="font-mono tabular-nums">
-          {formatE164ForDisplay(message.customerNumber)}
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {formatSydneyStamp(message.occurredAt)}
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {message.unmatchedReason === "AMBIGUOUS"
-            ? `matches leads ${message.candidateLeadIds.join(", ")}`
-            : message.unmatchedReason === "UNKNOWN_BUSINESS_NUMBER"
-              ? "sent to a number not in COMMS_PHONE_NUMBERS"
-              : "no lead has this number"}
-        </span>
-      </div>
-      <p className="text-sm whitespace-pre-wrap">{message.body}</p>
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          value={leadId}
-          onChange={(event) => setLeadId(event.target.value.replace(/\D/g, ""))}
-          placeholder="Lead #"
-          inputMode="numeric"
-          className="h-8 w-28"
-          aria-label="Lead number to file onto"
-        />
-        <Button
-          type="button"
-          size="sm"
-          disabled={
-            busy || !Number.isSafeInteger(parsedLeadId) || parsedLeadId <= 0
-          }
-          onClick={() => void file({ action: "attach", leadId: parsedLeadId })}
-        >
-          File onto lead
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={busy}
-          onClick={() => void file({ action: "dismiss" })}
-        >
-          Dismiss
-        </Button>
-      </div>
-    </li>
-  );
-}
-
 export function CommsAdminPanel() {
   const [status, setStatus] = useState<CommsStatusDto | null>(null);
-  const [unmatched, setUnmatched] = useState<{
-    sms: SmsMessageDto[];
-    calls: CallDto[];
-  } | null>(null);
+  const [unmatched, setUnmatched] = useState<UnmatchedCommsDto | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -185,7 +99,7 @@ export function CommsAdminPanel() {
     <PageHeader
       headingLevel="h1"
       title="Phone & SMS"
-      description="Which phone provider is active, the team's phones for lead calls, and texts and calls from numbers no lead has."
+      description="Which phone provider is active, the team's phones for lead calls, texts and calls from numbers no lead has, and calls from the team."
     />
   );
 
@@ -309,73 +223,18 @@ export function CommsAdminPanel() {
 
       <TeamPhonesCard officeMobile={status.staffForwardNumber} />
 
-      <Card>
-        <CardContent className="p-5">
-          <h2 className="text-base font-semibold">
-            Texts from unknown numbers
-          </h2>
-          {unmatched?.sms.length ? (
-            <ul>
-              {unmatched.sms.map((message) => (
-                <UnmatchedSmsRow
-                  key={message.id}
-                  message={message}
-                  onFiled={() => void load()}
-                />
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-1 text-sm text-muted-foreground">
-              Nothing waiting.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-5">
-          <h2 className="text-base font-semibold">
-            Recent calls from unknown numbers
-          </h2>
-          {unmatched?.calls.length ? (
-            <ul className="mt-2 space-y-1 text-sm">
-              {unmatched.calls.map((call) => (
-                <li key={call.id}>
-                  <span className="font-mono tabular-nums">
-                    {call.customerNumber === "withheld"
-                      ? "Withheld"
-                      : formatE164ForDisplay(call.customerNumber)}
-                  </span>{" "}
-                  <span className="text-muted-foreground">
-                    · {formatSydneyStamp(call.startedAt)} ·{" "}
-                    {call.answeredBy === "VOICEMAIL"
-                      ? "voicemail"
-                      : call.answeredBy === "AGENT"
-                        ? "answered by Mili"
-                        : call.connectedAt
-                          ? "answered"
-                          : "missed"}
-                  </span>
-                  <CallTranscript transcript={call.agentTranscript} />
-                  {call.recordings
-                    .filter((recording) => recording.available)
-                    .map((recording) => (
-                      <audio
-                        key={recording.id}
-                        controls
-                        preload="none"
-                        src={recordingUrl(recording.id)}
-                        className="mt-1 h-8 w-full max-w-sm"
-                      />
-                    ))}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-1 text-sm text-muted-foreground">None.</p>
-          )}
-        </CardContent>
-      </Card>
+      <UnmatchedTextsSection
+        messages={unmatched?.sms ?? []}
+        onFiled={() => void load()}
+      />
+      <TeamCallsSection
+        calls={unmatched?.teamCalls ?? []}
+        onRetried={() => void load()}
+      />
+      <UnknownCallsSection
+        calls={unmatched?.calls ?? []}
+        onRetried={() => void load()}
+      />
     </div>
   );
 }
