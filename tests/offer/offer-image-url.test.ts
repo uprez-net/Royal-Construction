@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 
 import {
+  LEGACY_BLOB_HOSTS,
   ROYAL_BLOB_HOST,
   allowedOfferImageHosts,
   isAllowedOfferImageUrl,
@@ -76,10 +77,18 @@ test("follows the stores in the Blob tokens, public or private, and always allow
     assert.deepEqual(
       [...allowedOfferImageHosts()].sort(),
       [
-        ROYAL_BLOB_HOST,
+        ...LEGACY_BLOB_HOSTS,
         "rep1acement.private.blob.vercel-storage.com",
         "rep1acement.public.blob.vercel-storage.com",
       ].sort(),
+    );
+    // Production's pre-#571 store stays allowed until its URLs are rewritten,
+    // so an offer opened between the deploy and the rewrite keeps its images.
+    assert.equal(
+      isAllowedOfferImageUrl(
+        "https://b7mydymu5fx66ove.public.blob.vercel-storage.com/offer/hero.png",
+      ),
+      true,
     );
     for (const url of [
       "https://rep1acement.public.blob.vercel-storage.com/a.png",

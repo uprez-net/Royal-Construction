@@ -22,6 +22,12 @@ export async function generatePDF({
     throw new Error("HTML content is required to generate PDF.");
   }
 
+  // Offer images, checklist photos and the like are private files (#571), and
+  // the headless browser has no session: each is handed a short-lived read
+  // link. Signed before Chromium starts, so a file that cannot be signed fails
+  // the render outright instead of producing a PDF with a hole in it.
+  const signedHtml = await signBlobUrlsInHtml(html);
+
   // 3️⃣ Launch Chromium (Vercel-safe)
   let browser;
   if (process.env.NODE_ENV === "development") {
@@ -40,9 +46,7 @@ export async function generatePDF({
   }
 
   const page = await browser.newPage();
-  // Offer images, checklist photos and the like are private files (#571), and
-  // this browser has no session: each is handed a short-lived read link.
-  await page.setContent(await signBlobUrlsInHtml(html), { waitUntil: "load" });
+  await page.setContent(signedHtml, { waitUntil: "load" });
 
   const pdf = await page.pdf({
     format: "A4",

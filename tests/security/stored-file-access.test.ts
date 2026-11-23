@@ -130,7 +130,51 @@ describe("authorizeStoredFileRead", () => {
     assert.equal(recorder.calls.length, 0);
   });
 
-  test("a customer, a guest or nobody is never handed a link", async () => {
+  test("a customer opens a milestone photo on their own project, and nothing else", async () => {
+    const customer = {
+      customerId: "c1",
+      kind: "user",
+      role: "CUSTOMER",
+      userId: "user_customer",
+    } as const;
+    const recorder = recordingDb({ "file.findFirst": { id: "f1" } });
+    await authorizeStoredFileRead(customer, url, recorder.db);
+    // The entitlement comes from the milestone's project, and only photos.
+    const [query] = recorder.calls.map((call) => call.args) as {
+      where: Record<string, unknown>;
+    }[];
+    assert.deepEqual(query!.where.milestone, {
+      project: { customerId: "c1" },
+    });
+    assert.deepEqual(query!.where.fileType, { startsWith: "image/" });
+    assert.equal(query!.where.leadId, null);
+    assert.equal(query!.where.url, url);
+
+    // Not one of theirs (another job's photo, a document, a lead's file).
+    await assert.rejects(
+      () =>
+        authorizeStoredFileRead(
+          customer,
+          url,
+          recordingDb({ "file.findFirst": null }).db,
+        ),
+      DomainNotFoundError,
+    );
+    // A portal account never linked to a customer opens nothing, unasked.
+    const unlinked = recordingDb();
+    await assert.rejects(
+      () =>
+        authorizeStoredFileRead(
+          { ...customer, customerId: null },
+          url,
+          unlinked.db,
+        ),
+      DomainNotFoundError,
+    );
+    assert.equal(unlinked.calls.length, 0);
+  });
+
+  test("a customer with no link, a guest or nobody is never handed a link", async () => {
     for (const principal of [
       customerPrincipal(),
       { kind: "user", role: "GUEST", userId: "g" } as const,
@@ -306,5 +350,36 @@ describe("signing", () => {
       ),
     );
     assert.ok(signed.includes(`src="${PUBLIC}/old.png"`));
+  });
+
+  test("a pathname with parentheses is signed whole, inside a tag or url()", async () => {
+    const html = `<img src="${PRIVATE}/site(1).jpg"><div style="background-image:url(${PRIVATE}/photos/site(2).jpg);"></div>`;
+    const signed = await signBlobUrlsInHtml(html);
+    const pathnames = presignUrl.mock.calls.map(
+      ([, options]) => options.pathname,
+    );
+    assert.deepEqual(pathnames.sort(), ["photos/site(2).jpg", "site(1).jpg"]);
+    assert.ok(
+      signed.includes(
+        `src="${PRIVATE}/site(1).jpg?vercel-blob-signature=sig&amp;x=1"`,
+      ),
+    );
+    assert.ok(
+      signed.includes(
+        `url(${PRIVATE}/photos/site(2).jpg?vercel-blob-signature=sig&amp;x=1);`,
+      ),
+      "the url() closing parenthesis stays outside the signed link",
+    );
+  });
+
+  test("an image that cannot be signed fails the render instead of leaving a hole", async () => {
+    presignUrl.mockRejectedValueOnce(new Error("store unreachable"));
+    await assert.rejects(
+      () =>
+        signBlobUrlsInHtml(
+          `<img src="${PRIVATE}/a.png"><img src="${PRIVATE}/b.png">`,
+        ),
+      /1 of 2 stored image\(s\)/,
+    );
   });
 });

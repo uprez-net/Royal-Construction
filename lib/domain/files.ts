@@ -186,7 +186,12 @@ export const READABLE_FILE_SELECT = {
  *   looked up elsewhere: that is the HBCF certificate or the tender.
  *   Everything else stored (offer images, invoices, variations, a lead's
  *   media) is the office's, as its screen is.
- * - A customer, a guest or an anonymous caller is never handed one.
+ * - A customer may open the progress photos on a milestone of their own
+ *   project, which the project page shows them, and nothing else. The
+ *   entitlement comes from the milestone's project, not just the File row's,
+ *   so a photo filed against another job's milestone does not pass. A
+ *   portal account with no customer link opens nothing.
+ * - A guest or an anonymous caller is never handed one.
  *
  * Refused as not found rather than forbidden, so the answer does not confirm
  * that a guessed URL exists.
@@ -197,6 +202,25 @@ export async function authorizeStoredFileRead(
   db: DomainDb,
 ): Promise<void> {
   if (isOfficePrincipal(principal)) return;
+  if (isUserPrincipal(principal) && principal.role === Role.CUSTOMER) {
+    const customerId = principal.customerId;
+    if (customerId) {
+      const photo = await db.file.findFirst({
+        select: { id: true },
+        where: {
+          fileType: { startsWith: "image/" },
+          leadId: null,
+          milestone: { project: { customerId } },
+          // An older row may carry only the milestone; one that names a
+          // project must name the same customer's.
+          OR: [{ projectId: null }, { project: { customerId } }],
+          url,
+        },
+      });
+      if (photo) return;
+    }
+    throw new DomainNotFoundError("File not found.");
+  }
   if (!isInternalPrincipal(principal) || !isUserPrincipal(principal)) {
     throw new DomainNotFoundError("File not found.");
   }

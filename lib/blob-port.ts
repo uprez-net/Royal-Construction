@@ -227,43 +227,58 @@ export async function fetchStoredFile(
   return fetch(readable, { cache: "no-store", ...init });
 }
 
-/** Every private Blob URL in a piece of text, signed in place. */
+/**
+ * A private Blob URL in HTML or CSS text. Parentheses are allowed, because a
+ * pathname can carry them (`site(1).jpg`); `endOfUrl` then gives back a `)`
+ * that closes a CSS `url(...)` rather than belonging to the path. Quotes,
+ * whitespace, `<`, `>`, `;` and `\` end it: the attribute, tag or declaration
+ * it sits in.
+ */
 const PRIVATE_BLOB_URL_IN_TEXT =
-  /https:\/\/[a-z0-9-]+\.private\.blob\.vercel-storage\.com\/[^\s"'<>()\\]+/gi;
+  /https:\/\/[a-z0-9-]+\.private\.blob\.vercel-storage\.com\/[^\s"'<>;\\]+/gi;
+
+/** Trim the unbalanced closing parentheses a match swallowed from `url(...)`. */
+function endOfUrl(match: string): string {
+  let url = match;
+  const count = (char: string) => url.split(char).length - 1;
+  while (url.endsWith(")") && count(")") > count("(")) url = url.slice(0, -1);
+  return url;
+}
 
 /**
  * Sign every private Blob URL in an HTML document, for a headless renderer
  * that fetches images itself and has no session. `&` in the signed query is
  * escaped, because the URLs sit in attributes.
  *
- * A URL that cannot be signed is left as it is: the image is missing from the
- * render, which is what a deleted file does too, rather than the whole
- * document failing.
+ * Throws if any of them cannot be signed. The document is a client's tender,
+ * proposal or variation: one rendered with an image missing would go out
+ * looking finished, and nobody would see it was wrong until the client did.
+ * The callers already turn a render failure into a refusal the office reads.
  */
 export async function signBlobUrlsInHtml(html: string): Promise<string> {
-  const found = [...new Set(html.match(PRIVATE_BLOB_URL_IN_TEXT) ?? [])];
+  const found = [
+    ...new Set((html.match(PRIVATE_BLOB_URL_IN_TEXT) ?? []).map(endOfUrl)),
+  ];
   if (found.length === 0) return html;
   const signed = new Map<string, string>();
-  await Promise.all(
-    found.map(async (raw) => {
-      // An attribute value may already carry `&amp;`; a stored URL has no
-      // query, so anything from `&` on is not part of it.
-      const url = raw.replaceAll("&amp;", "&");
-      try {
-        const { url: readable } = await signedBlobReadUrl(url);
-        signed.set(raw, readable.replaceAll("&", "&amp;"));
-      } catch (error) {
-        console.error(
-          "[blob] Could not sign a stored file for a rendered document",
-          error,
-        );
-      }
+  const results = await Promise.allSettled(
+    found.map(async (url) => {
+      const { url: readable } = await signedBlobReadUrl(url);
+      signed.set(url, readable.replaceAll("&", "&amp;"));
     }),
   );
-  return html.replace(
-    PRIVATE_BLOB_URL_IN_TEXT,
-    (match) => signed.get(match) ?? match,
-  );
+  const failures = results.filter((result) => result.status === "rejected");
+  if (failures.length > 0) {
+    // The count only: a pathname can carry a client's name.
+    throw new Error(
+      `${failures.length} of ${found.length} stored image(s) in the document could not be signed for rendering.`,
+      { cause: (failures[0] as PromiseRejectedResult).reason },
+    );
+  }
+  return html.replace(PRIVATE_BLOB_URL_IN_TEXT, (match) => {
+    const url = endOfUrl(match);
+    return `${signed.get(url) ?? url}${match.slice(url.length)}`;
+  });
 }
 
 /**

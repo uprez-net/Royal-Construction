@@ -25,6 +25,21 @@ const PRIVATE_HOST_SUFFIX = ".private.blob.vercel-storage.com";
 export const ROYAL_BLOB_HOST = `udafiztdzg1cn8u2${PUBLIC_HOST_SUFFIX}`;
 
 /**
+ * The public stores the files were in before #571, by environment: staging's
+ * is ROYAL_BLOB_HOST, production's is below. They are allowed everywhere,
+ * browser included, until the migration has rewritten every stored URL and
+ * deleted the old objects. Between the deploy (which points the token at the
+ * new store) and the rewrite, an offer still names its images here, and
+ * dropping them on load would empty the slots on the next autosave.
+ *
+ * Remove once both environments are migrated: by then nothing names them.
+ */
+export const LEGACY_BLOB_HOSTS: readonly string[] = [
+  ROYAL_BLOB_HOST,
+  `b7mydymu5fx66ove${PUBLIC_HOST_SUFFIX}`,
+];
+
+/**
  * The hosts an offer image may be on, where the store tokens can be read.
  *
  * A Vercel Blob read-write token reads vercel_blob_rw_<storeId>_<secret>, and
@@ -34,7 +49,7 @@ export const ROYAL_BLOB_HOST = `udafiztdzg1cn8u2${PUBLIC_HOST_SUFFIX}`;
  * replaced, as it was for #571.
  */
 export function allowedOfferImageHosts(): ReadonlySet<string> {
-  const hosts = new Set([ROYAL_BLOB_HOST]);
+  const hosts = new Set(LEGACY_BLOB_HOSTS);
   for (const token of [
     process.env.BLOB_READ_WRITE_TOKEN,
     process.env.BLOB_PRIVATE_READ_WRITE_TOKEN,
@@ -69,5 +84,5 @@ export function isAllowedOfferImageUrl(url: unknown): boolean {
   // that guards the renderer: the server re-parses every save with the tokens
   // in hand, and a private object in a stranger's store cannot be read
   // without that stranger's token anyway.
-  return host === ROYAL_BLOB_HOST || parsed.access === "private";
+  return LEGACY_BLOB_HOSTS.includes(host) || parsed.access === "private";
 }

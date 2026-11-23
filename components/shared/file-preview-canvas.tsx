@@ -546,8 +546,26 @@ export default function FilePreviewCanvas({
   const resetZoom = React.useCallback(() => setZoom(1), []);
 
   const handleDownload = React.useCallback(async () => {
+    let res: Response;
     try {
-      const res = await fetch(href);
+      res = await fetch(href);
+    } catch {
+      // The browser could not fetch it itself (offline, CORS): let it try
+      // the link directly.
+      window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    // A refusal or an expired link must not be saved as if it were the file.
+    if (!res.ok) {
+      setError(
+        res.status === 404 || res.status === 403
+          ? "This file is not available to you, or it no longer exists."
+          : `The download failed (HTTP ${res.status}). Try again in a moment.`,
+      );
+      setLoading(false);
+      return;
+    }
+    try {
       const blob = await res.blob();
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
