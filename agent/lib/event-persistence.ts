@@ -2,6 +2,7 @@ import { AgentSessionStatus, Prisma } from "@prisma/client";
 import type { HookContext, HookEvent } from "eve/hooks";
 import type { ConversationTitleGenerator } from "@/agent/lib/session-title";
 import prisma from "@/lib/prisma";
+import { reportError } from "@/lib/observability/report-error";
 import {
   getAgentSessionTitle,
   setAgentSessionTitleIfMissing,
@@ -67,8 +68,103 @@ export type AgentEventStore = {
   writeBatch(identity: SessionIdentity, batch: PendingEvent[]): Promise<void>;
 };
 
-function toInputJson(value: unknown): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+/**
+ * Thrown when a session row already belongs to someone else. This is the one
+ * write failure that must fail the turn: it is the ownership check, not a
+ * storage problem.
+ */
+export class AgentSessionOwnerMismatchError extends Error {
+  constructor() {
+    super("Agent session owner mismatch while persisting an Eve event.");
+    this.name = "AgentSessionOwnerMismatchError";
+  }
+}
+
+const NUL = /\u0000/g;
+// A high surrogate not followed by a low one, or a low one not preceded by a
+// high one. `JSON.stringify` writes either as a `\udXXX` escape, which jsonb
+// refuses just as it refuses `\u0000`.
+const LONE_SURROGATE =
+  /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+function cleanString(value: string): string {
+  return value.replace(NUL, "").replace(LONE_SURROGATE, "�");
+}
+
+function cleanJson(value: unknown): unknown {
+  if (typeof value === "string") return cleanString(value);
+  if (Array.isArray(value)) return value.map(cleanJson);
+  if (value !== null && typeof value === "object") {
+    const cleaned: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      cleaned[cleanString(key)] = cleanJson(entry);
+    }
+    return cleaned;
+  }
+  return value;
+}
+
+/**
+ * The event as jsonb can store it (#615).
+ *
+ * Postgres refuses a NUL (`\u0000`) and a lone surrogate anywhere in a jsonb
+ * value, and the `JSON.stringify` round trip keeps both. A tool result holding
+ * one — OCR text, an email body, a file read — used to fail the turn. This
+ * table is the application's copy of the stream (eve keeps its own), so
+ * dropping a NUL or replacing a broken surrogate with U+FFFD loses nothing a
+ * reader of this table needs.
+ */
+export function toInputJson(value: unknown): Prisma.InputJsonValue {
+  return cleanJson(JSON.parse(JSON.stringify(value))) as Prisma.InputJsonValue;
+}
+
+/**
+ * Whether a write failed because of what was in the batch rather than because
+ * the database was unreachable or the session belongs to someone else.
+ *
+ * SQLSTATE class 22 is "data exception": `22P05` (unsupported Unicode escape),
+ * `22021` (invalid byte sequence), `22P02` (invalid text representation) and
+ * the rest. Retrying the same rows can never succeed. Prisma surfaces the code
+ * in `meta.code` for a known request error and only in the message for an
+ * unknown one, so both are read.
+ */
+export function isUnstorablePayloadError(error: unknown): boolean {
+  if (error instanceof AgentSessionOwnerMismatchError) return false;
+  if (error === null || typeof error !== "object") return false;
+  const candidate = error as {
+    code?: unknown;
+    meta?: { code?: unknown };
+    message?: unknown;
+  };
+  const isDataException = (code: unknown) =>
+    typeof code === "string" && /^22[0-9A-Z]{3}$/.test(code);
+  if (isDataException(candidate.code) || isDataException(candidate.meta?.code))
+    return true;
+  return (
+    typeof candidate.message === "string"
+    && /Code: `22[0-9A-Z]{3}`/.test(candidate.message)
+  );
+}
+
+/**
+ * What is stored in place of an event Postgres still would not take.
+ *
+ * Deliberately not a hydratable event (no `meta`): `getAgentSessionEvents`
+ * stops at it, so a reload paints the conversation up to here and eve's live
+ * replay supplies the real event and everything after it. A marker that looked
+ * like the event would carry its `meta.id`, and eve would then drop the real
+ * one as already applied.
+ */
+function unstorableEventMarker(event: PendingEvent): PendingEvent {
+  return {
+    ...event,
+    payload: {
+      omitted: true,
+      reason: "The event payload could not be stored.",
+      type: event.eventType,
+      eveEventId: event.eveEventId,
+    },
+  };
 }
 
 /**
@@ -107,9 +203,7 @@ export const prismaAgentEventStore: AgentEventStore = {
       });
 
       if (session.ownerUserId !== identity.ownerUserId) {
-        throw new Error(
-          "Agent session owner mismatch while persisting an Eve event.",
-        );
+        throw new AgentSessionOwnerMismatchError();
       }
 
       const inserted = await tx.agentSessionEvent.createMany({
@@ -152,6 +246,11 @@ export const prismaAgentEventStore: AgentEventStore = {
  *   first event exactly as before.
  * - A background write that fails keeps its events queued; the next boundary
  *   retries them and, if it fails too, throws as the per-event write did.
+ * - A write the database refuses because of what is in it (a data exception,
+ *   #615) is not retried as it was, because it would fail the same way at
+ *   every later boundary and wedge the session. It is reported, then written
+ *   one event at a time, with a marker in place of any event still refused.
+ *   An owner mismatch is not a data error and still fails the turn.
  *
  * eve calls a session's hooks one event at a time, so a session's buffer is
  * never touched by two calls at once; the write chain keeps background and
@@ -190,6 +289,10 @@ export function createAgentEventPersister(
       try {
         await store.writeBatch(buffer.identity, batch);
       } catch (error) {
+        if (isUnstorablePayloadError(error)) {
+          await writeOneByOne(buffer, batch, error);
+          return;
+        }
         // Back to the front of the queue, so the next write retries them in
         // order rather than leaving a gap the hydrated prefix would stop at.
         buffer.pending.unshift(...batch);
@@ -200,6 +303,44 @@ export function createAgentEventPersister(
     // later one; the caller decides whether this write's failure matters.
     buffer.chain = write.catch(() => undefined);
     return write;
+  }
+
+  /**
+   * The batch held something Postgres refused. Report it once (ids only, never
+   * the payload), then write the events separately so the good ones land and
+   * only the refused one becomes a marker. Any other failure on the way puts
+   * the unwritten remainder back at the front and fails as a normal write.
+   */
+  async function writeOneByOne(
+    buffer: SessionBuffer,
+    batch: PendingEvent[],
+    cause: unknown,
+  ) {
+    reportError(cause, {
+      source: "eve:event-persistence",
+      ids: { sessionId: buffer.identity.eveSessionId },
+      extra: { batchSize: batch.length },
+      fingerprint: ["eve-event-persistence", "unstorable-payload"],
+    });
+    for (let index = 0; index < batch.length; index += 1) {
+      const event = batch[index]!;
+      try {
+        try {
+          await store.writeBatch(buffer.identity, [event]);
+        } catch (error) {
+          if (!isUnstorablePayloadError(error)) throw error;
+          console.error(
+            `[agent-events] ${event.eventType} ${event.eveEventId} in session ${buffer.identity.eveSessionId} could not be stored; a marker was written instead`,
+          );
+          await store.writeBatch(buffer.identity, [
+            unstorableEventMarker(event),
+          ]);
+        }
+      } catch (error) {
+        buffer.pending.unshift(...batch.slice(index));
+        throw error;
+      }
+    }
   }
 
   function flushInBackground(buffer: SessionBuffer) {
