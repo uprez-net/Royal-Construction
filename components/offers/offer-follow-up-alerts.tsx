@@ -1,8 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Bell, Clock, Loader2, Mail, Send } from "lucide-react";
+import {
+  AlertTriangle,
+  Bell,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  Mail,
+  Send,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { StatusPill } from "@/components/common/status-pill";
@@ -29,6 +37,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { formatSydneyDate, formatSydneyDateTime } from "@/lib/dates/sydney";
 import type {
+  MarkOfferFollowUpDoneResult,
   OfferFollowUpAlert,
   SendOfferFollowUpResult,
 } from "@/lib/domain/offers/follow-ups";
@@ -46,6 +55,10 @@ import { fetchJson } from "@/utils/fetch";
  *
  * "Do follow-up" opens a draft and sends nothing. The email leaves when the
  * administrator presses Send on the draft, after reading and editing it.
+ *
+ * "Follow-up done" is the quick dismiss for a client chased some other way (a
+ * call, a text): it sends nothing, takes the alert off the list, and the alert
+ * comes back a day later if the client still has not answered.
  */
 
 function days(count: number): string {
@@ -212,8 +225,38 @@ function FollowUpRow({
   alert: OfferFollowUpAlert;
   onFollowUp: () => void;
 }) {
+  const router = useRouter();
   const isDue = alert.state === "DUE";
   const hasAddress = alert.clientEmails.length > 0;
+  const [isMarking, setIsMarking] = useState(false);
+  // Held until the refreshed list arrives, so the row does not flash back to
+  // an enabled button before it leaves.
+  const [isRefreshing, startRefresh] = useTransition();
+  const isBusy = isMarking || isRefreshing;
+
+  const markDone = async () => {
+    if (isBusy) return;
+    setIsMarking(true);
+    try {
+      const response = await fetchJson<MarkOfferFollowUpDoneResult>(
+        `/api/offers/${alert.offerId}/follow-ups/done`,
+        { method: "POST" },
+        "The follow-up could not be marked done.",
+      );
+      toast.success(
+        `Marked done. ${alert.clientName} comes back on the list ${formatSydneyDateTime(new Date(response.data.nextDueAt))} if they have not replied.`,
+      );
+      startRefresh(() => router.refresh());
+    } catch (markError) {
+      toast.error(
+        markError instanceof Error
+          ? markError.message
+          : "The follow-up could not be marked done.",
+      );
+    } finally {
+      setIsMarking(false);
+    }
+  };
 
   return (
     <li className="flex items-center gap-3 px-4 py-2.5">
@@ -260,17 +303,33 @@ function FollowUpRow({
           </p>
         ) : null}
       </div>
-      <Button
-        type="button"
-        size="sm"
-        variant={isDue ? "default" : "outline"}
-        disabled={!hasAddress}
-        onClick={onFollowUp}
-        className="shrink-0"
-      >
-        <Send className="size-4" aria-hidden="true" />
-        {isDue ? "Do follow-up" : "Follow up again"}
-      </Button>
+      <div className="flex shrink-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={isBusy}
+          onClick={() => void markDone()}
+          title="Chased another way, such as a call. Hides this alert for a day; nothing is sent."
+        >
+          {isBusy ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <CheckCircle2 className="size-4" aria-hidden="true" />
+          )}
+          Follow-up done
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={isDue ? "default" : "outline"}
+          disabled={!hasAddress || isBusy}
+          onClick={onFollowUp}
+        >
+          <Send className="size-4" aria-hidden="true" />
+          {isDue ? "Do follow-up" : "Follow up again"}
+        </Button>
+      </div>
     </li>
   );
 }
