@@ -1413,6 +1413,7 @@ model User {
   tradeSelections           TradeSelection[]           @relation("TradeSelectionSelectedBy")
   createdOffers             Offer[]                    @relation("OfferCreatedBy")
   offerFollowUps            OfferFollowUp[]            @relation("OfferFollowUpSentBy")
+  offerFollowUpsMarkedDone  OfferFollowUpDone[]        @relation("OfferFollowUpDoneBy")
   xeroConnections           XeroConnection[]           @relation("XeroConnections")
   agentSessions             AgentSession[]
   agentActionAudits         AgentActionAudit[]
@@ -1938,6 +1939,7 @@ model Offer {
   acceptanceEnvelopes      Envelope[]                @relation("OfferAcceptanceEnvelopes")
   documentSends            OfferDocumentSend[]
   followUps                OfferFollowUp[]
+  followUpsDone            OfferFollowUpDone[]
   statusEvents             OfferStatusEvent[]
   unconfirmedEnvelopeSends UnconfirmedEnvelopeSend[]
   lead                     Lead                      @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -2185,6 +2187,21 @@ model OfferFollowUp {
   attemptKey String   @unique
 
   @@index([offerId, sentAt])
+}
+
+/// The office marking an offer's follow-up done without emailing from here: a
+/// phone call, a text, a word on site. Counts as contact, so the alert leaves
+/// the Offers page and comes back a day later if the client still has not
+/// answered. One row per press, for who did it and when.
+model OfferFollowUpDone {
+  id       String   @id @default(uuid())
+  offerId  String
+  offer    Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  doneAt   DateTime @default(now())
+  doneById String?
+  doneBy   User?    @relation("OfferFollowUpDoneBy", fields: [doneById], references: [id], onDelete: SetNull)
+
+  @@index([offerId, doneAt])
 }
 
 // One row per lifecycle transition, for accountability + legal trail.

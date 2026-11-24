@@ -3,6 +3,7 @@ import { describe, test } from "vitest";
 
 import {
   assessOfferFollowUp,
+  markOfferFollowUpDone,
   sendOfferFollowUp,
   withReplyToken,
   type OfferFollowUpSource,
@@ -29,6 +30,7 @@ function source(
     sentAt: SENT,
     awaitingSince: SENT,
     followUpTimes: [],
+    markedDoneTimes: [],
     lastSentAt: null,
     lastReplyAt: null,
     ...overrides,
@@ -144,6 +146,69 @@ describe("when an offer is due a follow-up", () => {
     );
   });
 
+  test("marking it done takes it off the list for a day, then it is due again", () => {
+    const markedDone = new Date(SENT.getTime() + 30 * HOUR);
+    const soon = new Date(markedDone.getTime() + 2 * HOUR);
+    assert.equal(
+      assessOfferFollowUp(source({ markedDoneTimes: [markedDone] }), soon),
+      null,
+    );
+
+    const nextDay = new Date(markedDone.getTime() + 25 * HOUR);
+    const assessed = assessOfferFollowUp(
+      source({ markedDoneTimes: [markedDone] }),
+      nextDay,
+    );
+    assert.equal(assessed?.state, "DUE");
+    // A mark is not an email: the count is of follow-ups actually sent.
+    assert.equal(assessed?.followUpCount, 0);
+    assert.equal(
+      assessed?.nextDueAt,
+      new Date(markedDone.getTime() + 24 * HOUR).toISOString(),
+    );
+  });
+
+  test("marking done after an emailed follow-up hides it too", () => {
+    const followedUp = new Date(SENT.getTime() + 30 * HOUR);
+    const markedDone = new Date(followedUp.getTime() + HOUR);
+    const soon = new Date(markedDone.getTime() + HOUR);
+    assert.equal(
+      assessOfferFollowUp(
+        source({ followUpTimes: [followedUp], markedDoneTimes: [markedDone] }),
+        soon,
+      ),
+      null,
+    );
+  });
+
+  test("an email sent after the mark shows as followed up again", () => {
+    const markedDone = new Date(SENT.getTime() + 30 * HOUR);
+    const followedUp = new Date(markedDone.getTime() + HOUR);
+    const soon = new Date(followedUp.getTime() + HOUR);
+    assert.equal(
+      assessOfferFollowUp(
+        source({ followUpTimes: [followedUp], markedDoneTimes: [markedDone] }),
+        soon,
+      )?.state,
+      "FOLLOWED_UP",
+    );
+  });
+
+  test("a client reply after the mark closes it", () => {
+    const markedDone = new Date(SENT.getTime() + 30 * HOUR);
+    const later = new Date(markedDone.getTime() + 48 * HOUR);
+    assert.equal(
+      assessOfferFollowUp(
+        source({
+          markedDoneTimes: [markedDone],
+          lastReplyAt: new Date(markedDone.getTime() + HOUR),
+        }),
+        later,
+      ),
+      null,
+    );
+  });
+
   test("days pending is counted from the original send", () => {
     const now = new Date(SENT.getTime() + 5 * 24 * HOUR);
     assert.equal(assessOfferFollowUp(source(), now)?.daysPending, 5);
@@ -231,6 +296,7 @@ describe("sending a follow-up", () => {
       },
       statusEvents: [],
       followUps: [],
+      followUpsDone: [],
       documentSends: [proposalSend],
       ...overrides,
     };
@@ -411,5 +477,78 @@ describe("sending a follow-up", () => {
     );
     assert.equal(sent, 0);
     assert.equal(result.replayed, true);
+  });
+
+  describe("marking a follow-up done", () => {
+    const DONE_AT = new Date("2026-11-13T00:00:00Z");
+
+    function markScripted(overrides: Record<string, unknown> = {}) {
+      return recordingDb({
+        "offer.findUnique": offerRow(overrides),
+        "lead.findUnique": { id: 7, assignedId: null },
+        "offerFollowUpDone.create": { doneAt: DONE_AT },
+      });
+    }
+
+    test("records the mark, sends nothing, and says when it comes back", async () => {
+      const recorder = markScripted();
+      const result = await markOfferFollowUpDone(
+        adminPrincipal(),
+        { offerId: "offer-1" },
+        recorder.db,
+      );
+      assert.equal(result.doneAt, DONE_AT.toISOString());
+      assert.equal(
+        result.nextDueAt,
+        new Date(DONE_AT.getTime() + 24 * HOUR).toISOString(),
+      );
+      const writes = recorder.writes();
+      assert.deepEqual(
+        writes.map((call) => call.operation),
+        ["offerFollowUpDone.create"],
+      );
+      assert.equal(
+        (writes[0]?.args as { data: { offerId: string } }).data.offerId,
+        "offer-1",
+      );
+    });
+
+    test("refuses a closed offer, a replied client and a non-staff caller", async () => {
+      await assert.rejects(
+        markOfferFollowUpDone(
+          adminPrincipal(),
+          { offerId: "offer-1" },
+          markScripted({ offerStatus: "OFFER_SIGNED" }).db,
+        ),
+        /no longer waiting on the client/,
+      );
+      const replied = markScripted({
+        documentSends: [
+          {
+            ...proposalSend,
+            lastReplyAt: new Date(SENT.getTime() + 30 * HOUR),
+          },
+        ],
+      });
+      await assert.rejects(
+        markOfferFollowUpDone(
+          adminPrincipal(),
+          { offerId: "offer-1" },
+          replied.db,
+        ),
+        /client has replied/,
+      );
+      assert.deepEqual(replied.writes(), []);
+      const stranger = markScripted();
+      await assert.rejects(
+        markOfferFollowUpDone(
+          customerPrincipal(),
+          { offerId: "offer-1" },
+          stranger.db,
+        ),
+        /internal staff/,
+      );
+      assert.deepEqual(stranger.writes(), []);
+    });
   });
 });

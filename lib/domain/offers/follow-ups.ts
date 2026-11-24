@@ -88,6 +88,11 @@ export type OfferFollowUpSource = {
   /** When it entered the status it is waiting in; at least `sentAt`. */
   readonly awaitingSince: Date;
   readonly followUpTimes: readonly Date[];
+  /**
+   * When the office pressed "Follow-up done": they chased the client some
+   * other way (a call, a text). Contact, but not an email from here.
+   */
+  readonly markedDoneTimes: readonly Date[];
   /** The latest proposal email to the client, re-sends included. */
   readonly lastSentAt: Date | null;
   /** The latest reply from the client to any send of this offer. */
@@ -101,11 +106,18 @@ function latest(times: readonly (Date | null)[]): Date | null {
     : null;
 }
 
-/** The last time we wrote to the client: the send, a re-send or a follow-up. */
+/**
+ * The last time we contacted the client: the send, a re-send, a follow-up
+ * email, or a follow-up the office marked done.
+ */
 function lastContactOf(offer: OfferFollowUpSource): Date {
   return (
-    latest([offer.awaitingSince, offer.lastSentAt, ...offer.followUpTimes])
-    ?? offer.awaitingSince
+    latest([
+      offer.awaitingSince,
+      offer.lastSentAt,
+      ...offer.followUpTimes,
+      ...offer.markedDoneTimes,
+    ]) ?? offer.awaitingSince
   );
 }
 
@@ -142,11 +154,21 @@ export function assessOfferFollowUp(
   // A later send or follow-up of ours restarts the clock.
   if (clientHasResponded(offer)) return null;
 
+  const withinADay = now.getTime() - lastContact.getTime() < FOLLOW_UP_AFTER_MS;
+
   // Not a day since the offer last went out, and never chased: nothing to
   // say yet.
+  if (lastFollowUp === null && withinADay) return null;
+
+  // The office marked it done after the last email: it is off the list until
+  // it falls due again, rather than sitting there as "Followed up". A mark is
+  // a dismissal, not a closure — a client who still has not answered a day
+  // later comes back as due.
+  const lastMarkedDone = latest(offer.markedDoneTimes);
   if (
-    lastFollowUp === null
-    && now.getTime() - lastContact.getTime() < FOLLOW_UP_AFTER_MS
+    withinADay
+    && lastMarkedDone !== null
+    && lastMarkedDone.getTime() === lastContact.getTime()
   ) {
     return null;
   }
@@ -190,6 +212,7 @@ const followUpOfferSelect = {
     select: { at: true },
   },
   followUps: { select: { sentAt: true } },
+  followUpsDone: { select: { doneAt: true } },
   // Every send, not just the answered ones: a re-sent proposal is contact and
   // restarts the clock, and its token is what a follow-up's reply matches on.
   documentSends: {
@@ -223,6 +246,7 @@ function followUpSource(offer: FollowUpOfferRow): OfferFollowUpSource {
     sentAt,
     awaitingSince: awaitingSince < sentAt ? sentAt : awaitingSince,
     followUpTimes: offer.followUps.map((followUp) => followUp.sentAt),
+    markedDoneTimes: offer.followUpsDone.map((done) => done.doneAt),
     lastSentAt: latest(offer.documentSends.map((send) => send.sentAt)),
     lastReplyAt: latest(offer.documentSends.map((send) => send.lastReplyAt)),
   };
@@ -307,6 +331,84 @@ export async function listOfferFollowUpAlerts(
     );
 }
 
+/**
+ * The offer, if the caller may see it and it is still waiting on the client.
+ * Sending a follow-up and marking one done refuse on the same grounds, so the
+ * two cannot disagree about whether there is anyone to chase.
+ */
+async function loadOfferAwaitingClient(
+  principal: DomainPrincipal,
+  offerId: string,
+  db: DomainDb,
+): Promise<FollowUpOfferRow> {
+  await authorizeOffer(principal, offerId, db);
+  const offer = await db.offer.findUnique({
+    where: { id: offerId },
+    select: followUpOfferSelect,
+  });
+  if (!offer) throw new DomainNotFoundError("Offer not found");
+  if (!OFFER_AWAITING_RESPONSE_STATUSES.includes(offer.offerStatus)) {
+    throw new DomainTransitionError(
+      "This offer is no longer waiting on the client, so there is nothing to follow up.",
+    );
+  }
+  // The same rule that takes the alert off the list: a reply that arrived
+  // while the draft was open means there is nobody to chase.
+  if (clientHasResponded(followUpSource(offer))) {
+    throw new DomainTransitionError(
+      "The client has replied since they were last contacted. Read their reply before following up.",
+    );
+  }
+  return offer;
+}
+
+export type MarkOfferFollowUpDoneResult = {
+  readonly offerId: string;
+  /** ISO instant it was marked done. */
+  readonly doneAt: string;
+  /** ISO instant the alert comes back if the client still has not answered. */
+  readonly nextDueAt: string;
+};
+
+/**
+ * "Follow-up done": the office chased the client some other way — a call, a
+ * text — and wants the alert off the Offers page. Nothing is sent.
+ *
+ * Recorded as contact, so the alert leaves the list and comes back a day later
+ * only if the client still has not answered, signed or declined. It is not a
+ * permanent dismissal: an offer nobody hears back on is exactly the one the
+ * alert exists to keep in front of the office.
+ *
+ * A double press records two marks a moment apart, which reads the same; no
+ * attempt key is needed because nothing leaves the building.
+ */
+export async function markOfferFollowUpDone(
+  principal: DomainPrincipal,
+  input: { readonly offerId: string },
+  db: DomainDb,
+): Promise<MarkOfferFollowUpDoneResult> {
+  if (!isOfficePrincipal(principal)) {
+    throw new DomainAuthorizationError(
+      "Following up an offer requires internal staff access.",
+    );
+  }
+  await loadOfferAwaitingClient(principal, input.offerId, db);
+  const done = await db.offerFollowUpDone.create({
+    data: {
+      offerId: input.offerId,
+      doneById: attributionUserId(principal),
+    },
+    select: { doneAt: true },
+  });
+  return {
+    offerId: input.offerId,
+    doneAt: done.doneAt.toISOString(),
+    nextDueAt: new Date(
+      done.doneAt.getTime() + FOLLOW_UP_AFTER_MS,
+    ).toISOString(),
+  };
+}
+
 export type SendOfferFollowUpInput = {
   readonly offerId: string;
   /** One of the lead's own addresses. */
@@ -378,24 +480,7 @@ export async function sendOfferFollowUp(
     throw new DomainValidationError("The email is empty.", "body");
   }
 
-  await authorizeOffer(principal, input.offerId, db);
-  const offer = await db.offer.findUnique({
-    where: { id: input.offerId },
-    select: followUpOfferSelect,
-  });
-  if (!offer) throw new DomainNotFoundError("Offer not found");
-  if (!OFFER_AWAITING_RESPONSE_STATUSES.includes(offer.offerStatus)) {
-    throw new DomainTransitionError(
-      "This offer is no longer waiting on the client, so there is nothing to follow up.",
-    );
-  }
-  // The same rule that takes the alert off the list: a reply that arrived
-  // while the draft was open means there is nobody to chase.
-  if (clientHasResponded(followUpSource(offer))) {
-    throw new DomainTransitionError(
-      "The client has replied since they were last contacted. Read their reply before following up.",
-    );
-  }
+  const offer = await loadOfferAwaitingClient(principal, input.offerId, db);
 
   const to = input.to.trim().toLowerCase();
   if (!allowedLeadRecipients(offer.lead).includes(to)) {

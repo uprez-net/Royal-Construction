@@ -3,7 +3,9 @@ import "server-only";
 import { sendEmail } from "@/lib/azureClient";
 import {
   listOfferFollowUpAlerts,
+  markOfferFollowUpDone,
   sendOfferFollowUp,
+  type MarkOfferFollowUpDoneResult,
   type OfferFollowUpAlert,
   type SendOfferFollowUpResult,
 } from "@/lib/domain/offers/follow-ups";
@@ -62,4 +64,12 @@ export async function sendOfferFollowUpEmail(
     prisma,
     { sendMail: sendEmail },
   );
+}
+
+/** The office chased the client another way; take the alert off the list. */
+export async function markOfferFollowUpDoneForOffice(
+  principal: DomainPrincipal,
+  offerId: string,
+): Promise<MarkOfferFollowUpDoneResult> {
+  return markOfferFollowUpDone(principal, { offerId }, prisma);
 }
