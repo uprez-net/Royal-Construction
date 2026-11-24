@@ -8,12 +8,13 @@ import {
   MessageSquareText,
   Plus,
   Search,
+  ShieldAlert,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AgentSessionListItem } from "@/lib/data/agent-sessions";
-import { SYDNEY_TZ } from "@/lib/dates/sydney";
+import { formatSydneyDate, SYDNEY_TZ } from "@/lib/dates/sydney";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,12 +28,15 @@ import { cn } from "@/lib/utils";
 export function AgentHistory({
   activeSessionId,
   activeSessionTitle,
+  activePendingApprovals = 0,
   initialSessions,
   onArchive,
   onClose,
   onNavigate,
   sessions,
 }: {
+  /** Live count for the open conversation; the list's own is from page load. */
+  activePendingApprovals?: number;
   activeSessionId: string | null;
   activeSessionTitle: string;
   initialSessions: AgentSessionListItem[];
@@ -127,6 +131,9 @@ export function AgentHistory({
         ) : (
           visible.map((session) => {
             const active = session.eveSessionId === activeSessionId;
+            const waiting = active
+              ? activePendingApprovals
+              : session.pendingApprovals;
             return (
               <div className="group relative" key={session.eveSessionId}>
                 <Link
@@ -158,11 +165,31 @@ export function AgentHistory({
                         <span
                           className={cn(
                             "size-1.5 shrink-0 rounded-full",
-                            statusDot(session.status),
+                            waiting > 0
+                              ? "bg-warning"
+                              : statusDot(session.status),
                           )}
-                          title={session.status.toLowerCase()}
+                          title={
+                            waiting > 0
+                              ? "waiting for approval"
+                              : session.status.toLowerCase()
+                          }
                         />
                       </div>
+                      {waiting > 0 ? (
+                        <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-warning-ink">
+                          <ShieldAlert
+                            aria-hidden="true"
+                            className="size-3 shrink-0"
+                          />
+                          <span className="truncate">
+                            {approvalWaitingLabel(
+                              waiting,
+                              active ? null : session.approvalExpiresAt,
+                            )}
+                          </span>
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 </Link>
@@ -196,6 +223,21 @@ function formatSessionDate(value: string) {
     month: "short",
     timeZone: SYDNEY_TZ,
   }).format(new Date(value));
+}
+
+/**
+ * "2 approvals waiting · expire Wed 26 Nov". A conversation parked on an
+ * approval read the same as one still working, and nothing outside the open
+ * transcript said a change was waiting (#617).
+ */
+export function approvalWaitingLabel(
+  count: number,
+  expiresAt: string | null,
+): string {
+  const what = count === 1 ? "Approval waiting" : `${count} approvals waiting`;
+  if (!expiresAt) return what;
+  const day = formatSydneyDate(new Date(expiresAt));
+  return `${what} · ${count === 1 ? "expires" : "expire"} ${day}`;
 }
 
 function statusDot(status: AgentSessionListItem["status"]) {

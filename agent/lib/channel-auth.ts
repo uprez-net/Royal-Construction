@@ -1,4 +1,5 @@
 import type { AuthFn } from "eve/channels/auth";
+import type { SessionAuthContext } from "eve/context";
 import { createClerkClient } from "@clerk/backend";
 import {
   ForbiddenError,
@@ -14,6 +15,11 @@ import { waitForOwnedAgentSession } from "@/agent/lib/session-owner";
 import { findAgentSessionOwner } from "@/lib/domain/access/agent-sessions";
 import { principalForClerkId } from "@/lib/domain/identity/users";
 import { isOfficeRole } from "@/lib/domain/principal";
+import {
+  APPROVAL_EXPIRY_SERVICE,
+  claimsApprovalExpiryService,
+  verifyApprovalExpiryRequest,
+} from "@/lib/agent/approval-expiry-wire";
 
 const clerkClient = createClerkClient({
   publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
@@ -36,6 +42,30 @@ export function clerkInternalUserAuth(): AuthFn<Request> {
           code: "agent_disabled",
           message: "The operations agent is not enabled for this environment.",
         });
+      }
+
+      // The one request a cron may make here: withdrawing approvals that
+      // expired unanswered (#617). Verified on the bearer, the path and a
+      // body that only cancels; see lib/agent/approval-expiry-wire.ts. A
+      // request that claims to be the service and fails any of those is
+      // refused outright rather than tried as a sign-in.
+      if (claimsApprovalExpiryService(request)) {
+        const eveSessionId = await verifyApprovalExpiryRequest(request);
+        if (!eveSessionId) {
+          throw new UnauthenticatedError({
+            code: "service_authentication_failed",
+            message: "The service request could not be verified.",
+          });
+        }
+        const service: SessionAuthContext = {
+          attributes: {},
+          authenticator: "guri-service",
+          issuer: "guri",
+          principalId: APPROVAL_EXPIRY_SERVICE,
+          principalType: "service",
+          subject: APPROVAL_EXPIRY_SERVICE,
+        };
+        return service;
       }
 
       const requestState = await clerkClient.authenticateRequest(request, {

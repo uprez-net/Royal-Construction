@@ -209,6 +209,9 @@ export function isCancelledFinding(finding: unknown): boolean {
  */
 export const CANCELLED_TITLE = "Cancelled — change not applied";
 
+/** The same, when nobody answered and the approval expired (#617). */
+export const EXPIRED_TITLE = "Not done — the approval expired";
+
 /**
  * A specialist result marked cancelled, with the words people read fixed.
  *
@@ -231,11 +234,21 @@ export function cancelledChangeResult<
   if (result.data.cancelled !== true) return null;
   const change =
     typeof result.data.change === "string" ? result.data.change.trim() : "";
+  const what = change ? ` (${change.slice(0, 200)})` : "";
+  if (result.data.expired === true) {
+    return {
+      ...result,
+      kind: "confirmation",
+      title: EXPIRED_TITLE,
+      summary: `Not done: the approval for this change${what} expired before anyone answered it, so it was not applied.`,
+      warnings: [],
+    };
+  }
   return {
     ...result,
     kind: "confirmation",
     title: CANCELLED_TITLE,
-    summary: `You cancelled this change${change ? ` (${change.slice(0, 200)})` : ""}, so it was not applied.`,
+    summary: `You cancelled this change${what}, so it was not applied.`,
     warnings: [],
   };
 }

@@ -7,12 +7,20 @@ import type { AgentInputResponse } from "@/components/agent/agent-approval";
 import {
   approvalBatchFor,
   type AgentApprovalBatch,
+  type AgentPendingApproval,
   type AgentTranscriptData,
 } from "@/components/agent/agent-reducer";
 
-type BatchLookup = (requestId: string) => AgentApprovalBatch | null;
+type ApprovalLookup = {
+  batchFor: (requestId: string) => AgentApprovalBatch | null;
+  /** The request while it is still waiting: when it was asked for, mostly. */
+  pendingFor: (requestId: string) => AgentPendingApproval | null;
+};
 
-const ApprovalBatchContext = createContext<BatchLookup>(() => null);
+const ApprovalBatchContext = createContext<ApprovalLookup>({
+  batchFor: () => null,
+  pendingFor: () => null,
+});
 
 /**
  * Hands every approval card the step it came from (#616).
@@ -30,7 +38,12 @@ export function AgentApprovalBatchProvider({
   children: ReactNode;
   data: Pick<AgentTranscriptData, "approvalBatches" | "pendingApprovals">;
 }) {
-  const lookup: BatchLookup = (requestId) => approvalBatchFor(data, requestId);
+  const lookup: ApprovalLookup = {
+    batchFor: (requestId) => approvalBatchFor(data, requestId),
+    pendingFor: (requestId) =>
+      data.pendingApprovals.find((item) => item.requestId === requestId)
+      ?? null,
+  };
   return (
     <ApprovalBatchContext.Provider value={lookup}>
       {children}
@@ -39,7 +52,11 @@ export function AgentApprovalBatchProvider({
 }
 
 export function useApprovalBatch(requestId: string) {
-  return useContext(ApprovalBatchContext)(requestId);
+  return useContext(ApprovalBatchContext).batchFor(requestId);
+}
+
+export function usePendingApproval(requestId: string) {
+  return useContext(ApprovalBatchContext).pendingFor(requestId);
 }
 
 /**

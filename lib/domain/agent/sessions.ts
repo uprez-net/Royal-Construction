@@ -1,5 +1,6 @@
 import type { DomainDb } from "../db";
 import { requireUserPrincipal, type DomainPrincipal } from "../principal";
+import { listPendingAgentApprovals } from "./approvals";
 
 const SESSION_REGISTRY_RETRY_DELAYS_MS = [
   40, 100, 200, 400, 800, 1_200,
@@ -14,6 +15,13 @@ export type AgentSessionListItem = {
   summary: string | null;
   title: string | null;
   updatedAt: string;
+  /**
+   * Approvals in this conversation nobody has answered (#617). A conversation
+   * parked on one used to read ACTIVE, the same as one still working.
+   */
+  pendingApprovals: number;
+  /** When the soonest of them expires, or null when none is waiting. */
+  approvalExpiresAt: string | null;
 };
 
 export type AgentWorkspaceData = {
@@ -65,8 +73,31 @@ export async function getAgentWorkspaceData(
     },
   });
 
+  const pending = rows.length
+    ? await listPendingAgentApprovals(principal, db, {
+        rootEveSessionIds: rows.map((row) => row.eveSessionId),
+      })
+    : [];
+  const waiting = new Map<string, { count: number; expiresAt: Date }>();
+  for (const approval of pending) {
+    const entry = waiting.get(approval.rootEveSessionId);
+    if (!entry) {
+      waiting.set(approval.rootEveSessionId, {
+        count: 1,
+        expiresAt: approval.expiresAt,
+      });
+    } else {
+      entry.count += 1;
+      if (approval.expiresAt < entry.expiresAt)
+        entry.expiresAt = approval.expiresAt;
+    }
+  }
+
   const sessions = rows.map((row) => ({
     agentName: row.agentName,
+    approvalExpiresAt:
+      waiting.get(row.eveSessionId)?.expiresAt.toISOString() ?? null,
+    pendingApprovals: waiting.get(row.eveSessionId)?.count ?? 0,
     createdAt: row.createdAt.toISOString(),
     eveSessionId: row.eveSessionId,
     lastEventAt: row.lastEventAt?.toISOString() ?? null,

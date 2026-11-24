@@ -19,7 +19,13 @@ import {
 import {
   AgentApprovalBatchControls,
   useApprovalBatch,
+  usePendingApproval,
 } from "@/components/agent/agent-approval-batch";
+import { formatSydneyDate } from "@/lib/dates/sydney";
+import {
+  approvalExpiresAt,
+  isApprovalExpired,
+} from "@/lib/domain/agent/approval-expiry";
 import { AgentWhatsAppDraftView } from "@/components/agent/agent-whatsapp";
 import {
   approvalWhatsApp,
@@ -76,6 +82,16 @@ export function AgentApproval({
   const isApproval = request.kind === "tool-approval";
   const isLimit = request.kind === "session-limit";
   const batch = useApprovalBatch(request.requestId);
+  // When the approval stops being answerable (#617): shown while it waits, and
+  // past it the card no longer offers Approve, which eve would refuse anyway.
+  const pending = usePendingApproval(request.requestId);
+  const requestedAt = pending?.requestedAt
+    ? new Date(pending.requestedAt)
+    : null;
+  const expiresAt =
+    isApproval && requestedAt ? approvalExpiresAt(requestedAt) : null;
+  const expired =
+    requestedAt !== null && isApprovalExpired(requestedAt, new Date());
   // Other approvals from the same step still unanswered. eve runs none of the
   // step's calls until they are (#616).
   const waitingOn = batch
@@ -275,6 +291,19 @@ export function AgentApproval({
         </dl>
       ) : null}
 
+      {!responded && isApproval && expiresAt ? (
+        <p
+          className={cn(
+            "text-xs",
+            expired ? "font-medium text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {expired
+            ? `Expired at the end of ${formatSydneyDate(expiresAt)}. This change will not be made; ask the agent again if it is still wanted.`
+            : `Answer by the end of ${formatSydneyDate(expiresAt)}, or it expires and the change is not made.`}
+        </p>
+      ) : null}
+
       {responded ? (
         <p
           className="flex items-center gap-2 text-xs text-muted-foreground"
@@ -290,7 +319,7 @@ export function AgentApproval({
         </p>
       ) : (
         <div className="flex flex-col gap-2">
-          {showBatchControls && batch ? (
+          {showBatchControls && batch && !expired ? (
             <AgentApprovalBatchControls
               batch={batch}
               bulkApproveBlocked={batch.pending.some(needsItsOwnApproval)}
@@ -302,7 +331,10 @@ export function AgentApproval({
             <div className="flex flex-wrap gap-2">
               {request.options?.map((option) => (
                 <Button
-                  disabled={busy || (filesLoading && option.style !== "danger")}
+                  disabled={
+                    busy
+                    || (option.style !== "danger" && (filesLoading || expired))
+                  }
                   key={option.id}
                   onClick={() =>
                     option.style === "danger"

@@ -19,6 +19,25 @@ const EVENT_SESSION_STATUS: Partial<
 };
 
 /**
+ * A session's status after this event.
+ *
+ * A specialist (child) session is created for one delegation and never sent
+ * another task, so once its turn completes it is done. It used to stay WAITING
+ * for ever (all 146 in production, #617), which read the same as one parked on
+ * an approval. eve still emits `session.waiting` after the turn; that must not
+ * move a completed child back, which the store enforces. A child parked on an
+ * approval never completes its turn, so it still reads WAITING.
+ */
+export function sessionStatusAfter(
+  eventType: string,
+  isChildSession: boolean,
+): AgentSessionStatus | undefined {
+  if (isChildSession && eventType === "turn.completed")
+    return AgentSessionStatus.COMPLETED;
+  return EVENT_SESSION_STATUS[eventType as HookEvent["type"]];
+}
+
+/**
  * Streaming deltas: the bulk of a turn's events, and redundant with the
  * `*.completed` / `actions.requested` / `action.result` event that closes each
  * of them.
@@ -218,6 +237,12 @@ export const prismaAgentEventStore: AgentEventStore = {
       });
 
       if (inserted.count > 0) {
+        // A completed specialist session stays completed (see
+        // sessionStatusAfter): its trailing `session.waiting` moves only the
+        // clock.
+        const keepsCompleted =
+          status === AgentSessionStatus.WAITING
+          && identity.parentEveSessionId !== undefined;
         await tx.agentSession.updateMany({
           where: {
             id: session.id,
@@ -225,9 +250,18 @@ export const prismaAgentEventStore: AgentEventStore = {
           },
           data: {
             lastEventAt: latest,
-            ...(status ? { status } : {}),
+            ...(status && !keepsCompleted ? { status } : {}),
           },
         });
+        if (keepsCompleted) {
+          await tx.agentSession.updateMany({
+            where: {
+              id: session.id,
+              status: { not: AgentSessionStatus.COMPLETED },
+            },
+            data: { status },
+          });
+        }
       }
     });
   },
@@ -374,7 +408,7 @@ export function createAgentEventPersister(
       eventType: event.type,
       payload: toInputJson(event),
       occurredAt: new Date(event.meta.at),
-      status: EVENT_SESSION_STATUS[event.type],
+      status: sessionStatusAfter(event.type, ctx.session.parent != null),
     });
 
     if (STREAMING_EVENT_TYPES.has(event.type)) {

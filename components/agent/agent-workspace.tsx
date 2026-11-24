@@ -126,9 +126,11 @@ export function AgentWorkspace({
         return [
           {
             agentName: "operations",
+            approvalExpiresAt: null,
             createdAt: now,
             eveSessionId: session.sessionId,
             lastEventAt: now,
+            pendingApprovals: 0,
             status: "ACTIVE",
             summary: null,
             title: null,
@@ -633,6 +635,7 @@ export function AgentWorkspace({
 
   const renderHistory = (onClose?: () => void) => (
     <AgentHistory
+      activePendingApprovals={agent.data.pendingApprovals.length}
       activeSessionId={activeSessionId}
       activeSessionTitle={activeSessionTitle}
       initialSessions={initialSessions}
