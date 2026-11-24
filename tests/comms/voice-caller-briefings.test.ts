@@ -130,6 +130,16 @@ describe("briefings: only what that class may hear", () => {
       new RegExp(BRIEFING_FACT.admin),
     );
     assert.match(access.context?.briefing ?? "", /Open leads: 0 \(new 3\)/);
+    // Meetings are MEETING tasks, read by the shared rule (#618).
+    assert.match(
+      access.context?.briefing ?? "",
+      /Lead meetings today and tomorrow: Lee Lead/,
+    );
+    const [meetings] = readArgs(recorder, "leadTask.findMany");
+    assert.deepEqual(
+      (meetings?.where as { type?: unknown } | undefined)?.type,
+      { in: ["MEETING"] },
+    );
     assert.equal(access.context?.canLookUp, true);
     assert.deepEqual(
       access.lookups.map((l) => l.name),

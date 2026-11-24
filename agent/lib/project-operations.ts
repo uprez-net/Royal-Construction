@@ -44,6 +44,11 @@ import {
 } from "@/lib/domain/projects/milestones";
 import { assignProjectSiteManager } from "@/lib/domain/projects/commands";
 import { getProjectDetail, listProjects } from "@/lib/domain/projects/queries";
+import {
+  listMilestonesDue,
+  type DueMilestone,
+} from "@/lib/domain/projects/milestones-due";
+import type { SydneyDayRangeName } from "@/lib/dates/day-range";
 import type { ProjectDetail } from "@/types/project";
 import {
   getProjectFinancials,
@@ -1324,6 +1329,75 @@ export async function createAuthorizedMilestone(
         title: "Milestone created",
       });
     },
+  });
+}
+
+function dueMilestoneForModel(milestone: DueMilestone) {
+  return {
+    milestoneId: milestone.milestoneId,
+    name: milestone.name,
+    parentName: milestone.parentName,
+    projectId: milestone.projectId,
+    projectName: milestone.projectName,
+    status: milestone.status,
+    targetDate: milestone.targetDate.toISOString(),
+    startDate: milestone.startDate?.toISOString() ?? null,
+  };
+}
+
+/**
+ * Milestones due in a window and those overdue, across every job in progress
+ * (#618): the portfolio read a brief needs, instead of a get_project per job.
+ */
+export async function listAuthorizedMilestonesDue(
+  ctx: ToolContext,
+  input: {
+    range?: SydneyDayRangeName;
+    from?: string;
+    to?: string;
+    includeOverdue: boolean;
+    limit: number;
+  },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const { due, overdue, range } = await listMilestonesDue(
+    userPrincipal(actor),
+    input,
+    agentDb,
+  );
+  const window =
+    range.fromDay === range.toDay
+      ? range.fromDay
+      : `${range.fromDay} to ${range.toDay}`;
+  const shown = (part: { total: number; items: unknown[] }) =>
+    part.total > part.items.length
+      ? ` (first ${part.items.length} listed)`
+      : "";
+  return agentResultEnvelopeSchema.parse({
+    version: 1,
+    kind: "milestone-list",
+    title: "Milestones due",
+    summary: [
+      `${due.total} open milestone${due.total === 1 ? "" : "s"} due ${window} across jobs in progress${shown(due)}.`,
+      input.includeOverdue
+        ? `${overdue.total} overdue${shown(overdue)}.`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    data: {
+      from: range.fromDay,
+      to: range.toDay,
+      dueTotal: due.total,
+      due: due.items.map(dueMilestoneForModel),
+      ...(input.includeOverdue
+        ? {
+            overdueTotal: overdue.total,
+            overdue: overdue.items.map(dueMilestoneForModel),
+          }
+        : {}),
+    },
+    warnings: [],
   });
 }
 

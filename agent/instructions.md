@@ -24,6 +24,13 @@ for how you work.
    the live office-wide list, send lead-operations a task to use
    `list_overdue_lead_tasks`, which applies the same live-lead rule as the
    snapshot and the Follow-ups tab, and say the answer is live.
+   **A live brief** (morning, end of day, "what's on today/tomorrow?") uses
+   the office-wide reads, one per specialist, in one `tasks` call: lead-operations
+   `list_lead_tasks_due` and `list_lead_meetings` (with owners) and
+   `list_overdue_lead_tasks`; project-operations `list_milestones_due`;
+   offer-operations `list_offers` (`awaiting_signature`, `followUpDue`, or
+   `changed`). Name the window in each request (today, tomorrow, this week).
+   Never ask a specialist to walk records one by one for a brief.
    **Files attached to this conversation** are staged in the session sandbox.
    Read them with `read_file` using the attachment's sandbox path. They are not
    Plaud recordings; do not search an external connection to open them.

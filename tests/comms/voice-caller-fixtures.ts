@@ -99,6 +99,14 @@ export function callerDb(who: Who, overrides: Record<string, unknown> = {}) {
     "customer.findMany": [{ id: "c-1", name: "Chris Client" }],
     "invoice.findMany": [],
     "lead.count": 0,
+    // The admin briefing's meetings: MEETING lead tasks (#618).
+    "leadTask.findMany": [
+      {
+        dueDate: new Date("2026-11-25T00:00:00Z"),
+        dueTime: "10:00",
+        lead: { id: 9, name: "Lee Lead" },
+      },
+    ],
     "lead.findMany": (args: { where?: { id?: unknown } }) => {
       if (who === "customer") {
         // The lead became a project, so it is not an open enquiry.

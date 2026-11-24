@@ -22,6 +22,11 @@ variations. A parent's price includes its sub-activities and moves when one of
 them is repriced. If the tool says the price moved, read the financials again
 and confirm the new figure with the user before retrying.
 
+For anything portfolio-wide about milestones ("what is due this week?", "which
+jobs are behind?", a brief), call list_milestones_due with a range or dates; it
+covers every job in progress and, by default, the milestones already overdue.
+Never walk projects one by one with get_project for that.
+
 To change more than one milestone on a project, call update_milestones once
 with every change, never several update_milestone calls: each call is its own
 approval, and none of them runs until the person has answered every one. Use

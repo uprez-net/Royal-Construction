@@ -1,4 +1,4 @@
-import type { LeadStage, Prisma } from "@prisma/client";
+import type { LeadStage, LeadTaskType, Prisma } from "@prisma/client";
 
 import { sydneyEndOfDay, sydneyToday } from "@/lib/dates/sydney";
 import {
@@ -58,6 +58,52 @@ export function overdueLeadTaskWhere(
     lead: assignedId === null ? LIVE_LEAD : { ...LIVE_LEAD, assignedId },
     status: { not: "DONE" },
   };
+}
+
+/**
+ * An open task due between two instants, on a lead a working view still
+ * shows (#618).
+ *
+ * The same family as `overdueLeadTaskWhere`, differing only in the window: a
+ * brief that asks "what is due today?" and one that asks "what is overdue?"
+ * read the same leads and the same notion of open. `types` narrows it, and a
+ * MEETING is a booked meeting: `meetingsBetweenWhere` is that case, the one
+ * the meeting reminders and the office digest share.
+ */
+export function leadTasksDueBetweenWhere({
+  from,
+  to,
+  assignedId,
+  types,
+}: {
+  from: Date;
+  to: Date;
+  /** `leadListScope(principal).assignedId`; required for the same reason as below. */
+  assignedId: string | null;
+  types?: readonly LeadTaskType[];
+}): Prisma.LeadTaskWhereInput {
+  return {
+    completedAt: null,
+    dueDate: { gte: from, lte: to },
+    lead: assignedId === null ? LIVE_LEAD : { ...LIVE_LEAD, assignedId },
+    status: { not: "DONE" },
+    ...(types?.length ? { type: { in: [...types] } } : {}),
+  };
+}
+
+/**
+ * Booked meetings between two instants, on live leads.
+ *
+ * A meeting is a `MEETING` lead task since #193; `Lead.meetingDate` is the
+ * retired column, and a meeting booked through the task form never sets it.
+ * The office digest read the column and so listed none of those (#618).
+ */
+export function meetingsBetweenWhere(options: {
+  from: Date;
+  to: Date;
+  assignedId: string | null;
+}): Prisma.LeadTaskWhereInput {
+  return leadTasksDueBetweenWhere({ ...options, types: ["MEETING"] });
 }
 
 /**

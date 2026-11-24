@@ -87,6 +87,12 @@ Anything office-wide about overdue work ("anything overdue?") is
 for each lead: the per-lead list includes won, lost and archived leads, which
 are not work. `list_lead_tasks` is for one lead the person named.
 
+Anything office-wide about what is due or booked in a window ("due today",
+"meetings tomorrow", "this week") is `list_lead_tasks_due` or
+`list_lead_meetings`, with `range` (today, tomorrow, this_week, next_7_days) or
+explicit `from`/`to` dates. Both return each task's owner and lead. A brief
+needs no other lead tool.
+
 ## WhatsApp
 
 1. Read with `get_lead_whatsapp` first: it says whether the 24-hour reply

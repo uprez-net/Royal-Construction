@@ -1,11 +1,37 @@
 import { z } from "zod";
+import { OfferStatus } from "@prisma/client";
 import { jsonValueSchema } from "@/agent/lib/result-contracts";
+import { dayRangeInputShape } from "@/agent/lib/lead-contracts";
 
 export const offerIdSchema = z.string().uuid();
 
 export const searchOffersInputSchema = z.object({
   query: z.string().trim().min(2).max(120),
   limit: z.number().int().min(1).max(10).default(5),
+});
+
+/** Office-wide offer list for briefs (#618). No reference needed. */
+export const listOffersInputSchema = z.object({
+  group: z
+    .enum(["awaiting_client", "awaiting_signature"])
+    .optional()
+    .describe(
+      "awaiting_client: emailed or out for acceptance and waiting on the client. awaiting_signature: out for a DocuSign signature (offer, tender or contract).",
+    ),
+  statuses: z
+    .array(z.enum(OfferStatus))
+    .max(12)
+    .optional()
+    .describe("Only these statuses; combined with group."),
+  changed: z
+    .object(dayRangeInputShape)
+    .optional()
+    .describe("Only offers changed in this window of Sydney days."),
+  followUpDue: z
+    .boolean()
+    .optional()
+    .describe("Only offers due a follow-up with the client now."),
+  limit: z.number().int().min(1).max(50).default(25),
 });
 
 export const getOfferInputSchema = z.object({

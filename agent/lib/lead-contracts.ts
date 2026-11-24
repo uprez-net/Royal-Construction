@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SYDNEY_DAY_RANGES } from "@/lib/dates/day-range";
 import { leadSources, leadStages } from "@/utils/validators/lead";
 
 export const leadIdSchema = z.number().int().positive();
@@ -28,6 +29,39 @@ export const listLeadTasksInputSchema = z.object({
 
 export const listOverdueLeadTasksInputSchema = z.object({
   limit: z.number().int().min(1).max(50).default(25),
+});
+
+/** A window of Sydney days: a name, or explicit dates (which win). */
+export const dayRangeInputShape = {
+  range: z
+    .enum(SYDNEY_DAY_RANGES)
+    .optional()
+    .describe(
+      "today, tomorrow, this_week (today to Sunday) or next_7_days. Defaults to today.",
+    ),
+  from: z.iso
+    .date()
+    .optional()
+    .describe("First day, YYYY-MM-DD, Sydney. Overrides range."),
+  to: z.iso
+    .date()
+    .optional()
+    .describe("Last day, YYYY-MM-DD, inclusive. Defaults to from."),
+};
+
+export const listLeadTasksDueInputSchema = z.object({
+  ...dayRangeInputShape,
+  types: z
+    .array(z.enum(["CALL", "EMAIL", "MEETING", "WAITING", "WHATSAPP"]))
+    .max(5)
+    .optional()
+    .describe("Only these task types. Omit for every type."),
+  limit: z.number().int().min(1).max(50).default(30),
+});
+
+export const listLeadMeetingsInputSchema = z.object({
+  ...dayRangeInputShape,
+  limit: z.number().int().min(1).max(50).default(30),
 });
 
 export const createLeadTaskInputSchema = z.object({

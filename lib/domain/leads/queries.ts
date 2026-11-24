@@ -10,7 +10,16 @@ import { DomainNotFoundError } from "../errors";
 import type { DomainPrincipal } from "../principal";
 import { authorizeLead, leadListScope } from "../access/leads";
 import { leadListOrderBy } from "./list-sort";
-import { overdueLeadTaskWhere } from "@/lib/leads/followup-due";
+import {
+  leadTasksDueBetweenWhere,
+  meetingsBetweenWhere,
+  overdueLeadTaskWhere,
+} from "@/lib/leads/followup-due";
+import type {
+  SydneyDayRange,
+  SydneyDayRangeInput,
+} from "@/lib/dates/day-range";
+import { resolveDayRange } from "../day-range";
 
 // Lead reads, scoped by the one lead rule.
 //
@@ -270,22 +279,97 @@ export async function listOverdueLeadTasks(
   input: { limit: number },
   db: DomainDb,
   now: Date = new Date(),
-): Promise<{ total: number; tasks: OverdueLeadTask[] }> {
+): Promise<{ total: number; tasks: DueLeadTask[] }> {
   const scope = leadListScope(principal);
-  const where = overdueLeadTaskWhere(now, scope.assignedId);
+  return readDueTasks(
+    overdueLeadTaskWhere(now, scope.assignedId),
+    input.limit,
+    db,
+  );
+}
+
+export type DueLeadTask = OverdueLeadTask & {
+  /** Who the task is for: its own assignee, else the lead's. Null if nobody. */
+  readonly ownerName: string | null;
+};
+
+/**
+ * Open lead tasks due in a window of Sydney days, across the office, with who
+ * each is for (#618).
+ *
+ * The morning brief needs "what is due today, and whose is it", and the only
+ * office-wide read was overdue tasks with no owner, so the specialist walked
+ * leads one at a time and reported the brief incomplete when it ran out of
+ * steps. Same rule family as `listOverdueLeadTasks` (live leads only, the
+ * same notion of open), scoped by `leadListScope`.
+ */
+export async function listLeadTasksDue(
+  principal: DomainPrincipal,
+  input: SydneyDayRangeInput & {
+    readonly limit: number;
+    readonly types?: readonly LeadTaskType[];
+  },
+  db: DomainDb,
+  now: Date = new Date(),
+): Promise<{ range: SydneyDayRange; total: number; tasks: DueLeadTask[] }> {
+  const range = resolveDayRange(input, now);
+  const scope = leadListScope(principal);
+  const where = leadTasksDueBetweenWhere({
+    assignedId: scope.assignedId,
+    from: range.from,
+    to: range.to,
+    types: input.types,
+  });
+  return { range, ...(await readDueTasks(where, input.limit, db)) };
+}
+
+/**
+ * Booked meetings in a window of Sydney days, across the office (#618). A
+ * meeting is a MEETING lead task (`meetingsBetweenWhere`), the same rule the
+ * meeting reminders and the office digest read.
+ */
+export async function listLeadMeetings(
+  principal: DomainPrincipal,
+  input: SydneyDayRangeInput & { readonly limit: number },
+  db: DomainDb,
+  now: Date = new Date(),
+): Promise<{ range: SydneyDayRange; total: number; tasks: DueLeadTask[] }> {
+  const range = resolveDayRange(input, now);
+  const scope = leadListScope(principal);
+  const where = meetingsBetweenWhere({
+    assignedId: scope.assignedId,
+    from: range.from,
+    to: range.to,
+  });
+  return { range, ...(await readDueTasks(where, input.limit, db)) };
+}
+
+async function readDueTasks(
+  where: Prisma.LeadTaskWhereInput,
+  limit: number,
+  db: DomainDb,
+): Promise<{ total: number; tasks: DueLeadTask[] }> {
   const [total, rows] = await Promise.all([
     db.leadTask.count({ where }),
     db.leadTask.findMany({
-      orderBy: [{ dueDate: "asc" }, { id: "asc" }],
+      orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }, { id: "asc" }],
       select: {
+        assignedTo: { select: { name: true } },
         dueDate: true,
         dueTime: true,
         id: true,
-        lead: { select: { id: true, name: true, stage: true } },
+        lead: {
+          select: {
+            assignedUser: { select: { name: true } },
+            id: true,
+            name: true,
+            stage: true,
+          },
+        },
         notes: true,
         type: true,
       },
-      take: input.limit,
+      take: limit,
       where,
     }),
   ]);
@@ -301,6 +385,8 @@ export async function listOverdueLeadTasks(
               leadName: row.lead.name,
               leadStage: row.lead.stage,
               notes: row.notes,
+              ownerName:
+                row.assignedTo?.name ?? row.lead.assignedUser?.name ?? null,
               type: row.type,
             },
           ]

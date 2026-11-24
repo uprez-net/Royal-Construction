@@ -1,7 +1,12 @@
 import type { Prisma } from "@prisma/client";
 import { sydneyStartOfDay, sydneyToday } from "@/lib/dates/sydney";
-import { LIVE_LEAD, overdueLeadTaskWhere } from "@/lib/leads/followup-due";
+import {
+  meetingsBetweenWhere,
+  overdueLeadTaskWhere,
+} from "@/lib/leads/followup-due";
 import type { DomainDb } from "../db";
+import { OFFER_AWAITING_SIGNATURE_STATUSES } from "../offers/office-list";
+import { projectInProgressWhere } from "../projects/milestones-due";
 import {
   leadChunk,
   officeDigestChunk,
@@ -366,14 +371,6 @@ export async function loadTradieChunks(
   );
 }
 
-// Out for a DocuSign signature. SENT is not here: it is an Offer emailed to
-// negotiate, which nobody has been asked to sign.
-const SIGNATURE_STATUSES = [
-  "OFFER_SENT",
-  "TENDER_SENT",
-  "CONTRACT_SENT",
-] as const;
-
 /** What the digest reads beyond the records: injected to keep imports one-way. */
 export type OfficeDigestExtras = {
   /** The documents the index could not read (./files.ts). */
@@ -427,15 +424,22 @@ export async function loadOfficeDigest(
       // Lost lead from February (#429).
       where: overdueLeadTaskWhere(now),
     }),
-    db.lead.findMany({
-      orderBy: { meetingDate: "asc" },
-      select: { meetingDate: true, meetingTime: true, name: true },
-      take: 15,
-      where: {
-        ...LIVE_LEAD,
-        meetingCompletedAt: null,
-        meetingDate: { gte: startOfToday, lte: weekAhead },
+    // A meeting is a MEETING lead task since #193. This read the retired
+    // `Lead.meetingDate` column, which the task form never sets, so the
+    // snapshot said "none booked" beside a full diary (#618).
+    db.leadTask.findMany({
+      orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }],
+      select: {
+        dueDate: true,
+        dueTime: true,
+        lead: { select: { name: true } },
       },
+      take: 15,
+      where: meetingsBetweenWhere({
+        assignedId: null,
+        from: startOfToday,
+        to: weekAhead,
+      }),
     }),
     db.offer.findMany({
       orderBy: { sentAt: "asc" },
@@ -451,7 +455,7 @@ export async function loadOfficeDigest(
       where: {
         isActive: true,
         lead: { isArchived: false },
-        offerStatus: { in: [...SIGNATURE_STATUSES] },
+        offerStatus: { in: [...OFFER_AWAITING_SIGNATURE_STATUSES] },
       },
     }),
     db.project.findMany({
@@ -466,7 +470,7 @@ export async function loadOfficeDigest(
         status: true,
       },
       take: 25,
-      where: { status: { notIn: ["COMPLETED", "DRAFT"] } },
+      where: projectInProgressWhere(),
     }),
     db.complianceAlert.count({ where: { status: "OPEN" } }),
     db.invoice.aggregate({
@@ -518,13 +522,13 @@ export async function loadOfficeDigest(
     projectsByStatus: Object.fromEntries(
       projectStatuses.map((row) => [row.status, row._count._all]),
     ),
-    upcomingMeetings: upcomingMeetings.flatMap((lead) =>
-      lead.meetingDate
+    upcomingMeetings: upcomingMeetings.flatMap((meeting) =>
+      meeting.dueDate
         ? [
             {
-              date: lead.meetingDate,
-              leadName: lead.name,
-              time: lead.meetingTime,
+              date: meeting.dueDate,
+              leadName: meeting.lead.name,
+              time: meeting.dueTime,
             },
           ]
         : [],
