@@ -8,6 +8,7 @@ import { buildBlobPath } from "@/utils/formatters";
 import { v4 as uuidv4 } from "uuid";
 import { ClientPayload } from "@/utils/validators/files";
 import { useUploadHints, type UploadHintExtras } from "./upload-hints";
+import { completeProjectUpload } from "@/lib/files/complete-project-upload";
 
 interface UploadButtonProps {
   maxFiles?: number;
@@ -81,6 +82,15 @@ export function UploadButton({
     try {
       const fileId = uuidv4(); // Generate a unique ID for the file
       const { tags, origin } = hintsFor(hints);
+      // A project upload is confirmed synchronously below, so `onUpload` gets
+      // an id the server can already see. Left to Blob's `onUploadCompleted`
+      // webhook, the row lands whenever that arrives (seconds later on a cold
+      // start), and a caller that points a record at the id straight away
+      // (a prior-compliance certificate, an HBCF extract) is told the file
+      // does not exist. Marking it `project-file` makes the webhook skip it,
+      // so there is one writer. A lead upload has no confirm route and still
+      // relies on the webhook.
+      const confirmSynchronously = Boolean(projectId) && !leadId;
       const blob = await upload(
         buildBlobPath({
           fileId: fileId,
@@ -101,6 +111,7 @@ export function UploadButton({
             fileSize: file.size,
             leadId,
             isOfferFile: false, // Set to true if this file is related to an offer
+            ...(confirmSynchronously ? { uploadType: "project-file" } : {}),
             tags,
             origin,
           } satisfies ClientPayload),
@@ -111,6 +122,21 @@ export function UploadButton({
           },
         },
       );
+
+      if (confirmSynchronously && projectId) {
+        await completeProjectUpload(
+          {
+            projectId,
+            milestoneId: milestoneId ?? null,
+            fileId,
+            fileName: file.name,
+            fileUrl: blob.url,
+            tags,
+            origin,
+          },
+          controller.signal,
+        );
+      }
 
       progressMap.current[fileId] = 100;
       updateOverallProgress();
