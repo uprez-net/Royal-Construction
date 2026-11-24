@@ -44,23 +44,35 @@ function answer(lines: readonly string[], recordIds: readonly string[]) {
   };
 }
 
+type ProjectMatch = { id: string; name: string; location: string };
+
 /**
  * The caller's words → one project, or the reason there is not one. The words
  * are tried as said, then as the same address written other ways
- * (project-search.ts): the first search that finds anything is the answer.
+ * (project-search.ts): the first search that finds a project still holding
+ * the address the caller gave is the answer.
  */
 async function oneProject(
   principal: UserPrincipal,
   words: string,
   db: DomainDb,
 ): Promise<{ id: string; name: string } | VoiceLookupResult> {
-  let found: Awaited<ReturnType<typeof listProjectsForLookup>> | null = null;
-  for (const query of projectSearchVariants(words)) {
-    found = await listProjectsForLookup(
+  let found: { items: ProjectMatch[]; totalCount: number } | null = null;
+  for (const search of projectSearchVariants(words)) {
+    const page = await listProjectsForLookup(
       principal,
-      { limit: 5, page: 1, query },
+      { limit: 5, page: 1, query: search.query },
       db,
     );
+    const { confirms } = search;
+    if (confirms) {
+      const items = page.items.filter((p) =>
+        confirms(`${p.name} ${p.location}`),
+      );
+      found = { items, totalCount: items.length };
+    } else {
+      found = page;
+    }
     if (found.items.length > 0) break;
   }
   if (!found || found.items.length === 0) {

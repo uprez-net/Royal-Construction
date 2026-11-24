@@ -279,6 +279,12 @@ export class VoiceAgentSession {
   /** When the transcript was last kept on the call, and how long it was. */
   private checkpointedAt = Number.NEGATIVE_INFINITY;
   private checkpointedLength = 0;
+  /**
+   * The checkpoint writes, one after another: a slow write finishing after a
+   * newer one would put the older transcript back. `finish` waits for it, so
+   * the function stays alive (waitUntil) until the last one has landed.
+   */
+  private checkpoints: Promise<void> = Promise.resolve();
   private readonly stats: SessionStats = {
     checkpoints: 0,
     delegations: 0,
@@ -501,6 +507,7 @@ export class VoiceAgentSession {
         this.stats.startedAt = this.now();
         this.watchSilence(CALLER_SILENCE_MS);
         this.watchGreeting();
+        this.checkpointEvery(CHECKPOINT_INTERVAL_MS);
         return;
       case "session.output_audio.delta":
         // Once the call is moving on there is nothing left to ask the desk.
@@ -837,9 +844,23 @@ export class VoiceAgentSession {
   // ── Keeping the transcript ───────────────────────────────────────────
 
   /**
+   * Checkpoint on a clock as well as after each of her turns, so a caller
+   * talking at length and then hanging up is kept too. Cleared with every
+   * other timer when the session finishes.
+   */
+  private checkpointEvery(ms: number): void {
+    this.after(ms, () => {
+      if (this.finished) return;
+      this.checkpointTranscript();
+      this.checkpointEvery(ms);
+    });
+  }
+
+  /**
    * Keep what has been said so far on the call, at most every
-   * CHECKPOINT_INTERVAL_MS and only when there is more of it. Fire and
-   * forget: the conversation never waits on the database.
+   * CHECKPOINT_INTERVAL_MS and only when there is more of it. The
+   * conversation never waits on the database; the writes queue behind one
+   * another, and one that fails is tried again next time.
    */
   private checkpointTranscript(): void {
     const checkpoint = this.deps.checkpoint;
@@ -851,20 +872,27 @@ export class VoiceAgentSession {
     const length = turns.reduce((sum, turn) => sum + turn.text.length, 0);
     if (length <= this.checkpointedLength) return;
     this.checkpointedAt = now;
-    this.checkpointedLength = length;
     this.stats.checkpoints += 1;
-    checkpoint({
+    const body = {
       callControlId: claims.callControlId,
       callId: claims.callId,
       provider: claims.provider,
       turns,
-    }).catch((error: unknown) => {
-      this.log.warn(
-        `[voice-agent] could not keep the transcript so far (${
-          error instanceof Error ? error.name : "error"
-        }).`,
-      );
-    });
+    };
+    this.checkpoints = this.checkpoints.then(() =>
+      checkpoint(body).then(
+        () => {
+          this.checkpointedLength = Math.max(this.checkpointedLength, length);
+        },
+        (error: unknown) => {
+          this.log.warn(
+            `[voice-agent] could not keep the transcript so far (${
+              error instanceof Error ? error.name : "error"
+            }).`,
+          );
+        },
+      ),
+    );
   }
 
   /** Let her last words finish playing (her speech, not the silence after), then hand the call back. */
@@ -994,6 +1022,8 @@ export class VoiceAgentSession {
     }
     // Closed after the report so the call has already been moved on.
     this.deps.carrier.close();
+    // A checkpoint still writing finishes before the function may stop.
+    await this.checkpoints;
     this.settle();
   }
 }

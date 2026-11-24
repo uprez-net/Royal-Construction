@@ -6,6 +6,7 @@ import { describe, test } from "vitest";
 
 import { commsRuntimeFromEnv } from "@/lib/comms/factory";
 import {
+  CHECKPOINT_INTERVAL_MS,
   GREETING_GIVE_UP_MS,
   GREETING_RETRY_MS,
   PREPARE_TIMEOUT_MS,
@@ -44,6 +45,18 @@ const speech = (bytes = 8_000) => ({
   delta: Buffer.alloc(bytes, SPEECH).toString("base64"),
   type: "session.output_audio.delta" as const,
 });
+
+const searchesFor = (words: string) =>
+  projectSearchVariants(words).map((search) => search.query);
+
+/** The first search of `words` that would accept `projectText`, if any. */
+const acceptedBy = (words: string, projectText: string) =>
+  projectSearchVariants(words).find(
+    (search) =>
+      search.confirms !== null
+      && search.query.length > 0
+      && search.confirms(projectText),
+  )?.query ?? null;
 
 function capturingLog() {
   const lines: { level: string; text: string }[] = [];
@@ -124,12 +137,14 @@ describe("her transcript is not lost when the caller hangs up (#605)", () => {
     });
     h.session.handleModelEvent(speech());
     h.fire(TURN_QUIET_MS);
+    await h.tick();
     assert.equal(kept.length, 1);
 
     // Five seconds on, with more said: kept again.
     h.advance(5_000);
     h.session.handleModelEvent(speech());
     h.fire(TURN_QUIET_MS);
+    await h.tick();
     assert.equal(kept.length, 2);
     assert.equal(kept[1].turns.length, 2);
   });
@@ -151,6 +166,113 @@ describe("her transcript is not lost when the caller hangs up (#605)", () => {
     await h.tick();
     assert.equal(h.reports.length, 0);
     assert.equal(h.state.carrierClosed, false);
+  });
+
+  test("checkpoints run on a clock too, so a caller talking at length is kept", async () => {
+    const kept: Omit<VoiceAgentReportBody, "outcome">[] = [];
+    const h = await started(undefined, undefined, {
+      checkpoint: async (body) => {
+        kept.push(body);
+      },
+    });
+    // The caller talks; Mili says nothing, so no turn of hers ends.
+    h.session.handleModelEvent({
+      delta: "I'm calling about the build, it's a long story.",
+      endMs: 4_000,
+      startMs: 0,
+      type: "session.input_transcript.delta",
+    });
+    h.fire(CHECKPOINT_INTERVAL_MS);
+    await h.tick();
+    assert.equal(kept.length, 1);
+    assert.equal(kept[0].turns[0]?.speaker, "caller");
+    // And it keeps running while the session does.
+    assert.ok(
+      h.timers.some((t) => t.live && t.ms === CHECKPOINT_INTERVAL_MS),
+      "the next checkpoint is scheduled",
+    );
+    h.session.handleCarrierClosed();
+    await h.session.done;
+    assert.ok(
+      !h.timers.some((t) => t.live && t.ms === CHECKPOINT_INTERVAL_MS),
+      "no checkpoint after the session ends",
+    );
+  });
+
+  test("a failed checkpoint is tried again, and writes land one after another", async () => {
+    const order: string[] = [];
+    let release: () => void = () => {};
+    let calls = 0;
+    const h = await started(undefined, undefined, {
+      checkpoint: async (body) => {
+        calls += 1;
+        const n = calls;
+        order.push(`start ${n}`);
+        if (n === 1) throw new Error("database down");
+        if (n === 2) await new Promise<void>((resolve) => (release = resolve));
+        order.push(`end ${n} (${body.turns.length} turns)`);
+      },
+    });
+    h.session.handleModelEvent({
+      delta: "Hello.",
+      endMs: 500,
+      startMs: 0,
+      type: "session.output_transcript.delta",
+    });
+    h.fire(CHECKPOINT_INTERVAL_MS);
+    await h.tick();
+    // Nothing new was said, but the failed write is tried again.
+    h.advance(CHECKPOINT_INTERVAL_MS);
+    h.fire(CHECKPOINT_INTERVAL_MS);
+    await h.tick();
+    assert.deepEqual(order, ["start 1", "start 2"]);
+    // A newer checkpoint waits for the slow one before it starts.
+    h.session.handleModelEvent({
+      delta: "I need a call back.",
+      endMs: 7_000,
+      startMs: 6_000,
+      type: "session.input_transcript.delta",
+    });
+    h.advance(CHECKPOINT_INTERVAL_MS);
+    h.fire(CHECKPOINT_INTERVAL_MS);
+    await h.tick();
+    assert.deepEqual(order, ["start 1", "start 2"]);
+    release();
+    await h.tick();
+    await h.tick();
+    assert.deepEqual(order, [
+      "start 1",
+      "start 2",
+      "end 2 (1 turns)",
+      "start 3",
+      "end 3 (2 turns)",
+    ]);
+  });
+
+  test("the session is not done until a checkpoint still writing has landed", async () => {
+    let release: () => void = () => {};
+    const h = await started(undefined, undefined, {
+      checkpoint: () => new Promise<void>((resolve) => (release = resolve)),
+    });
+    h.session.handleModelEvent({
+      delta: "Hello.",
+      endMs: 500,
+      startMs: 0,
+      type: "session.output_transcript.delta",
+    });
+    h.fire(CHECKPOINT_INTERVAL_MS);
+    await h.tick();
+    let done = false;
+    void h.session.done.then(() => {
+      done = true;
+    });
+    h.session.handleCarrierClosed();
+    await h.tick();
+    assert.equal(h.reports.length, 1, "the outcome is reported at once");
+    assert.equal(h.state.carrierClosed, true, "the line is not held up");
+    assert.equal(done, false, "but the function stays alive for the write");
+    release();
+    await h.session.done;
   });
 
   test("the checkpoint writes only while the call is still with her", async () => {
@@ -386,27 +508,75 @@ describe("her greeting is watched (#608)", () => {
 
 describe("an address finds its project however it is said (#609)", () => {
   test("the street type both ways, then the number and street, then a lot number", () => {
-    assert.deepEqual(projectSearchVariants("12 Example Street"), [
+    assert.deepEqual(searchesFor("12 Example Street"), [
       "12 Example Street",
       "12 Example St",
       "12 Example",
     ]);
-    assert.deepEqual(projectSearchVariants("12 Smith Rd, Oran Park"), [
+    assert.deepEqual(searchesFor("12 Smith Rd, Oran Park"), [
       "12 Smith Rd, Oran Park",
       "12 Smith Road, Oran Park",
       "12 Smith",
     ]);
-    assert.deepEqual(projectSearchVariants("lot number 1234"), [
+    assert.deepEqual(searchesFor("lot number 1234"), [
       "lot number 1234",
       "Lot 1234",
     ]);
-    assert.deepEqual(projectSearchVariants("1234"), ["1234", "Lot 1234"]);
-    assert.deepEqual(projectSearchVariants("Ridge"), ["Ridge"]);
+    assert.deepEqual(searchesFor("1234"), ["1234", "Lot 1234"]);
+    assert.deepEqual(searchesFor("Ridge"), ["Ridge"]);
     // "1st" is not a street type.
-    assert.deepEqual(projectSearchVariants("1st Avenue build").slice(0, 2), [
+    assert.deepEqual(searchesFor("1st Avenue build").slice(0, 2), [
       "1st Avenue build",
       "1st Ave build",
     ]);
+  });
+
+  test("a looser search counts only a project that still has the address said", () => {
+    // The street type said must be the one on the project, either spelling.
+    assert.equal(
+      acceptedBy("12 Example Street", "Lot 1, 12 Example St, Suburbia"),
+      "12 Example St",
+    );
+    assert.equal(
+      acceptedBy("12 Example Street", "Lot 1, 12 Example Avenue, Suburbia"),
+      null,
+    );
+    // Whole words: neither house 112 nor lot 12345.
+    assert.equal(acceptedBy("12 Example Street", "112 Example St"), null);
+    assert.equal(acceptedBy("lot 1234", "Lot 12345, 9 Other Rd"), null);
+    assert.equal(acceptedBy("lot 1234", "Lot 1234, 9 Other Rd"), "lot 1234");
+    // No street type said: the number and street are enough.
+    assert.equal(
+      acceptedBy("12 Example, Suburbia", "12 Example Cres, Suburbia"),
+      "12 Example",
+    );
+  });
+
+  test("a project the looser search finds at another address is no match", async () => {
+    const recorder = callerDb("admin", {
+      "project.count": 1,
+      "project.findMany": (args: { where?: unknown }) =>
+        JSON.stringify(args.where ?? {}).includes('"12 Example"')
+          ? [
+              {
+                id: "p-2",
+                location: "12 Example Avenue, Suburbia",
+                name: "Another job",
+              },
+            ]
+          : [],
+    });
+    const result = await runVoiceLookup(
+      principal({ class: "admin", firstName: "Alex", userId: "u-admin" }),
+      { name: "project_status", project: "12 Example Street" },
+      recorder.db,
+      { now: new Date("2026-11-24T01:00:00Z") },
+    );
+    assert.match(result.text, /No project matches "12 Example Street"/);
+    assert.ok(
+      !recorder.operations().includes("project.findFirstOrThrow"),
+      "the other project is never read",
+    );
   });
 
   test("the lookup tries the next spelling when the words as said find nothing", async () => {
@@ -497,6 +667,23 @@ describe("a date that has passed is never read as the schedule (#610)", () => {
     ).join("\n");
     assert.doesNotMatch(text, /20 November/);
     assert.match(text, /its scheduled finish date has passed/);
+  });
+
+  test("a stage not started whose due date has gone, whatever its start date says", () => {
+    const text = stageLines(
+      [
+        {
+          name: "Fit-out",
+          startDate: day("2026-12-01"),
+          status: MilestoneStatus.PENDING,
+          targetDate: day("2026-11-20"),
+        },
+      ],
+      NOW,
+      "",
+    ).join("\n");
+    assert.doesNotMatch(text, /20 November|current schedule/);
+    assert.match(text, /its scheduled start date has passed/);
   });
 
   test("today is not the past", () => {

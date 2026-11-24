@@ -54,8 +54,7 @@ function scheduleWords(milestone: MilestoneRow, now: Date): string {
   }
   if (
     milestone.status === MilestoneStatus.PENDING
-    && (passed(milestone.startDate)
-      || (!milestone.startDate && passed(milestone.targetDate)))
+    && (passed(milestone.startDate) || passed(milestone.targetDate))
   ) {
     return "its scheduled start date has passed; the team will confirm the new dates";
   }
