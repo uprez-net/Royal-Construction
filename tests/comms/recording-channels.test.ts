@@ -3,7 +3,11 @@ import { readFile } from "node:fs/promises";
 
 import { describe, test } from "vitest";
 
-import { encodeWavPcm16, splitStereoMp3 } from "@/lib/comms/audio/stereo";
+import {
+  encodeWavPcm16,
+  mp3HasTwoChannels,
+  splitStereoMp3,
+} from "@/lib/comms/audio/stereo";
 import { PROMPTS } from "@/lib/domain/comms/calls/flow";
 import {
   channelTranscript,
@@ -81,6 +85,27 @@ describe("lines by channel", () => {
         "Mili: Okay, hang on.",
         "Royal: No worries. I'll put you through to the team now. Hi, it's the office here.",
         "Caller: Oh hi.",
+      ].join("\n"),
+    );
+  });
+
+  test("an announcement cut across segments is still the handover", () => {
+    const text = channelTranscript(
+      [
+        seg(1, 20, "Let me check that for you."),
+        seg(0, 60, "I need to go."),
+        seg(1, 90.8, "No worries. I'll put you through"),
+        seg(1, 92.4, "to the team now."),
+        seg(1, 98, "Hi, it's the office here."),
+      ],
+      { call: MILI_CALL, kind: "CALL" },
+    );
+    assert.equal(
+      text,
+      [
+        "Mili: Let me check that for you.",
+        "Caller: I need to go.",
+        "Royal: No worries. I'll put you through to the team now. Hi, it's the office here.",
       ].join("\n"),
     );
   });
@@ -228,6 +253,21 @@ describe("the audio", () => {
 
   test("anything that is not a stereo MP3 is left for the mixed transcription", async () => {
     assert.equal(await splitStereoMp3(new Uint8Array([1, 2, 3, 4])), null);
+  });
+
+  test("a mono MP3 is not split, though the decoder would hand it back as two channels", async () => {
+    const fixture = async (name: string) =>
+      new Uint8Array(
+        await readFile(`${REPO_ROOT}/tests/comms/fixtures/${name}`),
+      );
+    const mono = await fixture("mono-tone.mp3");
+    assert.equal(mp3HasTwoChannels(mono), false);
+    assert.equal(await splitStereoMp3(mono), null);
+    assert.equal(
+      mp3HasTwoChannels(await fixture("stereo-left-tone.mp3")),
+      true,
+    );
+    assert.equal(mp3HasTwoChannels(new Uint8Array([1, 2, 3, 4])), null);
   });
 
   test("the WAV is 16-bit mono PCM at the recording's rate", () => {

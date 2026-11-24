@@ -59,6 +59,42 @@ export function encodeWavPcm16(
 }
 
 /**
+ * Whether the MP3's first frame says two channels (stereo, joint stereo or
+ * dual channel); false for mono, null when no frame header is found. Read from
+ * the header because the decoder hands a mono file back as two identical
+ * channels, which would transcribe every word twice under two speakers.
+ */
+export function mp3HasTwoChannels(mp3: Uint8Array): boolean | null {
+  let at = 0;
+  // An ID3v2 tag first: "ID3", version, flags, then a 28-bit syncsafe size.
+  if (
+    mp3[0] === 0x49
+    && mp3[1] === 0x44
+    && mp3[2] === 0x33
+    && mp3.length > 10
+  ) {
+    const size =
+      ((mp3[6] & 0x7f) << 21)
+      | ((mp3[7] & 0x7f) << 14)
+      | ((mp3[8] & 0x7f) << 7)
+      | (mp3[9] & 0x7f);
+    at = 10 + size + (mp3[5] & 0x10 ? 10 : 0);
+  }
+  for (let i = at; i + 3 < mp3.length; i += 1) {
+    if (mp3[i] !== 0xff || (mp3[i + 1] & 0xe0) !== 0xe0) continue;
+    const version = (mp3[i + 1] >> 3) & 0x03; // 1 is reserved
+    const layer = (mp3[i + 1] >> 1) & 0x03; // 0 is reserved
+    const bitrate = (mp3[i + 2] >> 4) & 0x0f; // 15 is invalid
+    const sampleRate = (mp3[i + 2] >> 2) & 0x03; // 3 is reserved
+    if (version === 1 || layer === 0 || bitrate === 15 || sampleRate === 3) {
+      continue;
+    }
+    return ((mp3[i + 3] >> 6) & 0x03) !== 0x03; // 3 is mono
+  }
+  return null;
+}
+
+/**
  * The recording's two channels as WAVs, first channel first; null when it is
  * not a two-channel MP3 this can decode, or too long to send a side at a time
  * (the caller then transcribes the file as it is).
@@ -66,6 +102,7 @@ export function encodeWavPcm16(
 export async function splitStereoMp3(
   mp3: Uint8Array,
 ): Promise<readonly [ChannelAudio, ChannelAudio] | null> {
+  if (mp3HasTwoChannels(mp3) !== true) return null;
   const { MPEGDecoder } = await import("mpg123-decoder");
   // One decoder per file: a reused one has to be reset, asynchronously, and
   // decodes garbage if it is not.

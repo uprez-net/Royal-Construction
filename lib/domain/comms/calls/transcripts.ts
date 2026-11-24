@@ -327,15 +327,9 @@ export function channelTranscript(
     }))
     .filter((segment) => segment.text)
     .sort((a, b) => a.startSecond - b.startSecond || a.channel - b.channel);
-  const handover = ` ${words(HANDOVER_WORDS).join(" ")} `;
   const spoken = (segment: TranscriptSegment) =>
     ` ${words(segment.text).join(" ")} `;
-  let handoverAt = who.afterHandover
-    ? ordered.findLastIndex(
-        (segment) =>
-          segment.channel === 1 && spoken(segment).includes(handover),
-      )
-    : -1;
+  let handoverAt = who.afterHandover ? handoverSegment(ordered) : -1;
   // The announcement can arrive in pieces ("No worries." then "I'll put you
   // through…"): the pieces just before it that are part of it are it too.
   while (
@@ -362,6 +356,41 @@ export function channelTranscript(
   const text = lines.map((line) => `${line.speaker}: ${line.text}`).join("\n");
   if (text.length <= MAX_TRANSCRIPT_CHARS) return text;
   return `${text.slice(0, MAX_TRANSCRIPT_CHARS - 2).trimEnd()} …`;
+}
+
+/**
+ * The segment the last handover announcement starts in, or -1. Speech-to-text
+ * can cut the announcement anywhere ("I'll put you through" / "to the team
+ * now"), so the words are matched across each run of second-channel
+ * segments, not one segment at a time.
+ */
+function handoverSegment(ordered: readonly TranscriptSegment[]): number {
+  const phrase = words(HANDOVER_WORDS);
+  let found = -1;
+  for (let start = 0; start < ordered.length; ) {
+    if (ordered[start].channel !== 1) {
+      start += 1;
+      continue;
+    }
+    // One run of the second channel: its words, and which segment said each.
+    const said: string[] = [];
+    const from: number[] = [];
+    let end = start;
+    for (; end < ordered.length && ordered[end].channel === 1; end += 1) {
+      for (const word of words(ordered[end].text)) {
+        said.push(word);
+        from.push(end);
+      }
+    }
+    for (let i = said.length - phrase.length; i >= 0; i -= 1) {
+      if (phrase.every((word, k) => said[i + k] === word)) {
+        found = from[i];
+        break;
+      }
+    }
+    start = end;
+  }
+  return found;
 }
 
 /**
