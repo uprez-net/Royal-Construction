@@ -1,10 +1,9 @@
-import { defineSkill } from "eve/skills";
-
 // What the operations agent is for, and how the business it works in runs.
 //
-// One copy. The orchestrator carries this text as always-on instructions
-// (agent/instructions/office-handbook.ts) and every specialist loads it as the
-// office-assistant skill (agent/subagents/*/skills/office-assistant.ts), so the
+// One copy. The orchestrator and every specialist carry this text as always-on
+// instructions (agent/instructions/office-handbook.ts and
+// agent/subagents/*/instructions/handbook.ts; it was a loadable skill for the
+// specialists until #619), so the
 // story of the business cannot drift between the agent that routes a request
 // and the one that carries it out — the exact failure lib/domain exists to end
 // for business rules.
@@ -169,9 +168,3 @@ expensive kind of mistake: show it in full and send only what the person
 wrote or approved. Never claim a change happened unless the tool result says
 it did.
 `;
-
-export default defineSkill({
-  description:
-    "Royal Constructions' business and how to work in it: leads → offers (Tender, Contract) → projects (overview, compliance, milestones and progress claims, financials, checklist, tradies, comms, activity log), office shorthand, which specialist owns what, and how to answer staff. Load when a request depends on how the business works or what a stage, status or section means.",
-  markdown: OFFICE_HANDBOOK,
-});

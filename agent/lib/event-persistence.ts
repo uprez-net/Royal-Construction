@@ -4,6 +4,12 @@ import type { ConversationTitleGenerator } from "@/agent/lib/session-title";
 import prisma from "@/lib/prisma";
 import { reportError } from "@/lib/observability/report-error";
 import {
+  FINAL_OUTPUT_DIAGNOSTIC_EVENT,
+  FINAL_OUTPUT_TOOL_NAME,
+  finalOutputIssues,
+} from "@/agent/lib/final-output-diagnostics";
+import { specialistResultSchema } from "@/agent/lib/result-contracts";
+import {
   getAgentSessionTitle,
   setAgentSessionTitleIfMissing,
 } from "@/lib/data/agent-session-titles";
@@ -78,6 +84,8 @@ type SessionIdentity = {
 type SessionBuffer = {
   identity: SessionIdentity;
   pending: PendingEvent[];
+  /** A specialist's streamed `final_output` arguments, by call (#619). */
+  finalOutputs: Map<string, string>;
   /** Every write for this session, in order. */
   chain: Promise<void>;
   timer: ReturnType<typeof setTimeout> | undefined;
@@ -300,6 +308,7 @@ export function createAgentEventPersister(
     let buffer = buffers.get(identity.eveSessionId);
     if (!buffer) {
       buffer = {
+        finalOutputs: new Map(),
         identity,
         pending: [],
         chain: Promise.resolve(),
@@ -386,8 +395,40 @@ export function createAgentEventPersister(
     });
   }
 
+  /**
+   * At the end of a specialist's step, check each `final_output` it attempted
+   * and queue a diagnostic for one that does not fit the schema. Queued ahead
+   * of the step boundary, so it lands in the same write.
+   */
+  function diagnoseFinalOutputs(buffer: SessionBuffer, event: HookEvent) {
+    if (buffer.finalOutputs.size === 0) return;
+    for (const [callId, inputText] of buffer.finalOutputs) {
+      const issues = finalOutputIssues(inputText, specialistResultSchema);
+      if (issues.length === 0) continue;
+      buffer.pending.push({
+        eveEventId: `${event.meta.id}:final-output:${callId}`,
+        eventType: FINAL_OUTPUT_DIAGNOSTIC_EVENT,
+        // Not a hydratable event (no `meta`), and only ever on a specialist
+        // session, which the workspace never hydrates.
+        payload: toInputJson({
+          callId,
+          issues,
+          stepEventId: event.meta.id,
+          type: FINAL_OUTPUT_DIAGNOSTIC_EVENT,
+        }),
+        occurredAt: new Date(event.meta.at),
+        status: undefined,
+      });
+    }
+    buffer.finalOutputs.clear();
+  }
+
   function release(buffer: SessionBuffer) {
-    if (buffer.pending.length === 0 && !buffer.timer) {
+    if (
+      buffer.pending.length === 0
+      && !buffer.timer
+      && buffer.finalOutputs.size === 0
+    ) {
       buffers.delete(buffer.identity.eveSessionId);
     }
   }
@@ -403,6 +444,24 @@ export function createAgentEventPersister(
       parentEveSessionId: ctx.session.parent?.sessionId,
       rootEveSessionId: ctx.session.parent?.rootSessionId ?? ctx.session.id,
     });
+    const isSpecialist = ctx.session.parent != null;
+    if (
+      isSpecialist
+      && event.type === "action.input.appended"
+      && event.data.toolName === FINAL_OUTPUT_TOOL_NAME
+    ) {
+      buffer.finalOutputs.set(
+        event.data.callId,
+        (buffer.finalOutputs.get(event.data.callId) ?? "")
+          + event.data.inputTextDelta,
+      );
+    }
+    if (
+      isSpecialist
+      && (event.type === "step.completed" || event.type === "step.failed")
+    ) {
+      diagnoseFinalOutputs(buffer, event);
+    }
     buffer.pending.push({
       eveEventId: event.meta.id,
       eventType: event.type,

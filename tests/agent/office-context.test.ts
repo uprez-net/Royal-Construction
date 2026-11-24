@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { Role } from "@prisma/client";
 import { test } from "vitest";
 
-import officeSkill, { OFFICE_HANDBOOK } from "@/agent/lib/office-handbook";
+import { OFFICE_HANDBOOK } from "@/agent/lib/office-handbook";
 import houseStyle from "@/agent/lib/house-style-instructions";
 import {
   contentHash,
@@ -336,24 +336,29 @@ test("search ranks by inner product plus name match, and refuses customers", asy
 test("every agent shares one handbook and one house style", () => {
   assert.match(OFFICE_HANDBOOK, /Leads — the start of every job/);
   assert.match(OFFICE_HANDBOOK, /Milestones/);
-  assert.ok(officeSkill);
   assert.ok(houseStyle);
   for (const name of SPECIALISTS) {
-    const skill = readFileSync(
+    // Carried as instructions since #619, not loaded as a skill.
+    const handbook = readFileSync(
       path.join(
         REPO_ROOT,
         "agent",
         "subagents",
         name,
-        "skills",
-        "office-assistant.ts",
+        "instructions",
+        "handbook.ts",
       ),
       "utf8",
     );
     assert.match(
-      skill,
+      handbook,
       /from "@\/agent\/lib\/office-handbook"/,
-      `${name} skill`,
+      `${name} handbook`,
+    );
+    assert.equal(
+      existsSync(path.join(REPO_ROOT, "agent", "subagents", name, "skills")),
+      false,
+      `${name} has no skills to load: its procedures are instructions (#619)`,
     );
     const style = readFileSync(
       path.join(
