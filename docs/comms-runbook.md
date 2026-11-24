@@ -108,10 +108,36 @@ unanswered follow-ups she tells them their query has been recorded and someone
 from the team will get back to them, says goodbye, and the call hangs up.
 Anything from the caller loud enough to be speech starts the count again.
 
-Recording transcripts: speech-to-text gives one block of prose, so a text model
-then splits a call recording into `Royal:` / `Caller:` / `Mili:` / `Contact:`
-lines. The split is kept only if it holds every word of the prose in the same
-order; otherwise the prose is kept. Voicemails stay as prose.
+A greeting that never comes: if she has not said a word 4.5 s after Live
+starts, her greeting is cued again; at 9 s the caller goes to the office
+mobile (then voicemail) rather than waiting in silence.
+
+Her transcript: what has been said is kept on the call while she talks (at
+most every 5 s), and the whole transcript is written again when she finishes.
+The stream route hands its session to `waitUntil`, because the platform
+freezes the function the moment the caller hangs up and the closing write used
+to run minutes later on a dead database connection, or never (#605).
+
+Each call leaves one log line, `[voice-agent] call summary: …`: the outcome,
+who she took the caller for (`caller=admin|site_manager|client|tradie|unknown`,
+or `unresolved-timeout` when resolution took longer than 4 s), how long each
+step took from the carrier's start frame (`liveOpen`, `setup`, `started`,
+`firstWords`), and counts of delegations, desk calls, lookups and silence
+follow-ups. No words, numbers or names. Search the runtime logs for
+`call summary` to see why a call was slow or went quiet.
+
+Recording transcripts: call recordings are two-channel, the customer's leg on
+the first channel and what was played to them on the second. On Telnyx the
+stored MP3 is decoded (`lib/comms/audio/stereo.ts`, WebAssembly, nothing to
+install), each channel is transcribed on its own with timings, and the lines
+are labelled by channel: `Caller:` or `Contact:` for the first, `Mili:` or
+`Royal:` for the second, switching from Mili to Royal at the "put you through
+to the team" announcement (#613). Nothing guesses who spoke. A recording that
+is not two channels, longer than about 20 minutes a side, or on Twilio (whose
+channel order is unverified) falls back to the old path: speech-to-text of the
+mix, then a text model splits it into lines, kept only if it holds every word
+of the prose in the same order, else the prose is kept. Voicemails stay as
+prose. Recordings already transcribed keep their transcript.
 
 To try her without a phone, the session tests in
 `tests/comms/voice-agent.test.ts` drive one conversation end to end with fakes.

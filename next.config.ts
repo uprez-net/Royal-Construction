@@ -37,7 +37,10 @@ const nextConfig: NextConfig = {
   // ws (Mili's call audio, lib/comms/voice-agent) breaks when bundled — its
   // optional native helpers resolve to stubs ("bufferUtil.mask is not a
   // function") — so it is required from node_modules at runtime too.
-  serverExternalPackages: ["docusign-esign", "ws"],
+  // mpg123-decoder (two-channel call recordings, lib/comms/audio/stereo.ts)
+  // carries an optional web-worker path whose `import(mod)` Turbopack cannot
+  // resolve; Node loads the package as it is, so it stays external too.
+  serverExternalPackages: ["docusign-esign", "mpg123-decoder", "ws"],
   typescript: {
     // `next build` runs the project-local `tsc` itself, which is the same work
     // `pnpm typecheck` does -- ~18s cold, ~8s warm. CI runs that check in its

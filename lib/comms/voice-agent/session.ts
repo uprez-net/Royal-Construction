@@ -7,6 +7,7 @@ import {
   VOICE_AGENT_SILENCE_SECONDS,
   VOICE_AGENT_WRAP_UP_INSTRUCTION,
   VOICE_AGENT_WRAP_UP_SECONDS,
+  VOICE_DELEGATION_NOTHING_TO_RUN_CUE,
   VOICE_LOOKUP_FAILED_CUE,
   voiceAgentInstructions,
   voiceLookupResultCue,
@@ -72,6 +73,8 @@ export type VoiceAgentReportBody = {
  * lookups. Nothing ever falls back to more.
  */
 export type VoiceCallerSetup = {
+  /** Who she is answering, for the call's summary line only. */
+  readonly callerClass?: string;
   readonly instructions: string;
   /** What makes Mili open the call: by name for a caller resolved by name. */
   readonly greetingCue: string;
@@ -82,6 +85,7 @@ export type VoiceCallerSetup = {
 };
 
 export const MESSAGE_ONLY_SETUP: VoiceCallerSetup = {
+  callerClass: "unknown",
   greetingCue: VOICE_AGENT_GREETING_CUE,
   instructions: voiceAgentInstructions(),
   lookup: null,
@@ -108,6 +112,13 @@ export type VoiceAgentSessionDeps = {
     lookups: readonly VoiceLookupDefinition[],
   ) => Promise<DeskDecision>;
   readonly report: (body: VoiceAgentReportBody) => Promise<void>;
+  /**
+   * Keep what has been said so far on the call (agent-transcript.ts), so a
+   * final report that never lands still leaves the transcript (#605).
+   */
+  readonly checkpoint?: (
+    body: Omit<VoiceAgentReportBody, "outcome">,
+  ) => Promise<void>;
   readonly log?: Pick<Console, "info" | "warn" | "error">;
   readonly now?: () => number;
   readonly setTimer?: (fn: () => void, ms: number) => unknown;
@@ -117,7 +128,19 @@ export type VoiceAgentSessionDeps = {
 /** Without a "start" frame by then, the socket is not a call. */
 export const START_TIMEOUT_MS = 10_000;
 /** Live must be ready by then, or the caller goes to a person. */
-export const MODEL_STARTUP_TIMEOUT_MS = 15_000;
+export const MODEL_STARTUP_TIMEOUT_MS = 12_000;
+/**
+ * Live started but Mili has not said a word by then: cue her greeting again.
+ * The caller has heard nothing since the declaration (#608).
+ */
+export const GREETING_RETRY_MS = 4_500;
+/**
+ * Still nothing by then: the caller goes to a person rather than sitting in
+ * silence. One caller hung up after 11.5 s of it.
+ */
+export const GREETING_GIVE_UP_MS = 9_000;
+/** The transcript is kept on the call at most this often while she talks. */
+export const CHECKPOINT_INTERVAL_MS = 5_000;
 /** Without the caller resolved by then, Mili starts as for an unknown caller. */
 export const PREPARE_TIMEOUT_MS = 4_000;
 /** A lookup slower than this is told to Mili as one that could not be done. */
@@ -193,14 +216,35 @@ type SpokenTurn = VoiceAgentTurn & {
   readonly seq: number;
 };
 
-/** What the desk's answer to a Live delegation tells Mili. */
+/**
+ * What the desk's answer to a Live delegation tells Mili. Always a final
+ * answer: one that reads as progress leaves Live waiting in silence (#606).
+ */
 function deskNote(decision: DeskDecision): string {
   if (decision?.action === "end")
     return "The call desk is ending the call now.";
   if (decision?.action === "transfer")
     return "The call desk is putting the caller through to the team now.";
-  return "The call desk has nothing to do yet; carry on with the caller.";
+  return VOICE_DELEGATION_NOTHING_TO_RUN_CUE;
 }
+
+/** What happened on one call, for the summary line. Never what was said. */
+type SessionStats = {
+  /** Session clock times; null until it happened. */
+  startFrameAt: number | null;
+  liveOpenAt: number | null;
+  setupAt: number | null;
+  startedAt: number | null;
+  firstWordsAt: number | null;
+  setupTimedOut: boolean;
+  greetingRetried: boolean;
+  delegations: number;
+  deskAsks: number;
+  deskFailures: number;
+  lookups: number;
+  followUps: number;
+  checkpoints: number;
+};
 
 export class VoiceAgentSession {
   private readonly deps: VoiceAgentSessionDeps;
@@ -232,6 +276,30 @@ export class VoiceAgentSession {
   private silence: VoiceSilenceState = voiceSilenceStart(0);
   /** Ends a silent caller's call if Mili never says her goodbye. */
   private silenceGoodbyeTimer: unknown = null;
+  /** When the transcript was last kept on the call, and how long it was. */
+  private checkpointedAt = Number.NEGATIVE_INFINITY;
+  private checkpointedLength = 0;
+  /**
+   * The checkpoint writes, one after another: a slow write finishing after a
+   * newer one would put the older transcript back. `finish` waits for it, so
+   * the function stays alive (waitUntil) until the last one has landed.
+   */
+  private checkpoints: Promise<void> = Promise.resolve();
+  private readonly stats: SessionStats = {
+    checkpoints: 0,
+    delegations: 0,
+    deskAsks: 0,
+    deskFailures: 0,
+    firstWordsAt: null,
+    followUps: 0,
+    greetingRetried: false,
+    liveOpenAt: null,
+    lookups: 0,
+    setupAt: null,
+    setupTimedOut: false,
+    startFrameAt: null,
+    startedAt: null,
+  };
 
   /** In the order spoken. */
   get turns(): VoiceAgentTurn[] {
@@ -315,6 +383,7 @@ export class VoiceAgentSession {
     }
     this.claims = claims;
     this.streamId = streamId;
+    this.stats.startFrameAt = this.now();
     this.after(
       Math.max(0, claims.maxSeconds - VOICE_AGENT_WRAP_UP_SECONDS) * 1000,
       () => {
@@ -349,6 +418,7 @@ export class VoiceAgentSession {
       void this.finish("failed");
       return;
     }
+    this.stats.liveOpenAt = this.now();
     // The caller may have hung up while Live opened: close it now rather than
     // keeping a billed session open while the caller is still being resolved.
     if (this.finished) {
@@ -356,6 +426,7 @@ export class VoiceAgentSession {
       return;
     }
     this.setup = await setup;
+    this.stats.setupAt = this.now();
     if (this.finished) {
       this.model.close();
       return;
@@ -372,10 +443,15 @@ export class VoiceAgentSession {
     const prepare = this.deps.prepare;
     if (!prepare) return MESSAGE_ONLY_SETUP;
     try {
-      return (
-        (await this.within(prepare(claims), PREPARE_TIMEOUT_MS))
-        ?? MESSAGE_ONLY_SETUP
+      const setup = await this.within(prepare(claims), PREPARE_TIMEOUT_MS);
+      if (setup) return setup;
+      // Not silent: a known caller (an admin, a client) is about to be
+      // answered as a stranger, and nothing else would say why (#612).
+      this.stats.setupTimedOut = true;
+      this.log.error(
+        `[voice-agent] the caller was not resolved within ${PREPARE_TIMEOUT_MS} ms; taking a message.`,
       );
+      return MESSAGE_ONLY_SETUP;
     } catch (error) {
       this.log.warn(
         `[voice-agent] the caller could not be resolved (${
@@ -428,7 +504,10 @@ export class VoiceAgentSession {
           type: "session.commentary.append",
         });
         this.silence = voiceSilenceStart(this.now());
+        this.stats.startedAt = this.now();
         this.watchSilence(CALLER_SILENCE_MS);
+        this.watchGreeting();
+        this.checkpointEvery(CHECKPOINT_INTERVAL_MS);
         return;
       case "session.output_audio.delta":
         // Once the call is moving on there is nothing left to ask the desk.
@@ -445,6 +524,7 @@ export class VoiceAgentSession {
         if (!this.ending) this.restartQuietTimer();
         return;
       case "session.delegation.created":
+        this.stats.delegations += 1;
         void this.askDesk(event.delegationId);
         return;
       case "error":
@@ -486,7 +566,10 @@ export class VoiceAgentSession {
       Math.max(this.playbackEndsAt, this.now())
       + audio.length / PHONE_BYTES_PER_MS;
     const speech = isSpeech(audio);
-    if (speech) this.speechEndsAt = this.playbackEndsAt;
+    if (speech) {
+      this.speechEndsAt = this.playbackEndsAt;
+      this.stats.firstWordsAt ??= this.now();
+    }
     return speech;
   }
 
@@ -546,6 +629,7 @@ export class VoiceAgentSession {
         this.moveOn(VOICE_AGENT_SILENCE_OUTCOME);
         return;
       }
+      this.checkpointTranscript();
       void this.askDesk(null);
     });
   }
@@ -559,10 +643,12 @@ export class VoiceAgentSession {
       return;
     }
     this.deskBusy = true;
+    this.stats.deskAsks += 1;
     let decision: DeskDecision = null;
     try {
       decision = await this.deps.decide([...this.turns], this.setup.lookups);
     } catch (error) {
+      this.stats.deskFailures += 1;
       // The caller can still hang up, and the time limit still ends the
       // call; the next thing Mili says asks again.
       this.log.warn(
@@ -580,6 +666,7 @@ export class VoiceAgentSession {
       if (this.lookupsRun.has(key)) {
         decision = null;
       } else {
+        this.stats.lookups += 1;
         lookup = { key, ...(await this.runLookup(decision.request)) };
       }
     }
@@ -687,6 +774,7 @@ export class VoiceAgentSession {
         this.watchSilence(action.ms);
         return;
       case "follow_up":
+        this.stats.followUps += 1;
         this.sendModel({
           content: VOICE_AGENT_SILENCE_FOLLOW_UP_CUE,
           delegation_id: null,
@@ -718,6 +806,93 @@ export class VoiceAgentSession {
       case "none":
         return;
     }
+  }
+
+  // ── Her greeting ─────────────────────────────────────────────────────
+
+  /**
+   * Live has started and been cued to greet. If she has not said a word a few
+   * seconds on, cue her again; if she still has not, hand the caller to a
+   * person — the caller has heard nothing since the declaration (#608).
+   */
+  private watchGreeting(): void {
+    this.after(GREETING_RETRY_MS, () => {
+      if (this.finished || this.ending || this.stats.firstWordsAt !== null) {
+        return;
+      }
+      this.stats.greetingRetried = true;
+      this.log.warn(
+        `[voice-agent] Mili had not spoken ${GREETING_RETRY_MS} ms after Live started; cueing her greeting again.`,
+      );
+      this.sendModel({
+        content: this.setup.greetingCue,
+        delegation_id: null,
+        type: "session.commentary.append",
+      });
+    });
+    this.after(GREETING_GIVE_UP_MS, () => {
+      if (this.finished || this.ending || this.stats.firstWordsAt !== null) {
+        return;
+      }
+      this.log.warn(
+        `[voice-agent] Mili had still not spoken ${GREETING_GIVE_UP_MS} ms after Live started; handing the caller to a person.`,
+      );
+      void this.finish("failed");
+    });
+  }
+
+  // ── Keeping the transcript ───────────────────────────────────────────
+
+  /**
+   * Checkpoint on a clock as well as after each of her turns, so a caller
+   * talking at length and then hanging up is kept too. Cleared with every
+   * other timer when the session finishes.
+   */
+  private checkpointEvery(ms: number): void {
+    this.after(ms, () => {
+      if (this.finished) return;
+      this.checkpointTranscript();
+      this.checkpointEvery(ms);
+    });
+  }
+
+  /**
+   * Keep what has been said so far on the call, at most every
+   * CHECKPOINT_INTERVAL_MS and only when there is more of it. The
+   * conversation never waits on the database; the writes queue behind one
+   * another, and one that fails is tried again next time.
+   */
+  private checkpointTranscript(): void {
+    const checkpoint = this.deps.checkpoint;
+    const claims = this.claims;
+    if (!checkpoint || !claims || this.finished) return;
+    const now = this.now();
+    if (now - this.checkpointedAt < CHECKPOINT_INTERVAL_MS) return;
+    const turns = this.turns;
+    const length = turns.reduce((sum, turn) => sum + turn.text.length, 0);
+    if (length <= this.checkpointedLength) return;
+    this.checkpointedAt = now;
+    this.stats.checkpoints += 1;
+    const body = {
+      callControlId: claims.callControlId,
+      callId: claims.callId,
+      provider: claims.provider,
+      turns,
+    };
+    this.checkpoints = this.checkpoints.then(() =>
+      checkpoint(body).then(
+        () => {
+          this.checkpointedLength = Math.max(this.checkpointedLength, length);
+        },
+        (error: unknown) => {
+          this.log.warn(
+            `[voice-agent] could not keep the transcript so far (${
+              error instanceof Error ? error.name : "error"
+            }).`,
+          );
+        },
+      ),
+    );
   }
 
   /** Let her last words finish playing (her speech, not the silence after), then hand the call back. */
@@ -789,6 +964,37 @@ export class VoiceAgentSession {
     this.settle();
   }
 
+  /**
+   * One line per call: how long each step took from the carrier's start
+   * frame, and what the session did. No words, numbers or names — the line
+   * exists so a slow greeting or a stalled call can be attributed (#608).
+   */
+  private summary(outcome: AgentOutcome): string {
+    const s = this.stats;
+    const at = (t: number | null) =>
+      t === null || s.startFrameAt === null ? "-" : `${t - s.startFrameAt}ms`;
+    const caller = s.setupTimedOut
+      ? "unresolved-timeout"
+      : (this.setup.callerClass ?? "unknown");
+    return [
+      `[voice-agent] call summary: outcome=${outcome}`,
+      `caller=${caller}`,
+      `liveOpen=${at(s.liveOpenAt)}`,
+      `setup=${at(s.setupAt)}`,
+      `started=${at(s.startedAt)}`,
+      `firstWords=${at(s.firstWordsAt)}`,
+      `ended=${at(this.now())}`,
+      `turns=${this.turns.length}`,
+      `delegations=${s.delegations}`,
+      `desk=${s.deskAsks}`,
+      `deskFailed=${s.deskFailures}`,
+      `lookups=${s.lookups}`,
+      `followUps=${s.followUps}`,
+      `greetingRetried=${s.greetingRetried}`,
+      `checkpoints=${s.checkpoints}`,
+    ].join(" ");
+  }
+
   /** Report once, then close both sides. */
   async finish(outcome: AgentOutcome): Promise<void> {
     if (this.finished || !this.claims) return;
@@ -796,6 +1002,7 @@ export class VoiceAgentSession {
     this.ending = true;
     this.clearTimers();
     this.closeModel();
+    this.log.info(this.summary(outcome));
     const claims = this.claims;
     try {
       await this.deps.report({
@@ -815,6 +1022,8 @@ export class VoiceAgentSession {
     }
     // Closed after the report so the call has already been moved on.
     this.deps.carrier.close();
+    // A checkpoint still writing finishes before the function may stop.
+    await this.checkpoints;
     this.settle();
   }
 }

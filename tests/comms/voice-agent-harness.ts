@@ -75,6 +75,8 @@ export function harness(
   urlToken?: string,
   decide: Decide = async () => null,
   prepare?: VoiceAgentSessionDeps["prepare"],
+  /** Any other dependency, over the scripted ones. */
+  extra: Partial<VoiceAgentSessionDeps> = {},
 ) {
   const carrierOut: string[] = [];
   const modelOut: LiveClientEvent[] = [];
@@ -132,6 +134,7 @@ export function harness(
     },
     urlToken: urlToken ?? null,
     voice: "marin",
+    ...extra,
   });
   const fire = (ms: number) => {
     for (const timer of timers.filter((t) => t.live && t.ms === ms)) {
@@ -187,8 +190,15 @@ export const callerMedia = JSON.stringify({
 export async function started(
   decide?: Decide,
   prepare?: VoiceAgentSessionDeps["prepare"],
+  extra?: Partial<VoiceAgentSessionDeps>,
 ) {
-  const h = harness("telnyx", token("telnyx", "v3:abc"), decide, prepare);
+  const h = harness(
+    "telnyx",
+    token("telnyx", "v3:abc"),
+    decide,
+    prepare,
+    extra,
+  );
   h.session.handleCarrierText(telnyxStart());
   await h.tick();
   h.session.handleModelEvent({ type: "session.started" });

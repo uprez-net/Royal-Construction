@@ -1,6 +1,17 @@
 import type { TranscriptSpeakerLabel } from "../comms/calls/transcript-lines";
 
 /**
+ * One stretch of speech on one channel of a two-channel recording. Channel 0
+ * is the customer's leg; channel 1 is what was played to them.
+ */
+export type TranscriptSegment = {
+  readonly channel: 0 | 1;
+  readonly startSecond: number;
+  readonly endSecond: number;
+  readonly text: string;
+};
+
+/**
  * Speech-to-text for a stored call recording or voicemail.
  *
  * A port because the reader (Blob storage) and the model (the AI Gateway) are
@@ -12,12 +23,21 @@ import type { TranscriptSpeakerLabel } from "../comms/calls/transcript-lines";
  * - Resolves `null` when the stored copy is gone (a miss in storage).
  * - A thrown error is a failure to transcribe: the domain records it and tries
  *   again, a bounded number of times.
+ * - With `splitChannels`, a two-channel recording is transcribed a channel at
+ *   a time and comes back with `segments` as well (#613). A recording that is
+ *   not two channels, or cannot be split, comes back as one text without
+ *   them, and the domain falls back to splitting the prose.
  */
 export type CallTranscriptionPort = (audio: {
   readonly blobUrl: string;
   readonly mimeType: string | null;
   readonly kind: "CALL" | "VOICEMAIL";
-}) => Promise<{ readonly text: string } | null>;
+  readonly splitChannels?: true;
+}) => Promise<{
+  readonly text: string;
+  /** Present only when the channels were transcribed apart. */
+  readonly segments?: readonly TranscriptSegment[];
+} | null>;
 
 /**
  * Splits a recording's transcript into turns by who is speaking.

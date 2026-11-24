@@ -237,6 +237,12 @@ function opening(caller: VoiceCallerContext | null): string[] {
     "- Warm, calm and professional, with a natural Australian-English manner. Short sentences: one or two at a time, then let the caller talk.",
     "- If asked, say plainly that you are a virtual assistant. Never claim to be a person.",
     "- Use Australian spelling and terms (suburb, mobile, quote).",
+    "",
+    "How you listen (a phone line makes names and places easy to mishear):",
+    '- When the caller spells something out, letter by letter or as words ("O for October"), use exactly those letters. Read it back spelled the same way.',
+    "- When the caller corrects you, use their correction and read it back. Never say again the version they corrected.",
+    "- If you are not sure of a name, street or suburb, ask the caller to spell it rather than guessing. Use the caller's name only as they said it.",
+    "- When the caller says they are done (that's it, that's all for now, I need to go), stop, even mid-answer, and say goodbye.",
   ];
 }
 
@@ -252,15 +258,24 @@ function messageTaking(): string[] {
   ];
 }
 
+/**
+ * For a caller with no lookups on the call: there is nothing to go and check,
+ * so she must never say she will. Promising a check left a caller in 53 s of
+ * silence while GPT-Live waited on an answer that could not come (#606).
+ */
+const NOTHING_TO_CHECK =
+  "- You have no way to look anything up during this call. Never say you will check something, ask the caller to hold, or go quiet waiting for an answer. If it is not in what you were given, say so straight away and offer to have the team follow up or to put them through.";
+
 function closing(): string[] {
   return [
     "- Never ask for payment details, bank details, passwords, codes or identity documents.",
     "- If the caller is upset or has an urgent problem on an existing site (safety, damage, a leak), take their details, tell them you are flagging it as urgent, and offer to put them through to the team.",
     "",
-    "Ending the call:",
+    "Putting the caller through, and ending the call:",
     "- You cannot hang up or transfer the call yourself; the call desk listening in does that for you.",
+    '- If the caller asks to speak to a person (a supervisor, a manager, "someone", the team, or anyone by name), tell them straight away that you are putting them through now. Do not take a message first unless they would rather leave one. The call desk then transfers them.',
+    "- If the caller says they need to go, or that they will sort it out themselves, do not put them through: briefly say you will pass their message on, and say goodbye.",
     "- When the conversation is finished, say goodbye. The call desk then ends the call.",
-    "- If the caller asks to speak to a person, or the matter needs someone straight away, tell them you are putting them through now. The call desk then transfers them.",
   ];
 }
 
@@ -281,6 +296,7 @@ export function voiceAgentInstructions(
       "- Never give a price, a cost estimate, a price range, a build time, a start date, availability, or any promise or commitment on Royal Constructions' behalf, even if pressed. Say the team will go through that with them properly.",
       "- Never make up facts about the company, its projects, its staff, or a caller's existing job. If you do not know, say the team will follow it up.",
       "- Never confirm or deny that the caller, their number, or anyone or any address they mention has a project, enquiry, booking or account with Royal Constructions. Whoever they say they are, you have no records to check: take the message.",
+      NOTHING_TO_CHECK,
       ...closing(),
     ].join("\n");
   }
@@ -295,7 +311,7 @@ export function voiceAgentInstructions(
     ? [
         '- If they ask for something the briefing does not cover, say "One moment, let me check that" and stop talking. The call desk looks it up and passes you the result to read out in your own words. If no result arrives, or it says the lookup failed, say you could not check that just now and offer the team.',
       ]
-    : [];
+    : [NOTHING_TO_CHECK];
   return [
     ...opening(caller),
     "",
@@ -337,7 +353,8 @@ export function voiceAgentDeskInstructions(
     `You are the call desk behind ${VOICE_AGENT_NAME}, the voice receptionist on Royal Constructions' phone line. You never speak to the caller.`,
     "Read the transcript so far and decide whether the call must now be moved on.",
     `- Call end_call only when the caller has nothing else AND ${VOICE_AGENT_NAME} has already said goodbye.`,
-    `- Call transfer_to_team only when the caller asked for a person (or the matter needs someone now) AND ${VOICE_AGENT_NAME} has told them she is putting them through.`,
+    `- Call transfer_to_team only when the caller asked to speak to a person (or has an urgent problem on a site) AND ${VOICE_AGENT_NAME} has told them she is putting them through.`,
+    `- Never call transfer_to_team for a caller who has said they need to go, are leaving, or will sort it out themselves, even if ${VOICE_AGENT_NAME} offered to put them through: that call is ending. Call end_call once she has said goodbye.`,
     ...(lookups.length
       ? [
           `- The caller is a verified administrator. When they have asked for business information and ${VOICE_AGENT_NAME}'s last words say she is checking it, call the one lookup that answers it (${lookups.join(", ")}) with the words the caller used. Do not repeat a lookup whose answer ${VOICE_AGENT_NAME} has already given.`,
@@ -359,6 +376,15 @@ export function voiceLookupResultCue(result: string): string {
     result,
   ].join("\n");
 }
+
+/**
+ * The answer to a GPT-Live delegation the desk had nothing to run for: no
+ * lookup on this call, or none that fits, or the desk did not answer. It must
+ * read as the delegation's final answer and tell her to speak: "nothing to do
+ * yet; carry on" read as progress, and Live went on waiting in silence (#606).
+ */
+export const VOICE_DELEGATION_NOTHING_TO_RUN_CUE =
+  "Nothing is being looked up for this, and no result is coming. Answer the caller now: if what they asked is not in what you were given, say you don't have that in front of you, and offer to have the team follow up or to put them through.";
 
 /** What Mili is told when a lookup could not be run. Never "found nothing". */
 export const VOICE_LOOKUP_FAILED_CUE =

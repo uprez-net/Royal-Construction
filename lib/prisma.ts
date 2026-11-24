@@ -2,6 +2,7 @@ import "dotenv/config";
 
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { attachDatabasePool } from "@vercel/functions";
 import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as {
@@ -18,8 +19,8 @@ if (!process.env.DATABASE_URL) {
 // leaking connections until the database refuses new ones and the dev server
 // OOMs on the backlog of retry promises.
 const pool =
-  globalForPrisma.pool ??
-  new Pool({
+  globalForPrisma.pool
+  ?? new Pool({
     connectionString: process.env.DATABASE_URL,
 
     /**
@@ -79,11 +80,17 @@ const pool =
     `);
     },
   });
+// On Vercel (Fluid compute) an instance is frozen between requests. Attached,
+// the pool keeps the instance alive until its idle clients are closed, so a
+// thawed instance never hands a query a connection that died while frozen —
+// "Connection terminated unexpectedly", which lost Mili's transcripts (#605).
+// Outside Vercel it only listens for releases.
+if (!globalForPrisma.pool) attachDatabasePool(pool);
 const adapter = new PrismaPg(pool);
 
 export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+  globalForPrisma.prisma
+  ?? new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
     transactionOptions: {

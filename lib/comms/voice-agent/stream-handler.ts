@@ -1,5 +1,7 @@
+import { waitUntil } from "@vercel/functions";
 import type { WebSocket } from "ws";
 
+import { checkpointAgentTranscript } from "@/lib/domain/comms/calls/agent-transcript";
 import { applyCallEvent } from "@/lib/domain/comms/calls/events";
 import { formatVoiceAgentTranscript } from "@/lib/domain/comms/calls/voice-agent";
 import type { TransactionalDomainDb } from "@/lib/domain/db";
@@ -44,6 +46,14 @@ export type VoiceAgentStreamDeps = {
   readonly decide?: typeof decideCallMove;
   readonly log?: Pick<Console, "info" | "warn" | "error">;
   readonly env?: Record<string, string | undefined>;
+  /**
+   * Keeps the function alive until the promise settles. The platform freezes
+   * the instance as soon as the carrier closes the socket — the caller hanging
+   * up — and the outcome and transcript are written after that. Without this
+   * the write ran when some later request thawed the instance, 12–17 minutes
+   * on, on a dead database connection, and the transcript was lost (#605).
+   */
+  readonly keepAlive?: (promise: Promise<unknown>) => void;
 };
 
 function text(status: number, body: string) {
@@ -137,6 +147,20 @@ export async function handleVoiceAgentStream(
           log,
         ),
       report: (report) => recordVoiceAgentOutcome(deps, report),
+      checkpoint: async (progress) => {
+        const transcript = formatVoiceAgentTranscript(progress.turns);
+        if (!transcript) return;
+        await checkpointAgentTranscript(
+          COMMS_WEBHOOK_PRINCIPAL,
+          {
+            callId: progress.callId,
+            provider: progress.provider,
+            providerCallId: progress.callControlId,
+            transcript,
+          },
+          deps.db,
+        );
+      },
       secret,
       urlToken,
       voice: voiceAgentVoice(deps.env),
@@ -148,7 +172,9 @@ export async function handleVoiceAgentStream(
     ws.on("error", (error) =>
       log.warn(`[voice-agent] ${provider} socket error:`, error.message),
     );
-    // The function stays alive until the conversation is over.
+    // The function stays alive until the conversation is over and reported,
+    // even once the carrier has closed the socket (see `keepAlive`).
+    (deps.keepAlive ?? waitUntil)(session.done);
     await session.done;
   };
 
