@@ -22,6 +22,11 @@ variations. A parent's price includes its sub-activities and moves when one of
 them is repriced. If the tool says the price moved, read the financials again
 and confirm the new figure with the user before retrying.
 
+To change more than one milestone on a project, call update_milestones once
+with every change, never several update_milestone calls: each call is its own
+approval, and none of them runs until the person has answered every one. Use
+update_milestone for a single milestone only.
+
 To change a project's site manager, resolve the person with
 list_site_managers and pass that id to assign_site_manager. Never guess an id
 from a name; if the name matches nobody, or more than one person, ask which.

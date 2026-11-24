@@ -40,6 +40,7 @@ import { isDomainError } from "@/lib/domain/errors";
 import {
   createMilestone as createMilestoneCommand,
   updateMilestone as updateMilestoneCommand,
+  updateMilestones as updateMilestonesCommand,
 } from "@/lib/domain/projects/milestones";
 import { assignProjectSiteManager } from "@/lib/domain/projects/commands";
 import { getProjectDetail, listProjects } from "@/lib/domain/projects/queries";
@@ -1321,6 +1322,85 @@ export async function createAuthorizedMilestone(
         },
         summary: `Milestone ${milestone.name} was added to ${project.name}.`,
         title: "Milestone created",
+      });
+    },
+  });
+}
+
+/**
+ * Several milestones on one project in one approval and one audit row (#616).
+ * All or nothing: the domain command applies each update with the same rules
+ * as `update_milestone` inside this one transaction.
+ */
+export async function updateAuthorizedMilestones(
+  ctx: ToolContext,
+  input: {
+    projectId: string;
+    updates: {
+      actualDate?: string;
+      milestoneId: string;
+      spend?: number;
+      startDate?: string;
+      status: "PENDING" | "ACTIVE" | "DONE" | "NOT_REQUIRED";
+      targetDate?: string;
+    }[];
+  },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const project = await assertProjectAccess(actor, input.projectId);
+  return runProjectMutation({
+    action: "project.milestones.update",
+    actor,
+    projectId: input.projectId,
+    ctx,
+    ownerUserId: actor.id,
+    targetId: input.projectId,
+    inputSummary: input as unknown as Prisma.InputJsonValue,
+    transactional: true,
+    execute: async (tx) => {
+      const { outcomes } = await updateMilestonesCommand(
+        userPrincipal(actor),
+        input,
+        tx ?? agentDb,
+      );
+      const claims = [
+        ...new Set(
+          outcomes.flatMap((outcome) =>
+            outcome.stageClaim ? [outcome.stageClaim.projectStage] : [],
+          ),
+        ),
+      ];
+      const last = outcomes.at(-1);
+      return actionEnvelope({
+        entityRef: projectReference(project),
+        data: {
+          projectId: input.projectId,
+          projectSpent: last?.projectSpent ?? null,
+          projectStatus:
+            outcomes.findLast((outcome) => outcome.projectStatus !== null)
+              ?.projectStatus ?? null,
+          stageClaimsDue: claims,
+          milestones: outcomes.map(({ milestone, replannedActivities }) => ({
+            milestoneId: milestone.id,
+            name: milestone.name,
+            status: milestone.status,
+            previousStatus: milestone.previousStatus,
+            targetDate: milestone.targetDate.toISOString(),
+            startDate: milestone.startDate?.toISOString() ?? null,
+            actualDate: milestone.actualDate?.toISOString() ?? null,
+            spend: milestone.spend ?? null,
+            replannedActivities: replannedActivities.map((change) => ({
+              milestoneId: change.id,
+              targetDate: change.targetDate.toISOString(),
+            })),
+          })),
+        },
+        summary: `${outcomes.length} milestones updated.`,
+        title: "Milestones updated",
+        warnings: claims.map(
+          (stage) =>
+            `These changes finished the ${stage} stage, and no progress claim has been raised for it. Raise it from the project's Payments tab — this tool cannot reach Xero.`,
+        ),
       });
     },
   });

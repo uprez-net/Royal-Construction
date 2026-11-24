@@ -59,3 +59,23 @@ test("hideIds leaves record ids out of a card that cannot name them", () => {
     ["query"],
   );
 });
+
+test("a bulk update is shown one line per record, named when the name is known (#616)", () => {
+  const input = {
+    projectId: "p1",
+    updates: [
+      { milestoneId: "m1", startDate: "2026-12-01", status: "PENDING" },
+      { milestoneId: "m2", startDate: "2026-12-08", status: "PENDING" },
+    ],
+  };
+  const named = toInputFields(input, {
+    itemLabels: { updates: ["Slab pour", undefined] },
+  }).find((field) => field.key === "updates");
+  assert.ok(named);
+  assert.equal(named.prose, true);
+  const [first, second] = named.value.split("\n");
+  assert.match(first ?? "", /^Slab pour: /);
+  assert.doesNotMatch(first ?? "", /m1/, "a named record hides its id");
+  assert.match(second ?? "", /^2\. Milestone → m2/);
+  assert.match(second ?? "", /Status → PENDING/i);
+});

@@ -65,6 +65,27 @@ test("an approved card says it is applying the change, then stops spinning", () 
   );
 });
 
+test("an approval held by the rest of its step says what it is waiting for (#616)", () => {
+  assert.equal(
+    respondedNotice({
+      applying: true,
+      cancelled: false,
+      isApproval: true,
+      waitingOn: 4,
+    }),
+    "Approved: runs once the other 4 changes are answered.",
+  );
+  assert.equal(
+    respondedNotice({
+      applying: true,
+      cancelled: false,
+      isApproval: true,
+      waitingOn: 1,
+    }),
+    "Approved: runs once the other change is answered.",
+  );
+});
+
 test("a cancelled change is called cancelled, the word on the button", () => {
   const denied = {
     approval: {

@@ -5,6 +5,7 @@ import { ArrowDown, Layers, LoaderCircle, Sparkles } from "lucide-react";
 import type { RefObject } from "react";
 import { useMemo } from "react";
 import { AgentApprovalBar } from "@/components/agent/agent-approval-bar";
+import { AgentApprovalBatchProvider } from "@/components/agent/agent-approval-batch";
 import type { AgentInputResponse } from "@/components/agent/agent-approval";
 import { AgentMessage } from "@/components/agent/agent-message";
 import type {
@@ -99,226 +100,230 @@ export function AgentTranscript({
   }, [data.subagents]);
 
   return (
-    <div className="relative min-h-0 flex-1 overflow-hidden">
-      <div
-        className="absolute inset-0 overflow-y-auto overscroll-contain"
-        onScroll={handleMessageScroll}
-        ref={viewportRef}
-      >
-        {/* Bottom padding leaves room for the scroll-to-latest button, so the
+    <AgentApprovalBatchProvider data={data}>
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        <div
+          className="absolute inset-0 overflow-y-auto overscroll-contain"
+          onScroll={handleMessageScroll}
+          ref={viewportRef}
+        >
+          {/* Bottom padding leaves room for the scroll-to-latest button, so the
             last lines of a reply are never under it. */}
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 pt-6 pb-16 sm:px-6 sm:pt-8">
-          {data.messages.length === 0 && agentStatus !== "resuming" ? (
-            <Empty className="border-0 p-2 sm:min-h-96 sm:p-6">
-              <EmptyHeader>
-                <EmptyMedia
-                  className="size-12 rounded-lg bg-muted text-foreground/80"
-                  variant="icon"
-                >
-                  <Sparkles aria-hidden="true" />
-                </EmptyMedia>
-                <EmptyTitle className="text-xl">
-                  What needs moving today?
-                </EmptyTitle>
-                <EmptyDescription>
-                  Ask for a live business lookup. The agent will show the exact
-                  target and ask before any controlled action.
-                </EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent className="max-w-xl sm:grid sm:grid-cols-3">
-                {SUGGESTIONS.map((suggestion) => (
+          <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 pt-6 pb-16 sm:px-6 sm:pt-8">
+            {data.messages.length === 0 && agentStatus !== "resuming" ? (
+              <Empty className="border-0 p-2 sm:min-h-96 sm:p-6">
+                <EmptyHeader>
+                  <EmptyMedia
+                    className="size-12 rounded-lg bg-muted text-foreground/80"
+                    variant="icon"
+                  >
+                    <Sparkles aria-hidden="true" />
+                  </EmptyMedia>
+                  <EmptyTitle className="text-xl">
+                    What needs moving today?
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    Ask for a live business lookup. The agent will show the
+                    exact target and ask before any controlled action.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent className="max-w-xl sm:grid sm:grid-cols-3">
+                  {SUGGESTIONS.map((suggestion) => (
+                    <Button
+                      className="h-auto min-h-16 w-full justify-start whitespace-normal px-3 py-2 text-left"
+                      key={suggestion}
+                      onClick={() => onSuggestion(suggestion)}
+                      type="button"
+                      variant="outline"
+                    >
+                      {suggestion}
+                    </Button>
+                  ))}
+                </EmptyContent>
+              </Empty>
+            ) : null}
+
+            {agentStatus === "resuming" ? (
+              <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-muted-foreground">
+                <span className="size-2 animate-pulse rounded-full bg-royal-gold" />
+                Restoring conversation…
+              </div>
+            ) : null}
+
+            {data.messages.map((message) => {
+              const turnId = message.metadata?.turnId;
+              const turn = turnId ? turnsById.get(turnId) : undefined;
+              return (
+                <div className="flex flex-col gap-3" key={message.id}>
+                  <AgentMessage
+                    awaitingApproval={Boolean(
+                      turnId && waitingTurns.has(turnId),
+                    )}
+                    annotations={
+                      // Annotations are persisted per turn. eve >= 0.61 ids a
+                      // user message by its delivery event rather than its turn,
+                      // so the turn is the stable key to look them up by.
+                      (message.role === "user" && turnId
+                        ? messageAnnotations[`${turnId}:user`]
+                        : undefined)
+                      ?? (message.metadata?.optimistic
+                        ? (pendingMessageAnnotations ?? undefined)
+                        : undefined)
+                    }
+                    canRespond={!busy && !connection.sessionClosed}
+                    isStreaming={agentStatus === "streaming"}
+                    labels={data.labels}
+                    message={message}
+                    onAction={onAction}
+                    onEditMessage={onEditMessage}
+                    onInputResponses={onRespond}
+                    subagents={
+                      message.role === "assistant" && turnId
+                        ? (subagentsByTurn.get(turnId) ?? [])
+                        : []
+                    }
+                    timestamp={messageTime(message, turn)}
+                    toolTimes={toolTimes(turn)}
+                    working={
+                      message.id === lastAssistantId
+                      && (turn?.status === "running"
+                        // An answered approval sends no message, so the reply
+                        // stays last and keeps its spinner; a new question adds
+                        // one, and the settled reply above it stays settled.
+                        || (busy && message.id === data.messages.at(-1)?.id))
+                    }
+                  />
+                  {message.role === "assistant" ? (
+                    <TurnOutcome turn={turn} />
+                  ) : null}
+                </div>
+              );
+            })}
+
+            {data.compaction?.status === "requested" ? (
+              <p className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <Layers aria-hidden="true" className="size-3.5" />
+                Summarising earlier messages to make room — nothing is lost from
+                the record.
+              </p>
+            ) : null}
+
+            {agentStatus === "streaming" ? (
+              <div className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <LoaderCircle className="size-3.5 animate-spin" />
+                Live response · assembling the next operation step…
+              </div>
+            ) : null}
+
+            {connection.reconnecting ? (
+              <div
+                className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+                role="status"
+              >
+                <LoaderCircle className="size-3.5 animate-spin" />
+                Your message was sent. Connecting to the live conversation…
+              </div>
+            ) : null}
+
+            {connection.stalled ? (
+              <Alert>
+                <AlertTitle>No updates for a while</AlertTitle>
+                <AlertDescription className="flex flex-wrap items-center gap-3">
+                  <span>
+                    The live connection may have dropped. The agent keeps
+                    working on the server; reconnecting shows where it got to.
+                  </span>
                   <Button
-                    className="h-auto min-h-16 w-full justify-start whitespace-normal px-3 py-2 text-left"
-                    key={suggestion}
-                    onClick={() => onSuggestion(suggestion)}
+                    onClick={connection.onReload}
+                    size="sm"
                     type="button"
                     variant="outline"
                   >
-                    {suggestion}
+                    Reconnect
                   </Button>
-                ))}
-              </EmptyContent>
-            </Empty>
-          ) : null}
+                </AlertDescription>
+              </Alert>
+            ) : null}
 
-          {agentStatus === "resuming" ? (
-            <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-muted-foreground">
-              <span className="size-2 animate-pulse rounded-full bg-royal-gold" />
-              Restoring conversation…
-            </div>
-          ) : null}
+            {connection.sessionClosed ? (
+              <Alert>
+                <AlertTitle>This conversation has ended</AlertTitle>
+                <AlertDescription className="flex flex-wrap items-center gap-3">
+                  <span>
+                    It can no longer take new messages, so its history is shown
+                    read-only. Anything still waiting here, including approvals,
+                    does not carry over. A new conversation starts fresh; your
+                    unsent message goes with it, unsent.
+                  </span>
+                  <Button
+                    onClick={connection.onContinue}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Continue in a new conversation
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : null}
 
-          {data.messages.map((message) => {
-            const turnId = message.metadata?.turnId;
-            const turn = turnId ? turnsById.get(turnId) : undefined;
-            return (
-              <div className="flex flex-col gap-3" key={message.id}>
-                <AgentMessage
-                  awaitingApproval={Boolean(turnId && waitingTurns.has(turnId))}
-                  annotations={
-                    // Annotations are persisted per turn. eve >= 0.61 ids a
-                    // user message by its delivery event rather than its turn,
-                    // so the turn is the stable key to look them up by.
-                    (message.role === "user" && turnId
-                      ? messageAnnotations[`${turnId}:user`]
-                      : undefined)
-                    ?? (message.metadata?.optimistic
-                      ? (pendingMessageAnnotations ?? undefined)
-                      : undefined)
-                  }
-                  canRespond={!busy && !connection.sessionClosed}
-                  isStreaming={agentStatus === "streaming"}
-                  labels={data.labels}
-                  message={message}
-                  onAction={onAction}
-                  onEditMessage={onEditMessage}
-                  onInputResponses={onRespond}
-                  subagents={
-                    message.role === "assistant" && turnId
-                      ? (subagentsByTurn.get(turnId) ?? [])
-                      : []
-                  }
-                  timestamp={messageTime(message, turn)}
-                  toolTimes={toolTimes(turn)}
-                  working={
-                    message.id === lastAssistantId
-                    && (turn?.status === "running"
-                      // An answered approval sends no message, so the reply
-                      // stays last and keeps its spinner; a new question adds
-                      // one, and the settled reply above it stays settled.
-                      || (busy && message.id === data.messages.at(-1)?.id))
-                  }
-                />
-                {message.role === "assistant" ? (
-                  <TurnOutcome turn={turn} />
-                ) : null}
-              </div>
-            );
-          })}
+            {agentError ? (
+              <Alert variant="destructive">
+                <AlertTitle>The agent could not continue</AlertTitle>
+                <AlertDescription className="flex flex-wrap items-center gap-3">
+                  <span>{agentError.message}</span>
+                  <Button
+                    onClick={onRetry}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Reconnect
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : null}
 
-          {data.compaction?.status === "requested" ? (
-            <p className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <Layers aria-hidden="true" className="size-3.5" />
-              Summarising earlier messages to make room — nothing is lost from
-              the record.
-            </p>
-          ) : null}
+            {sendError ? (
+              <Alert variant="destructive">
+                <AlertTitle>The message could not be sent</AlertTitle>
+                <AlertDescription>{sendError}</AlertDescription>
+              </Alert>
+            ) : null}
 
-          {agentStatus === "streaming" ? (
-            <div className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <LoaderCircle className="size-3.5 animate-spin" />
-              Live response · assembling the next operation step…
-            </div>
-          ) : null}
-
-          {connection.reconnecting ? (
-            <div
-              className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
-              role="status"
-            >
-              <LoaderCircle className="size-3.5 animate-spin" />
-              Your message was sent. Connecting to the live conversation…
-            </div>
-          ) : null}
-
-          {connection.stalled ? (
-            <Alert>
-              <AlertTitle>No updates for a while</AlertTitle>
-              <AlertDescription className="flex flex-wrap items-center gap-3">
-                <span>
-                  The live connection may have dropped. The agent keeps working
-                  on the server; reconnecting shows where it got to.
-                </span>
-                <Button
-                  onClick={connection.onReload}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  Reconnect
-                </Button>
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          {connection.sessionClosed ? (
-            <Alert>
-              <AlertTitle>This conversation has ended</AlertTitle>
-              <AlertDescription className="flex flex-wrap items-center gap-3">
-                <span>
-                  It can no longer take new messages, so its history is shown
-                  read-only. Anything still waiting here, including approvals,
-                  does not carry over. A new conversation starts fresh; your
-                  unsent message goes with it, unsent.
-                </span>
-                <Button
-                  onClick={connection.onContinue}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  Continue in a new conversation
-                </Button>
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          {agentError ? (
-            <Alert variant="destructive">
-              <AlertTitle>The agent could not continue</AlertTitle>
-              <AlertDescription className="flex flex-wrap items-center gap-3">
-                <span>{agentError.message}</span>
-                <Button
-                  onClick={onRetry}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  Reconnect
-                </Button>
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          {sendError ? (
-            <Alert variant="destructive">
-              <AlertTitle>The message could not be sent</AlertTitle>
-              <AlertDescription>{sendError}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          {archiveError ? (
-            <Alert variant="destructive">
-              <AlertTitle>The conversation could not be archived</AlertTitle>
-              <AlertDescription>{archiveError}</AlertDescription>
-            </Alert>
-          ) : null}
+            {archiveError ? (
+              <Alert variant="destructive">
+                <AlertTitle>The conversation could not be archived</AlertTitle>
+                <AlertDescription>{archiveError}</AlertDescription>
+              </Alert>
+            ) : null}
+          </div>
         </div>
+
+        {showApprovalBar ? (
+          <AgentApprovalBar
+            approvals={data.pendingApprovals}
+            viewportRef={viewportRef}
+          />
+        ) : null}
+
+        {showScrollToBottom ? (
+          <Button
+            aria-label="Scroll to the latest message"
+            // In the right-hand gutter rather than the middle of the column: in
+            // the middle it sat on top of the answer text (#432).
+            className="absolute right-4 bottom-4 z-20 rounded-full border-border/80 bg-card text-foreground transition-colors hover:bg-muted sm:right-6"
+            onClick={scrollToBottom}
+            size="icon-sm"
+            title="Scroll to latest message"
+            type="button"
+            variant="outline"
+          >
+            <ArrowDown aria-hidden="true" />
+          </Button>
+        ) : null}
       </div>
-
-      {showApprovalBar ? (
-        <AgentApprovalBar
-          approvals={data.pendingApprovals}
-          viewportRef={viewportRef}
-        />
-      ) : null}
-
-      {showScrollToBottom ? (
-        <Button
-          aria-label="Scroll to the latest message"
-          // In the right-hand gutter rather than the middle of the column: in
-          // the middle it sat on top of the answer text (#432).
-          className="absolute right-4 bottom-4 z-20 rounded-full border-border/80 bg-card text-foreground transition-colors hover:bg-muted sm:right-6"
-          onClick={scrollToBottom}
-          size="icon-sm"
-          title="Scroll to latest message"
-          type="button"
-          variant="outline"
-        >
-          <ArrowDown aria-hidden="true" />
-        </Button>
-      ) : null}
-    </div>
+    </AgentApprovalBatchProvider>
   );
 }
 

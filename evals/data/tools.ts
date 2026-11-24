@@ -103,6 +103,7 @@ export const WRITE_TOOLS = {
     "set_compliance_document_required",
     "start_compliance",
     "update_milestone",
+    "update_milestones",
     "update_project_requirements",
   ],
   "tradie-operations": [

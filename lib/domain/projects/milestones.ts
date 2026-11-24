@@ -500,6 +500,89 @@ function assertRecordingOnlyUpdate(
   }
 }
 
+/** The most milestones one bulk update may change: one approval card's worth. */
+export const MAX_BULK_MILESTONE_UPDATES = 25;
+
+export type UpdateMilestonesOutcome = {
+  readonly projectId: string;
+  /** One per update, in the order they were applied. */
+  readonly outcomes: readonly UpdateMilestoneOutcome[];
+};
+
+/**
+ * Several milestone updates on one project, applied in order as one fact.
+ *
+ * "Move these five start dates" used to be five `update_milestone` calls in
+ * one step, so five approvals, and eve runs none of a step's calls until every
+ * approval in it is answered (#616). One call is one approval, one audit row,
+ * and all or nothing: each update is `updateMilestone` exactly (no second copy
+ * of its rules), and a refusal of any of them rolls back the ones before it,
+ * so the office is never left with three of five dates moved.
+ *
+ * Must run inside the caller's transaction, for the same reason as
+ * `updateMilestone`.
+ */
+export async function updateMilestones(
+  principal: DomainPrincipal,
+  input: {
+    /** The project the caller means, when it named one: checked, not trusted. */
+    readonly projectId?: string;
+    readonly updates: readonly UpdateMilestoneInput[];
+  },
+  db: DomainDb,
+): Promise<UpdateMilestonesOutcome> {
+  const { updates } = input;
+  if (updates.length === 0) {
+    throw new DomainValidationError(
+      "No milestone updates were given.",
+      "updates",
+    );
+  }
+  if (updates.length > MAX_BULK_MILESTONE_UPDATES) {
+    throw new DomainValidationError(
+      `At most ${MAX_BULK_MILESTONE_UPDATES} milestones can be updated at once.`,
+      "updates",
+    );
+  }
+  const ids = updates.map((update) => update.milestoneId);
+  if (new Set(ids).size !== ids.length) {
+    throw new DomainValidationError(
+      "The same milestone appears twice in one update. Combine its changes into one entry.",
+      "updates",
+    );
+  }
+  const rows = await db.milestone.findMany({
+    select: { id: true, projectId: true },
+    where: { id: { in: ids } },
+  });
+  if (rows.length !== ids.length) {
+    throw new DomainNotFoundError(
+      "One or more of these milestones were not found.",
+    );
+  }
+  const projectIds = new Set(rows.map((row) => row.projectId));
+  if (projectIds.size !== 1) {
+    throw new DomainValidationError(
+      "A bulk milestone update covers one project. Update each project separately.",
+      "updates",
+    );
+  }
+  if (input.projectId !== undefined && !projectIds.has(input.projectId)) {
+    throw new DomainValidationError(
+      "These milestones are not on that project.",
+      "updates",
+    );
+  }
+
+  const outcomes: UpdateMilestoneOutcome[] = [];
+  for (const update of updates) {
+    // Access, the state machine and the recording-only rules are checked per
+    // milestone inside `updateMilestone`.
+    outcomes.push(await updateMilestone(principal, update, db));
+  }
+  return { outcomes, projectId: rows[0]!.projectId };
+}
+
 /**
  * Update a milestone, and everything settling it means for its project.
  *

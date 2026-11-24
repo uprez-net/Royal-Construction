@@ -85,11 +85,46 @@ export function toInputFields(
         isRecordIdField(key) && key !== "id"
           ? humanize(key.replace(/Ids?$/, ""))
           : humanize(key),
-      prose: PROSE_KEY.test(key) && typeof value === "string",
+      prose:
+        (PROSE_KEY.test(key) && typeof value === "string")
+        || isChangeSetList(value),
       value: isChangeSet(value)
         ? describeChanges(value, options)
-        : formatFieldValue(value),
+        : isChangeSetList(value)
+          ? describeChangeList(value, options.itemLabels?.[key], options)
+          : formatFieldValue(value),
     }));
+}
+
+/**
+ * A list of change sets, one per record: a bulk update's `updates` (#616).
+ * Shown one line per record so each change can be read before approving all
+ * of them, rather than as a block of JSON.
+ */
+function isChangeSetList(
+  value: unknown,
+): value is readonly Record<string, unknown>[] {
+  return Array.isArray(value) && value.length > 0 && value.every(isChangeSet);
+}
+
+function describeChangeList(
+  items: readonly Record<string, unknown>[],
+  names: readonly (string | undefined)[] | undefined,
+  options: InputFieldOptions,
+): string {
+  return items
+    .map((item, index) => {
+      const name = names?.[index];
+      // A named record is named once, at the start of its line; its raw id
+      // stays behind it for the tool.
+      const changes = describeChanges(item, {
+        ...options,
+        changeLabels: undefined,
+        hideIds: options.hideIds || name !== undefined,
+      });
+      return name ? `${name}: ${changes}` : `${index + 1}. ${changes}`;
+    })
+    .join("\n");
 }
 
 /** A flat object of field → value, the shape every `changes`/`patch` takes. */
@@ -109,6 +144,10 @@ export type InputFieldOptions = {
   readonly hideIds?: boolean;
   /** Names for record ids inside a set of changes, keyed by field name. */
   readonly changeLabels?: Readonly<Record<string, string>>;
+  /** For a list of change sets: the record each entry changes, by position. */
+  readonly itemLabels?: Readonly<
+    Record<string, readonly (string | undefined)[]>
+  >;
 };
 
 function describeChanges(

@@ -764,3 +764,64 @@ test("an approval with no turn running keeps the turn it names", () => {
 
   assert.equal(data.pendingApprovals[0]?.turnId, "turn_0");
 });
+
+// #616: five `update_milestone` approvals from one step. Approving one ran
+// nothing, because eve waits for the whole step, and the card said "Approved".
+function milestoneBatch() {
+  return stamped({
+    data: {
+      requests: [0, 1, 2, 3, 4].map((index) => ({
+        action: {
+          callId: `call_m${index}`,
+          input: { milestoneId: `m${index}` },
+          kind: "tool-call",
+          toolName: "update_milestone",
+        },
+        kind: "tool-approval",
+        options: [
+          { id: "approve", label: "Approve", style: "primary" },
+          { id: "cancel", label: "Cancel", style: "danger" },
+        ],
+        prompt: "Approve tool call: update_milestone",
+        requestId: `req_m${index}`,
+      })),
+      sequence: 4,
+      stepIndex: 0,
+      turnId,
+    },
+    type: "input.requested",
+  });
+}
+
+test("approvals from one step are grouped, and the group outlives each answer", async () => {
+  const { approvalBatchFor } = await import("@/components/agent/agent-reducer");
+  const data = reduceAll([
+    milestoneBatch(),
+    stamped({
+      data: {
+        responses: [{ optionId: "approve", requestId: "req_m1" }],
+        turnId,
+      },
+      type: "client.input.responded",
+    }),
+  ]);
+
+  assert.equal(data.pendingApprovals.length, 4);
+  const batch = approvalBatchFor(data, "req_m1");
+  assert.ok(batch, "the answered request still knows its step");
+  assert.equal(batch.requestIds.length, 5);
+  assert.deepEqual(
+    batch.pending.map((item) => item.requestId),
+    ["req_m0", "req_m2", "req_m3", "req_m4"],
+  );
+  assert.equal(batch.pending[0]?.approveOptionId, "approve");
+  assert.equal(batch.pending[0]?.cancelOptionId, "cancel");
+  assert.deepEqual(batch.pending[0]?.input, { milestoneId: "m0" });
+});
+
+test("a single approval is not a batch", async () => {
+  const { approvalBatchFor } = await import("@/components/agent/agent-reducer");
+  const data = reduceAll([approvalRequest]);
+  assert.equal(approvalBatchFor(data, "req_1"), null);
+  assert.equal(data.pendingApprovals[0]?.cancelOptionId, "deny");
+});
