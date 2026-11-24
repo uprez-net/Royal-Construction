@@ -40,9 +40,15 @@ import { isDomainError } from "@/lib/domain/errors";
 import {
   createMilestone as createMilestoneCommand,
   updateMilestone as updateMilestoneCommand,
+  updateMilestones as updateMilestonesCommand,
 } from "@/lib/domain/projects/milestones";
 import { assignProjectSiteManager } from "@/lib/domain/projects/commands";
 import { getProjectDetail, listProjects } from "@/lib/domain/projects/queries";
+import {
+  listMilestonesDue,
+  type DueMilestone,
+} from "@/lib/domain/projects/milestones-due";
+import type { SydneyDayRangeName } from "@/lib/dates/day-range";
 import type { ProjectDetail } from "@/types/project";
 import {
   getProjectFinancials,
@@ -1321,6 +1327,154 @@ export async function createAuthorizedMilestone(
         },
         summary: `Milestone ${milestone.name} was added to ${project.name}.`,
         title: "Milestone created",
+      });
+    },
+  });
+}
+
+function dueMilestoneForModel(milestone: DueMilestone) {
+  return {
+    milestoneId: milestone.milestoneId,
+    name: milestone.name,
+    parentName: milestone.parentName,
+    projectId: milestone.projectId,
+    projectName: milestone.projectName,
+    status: milestone.status,
+    targetDate: milestone.targetDate.toISOString(),
+    startDate: milestone.startDate?.toISOString() ?? null,
+  };
+}
+
+/**
+ * Milestones due in a window and those overdue, across every job in progress
+ * (#618): the portfolio read a brief needs, instead of a get_project per job.
+ */
+export async function listAuthorizedMilestonesDue(
+  ctx: ToolContext,
+  input: {
+    range?: SydneyDayRangeName;
+    from?: string;
+    to?: string;
+    includeOverdue: boolean;
+    limit: number;
+  },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const { due, overdue, range } = await listMilestonesDue(
+    userPrincipal(actor),
+    input,
+    agentDb,
+  );
+  const window =
+    range.fromDay === range.toDay
+      ? range.fromDay
+      : `${range.fromDay} to ${range.toDay}`;
+  const shown = (part: { total: number; items: unknown[] }) =>
+    part.total > part.items.length
+      ? ` (first ${part.items.length} listed)`
+      : "";
+  return agentResultEnvelopeSchema.parse({
+    version: 1,
+    kind: "milestone-list",
+    title: "Milestones due",
+    summary: [
+      `${due.total} open milestone${due.total === 1 ? "" : "s"} due ${window} across jobs in progress${shown(due)}.`,
+      input.includeOverdue
+        ? `${overdue.total} overdue${shown(overdue)}.`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    data: {
+      from: range.fromDay,
+      to: range.toDay,
+      dueTotal: due.total,
+      due: due.items.map(dueMilestoneForModel),
+      ...(input.includeOverdue
+        ? {
+            overdueTotal: overdue.total,
+            overdue: overdue.items.map(dueMilestoneForModel),
+          }
+        : {}),
+    },
+    warnings: [],
+  });
+}
+
+/**
+ * Several milestones on one project in one approval and one audit row (#616).
+ * All or nothing: the domain command applies each update with the same rules
+ * as `update_milestone` inside this one transaction.
+ */
+export async function updateAuthorizedMilestones(
+  ctx: ToolContext,
+  input: {
+    projectId: string;
+    updates: {
+      actualDate?: string;
+      milestoneId: string;
+      spend?: number;
+      startDate?: string;
+      status: "PENDING" | "ACTIVE" | "DONE" | "NOT_REQUIRED";
+      targetDate?: string;
+    }[];
+  },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const project = await assertProjectAccess(actor, input.projectId);
+  return runProjectMutation({
+    action: "project.milestones.update",
+    actor,
+    projectId: input.projectId,
+    ctx,
+    ownerUserId: actor.id,
+    targetId: input.projectId,
+    inputSummary: input as unknown as Prisma.InputJsonValue,
+    transactional: true,
+    execute: async (tx) => {
+      const { outcomes } = await updateMilestonesCommand(
+        userPrincipal(actor),
+        input,
+        tx ?? agentDb,
+      );
+      const claims = [
+        ...new Set(
+          outcomes.flatMap((outcome) =>
+            outcome.stageClaim ? [outcome.stageClaim.projectStage] : [],
+          ),
+        ),
+      ];
+      const last = outcomes.at(-1);
+      return actionEnvelope({
+        entityRef: projectReference(project),
+        data: {
+          projectId: input.projectId,
+          projectSpent: last?.projectSpent ?? null,
+          projectStatus:
+            outcomes.findLast((outcome) => outcome.projectStatus !== null)
+              ?.projectStatus ?? null,
+          stageClaimsDue: claims,
+          milestones: outcomes.map(({ milestone, replannedActivities }) => ({
+            milestoneId: milestone.id,
+            name: milestone.name,
+            status: milestone.status,
+            previousStatus: milestone.previousStatus,
+            targetDate: milestone.targetDate.toISOString(),
+            startDate: milestone.startDate?.toISOString() ?? null,
+            actualDate: milestone.actualDate?.toISOString() ?? null,
+            spend: milestone.spend ?? null,
+            replannedActivities: replannedActivities.map((change) => ({
+              milestoneId: change.id,
+              targetDate: change.targetDate.toISOString(),
+            })),
+          })),
+        },
+        summary: `${outcomes.length} milestones updated.`,
+        title: "Milestones updated",
+        warnings: claims.map(
+          (stage) =>
+            `These changes finished the ${stage} stage, and no progress claim has been raised for it. Raise it from the project's Payments tab — this tool cannot reach Xero.`,
+        ),
       });
     },
   });

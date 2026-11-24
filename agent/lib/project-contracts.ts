@@ -2,6 +2,8 @@ import { z } from "zod";
 import { ComplianceDocumentType } from "@prisma/client";
 import { jsonValueSchema } from "@/agent/lib/result-contracts";
 import { hasAtMostTwoDecimalPlaces } from "@/utils/validators/common";
+import { MAX_BULK_MILESTONE_UPDATES } from "@/lib/domain/projects/milestones";
+import { dayRangeInputShape } from "@/agent/lib/lead-contracts";
 
 export const projectIdSchema = z.string().uuid();
 export const milestoneIdSchema = z.string().uuid();
@@ -13,6 +15,15 @@ export const searchProjectsInputSchema = z.object({
 });
 
 export const getProjectInputSchema = z.object({ projectId: projectIdSchema });
+
+export const listMilestonesDueInputSchema = z.object({
+  ...dayRangeInputShape,
+  includeOverdue: z
+    .boolean()
+    .default(true)
+    .describe("Also list open milestones whose target date has passed."),
+  limit: z.number().int().min(1).max(60).default(40),
+});
 
 export const listSiteManagersInputSchema = z.object({
   query: z.string().trim().max(120).default(""),
@@ -212,6 +223,18 @@ export const updateMilestoneInputSchema = z.object({
       message: "Spend must have at most two decimal places.",
     })
     .optional(),
+});
+
+/**
+ * Several milestones on one project, in one call and one approval (#616).
+ * Each entry is exactly an `update_milestone` input.
+ */
+export const updateMilestonesInputSchema = z.object({
+  projectId: projectIdSchema,
+  updates: z
+    .array(updateMilestoneInputSchema)
+    .min(2, "Use update_milestone for a single milestone.")
+    .max(MAX_BULK_MILESTONE_UPDATES),
 });
 
 export const createVariationInputSchema = z.object({

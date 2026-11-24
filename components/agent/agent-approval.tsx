@@ -16,6 +16,16 @@ import {
   AgentOutreach,
   type AgentOutreachDetails,
 } from "@/components/agent/agent-outreach";
+import {
+  AgentApprovalBatchControls,
+  useApprovalBatch,
+  usePendingApproval,
+} from "@/components/agent/agent-approval-batch";
+import { formatSydneyDate } from "@/lib/dates/sydney";
+import {
+  approvalExpiresAt,
+  isApprovalExpired,
+} from "@/lib/domain/agent/approval-expiry";
 import { AgentWhatsAppDraftView } from "@/components/agent/agent-whatsapp";
 import {
   approvalWhatsApp,
@@ -71,21 +81,49 @@ export function AgentApproval({
   const [respondError, setRespondError] = useState<string | null>(null);
   const isApproval = request.kind === "tool-approval";
   const isLimit = request.kind === "session-limit";
+  const batch = useApprovalBatch(request.requestId);
+  // When the approval stops being answerable (#617): shown while it waits, and
+  // past it the card no longer offers Approve, which eve would refuse anyway.
+  const pending = usePendingApproval(request.requestId);
+  const requestedAt = pending?.requestedAt
+    ? new Date(pending.requestedAt)
+    : null;
+  const expiresAt =
+    isApproval && requestedAt ? approvalExpiresAt(requestedAt) : null;
+  // Only a tool approval expires; a question stays answerable.
+  const expired =
+    isApproval
+    && requestedAt !== null
+    && isApprovalExpired(requestedAt, new Date());
+  // Other approvals from the same step still unanswered. eve runs none of the
+  // step's calls until they are (#616).
+  const waitingOn = batch
+    ? batch.pending.filter((item) => item.requestId !== request.requestId)
+        .length
+    : 0;
+  const showBatchControls =
+    isApproval
+    && !responded
+    && batch !== null
+    && batch.pending.length > 1
+    && batch.pending[0]?.requestId === request.requestId;
   const whatsapp = isApproval ? approvalWhatsApp(toolName, input) : null;
   const outreach = isApproval && !whatsapp ? approvalOutreach(input) : null;
   const { names: attachmentNames, verify: verifyAttachments } =
     useOutreachAttachmentNames(outreach ? input : undefined);
   // An outreach cannot be approved before the owner can see its files.
   const filesLoading = outreach !== null && attachmentNames === undefined;
-  const { labels: targetLabels, changeLabels } = useApprovalTargetLabels(
-    isApproval ? input : undefined,
-  );
+  const {
+    labels: targetLabels,
+    changeLabels,
+    itemLabels,
+  } = useApprovalTargetLabels(isApproval ? input : undefined);
   // The email or WhatsApp body is the approval when there is one, so it is
   // rendered rather than repeated as a raw argument below the preview. The
   // lead id stays: the preview names the lead only by number, and this row is
   // where the looked-up lead name appears.
   const fields = (
-    isApproval ? toInputFields(input, { changeLabels }) : []
+    isApproval ? toInputFields(input, { changeLabels, itemLabels }) : []
   ).filter(
     (field) =>
       !(outreach && OUTREACH_KEYS.has(field.key))
@@ -256,26 +294,50 @@ export function AgentApproval({
         </dl>
       ) : null}
 
+      {!responded && isApproval && expiresAt ? (
+        <p
+          className={cn(
+            "text-xs",
+            expired ? "font-medium text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {expired
+            ? `Expired at the end of ${formatSydneyDate(expiresAt)}. This change will not be made; ask the agent again if it is still wanted.`
+            : `Answer by the end of ${formatSydneyDate(expiresAt)}, or it expires and the change is not made.`}
+        </p>
+      ) : null}
+
       {responded ? (
         <p
           className="flex items-center gap-2 text-xs text-muted-foreground"
           role="status"
         >
-          {applying ? (
+          {applying && waitingOn === 0 ? (
             <LoaderCircle
               aria-hidden="true"
               className="size-3.5 animate-spin"
             />
           ) : null}
-          {respondedNotice({ applying, cancelled, isApproval })}
+          {respondedNotice({ applying, cancelled, isApproval, waitingOn })}
         </p>
       ) : (
         <div className="flex flex-col gap-2">
+          {showBatchControls && batch && !expired ? (
+            <AgentApprovalBatchControls
+              batch={batch}
+              bulkApproveBlocked={batch.pending.some(needsItsOwnApproval)}
+              canRespond={canRespond}
+              onRespond={onRespond}
+            />
+          ) : null}
           {hasOptions && decliningOptionId === null ? (
             <div className="flex flex-wrap gap-2">
               {request.options?.map((option) => (
                 <Button
-                  disabled={busy || (filesLoading && option.style !== "danger")}
+                  disabled={
+                    busy
+                    || (option.style !== "danger" && (filesLoading || expired))
+                  }
                   key={option.id}
                   onClick={() =>
                     option.style === "danger"
@@ -401,14 +463,35 @@ export function respondedNotice({
   applying,
   cancelled,
   isApproval,
+  waitingOn = 0,
 }: {
   applying: boolean;
   cancelled: boolean;
   isApproval: boolean;
+  /** Approvals from the same step still unanswered (#616). */
+  waitingOn?: number;
 }): string {
   if (!isApproval) return "Answer sent.";
   if (cancelled) return "You cancelled this. Nothing was changed.";
+  // eve holds an approved call until every approval in its step is answered,
+  // so "Applying" here would be the silent failure of 24 Nov 2026.
+  if (waitingOn > 0)
+    return `Approved: runs once the other ${waitingOn === 1 ? "change is" : `${waitingOn} changes are`} answered.`;
   return applying ? "Approved. Applying your change…" : "Approved.";
+}
+
+/**
+ * An email or a message: approved on its own card, after its body has been
+ * read and (for an email) its files re-checked, never from "Approve all".
+ */
+function needsItsOwnApproval(pending: {
+  input: unknown;
+  toolName: string;
+}): boolean {
+  return (
+    approvalWhatsApp(pending.toolName, pending.input) !== null
+    || approvalOutreach(pending.input) !== null
+  );
 }
 
 /**
@@ -548,7 +631,22 @@ function useApprovalTargetLabels(input: unknown): ApprovalTargetNames {
       : {};
   // Top-level ids and ids inside a change set are looked up separately: the
   // same field name can point at a different record in each.
+  // A list of change sets (a bulk update's `updates`) is named entry by entry.
+  const items = Object.fromEntries(
+    Object.entries(record)
+      .filter(
+        (entry): entry is [string, Record<string, unknown>[]] =>
+          Array.isArray(entry[1])
+          && entry[1].length > 0
+          && entry[1].every(
+            (item) =>
+              item !== null && typeof item === "object" && !Array.isArray(item),
+          ),
+      )
+      .map(([key, list]) => [key, list.map(scalarIds)]),
+  );
   const idKey = JSON.stringify({
+    items,
     changes: Object.assign(
       {},
       ...Object.values(record)
@@ -566,11 +664,13 @@ function useApprovalTargetLabels(input: unknown): ApprovalTargetNames {
   useEffect(() => {
     const targets = JSON.parse(idKey) as {
       changes: Record<string, unknown>;
+      items: Record<string, Record<string, unknown>[]>;
       top: Record<string, unknown>;
     };
     if (
       Object.keys(targets.top).length === 0
       && Object.keys(targets.changes).length === 0
+      && Object.keys(targets.items).length === 0
     )
       return;
     const controller = new AbortController();
@@ -588,9 +688,37 @@ function useApprovalTargetLabels(input: unknown): ApprovalTargetNames {
               (payload: { labels?: Record<string, string> } | null) =>
                 payload?.labels ?? NO_LABELS,
             );
-    void Promise.all([lookup(targets.top), lookup(targets.changes)])
-      .then(([labels, changeLabels]) =>
-        setResolved({ key: idKey, names: { changeLabels, labels } }),
+    const itemEntries = Object.entries(targets.items);
+    void Promise.all([
+      lookup(targets.top),
+      lookup(targets.changes),
+      Promise.all(
+        itemEntries.map(([, list]) =>
+          Promise.all(
+            list.map((ids) =>
+              lookup(ids).then(
+                // The entry's own record: the id field named first.
+                (found) =>
+                  Object.keys(ids)
+                    .map((field) => found[field])
+                    .find((name) => name !== undefined),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ])
+      .then(([labels, changeLabels, itemNames]) =>
+        setResolved({
+          key: idKey,
+          names: {
+            changeLabels,
+            itemLabels: Object.fromEntries(
+              itemEntries.map(([key], index) => [key, itemNames[index] ?? []]),
+            ),
+            labels,
+          },
+        }),
       )
       .catch(() => undefined);
     return () => controller.abort();
@@ -602,6 +730,9 @@ function useApprovalTargetLabels(input: unknown): ApprovalTargetNames {
 type ApprovalTargetNames = {
   readonly labels: Readonly<Record<string, string>>;
   readonly changeLabels: Readonly<Record<string, string>>;
+  readonly itemLabels: Readonly<
+    Record<string, readonly (string | undefined)[]>
+  >;
 };
 
 /** The `…Id` fields of an object whose value is one id. */
@@ -618,5 +749,6 @@ function scalarIds(value: Record<string, unknown>): Record<string, unknown> {
 const NO_LABELS: Readonly<Record<string, string>> = {};
 const NO_NAMES: ApprovalTargetNames = {
   changeLabels: NO_LABELS,
+  itemLabels: {},
   labels: NO_LABELS,
 };

@@ -36,6 +36,11 @@ import {
   type OfferSummary,
 } from "@/lib/domain/offers/queries";
 import { createOfferRevision } from "@/lib/domain/offers/revisions";
+import {
+  listOfficeOffers,
+  type OfferListGroup,
+} from "@/lib/domain/offers/office-list";
+import type { SydneyDayRangeName } from "@/lib/dates/day-range";
 import { recallOfferEnvelope } from "@/lib/domain/offers/recall";
 import {
   authorizeOffer,
@@ -1160,5 +1165,59 @@ export async function createAuthorizedProjectFromOffer(
       ...result.warnings,
       "The project's Xero contact was not created now; it is created with the first progress claim.",
     ],
+  });
+}
+
+/**
+ * Active offers across the office by status, group, recent change or
+ * follow-up due (#618): the read a brief needs, with no reference to start
+ * from. The value is included only for an office caller, by the domain.
+ */
+export async function listAuthorizedOffers(
+  ctx: SessionContext,
+  input: {
+    group?: OfferListGroup;
+    statuses?: OfferStatus[];
+    changed?: { range?: SydneyDayRangeName; from?: string; to?: string };
+    followUpDue?: boolean;
+    limit: number;
+  },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const { changed, offers, total } = await listOfficeOffers(
+    userPrincipal(actor),
+    input,
+    agentDb,
+  );
+  const more = total - offers.length;
+  const filters = [
+    input.group?.replace("_", " "),
+    input.statuses?.length ? input.statuses.join(", ") : null,
+    changed
+      ? `changed ${changed.fromDay === changed.toDay ? changed.fromDay : `${changed.fromDay} to ${changed.toDay}`}`
+      : null,
+    input.followUpDue ? "due a follow-up" : null,
+  ].filter(Boolean);
+  return agentResultEnvelopeSchema.parse({
+    version: 1,
+    kind: "entity-summary",
+    title: "Offers",
+    summary: `${total} active offer${total === 1 ? "" : "s"}${filters.length ? ` (${filters.join("; ")})` : ""}${more > 0 ? `; the ${offers.length} most recently changed are listed` : ""}.`,
+    data: {
+      total,
+      offers: offers.map((offer) => ({
+        offerId: offer.offerId,
+        leadId: offer.leadId,
+        clientName: offer.clientName,
+        projectAddress: offer.projectAddress,
+        reference: offer.reference,
+        status: offer.status,
+        sentAt: offer.sentAt?.toISOString() ?? null,
+        updatedAt: offer.updatedAt.toISOString(),
+        followUp: offer.followUp,
+        valueIncGst: offer.valueIncGst,
+      })),
+    },
+    warnings: [],
   });
 }

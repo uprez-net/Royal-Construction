@@ -10,7 +10,10 @@ import { projectReadScope } from "../../access/projects";
 import { searchLeads } from "../../leads/queries";
 import { cap, DEAD_BOOKINGS, type BuiltBriefing } from "./briefing-lines";
 import type { VoiceCallerPrincipal } from "./identity";
-import { currentVoiceStaff, leadScopeWhere } from "./relationships";
+import { currentVoiceStaff } from "./relationships";
+import { leadListScope } from "../../access/leads";
+import { sydneyMidnightIn } from "@/lib/dates/sydney";
+import { meetingsBetweenWhere } from "@/lib/leads/followup-due";
 import {
   addDays,
   bookingStatus,
@@ -80,16 +83,24 @@ export async function adminBriefing(
       { includeArchived: false, limit: 1, page: 1, query: "" },
       db,
     ),
-    db.lead.findMany({
-      orderBy: { meetingDate: "asc" },
-      select: { id: true, meetingDate: true, meetingTime: true, name: true },
-      take: 6,
-      where: {
-        ...leadScopeWhere(principal),
-        isArchived: false,
-        meetingCompletedAt: null,
-        meetingDate: { gte: today, lt: addDays(today, 2) },
+    // A meeting is a MEETING lead task (#193); `Lead.meetingDate` is the
+    // retired column the task form never sets. Same rule as the office digest
+    // and the agent's meetings read (#618).
+    db.leadTask.findMany({
+      orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }],
+      select: {
+        dueDate: true,
+        dueTime: true,
+        lead: { select: { id: true, name: true } },
       },
+      take: 6,
+      where: meetingsBetweenWhere({
+        assignedId: leadListScope(principal).assignedId,
+        from: today,
+        // The end of tomorrow in Sydney, not 48 hours on: the day the clocks
+        // go back is 25 hours long.
+        to: new Date(sydneyMidnightIn(2, now).getTime() - 1),
+      }),
     }),
   ]);
 
@@ -126,7 +137,7 @@ export async function adminBriefing(
       `Lead meetings today and tomorrow: ${meetings
         .map(
           (m) =>
-            `${field(m.name, 40)} ${spokenDate(m.meetingDate, now)}${m.meetingTime ? ` at ${field(m.meetingTime, 10)}` : ""}`,
+            `${field(m.lead.name, 40)} ${m.dueDate ? spokenDate(m.dueDate, now) : ""}${m.dueTime ? ` at ${field(m.dueTime, 10)}` : ""}`,
         )
         .join("; ")}.`,
     );
@@ -135,7 +146,7 @@ export async function adminBriefing(
     recordIds: [
       ...projects.map((p) => `project:${p.id}`),
       ...bookings.map((b) => `booking:${b.id}`),
-      ...meetings.map((m) => `lead:${m.id}`),
+      ...meetings.map((m) => `lead:${m.lead.id}`),
     ],
     text: cap(lines),
   };

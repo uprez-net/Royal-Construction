@@ -4,9 +4,12 @@ import { test } from "vitest";
 import { loadOfficeDigest } from "@/lib/domain/agent-context/sources";
 import {
   officeDigestChunk,
-  projectChunk,
+  projectSections,
 } from "@/lib/domain/agent-context/text";
-import { listOverdueLeadTasks } from "@/lib/domain/leads/queries";
+import {
+  listLeadMeetings,
+  listOverdueLeadTasks,
+} from "@/lib/domain/leads/queries";
 import { systemPrincipal } from "@/lib/domain/principal";
 import { LIVE_LEAD, overdueLeadTaskWhere } from "@/lib/leads/followup-due";
 import { recordingDb } from "../architecture/domain-harness";
@@ -42,16 +45,56 @@ test("overdue tasks on closed or archived leads stay out of the digest", async (
   assert.deepEqual(where.lead, LIVE_LEAD);
 });
 
+function meetingsRead(calls: readonly { operation: string; args: unknown }[]) {
+  return calls.find(
+    (call) =>
+      call.operation === "leadTask.findMany"
+      && JSON.stringify((call.args as { where: { type?: unknown } }).where.type)
+        === JSON.stringify({ in: ["MEETING"] }),
+  );
+}
+
 test("meetings on closed or archived leads stay out of the week ahead", async () => {
   const recorder = digestDb();
   await loadOfficeDigest(recorder.db, new Date("2026-11-13T02:00:00Z"));
 
-  const meetings = recorder.calls.find(
-    (call) => call.operation === "lead.findMany",
+  const meetings = meetingsRead(recorder.calls);
+  assert.ok(meetings, "the week's meetings are read from MEETING tasks");
+  const where = (meetings.args as { where: { lead: unknown } }).where;
+  assert.deepEqual(where.lead, LIVE_LEAD);
+});
+
+// #618: a meeting is a MEETING lead task since #193. The digest read the
+// retired Lead.meetingDate column and said "none booked" beside a full diary,
+// while the meeting reminders read the tasks. The live meetings read, the
+// digest and the reminders now share meetingsBetweenWhere.
+test("the digest and the live meetings read count meetings by one rule", async () => {
+  const now = new Date("2026-11-13T02:00:00Z");
+  const digest = digestDb();
+  await loadOfficeDigest(digest.db, now);
+  const digestWhere = (meetingsRead(digest.calls)?.args as { where: unknown })
+    .where;
+
+  const live = recordingDb({ "leadTask.count": 0, "leadTask.findMany": [] });
+  await listLeadMeetings(
+    systemPrincipal("test"),
+    { from: "2026-11-13", limit: 30, to: "2026-11-20" },
+    live.db,
+    now,
   );
-  const where = (meetings?.args as { where: Record<string, unknown> }).where;
-  assert.deepEqual(where.stage, LIVE_LEAD.stage);
-  assert.equal(where.isArchived, false);
+  const liveWhere = (
+    live.calls.find((call) => call.operation === "leadTask.findMany")?.args as {
+      where: Record<string, unknown>;
+    }
+  ).where;
+  const shape = (where: unknown) => {
+    // The windows differ (a week from today against explicit dates); the
+    // rule around them must not.
+    const rest = { ...(where as Record<string, unknown>) };
+    delete rest.dueDate;
+    return rest;
+  };
+  assert.deepEqual(shape(liveWhere), shape(digestWhere));
 });
 
 // #432: "anything overdue?" answered from the digest said 11 and led with a
@@ -202,11 +245,12 @@ test("a project's snapshot counts every activity, so adding one changes it", () 
     name: "Pour",
     status: "PENDING",
   };
-  const one = projectChunk({ ...base, milestones: [stage, child] } as never);
-  const two = projectChunk({
-    ...base,
-    milestones: [stage, child, { ...child, name: "Cure" }],
-  } as never);
+  const overview = (milestones: unknown[]) =>
+    projectSections({ ...base, milestones } as never).find(
+      (section) => section.section === "overview",
+    )!;
+  const one = overview([stage, child]);
+  const two = overview([stage, child, { ...child, name: "Cure" }]);
   assert.match(
     one.content,
     /1 of 1 stages complete; 2 activities in all, 1 done/,

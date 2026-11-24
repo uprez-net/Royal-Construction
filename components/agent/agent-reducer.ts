@@ -25,6 +25,13 @@ export type AgentTranscriptData = {
   subagents: readonly AgentSubagentRun[];
   labels: Readonly<Record<string, string>>;
   pendingApprovals: readonly AgentPendingApproval[];
+  /**
+   * Which step each tool approval came from, by request id, for every step
+   * that asked for more than one (#616). Kept after a request is answered:
+   * eve resumes a step only once every approval in it is answered, so an
+   * approved card has to know which siblings are still holding it up.
+   */
+  approvalBatches: Readonly<Record<string, string>>;
   usage: AgentSessionUsage;
   compaction: AgentCompaction | null;
 };
@@ -112,6 +119,13 @@ export type AgentPendingApproval = {
   prompt: string;
   messageId: string;
   requestedAt: string | null;
+  /** The step's batch: the first request id of its `input.requested`. */
+  batchId: string;
+  /** The tool's arguments, as the approval card shows them. */
+  input: unknown;
+  /** The option ids that approve and cancel, when the request offers them. */
+  approveOptionId: string | null;
+  cancelOptionId: string | null;
 };
 
 export type AgentCompaction = {
@@ -127,6 +141,7 @@ const emptyUsage: AgentSessionUsage = {
 };
 
 export const emptyTranscriptData: AgentTranscriptData = {
+  approvalBatches: {},
   compaction: null,
   labels: {},
   messages: [],
@@ -476,21 +491,38 @@ function reduceTranscript(
     case "subagent.event":
       return withChildProgress(data, event.data.callId, event.data.event);
     case "input.requested": {
-      const added = event.data.requests.map((request) => ({
-        callId: request.action.callId,
-        kind: request.kind,
-        messageId: `${event.data.turnId}:assistant`,
-        prompt: request.prompt,
-        requestedAt: at,
-        requestId: request.requestId,
-        toolName: request.action.toolName,
-        turnId: event.data.turnId,
-      }));
+      const batchId = event.data.requests[0]?.requestId ?? "";
+      const added = event.data.requests.map(
+        (request): AgentPendingApproval => ({
+          approveOptionId: optionIdFor(request.options, "approve"),
+          batchId,
+          callId: request.action.callId,
+          cancelOptionId: optionIdFor(request.options, "cancel"),
+          input: request.action.input,
+          kind: request.kind,
+          messageId: `${event.data.turnId}:assistant`,
+          prompt: request.prompt,
+          requestedAt: at,
+          requestId: request.requestId,
+          toolName: request.action.toolName,
+          turnId: event.data.turnId,
+        }),
+      );
+      const batched = added.filter((item) => item.kind === "tool-approval");
       const forwarded = added
         .filter((item) => item.kind !== "session-limit")
         .map((item) => item.requestId);
       return {
         ...data,
+        approvalBatches:
+          batched.length < 2
+            ? data.approvalBatches
+            : {
+                ...data.approvalBatches,
+                ...Object.fromEntries(
+                  batched.map((item) => [item.requestId, batchId]),
+                ),
+              },
         pendingApprovals: [
           ...data.pendingApprovals.filter(
             (pending) =>
@@ -631,6 +663,65 @@ export function childProgressLabel(
     default:
       return null;
   }
+}
+
+/**
+ * The option that approves or cancels. eve names them `approve` and `cancel`
+ * (`deny` is accepted too); read from the request so a renamed option is
+ * followed rather than guessed.
+ */
+function optionIdFor(
+  options: readonly { id: string; style?: string }[] | undefined,
+  decision: "approve" | "cancel",
+): string | null {
+  if (!options || options.length === 0) return null;
+  const named =
+    decision === "approve"
+      ? options.find((option) => option.id === "approve")
+      : options.find(
+          (option) => option.id === "cancel" || option.id === "deny",
+        );
+  if (named) return named.id;
+  const styled = options.find((option) =>
+    decision === "approve"
+      ? option.style === "primary"
+      : option.style === "danger",
+  );
+  return styled?.id ?? null;
+}
+
+export type AgentApprovalBatch = {
+  /** Every request in the step, answered or not, in the order eve sent them. */
+  requestIds: readonly string[];
+  /** The step's requests still waiting for an answer. */
+  pending: readonly AgentPendingApproval[];
+};
+
+/**
+ * The step a tool approval belongs to, when that step asked for more than one
+ * approval. eve runs none of a step's calls, the approved ones included, until
+ * every approval in it has an answer (#616), so a card answered on its own has
+ * to say what it is still waiting for.
+ */
+export function approvalBatchFor(
+  data: Pick<AgentTranscriptData, "approvalBatches" | "pendingApprovals">,
+  requestId: string,
+): AgentApprovalBatch | null {
+  const batchId = data.approvalBatches[requestId];
+  if (batchId === undefined) return null;
+  return {
+    // Only the tool approvals recorded in the batch: a question raised in the
+    // same step shares its batchId but is answered on its own card, and must
+    // not be swept into "Approve all" or counted as holding the step up.
+    pending: data.pendingApprovals.filter(
+      (pending) =>
+        pending.batchId === batchId
+        && data.approvalBatches[pending.requestId] === batchId,
+    ),
+    requestIds: Object.entries(data.approvalBatches)
+      .filter(([, id]) => id === batchId)
+      .map(([id]) => id),
+  };
 }
 
 function clearApprovals(

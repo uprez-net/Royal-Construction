@@ -1595,7 +1595,8 @@ model AgentMemory {
 
 /// What the operations agent knows about the business before it asks.
 ///
-/// One row per live lead, project and tradie, plus one office digest: plain
+/// One row per section of each live lead, offer and project, one per tradie,
+/// plus one office digest: plain
 /// text built deterministically from the CRM by lib/domain/agent-context (no
 /// model writes a word of it), and an embedding of that text so the agent can
 /// find the right record from the way the office actually talks ("the Rose St
@@ -1606,22 +1607,34 @@ model AgentMemory {
 /// record through a specialist before it acts on anything.
 model AgentContextChunk {
   id          String                       @id @default(uuid())
-  /// lead | project | tradie | digest
+  /// lead | offer | project | tradie | digest
   kind        String
-  /// The record's own id as text (Lead ids are integers); "office" for the digest.
+  /// The record's own id as text (Lead ids are integers); "office" for the
+  /// digest. An offer's chunks carry its lead's id: one active offer per lead.
   entityId    String
+  /// overview | people | money | dates | compliance | comms | tasks, or
+  /// `record` for a chunk that is not split (a tradie, the digest). #621.
+  section     String                       @default("record")
   title       String
   content     String                       @db.Text
-  /// sha256 of `content`; an unchanged record is not re-embedded.
+  /// sha256 of the content, keywords, tags and due date; an unchanged chunk
+  /// is not re-embedded.
   contentHash String
   /// Normalised, so the inner product is the cosine similarity.
   embedding   Unsupported("vector(1536)")?
+  /// The forms people say the record by, normalised (lib/domain/agent-context/keywords.ts).
+  keywords    String[]                     @default([])
+  /// kind, status, stage, suburb and flags, as `name:value`.
+  tags        String[]                     @default([])
+  /// The earliest open date the section is about; "overdue" is decided when read.
+  dueAt       DateTime?
   refreshedAt DateTime                     @default(now())
   createdAt   DateTime                     @default(now())
   updatedAt   DateTime                     @updatedAt
 
-  @@unique([kind, entityId])
+  @@unique([kind, entityId, section])
   @@index([kind])
+  @@index([keywords], type: Gin)
 }
 
 /// The text read out of one uploaded document for the operations agent, so

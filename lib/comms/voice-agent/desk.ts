@@ -42,6 +42,7 @@ const LOOKUP_INPUT = z.discriminatedUnion("name", [
   z.object({ name: z.literal("project_status"), project: words }),
   z.object({ name: z.literal("project_financials"), project: words }),
   z.object({ lead: words, name: z.literal("lead_summary") }),
+  z.object({ name: z.literal("offer_status"), offer: words }),
   z.object({ name: z.literal("tradie_bookings"), tradie: words }),
   z.object({
     name: z.literal("bookings_between"),

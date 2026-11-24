@@ -20,6 +20,7 @@ import {
   AgentApproval,
   type AgentInputResponse,
 } from "@/components/agent/agent-approval";
+import { useApprovalBatch } from "@/components/agent/agent-approval-batch";
 import {
   formatDuration,
   humanize,
@@ -144,9 +145,16 @@ export function AgentToolCall({
   // finished the card stops spinning, whatever state the part was left in: a
   // card that still read "running" after the reply was shown said the work was
   // not done when it was (#432).
+  // …unless other approvals from its step are still unanswered: eve runs none
+  // of the step's calls until they are, so nothing is being applied (#616).
+  const batch = useApprovalBatch(request?.requestId ?? "");
+  const heldByBatch =
+    batch !== null
+    && batch.pending.some((item) => item.requestId !== request?.requestId);
   const applying =
     working
     && !cancelled
+    && !heldByBatch
     && (part.state === "approval-responded"
       || (part.state === "approval-requested" && responded));
   const running =

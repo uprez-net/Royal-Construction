@@ -1,5 +1,7 @@
 import { defineDynamic, defineInstructions } from "eve/instructions";
-import { CANCELLED_TITLE } from "@/agent/lib/team-dispatch";
+import { agentDb } from "@/agent/lib/db";
+import { CANCELLED_TITLE, EXPIRED_TITLE } from "@/agent/lib/team-dispatch";
+import { wasApprovalExpired } from "@/lib/domain/agent/approvals";
 
 /**
  * What a specialist does after the person presses Cancel on its approval.
@@ -77,6 +79,41 @@ export function findCancelledApproval(
   return null;
 }
 
+/**
+ * The cancelled approval's request id, when history carries it: eve writes a
+ * `tool-approval-response` with `approved: false` beside the denied result.
+ * It tells a withdrawal by the expiry (#617) apart from the person's Cancel,
+ * which reach the model in identical words.
+ */
+export function findCancelledApprovalRequestId(
+  messages: readonly MessageLike[],
+): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]!;
+    if (message.role === "user") return null;
+    if (message.role !== "tool") continue;
+    for (const part of partsOf(message)) {
+      if (
+        isRecord(part)
+        && part.type === "tool-approval-response"
+        && part.approved === false
+        && typeof part.approvalId === "string"
+      )
+        return part.approvalId;
+    }
+  }
+  return null;
+}
+
+export function expiredApprovalInstructions(toolName: string): string {
+  return [
+    "## The approval for this change expired",
+    `Nobody answered the approval for ${toolName} before it expired, so it was withdrawn and the change was not applied. Nobody refused it, and no rule stopped it.`,
+    "- Do not call any tool, and do not try the change another way.",
+    `- Finish now with kind "confirmation", title "${EXPIRED_TITLE}", data { "cancelled": true, "expired": true, "change": "<the change, in a few plain words>" }, and a one-sentence summary saying the approval expired and the change was not applied.`,
+  ].join("\n");
+}
+
 export function cancelledApprovalInstructions(toolName: string): string {
   return [
     "## The person cancelled this change",
@@ -89,15 +126,27 @@ export function cancelledApprovalInstructions(toolName: string): string {
 
 export default defineDynamic({
   events: {
-    "turn.started": (_event, ctx) => {
-      const toolName = findCancelledApproval(
-        (ctx as { messages?: readonly MessageLike[] }).messages ?? [],
-      );
-      return toolName
-        ? defineInstructions({
-            content: cancelledApprovalInstructions(toolName),
-          })
-        : null;
+    "turn.started": async (_event, ctx) => {
+      const messages =
+        (ctx as { messages?: readonly MessageLike[] }).messages ?? [];
+      const toolName = findCancelledApproval(messages);
+      if (!toolName) return null;
+      const requestId = findCancelledApprovalRequestId(messages);
+      const expired =
+        requestId !== null
+        && (await wasApprovalExpired(requestId, agentDb).catch((error) => {
+          // The cancellation wording is the fallback; the log says why.
+          console.error(
+            `[cancelled-approval] could not check whether request ${requestId} expired`,
+            error instanceof Error ? error.message : error,
+          );
+          return false;
+        }));
+      return defineInstructions({
+        content: expired
+          ? expiredApprovalInstructions(toolName)
+          : cancelledApprovalInstructions(toolName),
+      });
     },
   },
 });

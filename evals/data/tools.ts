@@ -33,7 +33,9 @@ export const READ_TOOLS = {
   "lead-operations": [
     "get_lead",
     "get_lead_whatsapp",
+    "list_lead_meetings",
     "list_lead_tasks",
+    "list_lead_tasks_due",
     "list_overdue_lead_tasks",
     "prepare_lead_whatsapp_message",
     "search_leads",
@@ -46,6 +48,7 @@ export const READ_TOOLS = {
     "get_offer_details",
     "get_offer_signing_status",
     "list_offer_revisions",
+    "list_offers",
     "search_offers",
   ],
   "project-operations": [
@@ -53,6 +56,7 @@ export const READ_TOOLS = {
     "get_project",
     "get_project_financials",
     "get_project_requirements",
+    "list_milestones_due",
     "list_site_managers",
     "prepare_compliance_outreach",
     "search_projects",
@@ -103,6 +107,7 @@ export const WRITE_TOOLS = {
     "set_compliance_document_required",
     "start_compliance",
     "update_milestone",
+    "update_milestones",
     "update_project_requirements",
   ],
   "tradie-operations": [

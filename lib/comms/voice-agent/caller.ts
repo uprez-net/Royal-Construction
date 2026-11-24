@@ -6,6 +6,7 @@ import { openVoiceCallerAccess } from "@/lib/domain/comms/callers/access";
 import { voiceCallAuthority } from "@/lib/domain/comms/callers/identity";
 import { runVoiceLookup } from "@/lib/domain/comms/callers/lookups";
 import type { DomainDb } from "@/lib/domain/db";
+import type { EmbeddingPort } from "@/lib/domain/ports/embedding";
 import { reportError } from "@/lib/observability/report-error";
 
 import type { VoiceCallerSetup } from "./session";
@@ -27,6 +28,8 @@ export type VoiceCallerDeps = {
   readonly db: DomainDb;
   /** COMMS_AGENT_DISCLOSURE_ENABLED. Off: every caller is unknown. */
   readonly disclosure: boolean;
+  /** The context index's embeddings, for finding the record a caller means. */
+  readonly embedding?: EmbeddingPort;
   readonly now?: () => Date;
 };
 
@@ -53,6 +56,7 @@ export function voiceCallerPreparer(
                   request,
                   deps.db,
                   { now: now() },
+                  { embedding: deps.embedding },
                 );
                 return result.text;
               } catch (error) {

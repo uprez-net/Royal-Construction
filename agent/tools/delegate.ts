@@ -140,6 +140,7 @@ export default defineWorkflowTool({
     "Parallel tasks are for reads and for independent changes the person has already asked for; a change that depends on another result goes in a later task with `after`.",
     "A single-record change is one delegate call: the specialist calls the write tool and its own approval card asks. Never delegate a separate verify or preview step first, and never ask for approval in prose.",
     "An office-wide overdue list is answered from the office snapshot; for a live one send lead-operations (list_overdue_lead_tasks), never a walk through leads.",
+    "A live brief or any office-wide date question uses the office-wide reads: lead-operations list_lead_tasks_due, list_lead_meetings and list_overdue_lead_tasks; project-operations list_milestones_due; offer-operations list_offers. Name the window (today, tomorrow, this week) in each request; never ask for records to be walked one by one.",
     "A change that comes back cancelled or declined at approval is the person's answer: never delegate it again.",
     "Set `readOnly: true` on every task that only looks things up. A read-only task whose specialist returns an unusable result is retried once for you; never delegate it again yourself.",
     "Specialists:",

@@ -190,3 +190,150 @@ test("a boundary waits for a background write in flight, then writes what queued
     ["reasoning.appended", "message.completed"],
   ]);
 });
+
+// #615: a NUL in a tool result used to fail the turn, and the batch holding it
+// went back to the front of the queue to fail every later boundary too.
+
+test("an event with a NUL or a lone surrogate in a nested string is cleaned for jsonb", async () => {
+  const { toInputJson } = await import("@/agent/lib/event-persistence");
+  const nul = String.fromCharCode(0);
+  const loneHigh = String.fromCharCode(0xd83d);
+  const loneLow = String.fromCharCode(0xde00);
+  const replacement = String.fromCharCode(0xfffd);
+  const emoji = String.fromCodePoint(0x1f600);
+  const cleaned = toInputJson({
+    type: "action.result",
+    data: {
+      output: {
+        text: `page${nul}one`,
+        lines: [`a${nul}b`, `broken ${loneHigh}`],
+      },
+      [`key${nul}`]: `${loneLow} low`,
+      intact: `emoji ${emoji} stays`,
+    },
+  });
+  assert.deepEqual(cleaned, {
+    type: "action.result",
+    data: {
+      output: { text: "pageone", lines: ["ab", `broken ${replacement}`] },
+      key: `${replacement} low`,
+      intact: `emoji ${emoji} stays`,
+    },
+  });
+  // What jsonb refuses is the escape JSON.stringify writes for these.
+  assert.doesNotMatch(JSON.stringify(cleaned), /\\u0000|\\ud[89a-f]/i);
+});
+
+test("a stored event with a NUL in it reaches the store without one", async () => {
+  const payloads: unknown[] = [];
+  const store = {
+    async writeBatch(_identity: unknown, batch: { payload: unknown }[]) {
+      payloads.push(...batch.map((event) => event.payload));
+    },
+  };
+  const persist = createAgentEventPersister(noTitle, store);
+  await persist(
+    event("action.result", { output: `ocr${String.fromCharCode(0)}text` }),
+    ctx,
+  );
+  assert.equal(
+    (payloads[0] as { data: { output: string } }).data.output,
+    "ocrtext",
+  );
+});
+
+function postgresDataError() {
+  return Object.assign(
+    new Error(
+      "Invalid `prisma.agentSessionEvent.createMany()` invocation:\nDatabase error. Code: `22P05`. Message: `unsupported Unicode escape sequence`",
+    ),
+    { name: "PrismaClientUnknownRequestError" },
+  );
+}
+
+test("a batch Postgres refuses for its content does not block the next boundary write", async () => {
+  const written: { eventType: string; payload: unknown }[][] = [];
+  const store = {
+    async writeBatch(
+      _identity: unknown,
+      batch: { eventType: string; payload: unknown }[],
+    ) {
+      // Refuse any write that still holds the poisoned result.
+      if (
+        batch.some(
+          (entry) =>
+            (entry.payload as { data?: { output?: string } }).data?.output
+            === "refused",
+        )
+      ) {
+        throw postgresDataError();
+      }
+      written.push(batch);
+    },
+  };
+  const persist = createAgentEventPersister(noTitle, store);
+  const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+  await persist(event("message.appended", { messageDelta: "a" }), ctx);
+  // The boundary does not throw: the turn goes on.
+  await persist(event("action.result", { output: "refused" }), ctx);
+  await persist(event("step.completed"), ctx);
+
+  const types = written.map((batch) => batch.map((entry) => entry.eventType));
+  assert.deepEqual(types, [
+    ["message.appended"],
+    ["action.result"],
+    ["step.completed"],
+  ]);
+  const marker = written[1]![0]!.payload as Record<string, unknown>;
+  assert.equal(marker.omitted, true);
+  assert.equal(marker.type, "action.result");
+  assert.equal("meta" in marker, false, "a marker is not a hydratable event");
+  assert.equal(logged.mock.calls.length, 1);
+  logged.mockRestore();
+});
+
+test("an owner mismatch still fails the turn and is retried, not replaced", async () => {
+  const { AgentSessionOwnerMismatchError } =
+    await import("@/agent/lib/event-persistence");
+  const attempts: string[][] = [];
+  const store = {
+    async writeBatch(_identity: unknown, batch: { eventType: string }[]) {
+      attempts.push(batch.map((entry) => entry.eventType));
+      throw new AgentSessionOwnerMismatchError();
+    },
+  };
+  const persist = createAgentEventPersister(noTitle, store);
+
+  await assert.rejects(
+    () => persist(event("session.started"), ctx),
+    /owner mismatch/,
+  );
+  await assert.rejects(
+    () => persist(event("turn.started"), ctx),
+    /owner mismatch/,
+  );
+  assert.deepEqual(attempts, [
+    ["session.started"],
+    ["session.started", "turn.started"],
+  ]);
+});
+
+test("only a data exception counts as an unstorable payload", async () => {
+  const { isUnstorablePayloadError, AgentSessionOwnerMismatchError } =
+    await import("@/agent/lib/event-persistence");
+  assert.equal(isUnstorablePayloadError(postgresDataError()), true);
+  assert.equal(
+    isUnstorablePayloadError({ code: "P2010", meta: { code: "22021" } }),
+    true,
+  );
+  assert.equal(
+    isUnstorablePayloadError(new Error("database unavailable")),
+    false,
+  );
+  assert.equal(
+    isUnstorablePayloadError(new AgentSessionOwnerMismatchError()),
+    false,
+  );
+  assert.equal(isUnstorablePayloadError({ code: "P1001" }), false);
+});

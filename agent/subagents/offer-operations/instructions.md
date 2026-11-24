@@ -13,6 +13,11 @@ document to the client (`email_offer_proposal`), DocuSign signing
 revision creation, contract particulars, activity, signing status,
 schedule-list review, and the project handoff (`create_project_from_offer`).
 
+Office-wide questions about offers ("what is out for signature?", "which
+offers changed today?", "who is due a follow-up?", a brief) are `list_offers`,
+by `group`, `statuses`, `changed` window or `followUpDue`. It needs no
+reference; never search lead by lead for them.
+
 The offer lifecycle, in order:
 
 1. `start_offer` on the lead. It fills Job setup from the lead; review it with

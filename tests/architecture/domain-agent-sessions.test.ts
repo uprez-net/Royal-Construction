@@ -8,6 +8,8 @@ test("agent workspace reads only root sessions owned by the principal", async ()
   const createdAt = new Date("2026-09-21T10:00:00.000Z");
   const recorder = recordingDb({
     "agentSession.findFirst": { eveSessionId: "eve_1" },
+    // No approvals waiting (#617).
+    "agentSessionEvent.findMany": [],
     "agentSession.findMany": [
       {
         agentName: "Royal assistant",
@@ -42,6 +44,16 @@ test("agent workspace reads only root sessions owned by the principal", async ()
   );
 
   assert.equal(result.sessions[0]?.eveSessionId, "eve_1");
+  assert.equal(result.sessions[0]?.pendingApprovals, 0);
+  const approvals = recorder.calls.find(
+    (call) => call.operation === "agentSessionEvent.findMany",
+  );
+  assert.deepEqual(
+    (approvals?.args as { where: { agentSession: unknown } }).where
+      .agentSession,
+    { ownerUserId: "owner_1", rootEveSessionId: { in: ["eve_1"] } },
+    "the approvals read is scoped to the caller's own listed conversations",
+  );
   assert.deepEqual(result.selectedAnnotationsByTurn.turn_1, [
     {
       group: "lead",

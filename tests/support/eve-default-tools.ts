@@ -6,8 +6,11 @@
  * defaultTools (its runtime config rejects that field), so each one is removed
  * by an authored disableTool() in the subagent's own tools/ directory.
  *
- * Not listed: load_skill, which specialists load their skills with;
- * ask_question, because removing it would change how a specialist asks a
+ * load_skill is listed since #619: the specialists carry their procedures and
+ * the office handbook as instructions, so there is nothing to load, and 31 of
+ * 77 production turns had spent a model call or two loading them anyway.
+ *
+ * Not listed: ask_question, because removing it would change how a specialist asks a
  * clarifying question and that path has no live eval yet; and task_cancel,
  * which eve already hides from a child session.
  *
@@ -18,6 +21,7 @@
  */
 export const DISABLED_DEFAULT_TOOLS = [
   "bash",
+  "load_skill",
   "read_file",
   "todo",
   "web_fetch",

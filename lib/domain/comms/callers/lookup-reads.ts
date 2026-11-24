@@ -3,7 +3,13 @@ import { InvoiceStatus, type LeadStage } from "@prisma/client";
 import { sydneyMidnightIn, sydneyToday } from "@/lib/dates/sydney";
 
 import type { DomainDb } from "../../db";
-import { projectReadScope } from "../../access/projects";
+import {
+  canSeeProjectFinancials,
+  projectReadScope,
+} from "../../access/projects";
+import { normalizeKeyword } from "../../agent-context/keywords";
+import { searchOffers } from "../../offers/queries";
+import type { EmbeddingPort } from "../../ports/embedding";
 import { searchLeads } from "../../leads/queries";
 import { getProjectFinancials } from "../../projects/financials";
 import { listProjectsForLookup } from "../../projects/queries";
@@ -12,6 +18,7 @@ import { toCents } from "../../tradies/billing-rules";
 import { searchTradies } from "../../tradies/queries";
 import { DEAD_BOOKINGS, milestoneLine } from "./briefing-lines";
 import type { VoiceLookupResult, VoiceLookupWhen } from "./lookups";
+import { resolveThroughIndex } from "./index-resolve";
 import { projectSearchVariants } from "./project-search";
 import { leadScopeWhere } from "./relationships";
 import {
@@ -46,6 +53,9 @@ function answer(lines: readonly string[], recordIds: readonly string[]) {
 
 type ProjectMatch = { id: string; name: string; location: string };
 
+/** What a lookup may reach outside the database: the index's embeddings. */
+export type VoiceLookupPorts = { readonly embedding?: EmbeddingPort };
+
 /**
  * The caller's words → one project, or the reason there is not one. The words
  * are tried as said, then as the same address written other ways
@@ -56,7 +66,36 @@ async function oneProject(
   principal: UserPrincipal,
   words: string,
   db: DomainDb,
+  ports: VoiceLookupPorts = {},
 ): Promise<{ id: string; name: string } | VoiceLookupResult> {
+  // The context index first (#621); every match is re-read live under the
+  // caller's own project scope before it counts.
+  const indexed = await resolveThroughIndex(
+    principal,
+    words,
+    "project",
+    db,
+    ports,
+  );
+  if (indexed.kind !== "none") {
+    const ids = indexed.kind === "one" ? [indexed.entityId] : indexed.entityIds;
+    const live = await db.project.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, location: true, name: true },
+      where: { id: { in: [...ids] }, ...projectReadScope(principal) },
+    });
+    if (live.length === 1) return live[0]!;
+    if (live.length > 1) {
+      return answer(
+        [
+          `${live.length} projects match "${field(words, 60)}"; ask which one:`,
+          ...live.map((p) => `- ${field(p.name)} at ${field(p.location)}`),
+        ],
+        live.map((p) => `project:${p.id}`),
+      );
+    }
+  }
+
   let found: { items: ProjectMatch[]; totalCount: number } | null = null;
   for (const search of projectSearchVariants(words)) {
     const page = await listProjectsForLookup(
@@ -98,8 +137,9 @@ export async function projectStatus(
   words: string,
   db: DomainDb,
   now: Date,
+  ports: VoiceLookupPorts = {},
 ): Promise<VoiceLookupResult> {
-  const match = await oneProject(principal, words, db);
+  const match = await oneProject(principal, words, db, ports);
   if ("text" in match) return match;
   const today = startOfSydneyDay(now);
   const project = await db.project.findFirstOrThrow({
@@ -158,8 +198,9 @@ export async function projectFinancials(
   principal: UserPrincipal,
   words: string,
   db: DomainDb,
+  ports: VoiceLookupPorts = {},
 ): Promise<VoiceLookupResult> {
-  const match = await oneProject(principal, words, db);
+  const match = await oneProject(principal, words, db, ports);
   if ("text" in match) return match;
   // Admin-only, enforced by the app's own rule inside getProjectFinancials.
   const [financials, claims] = await Promise.all([
@@ -196,17 +237,59 @@ export async function projectFinancials(
   );
 }
 
+/**
+ * The caller's words → the leads they could mean: the context index first
+ * (#621), each re-read live under the caller's lead scope, then the scoped
+ * name search.
+ */
+async function matchingLeads(
+  principal: UserPrincipal,
+  words: string,
+  db: DomainDb,
+  ports: VoiceLookupPorts,
+): Promise<{
+  items: { id: number; name: string; location: string | null }[];
+  totalCount: number;
+}> {
+  const indexed = await resolveThroughIndex(
+    principal,
+    words,
+    "lead",
+    db,
+    ports,
+  );
+  if (indexed.kind !== "none") {
+    const ids = (
+      indexed.kind === "one" ? [indexed.entityId] : indexed.entityIds
+    )
+      .map(Number)
+      .filter((id) => Number.isSafeInteger(id));
+    const live = await db.lead.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, location: true, name: true },
+      where: {
+        id: { in: ids },
+        isArchived: false,
+        ...leadScopeWhere(principal),
+      },
+    });
+    if (live.length) return { items: live, totalCount: live.length };
+  }
+  return searchLeads(
+    principal,
+    { includeArchived: false, limit: 5, page: 1, query: words },
+    db,
+  );
+}
+
 export async function leadSummary(
   principal: UserPrincipal,
   words: string,
   db: DomainDb,
   now: Date,
+  ports: VoiceLookupPorts = {},
 ): Promise<VoiceLookupResult> {
-  const found = await searchLeads(
-    principal,
-    { includeArchived: false, limit: 5, page: 1, query: words },
-    db,
-  );
+  const found = await matchingLeads(principal, words, db, ports);
   if (found.items.length === 0) {
     return answer([`No open lead matches "${field(words, 60)}".`], []);
   }
@@ -261,6 +344,145 @@ export async function leadSummary(
         : "",
     ].filter(Boolean),
     [`lead:${lead.id}`],
+  );
+}
+
+/**
+ * A spoken offer reference ("RC Q 2026 014 R2") in the form references are
+ * stored in ("rc-q-2026-014"), for the literal search; null for words that are
+ * not a reference. A trailing revision is left off: it is not in the base.
+ */
+function storedReferenceForm(words: string): string | null {
+  const tokens = normalizeKeyword(words).split(" ").filter(Boolean);
+  if (tokens.length > 1 && /^r\d{1,3}$/.test(tokens.at(-1)!)) tokens.pop();
+  if (tokens.length < 2 || !tokens.some((token) => /\d/.test(token)))
+    return null;
+  return tokens.join("-");
+}
+
+/** The revision the caller named ("R1", "rev 1", "revision 1"), or null. */
+function requestedRevision(words: string): number | null {
+  const match = /(?:(?:^| )(?:r|rev|revision) ?|(?<=\d)r)(\d{1,3})(?= |$)/.exec(
+    normalizeKeyword(words),
+  );
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * A lead's active offer, by the client's name, the site or the offer
+ * reference in any form (#621): its status, when it went out, and its value
+ * only for a caller who may see money (`canSeeProjectFinancials`).
+ */
+export async function offerStatus(
+  principal: UserPrincipal,
+  words: string,
+  db: DomainDb,
+  now: Date,
+  ports: VoiceLookupPorts = {},
+): Promise<VoiceLookupResult> {
+  const liveOffers = (leadIds: readonly number[]) =>
+    leadIds.length
+      ? db.offer.findMany({
+          orderBy: { updatedAt: "desc" },
+          select: {
+            baseReference: true,
+            contractValueIncGst: true,
+            id: true,
+            lead: { select: { location: true, name: true } },
+            leadId: true,
+            offerStatus: true,
+            revisionNumber: true,
+            sentAt: true,
+            totalAmount: true,
+            updatedAt: true,
+          },
+          take: 5,
+          where: {
+            isActive: true,
+            lead: { isArchived: false, ...leadScopeWhere(principal) },
+            leadId: { in: [...leadIds] },
+          },
+        })
+      : Promise.resolve([]);
+
+  const indexed = await resolveThroughIndex(
+    principal,
+    words,
+    "offer",
+    db,
+    ports,
+  );
+  // An offer's index entry carries its lead's id.
+  let offers = await liveOffers(
+    indexed.kind === "none"
+      ? []
+      : (indexed.kind === "one" ? [indexed.entityId] : indexed.entityIds)
+          .map(Number)
+          .filter((id) => Number.isSafeInteger(id)),
+  );
+  if (offers.length === 0) {
+    // The index found nothing, or only leads with no live offer this caller
+    // may read (a stale entry): the scoped search, as said and then as the
+    // reference is stored.
+    let found = await searchOffers(principal, { limit: 5, query: words }, db);
+    const stored = storedReferenceForm(words);
+    if (!found.some((o) => o.isActive) && stored && stored !== words) {
+      found = await searchOffers(principal, { limit: 5, query: stored }, db);
+    }
+    offers = await liveOffers([
+      ...new Set(found.filter((o) => o.isActive).map((o) => o.leadId)),
+    ]);
+  }
+  if (offers.length === 0) {
+    return answer(
+      [
+        `No current offer matches "${field(words, 60)}". Ask for the client's name or the offer reference.`,
+      ],
+      [],
+    );
+  }
+  const reference = (o: (typeof offers)[number]) =>
+    `${o.baseReference.trim() || `OF-${o.leadId}`}-R${o.revisionNumber}`;
+  if (offers.length > 1) {
+    return answer(
+      [
+        `${offers.length} offers match "${field(words, 60)}"; ask which one:`,
+        ...offers.map(
+          (o) =>
+            `- ${field(reference(o), 30)} for ${field(o.lead.name, 40)}${o.lead.location ? ` at ${field(o.lead.location, 40)}` : ""}`,
+        ),
+      ],
+      offers.map((o) => `offer:${o.id}`),
+    );
+  }
+  const offer = offers[0]!;
+  // "RC-…-R1" finds the lead's active offer, which may be R2: say so rather
+  // than answer R1's question with R2's status and value.
+  const asked = requestedRevision(words);
+  if (asked !== null && asked !== offer.revisionNumber) {
+    const base = offer.baseReference.trim() || `OF-${offer.leadId}`;
+    return answer(
+      [
+        asked < offer.revisionNumber
+          ? `${field(`${base}-R${asked}`, 30)} has been superseded. The current offer for ${field(offer.lead.name, 40)} is ${field(reference(offer), 30)}; ask about that one if it is wanted.`
+          : `There is no ${field(`${base}-R${asked}`, 30)}. The current offer for ${field(offer.lead.name, 40)} is ${field(reference(offer), 30)}; ask about that one if it is wanted.`,
+      ],
+      [`offer:${offer.id}`],
+    );
+  }
+  const value = canSeeProjectFinancials(principal)
+    ? toCents(offer.contractValueIncGst ?? offer.totalAmount)
+    : null;
+  return answer(
+    [
+      `${field(reference(offer), 30)} for ${field(offer.lead.name, 40)}${offer.lead.location ? ` at ${field(offer.lead.location, 40)}` : ""}: ${offer.offerStatus.toLowerCase().replaceAll("_", " ")}.`,
+      offer.sentAt
+        ? `Sent: ${spokenDate(offer.sentAt, now)}.`
+        : "Not sent yet.",
+      value === null ? "" : `Value: ${spokenDollars(value)} including GST.`,
+      `Last changed: ${spokenDate(offer.updatedAt, now)}.`,
+    ].filter(Boolean),
+    [`offer:${offer.id}`],
   );
 }
 
