@@ -10,14 +10,14 @@ import { listProjectsForLookup } from "../../projects/queries";
 import type { UserPrincipal } from "../../principal";
 import { toCents } from "../../tradies/billing-rules";
 import { searchTradies } from "../../tradies/queries";
-import { DEAD_BOOKINGS } from "./briefing-lines";
+import { DEAD_BOOKINGS, milestoneLine } from "./briefing-lines";
 import type { VoiceLookupResult, VoiceLookupWhen } from "./lookups";
+import { projectSearchVariants } from "./project-search";
 import { leadScopeWhere } from "./relationships";
 import {
   addDays,
   bookingStatus,
   field,
-  milestoneStatus,
   spokenDate,
   spokenDollars,
   staffLeadStage,
@@ -44,21 +44,34 @@ function answer(lines: readonly string[], recordIds: readonly string[]) {
   };
 }
 
-/** The caller's words → one project, or the reason there is not one. */
+/**
+ * The caller's words → one project, or the reason there is not one. The words
+ * are tried as said, then as the same address written other ways
+ * (project-search.ts): the first search that finds anything is the answer.
+ */
 async function oneProject(
   principal: UserPrincipal,
   words: string,
   db: DomainDb,
 ): Promise<{ id: string; name: string } | VoiceLookupResult> {
-  const found = await listProjectsForLookup(
-    principal,
-    { limit: 5, page: 1, query: words },
-    db,
-  );
-  if (found.items.length === 1) return found.items[0];
-  if (found.items.length === 0) {
-    return answer([`No project matches "${field(words, 60)}".`], []);
+  let found: Awaited<ReturnType<typeof listProjectsForLookup>> | null = null;
+  for (const query of projectSearchVariants(words)) {
+    found = await listProjectsForLookup(
+      principal,
+      { limit: 5, page: 1, query },
+      db,
+    );
+    if (found.items.length > 0) break;
   }
+  if (!found || found.items.length === 0) {
+    return answer(
+      [
+        `No project matches "${field(words, 60)}". Ask for the lot number or the suburb.`,
+      ],
+      [],
+    );
+  }
+  if (found.items.length === 1) return found.items[0];
   return answer(
     [
       `${found.totalCount} projects match "${field(words, 60)}"; ask which one:`,
@@ -112,10 +125,7 @@ export async function projectStatus(
     [
       `${field(project.name)} at ${field(project.location)}: ${staffProjectStatus(project.status)}.`,
       `Site manager: ${project.siteManager ? field(project.siteManager.name, 40) : "not assigned"}.`,
-      ...project.milestones.map(
-        (m) =>
-          `- ${field(m.name)}: ${milestoneStatus(m.status)}; current schedule ${spokenDate(m.startDate, now) ?? "no start date"} to ${spokenDate(m.targetDate, now)}.`,
-      ),
+      ...project.milestones.map((m) => `- ${milestoneLine(m, now)}.`),
       project.tradieSchedules.length
         ? `Next bookings: ${project.tradieSchedules
             .map(

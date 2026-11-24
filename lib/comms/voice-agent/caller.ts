@@ -42,6 +42,7 @@ export function voiceCallerPreparer(
         deps.db,
       );
       return {
+        callerClass: access.context?.callerClass ?? "unknown",
         greetingCue: voiceAgentGreetingCue(access.context),
         instructions: voiceAgentInstructions(access.context),
         lookup: access.lookups.length
