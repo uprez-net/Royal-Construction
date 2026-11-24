@@ -8,9 +8,10 @@ import type { DomainDb } from "../db";
 import { OFFER_AWAITING_SIGNATURE_STATUSES } from "../offers/office-list";
 import { projectInProgressWhere } from "../projects/milestones-due";
 import {
-  leadChunk,
+  leadSections,
+  offerSections,
   officeDigestChunk,
-  projectChunk,
+  projectSections,
   tradieChunk,
   type ChunkDraft,
   type OfficeDigestSource,
@@ -141,9 +142,9 @@ export async function loadLeadChunks(
     },
   });
 
-  return leads.map((lead) => {
+  return leads.flatMap((lead) => {
     const offer = lead.offers[0];
-    return leadChunk({
+    return leadSections({
       activeOffer: offer
         ? {
             contractValueIncGst: num(offer.contractValueIncGst),
@@ -261,11 +262,11 @@ export async function loadProjectChunks(
     },
   });
 
-  return projects.map((project) => {
+  return projects.flatMap((project) => {
     const customerNames = project.customers.length
       ? project.customers.map((entry) => entry.customer.name)
       : [project.customer.name];
-    return projectChunk({
+    return projectSections({
       buildingType: project.buildingType,
       checklists: project.checklists,
       compliance: project.certifierEngagement
@@ -311,6 +312,88 @@ export async function loadProjectChunks(
       })),
     });
   });
+}
+
+/** `job.validUntil` from an offer's workspace, when it is a calendar date. */
+function workspaceValidUntil(workspaceState: unknown): string | null {
+  if (!workspaceState || typeof workspaceState !== "object") return null;
+  const job = (workspaceState as { job?: { validUntil?: unknown } }).job;
+  const value = job?.validUntil;
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? value
+    : null;
+}
+
+/**
+ * Each live lead's active offer, as a record of its own (#621). Keyed by the
+ * lead's id, so the same rows are refreshed with the lead and a new revision
+ * replaces the old one in place.
+ */
+export async function loadOfferChunks(
+  db: DomainDb,
+  now: Date,
+  leadIds?: readonly number[],
+): Promise<ChunkDraft[]> {
+  const offers = await db.offer.findMany({
+    orderBy: { leadId: "asc" },
+    select: {
+      _count: { select: { followUps: true } },
+      acceptedAt: true,
+      baseReference: true,
+      contractValueIncGst: true,
+      followUps: {
+        orderBy: { sentAt: "desc" },
+        select: { sentAt: true },
+        take: 1,
+      },
+      id: true,
+      lead: {
+        select: {
+          location: true,
+          name: true,
+          project: { select: { id: true } },
+          secondaryName: true,
+        },
+      },
+      leadId: true,
+      offerStatus: true,
+      revisionNumber: true,
+      sentAt: true,
+      totalAmount: true,
+      updatedAt: true,
+      workspaceState: true,
+    },
+    where: {
+      isActive: true,
+      lead: leadIds
+        ? { id: { in: [...leadIds] }, isArchived: false }
+        : liveLeadWhere(now),
+    },
+  });
+
+  return offers.flatMap((offer) =>
+    offerSections({
+      acceptedAt: offer.acceptedAt,
+      followUps: {
+        count: offer._count.followUps,
+        lastSentAt: offer.followUps[0]?.sentAt ?? null,
+      },
+      id: offer.id,
+      leadId: offer.leadId,
+      leadName: offer.lead.name,
+      location: offer.lead.location,
+      projectId: offer.lead.project?.id ?? null,
+      reference: offer.baseReference.trim() || `OF-${offer.leadId}`,
+      revisionNumber: offer.revisionNumber,
+      secondaryName: offer.lead.secondaryName,
+      sentAt: offer.sentAt,
+      status: offer.offerStatus,
+      totalAmount: Number(offer.totalAmount),
+      updatedAt: offer.updatedAt,
+      validUntil: workspaceValidUntil(offer.workspaceState),
+      valueIncGst: num(offer.contractValueIncGst),
+    }),
+  );
 }
 
 export async function loadTradieChunks(
@@ -544,16 +627,20 @@ export async function loadContextChunks(
   extras: OfficeDigestExtras = {},
 ): Promise<ChunkDraft[]> {
   if (!selection) {
-    const [leads, projects, tradies, digest] = await Promise.all([
+    const [leads, offers, projects, tradies, digest] = await Promise.all([
       loadLeadChunks(db, now),
+      loadOfferChunks(db, now),
       loadProjectChunks(db, now),
       loadTradieChunks(db, now),
       loadOfficeDigest(db, now, extras),
     ]);
-    return [...leads, ...projects, ...tradies, digest];
+    return [...leads, ...offers, ...projects, ...tradies, digest];
   }
-  const [leads, projects, tradies] = await Promise.all([
+  const [leads, offers, projects, tradies] = await Promise.all([
     selection.leadIds?.length ? loadLeadChunks(db, now, selection.leadIds) : [],
+    selection.leadIds?.length
+      ? loadOfferChunks(db, now, selection.leadIds)
+      : [],
     selection.projectIds?.length
       ? loadProjectChunks(db, now, selection.projectIds)
       : [],
@@ -561,5 +648,5 @@ export async function loadContextChunks(
       ? loadTradieChunks(db, now, selection.tradieIds)
       : [],
   ]);
-  return [...leads, ...projects, ...tradies];
+  return [...leads, ...offers, ...projects, ...tradies];
 }

@@ -146,7 +146,7 @@ fit-out, final.
    task needs another's answer, give it \`after\`.
 3. Answer from the results in the same turn.
 
-The snapshot is refreshed nightly and after every change you make. It is
+The snapshot is refreshed every morning and after every change you make. It is
 orientation, not truth: confirm live values through a specialist before you
 change anything or quote a figure or date that will reach a client.
 

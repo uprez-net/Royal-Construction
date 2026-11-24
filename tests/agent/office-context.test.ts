@@ -8,6 +8,7 @@ import { OFFICE_HANDBOOK } from "@/agent/lib/office-handbook";
 import houseStyle from "@/agent/lib/house-style-instructions";
 import {
   contentHash,
+  draftHash,
   lexicalBoost,
   normalizeVector,
   queryTerms,
@@ -16,7 +17,7 @@ import {
   selectionFor,
 } from "@/lib/domain/agent-context";
 import {
-  leadChunk,
+  leadSections,
   type LeadContextSource,
 } from "@/lib/domain/agent-context/text";
 import type { DomainDb } from "@/lib/domain/db";
@@ -88,26 +89,53 @@ const lead: LeadContextSource = {
   urgent: false,
 };
 
-test("a lead reads the way the office talks about it, reproducibly", () => {
-  const chunk = leadChunk(lead);
-  assert.equal(chunk.title, "Jordan Smith — 12 Rose St, Kellyville");
-  assert.match(chunk.content, /Stage: Quoted/);
-  assert.match(
-    chunk.content,
-    /Offer: OF-42-R2 is Offer sent, \$612,500 inc GST/,
-  );
-  assert.match(
-    chunk.content,
-    /Open tasks: Call due .*2026 10:00 — Chase signature/,
-  );
-  assert.match(
-    chunk.content,
-    /Refs \(tools only, never show people\): leadId=42 offerId=offer-uuid/,
-  );
+test("a lead reads the way the office talks about it, a section at a time, reproducibly", () => {
+  const sections = leadSections(lead);
+  const by = Object.fromEntries(sections.map((s) => [s.section, s]));
+  assert.deepEqual(Object.keys(by).sort(), [
+    "comms",
+    "money",
+    "overview",
+    "people",
+    "tasks",
+  ]);
+  for (const section of sections) {
+    assert.equal(section.title, "Jordan Smith — 12 Rose St, Kellyville");
+    // The header is repeated, so a section found alone says whose it is.
+    assert.match(
+      section.content,
+      /^Lead: Jordan Smith — 12 Rose St, Kellyville \(Quoted\)/,
+    );
+    assert.match(
+      section.content,
+      /Refs \(tools only, never show people\): leadId=42 offerId=offer-uuid/,
+    );
+  }
+  // The overview names the offer; only the money section prices it.
+  assert.match(by.overview!.content, /Offer: OF-42-R2 is Offer sent/);
+  assert.doesNotMatch(by.overview!.content, /\$/);
+  assert.match(by.money!.content, /\$612,500 inc GST/);
+  assert.match(by.tasks!.content, /- Call due .*2026 10:00 — Chase signature/);
+  // A date, not "overdue": that is decided when the index is read.
+  assert.equal(by.tasks!.dueAt?.toISOString(), "2026-11-14T00:00:00.000Z");
+  assert.doesNotMatch(by.tasks!.content, /overdue/i);
+  // Keywords in the forms people say them.
+  for (const keyword of [
+    "jordan smith",
+    "smith",
+    "12 rose st",
+    "12 rose street",
+    "kellyville",
+    "of 42 r2",
+    "of42r2",
+  ])
+    assert.ok(by.overview!.keywords.includes(keyword), keyword);
+  assert.ok(by.overview!.tags.includes("stage:quoted"));
+  assert.ok(by.overview!.tags.includes("suburb:kellyville"));
   // Same record, same words, same hash: an unchanged lead is not re-embedded.
-  assert.equal(
-    contentHash(leadChunk(lead).content),
-    contentHash(chunk.content),
+  assert.deepEqual(
+    leadSections(lead).map((s) => contentHash(s.content)),
+    sections.map((s) => contentHash(s.content)),
   );
 });
 
@@ -140,8 +168,19 @@ test("an agent write re-indexes exactly the records it named", () => {
 });
 
 /** A database that serves one lead and records what the refresh writes. */
+const LEAD_SECTIONS = leadSections(lead);
+const SECTION_COUNT = LEAD_SECTIONS.length;
+
+function repeat<T>(values: readonly T[], times: number): T[] {
+  return Array.from({ length: times }, () => values).flat();
+}
+
+/**
+ * `existing`: "none", "current" (every section already indexed with its
+ * current text) or "stale" (one old row the refresh must replace).
+ */
 function refreshDb(
-  existingHash: string | null,
+  existing: "none" | "current" | "stale",
   missingVector = false,
   /** Rows a vector write matches: 0 when the text changed underneath it. */
   vectorRows = 1,
@@ -168,16 +207,25 @@ function refreshDb(
         return { count: 0 };
       },
       findMany: async () =>
-        existingHash === null
+        existing === "none"
           ? []
-          : [
-              {
-                contentHash: existingHash,
+          : existing === "stale"
+            ? [
+                {
+                  contentHash: "old-hash",
+                  entityId: "42",
+                  id: "row-1",
+                  kind: "lead",
+                  section: "record",
+                },
+              ]
+            : LEAD_SECTIONS.map((draft, index) => ({
+                contentHash: draftHash(draft),
                 entityId: "42",
-                id: "row-1",
+                id: `row-${index}`,
                 kind: "lead",
-              },
-            ],
+                section: draft.section,
+              })),
       updateMany: async () => {
         writes.push("touch");
         return { count: 1 };
@@ -209,6 +257,8 @@ function refreshDb(
         },
       ],
     },
+    // The lead's offer is its own record now (#621); none in this fixture.
+    offer: { findMany: async () => [] },
   };
   return { db: db as unknown as DomainDb, writes };
 }
@@ -231,50 +281,66 @@ function countingEmbedding(fail = false) {
 const cron = systemPrincipal("test");
 const selection = { leadIds: [42] };
 
-test("a new record is written and embedded", async () => {
-  const { db, writes } = refreshDb(null);
+test("a new record is written and embedded, a section at a time", async () => {
+  const { db, writes } = refreshDb("none");
   const embedding = countingEmbedding();
   const result = await refreshAgentContext(cron, { selection }, db, {
     embedding: embedding.port,
   });
   assert.deepEqual(writes, [
-    "upsert",
-    "clear-vector",
-    "set-vector-if-same-text",
+    ...repeat(["upsert", "clear-vector"], SECTION_COUNT),
+    ...repeat(["set-vector-if-same-text"], SECTION_COUNT),
   ]);
   assert.equal(embedding.calls.length, 1);
   assert.deepEqual(
     {
       embedded: result.embedded,
       embeddingFailed: result.embeddingFailed,
+      skipped: result.skipped,
       unchanged: result.unchanged,
     },
-    { embedded: 1, embeddingFailed: false, unchanged: 0 },
+    {
+      embedded: SECTION_COUNT,
+      embeddingFailed: false,
+      skipped: 0,
+      unchanged: 0,
+    },
   );
+  assert.equal(typeof result.durationMs, "number");
 });
 
 test("an unchanged record is not re-embedded", async () => {
-  const { db, writes } = refreshDb(contentHash(leadChunk(lead).content));
+  const { db, writes } = refreshDb("current");
   const embedding = countingEmbedding();
   const result = await refreshAgentContext(cron, { selection }, db, {
     embedding: embedding.port,
   });
   assert.deepEqual(writes, ["touch"]);
   assert.equal(embedding.calls.length, 0);
-  assert.equal(result.unchanged, 1);
+  assert.equal(result.unchanged, SECTION_COUNT);
+  assert.equal(result.skipped, SECTION_COUNT);
 });
 
 test("an embedding outage keeps the text and says so", async () => {
-  const { db, writes } = refreshDb(null);
+  const { db, writes } = refreshDb("none");
   const result = await refreshAgentContext(cron, { selection }, db, {
     embedding: countingEmbedding(true).port,
   });
-  assert.deepEqual(writes, ["upsert", "clear-vector"]);
+  assert.deepEqual(writes, repeat(["upsert", "clear-vector"], SECTION_COUNT));
   assert.equal(result.embeddingFailed, true);
 });
 
+test("a pre-section row is replaced by the record's sections", async () => {
+  const { db, writes } = refreshDb("stale");
+  const result = await refreshAgentContext(cron, { selection }, db, {
+    embedding: countingEmbedding().port,
+  });
+  assert.ok(writes.includes("delete"), "the old `record` row is removed");
+  assert.equal(result.removed, 1);
+});
+
 test("a record that left the live set loses its row", async () => {
-  const { db, writes } = refreshDb("old-hash");
+  const { db, writes } = refreshDb("stale");
   (
     db as unknown as { lead: { findMany: () => Promise<unknown[]> } }
   ).lead.findMany = async () => [];
@@ -284,7 +350,7 @@ test("a record that left the live set loses its row", async () => {
 });
 
 test("only administrators and the system rebuild the index", async () => {
-  const { db } = refreshDb(null);
+  const { db } = refreshDb("none");
   await assert.rejects(
     refreshAgentContext(
       userPrincipal({ id: "u1", role: Role.SITE_MANAGER }),
@@ -295,22 +361,30 @@ test("only administrators and the system rebuild the index", async () => {
   );
 });
 
+const SECTION_ROW = {
+  dueAt: null,
+  keywords: [] as string[],
+  refreshedAt: new Date(),
+  section: "overview",
+  tags: [] as string[],
+};
+
 test("search ranks by inner product plus name match, and refuses customers", async () => {
   const db = {
     $queryRaw: async () => [
       {
+        ...SECTION_ROW,
         content: "Lead: Lee Nguyen",
         entityId: "7",
         kind: "lead",
-        refreshedAt: new Date(),
         score: 0.42,
         title: "Lee Nguyen — 3 Oak Ave",
       },
       {
+        ...SECTION_ROW,
         content: "Lead: Jordan Smith",
         entityId: "42",
         kind: "lead",
-        refreshedAt: new Date(),
         score: 0.4,
         title: "Jordan Smith — 12 Rose St",
       },
@@ -380,7 +454,7 @@ test("every agent shares one handbook and one house style", () => {
 });
 
 test("a vector is not written over text that changed while it was made", async () => {
-  const { db } = refreshDb(null, false, 0);
+  const { db } = refreshDb("none", false, 0);
   const result = await refreshAgentContext(cron, { selection }, db, {
     embedding: countingEmbedding().port,
   });
@@ -389,19 +463,21 @@ test("a vector is not written over text that changed while it was made", async (
 });
 
 test("a vector of the wrong size is reported as a failure", async () => {
-  const { db, writes } = refreshDb(null);
+  const { db, writes } = refreshDb("none");
   const result = await refreshAgentContext(cron, { selection }, db, {
     embedding: {
       dimensions: 1536,
       embed: async (values) => values.map(() => [1, 0]),
     },
   });
-  assert.deepEqual(writes, ["upsert", "clear-vector"]);
+  assert.deepEqual(writes, repeat(["upsert", "clear-vector"], SECTION_COUNT));
   assert.equal(result.embeddingFailed, true);
 });
 
 test("restricted staff see only what their screens show, by vector and by name", async () => {
   const tradie = {
+    ...SECTION_ROW,
+    section: "record",
     content: "Tradie: Dave Smith",
     entityId: "t-1",
     kind: "tradie",
@@ -409,6 +485,7 @@ test("restricted staff see only what their screens show, by vector and by name",
     title: "Dave Smith",
   };
   const leadRow = {
+    ...SECTION_ROW,
     content: "Lead: Jordan Smith",
     entityId: "42",
     kind: "lead",

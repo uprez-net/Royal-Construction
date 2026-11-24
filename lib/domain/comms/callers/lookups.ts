@@ -6,10 +6,12 @@ import type { VoiceCallerClass, VoiceCallerPrincipal } from "./identity";
 import {
   bookingsBetween,
   leadSummary,
+  offerStatus,
   pipelineSummary,
   projectFinancials,
   projectStatus,
   tradieBookings,
+  type VoiceLookupPorts,
 } from "./lookup-reads";
 import { currentVoiceStaff } from "./relationships";
 
@@ -39,6 +41,7 @@ export type VoiceLookupRequest =
   | { readonly name: "project_status"; readonly project: string }
   | { readonly name: "project_financials"; readonly project: string }
   | { readonly name: "lead_summary"; readonly lead: string }
+  | { readonly name: "offer_status"; readonly offer: string }
   | { readonly name: "tradie_bookings"; readonly tradie: string }
   | { readonly name: "bookings_between"; readonly when: VoiceLookupWhen }
   | { readonly name: "pipeline_summary" };
@@ -105,6 +108,22 @@ export const VOICE_LOOKUPS: readonly VoiceLookupDefinition[] = [
         lead: text("The lead's name or suburb, as the caller said it."),
       },
       required: ["lead"],
+      type: "object",
+    },
+  },
+  {
+    classes: ["admin"],
+    description:
+      "A client's current offer: its reference, status, when it went out and its value. Use when the caller asks about an offer, a quote or a reference number.",
+    name: "offer_status",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        offer: text(
+          "The client's name, the site, or the offer reference, as the caller said it.",
+        ),
+      },
+      required: ["offer"],
       type: "object",
     },
   },
@@ -181,6 +200,7 @@ export async function runVoiceLookup(
   request: VoiceLookupRequest,
   db: DomainDb,
   input: { readonly now: Date },
+  ports: VoiceLookupPorts = {},
 ): Promise<VoiceLookupResult> {
   const allowed = voiceLookupsFor(caller).some(
     (lookup) => lookup.name === request.name,
@@ -209,16 +229,18 @@ export async function runVoiceLookup(
   const { now } = input;
   const result =
     request.name === "project_status"
-      ? await projectStatus(principal, request.project, db, now)
+      ? await projectStatus(principal, request.project, db, now, ports)
       : request.name === "project_financials"
-        ? await projectFinancials(principal, request.project, db)
+        ? await projectFinancials(principal, request.project, db, ports)
         : request.name === "lead_summary"
-          ? await leadSummary(principal, request.lead, db, now)
-          : request.name === "tradie_bookings"
-            ? await tradieBookings(principal, request.tradie, db, now)
-            : request.name === "bookings_between"
-              ? await bookingsBetween(principal, request.when, db, now)
-              : await pipelineSummary(principal, db, now);
+          ? await leadSummary(principal, request.lead, db, now, ports)
+          : request.name === "offer_status"
+            ? await offerStatus(principal, request.offer, db, now, ports)
+            : request.name === "tradie_bookings"
+              ? await tradieBookings(principal, request.tradie, db, now)
+              : request.name === "bookings_between"
+                ? await bookingsBetween(principal, request.when, db, now)
+                : await pipelineSummary(principal, db, now);
   await recordCallerAccess(
     caller,
     {

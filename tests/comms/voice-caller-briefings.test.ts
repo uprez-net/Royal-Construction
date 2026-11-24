@@ -147,6 +147,7 @@ describe("briefings: only what that class may hear", () => {
         "project_status",
         "project_financials",
         "lead_summary",
+        "offer_status",
         "tradie_bookings",
         "bookings_between",
         "pipeline_summary",

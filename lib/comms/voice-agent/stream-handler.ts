@@ -12,6 +12,7 @@ import { providerFromPath } from "../factory";
 import { COMMS_WEBHOOK_PRINCIPAL } from "../webhook-handler";
 import { voiceCallerPreparer } from "./caller";
 import { decideCallMove } from "./desk";
+import { gatewayEmbedding } from "@/lib/embedding-port";
 import { openLiveSession } from "./live";
 import { VoiceAgentSession, type VoiceAgentReportBody } from "./session";
 import { voiceAgentVoice } from "./settings";
@@ -139,6 +140,7 @@ export async function handleVoiceAgentStream(
       prepare: voiceCallerPreparer({
         db: deps.db,
         disclosure: config.voiceAgent.disclosure,
+        embedding: gatewayEmbedding,
       }),
       openModel: () =>
         open(

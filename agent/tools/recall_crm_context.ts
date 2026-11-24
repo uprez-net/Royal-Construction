@@ -19,10 +19,10 @@ import { gatewayEmbedding } from "@/lib/embedding-port";
  */
 export default defineTool({
   description: [
-    "Look up the office's snapshot of live leads, projects and tradies from a few words — a surname, a street, a suburb, a trade, a nickname, or a description like 'the double storey waiting on its CC'.",
-    "Returns each match's snapshot (stage, offer, money, dates, milestones, compliance, bookings) and its record ids for tool calls.",
+    "Look up the office's snapshot of live leads, offers, projects and tradies from a few words — a surname, a street (St or Street), a suburb, a lot number, an offer reference in any form, a trade, a nickname, or a description like 'the double storey waiting on its CC'.",
+    "Returns each match's best-matching section of its snapshot (overview, people, money, dates, compliance, recent comms or open tasks), the other sections that also matched, and its record ids for tool calls. `overdue` and `dueSoon` are worked out now from the section's earliest open date.",
     "Use it first whenever a request names or describes a record, then pass the ids to the specialists. Never show the ids to people.",
-    "Snapshot only (refreshed nightly and after every agent change): confirm live values through a specialist before acting or quoting a figure or date to a client.",
+    "Snapshot only (refreshed every morning and after every agent change): confirm live values through a specialist before acting or quoting a figure or date to a client.",
   ].join(" "),
   inputSchema: z.object({
     query: z
@@ -32,8 +32,8 @@ export default defineTool({
       .max(500)
       .describe("The words the person used to describe the record(s)."),
     kinds: z
-      .array(z.enum(["lead", "project", "tradie"]))
-      .max(3)
+      .array(z.enum(["lead", "offer", "project", "tradie"]))
+      .max(4)
       .optional()
       .describe("Limit to these record kinds. Omit to search all."),
     limit: z.number().int().min(1).max(10).optional(),
@@ -49,10 +49,15 @@ export default defineTool({
     );
     return {
       matches: hits.map((hit) => ({
+        alsoMatched: hit.alsoMatched,
+        dueSoon: hit.dueSoon,
         kind: hit.kind,
+        overdue: hit.overdue,
         relevance: Math.round(hit.score * 100) / 100,
+        section: hit.section,
         snapshot: hit.content,
         snapshotTakenAt: formatSydneyDateTime(hit.refreshedAt),
+        tags: hit.tags,
         title: hit.title,
       })),
       note: hits.length

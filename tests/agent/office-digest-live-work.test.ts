@@ -4,7 +4,7 @@ import { test } from "vitest";
 import { loadOfficeDigest } from "@/lib/domain/agent-context/sources";
 import {
   officeDigestChunk,
-  projectChunk,
+  projectSections,
 } from "@/lib/domain/agent-context/text";
 import {
   listLeadMeetings,
@@ -245,11 +245,12 @@ test("a project's snapshot counts every activity, so adding one changes it", () 
     name: "Pour",
     status: "PENDING",
   };
-  const one = projectChunk({ ...base, milestones: [stage, child] } as never);
-  const two = projectChunk({
-    ...base,
-    milestones: [stage, child, { ...child, name: "Cure" }],
-  } as never);
+  const overview = (milestones: unknown[]) =>
+    projectSections({ ...base, milestones } as never).find(
+      (section) => section.section === "overview",
+    )!;
+  const one = overview([stage, child]);
+  const two = overview([stage, child, { ...child, name: "Cure" }]);
   assert.match(
     one.content,
     /1 of 1 stages complete; 2 activities in all, 1 done/,

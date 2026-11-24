@@ -16,41 +16,87 @@ staff.
 - The **orchestrator** carries it as always-on instructions
   (`agent/instructions/office-handbook.ts`). It needs the map on every turn to
   route at all, and loading it as a skill would cost a round trip per session.
-- **Every specialist** gets the same text as a loadable `office-assistant`
-  skill (`agent/subagents/*/skills/office-assistant.ts`), plus a shared house
-  style (`agent/lib/house-style-instructions.ts`): names not ids in anything
-  people read, and use record ids a teammate already found instead of
-  searching again.
+- **Every specialist** carries the same text as instructions
+  (`agent/subagents/*/instructions/handbook.ts`; it was a loadable skill until
+  #619), plus a shared house style (`agent/lib/house-style-instructions.ts`):
+  names not ids in anything people read, and use record ids a teammate
+  already found instead of searching again.
 
 ## 2. What the agent knows: the context index
 
-`AgentContextChunk` holds one row per live lead, project and tradie, plus one
-office digest.
+`AgentContextChunk` holds each live lead, offer and project as **sections**,
+one row and one vector each, plus one row per tradie and one office digest
+(#621).
+
+| Kind | Sections |
+| --- | --- |
+| lead | overview, people, money, tasks, comms |
+| offer (the lead's active one, keyed by the lead's id) | overview, money |
+| project | overview, people, money, dates (milestones and bookings), compliance |
+| tradie, digest | record |
 
 **The text is deterministic.** `lib/domain/agent-context/text.ts` lays each
 record out the way the office talks about it: names, addresses, stage, offer
 reference and value, next steps, open tasks, recent contact, milestones,
 compliance, progress claims and bookings. No model writes or summarises any of
 it. The same record always produces the same text, and a test pins the
-wording. Each chunk ends with a `Refs` line of record ids, which are for tool
-calls only.
+wording. Every section repeats the record's header line, so a section found on
+its own still says whose it is, and ends with a `Refs` line of record ids,
+which are for tool calls only. A section with nothing to say is not written.
 
-**Only the search uses a model.** The text is embedded with
+**Money is a section of its own.** A caller who may not see money
+(`canSeeProjectFinancials`) is never handed the money section, by any route.
+
+**Keywords and tags.** The same pure builders write two columns
+(`lib/domain/agent-context/keywords.ts`):
+
+- `keywords`: the forms people say a record by, normalised. The lot number
+  with and without "lot", the street with "St" and "Street", the street
+  alone, the suburb, each client's names, and the offer reference with and
+  without separators and revision ("rc 2026 014", "rc2026014", "rc2026014r2").
+- `tags`: kind, status, stage, suburb, council, and flags such as
+  `has-open-tasks`.
+
+**Dates, not "overdue".** The text holds dates. Each section stores its
+earliest open date in `dueAt`, and search works out `overdue` and `dueSoon`
+when it is read, so the morning snapshot is not wrong by the afternoon.
+
+**Only the search uses a model.** Each section is embedded with
 `openai/text-embedding-3-small` through the AI Gateway (`lib/embedding-port.ts`)
 and stored in a pgvector `vector(1536)` column, normalised to unit length.
-Search ranks by inner product (`<#>`, the dot product) and adds a bonus for
-words that appear in a record's name, because embeddings are weak on surnames
-and street names. If the gateway is down, search falls back to the name match
-alone.
+Search gathers candidates three ways and merges them per record:
+
+- by vector: inner product (`<#>`, the dot product), per section;
+- by keyword: the question turned into the same forms (`queryKeywords`) and
+  matched exactly against `keywords` in Postgres (`hasSome`, a GIN index), so
+  "12 Example Street" finds a project saved as "12 Example St";
+- by name: words that appear in the record's title.
+
+A record scores its best section's vector plus the keyword and name evidence,
+and the hit carries that section, the other sections that matched, its tags
+and the read-time due flags. Embeddings are weak on surnames, street names and
+references, which is what the keywords are for. If the gateway is down,
+search falls back to keywords and names.
 
 **It stays fresh in three ways:**
 
-- `/api/cron/agent-context` rebuilds everything nightly at 20:30 UTC
-  (6:30–7:30 am Sydney), after the other syncs. Only rows whose text changed
-  are re-embedded.
+- `/api/cron/agent-context` rebuilds everything once a day at 21:00 UTC: 8 am
+  in Sydney under daylight saving, 7 am outside it, after the other syncs.
+  Only sections whose text, keywords or tags changed are re-embedded. The
+  response reports `durationMs`, `embedded` and `skipped`. A change made on
+  screen during the day is picked up by the next morning's run; the CRM does
+  not change much within a day.
 - Every agent write re-indexes the records it touched (see 4).
 - Records that leave the live set lose their row: archived leads, deals closed
   more than 60 days ago, completed projects, archived tradies.
+
+**Mili uses it too.** The voice agent's project, lead and offer lookups
+(`lib/domain/comms/callers/index-resolve.ts`) ask the index first, under the
+caller's re-checked identity (admins only today), and then read the record
+live through its own scoped query before saying anything. When the index
+cannot answer, they fall back to the scoped substring search. `offer_status`
+gives an offer's reference, status and dates, and its value only to a caller
+who may see money.
 
 **The orchestrator uses it two ways:**
 
@@ -185,13 +231,15 @@ See [the MCP endpoint](./eve-mcp-endpoint.md#approving-and-cancelling-in-words).
 | --- | --- |
 | `AI_GATEWAY_API_KEY` | Embeddings. Without it, search works by name only. |
 | `MISTRAL_AI_KEY` | OCR for uploaded documents. Without it, PDFs, scans and Office files wait unread, with nothing counted against them, and are read once it is set. The cron logs it as `readerUnavailable`. Text and spreadsheets are still read. |
-| `CRON_SECRET` | The nightly refresh, and the default bearer for `/api/agent/effects`. |
+| `CRON_SECRET` | The morning refresh, and the default bearer for `/api/agent/effects`. |
 | `AGENT_EFFECTS_SECRET` | Optional dedicated bearer for `/api/agent/effects`. |
 | `AGENT_EFFECTS_URL` | Optional override for where the agent posts effects. |
 | `VERCEL_AUTOMATION_BYPASS_SECRET` | Sent with the effect call when set, so preview deployment protection lets it through. |
 
 The migration `20261112150000_agent_context_chunks` enables the `vector`
 extension, which Neon provides; `20261113090000_agent_file_chunks` adds the
-document tables. The index is empty until the first refresh.
+document tables; `20261125090000_agent_context_sections` adds the section,
+keyword, tag and due-date columns. The index is empty until the first refresh.
 Run `/api/cron/agent-context` once after deploying, with the cron bearer, to
-fill it rather than waiting for the night.
+fill it rather than waiting for the morning. After the sections migration, the
+first run replaces each lead's and project's single row with its sections.

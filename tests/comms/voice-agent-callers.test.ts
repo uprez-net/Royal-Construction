@@ -331,7 +331,7 @@ for (const who of [
       assert.match(instructions, new RegExp(BRIEFING_FACT[who]));
     }
     if (who === "admin") {
-      assert.equal(h.offered.at(-1)?.length, 6);
+      assert.equal(h.offered.at(-1)?.length, 7);
       assert.match(said, /Ridge Street Build at 1 Example St: delayed/);
     } else {
       assert.deepEqual(h.offered.at(-1), []);

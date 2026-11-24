@@ -11,13 +11,17 @@ import prisma from "@/lib/prisma";
 import { errorResponse, successResponse } from "@/utils/validators";
 
 /**
- * The nightly rebuild of the operations agent's office context.
+ * The morning rebuild of the operations agent's office context, at 21:00 UTC:
+ * 8 am in Sydney under daylight saving, 7 am outside it. Once a day is
+ * enough; the CRM does not change much within a day.
  *
- * Every live lead, project and tradie is laid out as text (deterministically,
- * by lib/domain/agent-context/text.ts), re-embedded only where the text
- * changed, and the office digest is rewritten. Agent writes refresh their own
- * record during the day through /api/agent/effects; this run is what catches
- * everything changed on screen, by a webhook, or by another cron.
+ * Every live lead, offer and project is laid out as section chunks, and every
+ * tradie as one (deterministically, by lib/domain/agent-context/text.ts, with
+ * keywords and tags), re-embedded only where a chunk changed, and the office
+ * digest is rewritten. Agent writes refresh their own records during the day
+ * through /api/agent/effects; this run is what catches everything changed on
+ * screen, by a webhook, or by another cron. The response reports how long it
+ * took and how many chunks were embedded and skipped.
  *
  * Then the uploaded documents filed under those records are read (OCR), cut
  * into passages tagged with their lead, project and offer, and embedded
