@@ -3,6 +3,7 @@ import {
   CallRecordingStatus,
   CallTranscriptStatus,
   CommsDirection,
+  CommsProvider,
   type Prisma,
 } from "@prisma/client";
 
@@ -14,9 +15,11 @@ import {
 } from "../../errors";
 import type {
   CallTranscriptionPort,
+  TranscriptSegment,
   TranscriptSpeakerPort,
 } from "../../ports/transcription";
 import type { DomainPrincipal } from "../../principal";
+import { PROMPTS } from "./flow";
 import type { TranscriptSpeakerLabel } from "./transcript-lines";
 
 // Turning a stored call recording or voicemail into text.
@@ -31,10 +34,14 @@ import type { TranscriptSpeakerLabel } from "./transcript-lines";
 // The transcript is personal information like the audio, so it lives on the
 // recording row and is served by the same staff-only routes.
 //
-// Speech-to-text gives one block of prose with nobody's name on it. A call
-// recording is then split by speaker ("Royal: …" / "Caller: …", one line per
-// turn, as Mili's live transcript is) when the split keeps every word in
-// order; otherwise, or if the split fails, the prose is kept as it came.
+// A call recording has two channels: the customer's leg, and what was played
+// to them. Where the carrier's channel order is known (Telnyx), each channel is
+// transcribed on its own and the lines are labelled by channel, so who said
+// what is exact (#613). Otherwise speech-to-text gives one block of prose
+// with nobody's name on it, and it is split by speaker ("Royal: …" /
+// "Caller: …", one line per turn, as Mili's live transcript is) when the split
+// keeps every word in order; if not, or if the split fails, the prose is kept
+// as it came.
 
 export const MAX_TRANSCRIPT_ATTEMPTS = 3;
 /**
@@ -85,6 +92,7 @@ export async function transcribeCallRecording(
       id: true,
       kind: true,
       mimeType: true,
+      provider: true,
       status: true,
       transcriptAttempts: true,
       transcriptStatus: true,
@@ -147,6 +155,7 @@ export async function transcribeCallRecording(
       blobUrl: recording.blobUrl,
       kind: recording.kind,
       mimeType: recording.mimeType,
+      ...(splitsByChannel(recording) ? { splitChannels: true as const } : {}),
     });
   } catch (error) {
     const retryable = attempts < MAX_TRANSCRIPT_ATTEMPTS;
@@ -176,10 +185,16 @@ export async function transcribeCallRecording(
     return applied ? "gave_up" : "superseded";
   }
 
+  const byChannel = result.segments
+    ? channelTranscript(result.segments, recording)
+    : null;
   const plain = normaliseTranscript(result.text);
-  const text = plain
-    ? await splitBySpeaker(plain, recording, ports.speakers)
-    : plain;
+  const text =
+    byChannel !== null
+      ? byChannel
+      : plain
+        ? await splitBySpeaker(plain, recording, ports.speakers)
+        : plain;
   const applied = await settle(attempts, {
     transcribedAt: new Date(),
     transcript: text || null,
@@ -239,6 +254,114 @@ export function recordingSpeakers(recording: {
       "An inbound phone call to Royal Constructions answered by someone on the Royal team (Royal). Caller is whoever rang. A recorded announcement counts as Royal.",
     speakers: ["Royal", "Caller"],
   };
+}
+
+/**
+ * A recording whose channels can be told apart: a two-channel call recording
+ * on a carrier whose channel order is known. Telnyx records the leg it was
+ * started on — always the customer's — on the first channel, and what is
+ * played to that leg on the second (checked against every inbound call in the
+ * 24 Nov 2026 review). Twilio's order for these calls is unverified, so its
+ * recordings keep the speaker split.
+ */
+function splitsByChannel(recording: {
+  readonly kind: string;
+  readonly provider?: CommsProvider;
+  readonly call?: RecordingCall;
+}): boolean {
+  return (
+    recording.kind === "CALL"
+    && recording.provider === CommsProvider.TELNYX
+    && recordingChannelSpeakers(recording) !== null
+  );
+}
+
+/**
+ * What the second channel says when Mili hands the caller to the team: both
+ * handover announcements (flow.ts PROMPTS.agentTransfer, agentUnavailable)
+ * contain it. From the announcement it is heard in, the second channel is the
+ * team, not Mili.
+ */
+export const HANDOVER_WORDS = "put you through to the team";
+
+const HANDOVER_PROMPTS = [PROMPTS.agentTransfer, PROMPTS.agentUnavailable].map(
+  (prompt) => ` ${words(prompt).join(" ")} `,
+);
+
+/** Who is on each channel of a call recording; null for a voicemail. */
+export function recordingChannelSpeakers(recording: {
+  readonly kind: string;
+  readonly call?: RecordingCall;
+}): {
+  readonly customer: TranscriptSpeakerLabel;
+  readonly royal: TranscriptSpeakerLabel;
+  /** The second channel after a handover, on a call Mili answered. */
+  readonly afterHandover: TranscriptSpeakerLabel | null;
+} | null {
+  const call = recording.call;
+  if (recording.kind !== "CALL" || !call) return null;
+  if (call.answeredBy === CallAnsweredBy.AGENT) {
+    return { afterHandover: "Royal", customer: "Caller", royal: "Mili" };
+  }
+  if (call.direction === CommsDirection.OUTBOUND) {
+    return { afterHandover: null, customer: "Contact", royal: "Royal" };
+  }
+  return { afterHandover: null, customer: "Caller", royal: "Royal" };
+}
+
+/**
+ * Each channel's speech labelled by channel, in the order it was said, a
+ * speaker's consecutive parts joined: "Speaker: text" lines. Empty text when
+ * nobody spoke; null when the recording's channels cannot be labelled.
+ */
+export function channelTranscript(
+  segments: readonly TranscriptSegment[],
+  recording: { readonly kind: string; readonly call?: RecordingCall },
+): string | null {
+  const who = recordingChannelSpeakers(recording);
+  if (!who) return null;
+  const ordered = segments
+    .map((segment) => ({
+      ...segment,
+      text: segment.text.replace(/\s+/g, " ").trim(),
+    }))
+    .filter((segment) => segment.text)
+    .sort((a, b) => a.startSecond - b.startSecond || a.channel - b.channel);
+  const handover = ` ${words(HANDOVER_WORDS).join(" ")} `;
+  const spoken = (segment: TranscriptSegment) =>
+    ` ${words(segment.text).join(" ")} `;
+  let handoverAt = who.afterHandover
+    ? ordered.findLastIndex(
+        (segment) =>
+          segment.channel === 1 && spoken(segment).includes(handover),
+      )
+    : -1;
+  // The announcement can arrive in pieces ("No worries." then "I'll put you
+  // through…"): the pieces just before it that are part of it are it too.
+  while (
+    handoverAt > 0
+    && ordered[handoverAt - 1].channel === 1
+    && HANDOVER_PROMPTS.some((prompt) =>
+      prompt.includes(spoken(ordered[handoverAt - 1])),
+    )
+  ) {
+    handoverAt -= 1;
+  }
+  const lines: { speaker: TranscriptSpeakerLabel; text: string }[] = [];
+  ordered.forEach((segment, index) => {
+    const speaker =
+      segment.channel === 0
+        ? who.customer
+        : handoverAt >= 0 && index >= handoverAt && who.afterHandover
+          ? who.afterHandover
+          : who.royal;
+    const last = lines.at(-1);
+    if (last?.speaker === speaker) last.text = `${last.text} ${segment.text}`;
+    else lines.push({ speaker, text: segment.text });
+  });
+  const text = lines.map((line) => `${line.speaker}: ${line.text}`).join("\n");
+  if (text.length <= MAX_TRANSCRIPT_CHARS) return text;
+  return `${text.slice(0, MAX_TRANSCRIPT_CHARS - 2).trimEnd()} …`;
 }
 
 /**

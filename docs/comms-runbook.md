@@ -126,10 +126,18 @@ step took from the carrier's start frame (`liveOpen`, `setup`, `started`,
 follow-ups. No words, numbers or names. Search the runtime logs for
 `call summary` to see why a call was slow or went quiet.
 
-Recording transcripts: speech-to-text gives one block of prose, so a text model
-then splits a call recording into `Royal:` / `Caller:` / `Mili:` / `Contact:`
-lines. The split is kept only if it holds every word of the prose in the same
-order; otherwise the prose is kept. Voicemails stay as prose.
+Recording transcripts: call recordings are two-channel, the customer's leg on
+the first channel and what was played to them on the second. On Telnyx the
+stored MP3 is decoded (`lib/comms/audio/stereo.ts`, WebAssembly, nothing to
+install), each channel is transcribed on its own with timings, and the lines
+are labelled by channel: `Caller:` or `Contact:` for the first, `Mili:` or
+`Royal:` for the second, switching from Mili to Royal at the "put you through
+to the team" announcement (#613). Nothing guesses who spoke. A recording that
+is not two channels, longer than about 20 minutes a side, or on Twilio (whose
+channel order is unverified) falls back to the old path: speech-to-text of the
+mix, then a text model splits it into lines, kept only if it holds every word
+of the prose in the same order, else the prose is kept. Voicemails stay as
+prose. Recordings already transcribed keep their transcript.
 
 To try her without a phone, the session tests in
 `tests/comms/voice-agent.test.ts` drive one conversation end to end with fakes.

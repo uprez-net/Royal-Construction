@@ -9,9 +9,12 @@ import { z } from "zod";
 import { readStoredBlob } from "@/lib/blob-port";
 import type {
   CallTranscriptionPort,
+  TranscriptSegment,
   TranscriptSpeakerPort,
 } from "@/lib/domain/ports/transcription";
 import { gateway, TEXT_MODEL_ID, TRANSCRIPTION_MODEL_ID } from "@/lib/model";
+
+import { splitStereoMp3 } from "./audio/stereo";
 
 /** Names and trade terms the model should prefer when it hears them. */
 const CONTEXT_BIAS = [
@@ -48,21 +51,83 @@ export const gatewayCallTranscription: CallTranscriptionPort = async (
   const stored = await readStoredBlob(audio.blobUrl);
   if (!stored) return null;
   const bytes = new Uint8Array(await new Response(stored.stream).arrayBuffer());
+  if (audio.splitChannels) {
+    const split = await transcribeChannels(bytes);
+    if (split) return split;
+  }
+  const { text } = await speechToText(bytes, false);
+  return { text };
+};
+
+type Heard = {
+  readonly text: string;
+  readonly segments: readonly {
+    readonly text: string;
+    readonly startSecond: number;
+    readonly endSecond: number;
+  }[];
+};
+
+/** One file through the speech-to-text model. Silence is empty text. */
+async function speechToText(
+  audio: Uint8Array,
+  withSegments: boolean,
+): Promise<Heard> {
   try {
     const result = await transcribe({
-      audio: bytes,
+      audio,
       model: gateway.transcription(TRANSCRIPTION_MODEL_ID),
       // Keyed by the provider behind the gateway model (Mistral's Voxtral).
       providerOptions: {
-        mistral: { contextBias: CONTEXT_BIAS, language: "en" },
+        mistral: {
+          contextBias: CONTEXT_BIAS,
+          language: "en",
+          ...(withSegments ? { timestampGranularities: ["segment"] } : {}),
+        },
       },
     });
-    return { text: result.text };
+    return { segments: result.segments ?? [], text: result.text };
   } catch (error) {
-    if (NoTranscriptGeneratedError.isInstance(error)) return { text: "" };
+    if (NoTranscriptGeneratedError.isInstance(error)) {
+      return { segments: [], text: "" };
+    }
     throw error;
   }
-};
+}
+
+/**
+ * Each channel of a two-channel recording on its own, with when each part
+ * was said (#613). Null when the file is not two channels, or a side came
+ * back with words but no timings to place them by: the mix is transcribed
+ * instead.
+ */
+async function transcribeChannels(
+  mp3: Uint8Array,
+): Promise<{ text: string; segments: TranscriptSegment[] } | null> {
+  const channels = await splitStereoMp3(mp3);
+  if (!channels) return null;
+  const sides = await Promise.all(
+    channels.map((channel) => speechToText(channel.wav, true)),
+  );
+  if (sides.some((side) => side.text.trim() && side.segments.length === 0)) {
+    return null;
+  }
+  const segments = sides
+    .flatMap((side, channel) =>
+      side.segments.map((segment) => ({
+        channel: channel as 0 | 1,
+        endSecond: segment.endSecond,
+        startSecond: segment.startSecond,
+        text: segment.text.trim(),
+      })),
+    )
+    .filter((segment) => segment.text)
+    .sort((a, b) => a.startSecond - b.startSecond || a.channel - b.channel);
+  return {
+    segments,
+    text: segments.map((segment) => segment.text).join(" "),
+  };
+}
 
 const SPEAKER_SPLIT_TIMEOUT_MS = 90_000;
 
