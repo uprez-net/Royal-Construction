@@ -2,6 +2,7 @@ import {
   eveSessionUrl,
   expiryRequestBody,
   expiryRequestHeaders,
+  withdrawalOutcome,
 } from "@/lib/agent/approval-expiry-wire";
 import { expireStaleApprovals } from "@/lib/domain/agent/approvals";
 import { systemPrincipal } from "@/lib/domain/principal";
@@ -38,7 +39,10 @@ async function withdraw(
     method: "POST",
     signal: AbortSignal.timeout(15_000),
   });
-  if (!response.ok) {
+  const body = response.ok ? null : await response.json().catch(() => null);
+  const outcome = withdrawalOutcome(response.status, body);
+  if (outcome === "session-ended") return "session-ended" as const;
+  if (outcome === "failed") {
     // Logged by the caller, per conversation; the run closes its monitor
     // check-in as an error through `cronOutcome`.
     throw new Error(
