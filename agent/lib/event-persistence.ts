@@ -8,6 +8,7 @@ import {
   FINAL_OUTPUT_TOOL_NAME,
   finalOutputIssues,
 } from "@/agent/lib/final-output-diagnostics";
+import { cleanJson } from "@/agent/lib/jsonb-text";
 import { specialistResultSchema } from "@/agent/lib/result-contracts";
 import {
   getAgentSessionTitle,
@@ -107,30 +108,6 @@ export class AgentSessionOwnerMismatchError extends Error {
   }
 }
 
-const NUL = /\u0000/g;
-// A high surrogate not followed by a low one, or a low one not preceded by a
-// high one. `JSON.stringify` writes either as a `\udXXX` escape, which jsonb
-// refuses just as it refuses `\u0000`.
-const LONE_SURROGATE =
-  /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
-
-function cleanString(value: string): string {
-  return value.replace(NUL, "").replace(LONE_SURROGATE, "�");
-}
-
-function cleanJson(value: unknown): unknown {
-  if (typeof value === "string") return cleanString(value);
-  if (Array.isArray(value)) return value.map(cleanJson);
-  if (value !== null && typeof value === "object") {
-    const cleaned: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value)) {
-      cleaned[cleanString(key)] = cleanJson(entry);
-    }
-    return cleaned;
-  }
-  return value;
-}
-
 /**
  * The event as jsonb can store it (#615).
  *
@@ -156,21 +133,24 @@ export function toInputJson(value: unknown): Prisma.InputJsonValue {
  * unknown one, so both are read.
  */
 export function isUnstorablePayloadError(error: unknown): boolean {
-  if (error instanceof AgentSessionOwnerMismatchError) return false;
-  if (error === null || typeof error !== "object") return false;
+  return dataExceptionCode(error) !== null;
+}
+
+/** The class-22 SQLSTATE a write failed with, or null. */
+function dataExceptionCode(error: unknown): string | null {
+  if (error instanceof AgentSessionOwnerMismatchError) return null;
+  if (error === null || typeof error !== "object") return null;
   const candidate = error as {
     code?: unknown;
     meta?: { code?: unknown };
     message?: unknown;
   };
-  const isDataException = (code: unknown) =>
+  const isDataException = (code: unknown): code is string =>
     typeof code === "string" && /^22[0-9A-Z]{3}$/.test(code);
-  if (isDataException(candidate.code) || isDataException(candidate.meta?.code))
-    return true;
-  return (
-    typeof candidate.message === "string"
-    && /Code: `22[0-9A-Z]{3}`/.test(candidate.message)
-  );
+  if (isDataException(candidate.code)) return candidate.code;
+  if (isDataException(candidate.meta?.code)) return candidate.meta.code;
+  if (typeof candidate.message !== "string") return null;
+  return /Code: `(22[0-9A-Z]{3})`/.exec(candidate.message)?.[1] ?? null;
 }
 
 /**
@@ -359,12 +339,18 @@ export function createAgentEventPersister(
     batch: PendingEvent[],
     cause: unknown,
   ) {
-    reportError(cause, {
-      source: "eve:event-persistence",
-      ids: { sessionId: buffer.identity.eveSessionId },
-      extra: { batchSize: batch.length },
-      fingerprint: ["eve-event-persistence", "unstorable-payload"],
-    });
+    // Not the database's own error: its message can quote the refused value,
+    // which is client data. The SQLSTATE says what went wrong.
+    const code = dataExceptionCode(cause) ?? "22000";
+    reportError(
+      new Error(`Postgres refused an agent event (SQLSTATE ${code}).`),
+      {
+        source: "eve:event-persistence",
+        ids: { sessionId: buffer.identity.eveSessionId },
+        extra: { batchSize: batch.length },
+        fingerprint: ["eve-event-persistence", "unstorable-payload"],
+      },
+    );
     for (let index = 0; index < batch.length; index += 1) {
       const event = batch[index]!;
       try {

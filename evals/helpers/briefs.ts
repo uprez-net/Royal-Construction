@@ -14,8 +14,9 @@ import { completedCalls, describeCalls, observe } from "./tool-calls";
  * one at a time (389 `get_project` and 279 `list_lead_tasks` calls in 14
  * days) until it ran out of steps.
  *
- * A brief passes when no specialist reports an error, nothing is written, the
- * office-wide reads are used, and the per-record reads stay few.
+ * A brief passes when no specialist reports an error, nothing is written,
+ * every area it asked about was read office-wide, and the per-record reads
+ * stay few.
  */
 const OFFICE_WIDE_READS = [
   "list_lead_tasks_due",
@@ -25,6 +26,8 @@ const OFFICE_WIDE_READS = [
   "list_offers",
 ] as const;
 
+export type OfficeWideRead = (typeof OFFICE_WIDE_READS)[number];
+
 /** Per-record reads a brief should not need more than a handful of. */
 const PER_RECORD_READS = ["get_project", "list_lead_tasks", "get_compliance"];
 const MAX_PER_RECORD_READS = 4;
@@ -32,6 +35,8 @@ const MAX_PER_RECORD_READS = 4;
 export async function expectCompleteBrief(
   t: EveEvalContext,
   prompt: string,
+  /** The office-wide read each area the prompt asks about needs. */
+  areas: readonly OfficeWideRead[] = OFFICE_WIDE_READS,
 ): Promise<void> {
   const turn = await t.send(prompt);
   t.succeeded();
@@ -56,18 +61,20 @@ export async function expectCompleteBrief(
     ),
   ).label("every specialist result is complete");
 
-  const officeWide = run.calls.filter(
-    (call) =>
-      call.status === "completed"
-      && (OFFICE_WIDE_READS as readonly string[]).includes(call.name),
-  );
-  t.check(
-    officeWide,
-    satisfies(
-      () => officeWide.length > 0,
-      `the brief used an office-wide read; observed ${describeCalls(run)}`,
-    ),
-  ).label("office-wide reads are used");
+  // Each area needs its own read: one list_lead_tasks_due must not pass a
+  // brief that never looked at milestones or offers.
+  for (const area of areas) {
+    const reads = run.calls.filter(
+      (call) => call.status === "completed" && call.name === area,
+    );
+    t.check(
+      reads,
+      satisfies(
+        () => reads.length > 0,
+        `the brief read ${area} office-wide; observed ${describeCalls(run)}`,
+      ),
+    ).label(`office-wide read: ${area}`);
+  }
 
   const perRecord = run.calls.filter((call) =>
     PER_RECORD_READS.includes(call.name),

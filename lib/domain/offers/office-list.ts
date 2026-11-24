@@ -83,11 +83,12 @@ export async function listOfficeOffers(
     ...(input.group ? OFFER_LIST_GROUPS[input.group] : []),
   ];
 
-  const alerts = await listOfferFollowUpAlerts(principal, db, now);
-  const followUps = new Map(
-    alerts.map((alert) => [alert.offerId, alert.state]),
-  );
-  const dueIds = alerts
+  // Every offer is assessed only when the verdict decides who is listed;
+  // otherwise just the rows the list returns are (below).
+  const dueAlerts = input.followUpDue
+    ? await listOfferFollowUpAlerts(principal, db, now)
+    : null;
+  const dueIds = (dueAlerts ?? [])
     .filter((alert) => alert.state === "DUE")
     .map((alert) => alert.offerId);
 
@@ -122,6 +123,17 @@ export async function listOfficeOffers(
       where,
     }),
   ]);
+
+  const alerts =
+    dueAlerts
+    ?? (rows.length
+      ? await listOfferFollowUpAlerts(principal, db, now, {
+          offerIds: rows.map((row) => row.id),
+        })
+      : []);
+  const followUps = new Map(
+    alerts.map((alert) => [alert.offerId, alert.state]),
+  );
 
   return {
     changed,

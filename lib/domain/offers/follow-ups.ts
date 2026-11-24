@@ -286,15 +286,19 @@ export function withReplyToken(subject: string, token: string | null): string {
  * recently, followed up. Due first, then longest pending.
  *
  * The active revision only: a superseded revision is not with anybody.
+ * `offerIds` assesses only those offers, for a caller that already has its
+ * list.
  */
 export async function listOfferFollowUpAlerts(
   principal: DomainPrincipal,
   db: DomainDb,
   now: Date = new Date(),
+  options: { readonly offerIds?: readonly string[] } = {},
 ): Promise<OfferFollowUpAlert[]> {
   const scope = leadListScope(principal);
   const offers = await db.offer.findMany({
     where: {
+      ...(options.offerIds ? { id: { in: [...options.offerIds] } } : {}),
       isActive: true,
       offerStatus: { in: [...OFFER_AWAITING_RESPONSE_STATUSES] },
       ...(scope.assignedId === null

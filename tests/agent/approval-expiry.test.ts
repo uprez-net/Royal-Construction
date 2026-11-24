@@ -7,6 +7,7 @@ import {
 } from "@/lib/domain/agent/approval-expiry";
 import {
   APPROVAL_EXPIRED_ACTION,
+  APPROVAL_EXPIRY_PRINCIPAL_ID,
   expireStaleApprovals,
   listPendingAgentApprovals,
 } from "@/lib/domain/agent/approvals";
@@ -199,6 +200,74 @@ describe("expireStaleApprovals", () => {
     logged.mockRestore();
     assert.deepEqual(outcome, { expired: 0, failed: 1, waiting: 1 });
     assert.deepEqual(recorder.writes(), []);
+  });
+
+  it("finishes the record of a withdrawal an earlier run could not record", async () => {
+    const recorder = recordingDb({
+      "agentActionAudit.findMany": [],
+      "agentSession.findMany": [{ eveSessionId: ROOT, id: "session_row" }],
+      "agentSessionEvent.findMany": [
+        requested(["req_old"], "2026-11-10T05:03:00Z"),
+        {
+          ...settled("req_old"),
+          payload: {
+            data: {
+              outcome: "cancelled",
+              requestId: "req_old",
+              responderPrincipalId: APPROVAL_EXPIRY_PRINCIPAL_ID,
+            },
+          },
+        },
+        // A person's Cancel is not an expiry.
+        requested(["req_person"], "2026-11-10T05:04:00Z"),
+        {
+          ...settled("req_person"),
+          payload: {
+            data: {
+              outcome: "cancelled",
+              requestId: "req_person",
+              responderPrincipalId: "user_admin",
+            },
+          },
+        },
+      ],
+    });
+    const withdrawn: string[] = [];
+    const outcome = await expireStaleApprovals(
+      systemPrincipal("test"),
+      { now: new Date("2026-11-24T06:00:00Z") },
+      recorder.db,
+      { withdraw: async () => void withdrawn.push("called") },
+    );
+    assert.deepEqual(withdrawn, [], "nothing is withdrawn twice");
+    assert.deepEqual(outcome, { expired: 1, failed: 0, waiting: 0 });
+    const audit = recorder
+      .writes()
+      .find((call) => call.operation === "agentActionAudit.createMany");
+    const rows = (audit?.args as { data: Record<string, unknown>[] }).data;
+    assert.deepEqual(
+      rows.map((row) => row.targetId),
+      ["req_old"],
+    );
+  });
+
+  it("carries on past a withdrawal it could not record, and reports it", async () => {
+    const recorder = recordingDb({
+      "agentActionAudit.findMany": [],
+      "agentSession.findMany": () => {
+        throw new Error("connection reset");
+      },
+      "agentSessionEvent.findMany": events,
+    });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const outcome = await expireStaleApprovals(
+      systemPrincipal("test"),
+      { now: new Date("2026-11-24T06:00:00Z") },
+      recorder.db,
+      { withdraw: async () => {} },
+    );
+    logged.mockRestore();
+    assert.deepEqual(outcome, { expired: 0, failed: 1, waiting: 1 });
   });
 
   it("is the system's to run, not a signed-in user's", async () => {

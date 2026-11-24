@@ -710,8 +710,13 @@ export function approvalBatchFor(
   const batchId = data.approvalBatches[requestId];
   if (batchId === undefined) return null;
   return {
+    // Only the tool approvals recorded in the batch: a question raised in the
+    // same step shares its batchId but is answered on its own card, and must
+    // not be swept into "Approve all" or counted as holding the step up.
     pending: data.pendingApprovals.filter(
-      (pending) => pending.batchId === batchId,
+      (pending) =>
+        pending.batchId === batchId
+        && data.approvalBatches[pending.requestId] === batchId,
     ),
     requestIds: Object.entries(data.approvalBatches)
       .filter(([, id]) => id === batchId)

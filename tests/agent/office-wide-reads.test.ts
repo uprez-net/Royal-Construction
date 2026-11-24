@@ -259,9 +259,12 @@ describe("offers across the office", () => {
       recorder.db,
       NOW,
     );
-    const list = recorder.calls
-      .filter((call) => call.operation === "offer.findMany")
-      .at(-1);
+    // The list itself, not the follow-up read that assesses its rows.
+    const list = recorder.calls.find(
+      (call) =>
+        call.operation === "offer.findMany"
+        && "baseReference" in ((call.args as { select?: object }).select ?? {}),
+    );
     const where = (list?.args as { where: Record<string, unknown> }).where;
     assert.deepEqual(where.offerStatus, {
       in: ["OFFER_SENT", "TENDER_SENT", "CONTRACT_SENT"],

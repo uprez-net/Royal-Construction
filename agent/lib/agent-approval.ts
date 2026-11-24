@@ -18,9 +18,9 @@ type RequestTime = (requestId: string) => Promise<Date | null>;
  * expiry cron withdraws it. "Rejected" leaves the request pending; the cron
  * then cancels it and the turn ends with "Not done".
  *
- * A failed lookup lets the approval through: the tool it unlocks needs the
- * same database to write anything, and blocking a timely approval on a blip
- * would be the worse failure.
+ * A failed lookup refuses too: an approval nobody could check is not let
+ * through. The refusal leaves the request pending, so the owner can press
+ * Approve again once the database answers.
  */
 async function expiredRefusal(
   requestId: string,
@@ -35,7 +35,11 @@ async function expiredRefusal(
       `[agent-approval] could not read when request ${requestId} was made`,
       error instanceof Error ? error.message : error,
     );
-    return null;
+    return {
+      status: "rejected",
+      reason:
+        "Could not check whether this approval is still current, so the change was not made yet. Try approving again in a moment.",
+    };
   }
   if (!requestedAt || !isApprovalExpired(requestedAt, now)) return null;
   return {

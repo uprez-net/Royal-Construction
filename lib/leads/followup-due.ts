@@ -38,6 +38,17 @@ export const LIVE_LEAD = {
   isArchived: false,
 } satisfies Prisma.LeadWhereInput;
 
+/** An open task on a lead a working view still shows: the shared half. */
+function openTaskOnLiveLead(
+  assignedId: string | null,
+): Prisma.LeadTaskWhereInput {
+  return {
+    completedAt: null,
+    lead: assignedId === null ? LIVE_LEAD : { ...LIVE_LEAD, assignedId },
+    status: { not: "DONE" },
+  };
+}
+
 /**
  * An open task whose due date has already passed, on a lead a working view
  * still shows.
@@ -52,12 +63,7 @@ export function overdueLeadTaskWhere(
   now: Date,
   assignedId: string | null = null,
 ): Prisma.LeadTaskWhereInput {
-  return {
-    completedAt: null,
-    dueDate: { lt: now },
-    lead: assignedId === null ? LIVE_LEAD : { ...LIVE_LEAD, assignedId },
-    status: { not: "DONE" },
-  };
+  return { ...openTaskOnLiveLead(assignedId), dueDate: { lt: now } };
 }
 
 /**
@@ -83,10 +89,8 @@ export function leadTasksDueBetweenWhere({
   types?: readonly LeadTaskType[];
 }): Prisma.LeadTaskWhereInput {
   return {
-    completedAt: null,
+    ...openTaskOnLiveLead(assignedId),
     dueDate: { gte: from, lte: to },
-    lead: assignedId === null ? LIVE_LEAD : { ...LIVE_LEAD, assignedId },
-    status: { not: "DONE" },
     ...(types?.length ? { type: { in: [...types] } } : {}),
   };
 }

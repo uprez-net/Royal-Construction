@@ -18,7 +18,9 @@ import {
 } from "@/lib/domain/agent-context";
 import {
   leadSections,
+  offerSections,
   type LeadContextSource,
+  type OfferContextSource,
 } from "@/lib/domain/agent-context/text";
 import type { DomainDb } from "@/lib/domain/db";
 import { systemPrincipal, userPrincipal } from "@/lib/domain/principal";
@@ -512,4 +514,32 @@ test("restricted staff see only what their screens show, by vector and by name",
   const admin = userPrincipal({ id: "a1", role: Role.ADMIN });
   const adminHits = await searchAgentContext(admin, { query: "Smith" }, db, {});
   assert.deepEqual(adminHits.map((hit) => hit.kind).sort(), ["lead", "tradie"]);
+});
+
+test("an offer valid until a day lapses at the next Sydney midnight, in AEDT and AEST", () => {
+  const offer = (validUntil: string): OfferContextSource => ({
+    acceptedAt: null,
+    followUps: { count: 0, lastSentAt: null },
+    id: "o-1",
+    leadId: 9,
+    leadName: "Lee Lead",
+    location: "12 Example St",
+    projectId: null,
+    reference: "RC-2026-014",
+    revisionNumber: 2,
+    secondaryName: null,
+    sentAt: null,
+    status: "OFFER_SENT",
+    totalAmount: 1,
+    updatedAt: new Date("2026-11-01T00:00:00Z"),
+    validUntil,
+    valueIncGst: null,
+  });
+  const dueAt = (validUntil: string) =>
+    offerSections(offer(validUntil)).find((s) => s.section === "overview")
+      ?.dueAt;
+  // AEDT (UTC+11): midnight starting 1 Dec 2026 in Sydney.
+  assert.deepEqual(dueAt("2026-11-30"), new Date("2026-11-30T13:00:00Z"));
+  // AEST (UTC+10): midnight starting 1 Jul 2026 in Sydney.
+  assert.deepEqual(dueAt("2026-06-30"), new Date("2026-06-30T14:00:00Z"));
 });

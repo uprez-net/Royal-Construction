@@ -12,6 +12,7 @@ import { cap, DEAD_BOOKINGS, type BuiltBriefing } from "./briefing-lines";
 import type { VoiceCallerPrincipal } from "./identity";
 import { currentVoiceStaff } from "./relationships";
 import { leadListScope } from "../../access/leads";
+import { sydneyMidnightIn } from "@/lib/dates/sydney";
 import { meetingsBetweenWhere } from "@/lib/leads/followup-due";
 import {
   addDays,
@@ -96,7 +97,9 @@ export async function adminBriefing(
       where: meetingsBetweenWhere({
         assignedId: leadListScope(principal).assignedId,
         from: today,
-        to: new Date(addDays(today, 2).getTime() - 1),
+        // The end of tomorrow in Sydney, not 48 hours on: the day the clocks
+        // go back is 25 hours long.
+        to: new Date(sydneyMidnightIn(2, now).getTime() - 1),
       }),
     }),
   ]);

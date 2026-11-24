@@ -90,8 +90,11 @@ export function AgentApproval({
     : null;
   const expiresAt =
     isApproval && requestedAt ? approvalExpiresAt(requestedAt) : null;
+  // Only a tool approval expires; a question stays answerable.
   const expired =
-    requestedAt !== null && isApprovalExpired(requestedAt, new Date());
+    isApproval
+    && requestedAt !== null
+    && isApprovalExpired(requestedAt, new Date());
   // Other approvals from the same step still unanswered. eve runs none of the
   // step's calls until they are (#616).
   const waitingOn = batch

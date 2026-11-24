@@ -58,6 +58,25 @@ describe("a late approval", () => {
     });
   });
 
+  it("is refused, not let through, when the request time cannot be read", async () => {
+    const policy = ownerMayApprove(
+      async () => {
+        throw new Error("database unavailable");
+      },
+      () => new Date("2026-11-10T06:00:00Z"),
+    );
+    const decision = await policy({
+      request: { requestId: "req_1" },
+      responder: owner,
+      session: { initiator: owner },
+    } as never);
+    assert.equal(decision.status, "rejected");
+    assert.match(
+      (decision as { reason: string }).reason,
+      /Try approving again/,
+    );
+  });
+
   it("still refuses anyone but the owner first", async () => {
     const policy = ownerMayApprove(async () => null);
     const decision = await policy({

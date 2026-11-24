@@ -580,7 +580,22 @@ export async function updateMilestones(
     // milestone inside `updateMilestone`.
     outcomes.push(await updateMilestone(principal, update, db));
   }
-  return { outcomes, projectId: rows[0]!.projectId };
+  // A later update can re-date an earlier one (starting work re-dates the
+  // whole schedule), so each outcome reports the date stored at the end.
+  const stored = await db.milestone.findMany({
+    select: { id: true, targetDate: true },
+    where: { id: { in: ids } },
+  });
+  const targetDates = new Map(stored.map((row) => [row.id, row.targetDate]));
+  return {
+    outcomes: outcomes.map((outcome) => {
+      const targetDate = targetDates.get(outcome.milestone.id);
+      return targetDate instanceof Date
+        ? { ...outcome, milestone: { ...outcome.milestone, targetDate } }
+        : outcome;
+    }),
+    projectId: rows[0]!.projectId,
+  };
 }
 
 /**
@@ -885,8 +900,19 @@ export async function updateMilestone(
   // may not see the money gets none here either, from any adapter. Whether a
   // progress claim is now due is not a figure, and stays.
   const seesMoney = canSeeProjectFinancials(principal);
+  // Starting work re-dated every activity, this one included, after it was
+  // written: report the date it holds now, not the one before the re-date.
+  const storedTargetDate = projectStartDate
+    ? ((
+        await db.milestone.findUnique({
+          select: { targetDate: true },
+          where: { id: updated.id },
+        })
+      )?.targetDate ?? updated.targetDate)
+    : updated.targetDate;
   const milestone = {
     ...updated,
+    targetDate: storedTargetDate,
     budget: updated.budget.toString(),
     previousStatus: current.status,
     spend: updated.spend?.toString(),

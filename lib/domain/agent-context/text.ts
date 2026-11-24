@@ -1,4 +1,8 @@
-import { formatSydneyDate } from "@/lib/dates/sydney";
+import {
+  formatSydneyDate,
+  sydneyMidnightIn,
+  sydneyStartOfDay,
+} from "@/lib/dates/sydney";
 import {
   addressKeywords,
   nameKeywords,
@@ -505,8 +509,10 @@ export function offerSections(offer: OfferContextSource): ChunkDraft[] {
     },
     [
       {
+        // Valid through the whole of that Sydney day: it lapses at the next
+        // midnight there, whichever of AEST or AEDT is in force.
         dueAt: offer.validUntil
-          ? new Date(`${offer.validUntil}T13:59:59Z`)
+          ? sydneyMidnightIn(1, sydneyStartOfDay(offer.validUntil))
           : null,
         heading: "Overview",
         lines: [

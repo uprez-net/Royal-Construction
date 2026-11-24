@@ -425,6 +425,11 @@ export async function searchAgentContext(
     tags: true,
     title: true,
   } as const;
+  // One row per record. Every section of a record carries the same keywords
+  // and title, so reading them all let one suburb's five-section records fill
+  // the cap before the exact address was reached. The overview (or a
+  // tradie's single `record`) stands for the record; it is never money.
+  const recordSections = { in: ["overview", "record"] };
   const [byKeyword, byName] = await Promise.all([
     queryKeys.length
       ? db.agentContextChunk.findMany({
@@ -433,7 +438,7 @@ export async function searchAgentContext(
           where: {
             keywords: { hasSome: queryKeys },
             kind: { in: [...kinds] },
-            section: { notIn: hiddenSections },
+            section: recordSections,
           },
         })
       : Promise.resolve([]),
@@ -446,7 +451,7 @@ export async function searchAgentContext(
             OR: terms.map((term) => ({
               title: { contains: term, mode: "insensitive" as const },
             })),
-            section: { notIn: hiddenSections },
+            section: recordSections,
           },
         })
       : Promise.resolve([]),

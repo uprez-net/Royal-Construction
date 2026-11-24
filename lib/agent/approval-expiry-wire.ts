@@ -1,5 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 import { agentEffectsSecret } from "@/lib/cache/agent-effects-channel";
+import {
+  APPROVAL_EXPIRY_PRINCIPAL_ID,
+  expiryWithdrawalText,
+} from "@/lib/domain/agent/approvals";
 
 // The wire between the app's approval-expiry cron and Eve (#617).
 //
@@ -15,7 +19,8 @@ import { agentEffectsSecret } from "@/lib/cache/agent-effects-channel";
 // or reach any other route. Node-clean: Eve's bundle imports it.
 
 export const APPROVAL_EXPIRY_SERVICE_HEADER = "x-guri-service";
-export const APPROVAL_EXPIRY_SERVICE = "approval-expiry";
+// Also the principal eve records as answering: the stream's mark of an expiry.
+export const APPROVAL_EXPIRY_SERVICE = APPROVAL_EXPIRY_PRINCIPAL_ID;
 
 /** Most requests one cancellation may carry: one step's approvals and some. */
 export const MAX_EXPIRY_RESPONSES = 50;
@@ -58,7 +63,7 @@ export function expiryRequestBody(
     inputResponses: requests.map((request) => ({
       optionId: "cancel",
       requestId: request.requestId,
-      text: `Expired: nobody answered the approval for ${request.toolName} in time, so it was not made.`,
+      text: expiryWithdrawalText(request.toolName),
     })),
   };
 }

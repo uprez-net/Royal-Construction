@@ -134,7 +134,14 @@ export default defineDynamic({
       const requestId = findCancelledApprovalRequestId(messages);
       const expired =
         requestId !== null
-        && (await wasApprovalExpired(requestId, agentDb).catch(() => false));
+        && (await wasApprovalExpired(requestId, agentDb).catch((error) => {
+          // The cancellation wording is the fallback; the log says why.
+          console.error(
+            `[cancelled-approval] could not check whether request ${requestId} expired`,
+            error instanceof Error ? error.message : error,
+          );
+          return false;
+        }));
       return defineInstructions({
         content: expired
           ? expiredApprovalInstructions(toolName)

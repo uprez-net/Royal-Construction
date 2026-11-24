@@ -7,6 +7,7 @@ import {
   canSeeProjectFinancials,
   projectReadScope,
 } from "../../access/projects";
+import { normalizeKeyword } from "../../agent-context/keywords";
 import { searchOffers } from "../../offers/queries";
 import type { EmbeddingPort } from "../../ports/embedding";
 import { searchLeads } from "../../leads/queries";
@@ -347,10 +348,30 @@ export async function leadSummary(
 }
 
 /**
+ * A spoken offer reference ("RC Q 2026 014 R2") in the form references are
+ * stored in ("rc-q-2026-014"), for the literal search; null for words that are
+ * not a reference. A trailing revision is left off: it is not in the base.
+ */
+function storedReferenceForm(words: string): string | null {
+  const tokens = normalizeKeyword(words).split(" ").filter(Boolean);
+  if (tokens.length > 1 && /^r\d{1,3}$/.test(tokens.at(-1)!)) tokens.pop();
+  if (tokens.length < 2 || !tokens.some((token) => /\d/.test(token)))
+    return null;
+  return tokens.join("-");
+}
+
+/** The revision the caller named ("R1", "rev 1", "revision 1"), or null. */
+function requestedRevision(words: string): number | null {
+  const match = /(?:(?:^| )(?:r|rev|revision) ?|(?<=\d)r)(\d{1,3})(?= |$)/.exec(
+    normalizeKeyword(words),
+  );
+  return match ? Number(match[1]) : null;
+}
+
+/**
  * A lead's active offer, by the client's name, the site or the offer
- * reference in any form (#621): its status, when it went out, until when it
- * is valid, and its value only for a caller who may see money
- * (`canSeeProjectFinancials`).
+ * reference in any form (#621): its status, when it went out, and its value
+ * only for a caller who may see money (`canSeeProjectFinancials`).
  */
 export async function offerStatus(
   principal: UserPrincipal,
@@ -359,6 +380,31 @@ export async function offerStatus(
   now: Date,
   ports: VoiceLookupPorts = {},
 ): Promise<VoiceLookupResult> {
+  const liveOffers = (leadIds: readonly number[]) =>
+    leadIds.length
+      ? db.offer.findMany({
+          orderBy: { updatedAt: "desc" },
+          select: {
+            baseReference: true,
+            contractValueIncGst: true,
+            id: true,
+            lead: { select: { location: true, name: true } },
+            leadId: true,
+            offerStatus: true,
+            revisionNumber: true,
+            sentAt: true,
+            totalAmount: true,
+            updatedAt: true,
+          },
+          take: 5,
+          where: {
+            isActive: true,
+            lead: { isArchived: false, ...leadScopeWhere(principal) },
+            leadId: { in: [...leadIds] },
+          },
+        })
+      : Promise.resolve([]);
+
   const indexed = await resolveThroughIndex(
     principal,
     words,
@@ -366,41 +412,27 @@ export async function offerStatus(
     db,
     ports,
   );
-  let leadIds: number[];
-  if (indexed.kind !== "none") {
-    // An offer's index entry carries its lead's id.
-    leadIds = (indexed.kind === "one" ? [indexed.entityId] : indexed.entityIds)
-      .map(Number)
-      .filter((id) => Number.isSafeInteger(id));
-  } else {
-    const found = await searchOffers(principal, { limit: 5, query: words }, db);
-    leadIds = [
+  // An offer's index entry carries its lead's id.
+  let offers = await liveOffers(
+    indexed.kind === "none"
+      ? []
+      : (indexed.kind === "one" ? [indexed.entityId] : indexed.entityIds)
+          .map(Number)
+          .filter((id) => Number.isSafeInteger(id)),
+  );
+  if (offers.length === 0) {
+    // The index found nothing, or only leads with no live offer this caller
+    // may read (a stale entry): the scoped search, as said and then as the
+    // reference is stored.
+    let found = await searchOffers(principal, { limit: 5, query: words }, db);
+    const stored = storedReferenceForm(words);
+    if (!found.some((o) => o.isActive) && stored && stored !== words) {
+      found = await searchOffers(principal, { limit: 5, query: stored }, db);
+    }
+    offers = await liveOffers([
       ...new Set(found.filter((o) => o.isActive).map((o) => o.leadId)),
-    ];
+    ]);
   }
-  const offers = leadIds.length
-    ? await db.offer.findMany({
-        orderBy: { updatedAt: "desc" },
-        select: {
-          baseReference: true,
-          contractValueIncGst: true,
-          id: true,
-          lead: { select: { location: true, name: true } },
-          leadId: true,
-          offerStatus: true,
-          revisionNumber: true,
-          sentAt: true,
-          totalAmount: true,
-          updatedAt: true,
-        },
-        take: 5,
-        where: {
-          isActive: true,
-          lead: { isArchived: false, ...leadScopeWhere(principal) },
-          leadId: { in: leadIds },
-        },
-      })
-    : [];
   if (offers.length === 0) {
     return answer(
       [
@@ -424,6 +456,20 @@ export async function offerStatus(
     );
   }
   const offer = offers[0]!;
+  // "RC-…-R1" finds the lead's active offer, which may be R2: say so rather
+  // than answer R1's question with R2's status and value.
+  const asked = requestedRevision(words);
+  if (asked !== null && asked !== offer.revisionNumber) {
+    const base = offer.baseReference.trim() || `OF-${offer.leadId}`;
+    return answer(
+      [
+        asked < offer.revisionNumber
+          ? `${field(`${base}-R${asked}`, 30)} has been superseded. The current offer for ${field(offer.lead.name, 40)} is ${field(reference(offer), 30)}; ask about that one if it is wanted.`
+          : `There is no ${field(`${base}-R${asked}`, 30)}. The current offer for ${field(offer.lead.name, 40)} is ${field(reference(offer), 30)}; ask about that one if it is wanted.`,
+      ],
+      [`offer:${offer.id}`],
+    );
+  }
   const value = canSeeProjectFinancials(principal)
     ? toCents(offer.contractValueIncGst ?? offer.totalAmount)
     : null;

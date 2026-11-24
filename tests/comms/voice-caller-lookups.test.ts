@@ -343,6 +343,56 @@ describe("lookups through the context index", () => {
       recorder.db,
       NOW,
     );
+    assert.match(result.text, /RC-2026-014-R2 for Lee Lead/);
     assert.doesNotMatch(result.text, /Value|\$/);
+  });
+
+  test("a revision that is no longer current is called superseded, not answered with the current one", async () => {
+    const recorder = callerDb("admin", {
+      "agentContextChunk.findMany": [
+        indexRow({
+          entityId: "9",
+          keywords: ["rc 2026 014", "rc2026014", "rc 2026 014 r2"],
+          kind: "offer",
+          title: "RC-2026-014-R2 — Lee Lead, 12 Example St",
+        }),
+      ],
+      "offer.findMany": [offerRow],
+    });
+    const result = await runVoiceLookup(
+      adminCaller,
+      { name: "offer_status", offer: "RC-2026-014-R1" },
+      recorder.db,
+      { now: NOW },
+    );
+    assert.match(result.text, /RC-2026-014-R1 has been superseded/);
+    assert.match(result.text, /current offer for Lee Lead is RC-2026-014-R2/);
+    assert.doesNotMatch(result.text, /offer sent|Value|\$/);
+  });
+
+  test("a spoken reference falls back to the stored form when the index has nothing live", async () => {
+    const { offerStatus } =
+      await import("@/lib/domain/comms/callers/lookup-reads");
+    const { userPrincipal } = await import("@/lib/domain/principal");
+    const searched: string[] = [];
+    const recorder = callerDb("admin", {
+      "offer.findMany": (args: {
+        select?: { isActive?: boolean };
+        where?: { OR?: { baseReference?: { contains?: string } }[] };
+      }) => {
+        if (!args.select?.isActive) return [offerRow];
+        const query = args.where?.OR?.[1]?.baseReference?.contains ?? "";
+        searched.push(query);
+        return query === "rc-2026-014" ? [{ ...offerRow, isActive: true }] : [];
+      },
+    });
+    const result = await offerStatus(
+      userPrincipal({ id: "u-admin", role: Role.ADMIN }),
+      "RC 2026 014",
+      recorder.db,
+      NOW,
+    );
+    assert.deepEqual(searched, ["RC 2026 014", "rc-2026-014"]);
+    assert.match(result.text, /RC-2026-014-R2 for Lee Lead/);
   });
 });

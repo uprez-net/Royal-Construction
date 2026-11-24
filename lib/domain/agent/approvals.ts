@@ -21,6 +21,20 @@ import { approvalExpiresAt } from "./approval-expiry";
 export const APPROVAL_EXPIRED_ACTION = "agent.approval.expired";
 const APPROVAL_TARGET_TYPE = "agent-approval";
 
+/**
+ * The principal eve records as answering an expiry withdrawal. No person can
+ * be it, so an `approval.settled` by it is the stream's own durable mark that
+ * the expiry, not a person, cancelled the request.
+ */
+export const APPROVAL_EXPIRY_PRINCIPAL_ID = "approval-expiry";
+
+const EXPIRY_TEXT_PREFIX = "Expired: ";
+
+/** What an expiry withdrawal answers with; also read back as a mark. */
+export function expiryWithdrawalText(toolName: string): string {
+  return `${EXPIRY_TEXT_PREFIX}nobody answered the approval for ${toolName} in time, so it was not made.`;
+}
+
 export type PendingAgentApproval = {
   readonly requestId: string;
   readonly callId: string;
@@ -65,22 +79,46 @@ function answeredIds(eventType: string, payload: unknown): string[] {
 }
 
 /**
- * Tool approvals that have been asked for and not answered, oldest first.
- *
- * Read from the application's copy of eve's stream: an `input.requested` with
- * no `input.resolved` or `approval.settled` for its request, and no expiry
- * already recorded. A specialist's request is mirrored on the conversation
- * that delegated to it, so each request is counted once, against its
- * conversation.
- *
- * A signed-in caller sees their own conversations only. A system caller (the
- * expiry cron) sees all of them.
+ * The request ids this event shows the expiry withdrew: settled by the expiry
+ * principal, or resolved with the expiry's Cancel and its wording.
  */
-export async function listPendingAgentApprovals(
+function expiryWithdrawnIds(eventType: string, payload: unknown): string[] {
+  const data = record(record(payload)?.data);
+  if (!data) return [];
+  if (eventType === "approval.settled") {
+    return data.responderPrincipalId === APPROVAL_EXPIRY_PRINCIPAL_ID
+      && data.outcome === "cancelled"
+      && typeof data.requestId === "string"
+      ? [data.requestId]
+      : [];
+  }
+  if (eventType !== "input.resolved") return [];
+  const resolutions = Array.isArray(data.resolutions) ? data.resolutions : [];
+  return resolutions.flatMap((resolution) => {
+    const entry = record(resolution);
+    const response = record(entry?.response);
+    return typeof entry?.requestId === "string"
+      && response?.optionId === "cancel"
+      && typeof response.text === "string"
+      && response.text.startsWith(EXPIRY_TEXT_PREFIX)
+      ? [entry.requestId]
+      : [];
+  });
+}
+
+type ApprovalLog = {
+  /** Every tool approval asked for, first sighting, oldest first. */
+  readonly requested: ReadonlyMap<string, PendingAgentApproval>;
+  readonly answered: ReadonlySet<string>;
+  /** Answered by the expiry's withdrawal (see `expiryWithdrawnIds`). */
+  readonly withdrawnByExpiry: ReadonlySet<string>;
+};
+
+async function readApprovalLog(
   principal: DomainPrincipal,
   db: DomainDb,
-  options: { readonly rootEveSessionIds?: readonly string[] } = {},
-): Promise<PendingAgentApproval[]> {
+  options: { readonly rootEveSessionIds?: readonly string[] },
+): Promise<ApprovalLog> {
   let ownerUserId: string | undefined;
   if (principal.kind === "user") ownerUserId = principal.userId;
   else if (principal.kind !== "system") {
@@ -113,11 +151,14 @@ export async function listPendingAgentApprovals(
   });
 
   const answered = new Set<string>();
+  const withdrawnByExpiry = new Set<string>();
   const pending = new Map<string, PendingAgentApproval>();
   for (const event of events) {
     if (event.eventType !== "input.requested") {
       for (const id of answeredIds(event.eventType, event.payload))
         answered.add(id);
+      for (const id of expiryWithdrawnIds(event.eventType, event.payload))
+        withdrawnByExpiry.add(id);
       continue;
     }
     const requests = (event.payload as RequestedPayload).data?.requests ?? [];
@@ -153,8 +194,35 @@ export async function listPendingAgentApprovals(
     }
   }
 
-  const open = [...pending.values()].filter(
-    (approval) => !answered.has(approval.requestId),
+  return { answered, requested: pending, withdrawnByExpiry };
+}
+
+/**
+ * Tool approvals that have been asked for and not answered, oldest first.
+ *
+ * Read from the application's copy of eve's stream: an `input.requested` with
+ * no `input.resolved` or `approval.settled` for its request, and no expiry
+ * already recorded. A specialist's request is mirrored on the conversation
+ * that delegated to it, so each request is counted once, against its
+ * conversation.
+ *
+ * A signed-in caller sees their own conversations only. A system caller (the
+ * expiry cron) sees all of them.
+ */
+export async function listPendingAgentApprovals(
+  principal: DomainPrincipal,
+  db: DomainDb,
+  options: { readonly rootEveSessionIds?: readonly string[] } = {},
+): Promise<PendingAgentApproval[]> {
+  return pendingFrom(await readApprovalLog(principal, db, options), db);
+}
+
+async function pendingFrom(
+  log: ApprovalLog,
+  db: DomainDb,
+): Promise<PendingAgentApproval[]> {
+  const open = [...log.requested.values()].filter(
+    (approval) => !log.answered.has(approval.requestId),
   );
   if (open.length === 0) return [];
   const expired = await db.agentActionAudit.findMany({
@@ -247,7 +315,31 @@ export async function wasApprovalExpired(
       targetType: APPROVAL_TARGET_TYPE,
     },
   });
-  return row !== null;
+  if (row !== null) return true;
+  // The audit row is written after eve accepts the withdrawal, so a run can
+  // fail in between; eve's own record of who cancelled still says it.
+  const events = await db.agentSessionEvent.findMany({
+    select: { eventType: true, payload: true },
+    take: 10,
+    where: {
+      OR: [
+        {
+          eventType: "approval.settled",
+          payload: { equals: requestId, path: ["data", "requestId"] },
+        },
+        {
+          eventType: "input.resolved",
+          payload: {
+            array_contains: [{ requestId }],
+            path: ["data", "resolutions"],
+          },
+        },
+      ],
+    },
+  });
+  return events.some((event) =>
+    expiryWithdrawnIds(event.eventType, event.payload).includes(requestId),
+  );
 }
 
 /**
@@ -311,7 +403,29 @@ export async function expireStaleApprovals(
     );
   }
   const now = input.now ?? new Date();
-  const pending = await listPendingAgentApprovals(principal, db);
+  const log = await readApprovalLog(principal, db, {});
+  const pending = await pendingFrom(log, db);
+
+  let expired = 0;
+  let failed = 0;
+  // Withdrawn by an earlier run that failed before writing the audit row:
+  // eve's stream marks them, so the record is completed now. Rows already
+  // written are skipped by `recordExpiredApprovals`.
+  const unrecorded = [...log.requested.values()].filter((approval) =>
+    log.withdrawnByExpiry.has(approval.requestId),
+  );
+  if (unrecorded.length > 0) {
+    try {
+      expired += await recordExpiredApprovals(principal, unrecorded, db, now);
+    } catch (error) {
+      failed += 1;
+      console.error(
+        "[approval-expiry] could not record approvals an earlier run withdrew",
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
+
   const due = pending.filter(
     (approval) => approval.expiresAt.getTime() < now.getTime(),
   );
@@ -322,8 +436,6 @@ export async function expireStaleApprovals(
     byConversation.set(approval.rootEveSessionId, list);
   }
 
-  let expired = 0;
-  let failed = 0;
   for (const [rootEveSessionId, approvals] of byConversation) {
     try {
       await ports.withdraw(rootEveSessionId, approvals);
@@ -335,7 +447,17 @@ export async function expireStaleApprovals(
       );
       continue;
     }
-    expired += await recordExpiredApprovals(principal, approvals, db, now);
+    try {
+      expired += await recordExpiredApprovals(principal, approvals, db, now);
+    } catch (error) {
+      // Withdrawn but not recorded: the next run finds eve's mark and
+      // finishes the record (above). Counted, so the run reports a failure.
+      failed += 1;
+      console.error(
+        `[approval-expiry] withdrew approvals in session ${rootEveSessionId} but could not record them; the next run will`,
+        error instanceof Error ? error.message : error,
+      );
+    }
   }
   return { expired, failed, waiting: pending.length - due.length };
 }

@@ -152,9 +152,7 @@ export function addressKeywords(location: string | null | undefined): string[] {
     .filter(Boolean);
   for (const [index, part] of parts.entries()) {
     const tokens = words(part);
-    const typeAt = tokens.findIndex(
-      (token, at) => at > 0 && STREET_TYPE_FORMS.has(token),
-    );
+    const typeAt = streetTypeAt(tokens);
     if (typeAt > 0) {
       const forms = STREET_TYPE_FORMS.get(tokens[typeAt]!)!;
       const before = tokens.slice(0, typeAt).filter((token) => token !== "lot");
@@ -184,6 +182,22 @@ export function addressKeywords(location: string | null | undefined): string[] {
     }
   }
   return [...out].filter((keyword) => keyword.length >= 2);
+}
+
+/**
+ * Where the street type is: the last street-type word with a street name
+ * before it. "St" in "12 St Clair Avenue" is Saint, part of the name, and the
+ * suffix is "Avenue"; "Grove" in "12 Grove St" is the name. -1 when none.
+ */
+function streetTypeAt(tokens: readonly string[]): number {
+  for (let at = tokens.length - 1; at > 0; at -= 1) {
+    if (!STREET_TYPE_FORMS.has(tokens[at]!)) continue;
+    const before = tokens.slice(0, at).filter((token) => token !== "lot");
+    const numberAt = before.findIndex((token) => /^\d+[a-z]?$/.test(token));
+    const name = numberAt >= 0 ? before.slice(numberAt + 1) : before;
+    if (name.length > 0) return at;
+  }
+  return -1;
 }
 
 function isStateOrPostcode(token: string): boolean {

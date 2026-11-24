@@ -1,5 +1,9 @@
 import type { Prisma } from "@prisma/client";
-import { sydneyStartOfDay, sydneyToday } from "@/lib/dates/sydney";
+import {
+  isValidIsoCalendarDate,
+  sydneyStartOfDay,
+  sydneyToday,
+} from "@/lib/dates/sydney";
 import {
   meetingsBetweenWhere,
   overdueLeadTaskWhere,
@@ -319,7 +323,8 @@ function workspaceValidUntil(workspaceState: unknown): string | null {
   if (!workspaceState || typeof workspaceState !== "object") return null;
   const job = (workspaceState as { job?: { validUntil?: unknown } }).job;
   const value = job?.validUntil;
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+  // A real calendar day, not just its shape: "2026-02-31" is no date.
+  return typeof value === "string" && isValidIsoCalendarDate(value)
     ? value
     : null;
 }

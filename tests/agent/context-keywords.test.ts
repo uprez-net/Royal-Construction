@@ -47,6 +47,23 @@ describe("keywords", () => {
     assert.equal(suburbOf("12 Example St, Oran Park NSW 2570"), "oran park");
   });
 
+  it('take the street type from the end, so "St Clair Avenue" keeps its name', () => {
+    const keywords = addressKeywords("12 St Clair Avenue, Penrith NSW 2750");
+    for (const expected of [
+      "12 st clair avenue",
+      "12 st clair ave",
+      "st clair avenue",
+      "st clair ave",
+      "penrith",
+    ])
+      assert.ok(keywords.includes(expected), expected);
+    assert.ok(!keywords.includes("clair avenue"), "not read as a suburb");
+
+    const rose = addressKeywords("12 Rose Avenue, Kellyville");
+    assert.ok(overlaps("12 Rose Avenue", rose).includes("12 rose avenue"));
+    assert.ok(overlaps("12 Rose Ave", rose).includes("12 rose ave"));
+  });
+
   it("say an offer reference with and without its separators and revision", () => {
     assert.deepEqual(referenceKeywords("RC-2026-014", 2).sort(), [
       "rc 2026 014",
@@ -96,29 +113,35 @@ function indexDb(rows: Record<string, unknown>[]) {
     $queryRaw: async () => [],
     agentContextChunk: {
       findMany: async (args: {
+        take?: number;
         where: {
           keywords?: { hasSome: string[] };
           kind: { in: string[] };
           OR?: { title: { contains: string } }[];
-          section: { notIn: string[] };
+          section: { in?: string[]; notIn?: string[] };
         };
       }) =>
-        rows.filter((row) => {
-          const { where } = args;
-          if (!where.kind.in.includes(row.kind as string)) return false;
-          if (where.section.notIn.includes(row.section as string)) return false;
-          if (where.keywords)
-            return where.keywords.hasSome.some((key) =>
-              (row.keywords as string[]).includes(key),
-            );
-          if (where.OR)
-            return where.OR.some((clause) =>
-              (row.title as string)
-                .toLowerCase()
-                .includes(clause.title.contains.toLowerCase()),
-            );
-          return true;
-        }),
+        rows
+          .filter((row) => {
+            const { where } = args;
+            const section = row.section as string;
+            if (!where.kind.in.includes(row.kind as string)) return false;
+            if (where.section.notIn?.includes(section)) return false;
+            if (where.section.in && !where.section.in.includes(section))
+              return false;
+            if (where.keywords)
+              return where.keywords.hasSome.some((key) =>
+                (row.keywords as string[]).includes(key),
+              );
+            if (where.OR)
+              return where.OR.some((clause) =>
+                (row.title as string)
+                  .toLowerCase()
+                  .includes(clause.title.contains.toLowerCase()),
+              );
+            return true;
+          })
+          .slice(0, args.take ?? rows.length),
     },
   } as unknown as DomainDb;
 }
@@ -212,6 +235,27 @@ describe("searchAgentContext by keyword, with no embedding at all", () => {
     );
     assert.equal(hits[0]?.kind, "offer");
     assert.equal(hits[0]?.entityId, "42");
+  });
+
+  it("is not crowded out by the sections of other records in the same suburb", async () => {
+    const neighbours = Array.from({ length: 12 }, (_, index) =>
+      rowsOf(
+        projectSections({
+          ...projectBase,
+          customerNames: [`Client ${index}`],
+          id: `p-n${index}`,
+          location: `${index + 40} Other Rd, Oran Park`,
+          name: `Neighbour ${index}`,
+        }),
+      ),
+    ).flat();
+    const exact = rows.filter((row) => row.entityId === "p-example");
+    const hits = await searchAgentContext(
+      admin,
+      { kinds: ["project"], query: "12 Example Street Oran Park" },
+      indexDb([...neighbours, ...exact]),
+    );
+    assert.equal(hits[0]?.entityId, "p-example");
   });
 
   it("returns every candidate for a first name alone", async () => {
