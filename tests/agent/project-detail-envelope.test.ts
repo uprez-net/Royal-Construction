@@ -192,3 +192,24 @@ test("a blank or overlong project name does not fail the detail", () => {
     assert.equal(envelope.entityRef?.display.secondaryText?.length, 300);
   }
 });
+
+// #620: get_project failed its own output schema 42 times in production
+// before this was fixed (the Zod error pointed at
+// data.project.lead.emails[].sentAt). Pinned against the tool's own schema,
+// not only the envelope builder.
+test("get_project's output for a lead with emails passes the tool's own output schema", async () => {
+  const { default: getProject } =
+    await import("@/agent/subagents/project-operations/tools/get_project");
+  const schema = (
+    getProject as unknown as {
+      outputSchema: { safeParse: (value: unknown) => { success: boolean } };
+    }
+  ).outputSchema;
+  const envelope = projectDetailEnvelope(detailFixture());
+  assert.equal(schema.safeParse(envelope).success, true);
+  // What the tool hands eve is the serialised value.
+  assert.equal(
+    schema.safeParse(JSON.parse(JSON.stringify(envelope))).success,
+    true,
+  );
+});

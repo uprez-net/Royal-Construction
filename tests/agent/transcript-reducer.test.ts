@@ -825,3 +825,35 @@ test("a single approval is not a batch", async () => {
   assert.equal(approvalBatchFor(data, "req_1"), null);
   assert.equal(data.pendingApprovals[0]?.cancelOptionId, "deny");
 });
+
+// #620: production `approval.settled` events carry `turnId: ""`. The pending
+// approval is cleared by its request id, whatever turn it was homed to.
+test("an approval.settled with an empty turn id still clears its approval", () => {
+  const data = reduceAll([
+    approvalRequest,
+    stamped({
+      data: {
+        outcome: "approved",
+        requestId: "req_1",
+        sequence: 5,
+        turnId: "",
+      },
+      type: "approval.settled",
+    }),
+  ]);
+  assert.deepEqual(data.pendingApprovals, []);
+  // eve's own projection finds the card by approval id, not by turn, so the
+  // card on the right turn moves to approved and no stray message appears.
+  const parts = data.messages.flatMap((message) => message.parts);
+  const card = parts.find(
+    (part) => part.type === "dynamic-tool" && part.toolCallId === "call_2",
+  );
+  assert.equal(
+    (card as { state?: string } | undefined)?.state,
+    "approval-responded",
+  );
+  assert.equal(
+    data.messages.some((message) => message.id === ":assistant"),
+    false,
+  );
+});
