@@ -68,6 +68,28 @@ export function expiryRequestBody(
   };
 }
 
+/**
+ * What eve's answer to a withdrawal means. A 2xx withdrew it. A 409 whose code
+ * is `session_not_active` is a conversation that already ended (the session
+ * timeout is seven days): nothing is left to cancel and the change can never
+ * run. Anything else, `session_not_ready` (retryable) included, is a failure
+ * the next run retries.
+ */
+export function withdrawalOutcome(
+  status: number,
+  body: unknown,
+): "withdrawn" | "session-ended" | "failed" {
+  if (status >= 200 && status < 300) return "withdrawn";
+  if (
+    status === 409
+    && body !== null
+    && typeof body === "object"
+    && (body as { code?: unknown }).code === "session_not_active"
+  )
+    return "session-ended";
+  return "failed";
+}
+
 export function expiryRequestHeaders(
   env: Env = process.env,
 ): Record<string, string> | null {

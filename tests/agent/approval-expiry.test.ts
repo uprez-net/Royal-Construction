@@ -16,6 +16,7 @@ import {
   eveSessionUrl,
   isCancelOnlyBody,
   verifyApprovalExpiryRequest,
+  withdrawalOutcome,
 } from "@/lib/agent/approval-expiry-wire";
 import { adminPrincipal, recordingDb } from "../architecture/domain-harness";
 
@@ -270,12 +271,44 @@ describe("expireStaleApprovals", () => {
     assert.deepEqual(outcome, { expired: 0, failed: 1, waiting: 1 });
   });
 
+  it("records an approval whose conversation eve says has ended", async () => {
+    const recorder = recordingDb({
+      "agentActionAudit.findMany": [],
+      "agentSession.findMany": [{ eveSessionId: ROOT, id: "session_row" }],
+      "agentSessionEvent.findMany": events,
+    });
+    const outcome = await expireStaleApprovals(
+      systemPrincipal("test"),
+      { now: new Date("2026-11-24T06:00:00Z") },
+      recorder.db,
+      { withdraw: async () => "session-ended" },
+    );
+    assert.deepEqual(outcome, { expired: 1, failed: 0, waiting: 1 });
+  });
+
   it("is the system's to run, not a signed-in user's", async () => {
     await assert.rejects(
       expireStaleApprovals(adminPrincipal(), {}, recordingDb().db, {
         withdraw: async () => {},
       }),
     );
+  });
+});
+
+describe("eve's answer to a withdrawal", () => {
+  it("reads an ended conversation apart from a failure", () => {
+    assert.equal(withdrawalOutcome(202, null), "withdrawn");
+    assert.equal(
+      withdrawalOutcome(409, { code: "session_not_active", ok: false }),
+      "session-ended",
+    );
+    // Not ready yet is retryable: the next run tries again.
+    assert.equal(
+      withdrawalOutcome(409, { code: "session_not_ready", ok: false }),
+      "failed",
+    );
+    assert.equal(withdrawalOutcome(401, null), "failed");
+    assert.equal(withdrawalOutcome(409, null), "failed");
   });
 });
 

@@ -240,8 +240,9 @@ async function pendingFrom(
 /**
  * Record that these approvals expired unanswered: one audit row each, under
  * the conversation's owner. Called only after eve has accepted the
- * cancellation, so a row means the change was really withdrawn. Repeating a
- * call for an approval already recorded writes nothing.
+ * cancellation, or has said the conversation is no longer active, so a row
+ * means the change cannot run. Repeating a call for an approval already
+ * recorded writes nothing.
  */
 export async function recordExpiredApprovals(
   principal: DomainPrincipal,
@@ -365,11 +366,16 @@ export async function approvalRequestedAt(
   return row?.occurredAt ?? null;
 }
 
-/** Withdraws pending requests in one conversation through eve. Throws on failure. */
+/**
+ * Withdraws pending requests in one conversation through eve. Throws on
+ * failure. Answers `"session-ended"` when eve reports the conversation is no
+ * longer active (it timed out or ended): nothing is left to withdraw, and the
+ * change can never run.
+ */
 export type ApprovalWithdrawalPort = (
   rootEveSessionId: string,
   requests: readonly { requestId: string; toolName: string }[],
-) => Promise<void>;
+) => Promise<void | "session-ended">;
 
 export type ExpireApprovalsOutcome = {
   /** Approvals withdrawn through eve and recorded as expired. */
@@ -438,6 +444,9 @@ export async function expireStaleApprovals(
 
   for (const [rootEveSessionId, approvals] of byConversation) {
     try {
+      // "session-ended" is recorded too: an ended conversation cannot run the
+      // change, and leaving it pending failed every run and kept the
+      // conversation marked "Approval waiting" for ever.
       await ports.withdraw(rootEveSessionId, approvals);
     } catch (error) {
       failed += 1;
