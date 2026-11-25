@@ -162,6 +162,21 @@ test("a delivery-failure report stamps the send as bounced, once, and changes no
   });
 });
 
+test("a delivery-failure report is stamped even without an Auto-Submitted header", async () => {
+  const recorder = recordingDb({
+    "offerDocumentSend.findUnique": SEND,
+    "offerDocumentSend.updateMany": { count: 1 },
+  });
+
+  const record = await recordOfferReply(
+    WEBHOOK,
+    { ...REPLY, headers: { contentType: "multipart/report" } },
+    recorder.transactionalDb,
+  );
+
+  assert.equal(record.outcome, "bounced");
+});
+
 test("a repeated bounce notification is not reported again", async () => {
   const recorder = recordingDb({
     "offerDocumentSend.findUnique": SEND,

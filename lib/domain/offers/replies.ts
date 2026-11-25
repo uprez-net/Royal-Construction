@@ -124,7 +124,7 @@ export async function recordOfferReply(
     return { outcome: "no-matching-send" };
   }
 
-  if (isMachineGenerated(input.headers)) {
+  if (isMachineGenerated(input.headers) || isDeliveryFailure(input.headers)) {
     // A delivery-failure report is the one machine message worth keeping: the
     // send never reached the client and the offer still reads as sent (#585).
     // Stamped once; a repeated notification matches no row and is not
