@@ -1,6 +1,5 @@
 import { reportWorkflowError } from "@/lib/workflow/report-failure";
 import {
-  CertifierEngagementStatus,
   ComplianceAlertSource,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
@@ -18,6 +17,7 @@ import {
 } from "@/lib/agent/checklistExtractionAgent";
 import { detectComplianceAlerts } from "@/lib/agent/complianceAlertAgent";
 import { raiseComplianceAlert } from "@/lib/data/compliance-alerts";
+import { markChecklistIssued } from "@/lib/domain/compliance/documents";
 import { notifyCompliance } from "@/lib/compliance/notify";
 import {
   mapExistingDocumentsOntoChecklist,
@@ -360,19 +360,9 @@ async function saveChecklistItems(
       });
     }
 
-    await tx.certifierEngagement.updateMany({
-      where: {
-        id: input.engagementId,
-        status: {
-          in: [
-            CertifierEngagementStatus.RESPONSE_RECEIVED,
-            CertifierEngagementStatus.SIGNING,
-            CertifierEngagementStatus.CHECKLIST_EXTRACTING,
-          ],
-        },
-      },
-      data: { status: CertifierEngagementStatus.CHECKLIST_TRACKING },
-    });
+    // The same move the requests read out of a certifier's email make — one
+    // rule for "the certifier has issued their checklist".
+    await markChecklistIssued(input.engagementId, tx);
 
     return items.length;
   });

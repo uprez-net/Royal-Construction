@@ -15,6 +15,7 @@ import {
 import { test } from "vitest";
 
 import {
+  certificateBlockLockedReason,
   certificateCompletionBlockedReason,
   certificateDocumentTypeFor,
   certificateKindFor,
@@ -311,6 +312,35 @@ test("a CDC needs the principal certifier appointment recorded", () => {
 
   assert.ok(blocked);
   assert.match(blocked, /principal certifier/i);
+});
+
+test("the appointment holds the lodgement but never locks the block it is recorded in", () => {
+  // The form that records the appointment lives inside the certificate block.
+  // Locking the block on the appointment hid that form, so a CDC job whose
+  // checklist had passed read "record it" with nowhere to record it.
+  const file = engagement();
+
+  assert.match(
+    certificateLodgementBlockedReason(file) ?? "",
+    /principal certifier/i,
+  );
+  assert.equal(certificateBlockLockedReason(file), null);
+});
+
+test("the block stays locked on the certifier's verdict and the covenant", () => {
+  assert.match(
+    certificateBlockLockedReason(
+      engagement({ status: CertifierEngagementStatus.RESPONSE_RECEIVED }),
+    ) ?? "",
+    /pass every checklist item/i,
+  );
+  assert.equal(
+    certificateBlockLockedReason(
+      engagement(),
+      "The estate developer has to approve the plans.",
+    ),
+    "The estate developer has to approve the plans.",
+  );
 });
 
 test("a CDC with the appointment recorded is clear to lodge", () => {

@@ -180,8 +180,8 @@ export function certificateKindFor(
       isCertificateDocument(document.documentType) && document.files.length > 0,
   );
   if (held) {
-    return held.documentType ===
-      ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE
+    return held.documentType
+      === ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE
       ? ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE
       : ComplianceExternalApplicationKind.CONSTRUCTION_CERTIFICATE;
   }
@@ -280,28 +280,60 @@ export function certificateLodgementBlockedReason(
   engagement: CertifierEngagementDetail,
   developerBlocked: string | null = null,
 ): string | null {
-  const kind = certificateKindFor(engagement);
+  return (
+    certifierOrConsentBlockedReason(engagement)
+    ?? principalCertifierBlockedReason(engagement)
+    ?? developerBlocked
+  );
+}
 
+/**
+ * Why the certificate block cannot be opened yet, or null.
+ *
+ * Every gate in `certificateLodgementBlockedReason` except the principal
+ * certifier appointment, because the appointment is recorded *inside* the
+ * block. Locking the block on it hid the only form that could clear it, so a
+ * CDC job whose checklist had passed sat behind "record it below" with nothing
+ * below to record it in. The lodgement still waits for the appointment; the
+ * block says so in place of the lodgement form instead of behind a padlock.
+ */
+export function certificateBlockLockedReason(
+  engagement: CertifierEngagementDetail,
+  developerBlocked: string | null = null,
+): string | null {
+  return certifierOrConsentBlockedReason(engagement) ?? developerBlocked;
+}
+
+function certifierOrConsentBlockedReason(
+  engagement: CertifierEngagementDetail,
+): string | null {
   if (!certifierHasPassedChecklist(engagement)) {
     return "The certifier has to pass every checklist item before the application goes in. Send the pack for review and record their decision first.";
   }
 
   if (
-    kind === ComplianceExternalApplicationKind.CONSTRUCTION_CERTIFICATE &&
-    !hasDevelopmentConsent(engagement)
+    certificateKindFor(engagement)
+      === ComplianceExternalApplicationKind.CONSTRUCTION_CERTIFICATE
+    && !hasDevelopmentConsent(engagement)
   ) {
     return "Upload the council's notice of determination before lodging the construction certificate application.";
   }
 
+  return null;
+}
+
+function principalCertifierBlockedReason(
+  engagement: CertifierEngagementDetail,
+): string | null {
   if (
-    kind ===
-      ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE &&
-    !hasPrincipalCertifier(engagement)
+    certificateKindFor(engagement)
+      === ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE
+    && !hasPrincipalCertifier(engagement)
   ) {
-    return "Appoint the certifier as principal certifier on the NSW Planning Portal and record it below. A CDC cannot be determined without it.";
+    return "Appoint the certifier as principal certifier on the NSW Planning Portal and record it above. A CDC cannot be determined without it.";
   }
 
-  return developerBlocked;
+  return null;
 }
 
 /**

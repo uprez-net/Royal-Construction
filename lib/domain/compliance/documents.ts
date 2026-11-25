@@ -169,41 +169,9 @@ export async function resolveComplianceDocument(
   // Every document being approved is what freezes the section, so the
   // engagement's own status follows the last decision rather than needing a
   // separate button nobody would remember to press.
-  let engagementClosed = false;
-  if (approving) {
-    const outstanding = await db.complianceDocument.count({
-      where: {
-        // Checklist evidence is the whole of the review loop, so it is the
-        // whole of what can hold the engagement open. Counting anything else
-        // left it permanently one approval short of closing, against rows the
-        // UI gives nobody a way to approve.
-        documentType: ComplianceDocumentType.CHECKLIST_ITEM,
-        engagementId: document.engagementId,
-        // The two ways a row can be settled. NOT_REQUIRED never becomes
-        // APPROVED — nobody approves a document that was never supplied — so
-        // without it here a single waved-off line holds the engagement open
-        // for good.
-        status: {
-          notIn: [
-            ComplianceDocumentStatus.APPROVED,
-            ComplianceDocumentStatus.NOT_REQUIRED,
-          ],
-        },
-      },
-    });
-    if (outstanding === 0) {
-      engagementClosed = await advanceEngagementStatus(
-        document.engagementId,
-        [
-          CertifierEngagementStatus.IN_REVIEW,
-          CertifierEngagementStatus.CHECKLIST_TRACKING,
-          CertifierEngagementStatus.INSURANCE,
-        ],
-        CertifierEngagementStatus.APPROVED,
-        db,
-      );
-    }
-  }
+  const engagementClosed = approving
+    ? await approveEngagementIfChecklistSettled(document.engagementId, db)
+    : false;
 
   return {
     approved: approving,
@@ -236,6 +204,91 @@ export async function advanceEngagementStatus(
     where: { id: engagementId, status: { in: [...from] } },
   });
   return claim.count === 1;
+}
+
+/**
+ * Every status an engagement can be in when the certifier issues checklist
+ * items, and so leaves for CHECKLIST_TRACKING when they do.
+ *
+ * One list for both ways items arrive: the extraction of the certifier's
+ * checklist document, and the requests read out of the prose of their email.
+ * The second used to create the rows and leave the status alone, so a file
+ * whose certifier listed what they wanted in the body of a reply sat at
+ * RESPONSE_RECEIVED while the office worked every row — and approving the last
+ * one could not close it, because the close only starts from the tracking
+ * statuses. The CDC block then stayed locked on a checklist that had passed.
+ *
+ * OUTREACH_SENT and AWAITING_RESPONSE are on it because the inbound workflow
+ * records the requests before it marks the reply received: on a first reply
+ * the engagement is still in one of those.
+ */
+export const CHECKLIST_ISSUED_FROM: readonly CertifierEngagementStatus[] = [
+  CertifierEngagementStatus.OUTREACH_SENT,
+  CertifierEngagementStatus.AWAITING_RESPONSE,
+  CertifierEngagementStatus.RESPONSE_RECEIVED,
+  CertifierEngagementStatus.SIGNING,
+  CertifierEngagementStatus.CHECKLIST_EXTRACTING,
+];
+
+/** The certifier has issued checklist items: start tracking them. */
+export async function markChecklistIssued(
+  engagementId: string,
+  db: DomainDb,
+): Promise<boolean> {
+  return advanceEngagementStatus(
+    engagementId,
+    CHECKLIST_ISSUED_FROM,
+    CertifierEngagementStatus.CHECKLIST_TRACKING,
+    db,
+  );
+}
+
+/**
+ * Close the engagement as APPROVED if no checklist row is left to settle.
+ *
+ * Called after anything that settles a row — an approval, or a line marked not
+ * required. The second used not to call it, so a file whose last open line was
+ * waved off rather than approved stayed one step short of APPROVED for good.
+ *
+ * Returns whether THIS call made the move, so only one of two admins settling
+ * the last two rows at once announces it.
+ */
+export async function approveEngagementIfChecklistSettled(
+  engagementId: string,
+  db: DomainDb,
+): Promise<boolean> {
+  const outstanding = await db.complianceDocument.count({
+    where: {
+      // Checklist evidence is the whole of the review loop, so it is the
+      // whole of what can hold the engagement open. Counting anything else
+      // left it permanently one approval short of closing, against rows the
+      // UI gives nobody a way to approve.
+      documentType: ComplianceDocumentType.CHECKLIST_ITEM,
+      engagementId,
+      // The two ways a row can be settled. NOT_REQUIRED never becomes
+      // APPROVED — nobody approves a document that was never supplied — so
+      // without it here a single waved-off line holds the engagement open
+      // for good.
+      status: {
+        notIn: [
+          ComplianceDocumentStatus.APPROVED,
+          ComplianceDocumentStatus.NOT_REQUIRED,
+        ],
+      },
+    },
+  });
+  if (outstanding > 0) return false;
+
+  return advanceEngagementStatus(
+    engagementId,
+    [
+      CertifierEngagementStatus.IN_REVIEW,
+      CertifierEngagementStatus.CHECKLIST_TRACKING,
+      CertifierEngagementStatus.INSURANCE,
+    ],
+    CertifierEngagementStatus.APPROVED,
+    db,
+  );
 }
 
 /** Seed the fixed Development Application rows exactly once. */
@@ -328,6 +381,7 @@ export async function setComplianceDocumentNotRequired(
       changed: false as const,
       documentId: document.id,
       documentLabel: label,
+      engagementClosed: false,
       engagementId: document.engagementId,
       status,
     };
@@ -344,10 +398,21 @@ export async function setComplianceDocumentNotRequired(
       status,
     );
   }
+
+  // Waving off the last open line settles the checklist as surely as approving
+  // it does. DA rows are not part of the certifier's review, so only a
+  // checklist line can close the engagement.
+  const engagementClosed =
+    status === ComplianceDocumentStatus.NOT_REQUIRED
+    && document.documentType === ComplianceDocumentType.CHECKLIST_ITEM
+      ? await approveEngagementIfChecklistSettled(document.engagementId, db)
+      : false;
+
   return {
     changed: true as const,
     documentId: document.id,
     documentLabel: label,
+    engagementClosed,
     engagementId: document.engagementId,
     status,
   };

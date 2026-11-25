@@ -22,6 +22,7 @@ import {
   type CertificateApplicationKind,
 } from "@/lib/domain/compliance/portal-certificates";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { cn } from "@/lib/utils";
 import {
   complianceScope,
   recordPrincipalCertifier,
@@ -90,6 +91,13 @@ type PlanningPortalSectionProps = {
    * where it is needed, and the developer has signed off the plans.
    */
   blockedReason: string | null;
+  /**
+   * Why the block cannot be opened at all, or null. From
+   * `certificateBlockLockedReason`: every lodgement gate except the principal
+   * certifier appointment, which is recorded inside this block and so cannot be
+   * a reason to hide it.
+   */
+  lockedReason: string | null;
   rowMode: (
     document?: ComplianceDocumentWithFiles,
   ) => "upload" | "resolve" | "frozen";
@@ -117,6 +125,7 @@ export function PlanningPortalSection({
   principalCertifierAppointmentRef,
   certifierName,
   blockedReason,
+  lockedReason,
   rowMode,
   isRowBusy,
   onUpload,
@@ -129,8 +138,8 @@ export function PlanningPortalSection({
   const copy = EXTERNAL_APPLICATION_COPY[kind];
   const documentType = CERTIFICATE_DOCUMENT_TYPE[kind];
   const isCdc =
-    kind ===
-    ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE;
+    kind
+    === ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE;
 
   const hasCertificate = Boolean(certificate?.files.length);
   const isLodged = Boolean(application?.appliedAt);
@@ -180,11 +189,11 @@ export function PlanningPortalSection({
       isActive={isActive}
       ready={awaitingDownload}
       // Locked until the certifier has finished, and shown rather than hidden so
-      // a reader working the checklist can see what the checklist is *for*. The
-      // blocked sentence is the lock message, which is why the caller resolves it
-      // from the same function the server refuses with.
-      locked={Boolean(blockedReason) && !isLodged}
-      lockMessage={blockedReason ?? undefined}
+      // a reader working the checklist can see what the checklist is *for*. Not
+      // locked on the appointment: its form is in here, and a padlock over it
+      // was a dead end. The lodgement below waits for it instead.
+      locked={Boolean(lockedReason) && !isLodged}
+      lockMessage={lockedReason ?? undefined}
       className={className}
     >
       {/* -------------------------------------------------------------
@@ -218,35 +227,50 @@ export function PlanningPortalSection({
           the certificate is not a requirement of the application, it is the
           answer to it, so it belongs beside the lodgement that produced it.
       ------------------------------------------------------------- */}
-      <div className={isCdc ? "mt-4" : undefined}>
-        <ExternalApplicationBlock
-          projectId={projectId}
-          kind={kind}
-          application={application}
-          documentRows={
-            <ul>
-              <ComplianceDocumentRow
-                label={complianceDocumentLabel(documentType)}
-                document={certificate}
-                helperText={
-                  hasCertificate
-                    ? undefined
-                    : "Download it from the NSW Planning Portal and upload it here."
-                }
-                mode={rowMode(certificate)}
-                isBusy={isRowBusy(certificate, documentType)}
-                onUpload={(file) =>
-                  onUpload(file, {
-                    documentId: certificate?.id,
-                    documentType,
-                  })
-                }
-                onPreviewFile={onPreviewFile}
-              />
-            </ul>
-          }
-        />
-      </div>
+      {/* Open but not yet lodgeable — on a CDC, the appointment above is still
+          to be recorded. The same sentence the server refuses the lodgement
+          with, where the form would be, so nobody fills in a lodgement only to
+          be told no. */}
+      {blockedReason && !isLodged && !hasCertificate ? (
+        <p
+          className={cn(
+            "rounded-lg border border-dashed border-border/70 bg-muted/20 px-4 py-3 text-sm text-muted-foreground",
+            isCdc && "mt-4",
+          )}
+        >
+          {blockedReason}
+        </p>
+      ) : (
+        <div className={isCdc ? "mt-4" : undefined}>
+          <ExternalApplicationBlock
+            projectId={projectId}
+            kind={kind}
+            application={application}
+            documentRows={
+              <ul>
+                <ComplianceDocumentRow
+                  label={complianceDocumentLabel(documentType)}
+                  document={certificate}
+                  helperText={
+                    hasCertificate
+                      ? undefined
+                      : "Download it from the NSW Planning Portal and upload it here."
+                  }
+                  mode={rowMode(certificate)}
+                  isBusy={isRowBusy(certificate, documentType)}
+                  onUpload={(file) =>
+                    onUpload(file, {
+                      documentId: certificate?.id,
+                      documentType,
+                    })
+                  }
+                  onPreviewFile={onPreviewFile}
+                />
+              </ul>
+            }
+          />
+        </div>
+      )}
 
       {/* -------------------------------------------------------------
           Approved, and the file holds nothing.
