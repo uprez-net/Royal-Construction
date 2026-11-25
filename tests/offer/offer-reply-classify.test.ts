@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 import {
   extractOfferReplyToken,
+  isDeliveryFailure,
   isMachineGenerated,
 } from "@/lib/graph/offer-reply-classify";
 
@@ -84,4 +85,38 @@ test("absent headers mean no signal, not a verdict", () => {
   // rather than silently classifying every header-less message as a bounce.
   assert.equal(isMachineGenerated({}), false);
   assert.equal(isMachineGenerated({ from: "client@example.com" }), false);
+});
+
+// #585: the headers Graph returned for two real Exchange Online bounces on
+// 5 Nov 2026. The report type is dropped and Return-Path is absent, so only
+// the multipart/report content type separates them from an out-of-office reply.
+test("a real bounce is a delivery failure; an out-of-office reply is not", () => {
+  const bounce = {
+    autoSubmitted: "auto-replied",
+    contentType: "multipart/report",
+  };
+  assert.equal(isMachineGenerated(bounce), true);
+  assert.equal(isDeliveryFailure(bounce), true);
+
+  const outOfOffice = {
+    autoSubmitted: "auto-replied",
+    contentType: "text/plain; charset=utf-8",
+    returnPath: "<>",
+  };
+  assert.equal(isMachineGenerated(outOfOffice), true);
+  assert.equal(isDeliveryFailure(outOfOffice), false);
+});
+
+test("a full delivery-status content type counts; no signal does not", () => {
+  assert.equal(
+    isDeliveryFailure({
+      contentType: "multipart/report; report-type=delivery-status",
+    }),
+    true,
+  );
+  assert.equal(isDeliveryFailure({}), false);
+  assert.equal(
+    isDeliveryFailure({ contentType: "multipart/alternative" }),
+    false,
+  );
 });
