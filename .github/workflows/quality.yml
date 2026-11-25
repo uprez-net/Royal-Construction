@@ -223,7 +223,13 @@ jobs:
       - name: Setup project
         uses: ./.github/actions/setup
       - name: Build Eve agent
-        run: pnpm exec eve build
+        # This job checks that the agent compiles and that every package it
+        # loads resolves under Node's ESM loader. It does not deploy, so it
+        # skips sandbox prewarming: eve 0.64 prepares the specialists'
+        # identical templates in parallel and their `docker commit`s race for
+        # one image tag ("AlreadyExists"). The deploy builds still prewarm.
+        # Verified: a Clerk value import in an agent tool still exits 1 here.
+        run: pnpm exec eve build --skip-sandbox-prewarm
 
   next-build:
     name: Next.js build
