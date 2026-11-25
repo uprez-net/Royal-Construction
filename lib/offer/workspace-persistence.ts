@@ -313,6 +313,12 @@ const jobSchema = z.object({
   grannyBedrooms: z.number().default(0),
   grannyBathrooms: z.number().default(0),
   grannyGarageSpaces: z.number().default(0),
+  // Second floor. Defaulted for the same reason: every offer saved before it
+  // existed comes back as a build without one.
+  hasSecondFloor: z.boolean().default(false),
+  secondFloorSqm: z.number().default(0),
+  secondFloorBedrooms: z.number().default(0),
+  secondFloorBathrooms: z.number().default(0),
 });
 
 const costLineSchema = z.object({

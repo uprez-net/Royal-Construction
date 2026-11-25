@@ -446,3 +446,77 @@ test("Contract annexure does not overflow its pages at max overflow signers", as
     `annexure printed ${printed} A4 pages from ${emitted} emitted pages — a signature block is splitting across sheets`,
   );
 });
+
+// The snapshot page is the tallest and widest it gets when a build carries every
+// area cell (void, granny flat and a second floor) and both extra spec sections.
+// That is eight area cells side by side, and three spec tables under them, on a
+// page of fixed height.
+const EVERY_AREA_AND_DWELLING = () => {
+  const snapshot = snapshotWithOwners([individualOwner(1)]);
+  return {
+    ...snapshot,
+    job: {
+      ...snapshot.job,
+      groundFloorSqm: 187.35,
+      garageSqm: 41.25,
+      firstFloorSqm: 165.85,
+      alfrescoPorchSqm: 24.75,
+      balconySqm: 12.5,
+      porchSqm: 8.65,
+      voidSqm: 14.35,
+      grannyFlatSqm: 68.45,
+      hasGrannyHome: true,
+      grannyBedrooms: 2,
+      grannyBathrooms: 1,
+      grannyGarageSpaces: 1,
+      hasSecondFloor: true,
+      secondFloorSqm: 142.75,
+      secondFloorBedrooms: 3,
+      secondFloorBathrooms: 2.5,
+      bedrooms: 4,
+      bathrooms: 2.5,
+      garageSpaces: 2,
+    },
+  };
+};
+
+test("Proposal prints what it declares with every area cell and dwelling", async () => {
+  const html = buildProposalHtml(
+    buildProposalInput(EVERY_AREA_AND_DWELLING()),
+    EMPTY_OFFER_IMAGES,
+  );
+  const printed = await printedPageCount(html);
+  const declared = declaredPageTotal(html);
+  assert.equal(
+    printed,
+    declared,
+    `Proposal printed ${printed} A4 pages but declares ${declared}`,
+  );
+});
+
+test("No area figure overflows its cell with every area cell showing", async () => {
+  const html = buildProposalHtml(
+    buildProposalInput(EVERY_AREA_AND_DWELLING()),
+    EMPTY_OFFER_IMAGES,
+  );
+  const puppeteer = (await import("puppeteer")).default;
+  const browser = await puppeteer.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "load" });
+    await page.emulateMediaType("print");
+    const overflowing = await page.$$eval(".areatable > div", (cells) =>
+      cells
+        .filter((cell) => cell.scrollWidth > cell.clientWidth + 1)
+        .map((cell) => cell.textContent?.trim() ?? ""),
+    );
+    const cellCount = await page.$$eval(
+      ".areatable > div",
+      (cells) => cells.length,
+    );
+    assert.equal(cellCount, 8, "expected seven area cells and the total");
+    assert.deepEqual(overflowing, [], "area cells overflow their column");
+  } finally {
+    await browser.close();
+  }
+});

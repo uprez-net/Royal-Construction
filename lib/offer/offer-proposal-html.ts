@@ -3,7 +3,9 @@ import {
   buildOfferPrintTemplateData,
   formatArea,
   formatRoomCount,
+  dwellingSpecCells,
   grannyDwellingSpec,
+  secondFloorSpec,
   type OfferDwellingSpec,
   formatSiteParticulars,
   getPrintFooterText,
@@ -443,16 +445,17 @@ function snapshotPage(
   const cell = (cap: string, num: string) =>
     `<div><div class="cap">${esc(cap)}</div><div class="num">${esc(num)}</div></div>`;
   const particulars = formatSiteParticulars(job);
-  // Room counts print per dwelling: the major house always, the granny home only
-  // when the build includes one.
-  const specSection = (title: string, spec: OfferDwellingSpec) =>
-    `<div class="spechead">${esc(title)}</div>
-    <div class="spectable">
-      ${cell("Bedrooms", formatRoomCount(spec.bedrooms))}
-      ${cell("Bathrooms", formatRoomCount(spec.bathrooms))}
-      ${cell("Garage Spaces", formatRoomCount(spec.garageSpaces))}
+  // Room counts print per dwelling: the major house always, the second floor
+  // and the granny home only when the build includes them.
+  const specSection = (title: string, spec: OfferDwellingSpec) => {
+    const cells = dwellingSpecCells(spec);
+    return `<div class="spechead">${esc(title)}</div>
+    <div class="spectable" style="grid-template-columns:repeat(${cells.length},1fr);">
+      ${cells.map((entry) => cell(entry.label, formatRoomCount(entry.value))).join("")}
     </div>`;
+  };
   const granny = grannyDwellingSpec(job);
+  const secondFloor = secondFloorSpec(job);
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
     <div class="eyebrow">Project snapshot</div>
@@ -475,6 +478,7 @@ function snapshotPage(
       bedrooms: job.bedrooms,
       garageSpaces: job.garageSpaces,
     })}
+    ${secondFloor ? specSection("Second Floor Specifications", secondFloor) : ""}
     ${granny ? specSection("Granny Home Specifications", granny) : ""}
     ${foot}
   </div>`;

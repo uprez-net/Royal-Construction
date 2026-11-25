@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import {
   CHARS_PER_LINE_SIGNATURE,
   chunkAllowanceRows,
@@ -20,10 +21,12 @@ import {
   buildAreaBreakdown,
   buildOfferPrintTemplateData,
   formatArea,
+  dwellingSpecCells,
   formatRoomCount,
   formatSiteParticulars,
   getPrintFooterText,
   grannyDwellingSpec,
+  secondFloorSpec,
   PROPOSAL_TAGLINE,
   type OfferDwellingSpec,
   type OfferPrintScopeRow,
@@ -496,7 +499,9 @@ function PrintSnapshotPage({
           },
         ]
       : [];
+  const crowdedAreaGrid = areaCells.length > 7;
   const granny = grannyDwellingSpec(job);
+  const secondFloor = secondFloorSpec(job);
   const siteParticulars = formatSiteParticulars(job);
   return (
     <PrintPage footerText={footer}>
@@ -536,19 +541,28 @@ function PrintSnapshotPage({
           {areaCells.map((cell) => (
             <div
               key={cell.label}
-              className={
+              className={cn(
                 cell.emphasis
-                  ? "px-2 py-4 font-semibold text-sidebar"
-                  : "border-r border-border px-2 py-4 last:border-r-0"
-              }
+                  ? "py-4 font-semibold text-sidebar"
+                  : "border-r border-border py-4 last:border-r-0",
+                crowdedAreaGrid ? "px-1" : "px-2",
+              )}
             >
               <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
                 {cell.label}
               </p>
               {/* With void and granny flat both showing, seven cells leave ~77px
                 for a value and "187.35 m²" is ~76px of monospace: it broke at
-                the space and printed the unit on a line of its own. */}
-              <p className="mt-2 whitespace-nowrap font-mono font-semibold">
+                the space and printed the unit on a line of its own. A second
+                floor makes eight, ~66px at text-sm, so the value overran into
+                the next cell; text-xs and tighter padding give it ~74px for
+                ~60px of figure. Seven or fewer keep the size they had. */}
+              <p
+                className={cn(
+                  "mt-2 whitespace-nowrap font-mono font-semibold",
+                  crowdedAreaGrid && "text-xs",
+                )}
+              >
                 {cell.value}
               </p>
             </div>
@@ -568,6 +582,12 @@ function PrintSnapshotPage({
           garageSpaces: job.garageSpaces,
         }}
       />
+      {secondFloor ? (
+        <PrintDwellingSpec
+          title="Second Floor Specifications"
+          spec={secondFloor}
+        />
+      ) : null}
       {granny ? (
         <PrintDwellingSpec title="Granny Home Specifications" spec={granny} />
       ) : null}
@@ -576,8 +596,9 @@ function PrintSnapshotPage({
 }
 
 // Room counts per dwelling, as the emailed snapshot page prints them: the major
-// house always, the granny home only when the build includes one. The printed
-// copy carried neither, so it lost the bedroom counts the emailed PDF showed.
+// house always, the second floor and the granny home only when the build
+// includes them. The printed copy carried neither, so it lost the bedroom
+// counts the emailed PDF showed.
 function PrintDwellingSpec({
   title,
   spec,
@@ -585,17 +606,16 @@ function PrintDwellingSpec({
   readonly title: string;
   readonly spec: OfferDwellingSpec;
 }) {
-  const cells = [
-    { label: "Bedrooms", value: spec.bedrooms },
-    { label: "Bathrooms", value: spec.bathrooms },
-    { label: "Garage Spaces", value: spec.garageSpaces },
-  ];
+  const cells = dwellingSpecCells(spec);
   return (
     <div className="mt-6">
       <p className="text-xs font-semibold uppercase tracking-wide text-sidebar">
         {title}
       </p>
-      <div className="mt-2 grid grid-cols-3 border border-border text-center text-sm">
+      <div
+        className="mt-2 grid border border-border text-center text-sm"
+        style={{ gridTemplateColumns: `repeat(${cells.length}, 1fr)` }}
+      >
         {cells.map((cell) => (
           <div
             key={cell.label}

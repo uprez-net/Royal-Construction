@@ -171,13 +171,15 @@ export function formatArea(value: number): string {
   }).format(value)} m²`;
 }
 
-// Room counts for one dwelling — the major house or its granny home. Bathrooms
-// are captured as a decimal (a powder room is half a bathroom), so counts print
-// as entered rather than integer-formatted.
+// Room counts for one dwelling — the major house or its granny home — or for
+// the second floor. Bathrooms are captured as a decimal (a powder room is half
+// a bathroom), so counts print as entered rather than integer-formatted.
+// garageSpaces is absent for the second floor: a garage is never upstairs, and
+// printing "0 garage spaces" beside it would read as a fact about the build.
 export type OfferDwellingSpec = {
   readonly bathrooms: number;
   readonly bedrooms: number;
-  readonly garageSpaces: number;
+  readonly garageSpaces?: number;
 };
 
 export function formatRoomCount(value: number): string {
@@ -192,8 +194,41 @@ export function formatDwellingSpec(spec: OfferDwellingSpec): string {
   return [
     `${formatRoomCount(spec.bedrooms)} bedrooms`,
     `${formatRoomCount(spec.bathrooms)} bathrooms`,
-    `${formatRoomCount(spec.garageSpaces)} garage spaces`,
+    ...(spec.garageSpaces === undefined
+      ? []
+      : [`${formatRoomCount(spec.garageSpaces)} garage spaces`]),
   ].join(" | ");
+}
+
+// The spec's cells in print order, shared by the emailed PDF and the printed
+// copy so the two cannot list different rooms.
+export function dwellingSpecCells(
+  spec: OfferDwellingSpec,
+): readonly { readonly label: string; readonly value: number }[] {
+  return [
+    { label: "Bedrooms", value: spec.bedrooms },
+    { label: "Bathrooms", value: spec.bathrooms },
+    ...(spec.garageSpaces === undefined
+      ? []
+      : [{ label: "Garage Spaces", value: spec.garageSpaces }]),
+  ];
+}
+
+// The second floor's counts, or null when the build has none — callers drop
+// their "Second Floor Specifications" section entirely, as for the granny home.
+export function secondFloorSpec(
+  job: Pick<
+    OfferWorkspaceJob,
+    "hasSecondFloor" | "secondFloorBedrooms" | "secondFloorBathrooms"
+  >,
+): OfferDwellingSpec | null {
+  if (!job.hasSecondFloor) {
+    return null;
+  }
+  return {
+    bathrooms: job.secondFloorBathrooms,
+    bedrooms: job.secondFloorBedrooms,
+  };
 }
 
 // The granny-home counts, or null when the build has no granny home — callers
@@ -288,6 +323,12 @@ export function buildAreaBreakdown(job: OfferWorkspaceJob): OfferAreaBreakdown {
   const cells: OfferAreaCell[] = [
     { label: "Ground Floor + Garage", sqm: job.groundFloorSqm + job.garageSqm },
     { label: "First Floor", sqm: job.firstFloorSqm },
+    // Read through the basis, which already zeroes it when the toggle is off,
+    // so the cell and the total beneath it agree.
+    {
+      label: "Second Floor",
+      sqm: offerAreaBasisFromJob(job).secondFloorSqm,
+    },
     { label: "Alfresco + Balcony", sqm: job.alfrescoPorchSqm + job.balconySqm },
     { label: "Porch", sqm: job.porchSqm },
   ];
