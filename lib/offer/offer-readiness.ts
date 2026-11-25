@@ -172,7 +172,8 @@ export function collectOfferSendBlockers({
   if (expiryState === "none") {
     blockers.push({
       id: "validity-missing",
-      label: "Set a validity date in Job setup before sending.",
+      label:
+        "Set a validity date before sending (in Job setup, or in a new revision once the offer has been sent).",
       stepId: "offer-step-job-setup",
       severity: "block",
     });
@@ -181,7 +182,7 @@ export function collectOfferSendBlockers({
     blockers.push({
       id: "expired",
       label:
-        "This offer's validity date has passed — extend it before sending.",
+        "This offer's validity date has passed — extend it before sending (in Job setup, or in a new revision once the offer has been sent).",
       stepId: "offer-step-job-setup",
       severity: "block",
     });

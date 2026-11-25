@@ -48,6 +48,8 @@ test("a blank, malformed or past validity date is refused; today is fine", () =>
     /Set a validity date/,
   );
   assert.match(offerValidityIssue("2026-11-19", now) ?? "", /has passed/);
+  // Job setup is locked once an offer is sent, so the message must say how.
+  assert.match(offerValidityIssue("2026-11-19", now) ?? "", /new revision/);
   assert.equal(offerValidityIssue("2026-11-20", now), null);
   assert.equal(offerValidityIssue("2027-01-31", now), null);
 });

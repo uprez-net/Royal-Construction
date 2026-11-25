@@ -37,10 +37,10 @@ export function offerValidityIssue(
 ): string | null {
   const day = validUntil.trim();
   if (!isValidIsoCalendarDate(day)) {
-    return "Set a validity date in Job setup before sending: the documents say how long the price holds.";
+    return "Set a validity date before sending: the documents say how long the price holds. Set it in Job setup while the offer is pending, or create a new revision once it has been sent or agreed.";
   }
   if (day < sydneyToday(now)) {
-    return `The validity date (${day}) has passed. Extend it in Job setup before sending.`;
+    return `The validity date (${day}) has passed. Extend it in Job setup while the offer is pending, or create a new revision once it has been sent or agreed.`;
   }
   return null;
 }
