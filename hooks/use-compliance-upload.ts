@@ -113,7 +113,11 @@ export function useComplianceUpload(projectId: string) {
           buildBlobPath({ fileId, fileName: file.name, projectId }),
           file,
           {
-            access: "public",
+            // The store is private (#571): Blob refuses a public write to it
+            // outright, and Chrome reports that refusal of a streamed body as
+            // a bare "Failed to fetch (vercel.com)". Screens open the file
+            // through a signed link, never this URL.
+            access: "private",
             handleUploadUrl: "/api/upload",
             clientPayload: JSON.stringify({
               projectId,
