@@ -1,4 +1,4 @@
-import { MilestoneStatus, ProjectStatus, Role } from "@prisma/client";
+import { MilestoneStatus, Role } from "@prisma/client";
 
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 
@@ -9,24 +9,15 @@ import { projectReadScope } from "../access/projects";
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError } from "../errors";
 import { isInternalPrincipal, type DomainPrincipal } from "../principal";
-import { milestoneEndDate } from "./milestone-schedule";
+import {
+  BUILDING_PROJECT_STATUSES,
+  milestoneEndDate,
+} from "./milestone-schedule";
 
 // What a site manager's dashboard is built from: the live projects' progress by
 // manager, and the activities that are due. Neither carries a dollar figure and
 // neither reads a lead — that is the point of this module being separate from
 // the sales dashboard in `lib/data/dashboard.ts`.
-
-/**
- * A project that is being built, as against drafted, in compliance, or done.
- * The same four the "Active projects" table's status filter and the Needs
- * Attention rule treat as the build.
- */
-const BUILDING: ProjectStatus[] = [
-  ProjectStatus.ACTIVE,
-  ProjectStatus.ON_TRACK,
-  ProjectStatus.NEEDS_ATTENTION,
-  ProjectStatus.DELAYED,
-];
 
 /** Settled either way, as `withProjectStats` counts progress. */
 const SETTLED: MilestoneStatus[] = [
@@ -71,13 +62,17 @@ export async function listSiteManagerPerformance(
       name: true,
       siteManagerProjects: {
         select: { milestones: { select: { status: true } } },
-        where: { status: { in: BUILDING } },
+        where: { status: { in: [...BUILDING_PROJECT_STATUSES] } },
       },
     },
     where: {
       OR: [
         { role: Role.SITE_MANAGER },
-        { siteManagerProjects: { some: { status: { in: BUILDING } } } },
+        {
+          siteManagerProjects: {
+            some: { status: { in: [...BUILDING_PROJECT_STATUSES] } },
+          },
+        },
       ],
     },
   });
@@ -117,10 +112,12 @@ export type ProjectFollowUp = {
  * project's own Milestones tab lists as the stage.
  *
  * "Due" is the Milestones tab's own rule (`duenessOf`), the one the project's
- * overdue count uses: an open activity is due on its estimated completion
+ * overdue count uses: an activity is due on its estimated completion
  * (`milestoneEndDate`: its actual start, or its planned start, plus its
- * duration), pending or active alike. An activity due to finish today that
- * has not started is the one most worth chasing.
+ * duration). Only an activity under way is listed, as only one under way can
+ * be overdue (`openOverdueDays`): a pending activity's dates run from a start
+ * nobody has reached, and listing it here put "12 days overdue" on work that
+ * was never late.
  *
  * "Today" is Sydney's, not the server's: Vercel runs on UTC, where the day
  * ends ten hours before the office's does. Both dates are moved onto Sydney's
@@ -160,8 +157,11 @@ export async function listProjectFollowUpsDue(
         { startDate: null, targetDate: { lte: endOfToday } },
       ],
       parentId: null,
-      project: { ...projectReadScope(principal), status: { in: BUILDING } },
-      status: { in: [MilestoneStatus.PENDING, MilestoneStatus.ACTIVE] },
+      project: {
+        ...projectReadScope(principal),
+        status: { in: [...BUILDING_PROJECT_STATUSES] },
+      },
+      status: MilestoneStatus.ACTIVE,
     },
   });
 

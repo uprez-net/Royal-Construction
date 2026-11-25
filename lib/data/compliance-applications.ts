@@ -21,7 +21,10 @@ import {
   raiseComplianceAlert,
   resolveComplianceAlertBySystem,
 } from "@/lib/data/compliance-alerts";
-import { PORTAL_DOWNLOAD_ALERT } from "@/lib/domain/compliance/portal-certificates";
+import {
+  assertCertificateLodgeable,
+  PORTAL_DOWNLOAD_ALERT,
+} from "@/lib/domain/compliance/portal-certificates";
 import {
   ComplianceDomainError,
   requireComplianceAccess,
@@ -206,6 +209,12 @@ export async function recordExternalApplication(
     }
 
     case "applied": {
+      // A CDC or construction certificate the tab would not let anyone lodge —
+      // the checklist not passed, no consent, no principal certifier, plans the
+      // developer has not approved — is refused here before anything is
+      // written, in the sentence the tab shows in place of the form.
+      assertCertificateLodgeable(engagement, input.kind);
+
       // The row and its first round, together. Two statements left a lodgement
       // recorded with no round behind it when the second failed, and the
       // overdue sweep reads the rounds — so an application that was visibly

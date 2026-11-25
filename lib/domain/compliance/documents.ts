@@ -169,41 +169,9 @@ export async function resolveComplianceDocument(
   // Every document being approved is what freezes the section, so the
   // engagement's own status follows the last decision rather than needing a
   // separate button nobody would remember to press.
-  let engagementClosed = false;
-  if (approving) {
-    const outstanding = await db.complianceDocument.count({
-      where: {
-        // Checklist evidence is the whole of the review loop, so it is the
-        // whole of what can hold the engagement open. Counting anything else
-        // left it permanently one approval short of closing, against rows the
-        // UI gives nobody a way to approve.
-        documentType: ComplianceDocumentType.CHECKLIST_ITEM,
-        engagementId: document.engagementId,
-        // The two ways a row can be settled. NOT_REQUIRED never becomes
-        // APPROVED — nobody approves a document that was never supplied — so
-        // without it here a single waved-off line holds the engagement open
-        // for good.
-        status: {
-          notIn: [
-            ComplianceDocumentStatus.APPROVED,
-            ComplianceDocumentStatus.NOT_REQUIRED,
-          ],
-        },
-      },
-    });
-    if (outstanding === 0) {
-      engagementClosed = await advanceEngagementStatus(
-        document.engagementId,
-        [
-          CertifierEngagementStatus.IN_REVIEW,
-          CertifierEngagementStatus.CHECKLIST_TRACKING,
-          CertifierEngagementStatus.INSURANCE,
-        ],
-        CertifierEngagementStatus.APPROVED,
-        db,
-      );
-    }
-  }
+  const engagementClosed = approving
+    ? await approveEngagementIfChecklistSettled(document.engagementId, db)
+    : false;
 
   return {
     approved: approving,
@@ -236,6 +204,91 @@ export async function advanceEngagementStatus(
     where: { id: engagementId, status: { in: [...from] } },
   });
   return claim.count === 1;
+}
+
+/**
+ * Every status an engagement can be in when the certifier issues checklist
+ * items, and so leaves for CHECKLIST_TRACKING when they do.
+ *
+ * One list for both ways items arrive: the extraction of the certifier's
+ * checklist document, and the requests read out of the prose of their email.
+ * The second used to create the rows and leave the status alone, so a file
+ * whose certifier listed what they wanted in the body of a reply sat at
+ * RESPONSE_RECEIVED while the office worked every row — and approving the last
+ * one could not close it, because the close only starts from the tracking
+ * statuses. The CDC block then stayed locked on a checklist that had passed.
+ *
+ * OUTREACH_SENT and AWAITING_RESPONSE are on it because the inbound workflow
+ * records the requests before it marks the reply received: on a first reply
+ * the engagement is still in one of those.
+ */
+export const CHECKLIST_ISSUED_FROM: readonly CertifierEngagementStatus[] = [
+  CertifierEngagementStatus.OUTREACH_SENT,
+  CertifierEngagementStatus.AWAITING_RESPONSE,
+  CertifierEngagementStatus.RESPONSE_RECEIVED,
+  CertifierEngagementStatus.SIGNING,
+  CertifierEngagementStatus.CHECKLIST_EXTRACTING,
+];
+
+/** The certifier has issued checklist items: start tracking them. */
+export async function markChecklistIssued(
+  engagementId: string,
+  db: DomainDb,
+): Promise<boolean> {
+  return advanceEngagementStatus(
+    engagementId,
+    CHECKLIST_ISSUED_FROM,
+    CertifierEngagementStatus.CHECKLIST_TRACKING,
+    db,
+  );
+}
+
+/**
+ * Close the engagement as APPROVED if no checklist row is left to settle.
+ *
+ * Called after anything that settles a row — an approval, or a line marked not
+ * required. The second used not to call it, so a file whose last open line was
+ * waved off rather than approved stayed one step short of APPROVED for good.
+ *
+ * Returns whether THIS call made the move, so only one of two admins settling
+ * the last two rows at once announces it.
+ */
+export async function approveEngagementIfChecklistSettled(
+  engagementId: string,
+  db: DomainDb,
+): Promise<boolean> {
+  const outstanding = await db.complianceDocument.count({
+    where: {
+      // Checklist evidence is the whole of the review loop, so it is the
+      // whole of what can hold the engagement open. Counting anything else
+      // left it permanently one approval short of closing, against rows the
+      // UI gives nobody a way to approve.
+      documentType: ComplianceDocumentType.CHECKLIST_ITEM,
+      engagementId,
+      // The two ways a row can be settled. NOT_REQUIRED never becomes
+      // APPROVED — nobody approves a document that was never supplied — so
+      // without it here a single waved-off line holds the engagement open
+      // for good.
+      status: {
+        notIn: [
+          ComplianceDocumentStatus.APPROVED,
+          ComplianceDocumentStatus.NOT_REQUIRED,
+        ],
+      },
+    },
+  });
+  if (outstanding > 0) return false;
+
+  return advanceEngagementStatus(
+    engagementId,
+    [
+      CertifierEngagementStatus.IN_REVIEW,
+      CertifierEngagementStatus.CHECKLIST_TRACKING,
+      CertifierEngagementStatus.INSURANCE,
+    ],
+    CertifierEngagementStatus.APPROVED,
+    db,
+  );
 }
 
 /** Seed the fixed Development Application rows exactly once. */
@@ -328,27 +381,114 @@ export async function setComplianceDocumentNotRequired(
       changed: false as const,
       documentId: document.id,
       documentLabel: label,
+      engagementClosed: false,
       engagementId: document.engagementId,
+      engagementReopened: false,
       status,
     };
   }
 
-  const changed = await db.complianceDocument.updateMany({
-    where: { id: document.id, status: document.status },
-    data: { status },
-  });
-  if (changed.count !== 1) {
-    throw new DomainTransitionError(
-      "The compliance row changed while it was being updated; refresh and retry.",
-      document.status,
-      status,
-    );
-  }
+  const isChecklistLine =
+    document.documentType === ComplianceDocumentType.CHECKLIST_ITEM;
+
+  // The row, and what it does to the engagement, commit together. Settled
+  // separately, a failure after the row update left the last line waived and
+  // the engagement still open — and a retry found the row already NOT_REQUIRED,
+  // returned "unchanged" above, and never tried to close it again.
+  const apply = async (tx: DomainDb) => {
+    const changed = await tx.complianceDocument.updateMany({
+      where: { id: document.id, status: document.status },
+      data: { status },
+    });
+    if (changed.count !== 1) {
+      throw new DomainTransitionError(
+        "The compliance row changed while it was being updated; refresh and retry.",
+        document.status,
+        status,
+      );
+    }
+
+    // Putting a checklist line back is new work on a checklist that may have
+    // closed on it being waived, and an APPROVED engagement with an open line is
+    // one the certificate block reads as passed. So the engagement goes back to
+    // tracking with it — the status the close starts from, so approving or
+    // waiving the line again closes it the ordinary way.
+    const engagementReopened =
+      isChecklistLine && status !== ComplianceDocumentStatus.NOT_REQUIRED
+        ? await reopenEngagementForRestoredLine(
+            document.engagementId,
+            label,
+            tx,
+          )
+        : false;
+
+    // Waving off the last open line settles the checklist as surely as
+    // approving it does. DA rows are not part of the certifier's review, so
+    // only a checklist line can close the engagement.
+    const engagementClosed =
+      isChecklistLine && status === ComplianceDocumentStatus.NOT_REQUIRED
+        ? await approveEngagementIfChecklistSettled(document.engagementId, tx)
+        : false;
+
+    return { engagementClosed, engagementReopened };
+  };
+
+  const { engagementClosed, engagementReopened } =
+    "$transaction" in db ? await db.$transaction(apply) : await apply(db);
+
   return {
     changed: true as const,
     documentId: document.id,
     documentLabel: label,
+    engagementClosed,
     engagementId: document.engagementId,
+    engagementReopened,
     status,
   };
+}
+
+/**
+ * Take an APPROVED engagement back to CHECKLIST_TRACKING because one of its
+ * checklist lines has been put back, or refuse.
+ *
+ * Only from APPROVED. Past it the certificate has been issued on the strength
+ * of the checklist as it stood, and reopening the checklist would not unissue
+ * it — so the line stays waived and the refusal says why. Any status before
+ * APPROVED is still open and needs nothing. Returns whether this call reopened
+ * it.
+ */
+async function reopenEngagementForRestoredLine(
+  engagementId: string,
+  label: string,
+  db: DomainDb,
+): Promise<boolean> {
+  const engagement = await db.certifierEngagement.findUnique({
+    select: { status: true },
+    where: { id: engagementId },
+  });
+  if (!engagement) {
+    throw new DomainNotFoundError(
+      `Certifier engagement ${engagementId} not found.`,
+    );
+  }
+
+  if (
+    engagement.status === CertifierEngagementStatus.CERTIFICATE_ISSUED
+    || engagement.status === CertifierEngagementStatus.COMPLETED
+  ) {
+    throw new DomainTransitionError(
+      `The certificate has already been issued on this checklist, so ${label} cannot be put back.`,
+      engagement.status,
+      CertifierEngagementStatus.CHECKLIST_TRACKING,
+    );
+  }
+
+  if (engagement.status !== CertifierEngagementStatus.APPROVED) return false;
+
+  return advanceEngagementStatus(
+    engagementId,
+    [CertifierEngagementStatus.APPROVED],
+    CertifierEngagementStatus.CHECKLIST_TRACKING,
+    db,
+  );
 }

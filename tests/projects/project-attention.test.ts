@@ -57,6 +57,31 @@ function project(overrides: Partial<AttentionSource> = {}): AttentionSource {
 const kinds = (source: AttentionSource) =>
   assessProjectAttention(source, NOW).conditions.map((c) => c.kind);
 
+/**
+ * A job being built with its build-start documents held, so starting an
+ * activity raises nothing but what the test is about.
+ */
+function building(overrides: Partial<AttentionSource> = {}): AttentionSource {
+  return project({
+    status: "ACTIVE",
+    certifierEngagement: {
+      alerts: [],
+      documents: [
+        { documentType: "CONSTRUCTION_CERTIFICATE", _count: { files: 1 } },
+        { documentType: "HOME_INSURANCE", _count: { files: 1 } },
+      ],
+    },
+    ...overrides,
+  });
+}
+
+/** An activity under way: the only kind that can be overdue. */
+function started(
+  overrides: Partial<AttentionSource["milestones"][number]> = {},
+): AttentionSource["milestones"][number] {
+  return milestone({ status: "ACTIVE", ...overrides });
+}
+
 describe("Drafting", () => {
   test("a project with no activity started is drafting", () => {
     assert.equal(assessProjectAttention(project(), NOW).drafting, true);
@@ -96,8 +121,8 @@ describe("Needs Attention", () => {
 
   test("an activity past its estimated end is overdue, with the detail the alert shows", () => {
     // Planned 1 Nov Sydney, two days: due 3 Nov, ten days overdue on the 13th.
-    const late = project({
-      milestones: [milestone({ targetDate: new Date("2026-10-31T13:00:00Z") })],
+    const late = building({
+      milestones: [started({ targetDate: new Date("2026-10-31T13:00:00Z") })],
     });
     const attention = assessProjectAttention(late, NOW);
     assert.deepEqual(
@@ -121,14 +146,14 @@ describe("Needs Attention", () => {
   });
 
   test("several overdue activities are counted and each one named, worst first", () => {
-    const late = project({
+    const late = building({
       milestones: [
-        milestone({
+        started({
           id: "a",
           name: "Slab",
           targetDate: new Date("2026-11-08T13:00:00Z"),
         }),
-        milestone({
+        started({
           id: "b",
           name: "Frame",
           targetDate: new Date("2026-10-31T13:00:00Z"),
@@ -147,9 +172,9 @@ describe("Needs Attention", () => {
     // Planned from Sydney midnight on 1 Apr 2026 (AEDT), ten days: due 11 Apr,
     // after daylight saving ended on the 5th. Ten days added to the instant
     // lands at 11pm on the 10th in Sydney, a day off the count beside it.
-    const late = project({
+    const late = building({
       milestones: [
-        milestone({
+        started({
           targetDate: new Date("2026-03-31T13:00:00Z"),
           estimatedDays: 10,
         }),
@@ -160,9 +185,9 @@ describe("Needs Attention", () => {
   });
 
   test("a date from another year says which year, and a long list names only the worst few", () => {
-    const backlog = project({
+    const backlog = building({
       milestones: Array.from({ length: 5 }, (_, index) =>
-        milestone({
+        started({
           id: `m${index}`,
           name: `Step ${index}`,
           // Sydney midnight on 1 Oct 2024 onward, a day apart.
@@ -184,9 +209,9 @@ describe("Needs Attention", () => {
     // Due 10:00Z on 12 Nov: 9pm on the 12th in Sydney. Now is 22:00Z on the
     // 12th, 9am on the 13th in Sydney. On Sydney's calendar that is a day
     // overdue; on UTC's both are the 12th and it would read "due today".
-    const dueYesterday = project({
+    const dueYesterday = building({
       milestones: [
-        milestone({
+        started({
           targetDate: new Date("2026-11-10T10:00:00Z"),
           estimatedDays: 2,
         }),
@@ -196,6 +221,53 @@ describe("Needs Attention", () => {
       assessProjectAttention(dueYesterday, NOW).overdue[0]?.daysOverdue,
       1,
     );
+  });
+
+  test("an activity that has not started is not overdue, however late its plan", () => {
+    // Planned 1 Nov Sydney, two days: ten days past its end on the 13th, but
+    // nobody has started it, so it is waiting rather than late.
+    const waiting = building({
+      milestones: [
+        started(),
+        milestone({
+          id: "m2",
+          name: "Frame",
+          targetDate: new Date("2026-10-31T13:00:00Z"),
+        }),
+      ],
+    });
+    const attention = assessProjectAttention(waiting, NOW);
+    assert.deepEqual(attention.overdue, []);
+    assert.ok(!kinds(waiting).includes("OVERDUE"));
+  });
+
+  test("a project that is not being built has no overdue activities", () => {
+    const late = started({ targetDate: new Date("2026-10-31T13:00:00Z") });
+    for (const status of [
+      "DRAFT",
+      "COMPLIANCE_STARTED",
+      "COMPLIANCE_COMPLETED",
+    ] as const) {
+      const waiting = building({ status, milestones: [late] });
+      const attention = assessProjectAttention(waiting, NOW);
+      assert.deepEqual(attention.overdue, [], status);
+      assert.ok(!kinds(waiting).includes("OVERDUE"), status);
+      // Nothing else to raise, so it stays off the alert altogether.
+      assert.deepEqual(needingAttention([attention]), [], status);
+    }
+    // Every status a build runs under does flag it.
+    for (const status of [
+      "ACTIVE",
+      "ON_TRACK",
+      "NEEDS_ATTENTION",
+      "DELAYED",
+    ] as const) {
+      const attention = assessProjectAttention(
+        building({ status, milestones: [late] }),
+        NOW,
+      );
+      assert.equal(attention.overdue[0]?.daysOverdue, 10, status);
+    }
   });
 
   test("finished and waived activities are never overdue", () => {
@@ -461,22 +533,18 @@ describe("Needs Attention", () => {
 
   test("most overdue first", () => {
     const a = assessProjectAttention(
-      project({
+      building({
         id: "a",
         name: "A",
-        milestones: [
-          milestone({ targetDate: new Date("2026-11-05T13:00:00Z") }),
-        ],
+        milestones: [started({ targetDate: new Date("2026-11-05T13:00:00Z") })],
       }),
       NOW,
     );
     const b = assessProjectAttention(
-      project({
+      building({
         id: "b",
         name: "B",
-        milestones: [
-          milestone({ targetDate: new Date("2026-10-20T13:00:00Z") }),
-        ],
+        milestones: [started({ targetDate: new Date("2026-10-20T13:00:00Z") })],
       }),
       NOW,
     );

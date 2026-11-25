@@ -302,6 +302,8 @@ export function reevaluateFormulaCostLines(
     | "grannyBedrooms"
     | "grannyBathrooms"
     | "grannyGarageSpaces"
+    | "grannyHasSecondFloor"
+    | "grannySecondFloorSqm"
   >,
   area: OfferAreaCalculator,
   // This function is the bridge from a display calculation to persisted money:
@@ -338,7 +340,9 @@ export function reevaluateFormulaCostLines(
     TIE_COST: area.tieCost,
     TOTAL_TILES_REQUIRED: calc.totalTilesRequired,
     KITCHEN_AREA: basis.kitchenSqm,
-    TOTAL_FLOORING_AREA: basis.firstFloorSqm,
+    // Upper-floor flooring: the granny home's second floor is floored like the
+    // major house's first. Appended last, so x + 0 leaves every saved offer.
+    TOTAL_FLOORING_AREA: basis.firstFloorSqm + basis.grannySecondFloorSqm,
     TOTAL_AREA: rawTotalAreaSqm(basis),
     TOTAL_SHOWERS: job.showerCount,
     TOTAL_BEDROOMS: job.bedrooms + job.grannyBedrooms,

@@ -1,10 +1,11 @@
 import { differenceInCalendarDays } from "date-fns";
 
 import {
+  isProjectBuilding,
   milestoneEndDate,
   type MilestoneTiming,
 } from "@/lib/domain/projects/milestone-schedule";
-import { MilestoneStatus } from "@prisma/client";
+import { MilestoneStatus, type ProjectStatus } from "@prisma/client";
 
 /**
  * Derivations behind the Milestones tab's claim ledger.
@@ -213,22 +214,29 @@ export function duenessOf(milestone: MilestoneTiming, today: Date): Dueness {
 }
 
 /**
- * Calendar days an open activity has gone past its estimated completion, or
+ * Calendar days a started activity has gone past its estimated completion, or
  * null when it is not overdue.
  *
- * Open means PENDING or ACTIVE (issue #422): an activity that was due to be
- * finished and has not even started is the most overdue kind there is, and
- * hiding the badge until somebody pressed Start hid exactly that one. A
- * completed or waived activity is never overdue -- its history says whether
- * it finished late. Due today is not overdue; the day after is.
+ * Only an activity under way (ACTIVE) on a project being built
+ * (`isProjectBuilding`) can be overdue. Issue #422 counted a PENDING activity
+ * too, and that put every job still in drafting or compliance on the overdue
+ * alert: its planned dates run from a start date nobody has reached, so every
+ * activity on it falls "overdue" while the job waits on a certifier. The owner
+ * asked for those alerts to go. A completed or waived activity is never
+ * overdue -- its history says whether it finished late. Due today is not
+ * overdue; the day after is.
+ *
+ * The project's status is a parameter, not a check left to each caller, so
+ * the Milestones tab's badge and the Projects page's alert cannot disagree.
  */
 export function openOverdueDays(
   milestone: MilestoneTiming & { status: MilestoneStatus },
   now: Date,
+  projectStatus: ProjectStatus,
 ): number | null {
   if (
     milestone.status !== MilestoneStatus.ACTIVE
-    && milestone.status !== MilestoneStatus.PENDING
+    || !isProjectBuilding(projectStatus)
   ) {
     return null;
   }

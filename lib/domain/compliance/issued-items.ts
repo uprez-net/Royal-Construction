@@ -12,6 +12,7 @@ import {
 import { authorizeComplianceMutation } from "../access/compliance";
 import type { TransactionalDomainDb } from "../db";
 import type { DomainPrincipal } from "../principal";
+import { markChecklistIssued } from "./documents";
 import {
   comparableName,
   matchRejection,
@@ -146,6 +147,15 @@ export async function applyAssessorCorrespondence(
           outcome.rejected += 1;
         }
       }
+
+      // Items a certifier lists in the body of a reply are their checklist as
+      // much as an attached one is, so the engagement starts tracking them the
+      // way an extraction does. Without this the rows existed while the status
+      // stayed at RESPONSE_RECEIVED, and nothing could ever close it.
+      if (input.assessor === "certifier" && outcome.created > 0) {
+        await markChecklistIssued(input.engagementId, tx);
+      }
+
       return outcome;
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

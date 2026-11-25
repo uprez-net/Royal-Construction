@@ -342,7 +342,7 @@ export const notificationTemplates: NotificationTemplateFactory = {
 
   complianceApproved: (data) => ({
     title: `Compliance Approved: ${data.projectName}`,
-    message: `Every compliance document has been approved. The section is now closed.`,
+    message: `Every checklist item has been approved or marked not required. The section is now closed.`,
     url: `/projects/${data.projectId}?activeTab=compliance`,
   }),
 

@@ -146,6 +146,13 @@ export type OfferWorkspaceJob = {
   readonly grannyBedrooms: number;
   readonly grannyBathrooms: number;
   readonly grannyGarageSpaces: number;
+  // A second floor on the GRANNY HOME — the major house's upper floor is
+  // firstFloorSqm above. Only its area is captured: the granny's rooms are
+  // the counts above, whichever floor they are on. Counted only while both
+  // hasGrannyHome and grannyHasSecondFloor are on, so either toggle can be
+  // switched off without losing the figure.
+  readonly grannyHasSecondFloor: boolean;
+  readonly grannySecondFloorSqm: number;
   readonly buildScope: readonly string[];
 };
 
@@ -1025,6 +1032,8 @@ export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   grannyBedrooms: 0,
   grannyBathrooms: 0,
   grannyGarageSpaces: 0,
+  grannyHasSecondFloor: false,
+  grannySecondFloorSqm: 0,
   // Seeded per-offer at runtime via defaultOfferValidUntil(); empty here so a
   // stale constant can't ship an already-expired date.
   validUntil: "",

@@ -19,6 +19,10 @@ export type OfferAreaBasis = {
   readonly grannyFlatSqm: number;
   readonly balconySqm: number;
   readonly voidSqm: number;
+  // The granny home's second floor. Already 0 unless the job has a granny home
+  // AND it has a second floor — offerAreaBasisFromJob gates it, so nothing
+  // downstream has to check either toggle.
+  readonly grannySecondFloorSqm: number;
 };
 
 // The estimator's project-specific inputs for the slab / frame / brick / tile
@@ -105,6 +109,7 @@ export const EMPTY_AREA_BASIS: OfferAreaBasis = {
   balconySqm: 0,
   voidSqm: 0,
   kitchenSqm: 0,
+  grannySecondFloorSqm: 0,
 };
 
 // Fresh-offer defaults: every estimator input starts at zero. Rate constants
@@ -136,6 +141,9 @@ export function offerAreaBasisFromJob(
     | "balconySqm"
     | "voidSqm"
     | "kitchenSqm"
+    | "hasGrannyHome"
+    | "grannyHasSecondFloor"
+    | "grannySecondFloorSqm"
   >,
 ): OfferAreaBasis {
   return {
@@ -148,6 +156,10 @@ export function offerAreaBasisFromJob(
     balconySqm: job.balconySqm,
     voidSqm: job.voidSqm,
     kitchenSqm: job.kitchenSqm,
+    grannySecondFloorSqm:
+      job.hasGrannyHome && job.grannyHasSecondFloor
+        ? job.grannySecondFloorSqm
+        : 0,
   };
 }
 
@@ -171,6 +183,9 @@ export function rawTotalAreaSqm(basis: OfferAreaBasis): number {
     + basis.grannyFlatSqm
     + basis.balconySqm
     + basis.voidSqm
+    // Last on purpose: every offer saved before the granny second floor
+    // existed has 0 here, and x + 0 is exactly x, so no stored total moves.
+    + basis.grannySecondFloorSqm
   );
 }
 
@@ -183,7 +198,9 @@ export function getAreaBasisTotalSqm(basis: OfferAreaBasis): number {
       + basis.garageSqm
       + basis.voidSqm
       + basis.grannyFlatSqm
-      + basis.balconySqm,
+      + basis.balconySqm
+      // Last, for the same reason as in rawTotalAreaSqm.
+      + basis.grannySecondFloorSqm,
   );
 }
 
@@ -250,12 +267,22 @@ function frameFirstFloorAreaSqm(
   calcVersion: number,
 ): number {
   switch (calcVersion) {
+    // The granny home's second floor is an upper floor, so it is framed at the
+    // upper-floor rate under both rules — just as its ground floor is in the
+    // ground-floor frame. It is appended LAST to each historical expression
+    // rather than worked into it: every offer minted before it existed carries
+    // 0, and x + 0 is exactly x, so neither version's stored figures move.
     case LEGACY_CALC_VERSION:
-      return roundCurrency(basis.firstFloorSqm + basis.balconySqm);
+      return roundCurrency(
+        basis.firstFloorSqm + basis.balconySqm + basis.grannySecondFloorSqm,
+      );
     case CURRENT_CALC_VERSION:
       // A void is a hole in the first floor, but the frame still spans it.
       return roundCurrency(
-        basis.firstFloorSqm + basis.balconySqm + basis.voidSqm,
+        basis.firstFloorSqm
+          + basis.balconySqm
+          + basis.voidSqm
+          + basis.grannySecondFloorSqm,
       );
     default:
       throw new UnsupportedCalcVersionError(calcVersion);

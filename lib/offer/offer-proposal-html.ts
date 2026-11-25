@@ -257,7 +257,7 @@ export function buildProposalHtml(
   p { line-height: 1.55; font-size: 13px; }
   .muted { color: ${MUTED}; }
   .hero, .slot { border: 1px dashed ${BORDER}; background: #fff; display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
-  .hero img, .slot img { width: 100%; height: 100%; object-fit: cover; }
+  .hero img, .slot img { width: 100%; height: 100%; object-fit: contain; }
   .hero { height: 95mm; margin-top: 20px; }
   .caption { text-align: center; font-size: 10px; font-style: italic; color: ${MUTED}; margin-top: 4px; }
   .cover-title { text-align: center; margin-top: 18px; }

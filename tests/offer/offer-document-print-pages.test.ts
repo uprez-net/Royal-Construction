@@ -446,3 +446,208 @@ test("Contract annexure does not overflow its pages at max overflow signers", as
     `annexure printed ${printed} A4 pages from ${emitted} emitted pages — a signature block is splitting across sheets`,
   );
 });
+
+// The snapshot page is the tallest and widest it gets when a build carries every
+// area cell (void, granny flat and the granny's second floor) and the granny
+// spec section. That is eight area cells side by side, and two spec tables under
+// them, on a page of fixed height.
+const EVERY_AREA_AND_DWELLING = () => {
+  const snapshot = snapshotWithOwners([individualOwner(1)]);
+  return {
+    ...snapshot,
+    job: {
+      ...snapshot.job,
+      groundFloorSqm: 187.35,
+      garageSqm: 41.25,
+      firstFloorSqm: 165.85,
+      alfrescoPorchSqm: 24.75,
+      balconySqm: 12.5,
+      porchSqm: 8.65,
+      voidSqm: 14.35,
+      grannyFlatSqm: 68.45,
+      hasGrannyHome: true,
+      grannyBedrooms: 2,
+      grannyBathrooms: 1,
+      grannyGarageSpaces: 1,
+      grannyHasSecondFloor: true,
+      grannySecondFloorSqm: 142.75,
+      bedrooms: 4,
+      bathrooms: 2.5,
+      garageSpaces: 2,
+    },
+  };
+};
+
+test("Proposal prints what it declares with every area cell and dwelling", async () => {
+  const html = buildProposalHtml(
+    buildProposalInput(EVERY_AREA_AND_DWELLING()),
+    EMPTY_OFFER_IMAGES,
+  );
+  const printed = await printedPageCount(html);
+  const declared = declaredPageTotal(html);
+  assert.equal(
+    printed,
+    declared,
+    `Proposal printed ${printed} A4 pages but declares ${declared}`,
+  );
+});
+
+test("No area figure overflows its cell with every area cell showing", async () => {
+  const html = buildProposalHtml(
+    buildProposalInput(EVERY_AREA_AND_DWELLING()),
+    EMPTY_OFFER_IMAGES,
+  );
+  const puppeteer = (await import("puppeteer")).default;
+  const browser = await puppeteer.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "load" });
+    await page.emulateMediaType("print");
+    const overflowing = await page.$$eval(".areatable > div", (cells) =>
+      cells
+        .filter((cell) => cell.scrollWidth > cell.clientWidth + 1)
+        .map((cell) => cell.textContent?.trim() ?? ""),
+    );
+    const cellCount = await page.$$eval(
+      ".areatable > div",
+      (cells) => cells.length,
+    );
+    assert.equal(cellCount, 8, "expected seven area cells and the total");
+    assert.deepEqual(overflowing, [], "area cells overflow their column");
+  } finally {
+    await browser.close();
+  }
+});
+
+// The browser print view crowds the same eight cells into its own grid, and
+// shrinks them with Tailwind classes rather than a stylesheet of its own. The
+// test above reads the emailed HTML and never sees those classes.
+function browserPrintMarkup(): string {
+  const input = buildProposalInput(EVERY_AREA_AND_DWELLING());
+  return renderToStaticMarkup(
+    createElement(OfferWorkspacePrintTemplate, {
+      ...input,
+      images: EMPTY_OFFER_IMAGES,
+    }),
+  );
+}
+
+const AREA_LABEL_CLASS =
+  "text-xs font-semibold uppercase tracking-wide opacity-80";
+
+test("Browser print view tightens all eight area cells", () => {
+  // Only the area grid: the spec tables below it reuse the label class.
+  const markup = browserPrintMarkup();
+  const start = markup.indexOf("grid-flow-col auto-cols-fr");
+  assert.ok(start >= 0, "browser print view renders no area grid");
+  const html = markup.slice(
+    start,
+    markup.indexOf("</div></div>", markup.indexOf("Total Area", start)),
+  );
+  const cellClasses = [
+    ...html.matchAll(
+      new RegExp(`<div class="([^"]*)"><p class="${AREA_LABEL_CLASS}">`, "g"),
+    ),
+  ].map((match) => match[1].split(" "));
+  assert.equal(
+    cellClasses.length,
+    8,
+    "expected seven area cells and the total",
+  );
+  for (const classes of cellClasses) {
+    assert.ok(
+      classes.includes("px-1"),
+      `cell lacks px-1: ${classes.join(" ")}`,
+    );
+    assert.ok(
+      !classes.includes("px-2"),
+      `cell keeps px-2: ${classes.join(" ")}`,
+    );
+  }
+  const valueClasses = [
+    ...html.matchAll(
+      new RegExp(
+        `<p class="${AREA_LABEL_CLASS}">[^<]*</p><p class="([^"]*)">`,
+        "g",
+      ),
+    ),
+  ].map((match) => match[1].split(" "));
+  assert.equal(valueClasses.length, 8);
+  for (const classes of valueClasses) {
+    assert.ok(
+      classes.includes("text-xs"),
+      `area value lacks text-xs: ${classes.join(" ")}`,
+    );
+  }
+});
+
+// Layout is only worth checking against the stylesheet the app actually ships,
+// so this compiles app/globals.css with the app's own Tailwind PostCSS plugin
+// (scanning the repo for classes, as `next build` does). A hand-written
+// stand-in for those utilities would only prove the stand-in.
+async function compiledAppStylesheet(): Promise<string> {
+  const { readFile } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const postcss = (await import("postcss")).default;
+  const tailwindcss = (await import("@tailwindcss/postcss")).default;
+  const { REPO_ROOT } = await import("../support/repo-root");
+  const from = join(REPO_ROOT, "app/globals.css");
+  const result = await postcss([tailwindcss({ base: REPO_ROOT })]).process(
+    await readFile(from, "utf8"),
+    { from },
+  );
+  return result.css;
+}
+
+test("No area figure overflows its cell in the browser print view", async () => {
+  const css = await compiledAppStylesheet();
+  // Proves the stylesheet really is the compiled build, not an empty shell
+  // that would let every cell "fit" by having no layout at all.
+  for (const utility of [
+    ".auto-cols-fr",
+    ".grid-flow-col",
+    ".px-1",
+    ".text-xs",
+  ]) {
+    assert.ok(css.includes(utility), `compiled stylesheet lacks ${utility}`);
+  }
+  // next/font sets --font-mono on <html> in app/layout.tsx; outside Next it is
+  // unset. IBM Plex Mono is a webfont and is rarely installed, so fall back to
+  // faces with its 0.6em advance (Courier New, and Liberation Mono on Linux).
+  // The browser's own monospace is Consolas on Windows, 0.55em, and lets a
+  // figure that overflows in the real face appear to fit.
+  const html = `<!doctype html><html style="--font-mono: 'IBM Plex Mono', 'Courier New', 'Liberation Mono'"><head><style>${css}</style></head><body>${browserPrintMarkup()}</body></html>`;
+  const puppeteer = (await import("puppeteer")).default;
+  const browser = await puppeteer.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "load" });
+    await page.emulateMediaType("print");
+    const cells = await page.$$eval(
+      ".grid-flow-col.auto-cols-fr > div",
+      (nodes) =>
+        nodes.map((cell) => {
+          const grid = cell.parentElement!.getBoundingClientRect();
+          const box = cell.getBoundingClientRect();
+          // The figure is nowrap, so an overflowing one spills sideways: past
+          // its own content box into the cell's padding, then the next cell.
+          const value = cell.querySelector("p.font-mono")!;
+          return {
+            label: cell.textContent?.trim() ?? "",
+            insideGrid:
+              box.left >= grid.left - 1 && box.right <= grid.right + 1,
+            figureFits: value.scrollWidth <= value.clientWidth + 1,
+            overflows: cell.scrollWidth > cell.clientWidth + 1,
+          };
+        }),
+    );
+    assert.equal(cells.length, 8, "expected seven area cells and the total");
+    assert.deepEqual(
+      cells.filter((c) => !c.insideGrid || !c.figureFits || c.overflows),
+      [],
+      "area cells overflow their column in the browser print view",
+    );
+  } finally {
+    await browser.close();
+  }
+});

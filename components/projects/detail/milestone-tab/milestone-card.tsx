@@ -223,7 +223,11 @@ export function MilestoneCard({
     milestone,
     project.tradieSchedules,
   );
-  const runningOverdueDays = openOverdueDays(milestone, new Date());
+  const runningOverdueDays = openOverdueDays(
+    milestone,
+    new Date(),
+    project.status,
+  );
   const previous = previousActivity(milestone, project.milestones);
   const previousCompleted =
     previous?.status === MilestoneStatus.DONE && previous.actualDate

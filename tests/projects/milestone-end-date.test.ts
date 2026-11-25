@@ -79,12 +79,12 @@ test("due text, the active badge and completion lateness share the actual-start 
     days: 2,
   });
   assert.deepEqual(duenessOf(milestone, onEnd), { kind: "today", days: 0 });
-  assert.equal(openOverdueDays(milestone, onEnd), null);
+  assert.equal(openOverdueDays(milestone, onEnd, "ACTIVE"), null);
   assert.equal(daysLate(milestone, onEnd), 0);
   assert.deepEqual(duenessOf(milestone, afterEnd), {
     kind: "overdue",
     days: -1,
   });
-  assert.equal(openOverdueDays(milestone, afterEnd), 1);
+  assert.equal(openOverdueDays(milestone, afterEnd, "ACTIVE"), 1);
   assert.equal(daysLate(milestone, afterEnd), 1);
 });

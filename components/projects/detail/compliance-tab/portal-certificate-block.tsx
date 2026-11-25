@@ -4,6 +4,7 @@ import { ComplianceDocumentType } from "@prisma/client";
 
 import {
   CERTIFICATE_DOCUMENT_TYPE,
+  certificateBlockLockedReason,
   certificateKindFor,
   certificateLodgementBlockedReason,
   hasCertificate,
@@ -22,6 +23,7 @@ export type PortalCertificateValues = {
   certificateDocument: ComplianceDocumentWithFiles | undefined;
   certificateApplicationRow: ComplianceExternalApplicationRecord | null;
   portalBlocked: string | null;
+  portalLocked: string | null;
   certificateHeld: boolean;
 };
 
@@ -45,6 +47,10 @@ export function portalCertificateValues(params: {
         (application) => application.kind === certificateKind,
       ) ?? null,
     portalBlocked: certificateLodgementBlockedReason(
+      params.engagement,
+      params.developerBlocked,
+    ),
+    portalLocked: certificateBlockLockedReason(
       params.engagement,
       params.developerBlocked,
     ),
@@ -112,6 +118,7 @@ export function PortalCertificateBlock({
         }
         certifierName={engagement.certifierName}
         blockedReason={values.portalBlocked}
+        lockedReason={values.portalLocked}
         rowMode={rowMode}
         isRowBusy={isRowBusy}
         onUpload={onUpload}

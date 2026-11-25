@@ -49,7 +49,10 @@ import { formatVariationNumber } from "./variation-rules";
 // one is resolved — nobody has to remember to clear a flag. Each condition is
 // the rule that already exists elsewhere, called rather than restated:
 //
-//   - overdue activity       `openOverdueDays` — the Milestones tab's badge
+//   - overdue activity       `openOverdueDays` — the Milestones tab's badge;
+//                            only an activity under way on a project being
+//                            built, so a job in drafting or compliance never
+//                            reads overdue
 //   - open compliance alert  `ComplianceAlert.status = OPEN` — the project page's Alerts card
 //   - unresolved issue       a checklist defect still OPEN or IN_PROGRESS
 //   - variation pending      `Variation.status = PENDING` — awaiting the client
@@ -268,8 +271,13 @@ function condition(
 function sydneyOverdueDays(
   milestone: AttentionSource["milestones"][number],
   now: Date,
+  projectStatus: ProjectStatus,
 ): number | null {
-  return openOverdueDays(sydneyTiming(milestone), toZonedTime(now, SYDNEY_TZ));
+  return openOverdueDays(
+    sydneyTiming(milestone),
+    toZonedTime(now, SYDNEY_TZ),
+    projectStatus,
+  );
 }
 
 function legalAdministration(requirements: Prisma.JsonValue) {
@@ -314,7 +322,7 @@ export function assessProjectAttention(
 
   const overdue = project.milestones
     .flatMap((milestone): OverdueActivity[] => {
-      const days = sydneyOverdueDays(milestone, now);
+      const days = sydneyOverdueDays(milestone, now, project.status);
       return days === null
         ? []
         : [

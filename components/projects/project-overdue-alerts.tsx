@@ -19,6 +19,8 @@ import { formatStatus } from "./project-status";
  * Milestones tab's own `openOverdueDays` evaluated on Sydney's calendar — so a
  * project shows here exactly when its Milestones tab shows an Overdue badge,
  * and drops off the moment the activity is finished, waived or rescheduled.
+ * Only an activity under way on a project being built counts: a job in
+ * drafting or compliance, or an activity nobody has started, never shows here.
  * Nothing is stored, so there is nothing to dismiss or forget to clear.
  *
  * Silent when nothing is overdue, like the project page's own Alerts card: an

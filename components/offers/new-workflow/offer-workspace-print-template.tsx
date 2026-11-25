@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import {
   CHARS_PER_LINE_SIGNATURE,
   chunkAllowanceRows,
@@ -496,6 +497,7 @@ function PrintSnapshotPage({
           },
         ]
       : [];
+  const crowdedAreaGrid = areaCells.length > 7;
   const granny = grannyDwellingSpec(job);
   const siteParticulars = formatSiteParticulars(job);
   return (
@@ -536,19 +538,29 @@ function PrintSnapshotPage({
           {areaCells.map((cell) => (
             <div
               key={cell.label}
-              className={
+              className={cn(
                 cell.emphasis
-                  ? "px-2 py-4 font-semibold text-sidebar"
-                  : "border-r border-border px-2 py-4 last:border-r-0"
-              }
+                  ? "py-4 font-semibold text-sidebar"
+                  : "border-r border-border py-4 last:border-r-0",
+                crowdedAreaGrid ? "px-1" : "px-2",
+              )}
             >
               <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
                 {cell.label}
               </p>
               {/* With void and granny flat both showing, seven cells leave ~77px
                 for a value and "187.35 m²" is ~76px of monospace: it broke at
-                the space and printed the unit on a line of its own. */}
-              <p className="mt-2 whitespace-nowrap font-mono font-semibold">
+                the space and printed the unit on a line of its own. A granny
+                second floor makes eight, ~66px at text-sm, so the value
+                overran into the next cell; text-xs and tighter padding give it
+                ~74px for ~60px of figure. Seven or fewer keep the size they
+                had. */}
+              <p
+                className={cn(
+                  "mt-2 whitespace-nowrap font-mono font-semibold",
+                  crowdedAreaGrid && "text-xs",
+                )}
+              >
                 {cell.value}
               </p>
             </div>

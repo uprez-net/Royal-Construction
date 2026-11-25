@@ -313,6 +313,10 @@ const jobSchema = z.object({
   grannyBedrooms: z.number().default(0),
   grannyBathrooms: z.number().default(0),
   grannyGarageSpaces: z.number().default(0),
+  // Granny home second floor. Defaulted for the same reason: every offer saved
+  // before it existed comes back as a granny home without one.
+  grannyHasSecondFloor: z.boolean().default(false),
+  grannySecondFloorSqm: z.number().default(0),
 });
 
 const costLineSchema = z.object({

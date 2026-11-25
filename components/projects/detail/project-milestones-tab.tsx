@@ -30,6 +30,7 @@ import {
   findWorkingStageIndex,
   lastCompleted,
   nextActivity,
+  openOverdueDays,
   partitionActivities,
   stageRollup,
   stageState,
@@ -89,7 +90,13 @@ function shortDate(value: Date) {
  * question this tab exists to answer is "what happens next", and a row that
  * answers it only when expanded makes the user open all six to find out.
  */
-function NextUp({ ledgerStage }: { ledgerStage: LedgerStage }) {
+function NextUp({
+  ledgerStage,
+  projectStatus,
+}: {
+  ledgerStage: LedgerStage;
+  projectStatus: ProjectDetail["status"];
+}) {
   const next = nextActivity(ledgerStage.milestones);
   const rollup = stageRollup(ledgerStage.milestones);
 
@@ -126,7 +133,15 @@ function NextUp({ ledgerStage }: { ledgerStage: LedgerStage }) {
     );
   }
 
-  const dueness = duenessOf(next.activity, new Date());
+  const now = new Date();
+  // Past its planned end is only overdue by `openOverdueDays`' rule: started,
+  // on a project being built. Anything else reads as its plain due date.
+  const due = duenessOf(next.activity, now);
+  const dueness =
+    due.kind === "overdue"
+    && openOverdueDays(next.activity, now, projectStatus) === null
+      ? { ...due, kind: "scheduled" as const }
+      : due;
   const detail =
     dueness.kind === "overdue"
       ? `Overdue ${Math.abs(dueness.days)}d`
@@ -481,7 +496,10 @@ export function ProjectMilestonesTab({
                             <StageStatusPill state={ledgerStage.state} />
                           </span>
                           <span className="mt-1 block text-xs md:hidden">
-                            <NextUp ledgerStage={ledgerStage} />
+                            <NextUp
+                              ledgerStage={ledgerStage}
+                              projectStatus={project.status}
+                            />
                           </span>
                         </TableCell>
 
@@ -531,7 +549,10 @@ export function ProjectMilestonesTab({
                         </TableCell>
 
                         <TableCell className="hidden max-w-[22rem] text-xs md:table-cell">
-                          <NextUp ledgerStage={ledgerStage} />
+                          <NextUp
+                            ledgerStage={ledgerStage}
+                            projectStatus={project.status}
+                          />
                         </TableCell>
 
                         <TableCell className="stage-actions">

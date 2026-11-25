@@ -297,8 +297,15 @@ export function buildAreaBreakdown(job: OfferWorkspaceJob): OfferAreaBreakdown {
   if (job.grannyFlatSqm !== 0) {
     cells.push({ label: "Granny Flat", sqm: job.grannyFlatSqm });
   }
+  // Read through the basis, which already zeroes it unless the build has a
+  // granny home with a second floor, so the cell and the total beneath it
+  // agree.
+  const grannySecondFloorSqm = offerAreaBasisFromJob(job).grannySecondFloorSqm;
+  if (grannySecondFloorSqm !== 0) {
+    cells.push({ label: "Granny Second Floor", sqm: grannySecondFloorSqm });
+  }
   // A base cell with no area (a single-storey job's First Floor, a job with no
-  // porch) is dropped like Void and Granny Flat above, so nothing prints "0 m²".
+  // porch) is dropped like Void and the granny cells above, so nothing prints "0 m²".
   return {
     cells: cells.filter((cell) => cell.sqm !== 0),
     totalSqm: getTotalAreaSqm(job),

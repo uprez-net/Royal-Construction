@@ -188,7 +188,10 @@ export function OfferWorkspaceImages({
                 {url ? (
                   <Image
                     alt={slot.caption}
-                    className="object-cover"
+                    // contain, not cover: this preview is how the estimator
+                    // checks a photo before it goes to a client, so it has to
+                    // show the whole picture rather than a crop of it.
+                    className="object-contain"
                     fill
                     sizes="200px"
                     {...storedImageProps(url)}

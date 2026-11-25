@@ -1329,6 +1329,13 @@ export async function setComplianceDocumentNotRequired(params: {
     );
   }
 
+  // The same announcement an approval makes when it settles the last line.
+  if (outcome.engagementClosed) {
+    after(async () => {
+      await notifyCompliance("complianceApproved", params.projectId, {});
+    });
+  }
+
   return outcome;
 }
 

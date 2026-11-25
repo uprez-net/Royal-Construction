@@ -353,7 +353,7 @@ export function JobSetupPanel({
         <Card className="border-border/70 bg-card/95 shadow-sm">
           <CardHeader className="border-b border-border/70">
             <OfferCardHeading
-              description="Room counts for the granny home (secondary dwelling), listed separately on the Offer and Tender documents."
+              description="Room counts for the granny home (secondary dwelling), listed separately on the Offer and Tender documents, and the area of its second floor if it has one."
               icon={<Home className="size-4" aria-hidden="true" />}
               title="Granny Home Specifications"
             />
@@ -373,6 +373,29 @@ export function JobSetupPanel({
                 onJobChange({ grannyGarageSpaces })
               }
             />
+            {/* The granny home's own second floor — the major house's upper
+                floor is "First floor sqm" above. Only the area: the rooms are
+                the counts above, whichever floor they sit on. Turning this off
+                keeps the figure, which offerAreaBasisFromJob ignores while it
+                is off, so it neither prices nor prints. */}
+            <YesNoQuestion
+              label="Includes a second floor"
+              value={job.grannyHasSecondFloor}
+              onChange={(grannyHasSecondFloor) =>
+                onJobChange({ grannyHasSecondFloor })
+              }
+            />
+            {job.grannyHasSecondFloor ? (
+              <div className="grid gap-4 @xl/pane:grid-cols-2 @5xl/pane:grid-cols-4">
+                <AreaField
+                  label="Granny second floor sqm"
+                  value={job.grannySecondFloorSqm}
+                  onChange={(grannySecondFloorSqm) =>
+                    onJobChange({ grannySecondFloorSqm })
+                  }
+                />
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -423,8 +446,9 @@ function SpecFields({
 }
 
 // Two-button Yes/No selector, matching the tender gate's YesNoQuestion
-// (deliberately not RadioGroup, so both surfaces read alike). hasGrannyHome is a
-// plain boolean rather than tri-state, so "No" is the initial selection.
+// (deliberately not RadioGroup, so both surfaces read alike). hasGrannyHome and
+// grannyHasSecondFloor are plain booleans rather than tri-state, so "No" is the
+// initial selection.
 function YesNoQuestion({
   label,
   onChange,

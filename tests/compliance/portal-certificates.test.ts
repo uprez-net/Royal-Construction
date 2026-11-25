@@ -14,7 +14,10 @@ import {
 } from "@prisma/client";
 import { test } from "vitest";
 
+import { DomainTransitionError } from "@/lib/domain/errors";
 import {
+  assertCertificateLodgeable,
+  certificateBlockLockedReason,
   certificateCompletionBlockedReason,
   certificateDocumentTypeFor,
   certificateKindFor,
@@ -311,6 +314,78 @@ test("a CDC needs the principal certifier appointment recorded", () => {
 
   assert.ok(blocked);
   assert.match(blocked, /principal certifier/i);
+});
+
+test("the server refuses a first lodgement the tab would not offer", () => {
+  // The tab hides the form behind this sentence; the route used to write
+  // appliedAt and round one for whatever it was sent.
+  const file = engagement();
+  const cdc =
+    ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE;
+
+  assert.throws(
+    () => assertCertificateLodgeable(file, cdc),
+    (error: unknown) =>
+      error instanceof DomainTransitionError
+      && error.message === certificateLodgementBlockedReason(file),
+  );
+
+  // Clear once the appointment is in.
+  assert.doesNotThrow(() =>
+    assertCertificateLodgeable(
+      engagement({ principalCertifierAppointedAt: MONDAY }),
+      cdc,
+    ),
+  );
+});
+
+test("the lodgement gate leaves a recorded lodgement and the permits alone", () => {
+  const cdc =
+    ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE;
+  // A correction to a lodgement already on the row is not a new lodgement.
+  const lodged = engagement({
+    externalApplications: [
+      { kind: cdc, appliedAt: MONDAY },
+    ] as unknown as CertifierEngagementDetail["externalApplications"],
+  });
+  assert.doesNotThrow(() => assertCertificateLodgeable(lodged, cdc));
+
+  // A road opening permit has nothing to do with the certifier's verdict.
+  assert.doesNotThrow(() =>
+    assertCertificateLodgeable(
+      engagement({ status: CertifierEngagementStatus.CHECKLIST_TRACKING }),
+      ComplianceExternalApplicationKind.ROAD_OPENING,
+    ),
+  );
+});
+
+test("the appointment holds the lodgement but never locks the block it is recorded in", () => {
+  // The form that records the appointment lives inside the certificate block.
+  // Locking the block on the appointment hid that form, so a CDC job whose
+  // checklist had passed read "record it" with nowhere to record it.
+  const file = engagement();
+
+  assert.match(
+    certificateLodgementBlockedReason(file) ?? "",
+    /principal certifier/i,
+  );
+  assert.equal(certificateBlockLockedReason(file), null);
+});
+
+test("the block stays locked on the certifier's verdict and the covenant", () => {
+  assert.match(
+    certificateBlockLockedReason(
+      engagement({ status: CertifierEngagementStatus.RESPONSE_RECEIVED }),
+    ) ?? "",
+    /pass every checklist item/i,
+  );
+  assert.equal(
+    certificateBlockLockedReason(
+      engagement(),
+      "The estate developer has to approve the plans.",
+    ),
+    "The estate developer has to approve the plans.",
+  );
 });
 
 test("a CDC with the appointment recorded is clear to lodge", () => {
