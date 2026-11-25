@@ -12,6 +12,7 @@ import {
   setComplianceDocumentNotRequired,
 } from "@/lib/domain/compliance/documents";
 import { applyAssessorCorrespondence } from "@/lib/domain/compliance/issued-items";
+import { DomainTransitionError } from "@/lib/domain/errors";
 import { systemPrincipal } from "@/lib/domain/principal";
 import { adminPrincipal, recordingDb } from "../architecture/domain-harness";
 
@@ -105,6 +106,9 @@ test("a DA line or a restored line never closes the certifier's engagement", asy
     "complianceDocument.findFirst": checklistLine({
       status: ComplianceDocumentStatus.NOT_REQUIRED,
     }),
+    "certifierEngagement.findUnique": {
+      status: CertifierEngagementStatus.CHECKLIST_TRACKING,
+    },
   });
   const restoredResult = await setComplianceDocumentNotRequired(
     adminPrincipal(),
@@ -113,6 +117,121 @@ test("a DA line or a restored line never closes the certifier's engagement", asy
   );
   assert.equal(restoredResult.engagementClosed, false);
   assert.deepEqual(engagementUpdates(restored), []);
+});
+
+/**
+ * A database that remembers one checklist line and its engagement, so a waiver
+ * and the restore after it can be run against the same state.
+ */
+function statefulChecklist(engagement: CertifierEngagementStatus) {
+  const state = {
+    document: ComplianceDocumentStatus.PENDING as ComplianceDocumentStatus,
+    engagement,
+  };
+  const recorder = recordingDb({
+    "complianceDocument.findFirst": () =>
+      checklistLine({ status: state.document }),
+    "complianceDocument.updateMany": (args: unknown) => {
+      const { data, where } = args as {
+        data: { status: ComplianceDocumentStatus };
+        where: { status: ComplianceDocumentStatus };
+      };
+      if (where.status !== state.document) return { count: 0 };
+      state.document = data.status;
+      return { count: 1 };
+    },
+    // The only line on the checklist.
+    "complianceDocument.count": () =>
+      state.document === ComplianceDocumentStatus.APPROVED
+      || state.document === ComplianceDocumentStatus.NOT_REQUIRED
+        ? 0
+        : 1,
+    "certifierEngagement.findUnique": () => ({ status: state.engagement }),
+    "certifierEngagement.updateMany": (args: unknown) => {
+      const { data, where } = args as EngagementUpdate;
+      if (!where.status.in.includes(state.engagement)) return { count: 0 };
+      state.engagement = data.status;
+      return { count: 1 };
+    },
+  });
+  return { recorder, state };
+}
+
+const setRequired = (
+  recorder: ReturnType<typeof recordingDb>,
+  notRequired: boolean,
+) =>
+  setComplianceDocumentNotRequired(
+    adminPrincipal(),
+    { documentId: "doc_1", notRequired, projectId: "p_1" },
+    recorder.db,
+  );
+
+test("putting back the line whose waiver closed the checklist reopens it", async () => {
+  const { recorder, state } = statefulChecklist(
+    CertifierEngagementStatus.CHECKLIST_TRACKING,
+  );
+
+  const waived = await setRequired(recorder, true);
+  assert.equal(waived.engagementClosed, true);
+  assert.equal(state.engagement, CertifierEngagementStatus.APPROVED);
+
+  const restored = await setRequired(recorder, false);
+  assert.equal(restored.engagementReopened, true);
+  assert.equal(state.document, ComplianceDocumentStatus.PENDING);
+  // Back to tracking, not left APPROVED with a line open on it.
+  assert.equal(state.engagement, CertifierEngagementStatus.CHECKLIST_TRACKING);
+
+  // And the ordinary close still works from there.
+  const waivedAgain = await setRequired(recorder, true);
+  assert.equal(waivedAgain.engagementClosed, true);
+  assert.equal(state.engagement, CertifierEngagementStatus.APPROVED);
+});
+
+test("a line cannot be put back once the certificate has been issued", async () => {
+  const { recorder, state } = statefulChecklist(
+    CertifierEngagementStatus.CHECKLIST_TRACKING,
+  );
+  await setRequired(recorder, true);
+  state.engagement = CertifierEngagementStatus.CERTIFICATE_ISSUED;
+
+  await assert.rejects(setRequired(recorder, false), DomainTransitionError);
+  assert.equal(state.engagement, CertifierEngagementStatus.CERTIFICATE_ISSUED);
+});
+
+test("the waiver and the close run in one transaction", async () => {
+  const recorder = recordingDb({
+    "complianceDocument.findFirst": checklistLine(),
+    "complianceDocument.count": 0,
+  });
+  let transactions = 0;
+  // A real client: `"$transaction" in db` is how the command tells one from a
+  // caller's transaction, and the recorder answers false to it.
+  const db = new Proxy(recorder.db, {
+    has(target, property) {
+      return property === "$transaction" || Reflect.has(target, property);
+    },
+    get(target, property, receiver) {
+      if (property === "$transaction") {
+        const open = Reflect.get(target, property, receiver) as (
+          run: (tx: unknown) => Promise<unknown>,
+        ) => Promise<unknown>;
+        return (run: (tx: unknown) => Promise<unknown>) => {
+          transactions += 1;
+          return open(run);
+        };
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
+
+  await setComplianceDocumentNotRequired(
+    adminPrincipal(),
+    { documentId: "doc_1", notRequired: true, projectId: "p_1" },
+    db,
+  );
+
+  assert.equal(transactions, 1);
 });
 
 const projectWithEngagement = {

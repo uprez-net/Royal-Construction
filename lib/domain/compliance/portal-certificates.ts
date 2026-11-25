@@ -8,11 +8,14 @@ import {
 
 import { isNotRequired } from "@/constants/complianceDocuments";
 import {
+  developerPlansBlockedReason,
   externalApplication,
   hasDevelopmentApplication,
   hasDevelopmentConsent,
   type CertifierEngagementDetail,
 } from "@/types/compliance";
+
+import { DomainTransitionError } from "../errors";
 
 /**
  * The lodgement between the checklist passing and the certificate arriving.
@@ -285,6 +288,39 @@ export function certificateLodgementBlockedReason(
     ?? principalCertifierBlockedReason(engagement)
     ?? developerBlocked
   );
+}
+
+/**
+ * Refuses a first certificate lodgement the tab would not offer.
+ *
+ * The server's half of `certificateLodgementBlockedReason`. The tab hides the
+ * lodgement form behind that sentence, but the route wrote `appliedAt` and round
+ * one for whatever it was sent -- so a stale tab, a second tab or a direct call
+ * could lodge a CDC with no principal certifier, or before the certifier had
+ * passed the checklist, and start a determination clock on an application the
+ * portal would refuse. Thrown before anything is written, with the same words
+ * the tab shows, and with the developer gate resolved here the way the tab
+ * resolves it, so the two cannot disagree about why.
+ *
+ * Only the first lodgement. Once `appliedAt` is on the row the tab shows the
+ * lodgement form again for corrections, and refusing a corrected date there --
+ * on a gate that held when the application went in -- would be a control the
+ * screen offers and the server rejects. The permits are not gated at all.
+ */
+export function assertCertificateLodgeable(
+  engagement: CertifierEngagementDetail,
+  kind: ComplianceExternalApplicationKind,
+): void {
+  if (!isCertificateApplication(kind)) return;
+  if (externalApplication(engagement, kind)?.appliedAt) return;
+
+  const blocked = certificateLodgementBlockedReason(
+    engagement,
+    developerPlansBlockedReason(engagement),
+  );
+  if (blocked) {
+    throw new DomainTransitionError(blocked);
+  }
 }
 
 /**

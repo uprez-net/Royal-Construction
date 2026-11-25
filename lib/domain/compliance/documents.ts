@@ -383,30 +383,58 @@ export async function setComplianceDocumentNotRequired(
       documentLabel: label,
       engagementClosed: false,
       engagementId: document.engagementId,
+      engagementReopened: false,
       status,
     };
   }
 
-  const changed = await db.complianceDocument.updateMany({
-    where: { id: document.id, status: document.status },
-    data: { status },
-  });
-  if (changed.count !== 1) {
-    throw new DomainTransitionError(
-      "The compliance row changed while it was being updated; refresh and retry.",
-      document.status,
-      status,
-    );
-  }
+  const isChecklistLine =
+    document.documentType === ComplianceDocumentType.CHECKLIST_ITEM;
 
-  // Waving off the last open line settles the checklist as surely as approving
-  // it does. DA rows are not part of the certifier's review, so only a
-  // checklist line can close the engagement.
-  const engagementClosed =
-    status === ComplianceDocumentStatus.NOT_REQUIRED
-    && document.documentType === ComplianceDocumentType.CHECKLIST_ITEM
-      ? await approveEngagementIfChecklistSettled(document.engagementId, db)
-      : false;
+  // The row, and what it does to the engagement, commit together. Settled
+  // separately, a failure after the row update left the last line waived and
+  // the engagement still open — and a retry found the row already NOT_REQUIRED,
+  // returned "unchanged" above, and never tried to close it again.
+  const apply = async (tx: DomainDb) => {
+    const changed = await tx.complianceDocument.updateMany({
+      where: { id: document.id, status: document.status },
+      data: { status },
+    });
+    if (changed.count !== 1) {
+      throw new DomainTransitionError(
+        "The compliance row changed while it was being updated; refresh and retry.",
+        document.status,
+        status,
+      );
+    }
+
+    // Putting a checklist line back is new work on a checklist that may have
+    // closed on it being waived, and an APPROVED engagement with an open line is
+    // one the certificate block reads as passed. So the engagement goes back to
+    // tracking with it — the status the close starts from, so approving or
+    // waiving the line again closes it the ordinary way.
+    const engagementReopened =
+      isChecklistLine && status !== ComplianceDocumentStatus.NOT_REQUIRED
+        ? await reopenEngagementForRestoredLine(
+            document.engagementId,
+            label,
+            tx,
+          )
+        : false;
+
+    // Waving off the last open line settles the checklist as surely as
+    // approving it does. DA rows are not part of the certifier's review, so
+    // only a checklist line can close the engagement.
+    const engagementClosed =
+      isChecklistLine && status === ComplianceDocumentStatus.NOT_REQUIRED
+        ? await approveEngagementIfChecklistSettled(document.engagementId, tx)
+        : false;
+
+    return { engagementClosed, engagementReopened };
+  };
+
+  const { engagementClosed, engagementReopened } =
+    "$transaction" in db ? await db.$transaction(apply) : await apply(db);
 
   return {
     changed: true as const,
@@ -414,6 +442,53 @@ export async function setComplianceDocumentNotRequired(
     documentLabel: label,
     engagementClosed,
     engagementId: document.engagementId,
+    engagementReopened,
     status,
   };
+}
+
+/**
+ * Take an APPROVED engagement back to CHECKLIST_TRACKING because one of its
+ * checklist lines has been put back, or refuse.
+ *
+ * Only from APPROVED. Past it the certificate has been issued on the strength
+ * of the checklist as it stood, and reopening the checklist would not unissue
+ * it — so the line stays waived and the refusal says why. Any status before
+ * APPROVED is still open and needs nothing. Returns whether this call reopened
+ * it.
+ */
+async function reopenEngagementForRestoredLine(
+  engagementId: string,
+  label: string,
+  db: DomainDb,
+): Promise<boolean> {
+  const engagement = await db.certifierEngagement.findUnique({
+    select: { status: true },
+    where: { id: engagementId },
+  });
+  if (!engagement) {
+    throw new DomainNotFoundError(
+      `Certifier engagement ${engagementId} not found.`,
+    );
+  }
+
+  if (
+    engagement.status === CertifierEngagementStatus.CERTIFICATE_ISSUED
+    || engagement.status === CertifierEngagementStatus.COMPLETED
+  ) {
+    throw new DomainTransitionError(
+      `The certificate has already been issued on this checklist, so ${label} cannot be put back.`,
+      engagement.status,
+      CertifierEngagementStatus.CHECKLIST_TRACKING,
+    );
+  }
+
+  if (engagement.status !== CertifierEngagementStatus.APPROVED) return false;
+
+  return advanceEngagementStatus(
+    engagementId,
+    [CertifierEngagementStatus.APPROVED],
+    CertifierEngagementStatus.CHECKLIST_TRACKING,
+    db,
+  );
 }

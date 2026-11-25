@@ -22,7 +22,6 @@ import {
   type CertificateApplicationKind,
 } from "@/lib/domain/compliance/portal-certificates";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { cn } from "@/lib/utils";
 import {
   complianceScope,
   recordPrincipalCertifier,
@@ -170,6 +169,30 @@ export function PlanningPortalSection({
    * is appointed at the notice of commencement, after this block is finished
    * with, so a permanent "2/3" there would be a card that can never complete.
    */
+  /** The certificate's row, beside the lodgement or under the refusal. */
+  const certificateRow = (
+    <ul>
+      <ComplianceDocumentRow
+        label={complianceDocumentLabel(documentType)}
+        document={certificate}
+        helperText={
+          hasCertificate
+            ? undefined
+            : "Download it from the NSW Planning Portal and upload it here."
+        }
+        mode={rowMode(certificate)}
+        isBusy={isRowBusy(certificate, documentType)}
+        onUpload={(file) =>
+          onUpload(file, {
+            documentId: certificate?.id,
+            documentType,
+          })
+        }
+        onPreviewFile={onPreviewFile}
+      />
+    </ul>
+  );
+
   const steps = isCdc
     ? [Boolean(principalCertifierAppointedAt), isLodged, hasCertificate]
     : [isLodged, hasCertificate];
@@ -229,45 +252,26 @@ export function PlanningPortalSection({
       ------------------------------------------------------------- */}
       {/* Open but not yet lodgeable — on a CDC, the appointment above is still
           to be recorded. The same sentence the server refuses the lodgement
-          with, where the form would be, so nobody fills in a lodgement only to
-          be told no. */}
-      {blockedReason && !isLodged && !hasCertificate ? (
-        <p
-          className={cn(
-            "rounded-lg border border-dashed border-border/70 bg-muted/20 px-4 py-3 text-sm text-muted-foreground",
-            isCdc && "mt-4",
-          )}
-        >
-          {blockedReason}
-        </p>
+          with (`assertCertificateLodgeable`), where the form would be, so
+          nobody fills in a lodgement only to be told no. Shown whether or not
+          a certificate is already on the file: the server refuses the
+          lodgement either way, so hiding the reason there would offer a form
+          that cannot be saved. The certificate row stays below it, so a file
+          that is already held can still be opened or replaced. */}
+      {blockedReason && !isLodged ? (
+        <div className={isCdc ? "mt-4" : undefined}>
+          <p className="rounded-lg border border-dashed border-border/70 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+            {blockedReason}
+          </p>
+          {hasCertificate ? <div className="mt-3">{certificateRow}</div> : null}
+        </div>
       ) : (
         <div className={isCdc ? "mt-4" : undefined}>
           <ExternalApplicationBlock
             projectId={projectId}
             kind={kind}
             application={application}
-            documentRows={
-              <ul>
-                <ComplianceDocumentRow
-                  label={complianceDocumentLabel(documentType)}
-                  document={certificate}
-                  helperText={
-                    hasCertificate
-                      ? undefined
-                      : "Download it from the NSW Planning Portal and upload it here."
-                  }
-                  mode={rowMode(certificate)}
-                  isBusy={isRowBusy(certificate, documentType)}
-                  onUpload={(file) =>
-                    onUpload(file, {
-                      documentId: certificate?.id,
-                      documentType,
-                    })
-                  }
-                  onPreviewFile={onPreviewFile}
-                />
-              </ul>
-            }
+            documentRows={certificateRow}
           />
         </div>
       )}
