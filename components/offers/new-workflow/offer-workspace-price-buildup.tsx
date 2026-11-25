@@ -9,11 +9,17 @@ import type {
 import {
   describeHbcfPremium,
   parseNonNegativeNumberInput,
+  resolveTargetMarkupPct,
   HBCF_PREMIUM_GROSS_UP,
 } from "@/lib/offer/workspace-pricing";
+import { roundCurrency } from "@/lib/offer/pricing";
 import { Calculator } from "lucide-react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
-import { formatCurrency, numberInputValue } from "./offer-workspace-format";
+import {
+  formatCurrency,
+  formatPercentFixed,
+  numberInputValue,
+} from "./offer-workspace-format";
 import { FIELD_LABEL_CLASS, FieldLabel } from "./offer-workspace-fields";
 
 type PriceBuildupPanelProps = {
@@ -29,9 +35,12 @@ type PriceBuildupPanelProps = {
   ) => void;
 };
 
-// The Royal quote build-up — the single source of the customer price. The Royal
-// Construction charge is two additive markup levers (Overhead % + Fee %) on the
-// cost base; HBCF and the impact fee are the standing fixed additions.
+// The Royal quote build-up — the single source of the calculated price. The
+// Royal Construction charge is two additive markups on job cost (overhead and
+// builder's fee); HBCF and the impact fee are the standing fixed additions.
+// Both rates are MARKUPS on job cost, not margins on the price: 20% on a
+// $650,000 job is $130,000, which is 16.67% of the $780,000 it sells for.
+// The profitability card under the customer price shows the margin.
 export function PriceBuildupPanel({
   settings,
   pricing,
@@ -47,12 +56,16 @@ export function PriceBuildupPanel({
   // riding on top of it; the build-up carries only their sum (HBCF premium).
   const hbcf = describeHbcfPremium(settings);
   const hasLoadingCharge = hbcf.loadingCharge > 0;
+  const totalMarkupPct = resolveTargetMarkupPct(settings);
+  const totalMarkup = roundCurrency(
+    pricing.royalConstructionOverhead + pricing.royalConstructionFee,
+  );
 
   return (
     <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
-          description="The Royal quote build-up: direct cost plus fixed additions, marked up by the Royal Construction Overhead and Fee, then GST. This is the price shown to the client."
+          description="Job cost (direct cost plus fixed additions), marked up by overhead and builder's fee, then GST."
           icon={<Calculator className="size-4" aria-hidden="true" />}
           singleLineDescription
           title="Price build-up"
@@ -60,32 +73,20 @@ export function PriceBuildupPanel({
       </CardHeader>
       <CardContent className="grid gap-4">
         {/* Sized to the step pane, not the viewport: the pane is narrower than
-            the window, so xl:grid-cols-4 squeezed four fields into it. */}
-        <div className="grid gap-3 @xl/pane:grid-cols-2 @5xl/pane:grid-cols-4">
+            the window, so a viewport breakpoint squeezed the fields into it. */}
+        <div className="grid gap-3 @xl/pane:grid-cols-3">
           <PercentField
-            label="Royal Construction Overhead"
+            label="Overhead markup on job cost"
             value={settings.royalConstructionOverheadPct}
             onChange={(royalConstructionOverheadPct) =>
               onSettingsChange({ royalConstructionOverheadPct })
             }
           />
           <PercentField
-            label="Royal Construction Fee"
+            label="Builder’s fee markup on job cost"
             value={settings.royalConstructionFeePct}
             onChange={(royalConstructionFeePct) =>
               onSettingsChange({ royalConstructionFeePct })
-            }
-          />
-          {/* Derived, not typed: the contract value inc GST below, solved
-              together with the HBCF premium it prices (see
-              withDerivedTotalContractValue). */}
-          <DerivedMoneyField
-            label="Total Contract Value"
-            value={settings.hbcfTotalContractValue}
-            helperText={
-              totalContractValueDerived
-                ? "Same as contract value inc GST"
-                : "As quoted when the offer was issued"
             }
           />
           <MoneyField
@@ -94,79 +95,104 @@ export function PriceBuildupPanel({
             onChange={(impactFeeFixed) => onSettingsChange({ impactFeeFixed })}
           />
         </div>
-        <div className="grid gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <div>
-              <p className={FIELD_LABEL_CLASS}>HBCF premium</p>
-              <p className="text-xs text-muted-foreground">
-                Auto-calculated from Total Contract Value (H01 metro{" "}
-                {hbcfRatePercent}% + GST + stamp ≈ {hbcfEffectivePercent}%)
-                {hasLoadingCharge
-                  ? `, plus a ${settings.loadingChargePercentage}% loading charge`
-                  : ""}
-              </p>
-            </div>
-            <p className="font-mono text-sm font-semibold tabular-nums">
-              {formatCurrency(settings.homeWarrantyHbcfFixed)}
-            </p>
-          </div>
-          {hasLoadingCharge ? (
-            <div className="grid gap-1 border-t border-border/60 pt-2 text-xs">
-              <SummaryRow
-                label="Premium (inc GST & stamp)"
-                value={formatCurrency(hbcf.premiumBeforeLoading)}
-              />
-              <SummaryRow
-                label={`Loading charge (${settings.loadingChargePercentage}%)`}
-                value={formatCurrency(hbcf.loadingCharge)}
-              />
-            </div>
-          ) : null}
-        </div>
-        <div className="rounded-lg border border-border bg-muted/50 p-3">
-          <div className="grid gap-2 text-sm">
+        <div className="grid gap-2 text-sm">
+          <SummaryRow
+            label="Direct construction cost"
+            value={formatCurrency(pricing.directTotal)}
+          />
+          <SummaryRow
+            label="HBCF premium"
+            value={formatCurrency(settings.homeWarrantyHbcfFixed)}
+          />
+          {settings.impactFeeFixed > 0 ? (
             <SummaryRow
-              label="Direct quote total"
-              value={formatCurrency(pricing.directTotal)}
+              label="Impact fee"
+              value={formatCurrency(settings.impactFeeFixed)}
             />
+          ) : null}
+          <SummaryRow
+            label="Job cost before markup"
+            value={formatCurrency(pricing.costBeforeFee)}
+          />
+          <SummaryRow
+            label="Total markup on job cost"
+            value={`${formatPercentFixed(totalMarkupPct)} · ${formatCurrency(totalMarkup)}`}
+          />
+          <div className="mt-1 border-t border-border/70 pt-2">
+            <SummaryRow
+              label="Calculated price incl GST"
+              value={formatCurrency(pricing.contractValueIncGst, {
+                maximumFractionDigits: 2,
+              })}
+              strong
+            />
+          </div>
+        </div>
+        <details className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm">
+          <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40">
+            Price build-up details
+          </summary>
+          <div className="mt-2 grid gap-2">
             <SummaryRow
               label="Fixed additions"
               value={formatCurrency(pricing.additionsTotal)}
             />
             <SummaryRow
-              label="Cost before fee"
-              value={formatCurrency(pricing.costBeforeFee)}
-            />
-            <SummaryRow
-              label={`Royal Construction Overhead (${Math.round(
-                settings.royalConstructionOverheadPct * 100,
-              )}%)`}
+              label={`Overhead markup (${formatPercentFixed(
+                settings.royalConstructionOverheadPct,
+              )})`}
               value={formatCurrency(pricing.royalConstructionOverhead)}
             />
             <SummaryRow
-              label={`Royal Construction Fee (${Math.round(
-                settings.royalConstructionFeePct * 100,
-              )}%)`}
+              label={`Builder’s fee markup (${formatPercentFixed(
+                settings.royalConstructionFeePct,
+              )})`}
               value={formatCurrency(pricing.royalConstructionFee)}
             />
             <SummaryRow
-              label="Total including construction cost"
+              label="Calculated price ex GST"
               value={formatCurrency(pricing.totalIncludingConstruction)}
             />
             <SummaryRow label="GST" value={formatCurrency(pricing.gstAmount)} />
             <SummaryRow
-              label="Contract value inc GST"
-              value={formatCurrency(pricing.contractValueIncGst)}
-              strong
-            />
-            <SummaryRow
-              label="Build-up per sqm"
+              label="Calculated price per sqm"
               value={formatCurrency(pricing.perSqm, {
                 maximumFractionDigits: 2,
               })}
             />
+            <div className="grid gap-1 border-t border-border/60 pt-2 text-xs">
+              <p className={FIELD_LABEL_CLASS}>HBCF premium</p>
+              {/* The premium is priced on the contract value it insures. Once
+                  the offer is issued that value stays at the figure quoted,
+                  and may no longer match the build-up. */}
+              <p className="text-muted-foreground">
+                Auto-calculated on a contract value of{" "}
+                {formatCurrency(settings.hbcfTotalContractValue)}
+                {totalContractValueDerived
+                  ? " (the calculated price incl GST)"
+                  : " (as quoted when the offer was issued)"}
+                : H01 metro {hbcfRatePercent}% + GST + stamp ≈{" "}
+                {hbcfEffectivePercent}%
+                {hasLoadingCharge
+                  ? `, plus a ${settings.loadingChargePercentage}% loading charge`
+                  : ""}
+                .
+              </p>
+              {hasLoadingCharge ? (
+                <>
+                  <SummaryRow
+                    label="Premium (inc GST & stamp)"
+                    value={formatCurrency(hbcf.premiumBeforeLoading)}
+                  />
+                  <SummaryRow
+                    label={`Loading charge (${settings.loadingChargePercentage}%)`}
+                    value={formatCurrency(hbcf.loadingCharge)}
+                  />
+                </>
+              ) : null}
+            </div>
           </div>
-        </div>
+        </details>
       </CardContent>
     </Card>
   );
@@ -230,32 +256,6 @@ function MoneyField({
           }
         }}
       />
-    </label>
-  );
-}
-
-function DerivedMoneyField({
-  helperText,
-  label,
-  value,
-}: {
-  readonly helperText: string;
-  readonly label: string;
-  readonly value: number;
-}) {
-  return (
-    <label>
-      <FieldLabel>{label}</FieldLabel>
-      <Input
-        aria-readonly="true"
-        className="bg-muted/50 font-mono tabular-nums text-muted-foreground"
-        readOnly
-        type="text"
-        value={formatCurrency(value)}
-      />
-      <span className="mt-1 block text-[11px] leading-4 text-muted-foreground">
-        {helperText}
-      </span>
     </label>
   );
 }

@@ -175,7 +175,7 @@ export function buildOfferStepDigests(
         : `${plural(includedLines.length, "line", "lines")} · ${compactMoney(input.directTotal)}`,
     pricing:
       input.contractValueIncGst > 0
-        ? `${formatPercent(input.effectiveMargin.effectiveMarkupPct)} margin · ${compactMoney(input.contractValueIncGst)}`
+        ? `${formatPercent(input.effectiveMargin.effectiveMarkupPct)} markup · ${compactMoney(input.contractValueIncGst)}`
         : "Not priced",
     scope: [
       plural(input.allowances.length, "allowance", "allowances"),

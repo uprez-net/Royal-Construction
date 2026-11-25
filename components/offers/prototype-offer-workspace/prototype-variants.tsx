@@ -573,7 +573,7 @@ function SummaryStrip({ job }: { readonly job: PrototypeJob }) {
       ))}
       <div className="ml-auto flex items-center gap-3">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-success-light px-2.5 py-0.5 text-xs font-medium text-success-ink">
-          Margin at target · 20%
+          Markup at target · 20%
         </span>
         <span className="font-mono tabular-nums text-lg font-semibold">
           {formatCurrency(PRICING.contractValueIncGst)}
