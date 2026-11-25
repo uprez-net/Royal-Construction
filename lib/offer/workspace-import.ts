@@ -243,9 +243,9 @@ function getStageCodeFromLabel(value: string): OfferStageCode | null {
   const normalized = value.trim().toUpperCase();
   for (const stage of OFFER_STAGE_CATALOG) {
     if (
-      normalized === stage.code ||
-      normalized.startsWith(`${stage.code} -`) ||
-      normalized.startsWith(`${stage.code} —`)
+      normalized === stage.code
+      || normalized.startsWith(`${stage.code} -`)
+      || normalized.startsWith(`${stage.code} —`)
     ) {
       return stage.code;
     }
@@ -408,8 +408,8 @@ function findBuildupWarnings(
   const feeLabel = textValue(getCell(rows, 81, 6));
   const labelPercent = parsePercentFromText(feeLabel);
   if (
-    labelPercent === null ||
-    Math.abs(labelPercent - settings.royalConstructionFeePct) < 0.005
+    labelPercent === null
+    || Math.abs(labelPercent - settings.royalConstructionFeePct) < 0.005
   ) {
     return [];
   }
