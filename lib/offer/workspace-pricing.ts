@@ -543,7 +543,7 @@ export function splitContractValueByGst({
 // The share of each job's ex-GST selling price set aside for running the
 // company: office, vehicles, insurance, the people who are not on a site.
 //
-// It is NOT the quote's "Overhead markup on job cost". That markup is a lever
+// It is NOT the quote's "Overhead markup". That markup is a lever
 // on the selling price, applied to job cost; this is what the business needs
 // back out of the selling price, applied to revenue. Using the markup here
 // would make every quote's projected profit come out at exactly the fee

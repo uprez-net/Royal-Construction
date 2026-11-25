@@ -76,14 +76,14 @@ export function PriceBuildupPanel({
             the window, so a viewport breakpoint squeezed the fields into it. */}
         <div className="grid gap-3 @xl/pane:grid-cols-3">
           <PercentField
-            label="Overhead markup on job cost"
+            label="Overhead markup"
             value={settings.royalConstructionOverheadPct}
             onChange={(royalConstructionOverheadPct) =>
               onSettingsChange({ royalConstructionOverheadPct })
             }
           />
           <PercentField
-            label="Builder’s fee markup on job cost"
+            label="Builder’s fee markup"
             value={settings.royalConstructionFeePct}
             onChange={(royalConstructionFeePct) =>
               onSettingsChange({ royalConstructionFeePct })
