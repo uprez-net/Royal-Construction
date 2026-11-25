@@ -535,8 +535,8 @@ function parseAreaCalculator(
         [getCell(rows, 9, 5)],
         EMPTY_AREA_BASIS.kitchenSqm,
       ),
-      // The workbook has no second-floor cell.
-      secondFloorSqm: EMPTY_AREA_BASIS.secondFloorSqm,
+      // The workbook has no granny second-floor cell.
+      grannySecondFloorSqm: EMPTY_AREA_BASIS.grannySecondFloorSqm,
     },
     areaCalculator: {
       ...INITIAL_AREA_CALCULATOR,

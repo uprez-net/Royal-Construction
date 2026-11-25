@@ -146,16 +146,13 @@ export type OfferWorkspaceJob = {
   readonly grannyBedrooms: number;
   readonly grannyBathrooms: number;
   readonly grannyGarageSpaces: number;
-  // A second floor above the first. hasSecondFloor gates the workspace card,
-  // the "Second Floor" area cell and the "Second Floor Specifications"
-  // sections in the Offer and Tender documents, and every price the area and
-  // the counts feed: with the toggle off the stored figures are ignored, so
-  // turning it off and on again does not lose them. The counts are rooms ON
-  // the second floor, entered on top of the Major House counts above.
-  readonly hasSecondFloor: boolean;
-  readonly secondFloorSqm: number;
-  readonly secondFloorBedrooms: number;
-  readonly secondFloorBathrooms: number;
+  // A second floor on the GRANNY HOME — the major house's upper floor is
+  // firstFloorSqm above. Only its area is captured: the granny's rooms are
+  // the counts above, whichever floor they are on. Counted only while both
+  // hasGrannyHome and grannyHasSecondFloor are on, so either toggle can be
+  // switched off without losing the figure.
+  readonly grannyHasSecondFloor: boolean;
+  readonly grannySecondFloorSqm: number;
   readonly buildScope: readonly string[];
 };
 
@@ -1035,10 +1032,8 @@ export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   grannyBedrooms: 0,
   grannyBathrooms: 0,
   grannyGarageSpaces: 0,
-  hasSecondFloor: false,
-  secondFloorSqm: 0,
-  secondFloorBedrooms: 0,
-  secondFloorBathrooms: 0,
+  grannyHasSecondFloor: false,
+  grannySecondFloorSqm: 0,
   // Seeded per-offer at runtime via defaultOfferValidUntil(); empty here so a
   // stale constant can't ship an already-expired date.
   validUntil: "",

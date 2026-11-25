@@ -3,7 +3,6 @@ import {
   formatArea,
   formatDwellingSpec,
   grannyDwellingSpec,
-  secondFloorSpec,
   tenderInclusionDetail,
   COMPANY_LINE,
   type OfferPrintPaymentRow,
@@ -811,7 +810,6 @@ function particularsPage(
 ): string {
   const { job } = input;
   const grannySpec = grannyDwellingSpec(job);
-  const upperSpec = secondFloorSpec(job);
   const ownerLabel = (job.owners ?? []).length > 1 ? "Owners" : "Owner";
   return tenderPage(
     `<h3 class="t-sub">Project Particulars</h3>
@@ -844,7 +842,6 @@ function particularsPage(
             garageSpaces: job.garageSpaces,
           }),
         )}
-        ${upperSpec ? particular("Second Floor Specifications", formatDwellingSpec(upperSpec)) : ""}
         ${grannySpec ? particular("Granny Home Specifications", formatDwellingSpec(grannySpec)) : ""}
         ${particular("Prepared by", job.preparedBy)}
       </tbody>

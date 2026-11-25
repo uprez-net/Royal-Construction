@@ -19,9 +19,10 @@ export type OfferAreaBasis = {
   readonly grannyFlatSqm: number;
   readonly balconySqm: number;
   readonly voidSqm: number;
-  // Already 0 when the job has no second floor — offerAreaBasisFromJob gates
-  // it on hasSecondFloor, so nothing downstream has to check the toggle.
-  readonly secondFloorSqm: number;
+  // The granny home's second floor. Already 0 unless the job has a granny home
+  // AND it has a second floor — offerAreaBasisFromJob gates it, so nothing
+  // downstream has to check either toggle.
+  readonly grannySecondFloorSqm: number;
 };
 
 // The estimator's project-specific inputs for the slab / frame / brick / tile
@@ -108,7 +109,7 @@ export const EMPTY_AREA_BASIS: OfferAreaBasis = {
   balconySqm: 0,
   voidSqm: 0,
   kitchenSqm: 0,
-  secondFloorSqm: 0,
+  grannySecondFloorSqm: 0,
 };
 
 // Fresh-offer defaults: every estimator input starts at zero. Rate constants
@@ -140,8 +141,9 @@ export function offerAreaBasisFromJob(
     | "balconySqm"
     | "voidSqm"
     | "kitchenSqm"
-    | "hasSecondFloor"
-    | "secondFloorSqm"
+    | "hasGrannyHome"
+    | "grannyHasSecondFloor"
+    | "grannySecondFloorSqm"
   >,
 ): OfferAreaBasis {
   return {
@@ -154,7 +156,10 @@ export function offerAreaBasisFromJob(
     balconySqm: job.balconySqm,
     voidSqm: job.voidSqm,
     kitchenSqm: job.kitchenSqm,
-    secondFloorSqm: job.hasSecondFloor ? job.secondFloorSqm : 0,
+    grannySecondFloorSqm:
+      job.hasGrannyHome && job.grannyHasSecondFloor
+        ? job.grannySecondFloorSqm
+        : 0,
   };
 }
 
@@ -178,9 +183,9 @@ export function rawTotalAreaSqm(basis: OfferAreaBasis): number {
     + basis.grannyFlatSqm
     + basis.balconySqm
     + basis.voidSqm
-    // Last on purpose: every offer saved before the second floor existed has
-    // 0 here, and x + 0 is exactly x, so no stored total moves.
-    + basis.secondFloorSqm
+    // Last on purpose: every offer saved before the granny second floor
+    // existed has 0 here, and x + 0 is exactly x, so no stored total moves.
+    + basis.grannySecondFloorSqm
   );
 }
 
@@ -195,7 +200,7 @@ export function getAreaBasisTotalSqm(basis: OfferAreaBasis): number {
       + basis.grannyFlatSqm
       + basis.balconySqm
       // Last, for the same reason as in rawTotalAreaSqm.
-      + basis.secondFloorSqm,
+      + basis.grannySecondFloorSqm,
   );
 }
 
@@ -262,13 +267,14 @@ function frameFirstFloorAreaSqm(
   calcVersion: number,
 ): number {
   switch (calcVersion) {
-    // The second floor is framed at the upper-floor rate under both rules. It
-    // is appended LAST to each historical expression rather than worked into
-    // it: every offer minted before it existed carries 0, and x + 0 is exactly
-    // x, so neither version's stored figures move.
+    // The granny home's second floor is an upper floor, so it is framed at the
+    // upper-floor rate under both rules — just as its ground floor is in the
+    // ground-floor frame. It is appended LAST to each historical expression
+    // rather than worked into it: every offer minted before it existed carries
+    // 0, and x + 0 is exactly x, so neither version's stored figures move.
     case LEGACY_CALC_VERSION:
       return roundCurrency(
-        basis.firstFloorSqm + basis.balconySqm + basis.secondFloorSqm,
+        basis.firstFloorSqm + basis.balconySqm + basis.grannySecondFloorSqm,
       );
     case CURRENT_CALC_VERSION:
       // A void is a hole in the first floor, but the frame still spans it.
@@ -276,7 +282,7 @@ function frameFirstFloorAreaSqm(
         basis.firstFloorSqm
           + basis.balconySqm
           + basis.voidSqm
-          + basis.secondFloorSqm,
+          + basis.grannySecondFloorSqm,
       );
     default:
       throw new UnsupportedCalcVersionError(calcVersion);
@@ -434,42 +440,15 @@ export function calculateOfferArea(
   };
 }
 
-// Bathrooms across the whole build: the granny flat's and the second floor's
-// counts only while the build has them. The tile areas and the cost formulas
-// both price on this.
+// Bathrooms across the whole build: the granny flat's count only while the
+// build has one. The tile areas and the cost formulas both price on this.
 export function offerTotalBathrooms(
   job: Pick<
     OfferWorkspaceJob,
-    | "bathrooms"
-    | "hasGrannyHome"
-    | "grannyBathrooms"
-    | "hasSecondFloor"
-    | "secondFloorBathrooms"
+    "bathrooms" | "hasGrannyHome" | "grannyBathrooms"
   >,
 ): number {
-  return (
-    job.bathrooms
-    + (job.hasGrannyHome ? job.grannyBathrooms : 0)
-    + (job.hasSecondFloor ? job.secondFloorBathrooms : 0)
-  );
-}
-
-// Bedrooms across the whole build, for TOTAL_BEDROOMS in the cost formulas.
-// The granny count is NOT gated on hasGrannyHome: that is how TOTAL_BEDROOMS
-// has always been worked, and gating it now would reprice an offer that
-// carries granny bedrooms with the toggle off. The second floor is new, so it
-// follows its toggle like everything else about it.
-export function offerTotalBedrooms(
-  job: Pick<
-    OfferWorkspaceJob,
-    "bedrooms" | "grannyBedrooms" | "hasSecondFloor" | "secondFloorBedrooms"
-  >,
-): number {
-  return (
-    job.bedrooms
-    + job.grannyBedrooms
-    + (job.hasSecondFloor ? job.secondFloorBedrooms : 0)
-  );
+  return job.bathrooms + (job.hasGrannyHome ? job.grannyBathrooms : 0);
 }
 
 type TileJobInputs = Parameters<typeof offerAreaBasisFromJob>[0]

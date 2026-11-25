@@ -156,11 +156,14 @@ export function AreaCalculatorPanel({
             <BasisRow label="Ground floor" value={basis.groundFloorSqm} />
             <BasisRow label="Void area" value={basis.voidSqm} />
             <BasisRow label="First floor" value={basis.firstFloorSqm} />
-            <BasisRow label="Second floor" value={basis.secondFloorSqm} />
             <BasisRow label="Garage" value={basis.garageSqm} />
             <BasisRow label="Alfresco" value={basis.alfrescoSqm} />
             <BasisRow label="Porch" value={basis.porchSqm} />
             <BasisRow label="Granny flat" value={basis.grannyFlatSqm} />
+            <BasisRow
+              label="Granny second floor"
+              value={basis.grannySecondFloorSqm}
+            />
             <BasisRow label="Balcony" value={basis.balconySqm} />
             <BasisRow label="Kitchen" value={basis.kitchenSqm} />
           </dl>

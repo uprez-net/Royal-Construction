@@ -346,62 +346,14 @@ export function JobSetupPanel({
               )
             }
           />
-          {/* Turning this off keeps the figures below: offerAreaBasisFromJob
-              and the totals ignore them while it is off, so they cannot price
-              or print, and turning it back on does not make the estimator
-              re-enter them. */}
-          <YesNoQuestion
-            label="Includes a Second Floor"
-            value={job.hasSecondFloor}
-            onChange={(hasSecondFloor) => onJobChange({ hasSecondFloor })}
-          />
         </CardContent>
       </Card>
-
-      {job.hasSecondFloor ? (
-        <Card className="border-border/70 bg-card/95 shadow-sm">
-          <CardHeader className="border-b border-border/70">
-            <OfferCardHeading
-              description="Rooms on the second floor, on top of the Major House counts, and its floor area. Listed separately on the Offer and Tender documents, and counted in the total build area."
-              icon={<Home className="size-4" aria-hidden="true" />}
-              title="Second Floor Specifications"
-            />
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-4 @xl/pane:grid-cols-2 @5xl/pane:grid-cols-4">
-              <Field label="Second floor bedrooms">
-                <CountField
-                  step="1"
-                  value={job.secondFloorBedrooms}
-                  onChange={(secondFloorBedrooms) =>
-                    onJobChange({ secondFloorBedrooms })
-                  }
-                />
-              </Field>
-              <Field label="Second floor bathrooms">
-                <CountField
-                  step="0.5"
-                  value={job.secondFloorBathrooms}
-                  onChange={(secondFloorBathrooms) =>
-                    onJobChange({ secondFloorBathrooms })
-                  }
-                />
-              </Field>
-              <AreaField
-                label="Second floor sqm"
-                value={job.secondFloorSqm}
-                onChange={(secondFloorSqm) => onJobChange({ secondFloorSqm })}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
 
       {job.hasGrannyHome ? (
         <Card className="border-border/70 bg-card/95 shadow-sm">
           <CardHeader className="border-b border-border/70">
             <OfferCardHeading
-              description="Room counts for the granny home (secondary dwelling), listed separately on the Offer and Tender documents."
+              description="Room counts for the granny home (secondary dwelling), listed separately on the Offer and Tender documents, and the area of its second floor if it has one."
               icon={<Home className="size-4" aria-hidden="true" />}
               title="Granny Home Specifications"
             />
@@ -421,6 +373,29 @@ export function JobSetupPanel({
                 onJobChange({ grannyGarageSpaces })
               }
             />
+            {/* The granny home's own second floor — the major house's upper
+                floor is "First floor sqm" above. Only the area: the rooms are
+                the counts above, whichever floor they sit on. Turning this off
+                keeps the figure, which offerAreaBasisFromJob ignores while it
+                is off, so it neither prices nor prints. */}
+            <YesNoQuestion
+              label="Includes a second floor"
+              value={job.grannyHasSecondFloor}
+              onChange={(grannyHasSecondFloor) =>
+                onJobChange({ grannyHasSecondFloor })
+              }
+            />
+            {job.grannyHasSecondFloor ? (
+              <div className="grid gap-4 @xl/pane:grid-cols-2 @5xl/pane:grid-cols-4">
+                <AreaField
+                  label="Granny second floor sqm"
+                  value={job.grannySecondFloorSqm}
+                  onChange={(grannySecondFloorSqm) =>
+                    onJobChange({ grannySecondFloorSqm })
+                  }
+                />
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -472,7 +447,7 @@ function SpecFields({
 
 // Two-button Yes/No selector, matching the tender gate's YesNoQuestion
 // (deliberately not RadioGroup, so both surfaces read alike). hasGrannyHome and
-// hasSecondFloor are plain booleans rather than tri-state, so "No" is the
+// grannyHasSecondFloor are plain booleans rather than tri-state, so "No" is the
 // initial selection.
 function YesNoQuestion({
   label,

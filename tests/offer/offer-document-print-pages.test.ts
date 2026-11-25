@@ -448,9 +448,9 @@ test("Contract annexure does not overflow its pages at max overflow signers", as
 });
 
 // The snapshot page is the tallest and widest it gets when a build carries every
-// area cell (void, granny flat and a second floor) and both extra spec sections.
-// That is eight area cells side by side, and three spec tables under them, on a
-// page of fixed height.
+// area cell (void, granny flat and the granny's second floor) and the granny
+// spec section. That is eight area cells side by side, and two spec tables under
+// them, on a page of fixed height.
 const EVERY_AREA_AND_DWELLING = () => {
   const snapshot = snapshotWithOwners([individualOwner(1)]);
   return {
@@ -469,10 +469,8 @@ const EVERY_AREA_AND_DWELLING = () => {
       grannyBedrooms: 2,
       grannyBathrooms: 1,
       grannyGarageSpaces: 1,
-      hasSecondFloor: true,
-      secondFloorSqm: 142.75,
-      secondFloorBedrooms: 3,
-      secondFloorBathrooms: 2.5,
+      grannyHasSecondFloor: true,
+      grannySecondFloorSqm: 142.75,
       bedrooms: 4,
       bathrooms: 2.5,
       garageSpaces: 2,

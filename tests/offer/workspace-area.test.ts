@@ -31,7 +31,7 @@ const basis: OfferAreaBasis = {
   balconySqm: 0,
   voidSqm: 0,
   kitchenSqm: 0,
-  secondFloorSqm: 0,
+  grannySecondFloorSqm: 0,
 };
 
 const defaultRates: AreaRateConstants = {
@@ -319,8 +319,8 @@ test("the basis total sums every area it is given", () => {
       grannyFlatSqm: 0,
       balconySqm: 0,
       voidSqm: 0,
-      secondFloorSqm: 0,
       kitchenSqm: 0,
+      grannySecondFloorSqm: 0,
     }),
     0,
   );
@@ -431,9 +431,8 @@ const TILE_JOB = {
   bathrooms: 2,
   hasGrannyHome: false,
   grannyBathrooms: 1,
-  hasSecondFloor: false,
-  secondFloorSqm: 0,
-  secondFloorBathrooms: 0,
+  grannyHasSecondFloor: false,
+  grannySecondFloorSqm: 0,
 };
 
 test("bathrooms count the granny flat's only while the build has one", () => {
