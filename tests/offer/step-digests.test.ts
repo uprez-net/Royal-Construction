@@ -154,6 +154,15 @@ test("the markup digest uses the same 1dp format as the summary strip", () => {
   assert.equal(d.pricing, "17.5% markup · $3.64m");
 });
 
+test("a price with no job cost behind it is not priced, as on the strip", () => {
+  const d = buildOfferStepDigests({
+    ...BASE,
+    effectiveMargin: { effectiveMarkupPct: 0, marginStatus: "not_priced" },
+  });
+  // Not "0% markup · $3.64m" beside a strip chip reading "Not priced".
+  assert.equal(d.pricing, "Not priced");
+});
+
 test("a gated phase stops describing its gate once the gate is open", () => {
   const shut = buildOfferStepDigests(BASE);
   assert.equal(shut["tender-gate"], "Unlocks once the offer is agreed");

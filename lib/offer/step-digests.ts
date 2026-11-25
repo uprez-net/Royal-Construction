@@ -173,8 +173,11 @@ export function buildOfferStepDigests(
       input.lines.length === 0
         ? "No lines yet"
         : `${plural(includedLines.length, "line", "lines")} · ${compactMoney(input.directTotal)}`,
+    // Same test as the summary strip's chip: an override price with no job
+    // cost behind it has no markup, so it must not read "0% markup".
     pricing:
       input.contractValueIncGst > 0
+      && input.effectiveMargin.marginStatus !== "not_priced"
         ? `${formatPercent(input.effectiveMargin.effectiveMarkupPct)} markup · ${compactMoney(input.contractValueIncGst)}`
         : "Not priced",
     scope: [
