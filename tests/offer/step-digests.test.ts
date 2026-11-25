@@ -79,7 +79,7 @@ test("each step reports its own number, not a Complete/Incomplete chip", () => {
   assert.equal(d["job-setup"], "5 bed · 3 bath · 838 m²");
   // Only the INCLUDED lines are counted: an excluded line is not in the price.
   assert.equal(d["cost-schedule"], "2 lines · $3,000");
-  assert.equal(d.pricing, "20% margin · $3.64m");
+  assert.equal(d.pricing, "20% markup · $3.64m");
   assert.equal(d.scope, "1 allowance · 2 excluded");
   assert.equal(
     d["offer-document"],
@@ -145,13 +145,22 @@ test("money is shortened so a seven-figure value fits a 240px rail", () => {
   assert.equal(compactMoney(999_999), "$1m");
 });
 
-test("the margin digest uses the same 1dp format as the summary strip", () => {
+test("the markup digest uses the same 1dp format as the summary strip", () => {
   const d = buildOfferStepDigests({
     ...BASE,
     effectiveMargin: { effectiveMarkupPct: 0.175, marginStatus: "at_target" },
   });
-  // Not "18% margin" beside a strip reading "17.5%".
-  assert.equal(d.pricing, "17.5% margin · $3.64m");
+  // Not "18% markup" beside a strip reading "17.5%".
+  assert.equal(d.pricing, "17.5% markup · $3.64m");
+});
+
+test("a price with no job cost behind it is not priced, as on the strip", () => {
+  const d = buildOfferStepDigests({
+    ...BASE,
+    effectiveMargin: { effectiveMarkupPct: 0, marginStatus: "not_priced" },
+  });
+  // Not "0% markup · $3.64m" beside a strip chip reading "Not priced".
+  assert.equal(d.pricing, "Not priced");
 });
 
 test("a gated phase stops describing its gate once the gate is open", () => {

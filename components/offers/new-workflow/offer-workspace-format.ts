@@ -52,7 +52,7 @@ export function formatOfferReference(
 }
 
 // Re-exported so the rail digest and the strip chip cannot drift apart.
-export { formatPercent } from "@/lib/offer/format";
+export { formatPercent, formatPercentFixed } from "@/lib/offer/format";
 
 export function getMarginStatusLabel(status: MarginStatus): string {
   switch (status) {

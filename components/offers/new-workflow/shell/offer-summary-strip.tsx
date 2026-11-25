@@ -187,15 +187,17 @@ export function OfferSummaryStrip({
                 marginToneClass(effectiveMargin.marginStatus),
               )}
             >
-              {/* Unpriced has no margin, so no verdict icon and no 0% beside it. */}
+              {/* Unpriced has no markup, so no verdict icon and no 0% beside it. */}
               {!priced ? null : effectiveMargin.marginStatus === "at_target" ? (
                 <Check className="size-3" aria-hidden="true" />
               ) : (
                 <TriangleAlert className="size-3" aria-hidden="true" />
               )}
               {getMarginStatusLabel(effectiveMargin.marginStatus)}
+              {/* A markup on job cost, not a margin on the price: 20% here is a
+                  16.67% gross margin (see the Pricing step's profitability). */}
               {priced
-                ? ` · ${formatPercent(effectiveMargin.effectiveMarkupPct)}`
+                ? ` · ${formatPercent(effectiveMargin.effectiveMarkupPct)} markup`
                 : null}
             </span>
             <p className="font-mono text-lg font-semibold tabular-nums">

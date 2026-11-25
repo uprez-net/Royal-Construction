@@ -740,7 +740,7 @@ export function PricingRail({
         </dl>
       )}
       <div className="flex items-center justify-between gap-3 border-t border-border/70 pt-3">
-        <p className="text-sm font-medium">Margin</p>
+        <p className="text-sm font-medium">Markup</p>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-success-light px-2.5 py-0.5 text-xs font-medium text-success-ink">
           <Check className="size-3" aria-hidden="true" />
           {PRICING.marginStatus} · 20%
