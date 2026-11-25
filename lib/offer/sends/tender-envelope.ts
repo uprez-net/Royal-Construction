@@ -1,3 +1,4 @@
+import { stalePriceTextRefusal } from "@/lib/domain/offers/stale-price-text";
 import { EnvelopeDocType, OfferStatus } from "@prisma/client";
 import { generatePDF } from "@/lib/pdf/generate-pdf";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
@@ -108,6 +109,16 @@ export async function sendTenderEnvelope(
       ok: false,
       error: "Enter floor areas in Job setup before sending the Tender.",
     };
+  }
+
+  // A price typed into free text goes stale when the total moves (#589).
+  const stalePriceText = await stalePriceTextRefusal(
+    db,
+    input.offerId,
+    snapshot,
+  );
+  if (stalePriceText) {
+    return { ok: false, error: stalePriceText };
   }
 
   // A Tender is a fixed-price contract: its progress-payment schedule must sum
