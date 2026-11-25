@@ -7,13 +7,18 @@ import {
   dollarFigures,
   findStalePriceText,
 } from "@/lib/offer/stale-price-text";
-import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
+import { buildInitialOfferWorkspaceSnapshot } from "@/lib/offer/initial-workspace";
+import {
+  serializeWorkspace,
+  type OfferWorkspaceSnapshot,
+} from "@/lib/offer/workspace-persistence";
 
 // #589: an early-November revision showed one total on the headline and
 // another on the allowances page. The text is free text that a revision copies
 // as it is, so only a figure that equals an EARLIER total can be called stale.
 
 const snapshot = (over: {
+  standardPriceInput?: string;
   headline?: string;
   allowanceDescription?: string;
   variationRule?: string;
@@ -33,7 +38,19 @@ const snapshot = (over: {
       termsSummary: "",
     },
     priceAdjustmentLabel: "",
+    standardPriceInput: over.standardPriceInput ?? "",
   }) as unknown as OfferWorkspaceSnapshot;
+
+// A saved workspace carrying this standard price, as an earlier revision's row.
+const savedWith = (standardPriceInput: string) =>
+  JSON.parse(
+    JSON.stringify(
+      serializeWorkspace({
+        ...buildInitialOfferWorkspaceSnapshot(),
+        standardPriceInput,
+      }),
+    ),
+  );
 
 describe("dollarFigures", () => {
   test("reads whole dollars, thousands separators, cents and a space", () => {
@@ -158,6 +175,84 @@ describe("stalePriceTextRefusal", () => {
         ]),
         "offer_2",
         snapshot({ headline: "Fixed price $640,000" }),
+      ),
+      null,
+    );
+  });
+});
+
+describe("standard price", () => {
+  const dbWith = (current: object, others: object[]) =>
+    ({
+      offer: {
+        findMany: async () => others,
+        findUnique: async () => current,
+      },
+    }) as unknown as DomainDb;
+  const current = {
+    baseReference: "RC-Q-1",
+    contractValueIncGst: 640_000,
+    leadId: 1,
+    workspaceState: null,
+  };
+
+  test("text quoting an earlier revision's standard price is stale", async () => {
+    const refusal = await stalePriceTextRefusal(
+      dbWith(current, [
+        {
+          amount: 1,
+          contractValueIncGst: 1,
+          totalAmount: 1,
+          workspaceState: savedWith("700000"),
+        },
+      ]),
+      "offer_2",
+      snapshot({
+        headline: "Standard price $700,000",
+        standardPriceInput: "720000",
+      }),
+    );
+    assert.match(refusal ?? "", /Headline/);
+  });
+
+  test("a standard price this offer still carries is not stale", async () => {
+    assert.equal(
+      await stalePriceTextRefusal(
+        dbWith(current, [
+          {
+            amount: 1,
+            contractValueIncGst: 1,
+            totalAmount: 1,
+            workspaceState: savedWith("700000"),
+          },
+        ]),
+        "offer_2",
+        snapshot({
+          headline: "Standard price $700,000",
+          standardPriceInput: "700000",
+        }),
+      ),
+      null,
+    );
+  });
+
+  test("an earlier total equal to the kept standard price does not block the text", async () => {
+    // R1 totalled $700,000; R2 keeps that standard price but sells for $640,000.
+    assert.equal(
+      await stalePriceTextRefusal(
+        dbWith(current, [
+          {
+            amount: 636_363.64,
+            contractValueIncGst: 700_000,
+            totalAmount: 700_000,
+            workspaceState: null,
+          },
+        ]),
+        "offer_2",
+        snapshot({
+          headline: "Standard price $700,000",
+          standardPriceInput: "700000",
+        }),
       ),
       null,
     );
