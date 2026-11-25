@@ -339,7 +339,7 @@ test("site manager performance is computed from building projects, not a sample 
   );
 });
 
-test("project follow-ups are activities due by the end of Sydney's today, on building projects", async () => {
+test("project follow-ups are activities under way due by the end of Sydney's today, on building projects", async () => {
   const recorder = recordingDb({ "milestone.findMany": [] });
   // 23:30 UTC on the 19th is 10:30 on the 20th in Sydney (AEDT).
   await listProjectFollowUpsDue(
@@ -351,7 +351,8 @@ test("project follow-ups are activities due by the end of Sydney's today, on bui
   const call = recorder.calls.find((c) => c.operation === "milestone.findMany");
   const where = (call?.args as { where: Record<string, unknown> }).where;
   assert.equal(where.parentId, null);
-  assert.deepEqual(where.status, { in: ["PENDING", "ACTIVE"] });
+  // Under way only: an activity nobody has started is never overdue.
+  assert.equal(where.status, "ACTIVE");
   // End of the 20th in Sydney is 12:59:59.999 UTC on the 20th (UTC+11). Only
   // a narrowing: nothing that has not started by tonight can be due.
   const endOfToday = new Date("2026-11-20T12:59:59.999Z");
@@ -398,7 +399,7 @@ test("a follow-up is due on the activity's estimated completion, the same day th
         startDate: day(19),
         targetDate: day(19),
       }),
-      // Planned for the 18th, two days, never started: due to finish today.
+      // Planned for the 18th, two days, no start recorded: due to finish today.
       row("today", { estimatedDays: 2, startDate: null, targetDate: day(18) }),
       // Planned for the 10th, two days: overdue since the 13th.
       row("overdue", {

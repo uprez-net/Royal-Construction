@@ -6,7 +6,7 @@ import { forModel } from "@/agent/lib/model-output";
 
 export default defineTool({
   description:
-    "List open milestones due in a window of Sydney days (today, tomorrow, this week, or explicit dates) across every job in progress, with the project, status and target date of each, and by default the open milestones already overdue. Use this for briefs and any portfolio-wide 'what is due / behind?' question; never walk projects one by one with get_project.",
+    "List open milestones due in a window of Sydney days (today, tomorrow, this week, or explicit dates) across every job in progress, with the project, status and target date of each, and by default the milestones already overdue (only started milestones on jobs being built can be overdue). Use this for briefs and any portfolio-wide 'what is due / behind?' question; never walk projects one by one with get_project.",
   inputSchema: listMilestonesDueInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   toModelOutput: forModel,

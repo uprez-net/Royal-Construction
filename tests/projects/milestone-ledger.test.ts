@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { MilestoneStatus } from "@prisma/client";
+import { MilestoneStatus, ProjectStatus } from "@prisma/client";
 import { test } from "vitest";
 
 import {
@@ -37,6 +37,8 @@ function activity(
 }
 
 const { ACTIVE, PENDING, DONE, NOT_REQUIRED } = MilestoneStatus;
+// A project being built: the only kind with overdue activities.
+const BUILDING = ProjectStatus.ACTIVE;
 
 test("a waived activity is settled, so it never counts as outstanding work", () => {
   assert.equal(isSettled({ status: NOT_REQUIRED }), true);
@@ -477,8 +479,14 @@ test("an active activity becomes overdue after its estimated calendar duration, 
     estimatedDays: 5,
   };
 
-  assert.equal(openOverdueDays(started, new Date("2026-09-19T16:00:00")), null);
-  assert.equal(openOverdueDays(started, new Date("2026-09-20T08:00:00")), 1);
+  assert.equal(
+    openOverdueDays(started, new Date("2026-09-19T16:00:00"), BUILDING),
+    null,
+  );
+  assert.equal(
+    openOverdueDays(started, new Date("2026-09-20T08:00:00"), BUILDING),
+    1,
+  );
 });
 
 test("longer activity estimates are respected and public holidays count as calendar days", () => {
@@ -489,18 +497,25 @@ test("longer activity estimates are respected and public holidays count as calen
     estimatedDays: 10,
   };
 
-  assert.equal(openOverdueDays(started, new Date("2026-10-09T09:00:00")), null);
-  assert.equal(openOverdueDays(started, new Date("2026-10-13T09:00:00")), 1);
+  assert.equal(
+    openOverdueDays(started, new Date("2026-10-09T09:00:00"), BUILDING),
+    null,
+  );
+  assert.equal(
+    openOverdueDays(started, new Date("2026-10-13T09:00:00"), BUILDING),
+    1,
+  );
   assert.equal(
     openOverdueDays(
       { ...started, estimatedDays: 5 },
       new Date("2026-10-09T09:00:00"),
+      BUILDING,
     ),
     2,
   );
 });
 
-test("open activities fall back to the planned start and the two-day default; settled rows have no running-overdue badge", () => {
+test("started activities fall back to the planned start and the two-day default; settled rows have no running-overdue badge", () => {
   const now = new Date("2026-09-07T09:00:00");
   const longAgo = new Date("2026-09-01T09:00:00");
 
@@ -509,21 +524,15 @@ test("open activities fall back to the planned start and the two-day default; se
     openOverdueDays(
       { status: ACTIVE, targetDate: longAgo, startDate: null },
       now,
-    ),
-    4,
-  );
-  // Issue #422: never started and past its deadline is overdue too.
-  assert.equal(
-    openOverdueDays(
-      { status: PENDING, targetDate: longAgo, estimatedDays: 2 },
-      now,
+      BUILDING,
     ),
     4,
   );
   assert.equal(
     openOverdueDays(
-      { status: PENDING, targetDate: longAgo, estimatedDays: 6 },
+      { status: ACTIVE, targetDate: longAgo, estimatedDays: 6 },
       now,
+      BUILDING,
     ),
     null,
     "due today is not overdue until the day has passed",
@@ -532,6 +541,7 @@ test("open activities fall back to the planned start and the two-day default; se
     openOverdueDays(
       { status: DONE, targetDate: longAgo, startDate: longAgo },
       now,
+      BUILDING,
     ),
     null,
   );
@@ -539,7 +549,46 @@ test("open activities fall back to the planned start and the two-day default; se
     openOverdueDays(
       { status: NOT_REQUIRED, targetDate: longAgo, startDate: longAgo },
       now,
+      BUILDING,
     ),
     null,
   );
+});
+
+test("an activity that has not started is never overdue, however far past its planned end", () => {
+  // Reverses issue #422: a pending activity's dates run from a start nobody
+  // has reached, so counting it put every waiting job on the overdue alert.
+  assert.equal(
+    openOverdueDays(
+      { status: PENDING, targetDate: new Date("2026-01-01T09:00:00") },
+      new Date("2026-09-07T09:00:00"),
+      BUILDING,
+    ),
+    null,
+  );
+});
+
+test("only a project being built has overdue activities", () => {
+  const started = {
+    status: ACTIVE,
+    targetDate: new Date("2026-09-01T09:00:00"),
+    estimatedDays: 2,
+  };
+  const now = new Date("2026-09-07T09:00:00");
+  for (const building of [
+    ProjectStatus.ACTIVE,
+    ProjectStatus.ON_TRACK,
+    ProjectStatus.NEEDS_ATTENTION,
+    ProjectStatus.DELAYED,
+  ]) {
+    assert.equal(openOverdueDays(started, now, building), 4, building);
+  }
+  for (const notBuilding of [
+    ProjectStatus.DRAFT,
+    ProjectStatus.COMPLIANCE_STARTED,
+    ProjectStatus.COMPLIANCE_COMPLETED,
+    ProjectStatus.COMPLETED,
+  ]) {
+    assert.equal(openOverdueDays(started, now, notBuilding), null, notBuilding);
+  }
 });

@@ -1,6 +1,6 @@
 import { addDays } from "date-fns";
 
-import { MilestoneStatus } from "@prisma/client";
+import { MilestoneStatus, ProjectStatus } from "@prisma/client";
 
 // The spacing of a project's activities from its start date.
 //
@@ -149,4 +149,21 @@ export function hasWorkStarted(
   return milestones.some((milestone) =>
     STARTED_MILESTONE_STATUSES.includes(milestone.status),
   );
+}
+
+/**
+ * A project that is being built, as against drafted, in compliance, or done.
+ * The "Active projects" table's status filter, the site manager's dashboard and
+ * the overdue alert all mean these four.
+ */
+export const BUILDING_PROJECT_STATUSES: readonly ProjectStatus[] = [
+  ProjectStatus.ACTIVE,
+  ProjectStatus.ON_TRACK,
+  ProjectStatus.NEEDS_ATTENTION,
+  ProjectStatus.DELAYED,
+];
+
+/** Whether a project is being built (`BUILDING_PROJECT_STATUSES`). */
+export function isProjectBuilding(status: ProjectStatus): boolean {
+  return BUILDING_PROJECT_STATUSES.includes(status);
 }

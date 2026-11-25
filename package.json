@@ -126,6 +126,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
     "just-bash": "^3.4.2",
+    "postcss": "8.5.31",
     "prettier": "3.8.3",
     "prisma": "^7.10.0",
     "puppeteer": "^25.16.0",

@@ -6,6 +6,7 @@ import type {
 } from "@/lib/dates/day-range";
 import { resolveDayRange } from "../day-range";
 import { projectReadScope } from "../access/projects";
+import { BUILDING_PROJECT_STATUSES } from "./milestone-schedule";
 import type { DomainDb } from "../db";
 import type { DomainPrincipal } from "../principal";
 
@@ -44,7 +45,10 @@ export type MilestonesDue = {
   readonly range: SydneyDayRange;
   /** Open milestones whose target date falls in the window. */
   readonly due: { readonly total: number; readonly items: DueMilestone[] };
-  /** Open milestones whose target date passed before today. Empty if not asked. */
+  /**
+   * Milestones under way, on jobs being built, whose target date passed
+   * before today. Empty if not asked.
+   */
   readonly overdue: { readonly total: number; readonly items: DueMilestone[] };
 };
 
@@ -77,9 +81,15 @@ export async function listMilestonesDue(
     status: open,
     targetDate: { gte: range.from, lte: range.to },
   };
+  // Overdue is `openOverdueDays`' rule: only an activity under way, on a
+  // project being built. A job waiting on its certifier has planned dates in
+  // the past on every activity, and none of them is late.
   const overdueWhere: Prisma.MilestoneWhereInput = {
-    project,
-    status: open,
+    project: {
+      ...projectReadScope(principal),
+      status: { in: [...BUILDING_PROJECT_STATUSES] },
+    },
+    status: MilestoneStatus.ACTIVE,
     targetDate: { lt: sydneyStartOfDay(sydneyToday(now)) },
   };
   const select = {

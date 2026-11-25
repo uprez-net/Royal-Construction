@@ -199,6 +199,12 @@ describe("milestones due across jobs in progress", () => {
     assert.deepEqual(overdue?.targetDate, {
       lt: new Date("2026-11-23T13:00:00.000Z"),
     });
+    // Behind means under way and late, on a job being built: a job waiting on
+    // its certifier has nothing overdue however old its planned dates.
+    assert.equal(overdue?.status, "ACTIVE");
+    assert.deepEqual(overdue?.project, {
+      status: { in: ["ACTIVE", "ON_TRACK", "NEEDS_ATTENTION", "DELAYED"] },
+    });
   });
 
   it("does not read what is behind when not asked", async () => {
