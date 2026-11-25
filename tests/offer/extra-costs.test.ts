@@ -333,7 +333,7 @@ describe("send readiness", () => {
       hasLead: true,
       hasKnownFloorArea: true,
       needsOverrideReason: false,
-      expiryState: "none",
+      expiryState: "valid",
       extraCostIssues: issues,
     });
     assert.deepEqual(

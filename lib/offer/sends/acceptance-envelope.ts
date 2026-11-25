@@ -6,6 +6,7 @@ import {
 import { EnvelopeDocType, OfferStatus } from "@prisma/client";
 import { generatePDF } from "@/lib/pdf/generate-pdf";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { offerValidityIssue } from "@/lib/offer/offer-send-guards";
 import { buildProposalHtml } from "@/lib/offer/offer-proposal-html";
 import {
   collectOfferSigners,
@@ -113,6 +114,13 @@ export async function sendOfferAcceptanceEnvelope(
       ok: false,
       error: `Complete the owner details before sending for signature: ${ownerIssues.join(" ")}`,
     };
+  }
+
+  // Every document states how long the price holds, so a blank or past date
+  // must not reach the client (#534).
+  const validityIssue = offerValidityIssue(snapshot.job.validUntil);
+  if (validityIssue) {
+    return { ok: false, error: validityIssue };
   }
 
   // Same gate as marking the offer sent: an extra switched on but not priceable
