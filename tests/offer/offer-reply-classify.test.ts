@@ -107,18 +107,12 @@ test("a real bounce is a delivery failure; an out-of-office reply is not", () =>
   assert.equal(isDeliveryFailure(outOfOffice), false);
 });
 
-test("a full delivery-status content type counts; a read receipt and no signal do not", () => {
+test("a full delivery-status content type counts; no signal does not", () => {
   assert.equal(
     isDeliveryFailure({
       contentType: "multipart/report; report-type=delivery-status",
     }),
     true,
-  );
-  assert.equal(
-    isDeliveryFailure({
-      contentType: "multipart/report; report-type=disposition-notification",
-    }),
-    false,
   );
   assert.equal(isDeliveryFailure({}), false);
   assert.equal(

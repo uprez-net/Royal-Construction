@@ -55,12 +55,9 @@ export function isMachineGenerated(headers: EmailHeaders): boolean {
 // absent. `Auto-Submitted: auto-replied` is on out-of-office replies too, and
 // RFC 3834 gives those a null return path as well, so neither separates them.
 // What does: an out-of-office reply is a plain message, never a multipart
-// report. A read receipt is the one other report, and says so when the
-// parameter survives.
+// report. Our offer sends do not ask for read receipts, the only other report.
 export function isDeliveryFailure(headers: EmailHeaders): boolean {
-  const contentType = headers.contentType?.toLowerCase() ?? "";
   return (
-    contentType.includes("multipart/report")
-    && !contentType.includes("disposition-notification")
+    headers.contentType?.toLowerCase().includes("multipart/report") ?? false
   );
 }

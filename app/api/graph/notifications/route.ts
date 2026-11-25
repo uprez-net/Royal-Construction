@@ -841,6 +841,9 @@ async function processNotifications(
               // The offer never reached the client, and only the office can
               // chase it. Ids only: the recipient's address is data.
               reportError(new Error("An offer email bounced"), {
+                // One issue per send, not one for every bounce ever: Sentry
+                // would group them all and alert on the first.
+                fingerprint: ["offer-bounce", record.sendId],
                 ids: { sendId: record.sendId },
                 level: "warning",
                 source: "graph.offer-bounce",
