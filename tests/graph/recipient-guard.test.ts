@@ -70,12 +70,13 @@ describe("assertDeliverableRecipients", () => {
   });
 
   test("the refusal does not repeat the address", () => {
-    try {
-      assertDeliverableRecipients({ to: "secret@example.com" }, PRODUCTION);
-      assert.fail("should have thrown");
-    } catch (error) {
-      assert.doesNotMatch(String((error as Error).message), /secret/);
-    }
+    assert.throws(
+      () =>
+        assertDeliverableRecipients({ to: "secret@example.com" }, PRODUCTION),
+      (error: Error) =>
+        /reserved test domain/.test(error.message)
+        && !/secret|example\.com/.test(error.message),
+    );
   });
 
   test("staging and development send to test domains on purpose", () => {
