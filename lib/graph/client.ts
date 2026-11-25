@@ -6,6 +6,7 @@ import {
 } from "@azure/identity";
 import { type GraphConfig } from "./config";
 import { ccWithSender } from "./mailbox";
+import { assertDeliverableRecipients } from "./recipient-guard";
 import { type EmailHeaders } from "@/utils/spam-detector";
 
 export interface EmailAttachment {
@@ -783,6 +784,7 @@ export async function createGraphContext(
       return Buffer.from(await response.arrayBuffer());
     },
     replyToMessage: async ({ messageId, body, attachments, to, cc }) => {
+      assertDeliverableRecipients({ to, cc });
       const decodedAttachments =
         attachments && attachments.length > 0
           ? decodeAttachments(attachments)
@@ -870,6 +872,8 @@ export async function createGraphContext(
           "sendMail refused: the message has no recipient. Nothing was sent.",
         );
       }
+
+      assertDeliverableRecipients({ to, cc, bcc });
 
       const formatRecipients = (value?: string | string[]) =>
         value
