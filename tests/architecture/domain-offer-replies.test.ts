@@ -113,7 +113,7 @@ test("a reply from someone other than the recipient records nothing", async () =
   assert.deepEqual(recorder.writes(), []);
 });
 
-test("a bounce quoting the offer's subject records nothing", async () => {
+test("an out-of-office reply quoting the offer's subject records nothing", async () => {
   const recorder = recordingDb({ "offerDocumentSend.findUnique": SEND });
 
   const record = await recordOfferReply(
@@ -124,6 +124,57 @@ test("a bounce quoting the offer's subject records nothing", async () => {
 
   assert.equal(record.outcome, "auto-generated");
   assert.deepEqual(recorder.writes(), []);
+});
+
+// The headers Graph returned for two real bounces on 5 Nov 2026: the report's
+// parameters are dropped, and there is no Return-Path.
+const BOUNCE_HEADERS = {
+  autoSubmitted: "auto-replied",
+  contentType: "multipart/report",
+};
+
+test("a delivery-failure report stamps the send as bounced, once, and changes nothing else", async () => {
+  const recorder = recordingDb({
+    "offerDocumentSend.findUnique": SEND,
+    "offerDocumentSend.updateMany": { count: 1 },
+  });
+
+  const record = await recordOfferReply(
+    WEBHOOK,
+    {
+      ...REPLY,
+      headers: BOUNCE_HEADERS,
+      receivedAt: "2026-11-05T10:03:12.000Z",
+    },
+    recorder.transactionalDb,
+  );
+
+  assert.deepEqual(record, { outcome: "bounced", sendId: "send_1" });
+  const writes = recorder.writes();
+  assert.equal(writes.length, 1);
+  const [stamp] = written<Record<string, unknown>>(
+    recorder,
+    "offerDocumentSend.updateMany",
+  );
+  assert.deepEqual(stamp.where, { bouncedAt: null, id: "send_1" });
+  assert.deepEqual(stamp.data, {
+    bouncedAt: new Date("2026-11-05T10:03:12.000Z"),
+  });
+});
+
+test("a repeated bounce notification is not reported again", async () => {
+  const recorder = recordingDb({
+    "offerDocumentSend.findUnique": SEND,
+    "offerDocumentSend.updateMany": { count: 0 },
+  });
+
+  const record = await recordOfferReply(
+    WEBHOOK,
+    { ...REPLY, headers: BOUNCE_HEADERS },
+    recorder.transactionalDb,
+  );
+
+  assert.equal(record.outcome, "auto-generated");
 });
 
 test("only the mailbox integration may record a reply", async () => {

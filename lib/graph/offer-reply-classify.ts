@@ -45,3 +45,22 @@ export function isMachineGenerated(headers: EmailHeaders): boolean {
   }
   return false;
 }
+
+// A report that a send did not arrive (#585), as opposed to an out-of-office
+// reply, which is also machine-generated and also quotes our token.
+//
+// Seen on two real bounces from Exchange Online: Graph hands back
+// `Content-Type: multipart/report` with the parameters dropped, so
+// `report-type=delivery-status` is NOT there to test, and `Return-Path` is
+// absent. `Auto-Submitted: auto-replied` is on out-of-office replies too, and
+// RFC 3834 gives those a null return path as well, so neither separates them.
+// What does: an out-of-office reply is a plain message, never a multipart
+// report. A read receipt is the one other report, and says so when the
+// parameter survives.
+export function isDeliveryFailure(headers: EmailHeaders): boolean {
+  const contentType = headers.contentType?.toLowerCase() ?? "";
+  return (
+    contentType.includes("multipart/report")
+    && !contentType.includes("disposition-notification")
+  );
+}

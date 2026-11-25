@@ -15,6 +15,8 @@ export type OfferActivitySend = {
   readonly openedAt: string | null;
   readonly repliedAt: string | null;
   readonly lastReplyAt: string | null;
+  // When a delivery-failure report for this send arrived: it never reached them.
+  readonly bouncedAt: string | null;
   readonly replies: readonly OfferActivityReply[];
 };
 
