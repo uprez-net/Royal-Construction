@@ -44,7 +44,13 @@ export type VoiceLookupRequest =
   | { readonly name: "offer_status"; readonly offer: string }
   | { readonly name: "tradie_bookings"; readonly tradie: string }
   | { readonly name: "bookings_between"; readonly when: VoiceLookupWhen }
-  | { readonly name: "pipeline_summary" };
+  | { readonly name: "pipeline_summary" }
+  /**
+   * Not a catalogue read: a question passed to Hermes on a briefing call to
+   * the owner (calls/owner-call.ts). No class may run it here; it is offered
+   * and answered only by the owner call's own setup.
+   */
+  | { readonly name: "ask_hermes"; readonly question: string };
 
 export type VoiceLookupName = VoiceLookupRequest["name"];
 
@@ -60,6 +66,8 @@ export type VoiceLookupDefinition = {
   };
   /** Who may run it. Only admins today. */
   readonly classes: readonly VoiceCallerClass[];
+  /** How long Mili waits for it; the session's default when absent. */
+  readonly timeoutMs?: number;
 };
 
 const text = (description: string) => ({
@@ -211,6 +219,12 @@ export async function runVoiceLookup(
       { kind: "REFUSED", outcome: "not_permitted", queryName: request.name },
       db,
     );
+    throw new DomainAuthorizationError(
+      "That lookup is not available to this caller.",
+    );
+  }
+  if (request.name === "ask_hermes") {
+    // Unreachable (no class may run it), and narrows what follows.
     throw new DomainAuthorizationError(
       "That lookup is not available to this caller.",
     );

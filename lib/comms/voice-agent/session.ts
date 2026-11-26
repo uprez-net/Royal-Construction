@@ -21,9 +21,13 @@ import type {
   VoiceLookupDefinition,
   VoiceLookupRequest,
 } from "@/lib/domain/comms/callers/lookups";
+import {
+  AGENT_CALL_EVENT,
+  type AgentCallEventInput,
+} from "@/lib/domain/comms/calls/agent-events";
 import type { AgentOutcome, CommsProviderName } from "@/lib/domain/ports/comms";
 
-import type { DeskDecision } from "./desk";
+import type { DeskDecision, DeskMode } from "./desk";
 import { carrierMediaFrame, parseCarrierFrame } from "./frames";
 import type { LiveClientEvent, LiveConnection, LiveServerEvent } from "./live";
 import { VOICE_AGENT_MODEL } from "./settings";
@@ -82,6 +86,31 @@ export type VoiceCallerSetup = {
   readonly lookups: readonly VoiceLookupDefinition[];
   /** Runs one lookup for this caller and resolves to what Mili may say. */
   readonly lookup: ((request: VoiceLookupRequest) => Promise<string>) | null;
+  /**
+   * A briefing call Mili placed to the owner (owner-call.ts): the desk
+   * offers no transfer, and her wrap-up and silence words are the owner
+   * call's. Absent: an inbound call.
+   */
+  readonly desk?: DeskMode;
+  readonly cues?: {
+    readonly wrapUp: string;
+    readonly silenceFollowUp: string;
+    readonly silenceGoodbye: string;
+  };
+};
+
+/**
+ * Where the session hands what the call desk did (a lookup and its answer,
+ * ending the call, how the session ended). `emit` must return at once: the
+ * writer stores events off the conversation's path (event-writer.ts), and
+ * `flush` is awaited only once the call has been reported.
+ */
+export type VoiceAgentEventSink = {
+  emit(
+    call: { readonly callId: string; readonly providerCallId: string },
+    event: AgentCallEventInput,
+  ): void;
+  flush(): Promise<void>;
 };
 
 export const MESSAGE_ONLY_SETUP: VoiceCallerSetup = {
@@ -110,6 +139,7 @@ export type VoiceAgentSessionDeps = {
   readonly decide: (
     turns: readonly VoiceAgentTurn[],
     lookups: readonly VoiceLookupDefinition[],
+    mode?: DeskMode,
   ) => Promise<DeskDecision>;
   readonly report: (body: VoiceAgentReportBody) => Promise<void>;
   /**
@@ -119,6 +149,8 @@ export type VoiceAgentSessionDeps = {
   readonly checkpoint?: (
     body: Omit<VoiceAgentReportBody, "outcome">,
   ) => Promise<void>;
+  /** What the desk did on the call. Absent: nothing is kept. */
+  readonly events?: VoiceAgentEventSink;
   readonly log?: Pick<Console, "info" | "warn" | "error">;
   readonly now?: () => number;
   readonly setTimer?: (fn: () => void, ms: number) => unknown;
@@ -389,7 +421,7 @@ export class VoiceAgentSession {
       () => {
         if (this.ready && !this.ending) {
           this.sendModel({
-            content: VOICE_AGENT_WRAP_UP_INSTRUCTION,
+            content: this.setup.cues?.wrapUp ?? VOICE_AGENT_WRAP_UP_INSTRUCTION,
             delegation_id: null,
             type: "session.instructions.append",
           });
@@ -434,6 +466,12 @@ export class VoiceAgentSession {
     this.sendModel(
       voiceAgentLiveStart(this.deps.voice, this.setup.instructions),
     );
+    this.emit(AGENT_CALL_EVENT.sessionStarted, {
+      callerClass: this.setup.callerClass ?? "unknown",
+      lookups: this.setup.lookups.map((lookup) => lookup.name),
+      ownerCall: this.setup.desk?.kind === "owner_call",
+      setupTimedOut: this.stats.setupTimedOut,
+    });
   }
 
   /** The caller's setup, or message taking if it fails or is slow. */
@@ -646,7 +684,11 @@ export class VoiceAgentSession {
     this.stats.deskAsks += 1;
     let decision: DeskDecision = null;
     try {
-      decision = await this.deps.decide([...this.turns], this.setup.lookups);
+      decision = await this.deps.decide(
+        [...this.turns],
+        this.setup.lookups,
+        this.setup.desk,
+      );
     } catch (error) {
       this.stats.deskFailures += 1;
       // The caller can still hang up, and the time limit still ends the
@@ -655,6 +697,9 @@ export class VoiceAgentSession {
         "[voice-agent] the call desk did not answer.",
         error instanceof Error ? error.message : error,
       );
+      this.emit(AGENT_CALL_EVENT.deskFailed, {
+        error: error instanceof Error ? error.name : "error",
+      });
     }
     let lookup: {
       readonly key: string;
@@ -667,8 +712,24 @@ export class VoiceAgentSession {
         decision = null;
       } else {
         this.stats.lookups += 1;
-        lookup = { key, ...(await this.runLookup(decision.request)) };
+        const startedAt = this.now();
+        const ran = await this.runLookup(decision.request);
+        lookup = { answered: ran.answered, cue: ran.cue, key };
+        const { name, ...args } = decision.request;
+        this.emit(AGENT_CALL_EVENT.deskLookup, {
+          answer: ran.text,
+          answered: ran.answered,
+          args,
+          delegated: delegationId !== null,
+          failure: ran.failure,
+          ms: this.now() - startedAt,
+          name,
+        });
       }
+    } else if (decision?.action === "end") {
+      this.emit(AGENT_CALL_EVENT.deskEndCall);
+    } else if (decision?.action === "transfer") {
+      this.emit(AGENT_CALL_EVENT.deskTransfer, { reason: decision.reason });
     }
     this.deskBusy = false;
     if (this.finished || this.ending) return;
@@ -710,28 +771,42 @@ export class VoiceAgentSession {
    * Any refusal, failure or timeout becomes "could not check" — never "found
    * nothing", and never an answer from somewhere wider.
    */
-  private async runLookup(
-    request: VoiceLookupRequest,
-  ): Promise<{ readonly cue: string; readonly answered: boolean }> {
-    const failed = { answered: false, cue: VOICE_LOOKUP_FAILED_CUE };
+  private async runLookup(request: VoiceLookupRequest): Promise<{
+    readonly cue: string;
+    readonly answered: boolean;
+    /** What came back, for the call's event log. */
+    readonly text: string | null;
+    readonly failure: string | null;
+  }> {
+    const failed = (failure: string) => ({
+      answered: false,
+      cue: VOICE_LOOKUP_FAILED_CUE,
+      failure,
+      text: null,
+    });
     const lookup = this.setup.lookup;
-    const offered = this.setup.lookups.some((l) => l.name === request.name);
-    if (!lookup || !offered) return failed;
+    const definition = this.setup.lookups.find((l) => l.name === request.name);
+    if (!lookup || !definition) return failed("not_offered");
     try {
-      const text = await this.within(lookup(request), LOOKUP_TIMEOUT_MS);
+      const text = await this.within(
+        lookup(request),
+        definition.timeoutMs ?? LOOKUP_TIMEOUT_MS,
+      );
       if (text === null) {
         this.log.warn(`[voice-agent] lookup ${request.name} timed out.`);
-        return failed;
+        return failed("timeout");
       }
-      return { answered: true, cue: voiceLookupResultCue(text) };
+      return {
+        answered: true,
+        cue: voiceLookupResultCue(text),
+        failure: null,
+        text,
+      };
     } catch (error) {
       // The name only: what was asked and what came back stay off the logs.
-      this.log.warn(
-        `[voice-agent] lookup ${request.name} failed (${
-          error instanceof Error ? error.name : "error"
-        }).`,
-      );
-      return failed;
+      const name = error instanceof Error ? error.name : "error";
+      this.log.warn(`[voice-agent] lookup ${request.name} failed (${name}).`);
+      return failed(name);
     }
   }
 
@@ -776,7 +851,9 @@ export class VoiceAgentSession {
       case "follow_up":
         this.stats.followUps += 1;
         this.sendModel({
-          content: VOICE_AGENT_SILENCE_FOLLOW_UP_CUE,
+          content:
+            this.setup.cues?.silenceFollowUp
+            ?? VOICE_AGENT_SILENCE_FOLLOW_UP_CUE,
           delegation_id: null,
           type: "session.commentary.append",
         });
@@ -787,7 +864,8 @@ export class VoiceAgentSession {
           "[voice-agent] the caller stayed silent; ending the call.",
         );
         this.sendModel({
-          content: VOICE_AGENT_SILENCE_GOODBYE_CUE,
+          content:
+            this.setup.cues?.silenceGoodbye ?? VOICE_AGENT_SILENCE_GOODBYE_CUE,
           delegation_id: null,
           type: "session.commentary.append",
         });
@@ -918,6 +996,24 @@ export class VoiceAgentSession {
 
   // ── Ending ───────────────────────────────────────────────────────────
 
+  /** Hand an event to the sink. Never waits, and never throws into the call. */
+  private emit(
+    kind: AgentCallEventInput["kind"],
+    detail: Record<string, unknown> = {},
+  ): void {
+    const sink = this.deps.events;
+    const claims = this.claims;
+    if (!sink || !claims) return;
+    try {
+      sink.emit(
+        { callId: claims.callId, providerCallId: claims.callControlId },
+        { at: new Date(this.now()), detail, kind },
+      );
+    } catch {
+      // A broken sink loses the log, never the call.
+    }
+  }
+
   /** True once the event was handed to an open Live socket. */
   private sendModel(event: LiveClientEvent): boolean {
     if (!this.model) return false;
@@ -1003,6 +1099,18 @@ export class VoiceAgentSession {
     this.clearTimers();
     this.closeModel();
     this.log.info(this.summary(outcome));
+    this.emit(AGENT_CALL_EVENT.sessionEnded, {
+      deskAsks: this.stats.deskAsks,
+      deskFailures: this.stats.deskFailures,
+      followUps: this.stats.followUps,
+      lookups: this.stats.lookups,
+      outcome,
+      seconds:
+        this.stats.startFrameAt === null
+          ? null
+          : Math.round((this.now() - this.stats.startFrameAt) / 1000),
+      turns: this.turns.length,
+    });
     const claims = this.claims;
     try {
       await this.deps.report({
@@ -1022,8 +1130,10 @@ export class VoiceAgentSession {
     }
     // Closed after the report so the call has already been moved on.
     this.deps.carrier.close();
-    // A checkpoint still writing finishes before the function may stop.
+    // A checkpoint or event still writing finishes before the function may
+    // stop. Neither delayed the conversation: they were written as it went.
     await this.checkpoints;
+    await this.deps.events?.flush().catch(() => {});
     this.settle();
   }
 }

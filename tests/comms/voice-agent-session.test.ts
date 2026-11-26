@@ -10,6 +10,7 @@ import {
 } from "@/lib/comms/voice-agent/session";
 import {
   formatVoiceAgentTranscript,
+  VOICE_AGENT_TRANSCRIPT_MAX_CHARS,
   VOICE_AGENT_GREETING,
   VOICE_AGENT_GREETING_CUE,
   VOICE_AGENT_MAX_SECONDS,
@@ -347,10 +348,14 @@ test("the transcript is one line per turn, capped", () => {
     "Mili: Hi there\nCaller: Hello",
   );
   assert.equal(formatVoiceAgentTranscript([]), null);
+  // Sized for a 15-minute owner call, not just a 270 s inbound one.
   const long = formatVoiceAgentTranscript([
-    { speaker: "caller", text: "x".repeat(30_000) },
+    {
+      speaker: "caller",
+      text: "x".repeat(VOICE_AGENT_TRANSCRIPT_MAX_CHARS + 10_000),
+    },
   ]);
-  assert.ok(long && long.length <= 20_000);
+  assert.ok(long && long.length <= VOICE_AGENT_TRANSCRIPT_MAX_CHARS);
 });
 
 // ── A silent caller ──────────────────────────────────────────────────

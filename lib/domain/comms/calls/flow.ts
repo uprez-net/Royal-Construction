@@ -12,6 +12,7 @@ import type {
   DialOutcome,
 } from "../../ports/comms";
 import { VOICE_AGENT_MAX_SECONDS } from "./voice-agent";
+import { OWNER_CALL_MAX_SECONDS } from "./voice-agent-owner-call";
 
 // What a call does next, as neutral instructions (file 01 §10).
 //
@@ -26,6 +27,10 @@ import { VOICE_AGENT_MAX_SECONDS } from "./voice-agent";
 // Outbound:  customer answers → greeting [+ "this call is recorded"]
 //            → staff (browser, or the phone picked) → if nobody picks up,
 //            apologise
+// Owner:     the owner line answers → Mili, recorded, with the briefing
+//            Hermes asked for (owner-call.ts) → hang up, however she ends.
+//            Nobody else is rung: the owner is who the team would put them
+//            through to.
 //
 // An inbound call never rings a staff browser: the business number itself
 // answers every call, and the office mobile is only the fallback.
@@ -208,6 +213,39 @@ function outboundUnavailable(): FlowDecision {
   };
 }
 
+/**
+ * A briefing call to the owner line: Mili takes it as soon as it is answered.
+ * Recorded, with no declaration first: it is the business owner's own call,
+ * placed on their own assistant's request, and they asked for these calls to
+ * be kept (recording and transcript) for the admin's Agent calls page.
+ */
+function isOwnerCall(call: CallForFlow): boolean {
+  return (
+    call.direction === CommsDirection.OUTBOUND
+    && call.staffTarget === CallStaffTarget.AGENT
+  );
+}
+
+function answerOwnerCall(ctx: CallFlowContext): FlowDecision {
+  if (!ctx.channel.voiceAgent) {
+    // Mili was switched off between ringing and answering.
+    return {
+      instructions: [{ op: "hangup" }],
+      step: CallFlowStep.ENDED,
+    };
+  }
+  return {
+    instructions: [
+      {
+        maxSeconds: OWNER_CALL_MAX_SECONDS,
+        op: "connectAgent",
+        record: true,
+      },
+    ],
+    step: CallFlowStep.AGENT,
+  };
+}
+
 /** The first thing a customer hears: an inbound call arrived, or an outbound one was answered. */
 export function decideCallStart(
   call: CallForFlow,
@@ -216,6 +254,7 @@ export function decideCallStart(
   if (call.direction === CommsDirection.INBOUND) {
     return answerInbound(call, ctx);
   }
+  if (isOwnerCall(call)) return answerOwnerCall(ctx);
   if (ctx.channel.recordingMode === "consented") {
     // Told, not asked: staying on the line is consent.
     const declared = {
@@ -264,7 +303,7 @@ export function decideAfterAgent(
   ctx: CallFlowContext,
   outcome: AgentOutcome,
 ): FlowDecision {
-  if (outcome === "completed") {
+  if (outcome === "completed" || isOwnerCall(call)) {
     return { instructions: [{ op: "hangup" }], step: CallFlowStep.ENDED };
   }
   const next = ringInboundStaff(call, ctx);

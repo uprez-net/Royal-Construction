@@ -7,6 +7,10 @@ import {
   voiceAgentDeskInstructions,
   type VoiceAgentTurn,
 } from "@/lib/domain/comms/calls/voice-agent";
+import {
+  ASK_HERMES_QUESTION_MAX_CHARS,
+  voiceAgentOwnerDeskInstructions,
+} from "@/lib/domain/comms/calls/voice-agent-owner-call";
 import type {
   VoiceLookupDefinition,
   VoiceLookupRequest,
@@ -32,6 +36,15 @@ export type DeskDecision =
   | { readonly action: "lookup"; readonly request: VoiceLookupRequest }
   | null;
 
+/**
+ * A briefing call Mili placed to the owner: nobody to transfer to, and the
+ * desk can pass a question to Hermes when it is connected.
+ */
+export type DeskMode = {
+  readonly kind: "owner_call";
+  readonly canAskAssistant: boolean;
+};
+
 /** Long enough for a slow reply, short enough that a hung one is dropped. */
 const DESK_TIMEOUT_MS = 8_000;
 
@@ -49,6 +62,10 @@ const LOOKUP_INPUT = z.discriminatedUnion("name", [
     when: z.enum(["today", "tomorrow", "this_week", "next_week"]),
   }),
   z.object({ name: z.literal("pipeline_summary") }),
+  z.object({
+    name: z.literal("ask_hermes"),
+    question: z.string().trim().min(1).max(ASK_HERMES_QUESTION_MAX_CHARS),
+  }),
 ]);
 
 /** A desk tool call → a lookup request, or null when it is not one. */
@@ -77,9 +94,30 @@ const callTools = Object.fromEntries(
   VOICE_AGENT_TOOLS.map((definition) => [definition.name, asTool(definition)]),
 );
 
+/** On a briefing call the desk can only end it: there is nobody to transfer to. */
+const ownerCallTools = Object.fromEntries(
+  VOICE_AGENT_TOOLS.filter((definition) => definition.name === "end_call").map(
+    (definition) => [definition.name, asTool(definition)],
+  ),
+);
+
+function deskSystem(
+  lookups: readonly VoiceLookupDefinition[],
+  mode: DeskMode | undefined,
+): string {
+  const names = lookups.map((lookup) => lookup.name);
+  return mode?.kind === "owner_call"
+    ? voiceAgentOwnerDeskInstructions({
+        canAskAssistant: mode.canAskAssistant,
+        lookups: names,
+      })
+    : voiceAgentDeskInstructions({ lookups: names });
+}
+
 export async function decideCallMove(
   turns: readonly VoiceAgentTurn[],
   lookups: readonly VoiceLookupDefinition[] = [],
+  mode?: DeskMode,
 ): Promise<DeskDecision> {
   const transcript = formatVoiceAgentTranscript(turns);
   if (!transcript) return null;
@@ -90,12 +128,10 @@ export async function decideCallMove(
     messages: [{ content: transcript, role: "user" }],
     model: gateway(VOICE_AGENT_DESK_MODEL),
     providerOptions: { gateway: { tags: ["voice-agent", "mili-desk"] } },
-    system: voiceAgentDeskInstructions({
-      lookups: lookups.map((lookup) => lookup.name),
-    }),
+    system: deskSystem(lookups, mode),
     toolChoice: "auto",
     tools: {
-      ...callTools,
+      ...(mode?.kind === "owner_call" ? ownerCallTools : callTools),
       ...Object.fromEntries(
         lookups.map((lookup) => [lookup.name, asTool(lookup)]),
       ),
@@ -104,7 +140,7 @@ export async function decideCallMove(
   // Moving the call on wins over a lookup in the same reply.
   for (const call of result.toolCalls) {
     if (call.toolName === "end_call") return { action: "end" };
-    if (call.toolName === "transfer_to_team") {
+    if (call.toolName === "transfer_to_team" && mode?.kind !== "owner_call") {
       const reason = (call.input as { reason?: unknown } | undefined)?.reason;
       return {
         action: "transfer",

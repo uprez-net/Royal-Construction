@@ -7,6 +7,7 @@ import {
   MCP_METADATA_PATH,
   MCP_ROUTE,
   MCP_SCOPES,
+  HERMES_SECRET_HEADER,
   type McpAuthDependencies,
   clerkIssuerFromPublishableKey,
   createMcpUserAuth,
@@ -120,6 +121,32 @@ test("the rollout flag closes the endpoint before any credential is read", async
   assert.equal(response.status, 403);
   assert.equal((await response.json()).code, "agent_disabled");
   assert.equal(reads, 0, "the disabled endpoint still called Clerk");
+});
+
+test("Hermes's secret marks the session as Hermes; a wrong or missing one is just an ordinary caller", async () => {
+  // The mark is what offers the owner-call tools (agent/tools/owner_calls.ts).
+  // It adds to a signed-in office user and never replaces the Clerk check.
+  const secret = "h".repeat(40);
+  const auth = createMcpUserAuth(deps({ hermesSecret: () => secret }));
+  const withHeader = (value: string | null) =>
+    new Request("https://royal.test/eve/v1/mcp", {
+      headers: value ? { [HERMES_SECRET_HEADER]: value } : {},
+    });
+  const hermes = await Promise.resolve(auth(withHeader(secret)));
+  assert.deepEqual(hermes?.attributes, { hermes: "true", role: "ADMIN" });
+  for (const sent of [null, "wrong", `${secret}x`]) {
+    const caller = await Promise.resolve(auth(withHeader(sent)));
+    assert.deepEqual(caller?.attributes, { role: "ADMIN" }, String(sent));
+  }
+  // Secret unset: nobody is Hermes, whatever they send.
+  const unset = createMcpUserAuth(deps({ hermesSecret: () => null }));
+  const anyone = await Promise.resolve(unset(withHeader(secret)));
+  assert.deepEqual(anyone?.attributes, { role: "ADMIN" });
+  // And the secret alone is not a credential: no Clerk user, no session.
+  const noUser = createMcpUserAuth(
+    deps({ clerkUserIdFor: async () => null, hermesSecret: () => secret }),
+  );
+  assert.equal(await Promise.resolve(noUser(withHeader(secret))), null);
 });
 
 test("an accepted caller becomes the application user, not the Clerk subject", async () => {

@@ -349,7 +349,13 @@ test("with disclosure switched off, every caller is message taking and nothing i
       voiceCallerPreparer({ db: recorder.db, disclosure: false }),
     );
     assert.equal(liveInstructions(h), MESSAGE_ONLY_SETUP.instructions);
-    assert.deepEqual(recorder.calls, []);
+    // The one read is whether this is Mili's own briefing call to the owner
+    // (owner-call.ts): the call row itself, nothing about who is calling.
+    assert.deepEqual(recorder.operations(), ["call.findUnique"]);
+    const probe = recorder.calls[0].args as {
+      select: Record<string, unknown>;
+    };
+    assert.ok("ownerCall" in probe.select);
   }
 });
 
