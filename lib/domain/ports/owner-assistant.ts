@@ -3,7 +3,7 @@
  * briefing call when the owner asks Mili something her briefing does not
  * cover ("what time is that meeting again?", "who else is coming?").
  *
- * A port because the transport (Hermes's MCP server, a bearer token) is an
+ * A port because the transport (Hermes's API server, a bearer token) is an
  * adapter's business (lib/hermes). The contract: one question in, one
  * plain-text answer out, or a throw. An empty answer is a throw too: Mili is
  * told she could not check, never that there is nothing to say.

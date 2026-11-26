@@ -9,27 +9,24 @@
 //     offered the owner-call tools (agent/tools/owner_calls.ts). Unset: no
 //     caller is Hermes.
 //
-//   Royal → Hermes   HERMES_SERVER_MCP_URL, HERMES_SERVER_MCP_TOKEN,
-//                    HERMES_SERVER_MCP_TOOL (default "ask")
-//     Hermes's own MCP server. On a briefing call, a question the owner asks
-//     that the briefing does not cover is passed to that tool. Unset: Mili
-//     answers from the briefing only.
+//   Royal → Hermes   HERMES_SERVER_URL, HERMES_SERVER_TOKEN
+//     Hermes's API server (its base URL; /v1/chat/completions is added) and
+//     that server's API key. On a briefing call, a question the owner asks
+//     that the briefing does not cover is sent there as a chat completion.
+//     Unset: Mili answers from the briefing only.
 //
 // docs/hermes-owner-calls.md is the contract.
 
 /** A secret shorter than this is reported and the endpoint stays off. */
 export const HERMES_SECRET_MIN_LENGTH = 32;
 
-export const HERMES_DEFAULT_ASK_TOOL = "ask";
-
 export type HermesConfig = {
   /** What Hermes sends to Royal. Null: no caller is ever Hermes. */
   readonly inboundSecret: string | null;
-  /** Hermes's MCP server, for Mili's follow-up questions. Null: not connected. */
+  /** Hermes's API server, for Mili's follow-up questions. Null: not connected. */
   readonly server: {
     readonly url: string;
     readonly token: string;
-    readonly askTool: string;
   } | null;
   /** Misconfigurations worth a log line, never containing a secret. */
   readonly problems: readonly string[];
@@ -53,15 +50,15 @@ export function readHermesConfig(env: Env = process.env): HermesConfig {
     inboundSecret = null;
   }
 
-  const rawUrl = value(env, "HERMES_SERVER_MCP_URL");
-  const token = value(env, "HERMES_SERVER_MCP_TOKEN");
+  const rawUrl = value(env, "HERMES_SERVER_URL");
+  const token = value(env, "HERMES_SERVER_TOKEN");
   let server: HermesConfig["server"] = null;
   if (rawUrl) {
     let url: URL | null = null;
     try {
       url = new URL(rawUrl);
     } catch {
-      problems.push("HERMES_SERVER_MCP_URL is not a URL.");
+      problems.push("HERMES_SERVER_URL is not a URL.");
     }
     // https only; plain http only to localhost, for running Hermes locally.
     if (
@@ -70,28 +67,23 @@ export function readHermesConfig(env: Env = process.env): HermesConfig {
       && !(url.protocol === "http:" && url.hostname === "localhost")
     ) {
       problems.push(
-        "HERMES_SERVER_MCP_URL must be https (or http://localhost for local development): the token and the owner's questions travel on it.",
+        "HERMES_SERVER_URL must be https (or http://localhost for local development): the token and the owner's questions travel on it.",
       );
       url = null;
     }
     if (url && (url.username || url.password)) {
       problems.push(
-        "HERMES_SERVER_MCP_URL must not carry a username or password; put the credential in HERMES_SERVER_MCP_TOKEN.",
+        "HERMES_SERVER_URL must not carry a username or password; put the credential in HERMES_SERVER_TOKEN.",
       );
       url = null;
     }
     if (url && !token) {
       problems.push(
-        "HERMES_SERVER_MCP_TOKEN is not set, so Mili can't ask Hermes anything.",
+        "HERMES_SERVER_TOKEN is not set, so Mili can't ask Hermes anything.",
       );
     }
     if (url && token) {
-      server = {
-        askTool:
-          value(env, "HERMES_SERVER_MCP_TOOL") ?? HERMES_DEFAULT_ASK_TOOL,
-        token,
-        url: url.toString(),
-      };
+      server = { token, url: url.toString() };
     }
   }
   return { inboundSecret, problems, server };

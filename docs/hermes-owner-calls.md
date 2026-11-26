@@ -16,7 +16,7 @@ Hermes ── Eve MCP (/eve/v1/mcp) + X-Hermes-Secret ──▶ schedule_owner_c
                                                        ▼ rings the owner line
       owner answers ──▶ flow.ts: connectAgent (recorded, up to 15 min) ──▶ Mili
                                                        │ "let me check that"
-Hermes's MCP server ◀── tools/call "ask" ── call desk: ask_hermes
+Hermes API server ◀── /v1/chat/completions ── call desk: ask_hermes
 Hermes ── get_owner_call ──▶ status, answered?, transcript, recording saved?
 ```
 
@@ -35,9 +35,9 @@ Hermes ── get_owner_call ──▶ status, answered?, transcript, recording 
    owner-call tools. Anyone else signed in through the same channel never
    sees them.
 3. **Royal → Hermes** (optional, for follow-up questions). Set
-   `HERMES_SERVER_MCP_URL` (https, or http://localhost for local development;
-   no username or password in it) and `HERMES_SERVER_MCP_TOKEN`. If the tool
-   isn't called `ask`, also set `HERMES_SERVER_MCP_TOOL`. Without these, Mili
+   `HERMES_SERVER_URL` to the base URL of Hermes's API server (https, or
+   http://localhost for local development; no username or password in it)
+   and `HERMES_SERVER_TOKEN` to that server's API key. Without these, Mili
    answers from the briefing only and says Hermes will follow up.
 4. **Mili** must be on: `COMMS_AGENT_ENABLED`, `COMMS_AGENT_SECRET` and
    `COMMS_CALLS_ENABLED`. If she's off, a request is refused and the refusal
@@ -114,25 +114,28 @@ read once a minute for calls that are due. This is how it fits together:
 ## Questions back to Hermes
 
 When the owner asks something the briefing doesn't cover, Royal sends one
-`tools/call` to Hermes's server:
+OpenAI-style chat completion to Hermes's API server, with
+`Authorization: Bearer <HERMES_SERVER_TOKEN>`:
 
-```json
+```
+POST <HERMES_SERVER_URL>/v1/chat/completions
 {
-  "name": "ask",
-  "arguments": {
-    "question": "Who else is coming to the inspection?",
-    "context": "Mili … is briefing Raj on: Smith St brief.\nCategory: project_brief.\nYour reference: task-9.\nAgenda:\n- …",
-    "reference": "task-9",
-    "call_id": "<Royal Call.id>"
-  }
+  "model": "hermes-agent",
+  "stream": false,
+  "messages": [
+    { "role": "system", "content": "Royal Constructions' voice agent, Mili, is on a phone call with the owner … Royal's call id: … Your reference: task-9. … <briefing>Mili … is briefing Raj on: Smith St brief. …</briefing>" },
+    { "role": "user", "content": "Who else is coming to the inspection?" }
+  ]
 }
 ```
 
-The tool should answer within about 20 seconds, in two or three short
-sentences of plain text. These all reach the owner as "I couldn't check that
-just now":
+The briefing goes in the system message, marked as data rather than
+instructions, and Hermes is told to answer only, not to act. Royal reads
+`choices[0].message.content`. Hermes should answer within about 20 seconds,
+in two or three short sentences of plain text. These all reach the owner as
+"I couldn't check that just now":
 
-- an `isError` result
+- a response that isn't a chat completion
 - an empty answer
 - a timeout
 - a non-2xx response
