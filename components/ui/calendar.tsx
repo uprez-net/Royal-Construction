@@ -16,6 +16,19 @@ import {
   ChevronDownIcon,
 } from "lucide-react";
 
+/**
+ * How many years past this one the year dropdown offers when a caller sets no
+ * `endMonth`. react-day-picker's own default stops at December of the current
+ * year, so in late November no activity, booking or insurance date could be
+ * picked in the next year at all. Builds run well over a year.
+ */
+export const CALENDAR_YEARS_AHEAD = 10;
+
+/** The last month the year dropdown reaches by default. */
+export function defaultCalendarEndMonth(today: Date = new Date()): Date {
+  return new Date(today.getFullYear() + CALENDAR_YEARS_AHEAD, 11, 31);
+}
+
 function Calendar({
   className,
   classNames,
@@ -33,6 +46,8 @@ function Calendar({
 
   return (
     <DayPicker
+      // Before `props`, so a caller's own range still wins.
+      endMonth={defaultCalendarEndMonth(props.today)}
       showOutsideDays={showOutsideDays}
       className={cn(
         "group/calendar bg-background p-2 [--cell-radius:var(--radius-md)] [--cell-size:--spacing(7)] in-data-[slot=card-content]:bg-transparent in-data-[slot=popover-content]:bg-transparent",
