@@ -1,4 +1,5 @@
 import { createGraphContext, GraphMessage } from "@/lib/graph/client";
+import { reportError } from "@/lib/observability/report-error";
 import { isLeadMessage } from "@/lib/graph/lead-subject";
 import { getGraphConfig, type GraphMailbox } from "@/lib/graph/config";
 import prisma from "@/lib/prisma";
@@ -836,6 +837,18 @@ async function processNotifications(
               prisma,
             );
             const outcome = record.outcome;
+            if (record.outcome === "bounced") {
+              // The offer never reached the client, and only the office can
+              // chase it. Ids only: the recipient's address is data.
+              reportError(new Error("An offer email bounced"), {
+                // One issue per send, not one for every bounce ever: Sentry
+                // would group them all and alert on the first.
+                fingerprint: ["offer-bounce", record.sendId],
+                ids: { sendId: record.sendId },
+                level: "warning",
+                source: "graph.offer-bounce",
+              });
+            }
             if (record.outcome === "recorded") {
               // The message is committed; its files are the slow half, and
               // Graph has already been told 202. `start` only enqueues. Should

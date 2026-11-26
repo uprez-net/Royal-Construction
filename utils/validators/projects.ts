@@ -4,7 +4,11 @@ import type { ProjectListSortBy } from "@/lib/data/projects";
 import type { OfferWorkspaceCostLine } from "@/lib/offer/workspace-model";
 import type { ProjectExtractionData } from "@/types/project-extraction";
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
-import { DRAFTING_FILTER, OPEN_PROJECTS_FILTER } from "@/types/project";
+import {
+  DRAFTING_FILTER,
+  OPEN_PROJECTS_FILTER,
+  OVERDUE_FILTER,
+} from "@/types/project";
 import {
   emailSchema,
   nonNegativeSchema,
@@ -268,6 +272,7 @@ export const projectListQuerySchema = z
         z.enum(ProjectStatus),
         z.literal(OPEN_PROJECTS_FILTER),
         z.literal(DRAFTING_FILTER),
+        z.literal(OVERDUE_FILTER),
       ])
       .optional()
       .catch(undefined),

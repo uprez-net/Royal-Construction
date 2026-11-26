@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Clock,
   MailOpen,
+  MailWarning,
   MessageSquarePlus,
   Paperclip,
   Reply,
@@ -297,6 +298,12 @@ function mergeTimeline(
             <span className="ml-1 inline-flex items-center gap-1 text-muted-foreground">
               <MailOpen className="size-3" aria-hidden="true" /> opened{" "}
               {formatActivityWhen(send.openedAt, now)}
+            </span>
+          ) : null}
+          {send.bouncedAt ? (
+            <span className="ml-1 inline-flex items-center gap-1 font-medium text-destructive">
+              <MailWarning className="size-3" aria-hidden="true" /> bounced{" "}
+              {formatActivityWhen(send.bouncedAt, now)} — not delivered
             </span>
           ) : null}
           {repliedWhen ? (

@@ -19,6 +19,7 @@ export type OfferActivityResult = {
     readonly openedAt: string | null;
     readonly repliedAt: string | null;
     readonly lastReplyAt: string | null;
+    readonly bouncedAt: string | null;
     readonly replies: readonly OfferActivityReply[];
   }[];
   readonly events: readonly {
@@ -58,6 +59,7 @@ export async function loadOfferActivity(
     db.offerDocumentSend.findMany({
       orderBy: { sentAt: "desc" },
       select: {
+        bouncedAt: true,
         lastReplyAt: true,
         offerFileVersion: true,
         openedAt: true,
@@ -91,6 +93,7 @@ export async function loadOfferActivity(
     ok: true,
     sends: sends.map((send) => ({
       ...send,
+      bouncedAt: send.bouncedAt?.toISOString() ?? null,
       lastReplyAt: send.lastReplyAt?.toISOString() ?? null,
       openedAt: send.openedAt?.toISOString() ?? null,
       repliedAt: send.repliedAt?.toISOString() ?? null,

@@ -1,7 +1,11 @@
 "use client";
 
 import React from "react";
-import { DRAFTING_FILTER, type ProjectKPIs } from "@/types/project";
+import {
+  DRAFTING_FILTER,
+  OVERDUE_FILTER,
+  type ProjectKPIs,
+} from "@/types/project";
 import type { ProjectStatusFilter } from "./projects-list-url";
 import { MobileFilterSelect } from "@/components/common/mobile-filter-select";
 import { FilterChip, FilterChips } from "@/components/common/list-toolbar";
@@ -36,6 +40,9 @@ export function ProjectFilters({
       value: "NEEDS_ATTENTION",
       count: kpis.needsAttention,
     },
+    // An activity past its end, or a booking it needed confirmed by now.
+    // Derived like Needs Attention, and a part of it.
+    { label: "Overdue", value: OVERDUE_FILTER, count: kpis.overdue },
     { label: "Delayed", value: "DELAYED", count: kpis.delayed },
     { label: "Completed", value: "COMPLETED", count: kpis.completed },
   ];

@@ -9,9 +9,14 @@ import {
   Loader2,
   Send,
 } from "lucide-react";
+import { format } from "date-fns";
 import { toast } from "sonner";
 
-import { ComplianceAlertStatus, ComplianceOutreachMode } from "@prisma/client";
+import {
+  ComplianceAlertStatus,
+  ComplianceOutreachMode,
+  MilestoneStatus,
+} from "@prisma/client";
 
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
@@ -22,7 +27,7 @@ import {
 } from "@/constants/complianceAlerts";
 import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { COMPLIANCE_ALERT_PARTY } from "@/lib/domain/compliance/alert-parties";
-import { missingMilestoneTrades } from "@/lib/domain/projects/tradie-dependencies";
+import { overdueMilestoneBookings } from "@/lib/domain/projects/tradie-dependencies";
 import { bookingTrade } from "@/lib/domain/tradies/request-rules";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -302,13 +307,17 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
   const tradieAlerts = useTradieAttention(project.tradieSchedules);
 
   const complianceAlerts = engagement?.alerts ?? [];
-  // One alert per missing trade: an activity needing two trades can be
-  // missing either, and each has its own booking to chase.
+  // One alert per overdue trade booking: an activity under way, or one due to
+  // start on a job being built, needs a confirmed booking for each trade, and
+  // each has its own booking to chase. The Overdue filter's own rule.
+  const now = new Date();
   const dependencyAlerts = project.milestones.flatMap((milestone) =>
-    missingMilestoneTrades(milestone, project.tradieSchedules).map((trade) => ({
+    overdueMilestoneBookings(
       milestone,
-      trade,
-    })),
+      project.tradieSchedules,
+      now,
+      project.status,
+    ).map((gap) => ({ milestone, gap })),
   );
 
   /**
@@ -401,31 +410,37 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
         {dependencyAlerts.length > 0 ? (
           <ul
             className="flex flex-col gap-2"
-            aria-label="Missing required trades"
+            aria-label="Overdue trade bookings"
           >
-            {dependencyAlerts.map(({ milestone, trade }) => (
-              <li
-                key={`dependency-${milestone.id}-${trade}`}
-                className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-light px-4 py-3"
-              >
-                <AlertTriangle
-                  className="mt-0.5 size-4 shrink-0 text-warning-ink"
-                  aria-hidden="true"
-                />
-                <div>
-                  <p className="text-sm font-medium text-warning-ink">
-                    No confirmed {trade} booking for this activity
-                  </p>
-                  <p className="mt-1 text-sm text-foreground">
-                    {milestone.name} has started without a confirmed {trade}{" "}
-                    booking. Book a tradie in this category against this
-                    activity, approve the booking and obtain their final
-                    confirmation. A booking against another activity does not
-                    meet this dependency.
-                  </p>
-                </div>
-              </li>
-            ))}
+            {dependencyAlerts.map(
+              ({ milestone, gap: { trade, unconfirmed } }) => (
+                <li
+                  key={`dependency-${milestone.id}-${trade}`}
+                  className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-light px-4 py-3"
+                >
+                  <AlertTriangle
+                    className="mt-0.5 size-4 shrink-0 text-warning-ink"
+                    aria-hidden="true"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-warning-ink">
+                      {unconfirmed
+                        ? `${trade} booking not confirmed for this activity`
+                        : `No confirmed ${trade} booking for this activity`}
+                    </p>
+                    <p className="mt-1 text-sm text-foreground">
+                      {milestone.status === MilestoneStatus.ACTIVE
+                        ? `${milestone.name} has started`
+                        : `${milestone.name} is due to start ${format(new Date(milestone.targetDate), "d MMM yyyy")}`}{" "}
+                      without a confirmed {trade} booking.{" "}
+                      {unconfirmed
+                        ? "A tradie is booked but has not confirmed: chase them, approve the booking and obtain their final confirmation."
+                        : "Book a tradie in this category against this activity, approve the booking and obtain their final confirmation. A booking against another activity does not meet this dependency."}
+                    </p>
+                  </div>
+                </li>
+              ),
+            )}
           </ul>
         ) : null}
         {complianceAlerts.length > 0 ? (

@@ -30,7 +30,11 @@ import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { setProjects } from "@/lib/store/slices/projectsSlice";
 import { openModal } from "@/lib/store/slices/uiSlice";
-import type { ProjectKPIs, ProjectWithStats } from "@/types/project";
+import {
+  OVERDUE_FILTER,
+  type ProjectKPIs,
+  type ProjectWithStats,
+} from "@/types/project";
 import { compareAsc, isBefore } from "date-fns";
 import { EnhancedProjectCard } from "./enhanced-project-card";
 import { ProjectAttentionReasons } from "./project-attention-reasons";
@@ -163,7 +167,9 @@ function ProjectsWorkspace({
   // "No projects yet" empty state.
   const hasActiveFilters =
     list.status !== DEFAULT_PROJECT_STATUS_FILTER || list.query !== "";
-  const showAttentionColumn = list.status === "NEEDS_ATTENTION";
+  // The derived chips say why each row is on them.
+  const showAttentionColumn =
+    list.status === "NEEDS_ATTENTION" || list.status === OVERDUE_FILTER;
 
   const visibleProjects = useMemo(() => {
     return projectsInStore.map((project) => {

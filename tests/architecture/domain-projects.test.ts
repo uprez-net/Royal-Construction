@@ -146,6 +146,7 @@ test("the KPI roll-up counts only what the caller may list", async () => {
     drafting: 1,
     needsAttention: 0,
     onTrack: 0,
+    overdue: 0,
     totalActive: 4,
   });
 

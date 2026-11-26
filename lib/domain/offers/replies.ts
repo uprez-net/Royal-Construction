@@ -6,7 +6,10 @@ import { isSignatureNoise } from "../email/attachment-noise";
 import { DomainAuthorizationError, DomainNotFoundError } from "../errors";
 import type { BlobPutPort } from "../ports/blob";
 import type { DomainPrincipal } from "../principal";
-import { isMachineGenerated } from "@/lib/graph/offer-reply-classify";
+import {
+  isDeliveryFailure,
+  isMachineGenerated,
+} from "@/lib/graph/offer-reply-classify";
 import { buildBlobPath, normalizeEmailAddress } from "@/utils/formatters";
 import type { EmailHeaders } from "@/utils/spam-detector";
 
@@ -21,6 +24,7 @@ export type OfferReplyOutcome =
   | "already-recorded"
   | "no-matching-send"
   | "auto-generated"
+  | "bounced"
   | "sender-mismatch";
 
 /** The inbound message, flattened to what the rule reads. */
@@ -87,7 +91,8 @@ const PENDING_NOTE =
 
 export type OfferReplyRecord =
   | { readonly outcome: "recorded"; readonly replyId: string }
-  | { readonly outcome: Exclude<OfferReplyOutcome, "recorded"> };
+  | { readonly outcome: "bounced"; readonly sendId: string }
+  | { readonly outcome: Exclude<OfferReplyOutcome, "recorded" | "bounced"> };
 
 /**
  * Records an inbound reply against its OfferDocumentSend.
@@ -119,7 +124,20 @@ export async function recordOfferReply(
     return { outcome: "no-matching-send" };
   }
 
-  if (isMachineGenerated(input.headers)) {
+  if (isMachineGenerated(input.headers) || isDeliveryFailure(input.headers)) {
+    // A delivery-failure report is the one machine message worth keeping: the
+    // send never reached the client and the offer still reads as sent (#585).
+    // Stamped once; a repeated notification matches no row and is not
+    // reported again. The offer's status is left alone.
+    if (isDeliveryFailure(input.headers)) {
+      const stamped = await db.offerDocumentSend.updateMany({
+        data: {
+          bouncedAt: input.receivedAt ? new Date(input.receivedAt) : new Date(),
+        },
+        where: { bouncedAt: null, id: send.id },
+      });
+      if (stamped.count === 1) return { outcome: "bounced", sendId: send.id };
+    }
     return { outcome: "auto-generated" };
   }
 

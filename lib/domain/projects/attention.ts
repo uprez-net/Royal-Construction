@@ -9,7 +9,7 @@ import {
   type TradieScheduleStatus,
   VariationStatus,
 } from "@prisma/client";
-import { format } from "date-fns";
+import { addDays, differenceInCalendarDays, format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 
 import { COMPLIANCE_ALERT_COPY } from "@/constants/complianceAlerts";
@@ -26,11 +26,15 @@ import type { DomainDb } from "../db";
 import type { DomainPrincipal } from "../principal";
 import { gapsVisibleTo, projectDocumentGaps } from "./document-gaps";
 import {
+  BUILDING_PROJECT_STATUSES,
   hasWorkStarted,
   milestoneEndDate,
   STARTED_MILESTONE_STATUSES,
 } from "./milestone-schedule";
-import { missingMilestoneTrades } from "./tradie-dependencies";
+import {
+  bookingGapLabel,
+  overdueMilestoneBookings,
+} from "./tradie-dependencies";
 import { formatVariationNumber } from "./variation-rules";
 
 // What on a project needs somebody, and whether it has started on site yet
@@ -60,10 +64,12 @@ import { formatVariationNumber } from "./variation-rules";
 //                            HBCF number) from day one, and
 //                            `missingBuildStartDocuments` once work has
 //                            started on site
-//   - dependency breach      `missingMilestoneTrades` — the project page's
-//                            "No confirmed … booking" alert; it only looks at
-//                            activities under way, so a booking not yet due is
-//                            never flagged
+//   - booking overdue        `overdueMilestoneBookings` — the project page's
+//                            "No confirmed … booking" alert: an activity under
+//                            way, or one on a job being built whose planned
+//                            start day has come, without a confirmed booking
+//                            for each trade it needs, or with a tradie booked
+//                            who has not confirmed
 //
 // **Drafting** is the stage before any of that work: no activity has started.
 // `hasWorkStarted` is the same test that freezes a project's start date, so the
@@ -120,6 +126,29 @@ export type OverdueActivity = {
   readonly daysOverdue: number;
 };
 
+/**
+ * A trade booking an activity needed confirmed by now and does not have
+ * (`overdueMilestoneBookings`).
+ */
+export type OverdueBooking = {
+  readonly milestoneId: string;
+  /** The activity's name. */
+  readonly name: string;
+  readonly trade: string;
+  /** A tradie is booked but has not confirmed; false when nobody is booked. */
+  readonly unconfirmed: boolean;
+  /** The activity is under way, as against due to start. */
+  readonly started: boolean;
+  /** ISO instant: the activity's planned start. */
+  readonly plannedStart: string;
+  /**
+   * Whole calendar days since the booking was owed, in Sydney: the day an
+   * activity under way started, else its planned start. 0 on the day itself,
+   * never negative.
+   */
+  readonly daysLate: number;
+};
+
 export type ProjectAttention = {
   readonly projectId: string;
   readonly name: string;
@@ -134,6 +163,8 @@ export type ProjectAttention = {
   readonly conditions: AttentionCondition[];
   /** Most overdue first. Empty when nothing is overdue. */
   readonly overdue: OverdueActivity[];
+  /** Latest first. Empty when every booking due is confirmed. */
+  readonly overdueBookings: OverdueBooking[];
 };
 
 /** Everything `assessProjectAttention` reads, as the query selects it. */
@@ -437,19 +468,52 @@ export function assessProjectAttention(
     );
   }
 
-  const missingTrades = project.milestones.flatMap((milestone) =>
-    missingMilestoneTrades(milestone, project.tradieSchedules).map(
-      (trade) => `No confirmed ${trade} booking for ${milestone.name}`,
-    ),
-  );
-  if (missingTrades.length > 0) {
+  // Planned starts on Sydney's calendar, like the overdue count above.
+  const today = toZonedTime(now, SYDNEY_TZ);
+  const overdueBookings = project.milestones
+    .flatMap((milestone): OverdueBooking[] => {
+      const plannedStart = toZonedTime(milestone.targetDate, SYDNEY_TZ);
+      const started = milestone.status === "ACTIVE";
+      // Late from the day the work began when it has, else the planned day.
+      const owedFrom =
+        started && milestone.startDate
+          ? toZonedTime(milestone.startDate, SYDNEY_TZ)
+          : plannedStart;
+      return overdueMilestoneBookings(
+        { ...milestone, targetDate: plannedStart },
+        project.tradieSchedules,
+        today,
+        project.status,
+      ).map((gap) => ({
+        milestoneId: milestone.id,
+        name: milestone.name,
+        trade: gap.trade,
+        unconfirmed: gap.unconfirmed,
+        started,
+        plannedStart: milestone.targetDate.toISOString(),
+        daysLate: Math.max(0, differenceInCalendarDays(today, owedFrom)),
+      }));
+    })
+    .sort((a, b) => b.daysLate - a.daysLate);
+  if (overdueBookings.length > 0) {
+    const thisYear = today.getFullYear();
+    const when = (booking: OverdueBooking) => {
+      if (booking.started) return "which has started";
+      if (booking.daysLate === 0) return "which starts today";
+      const day = toZonedTime(new Date(booking.plannedStart), SYDNEY_TZ);
+      return `due to start ${format(day, day.getFullYear() === thisYear ? "d MMM" : "d MMM yyyy")}`;
+    };
+    const lines = overdueBookings.map(
+      (booking) =>
+        `${bookingGapLabel(booking)} for ${booking.name}, ${when(booking)}`,
+    );
     conditions.push(
       condition(
         "DEPENDENCY",
-        missingTrades,
-        (trade) => `${trade}, which has started`,
+        lines,
+        (line) => line,
         (count) =>
-          `${plural(count, "required trade", "required trades")} not booked for work under way`,
+          `${plural(count, "trade booking", "trade bookings")} overdue`,
       ),
     );
   }
@@ -463,6 +527,7 @@ export function assessProjectAttention(
     drafting: !started,
     conditions,
     overdue,
+    overdueBookings,
   };
 }
 
@@ -534,7 +599,15 @@ export const attentionSourceSelect = {
 export async function readProjectAttention(
   principal: DomainPrincipal,
   db: DomainDb,
-  options: { now?: Date; projectIds?: readonly string[] } = {},
+  options: {
+    now?: Date;
+    projectIds?: readonly string[];
+    /**
+     * Read only the projects that could be overdue (`overdueCandidateWhere`),
+     * for the Overdue filter. `assessProjectAttention` still decides which are.
+     */
+    overdueCandidates?: boolean;
+  } = {},
 ): Promise<ProjectAttention[]> {
   if (options.projectIds && options.projectIds.length === 0) return [];
   const now = options.now ?? new Date();
@@ -543,6 +616,9 @@ export async function readProjectAttention(
       ...projectReadScope(principal),
       status: { not: ProjectStatus.COMPLETED },
       ...(options.projectIds ? { id: { in: [...options.projectIds] } } : {}),
+      ...(options.overdueCandidates
+        ? { AND: [overdueCandidateWhere(now)] }
+        : {}),
     },
     select: attentionSourceSelect,
   });
@@ -557,6 +633,31 @@ export async function readProjectAttention(
       seesMoney,
     ),
   );
+}
+
+/**
+ * A wide net for the Overdue filter, so it reads the few projects that could
+ * be overdue rather than every open job with all its relations. Prisma turns
+ * it into one EXISTS per branch, and because it is a `where` rather than raw
+ * SQL the caller's scope still applies to it.
+ *
+ * Wider than the rule on purpose, never narrower: both ways to be overdue
+ * need an activity under way, or a pending one on a job being built whose
+ * planned start is no later than today in Sydney, which is always before
+ * now + 1 day. `assessProjectAttention` then decides.
+ */
+export function overdueCandidateWhere(now: Date): Prisma.ProjectWhereInput {
+  return {
+    OR: [
+      { milestones: { some: { status: "ACTIVE" } } },
+      {
+        status: { in: [...BUILDING_PROJECT_STATUSES] },
+        milestones: {
+          some: { status: "PENDING", targetDate: { lt: addDays(now, 1) } },
+        },
+      },
+    ],
+  };
 }
 
 /** Projects with at least one condition, most urgent first. */

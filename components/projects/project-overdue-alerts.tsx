@@ -8,7 +8,16 @@ import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatSydneyDate } from "@/lib/dates/sydney";
-import type { ProjectAttention } from "@/lib/domain/projects/attention";
+import type {
+  OverdueActivity,
+  OverdueBooking,
+  ProjectAttention,
+} from "@/lib/domain/projects/attention";
+import {
+  isProjectOverdue,
+  overdueLateness,
+} from "@/lib/domain/projects/overdue";
+import { bookingGapLabel } from "@/lib/domain/projects/tradie-dependencies";
 
 import { formatStatus } from "./project-status";
 
@@ -23,6 +32,13 @@ import { formatStatus } from "./project-status";
  * drafting or compliance, or an activity nobody has started, never shows here.
  * Nothing is stored, so there is nothing to dismiss or forget to clear.
  *
+ *
+ * A trade booking is overdue here too: an activity under way, or one due to
+ * start, without a confirmed booking for each trade it needs or with a tradie
+ * booked who has not confirmed (`overdueMilestoneBookings`). A booking has to
+ * be in place before the work starts, so it is late from the start day, not
+ * the end. The same projects as the list's Overdue chip (`isProjectOverdue`).
+ *
  * Silent when nothing is overdue, like the project page's own Alerts card: an
  * empty panel on every quiet morning trains people to stop looking at it.
  */
@@ -34,6 +50,57 @@ function days(count: number): string {
   return `${count} ${count === 1 ? "day" : "days"}`;
 }
 
+/** One overdue thing on a project: what it is, and how late. */
+type OverdueItem = {
+  key: string;
+  name: string;
+  detail: string;
+  late: string;
+};
+
+function activityItem(activity: OverdueActivity): OverdueItem {
+  return {
+    key: `activity-${activity.milestoneId}`,
+    name: activity.name,
+    detail: `due ${formatSydneyDate(new Date(activity.expectedCompletion))}`,
+    late: `${days(activity.daysOverdue)} overdue`,
+  };
+}
+
+function bookingItem(booking: OverdueBooking): OverdueItem {
+  return {
+    key: `booking-${booking.milestoneId}-${booking.trade}`,
+    name: booking.name,
+    detail: `${bookingGapLabel(booking)} · ${
+      booking.started
+        ? "started"
+        : `starts ${formatSydneyDate(new Date(booking.plannedStart))}`
+    }`,
+    late:
+      booking.daysLate === 0
+        ? "booking due today"
+        : `booking ${days(booking.daysLate)} overdue`,
+  };
+}
+
+/** Latest first, activities ahead of bookings on a tie. */
+function overdueItems(project: ProjectAttention): OverdueItem[] {
+  const late = [
+    ...project.overdue.map((activity) => ({
+      days: activity.daysOverdue,
+      item: activityItem(activity),
+    })),
+    ...project.overdueBookings.map((booking) => ({
+      days: booking.daysLate,
+      item: bookingItem(booking),
+    })),
+  ];
+  return late
+    .map((entry, index) => ({ ...entry, index }))
+    .sort((a, b) => b.days - a.days || a.index - b.index)
+    .map((entry) => entry.item);
+}
+
 function OverdueProjectRow({
   project,
   href,
@@ -42,7 +109,7 @@ function OverdueProjectRow({
   href: string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [worst, ...others] = project.overdue;
+  const [worst, ...others] = overdueItems(project);
   if (!worst) return null;
 
   return (
@@ -68,12 +135,8 @@ function OverdueProjectRow({
           </div>
           <p className="text-xs text-muted-foreground">
             <span className="font-medium text-foreground">{worst.name}</span>
-            {" · due "}
-            {formatSydneyDate(new Date(worst.expectedCompletion))}
-            {" · "}
-            <span className="font-semibold text-warning-ink">
-              {days(worst.daysOverdue)} overdue
-            </span>
+            {` · ${worst.detail} · `}
+            <span className="font-semibold text-warning-ink">{worst.late}</span>
             {" · "}
             {project.location}
             {project.customerName ? ` · ${project.customerName}` : ""}
@@ -103,13 +166,11 @@ function OverdueProjectRow({
       {others.length > 0 && expanded ? (
         <ul
           className="mt-1.5 space-y-0.5 pl-7 text-xs text-muted-foreground"
-          aria-label={`Other overdue activities on ${project.name}`}
+          aria-label={`Other overdue items on ${project.name}`}
         >
-          {others.map((activity) => (
-            <li key={activity.milestoneId}>
-              {activity.name} — due{" "}
-              {formatSydneyDate(new Date(activity.expectedCompletion))},{" "}
-              {days(activity.daysOverdue)} overdue
+          {others.map((item) => (
+            <li key={item.key}>
+              {item.name} — {item.detail}, {item.late}
             </li>
           ))}
         </ul>
@@ -155,11 +216,8 @@ export function ProjectOverdueAlerts({
     );
   }
   const overdue = projects
-    .filter((project) => project.overdue.length > 0)
-    .sort(
-      (a, b) =>
-        (b.overdue[0]?.daysOverdue ?? 0) - (a.overdue[0]?.daysOverdue ?? 0),
-    );
+    .filter(isProjectOverdue)
+    .sort((a, b) => overdueLateness(b) - overdueLateness(a));
   if (overdue.length === 0) return null;
 
   const visible = showAll ? overdue : overdue.slice(0, VISIBLE_PROJECTS);

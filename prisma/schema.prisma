@@ -2147,6 +2147,10 @@ model OfferDocumentSend {
   // back to this send (see lib/domain/offers/replies).
   repliedAt        DateTime?
   lastReplyAt      DateTime?
+  // Set once, when a delivery-failure report for this send arrives (#585). The
+  // offer's status does not change: this only makes a send that never reached
+  // the client visible, where it used to read as sent.
+  bouncedAt        DateTime?
   replies          OfferDocumentReply[]
 
   @@index([offerId])

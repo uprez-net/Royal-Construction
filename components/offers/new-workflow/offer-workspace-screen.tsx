@@ -89,6 +89,7 @@ import { ContractPanel } from "./offer-workspace-contract";
 import { ProjectHandoffPanel } from "./offer-workspace-project-handoff";
 import { TenderPanel } from "./offer-workspace-tender";
 import { PricingDecisionPanel } from "./offer-workspace-pricing-decision";
+import { ProfitabilityPanel } from "./offer-workspace-profitability";
 import { ScopePanel } from "./offer-workspace-scope";
 import { OfferWorkspaceImages } from "./offer-workspace-images";
 import type {
@@ -925,6 +926,7 @@ export function OfferWorkspaceScreen({
                       />
                       <PricingDecisionPanel
                         customerPrice={customerPrice}
+                        pricing={pricing}
                         overrideReason={overrideReason}
                         priceAdjustmentLabel={priceAdjustmentLabel}
                         selectedPriceInput={selectedPriceInput}
@@ -935,6 +937,10 @@ export function OfferWorkspaceScreen({
                         }
                         onSelectedPriceInputChange={onSelectedPriceInputChange}
                         onStandardPriceInputChange={onStandardPriceInputChange}
+                      />
+                      <ProfitabilityPanel
+                        customerPrice={customerPrice}
+                        pricing={pricing}
                       />
                     </StepPane>
 

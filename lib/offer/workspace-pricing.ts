@@ -319,6 +319,13 @@ function roundRate(value: number): number {
   return Math.round((value + Number.EPSILON) * 10000) / 10000;
 }
 
+// What a selling price ex GST earns over job cost, as a fraction of job cost.
+// One definition for the markup badge and the profitability panel, which sit
+// on the same screen.
+function markupOnJobCost(sellingExGst: number, jobCost: number): number {
+  return roundRate((sellingExGst - jobCost) / jobCost);
+}
+
 export function getMarginStatus(
   appliedMarkupPct: number,
   targetMarkupPct: number,
@@ -445,12 +452,13 @@ export function calculateEffectiveMargin({
   if (!(costBeforeFee > 0)) {
     return { effectiveMarkupPct: 0, marginStatus: "not_priced" };
   }
-  const sellingExGst = roundCurrency(
-    sellingContractValueIncGst / (1 + gstRate),
-  );
-  const effectiveMarkupPct = roundRate(
-    (sellingExGst - costBeforeFee) / costBeforeFee,
-  );
+  // The same ex-GST figure the offer stores (Offer.amount), so the markup is
+  // measured on the price of record and agrees with the profitability panel.
+  const sellingExGst = splitContractValueByGst({
+    contractValueIncGst: sellingContractValueIncGst,
+    gstRate,
+  }).amountExGst;
+  const effectiveMarkupPct = markupOnJobCost(sellingExGst, costBeforeFee);
 
   // Green at/above the target fee, amber while still profitable below it, red
   // once the selling price is at or below cost. The minimum is a strictly
@@ -529,5 +537,86 @@ export function splitContractValueByGst({
     amountExGst,
     gstAmount: roundCurrency(totalIncGst - amountExGst),
     totalIncGst,
+  };
+}
+
+// The share of each job's ex-GST selling price set aside for running the
+// company: office, vehicles, insurance, the people who are not on a site.
+//
+// It is NOT the quote's "Overhead markup". That markup is a lever
+// on the selling price, applied to job cost; this is what the business needs
+// back out of the selling price, applied to revenue. Using the markup here
+// would make every quote's projected profit come out at exactly the fee
+// markup, whatever the company's real overhead is.
+//
+// `approved: false` until the business confirms the rate. The panel labels the
+// figure illustrative while it is, so a projected profit is never read as one
+// the business signed off. Change the rate and flip the flag together.
+export const COMPANY_OVERHEAD_ALLOCATION = {
+  rate: 0.06,
+  approved: false,
+} as const;
+
+export type OfferProfitability = {
+  readonly sellingPriceIncGst: number;
+  readonly sellingPriceExGst: number;
+  readonly gstAmount: number;
+  // costBeforeFee: direct cost plus fixed additions, before either markup.
+  readonly jobCost: number;
+  // Every percentage is null on an unpriced quote (no job cost or no price),
+  // because a percentage of nothing reads as a verdict on nothing.
+  readonly effectiveMarkupPct: number | null;
+  // Selling price ex GST less job cost. Negative when the offer is below cost.
+  readonly grossProfit: number;
+  readonly grossMarginPct: number | null;
+  readonly companyOverheadRate: number;
+  readonly companyOverhead: number;
+  readonly projectedProfitBeforeTax: number;
+  readonly projectedMarginBeforeTaxPct: number | null;
+};
+
+// Internal profitability at the price actually going on the offer. Measured on
+// the SELECTED price ex GST, not the calculated build-up, so a discount or any
+// other override shows its real cost to the business. Never on a customer
+// document: nothing here is persisted or passed to a print template.
+export function calculateOfferProfitability({
+  jobCost,
+  sellingContractValueIncGst,
+  gstRate,
+  companyOverheadRate = COMPANY_OVERHEAD_ALLOCATION.rate,
+}: {
+  readonly jobCost: number;
+  readonly sellingContractValueIncGst: number;
+  readonly gstRate: number;
+  readonly companyOverheadRate?: number;
+}): OfferProfitability {
+  const split = splitContractValueByGst({
+    contractValueIncGst: sellingContractValueIncGst,
+    gstRate,
+  });
+  const sellingPriceExGst = split.amountExGst;
+  const priced = jobCost > 0 && sellingPriceExGst > 0;
+  const grossProfit = roundCurrency(sellingPriceExGst - jobCost);
+  const companyOverhead = roundCurrency(
+    sellingPriceExGst * companyOverheadRate,
+  );
+  const projectedProfitBeforeTax = roundCurrency(grossProfit - companyOverhead);
+  const ofSellingPrice = (amount: number) =>
+    priced ? roundRate(amount / sellingPriceExGst) : null;
+
+  return {
+    sellingPriceIncGst: split.totalIncGst,
+    sellingPriceExGst,
+    gstAmount: split.gstAmount,
+    jobCost: roundCurrency(jobCost),
+    effectiveMarkupPct: priced
+      ? markupOnJobCost(sellingPriceExGst, jobCost)
+      : null,
+    grossProfit,
+    grossMarginPct: ofSellingPrice(grossProfit),
+    companyOverheadRate,
+    companyOverhead,
+    projectedProfitBeforeTax,
+    projectedMarginBeforeTaxPct: ofSellingPrice(projectedProfitBeforeTax),
   };
 }

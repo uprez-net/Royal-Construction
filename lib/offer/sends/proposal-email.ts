@@ -1,3 +1,4 @@
+import { stalePriceTextRefusal } from "@/lib/domain/offers/stale-price-text";
 import { collectExtraCostIssues } from "@/lib/offer/extra-costs";
 import { randomBytes } from "node:crypto";
 import { resolveMx } from "node:dns/promises";
@@ -175,6 +176,16 @@ export async function emailOfferProposal(
       ok: false,
       error: "Enter floor areas in Job setup before sending the proposal.",
     };
+  }
+
+  // A price typed into free text goes stale when the total moves (#589).
+  const stalePriceText = await stalePriceTextRefusal(
+    db,
+    input.offerId,
+    snapshot,
+  );
+  if (stalePriceText) {
+    return { ok: false, error: stalePriceText };
   }
 
   // Recipients = EVERY customer signatory (individual owners + company

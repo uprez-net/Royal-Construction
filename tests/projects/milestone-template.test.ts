@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import {
-  ProjectStage,
-  MilestoneStatus as MS,
-  TradieScheduleStatus as TS,
-} from "@prisma/client";
+import { ProjectStage, MilestoneStatus as MS } from "@prisma/client";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { REPO_ROOT } from "../support/repo-root";
@@ -27,7 +23,6 @@ import {
 } from "@/lib/domain/projects/milestones";
 import { milestoneTargetDates } from "@/lib/domain/projects/milestone-schedule";
 import { moveTemplateActivity } from "@/lib/domain/projects/template-tree";
-import { missingMilestoneTrades } from "@/lib/domain/projects/tradie-dependencies";
 import { milestoneTemplates } from "@/constants/milestoneTemplate";
 import type { TemplateActivity } from "@/types/milestone-template";
 import { adminPrincipal, recordingDb } from "../architecture/domain-harness";
@@ -396,76 +391,6 @@ test("template saves release positions in bulk and restore unchanged rows withou
   assert.ok(
     recorder.operations().indexOf("$.executeRaw")
       < recorder.operations().indexOf("milestoneTemplate.deleteMany"),
-  );
-});
-
-test("only a confirmed booking in the right category on this milestone clears the warning", () => {
-  const milestone = {
-    id: "a",
-    status: MS.ACTIVE,
-    requiredTradeTypes: [{ label: "Plumbing" }],
-  };
-  const booking = {
-    milestoneId: "a",
-    status: TS.CONFIRMED,
-    tradie: { trade: "Plumbing" },
-  };
-  assert.deepEqual(missingMilestoneTrades(milestone, []), ["Plumbing"]);
-  for (const status of [
-    TS.PENDING,
-    TS.AWAITING_ADMIN_APPROVAL,
-    TS.PENDING_FINAL_CONFIRMATION,
-    TS.DECLINED,
-    TS.CANCELLED,
-  ])
-    assert.deepEqual(
-      missingMilestoneTrades(milestone, [{ ...booking, status }]),
-      ["Plumbing"],
-    );
-  assert.deepEqual(
-    missingMilestoneTrades(milestone, [{ ...booking, milestoneId: "b" }]),
-    ["Plumbing"],
-  );
-  assert.deepEqual(
-    missingMilestoneTrades(milestone, [
-      { ...booking, tradie: { trade: "Electrical" } },
-    ]),
-    ["Plumbing"],
-  );
-  assert.deepEqual(missingMilestoneTrades(milestone, [booking]), []);
-  // The same trade as a request would accept it, whatever the directory's case.
-  assert.deepEqual(
-    missingMilestoneTrades(milestone, [
-      { ...booking, tradie: { trade: " plumbing " } },
-    ]),
-    [],
-  );
-  for (const status of [MS.PENDING, MS.DONE, MS.NOT_REQUIRED])
-    assert.deepEqual(missingMilestoneTrades({ ...milestone, status }, []), []);
-});
-
-test("an activity needing two trades warns for each until both are confirmed", () => {
-  const milestone = {
-    id: "a",
-    status: MS.ACTIVE,
-    requiredTradeTypes: [{ label: "Plumbing" }, { label: "Electrical" }],
-  };
-  const plumber = {
-    milestoneId: "a",
-    status: TS.CONFIRMED,
-    tradie: { trade: "Plumbing" },
-  };
-  const electrician = { ...plumber, tradie: { trade: "Electrical" } };
-  assert.deepEqual(missingMilestoneTrades(milestone, []), [
-    "Plumbing",
-    "Electrical",
-  ]);
-  assert.deepEqual(missingMilestoneTrades(milestone, [plumber]), [
-    "Electrical",
-  ]);
-  assert.deepEqual(
-    missingMilestoneTrades(milestone, [plumber, electrician]),
-    [],
   );
 });
 
