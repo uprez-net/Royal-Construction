@@ -35,10 +35,13 @@ Hermes ── get_owner_call ──▶ status, answered?, transcript, recording 
    owner-call tools. Anyone else signed in through the same channel never
    sees them.
 3. **Royal → Hermes** (optional, for follow-up questions). Set
-   `HERMES_SERVER_URL` to the base URL of Hermes's API server (https, or
-   http://localhost for local development; no username or password in it)
-   and `HERMES_SERVER_TOKEN` to that server's API key. Without these, Mili
-   answers from the briefing only and says Hermes will follow up.
+   `HERMES_SERVER_URL` to the base URL of Hermes's API server (no username or
+   password in it) and `HERMES_SERVER_TOKEN` to that server's API key.
+   Without these, Mili answers from the briefing only and says Hermes will
+   follow up. Plain `http://` to the server's IP is accepted because Hermes
+   has no domain yet, but the key and the owner's questions then travel
+   unencrypted, and the admin comms panel says so. Switch to `https://` once
+   Hermes has a domain.
 4. **Mili** must be on: `COMMS_AGENT_ENABLED`, `COMMS_AGENT_SECRET` and
    `COMMS_CALLS_ENABLED`. If she's off, a request is refused and the refusal
    says so.

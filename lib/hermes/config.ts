@@ -60,16 +60,22 @@ export function readHermesConfig(env: Env = process.env): HermesConfig {
     } catch {
       problems.push("HERMES_SERVER_URL is not a URL.");
     }
-    // https only; plain http only to localhost, for running Hermes locally.
+    // https or http. Plain http is allowed because Hermes has no domain yet and
+    // answers on its server's IP; it still connects, but the admin panel says
+    // the token and the owner's questions are travelling unencrypted.
+    if (url && url.protocol !== "https:" && url.protocol !== "http:") {
+      problems.push("HERMES_SERVER_URL must be an https or http URL.");
+      url = null;
+    }
     if (
       url
-      && url.protocol !== "https:"
-      && !(url.protocol === "http:" && url.hostname === "localhost")
+      && url.protocol === "http:"
+      && url.hostname !== "localhost"
+      && token
     ) {
       problems.push(
-        "HERMES_SERVER_URL must be https (or http://localhost for local development): the token and the owner's questions travel on it.",
+        "HERMES_SERVER_URL is plain http, so Hermes's key and the owner's questions travel unencrypted. Switch it to https once Hermes has a domain.",
       );
-      url = null;
     }
     if (url && (url.username || url.password)) {
       problems.push(

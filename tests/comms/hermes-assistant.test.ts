@@ -16,24 +16,42 @@ import { readHermesConfig } from "@/lib/hermes/config";
 
 const SECRET = "s".repeat(40);
 
-test("config: a short inbound secret or an http Hermes server is refused", () => {
-  const config = readHermesConfig({
-    HERMES_MCP_SECRET: "short",
-    HERMES_SERVER_TOKEN: "t",
-    HERMES_SERVER_URL: "http://78.47.57.195:8642",
-  });
+test("config: a short inbound secret is refused", () => {
+  const config = readHermesConfig({ HERMES_MCP_SECRET: "short" });
   assert.equal(config.inboundSecret, null);
-  assert.equal(config.server, null);
-  assert.equal(config.problems.length, 2);
+  assert.equal(config.problems.length, 1);
   const ok = readHermesConfig({
     HERMES_MCP_SECRET: SECRET,
     HERMES_SERVER_TOKEN: "t",
     HERMES_SERVER_URL: "https://hermes.example",
   });
+  assert.equal(ok.inboundSecret, SECRET);
   assert.deepEqual(ok.server, { token: "t", url: "https://hermes.example/" });
+  assert.deepEqual(ok.problems, []);
 });
 
-test("config: only https, or http to localhost, and never a credential in the URL", () => {
+test("config: plain http to Hermes's IP connects, with a warning on the admin panel", () => {
+  const config = readHermesConfig({
+    HERMES_SERVER_TOKEN: "t",
+    HERMES_SERVER_URL: "http://78.47.57.195:8642",
+  });
+  assert.deepEqual(config.server, {
+    token: "t",
+    url: "http://78.47.57.195:8642/",
+  });
+  assert.equal(config.problems.length, 1);
+  assert.match(config.problems[0], /unencrypted/);
+  // localhost is local development: no warning.
+  assert.deepEqual(
+    readHermesConfig({
+      HERMES_SERVER_TOKEN: "t",
+      HERMES_SERVER_URL: "http://localhost:8642",
+    }).problems,
+    [],
+  );
+});
+
+test("config: only https or http, and never a credential in the URL", () => {
   const server = (url: string) =>
     readHermesConfig({
       HERMES_SERVER_TOKEN: "t",
