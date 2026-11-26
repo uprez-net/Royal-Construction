@@ -70,7 +70,7 @@ export type CallDto = {
   customerNumber: string;
   status: CallStatusDto;
   flowStep: string;
-  staffTarget: "BROWSER" | "MOBILE" | null;
+  staffTarget: "BROWSER" | "MOBILE" | "AGENT" | null;
   /** Outbound to a phone: the nickname of the phone it rang. */
   staffPhoneLabel: string | null;
   staffName: string | null;
@@ -186,6 +186,61 @@ export type CallablePhoneDto = {
 /** A team member's phone, as an admin manages it. */
 export type TeamPhoneDto = { id: string; nickname: string; e164: string };
 
+/** The owner line: where Mili rings with a briefing Hermes asked for. */
+export type OwnerLineDto = { nickname: string; e164: string };
+
+export type OwnerCallStatusDto =
+  | "SCHEDULED"
+  | "PLACING"
+  | "PLACED"
+  | "CANCELED"
+  | "FAILED";
+
+/** A call Mili makes to the owner for Hermes (Admin → Agent calls). */
+export type OwnerCallDto = {
+  id: string;
+  status: OwnerCallStatusDto;
+  callAt: string;
+  placedAt: string | null;
+  canceledAt: string | null;
+  failureReason: string | null;
+  source: string;
+  category: string;
+  subject: string;
+  reference: string | null;
+  eventAt: string | null;
+  questionsAsked: number;
+  to: string | null;
+  createdAt: string;
+  call: {
+    callId: string;
+    status: CallStatusDto;
+    flowStep: string;
+    answered: boolean;
+    answeredAt: string | null;
+    endedAt: string | null;
+    durationSeconds: number | null;
+    needsReconciliation: boolean;
+    problem: string | null;
+    transcript: string | null;
+    recordings: { id: string; available: boolean; transcript: string | null }[];
+  } | null;
+};
+
+export type AgentCallEventDto = {
+  id: string;
+  kind: string;
+  occurredAt: string;
+  detail: Record<string, unknown> | null;
+};
+
+export type OwnerCallDetailDto = OwnerCallDto & {
+  agenda: string[];
+  context: string;
+  callRecord: CallDto | null;
+  events: AgentCallEventDto[];
+};
+
 export type PlaceCallResultDto = { call: CallDto; alreadyPlaced: boolean };
 
 export type BrowserCredentialDto =
@@ -258,4 +313,10 @@ export type CommsStatusDto = CommsAvailabilityDto & {
   numbers: { e164: string; label: string; provider: "twilio" | "telnyx" }[];
   problems: string[];
   capabilities: Record<string, boolean | string> | null;
+  /** HERMES_MCP_SECRET is set: Hermes can ask Mili to ring the owner line. */
+  hermesCalls: boolean;
+  /** HERMES_SERVER_MCP_* is set: Mili can pass the owner's questions to Hermes. */
+  hermesAssistant: boolean;
+  /** Where Hermes connects, for its MCP config. */
+  hermesEndpoint: string | null;
 };

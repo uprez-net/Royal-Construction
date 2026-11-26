@@ -26,6 +26,8 @@ const KNOWN_TYPES = new Set([
   "milestoneTemplate",
   "offer",
   "offerRevision",
+  /** Not a screen: a scheduled owner call whose timer is started here. */
+  "ownerCall",
   "project",
   "teamMember",
   "tradie",

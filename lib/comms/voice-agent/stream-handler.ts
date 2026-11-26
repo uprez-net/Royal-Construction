@@ -1,6 +1,7 @@
 import { waitUntil } from "@vercel/functions";
 import type { WebSocket } from "ws";
 
+import { recordVoiceAgentEvents } from "@/lib/domain/comms/calls/agent-events";
 import { checkpointAgentTranscript } from "@/lib/domain/comms/calls/agent-transcript";
 import { applyCallEvent } from "@/lib/domain/comms/calls/events";
 import { formatVoiceAgentTranscript } from "@/lib/domain/comms/calls/voice-agent";
@@ -12,7 +13,11 @@ import { providerFromPath } from "../factory";
 import { COMMS_WEBHOOK_PRINCIPAL } from "../webhook-handler";
 import { voiceCallerPreparer } from "./caller";
 import { decideCallMove } from "./desk";
+import { voiceAgentEventWriter } from "./event-writer";
 import { gatewayEmbedding } from "@/lib/embedding-port";
+import { hermesAssistant } from "@/lib/hermes/assistant";
+import { readHermesConfig } from "@/lib/hermes/config";
+import type { OwnerAssistantPort } from "@/lib/domain/ports/owner-assistant";
 import { openLiveSession } from "./live";
 import { VoiceAgentSession, type VoiceAgentReportBody } from "./session";
 import { voiceAgentVoice } from "./settings";
@@ -47,6 +52,11 @@ export type VoiceAgentStreamDeps = {
   readonly decide?: typeof decideCallMove;
   readonly log?: Pick<Console, "info" | "warn" | "error">;
   readonly env?: Record<string, string | undefined>;
+  /**
+   * Hermes, for the owner's questions on a briefing call. Absent: built from
+   * HERMES_SERVER_MCP_* (null when that is not set).
+   */
+  readonly assistant?: OwnerAssistantPort | null;
   /**
    * Keeps the function alive until the promise settles. The platform freezes
    * the instance as soon as the carrier closes the socket — the caller hanging
@@ -136,8 +146,19 @@ export async function handleVoiceAgentStream(
       },
       decide: deps.decide ?? decideCallMove,
       dialect: provider,
+      // What the desk did on the call: queued and written in batches, never
+      // in the way of what Mili says next.
+      events: voiceAgentEventWriter(
+        (batch) =>
+          recordVoiceAgentEvents(COMMS_WEBHOOK_PRINCIPAL, batch, deps.db),
+        { log },
+      ),
       log,
       prepare: voiceCallerPreparer({
+        assistant:
+          deps.assistant === undefined
+            ? hermesAssistant(readHermesConfig(deps.env ?? process.env))
+            : deps.assistant,
         db: deps.db,
         disclosure: config.voiceAgent.disclosure,
         embedding: gatewayEmbedding,

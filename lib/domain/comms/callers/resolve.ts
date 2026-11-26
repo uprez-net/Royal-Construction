@@ -1,4 +1,4 @@
-import { CommsDirection, Prisma } from "@prisma/client";
+import { CallStaffTarget, CommsDirection, Prisma } from "@prisma/client";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 
 import type { DomainDb } from "../../db";
@@ -219,12 +219,24 @@ export async function resolveVoiceCaller(
   if (!input.enabled) return principal(unknownCaller("disabled"), null);
 
   const call = await db.call.findUnique({
-    select: { customerNumber: true, direction: true, providerCallId: true },
+    select: {
+      customerNumber: true,
+      direction: true,
+      providerCallId: true,
+      staffTarget: true,
+    },
     where: { id: authority.callId },
   });
+  // An inbound call, or Mili's own briefing call to the owner line: there
+  // the number is the one Royal dialled, which is at least as good as the
+  // one a carrier put on an inbound call.
+  const answerable =
+    call?.direction === CommsDirection.INBOUND
+    || (call?.direction === CommsDirection.OUTBOUND
+      && call.staffTarget === CallStaffTarget.AGENT);
   if (
     !call
-    || call.direction !== CommsDirection.INBOUND
+    || !answerable
     || call.providerCallId !== authority.providerCallId
   ) {
     // No audit row: there may be no call to hang it on.

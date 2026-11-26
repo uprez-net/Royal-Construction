@@ -3,6 +3,7 @@ import { connection } from "next/server";
 
 import { commsRuntimeFromEnv } from "@/lib/comms/factory";
 import { signedInUserPrincipal } from "@/lib/data/lead-whatsapp-request";
+import { readHermesConfig } from "@/lib/hermes/config";
 import { isOfficePrincipal } from "@/lib/domain/principal";
 import {
   forbiddenResponse,
@@ -31,6 +32,7 @@ export async function GET() {
     smsAvailable: channel?.smsAvailable ?? false,
   };
   if (principal.role !== Role.ADMIN) return successResponse(availability);
+  const hermes = readHermesConfig();
   return successResponse({
     ...availability,
     activeProvider: config.provider,
@@ -39,8 +41,13 @@ export async function GET() {
     capabilities: channel
       ? runtime.adapterFor(channel.provider).capabilities
       : null,
+    hermesAssistant: hermes.server !== null,
+    hermesCalls: hermes.inboundSecret !== null,
+    hermesEndpoint: config.webhookOrigin
+      ? `${config.webhookOrigin}/eve/v1/mcp`
+      : null,
     numbers: config.numbers,
-    problems: config.problems,
+    problems: [...config.problems, ...hermes.problems],
     recordingMode: config.recordingMode,
     smsEnabled: config.smsEnabled,
     staffForwardNumber: config.staffForwardNumber,

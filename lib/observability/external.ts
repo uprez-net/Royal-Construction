@@ -24,7 +24,9 @@ export type ExternalService =
   | "geoscape"
   | "clerk"
   // Royal's own WhatsApp bridge (services/whatsapp-bridge), for project groups.
-  | "whatsapp-bridge";
+  | "whatsapp-bridge"
+  // The owner's assistant on its own server, asked from a briefing call.
+  | "hermes";
 
 export interface ExternalFailureContext {
   /**

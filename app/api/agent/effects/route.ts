@@ -6,6 +6,7 @@ import {
   resolveAffected,
 } from "@/lib/cache/agent-effects";
 import { isAuthorizedEffectsRequest } from "@/lib/cache/agent-effects-channel";
+import { armOwnerCallTimers } from "@/lib/comms/owner-call-timers";
 import { refreshAgentContext } from "@/lib/domain/agent-context";
 import { systemPrincipal } from "@/lib/domain/principal";
 import { gatewayEmbedding } from "@/lib/embedding-port";
@@ -32,6 +33,24 @@ export async function POST(request: Request) {
   }
   const refs = parseEffectRefs(await request.json().catch(() => null));
   if (!refs.length) return Response.json({ tags: [], reindexing: 0 });
+
+  // Hermes scheduled (or cancelled) an owner call: start its timer, the
+  // durable sleep that rings it at its time. Eve cannot start the app's
+  // workflows itself; this is the one channel it already posts to after a
+  // write. A cancelled or already-rung call is not SCHEDULED, so nothing
+  // starts; a lost start is re-armed by the hourly owner-calls backstop.
+  const ownerCallIds = refs
+    .filter((ref) => ref.type === "ownerCall")
+    .map((ref) => ref.id);
+  if (ownerCallIds.length) {
+    after(async () => {
+      try {
+        await armOwnerCallTimers({ ownerCallIds }, prisma);
+      } catch (error) {
+        console.error("[agent-effects] arming owner-call timers failed", error);
+      }
+    });
+  }
 
   const affected = await resolveAffected(refs, prisma);
   const tags = cacheTagsFor(affected);
