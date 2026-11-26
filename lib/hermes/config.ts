@@ -9,11 +9,13 @@
 //     offered the owner-call tools (agent/tools/owner_calls.ts). Unset: no
 //     caller is Hermes.
 //
-//   Royal → Hermes   HERMES_SERVER_URL, HERMES_SERVER_TOKEN
+//   Royal → Hermes   HERMES_SERVER_MCP_URL, HERMES_SERVER_MCP_TOKEN
 //     Hermes's API server (its base URL; /v1/chat/completions is added) and
 //     that server's API key. On a briefing call, a question the owner asks
 //     that the briefing does not cover is sent there as a chat completion.
 //     Unset: Mili answers from the briefing only.
+//     The names still say MCP because that is how they are set in Vercel;
+//     the server is not an MCP server. Keep the names.
 //
 // docs/hermes-owner-calls.md is the contract.
 
@@ -50,21 +52,21 @@ export function readHermesConfig(env: Env = process.env): HermesConfig {
     inboundSecret = null;
   }
 
-  const rawUrl = value(env, "HERMES_SERVER_URL");
-  const token = value(env, "HERMES_SERVER_TOKEN");
+  const rawUrl = value(env, "HERMES_SERVER_MCP_URL");
+  const token = value(env, "HERMES_SERVER_MCP_TOKEN");
   let server: HermesConfig["server"] = null;
   if (rawUrl) {
     let url: URL | null = null;
     try {
       url = new URL(rawUrl);
     } catch {
-      problems.push("HERMES_SERVER_URL is not a URL.");
+      problems.push("HERMES_SERVER_MCP_URL is not a URL.");
     }
     // https or http. Plain http is allowed because Hermes has no domain yet and
     // answers on its server's IP; it still connects, but the admin panel says
     // the token and the owner's questions are travelling unencrypted.
     if (url && url.protocol !== "https:" && url.protocol !== "http:") {
-      problems.push("HERMES_SERVER_URL must be an https or http URL.");
+      problems.push("HERMES_SERVER_MCP_URL must be an https or http URL.");
       url = null;
     }
     if (
@@ -74,18 +76,18 @@ export function readHermesConfig(env: Env = process.env): HermesConfig {
       && token
     ) {
       problems.push(
-        "HERMES_SERVER_URL is plain http, so Hermes's key and the owner's questions travel unencrypted. Switch it to https once Hermes has a domain.",
+        "HERMES_SERVER_MCP_URL is plain http, so Hermes's key and the owner's questions travel unencrypted. Switch it to https once Hermes has a domain.",
       );
     }
     if (url && (url.username || url.password)) {
       problems.push(
-        "HERMES_SERVER_URL must not carry a username or password; put the credential in HERMES_SERVER_TOKEN.",
+        "HERMES_SERVER_MCP_URL must not carry a username or password; put the credential in HERMES_SERVER_MCP_TOKEN.",
       );
       url = null;
     }
     if (url && !token) {
       problems.push(
-        "HERMES_SERVER_TOKEN is not set, so Mili can't ask Hermes anything.",
+        "HERMES_SERVER_MCP_TOKEN is not set, so Mili can't ask Hermes anything.",
       );
     }
     if (url && token) {

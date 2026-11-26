@@ -22,8 +22,8 @@ test("config: a short inbound secret is refused", () => {
   assert.equal(config.problems.length, 1);
   const ok = readHermesConfig({
     HERMES_MCP_SECRET: SECRET,
-    HERMES_SERVER_TOKEN: "t",
-    HERMES_SERVER_URL: "https://hermes.example",
+    HERMES_SERVER_MCP_TOKEN: "t",
+    HERMES_SERVER_MCP_URL: "https://hermes.example",
   });
   assert.equal(ok.inboundSecret, SECRET);
   assert.deepEqual(ok.server, { token: "t", url: "https://hermes.example/" });
@@ -32,8 +32,8 @@ test("config: a short inbound secret is refused", () => {
 
 test("config: plain http to Hermes's IP connects, with a warning on the admin panel", () => {
   const config = readHermesConfig({
-    HERMES_SERVER_TOKEN: "t",
-    HERMES_SERVER_URL: "http://78.47.57.195:8642",
+    HERMES_SERVER_MCP_TOKEN: "t",
+    HERMES_SERVER_MCP_URL: "http://78.47.57.195:8642",
   });
   assert.deepEqual(config.server, {
     token: "t",
@@ -44,8 +44,8 @@ test("config: plain http to Hermes's IP connects, with a warning on the admin pa
   // localhost is local development: no warning.
   assert.deepEqual(
     readHermesConfig({
-      HERMES_SERVER_TOKEN: "t",
-      HERMES_SERVER_URL: "http://localhost:8642",
+      HERMES_SERVER_MCP_TOKEN: "t",
+      HERMES_SERVER_MCP_URL: "http://localhost:8642",
     }).problems,
     [],
   );
@@ -54,8 +54,8 @@ test("config: plain http to Hermes's IP connects, with a warning on the admin pa
 test("config: only https or http, and never a credential in the URL", () => {
   const server = (url: string) =>
     readHermesConfig({
-      HERMES_SERVER_TOKEN: "t",
-      HERMES_SERVER_URL: url,
+      HERMES_SERVER_MCP_TOKEN: "t",
+      HERMES_SERVER_MCP_URL: url,
     }).server;
   for (const refused of [
     "ws://localhost",
@@ -72,7 +72,7 @@ test("config: only https or http, and never a credential in the URL", () => {
 
 test("config: a URL without a token is reported, not half-connected", () => {
   const config = readHermesConfig({
-    HERMES_SERVER_URL: "https://hermes.example",
+    HERMES_SERVER_MCP_URL: "https://hermes.example",
   });
   assert.equal(config.server, null);
   assert.equal(config.problems.length, 1);
@@ -128,8 +128,8 @@ test("one question: one chat completion, with the bearer key, the briefing and t
 
   const port = hermesAssistant(
     readHermesConfig({
-      HERMES_SERVER_TOKEN: "hermes-token",
-      HERMES_SERVER_URL: "https://hermes.example",
+      HERMES_SERVER_MCP_TOKEN: "hermes-token",
+      HERMES_SERVER_MCP_URL: "https://hermes.example",
     }),
     fetcher,
   );
@@ -163,8 +163,8 @@ test("a non-2xx answer is a HermesError carrying the status", async () => {
     new Response("unauthorized", { status: 401 })) as unknown as typeof fetch;
   const port = hermesAssistant(
     readHermesConfig({
-      HERMES_SERVER_TOKEN: "wrong",
-      HERMES_SERVER_URL: "https://hermes.example",
+      HERMES_SERVER_MCP_TOKEN: "wrong",
+      HERMES_SERVER_MCP_URL: "https://hermes.example",
     }),
     fetcher,
   );
