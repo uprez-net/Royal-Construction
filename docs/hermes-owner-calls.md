@@ -35,8 +35,8 @@ Hermes ── get_owner_call ──▶ status, answered?, transcript, recording 
    owner-call tools. Anyone else signed in through the same channel never
    sees them.
 3. **Royal → Hermes** (optional, for follow-up questions). Set
-   `HERMES_SERVER_URL` to the base URL of Hermes's API server (no username or
-   password in it) and `HERMES_SERVER_TOKEN` to that server's API key.
+   `HERMES_SERVER_MCP_URL` to the base URL of Hermes's API server (no username or
+   password in it) and `HERMES_SERVER_MCP_TOKEN` to that server's API key.
    Without these, Mili answers from the briefing only and says Hermes will
    follow up. Plain `http://` to the server's IP is accepted because Hermes
    has no domain yet, but the key and the owner's questions then travel
@@ -118,10 +118,10 @@ read once a minute for calls that are due. This is how it fits together:
 
 When the owner asks something the briefing doesn't cover, Royal sends one
 OpenAI-style chat completion to Hermes's API server, with
-`Authorization: Bearer <HERMES_SERVER_TOKEN>`:
+`Authorization: Bearer <HERMES_SERVER_MCP_TOKEN>`:
 
 ```
-POST <HERMES_SERVER_URL>/v1/chat/completions
+POST <HERMES_SERVER_MCP_URL>/v1/chat/completions
 {
   "model": "hermes-agent",
   "stream": false,

@@ -315,7 +315,7 @@ export type CommsStatusDto = CommsAvailabilityDto & {
   capabilities: Record<string, boolean | string> | null;
   /** HERMES_MCP_SECRET is set: Hermes can ask Mili to ring the owner line. */
   hermesCalls: boolean;
-  /** HERMES_SERVER_URL and _TOKEN are set: Mili can pass the owner's questions to Hermes. */
+  /** HERMES_SERVER_MCP_URL and _TOKEN are set: Mili can pass the owner's questions to Hermes. */
   hermesAssistant: boolean;
   /** Where Hermes connects, for its MCP config. */
   hermesEndpoint: string | null;

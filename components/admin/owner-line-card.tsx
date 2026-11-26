@@ -33,7 +33,7 @@ export function OwnerLineCard({
 }: {
   /** HERMES_MCP_SECRET is set. */
   hermesCalls: boolean;
-  /** HERMES_SERVER_URL and HERMES_SERVER_TOKEN are set. */
+  /** HERMES_SERVER_MCP_URL and HERMES_SERVER_MCP_TOKEN are set. */
   hermesAssistant: boolean;
   hermesEndpoint: string | null;
   /** Mili is switched on and reachable. */
@@ -245,8 +245,8 @@ export function OwnerLineCard({
             {hermesAssistant ? null : (
               <>
                 {" "}
-                (set <code>HERMES_SERVER_URL</code> and{" "}
-                <code>HERMES_SERVER_TOKEN</code>)
+                (set <code>HERMES_SERVER_MCP_URL</code> and{" "}
+                <code>HERMES_SERVER_MCP_TOKEN</code>)
               </>
             )}
           </li>
