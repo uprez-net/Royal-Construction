@@ -65,11 +65,11 @@ orchestrator calls these tools directly, without delegating:
 
 | Tool                  | What it does |
 | --------------------- | ------------ |
-| `schedule_owner_call` | Rings now, or at `call_at`. Takes `idempotency_key`, `category`, `subject`, `agenda`, `context`, `reference`, `event_at`, `call_at` and, for a callback, `handoff_id`. The same key never rings twice, and a handoff gets one callback. |
+| `schedule_owner_call` | Rings now, or at `call_at`. Takes `idempotency_key`, `category`, `subject`, `agenda`, `context`, `reference`, `event_at`, `call_at` and, for a callback, `handoff_id`. The same key never rings twice, and a handoff gets one callback. Use a new `idempotency_key` for every callback, including a replacement for one that didn't reach the owner; reuse a key only to retry the same request. A key already used for a different call is refused. |
 | `get_owner_call`      | Where a call stands: `scheduled`, `placing`, `placed`, `canceled` or `failed` (with `failure_reason`). Once placed, it also gives the call's status, whether the owner answered, how long it ran, the transcript, whether the recording was saved, and its `handoff`. |
 | `cancel_owner_call`   | Cancels a call before it rings. Refused once it has rung. |
 | `list_owner_calls`    | The calls still to ring, then the most recent ones. |
-| `list_owner_call_handoffs` | The post-call handoffs still outstanding, oldest first, including ones Royal could not deliver. |
+| `list_owner_call_handoffs` | The post-call handoffs still outstanding, oldest first, including ones Royal could not deliver. Up to 50 a page; pass `cursor` (the `next_cursor` from the page before) for the next. |
 | `get_owner_call_handoff` | One handoff: the call, whether the owner picked up, each request, the transcript, and where it stands. |
 | `resolve_owner_call_handoff` | Marks a handoff dealt with when no callback is needed, with one line saying how. |
 
@@ -197,19 +197,27 @@ When an owner call ends, Royal passes Hermes what it left
 1. **The call ends.** Mili's report or the carrier's last status, whichever
    lands first, marks the call's `OwnerCallHandoff` `PENDING`. There is one
    handoff per owner call, so a repeated event does nothing. Unanswered
-   calls get one too, so Hermes knows the briefing wasn't given.
+   calls get one too, so Hermes knows the briefing wasn't given. A callback
+   that rang out unanswered doesn't get its own: the handoff it came from
+   is reopened instead. Calls placed before handoffs existed never get one.
 2. **Delivery.** A workflow (`lib/workflow/owner-call-handoff.ts`) sends one
    chat completion to Hermes's API server. The system message holds Royal's
    rules and the handoff id. The user message holds the call as data: its
    outcome, each request (with `call_back` and the owner's own timing
    words), and the transcript. An answered call with no transcript yet waits
    up to 5 minutes for the recording's, then goes without and says so. The
-   handoff is claimed `PENDING → DELIVERING`, so two runs never both send
-   it. Hermes may take up to 3 minutes to reply. A 2xx chat completion makes
+   handoff is claimed `PENDING → DELIVERING` under a fresh claim id, and
+   the result is written only while that claim still holds. So two runs
+   never both send it, and a stale attempt never overwrites a newer one.
+   The requests are read after the claim, so one noted just before it goes
+   in. Hermes may take up to 3 minutes to reply. A 2xx chat completion makes
    it `DELIVERED`, and the reply is kept.
 3. **Hermes deals with it.** For a callback, Hermes calls
-   `schedule_owner_call` with `handoff_id` once it has the answer. That
-   resolves the handoff in the same transaction. Hermes then reads the call
+   `schedule_owner_call` with `handoff_id` once it has the answer and the
+   call has ended. Until then the handoff is still open and the request is
+   refused, with a reply telling Hermes to wait for the handoff. Scheduling
+   resolves the handoff in the same transaction, under the handoff's row
+   lock. A handoff already resolved without a callback is refused one. Hermes then reads the call
    back with `get_owner_call`. A second request for the same handoff returns
    the first callback, so a handoff Hermes received twice still rings once.
    If nothing needs a callback, Hermes calls `resolve_owner_call_handoff`.
@@ -220,12 +228,24 @@ When an owner call ends, Royal passes Hermes what it left
    retries after 1, 5 and 15 minutes. After that, the hourly
    `/api/cron/owner-calls` backstop retries it, up to 12 tries in all. It
    also re-starts a run that was lost, and marks a call that ended with
-   neither end event recorded. Without `HERMES_SERVER_MCP_URL`, delivery
+   neither end event recorded, and fails a delivery that was cut off with
+   no tries left. Without `HERMES_SERVER_MCP_URL`, delivery
    stops at once and the handoff waits for Hermes to pull it with
    `list_owner_call_handoffs`. A callback that fails to ring (missed, no
-   owner line, the carrier refused) reopens its handoff and unlinks it, so
-   Hermes can schedule another. The admin hub shows *"N not passed to
-   Hermes"*, and each call under Agent calls shows its handoff.
+   owner line, the carrier refused, or it rang out unanswered) reopens its
+   handoff and unlinks it, so Hermes can schedule another. A callback whose
+   carrier answer was uncertain may have rung, so it stays linked until
+   someone checks the carrier's log. The admin hub shows *"N not passed to
+   Hermes"*. Agent calls lists those calls at the top, however old they
+   are, and each call there shows its handoff.
+5. **Reopened, not replayed.** A handoff is reopened (back to `PENDING`, its
+   `revision` bumped) when its callback didn't reach the owner, or when a
+   request is noted after it was sent. For example, the owner hangs up while
+   holding and the "Hermes will call back" note lands late. Each delivery
+   names its revision. Revision 0 sent twice is a replay, and Hermes is told
+   not to redo it. A higher revision is new, and Hermes is told to act on it.
+   The same request noted again with a different callback choice or time
+   keeps the latest. Notes on a handoff are admitted one at a time.
 
 ## The event log
 

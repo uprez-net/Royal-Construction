@@ -255,6 +255,8 @@ export function clearOwnerLine(): Promise<unknown> {
 export function fetchAgentCalls(): Promise<{
   pending: OwnerCallDto[];
   recent: OwnerCallDto[];
+  /** However old: calls whose handoff never reached Hermes. */
+  handoffFailed: OwnerCallDto[];
 }> {
   return unwrap(
     "/api/comms/agent-calls",

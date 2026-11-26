@@ -96,6 +96,13 @@ export type VoiceCallerDeps = {
   readonly assistant?: OwnerAssistantPort | null;
   /** The music an owner holds to (hold-music.ts). Absent: silence. */
   readonly holdMusic?: () => Promise<Uint8Array | null>;
+  /**
+   * A request noted after the call's handoff had already gone to Hermes
+   * reopened it: start delivering it again. Absent: the hourly backstop does.
+   */
+  readonly onHandoffReopened?: (
+    handoffIds: readonly string[],
+  ) => Promise<unknown>;
   readonly now?: () => Date;
 };
 
@@ -136,6 +143,18 @@ export function voiceCallerPreparer(
     briefing: OwnerCallVoiceBriefing,
     authority: VoiceCallAuthority,
   ): Promise<VoiceCallerSetup> => {
+    const assistant = deps.assistant ?? null;
+    const canAskAssistant = assistant !== null;
+    // Loaded alongside the owner's access, within the same short wait: music
+    // that is missing or slow means silence on hold, never a slower start or
+    // a lost briefing.
+    const music =
+      canAskAssistant && deps.holdMusic
+        ? within(deps.holdMusic(), OWNER_ACCESS_TIMEOUT_MS).catch(
+            // loadHoldMusic reports its own failure.
+            () => null,
+          )
+        : Promise.resolve(null);
     let access: VoiceCallerAccess | null = null;
     try {
       access = await within(
@@ -152,21 +171,12 @@ export function voiceCallerPreparer(
         source: "voice-agent:resolve-owner",
       });
     }
-    const assistant = deps.assistant ?? null;
-    const canAskAssistant = assistant !== null;
     const catalogue = access?.lookups ?? [];
     const runCatalogue =
       access && catalogue.length
         ? catalogueLookup(access, authority.callId)
         : null;
-    let holdAudio: Uint8Array | null = null;
-    if (canAskAssistant && deps.holdMusic) {
-      try {
-        holdAudio = await within(deps.holdMusic(), OWNER_ACCESS_TIMEOUT_MS);
-      } catch {
-        // loadHoldMusic reports its own failure; the owner holds in silence.
-      }
-    }
+    const holdAudio = await music;
 
     /** Note a request for Hermes; null when it could not be written. */
     const note = async (request: {
@@ -181,6 +191,17 @@ export function voiceCallerPreparer(
           { ...request, now: now() },
           deps.db,
         );
+        if (noted.reopened && deps.onHandoffReopened) {
+          // Off the call's path; the backstop starts it if this fails.
+          void deps
+            .onHandoffReopened([noted.handoffId])
+            .catch((error: unknown) => {
+              console.error(
+                "[voice-agent] could not restart delivery of a reopened handoff; the hourly backstop will.",
+                error instanceof Error ? error.message : error,
+              );
+            });
+        }
         return noted.handoffId;
       } catch (error) {
         reportError(error, {

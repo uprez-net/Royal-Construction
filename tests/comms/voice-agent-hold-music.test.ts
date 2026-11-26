@@ -138,6 +138,22 @@ test("holding: if Mili speaks, the music queued ahead of her is dropped and her 
   assert.ok(h.carrierOut.length > count);
 });
 
+test("holding: the pauses inside what she says go through with her words, and the music waits", async () => {
+  const h = await holding(new Promise(() => {}));
+  h.session.handleModelEvent(audio(SPEECH));
+  const afterWord = h.carrierOut.length;
+  // A pause between two words: part of what she is saying.
+  h.session.handleModelEvent(audio(0xff));
+  h.session.handleModelEvent(audio(SPEECH));
+  assert.equal(h.carrierOut.length, afterWord + 2);
+  assert.equal(clears(h.carrierOut).length, 1, "no music came between them");
+  // Well after her last word, background silence is dropped again.
+  h.advance(5_000);
+  const quiet = h.carrierOut.length;
+  h.session.handleModelEvent(audio(0xff));
+  assert.equal(h.carrierOut.length, quiet);
+});
+
 test("a lookup nobody holds for (Royal's records) plays no music", async () => {
   const records = VOICE_LOOKUPS.find((l) => l.name === "pipeline_summary");
   assert.ok(records);

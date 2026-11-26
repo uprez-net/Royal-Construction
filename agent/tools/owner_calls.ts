@@ -9,6 +9,7 @@ import {
   handoffIdInput,
   isHermesSession,
   listHandoffs,
+  listHandoffsInput,
   listScheduledOwnerCalls,
   ownerCallIdInput,
   resolveHandoff,
@@ -69,12 +70,12 @@ export default defineDynamic({
             }),
             list_owner_call_handoffs: defineTool({
               description:
-                "The post-call handoffs still outstanding: calls that ended with something for you (a callback with the details, something to do), not yet resolved, oldest first. Includes ones Royal failed to deliver to you.",
-              inputSchema: z.object({}),
+                "The post-call handoffs still outstanding: calls that ended with something for you (a callback with the details, something to do), not yet resolved, oldest first, a page at a time (pass next_cursor for the next). Includes ones Royal failed to deliver to you.",
+              inputSchema: listHandoffsInput,
               label: {
                 start: () => "Listing what Mili's calls left for Hermes",
               },
-              execute: (_input, toolCtx) => listHandoffs(toolCtx),
+              execute: (input, toolCtx) => listHandoffs(input, toolCtx),
             }),
             get_owner_call_handoff: defineTool({
               description:

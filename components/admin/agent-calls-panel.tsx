@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   Bot,
   CalendarClock,
   ChevronDown,
@@ -491,6 +492,7 @@ export function AgentCallsPanel() {
   const [lists, setLists] = useState<{
     pending: OwnerCallDto[];
     recent: OwnerCallDto[];
+    handoffFailed: OwnerCallDto[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -545,6 +547,21 @@ export function AgentCallsPanel() {
       ) : null}
       {lists ? (
         <>
+          {lists.handoffFailed.length ? (
+            <Section
+              title="Not passed to Hermes"
+              icon={
+                <AlertTriangle
+                  className="size-4 text-destructive"
+                  aria-hidden="true"
+                />
+              }
+              empty=""
+              calls={lists.handoffFailed}
+              onChanged={() => void load()}
+              version={version}
+            />
+          ) : null}
           <Section
             title="Pending"
             icon={<CalendarClock className="size-4" aria-hidden="true" />}

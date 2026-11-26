@@ -120,6 +120,7 @@ export function handoffForHermes(
     callback_owner_call_id: handoff.callbackOwnerCallId,
     delivered_at: iso(handoff.deliveredAt),
     handoff_id: handoff.id,
+    revision: handoff.revision,
     last_error: handoff.lastError,
     owner_call_id: handoff.ownerCallId,
     ready_at: iso(handoff.readyAt),
@@ -220,7 +221,7 @@ export const scheduleOwnerCallInput = z.object({
     .max(100)
     .optional()
     .describe(
-      "When this is the callback for a post-call handoff, its handoff_id. Scheduling it resolves the handoff; one callback per handoff, so asking again returns the one already scheduled.",
+      "When this is the callback for a post-call handoff, its handoff_id, once the call it came from has ended. Scheduling it resolves the handoff; one callback per handoff, so asking again returns the one already scheduled. Use a new idempotency_key for each callback, including a replacement for one that didn't reach the owner.",
     ),
 });
 
@@ -361,13 +362,31 @@ export async function listScheduledOwnerCalls(
   });
 }
 
-export async function listHandoffs(ctx: ToolContext): Promise<OwnerCallResult> {
-  await requireHermes(ctx);
-  return refusalsAsResults(async () => ({
-    outstanding: (await listOwnerCallHandoffs(HERMES_PRINCIPAL, agentDb)).map(
-      handoffForHermes,
+export const listHandoffsInput = z.object({
+  cursor: z
+    .string()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe(
+      "next_cursor from the previous page; leave it out for the first.",
     ),
-  }));
+});
+
+export async function listHandoffs(
+  input: z.infer<typeof listHandoffsInput>,
+  ctx: ToolContext,
+): Promise<OwnerCallResult> {
+  await requireHermes(ctx);
+  return refusalsAsResults(async () => {
+    const page = await listOwnerCallHandoffs(HERMES_PRINCIPAL, agentDb, {
+      cursor: input.cursor ?? null,
+    });
+    return {
+      next_cursor: page.nextCursor,
+      outstanding: page.handoffs.map(handoffForHermes),
+    };
+  });
 }
 
 export async function getHandoff(

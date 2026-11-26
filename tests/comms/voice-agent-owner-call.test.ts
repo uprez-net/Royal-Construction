@@ -34,7 +34,7 @@ function ownerDb(extra: Record<string, unknown> = {}) {
   return recordingDb({
     "ownerCallHandoff.findUnique": { id: "h-1", status: "OPEN" },
     "ownerCallHandoffRequest.count": 0,
-    "ownerCallHandoffRequest.createMany": { count: 1 },
+    "ownerCallHandoffRequest.findUnique": null,
     ...extra,
     "call.findUnique": {
       contactName: "Raj",
@@ -182,11 +182,11 @@ test("holding: hold music comes with ask_hermes; Hermes failing becomes a call b
     text: "noted for a call back (handoff h-1)",
   });
   const noted = recorder.calls.find(
-    (c) => c.operation === "ownerCallHandoffRequest.createMany",
-  )?.args as { data: Record<string, unknown>[] };
-  assert.equal(noted.data[0].request, "Who else is coming?");
-  assert.equal(noted.data[0].callBack, true);
-  assert.equal(noted.data[0].source, "hold_failed");
+    (c) => c.operation === "ownerCallHandoffRequest.create",
+  )?.args as { data: Record<string, unknown> };
+  assert.equal(noted.data.request, "Who else is coming?");
+  assert.equal(noted.data.callBack, true);
+  assert.equal(noted.data.source, "hold_failed");
 });
 
 test("holding: if the call back can't be noted either, Mili promises nothing", async () => {
@@ -198,7 +198,7 @@ test("holding: if the call back can't be noted either, Mili promises nothing", a
       handOff: async () => "",
     },
     db: ownerDb({
-      "ownerCallHandoffRequest.createMany": () => {
+      "ownerCallHandoffRequest.create": () => {
         throw new Error("database down");
       },
     }).transactionalDb,
@@ -235,7 +235,7 @@ test("a call back the owner asks for is noted for Hermes, and Mili confirms only
 
   const broken = await voiceCallerPreparer({
     db: ownerDb({
-      "ownerCallHandoffRequest.createMany": () => {
+      "ownerCallHandoffRequest.create": () => {
         throw new Error("database down");
       },
     }).transactionalDb,

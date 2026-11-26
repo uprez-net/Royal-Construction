@@ -186,6 +186,7 @@ export async function handleVoiceAgentStream(
         disclosure: config.voiceAgent.disclosure,
         embedding: gatewayEmbedding,
         holdMusic: deps.holdMusic ?? loadHoldMusic,
+        onHandoffReopened: deps.onHandoffReady ?? startHandoffDeliveries,
       }),
       openModel: () =>
         open(

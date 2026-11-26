@@ -2,23 +2,29 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 
 import { parseLookupCall } from "@/lib/comms/voice-agent/desk";
+import type { VoiceCallAuthority } from "@/lib/domain/comms/callers/identity";
 import {
   deliverOwnerCallHandoff,
+  handoffsToDeliver,
+  listOwnerCallHandoffs,
   markOwnerCallEnded,
   noteOwnerCallRequest,
   OWNER_CALL_HANDOFF_LIMITS,
   OWNER_CALL_HANDOFF_REFUSALS,
   ownerCallHandoffBody,
+  ownerCallHandoffInstructions,
   resolveOwnerCallHandoff,
 } from "@/lib/domain/comms/calls/owner-call-handoff";
 import {
   OWNER_CALL_REFUSALS,
   placeOwnerCall,
+  recoverStalePlacingOwnerCalls,
   requestOwnerCall,
 } from "@/lib/domain/comms/calls/owner-call";
 import {
   DomainNotFoundError,
   DomainTransitionError,
+  DomainValidationError,
 } from "@/lib/domain/errors";
 import type {
   OwnerAssistantHandoff,
@@ -38,7 +44,11 @@ import { recordingDb } from "../architecture/domain-harness";
 const NOW = new Date("2026-11-26T02:00:00Z");
 const HERMES = systemPrincipal("hermes");
 const WORKFLOW = systemPrincipal("workflow:owner-call-handoff");
-const AUTHORITY = { callId: "call-1", providerCallId: "v3:abc" } as never;
+const AUTHORITY = {
+  callId: "call-1",
+  kind: "voice-call",
+  providerCallId: "v3:abc",
+} satisfies VoiceCallAuthority;
 
 type Op = { operation: string; args: unknown };
 const ops = (calls: readonly Op[], operation: string) =>
@@ -83,6 +93,8 @@ function handoffRow(overrides: Record<string, unknown> = {}) {
       subject: "Bookings update",
     },
     readyAt: NOW,
+    revision: 0,
+    claimId: null,
     requests: [
       {
         callBack: true,
@@ -112,7 +124,7 @@ test("on the call: a request is noted at once on the call's handoff, with an eve
     "call.findUnique": VOICE_ROW,
     "ownerCallHandoff.findUnique": { id: "h-1", status: "OPEN" },
     "ownerCallHandoffRequest.count": 0,
-    "ownerCallHandoffRequest.createMany": { count: 1 },
+    "ownerCallHandoffRequest.findUnique": null,
   });
   const noted = await noteOwnerCallRequest(
     AUTHORITY,
@@ -125,26 +137,119 @@ test("on the call: a request is noted at once on the call's handoff, with an eve
     },
     recorder.transactionalDb,
   );
-  assert.deepEqual(noted, { alreadyNoted: false, handoffId: "h-1" });
+  assert.deepEqual(noted, {
+    alreadyNoted: false,
+    handoffId: "h-1",
+    reopened: false,
+  });
   const created = ops(recorder.calls, "ownerCallHandoff.createMany")[0]
     ?.args as { data: { status: string }[]; skipDuplicates: boolean };
   assert.equal(created.data[0].status, "OPEN");
   assert.equal(created.skipDuplicates, true, "one handoff per owner call");
-  const request = ops(recorder.calls, "ownerCallHandoffRequest.createMany")[0]
-    ?.args as { data: Record<string, unknown>[]; skipDuplicates: boolean };
-  assert.equal(request.data[0].request, "Find the past two building bookings.");
-  assert.equal(request.data[0].callBack, true);
-  assert.equal(request.data[0].timing, "after three");
-  assert.equal(request.skipDuplicates, true);
+  const request = ops(recorder.calls, "ownerCallHandoffRequest.create")[0]
+    ?.args as { data: Record<string, unknown> };
+  assert.equal(request.data.request, "Find the past two building bookings.");
+  assert.equal(request.data.callBack, true);
+  assert.equal(request.data.timing, "after three");
+  // One note at a time: the handoff's row is locked before the cap is read.
+  const order = recorder.operations();
+  assert.ok(order.indexOf("$.executeRaw") >= 0, "the handoff row is locked");
+  assert.ok(
+    order.indexOf("$.executeRaw")
+      < order.indexOf("ownerCallHandoffRequest.count"),
+  );
   assert.deepEqual(eventKinds(recorder.calls), ["handoff.noted"]);
+});
+
+test("on the call: the same request with a changed call back or time keeps the latest", async () => {
+  const recorder = recordingDb({
+    "call.findUnique": VOICE_ROW,
+    "ownerCallHandoff.findUnique": { id: "h-1", status: "OPEN" },
+    "ownerCallHandoffRequest.findUnique": {
+      callBack: false,
+      id: "r-1",
+      timing: null,
+    },
+  });
+  const noted = await noteOwnerCallRequest(
+    AUTHORITY,
+    {
+      callBack: true,
+      request: "Book the plumber",
+      source: "owner",
+      timing: "tomorrow morning",
+    },
+    recorder.transactionalDb,
+  );
+  assert.equal(noted.alreadyNoted, false);
+  const updated = ops(recorder.calls, "ownerCallHandoffRequest.update")[0]
+    ?.args as { data: Record<string, unknown>; where: { id: string } };
+  assert.equal(updated.where.id, "r-1");
+  assert.equal(updated.data.callBack, true);
+  assert.equal(updated.data.timing, "tomorrow morning");
+  assert.deepEqual(ops(recorder.calls, "ownerCallHandoffRequest.create"), []);
+  assert.deepEqual(eventKinds(recorder.calls), ["handoff.noted"]);
+});
+
+test("a request noted after the handoff went to Hermes reopens it as a new revision", async () => {
+  for (const status of ["DELIVERING", "DELIVERED", "RESOLVED", "FAILED"]) {
+    const recorder = recordingDb({
+      "call.findUnique": VOICE_ROW,
+      "ownerCallHandoff.findUnique": { id: "h-1", status },
+      "ownerCallHandoffRequest.count": 1,
+      "ownerCallHandoffRequest.findUnique": null,
+    });
+    const noted = await noteOwnerCallRequest(
+      AUTHORITY,
+      {
+        callBack: true,
+        request: "Who else is coming?",
+        source: "hold_failed",
+      },
+      recorder.transactionalDb,
+    );
+    assert.equal(noted.reopened, true, status);
+    const reopened = ops(recorder.calls, "ownerCallHandoff.update")[0]
+      ?.args as { data: Record<string, unknown> };
+    assert.equal(reopened.data.status, "PENDING");
+    assert.deepEqual(reopened.data.revision, { increment: 1 });
+    assert.equal(
+      reopened.data.claimId,
+      null,
+      "an in-flight delivery loses its claim",
+    );
+    assert.deepEqual(eventKinds(recorder.calls), [
+      "handoff.noted",
+      "handoff.reopened",
+    ]);
+  }
+  // Not yet gone: nothing to reopen.
+  for (const status of ["OPEN", "PENDING"]) {
+    const recorder = recordingDb({
+      "call.findUnique": VOICE_ROW,
+      "ownerCallHandoff.findUnique": { id: "h-1", status },
+      "ownerCallHandoffRequest.count": 0,
+      "ownerCallHandoffRequest.findUnique": null,
+    });
+    const noted = await noteOwnerCallRequest(
+      AUTHORITY,
+      { callBack: true, request: "Call me back", source: "owner" },
+      recorder.transactionalDb,
+    );
+    assert.equal(noted.reopened, false, status);
+    assert.deepEqual(ops(recorder.calls, "ownerCallHandoff.update"), []);
+  }
 });
 
 test("on the call: the same request noted twice is kept once, and logged once", async () => {
   const recorder = recordingDb({
     "call.findUnique": VOICE_ROW,
     "ownerCallHandoff.findUnique": { id: "h-1", status: "OPEN" },
-    "ownerCallHandoffRequest.count": 1,
-    "ownerCallHandoffRequest.createMany": { count: 0 },
+    "ownerCallHandoffRequest.findUnique": {
+      callBack: true,
+      id: "r-1",
+      timing: null,
+    },
   });
   const noted = await noteOwnerCallRequest(
     AUTHORITY,
@@ -152,6 +257,7 @@ test("on the call: the same request noted twice is kept once, and logged once", 
     recorder.transactionalDb,
   );
   assert.equal(noted.alreadyNoted, true);
+  assert.deepEqual(ops(recorder.calls, "ownerCallHandoffRequest.update"), []);
   assert.deepEqual(eventKinds(recorder.calls), []);
 });
 
@@ -180,6 +286,7 @@ test("on the call: a desk that keeps noting is capped", async () => {
     "call.findUnique": VOICE_ROW,
     "ownerCallHandoff.findUnique": { id: "h-1", status: "OPEN" },
     "ownerCallHandoffRequest.count": OWNER_CALL_HANDOFF_LIMITS.requestsPerCall,
+    "ownerCallHandoffRequest.findUnique": null,
   });
   await assert.rejects(
     noteOwnerCallRequest(
@@ -243,6 +350,16 @@ test("the call ends: its handoff is ready once, however many end-of-call events 
   );
   assert.deepEqual(eventKinds(repeat.calls), []);
 
+  // Placed before handoffs existed: never handed over, late or otherwise.
+  const old = recordingDb({
+    "ownerCall.findUnique": { handoffEligible: false, id: "oc-0" },
+  });
+  assert.equal(
+    await markOwnerCallEnded(old.db, { callId: "call-0", now: NOW }),
+    null,
+  );
+  assert.deepEqual(old.operations(), ["ownerCall.findUnique"]);
+
   const notOwner = recordingDb({ "ownerCall.findUnique": null });
   assert.equal(
     await markOwnerCallEnded(notOwner.db, { callId: "call-9", now: NOW }),
@@ -291,14 +408,93 @@ test("delivery: Hermes is told what to do, with the requests and the transcript 
         where: Record<string, unknown>;
       },
   );
-  // Claimed first, so a second run finds nothing to send.
+  // Claimed first, under a fresh claim id, so a second run finds nothing to
+  // send and a stale one can write nothing.
   assert.equal(writes[0].data.status, "DELIVERING");
   assert.equal(writes[0].where.status, "PENDING");
-  // Only a DELIVERING claim becomes DELIVERED: one Hermes resolved while
-  // answering (it scheduled the callback inside the request) stays resolved.
-  assert.equal(writes[1].data.status, "DELIVERED");
-  assert.equal(writes[1].where.status, "DELIVERING");
+  const claimId = writes[0].data.claimId;
+  assert.equal(typeof claimId, "string");
+  // The reply is kept while the claim is still this attempt's, even if
+  // Hermes resolved it while answering...
+  assert.equal(writes[1].where.claimId, claimId);
+  assert.equal(
+    writes[1].data.hermesReply,
+    "I'll find the two bookings and schedule the callback.",
+  );
+  // ...and only a DELIVERING claim becomes DELIVERED.
+  assert.equal(writes[2].data.status, "DELIVERED");
+  assert.equal(writes[2].where.status, "DELIVERING");
+  assert.equal(writes[2].where.claimId, claimId);
   assert.deepEqual(eventKinds(recorder.calls), ["handoff.delivered"]);
+});
+
+test("delivery: overtaken while Hermes answered (reopened), it writes nothing and asks to go again", async () => {
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": handoffRow(),
+    "ownerCallHandoff.updateMany": (args: unknown) =>
+      (args as { data: Record<string, unknown> }).data.claimId
+        ? { count: 1 }
+        : { count: 0 },
+  });
+  assert.equal(
+    await deliverOwnerCallHandoff(
+      WORKFLOW,
+      { handoffId: "h-1", now: NOW },
+      recorder.transactionalDb,
+      { assistant: assistant() },
+    ),
+    "reopened",
+  );
+  assert.deepEqual(eventKinds(recorder.calls), []);
+});
+
+test("delivery: a reopened handoff tells Hermes why, so it is acted on and not taken for a replay", () => {
+  const first = ownerCallHandoffInstructions("h-1");
+  assert.match(first, /revision 0/);
+  assert.match(first, /same delivery sent again: do not do it again/);
+  const again = ownerCallHandoffInstructions("h-1", {
+    revision: 2,
+    why: "The callback Hermes scheduled didn't reach the owner: no answer",
+  });
+  assert.match(again, /revision 2/);
+  assert.match(again, /reopened: The callback Hermes scheduled didn't reach/);
+  assert.match(again, /Act on it even if you dealt with an earlier revision/);
+  assert.match(again, /new idempotency_key for each callback/);
+});
+
+test("delivery: one cut off with no tries left is FAILED, and not tried again", async () => {
+  let sent = 0;
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": handoffRow({
+      attempts: OWNER_CALL_HANDOFF_LIMITS.maxAttempts,
+      claimId: "old-claim",
+      lastAttemptAt: new Date(NOW.getTime() - 60 * 60 * 1000),
+      status: "DELIVERING",
+    }),
+    "ownerCallHandoff.updateMany": { count: 1 },
+  });
+  assert.equal(
+    await deliverOwnerCallHandoff(
+      WORKFLOW,
+      { handoffId: "h-1", now: NOW },
+      recorder.transactionalDb,
+      {
+        assistant: assistant(async () => {
+          sent += 1;
+          return "";
+        }),
+      },
+    ),
+    "gave_up",
+  );
+  assert.equal(sent, 0);
+  const write = ops(recorder.calls, "ownerCallHandoff.updateMany")[0]?.args as {
+    data: Record<string, unknown>;
+    where: Record<string, unknown>;
+  };
+  assert.equal(write.data.status, "FAILED");
+  assert.equal(write.data.lastError, OWNER_CALL_HANDOFF_REFUSALS.cutOff);
+  assert.equal(write.where.claimId, "old-claim");
 });
 
 test("delivery: Hermes failing leaves it FAILED and outstanding, with why — never delivered", async () => {
@@ -626,6 +822,63 @@ test("the callback: scheduled with the handoff's id it resolves the handoff in t
   ]);
 });
 
+test("the callback: checked again under the handoff's lock in the transaction that creates it", async () => {
+  // Free at the first look, given a callback by the time of the transaction.
+  let looks = 0;
+  const recorder = recordingDb({
+    "commsOwnerLine.findUnique": OWNER_LINE,
+    "ownerCall.findUnique": (args: unknown) => {
+      const where = (args as { where: Record<string, unknown> }).where;
+      return where.idempotencyKey ? null : summary("oc-3");
+    },
+    "ownerCallHandoff.findUnique": () => {
+      looks += 1;
+      return looks === 1
+        ? { callback: null, status: "DELIVERED" }
+        : { callback: { id: "oc-3" }, status: "RESOLVED" };
+    },
+  });
+  const result = await requestOwnerCall(
+    HERMES,
+    CALLBACK_INPUT,
+    recorder.transactionalDb,
+  );
+  assert.equal(result.alreadyRequested, true);
+  assert.equal(result.ownerCall.id, "oc-3");
+  assert.deepEqual(ops(recorder.calls, "ownerCall.create"), []);
+  assert.ok(recorder.operations().includes("$.executeRaw"), "locked first");
+});
+
+test("the callback: a handoff resolved without one gets none", async () => {
+  const recorder = recordingDb({
+    "ownerCall.findUnique": null,
+    "ownerCallHandoff.findUnique": { callback: null, status: "RESOLVED" },
+  });
+  await assert.rejects(
+    requestOwnerCall(HERMES, CALLBACK_INPUT, recorder.transactionalDb),
+    (error) =>
+      error instanceof DomainTransitionError
+      && error.message === OWNER_CALL_HANDOFF_REFUSALS.resolvedWithoutCallback,
+  );
+});
+
+test("the callback: a key already used for another call is refused, not answered as this handoff's", async () => {
+  // The same key as a callback for another handoff, and as a failed callback
+  // for this one that was unlinked: neither resolves this handoff.
+  for (const fromHandoffId of ["h-other", null]) {
+    const recorder = recordingDb({
+      "ownerCall.findUnique": { fromHandoffId, id: "oc-9" },
+    });
+    await assert.rejects(
+      requestOwnerCall(HERMES, CALLBACK_INPUT, recorder.transactionalDb),
+      (error) =>
+        error instanceof DomainValidationError
+        && error.message === OWNER_CALL_REFUSALS.keyForOtherHandoff,
+    );
+    assert.deepEqual(ops(recorder.calls, "ownerCall.create"), []);
+  }
+});
+
 test("the callback: a handoff Hermes received twice still gets one callback", async () => {
   const recorder = recordingDb({
     "ownerCall.findUnique": (args: unknown) => {
@@ -686,10 +939,14 @@ test("the callback failing to ring reopens its handoff, unlinked so Hermes can s
     ),
     "failed",
   );
-  const unlinked = ops(recorder.calls, "ownerCall.update").find(
-    (c) => "fromHandoffId" in (c.args as { data: object }).data,
+  const unlinked = ops(recorder.calls, "ownerCall.update")
+    .map((c) => c.args as { data: Record<string, unknown> })
+    .find((args) => "fromHandoffId" in args.data);
+  assert.equal(
+    unlinked?.data.fromHandoffId,
+    null,
+    "the failed call no longer holds the handoff's callback",
   );
-  assert.ok(unlinked, "the failed call no longer holds the handoff's callback");
   const reopened = ops(recorder.calls, "ownerCallHandoff.update")[0]?.args as {
     data: Record<string, unknown>;
     where: { id: string };
@@ -704,6 +961,155 @@ test("the callback failing to ring reopens its handoff, unlinked so Hermes can s
     "owner_call.failed",
     "handoff.reopened",
   ]);
+});
+
+test("a callback that may have rung keeps its handoff: never reopened on an uncertain carrier answer", async () => {
+  // placeOwnerCall: the carrier never confirmed, so the call may have rung.
+  const uncertain = recordingDb({
+    "agentCallEvent.create": {},
+    "call.count": 0,
+    "commsOwnerLine.findUnique": OWNER_LINE,
+    "ownerCall.findUnique": {
+      call: {
+        needsReconciliation: true,
+        providerCallId: null,
+        status: "INITIATED",
+      },
+      callAt: NOW,
+      category: "task_update",
+      fromHandoffId: "h-1",
+    },
+    "ownerCall.updateMany": { count: 1 },
+    // No earlier call under this key; the carrier is then unreachable.
+    "call.findUnique": null,
+  });
+  await placeOwnerCall(
+    systemPrincipal("workflow:owner-call"),
+    { now: NOW, ownerCallId: "oc-2" },
+    uncertain.transactionalDb,
+    { voice: null },
+  ).catch(() => "threw");
+  // It did fail the call — and left the handoff alone.
+  assert.ok(eventKinds(uncertain.calls).includes("owner_call.failed"));
+  assert.deepEqual(ops(uncertain.calls, "ownerCallHandoff.update"), []);
+
+  // The backstop: a placement left PLACING with no carrier id saved is
+  // failed as uncertain, and its handoff stays as it is.
+  const stale = recordingDb({
+    "agentCallEvent.create": {},
+    "ownerCall.findMany": [
+      {
+        call: {
+          id: "call-9",
+          providerCallId: null,
+          providerErrorTitle: null,
+          startedAt: NOW,
+          status: "INITIATED",
+        },
+        id: "oc-2",
+        updatedAt: NOW,
+      },
+    ],
+    "ownerCall.updateMany": { count: 1 },
+  });
+  await recoverStalePlacingOwnerCalls(
+    systemPrincipal("cron:owner-calls"),
+    { now: new Date(NOW.getTime() + 60 * 60 * 1000) },
+    stale.transactionalDb,
+  );
+  assert.deepEqual(eventKinds(stale.calls), ["owner_call.failed"]);
+  assert.deepEqual(ops(stale.calls, "ownerCallHandoff.update"), []);
+});
+
+test("a callback that rang out without reaching the owner reopens the handoff it came from, once", async () => {
+  const recorder = recordingDb({
+    "agentCallEvent.create": {},
+    "ownerCall.findUnique": {
+      call: { answeredAt: null, answeredBy: null, status: "NO_ANSWER" },
+      fromHandoffId: "h-1",
+      handoffEligible: true,
+      id: "oc-2",
+    },
+    "ownerCallHandoff.findUnique": { id: "h-2", status: "OPEN" },
+    "ownerCallHandoff.update": { ownerCallId: "oc-1" },
+  });
+  assert.equal(
+    await markOwnerCallEnded(recorder.db, { callId: "call-2", now: NOW }),
+    "h-1",
+  );
+  const reopened = ops(recorder.calls, "ownerCallHandoff.update")[0]?.args as {
+    data: Record<string, unknown>;
+    where: { id: string };
+  };
+  assert.equal(reopened.where.id, "h-1");
+  assert.equal(reopened.data.status, "PENDING");
+  // The callback's own handoff is closed with a pointer, not sent as well.
+  const own = ops(recorder.calls, "ownerCallHandoff.updateMany")[0]?.args as {
+    data: Record<string, unknown>;
+  };
+  assert.equal(own.data.status, "RESOLVED");
+  assert.match(String(own.data.resolution), /handoff h-1 was reopened/);
+  assert.deepEqual(eventKinds(recorder.calls), ["handoff.reopened"]);
+});
+
+test("the backstop fails a claim cut off with no tries left, and only hands over eligible calls", async () => {
+  const recorder = recordingDb({
+    "agentCallEvent.create": {},
+    "ownerCall.findMany": [],
+    "ownerCallHandoff.findMany": (args: unknown) =>
+      (args as { where: { status?: string } }).where.status === "DELIVERING"
+        ? [{ claimId: "c-1", id: "h-9", ownerCall: { id: "oc-9" } }]
+        : [],
+    "ownerCallHandoff.updateMany": { count: 1 },
+  });
+  assert.deepEqual(
+    await handoffsToDeliver(
+      systemPrincipal("cron:owner-calls"),
+      { now: NOW },
+      recorder.transactionalDb,
+    ),
+    [],
+  );
+  const ended = ops(recorder.calls, "ownerCall.findMany")[0]?.args as {
+    where: Record<string, unknown>;
+  };
+  assert.equal(ended.where.handoffEligible, true);
+  const failed = ops(recorder.calls, "ownerCallHandoff.updateMany")[0]
+    ?.args as { data: Record<string, unknown>; where: Record<string, unknown> };
+  assert.equal(failed.data.status, "FAILED");
+  assert.equal(failed.where.claimId, "c-1");
+});
+
+test("Hermes's list of outstanding handoffs comes a page at a time, oldest first", async () => {
+  const row = (id: string) => ({ ...handoffRow(), id });
+  const recorder = recordingDb({
+    "ownerCallHandoff.findMany": [row("h-1"), row("h-2"), row("h-3")],
+  });
+  const page = await listOwnerCallHandoffs(HERMES, recorder.db, {
+    cursor: "h-0",
+    limit: 2,
+  });
+  assert.deepEqual(
+    page.handoffs.map((h) => h.id),
+    ["h-1", "h-2"],
+  );
+  assert.equal(page.nextCursor, "h-2");
+  const query = ops(recorder.calls, "ownerCallHandoff.findMany")[0]?.args as {
+    cursor: { id: string };
+    skip: number;
+    take: number;
+    orderBy: unknown;
+  };
+  assert.deepEqual(query.cursor, { id: "h-0" });
+  assert.equal(query.skip, 1);
+  assert.equal(query.take, 3);
+  assert.deepEqual(query.orderBy, [{ readyAt: "asc" }, { id: "asc" }]);
+
+  const last = recordingDb({ "ownerCallHandoff.findMany": [row("h-1")] });
+  assert.equal(
+    (await listOwnerCallHandoffs(HERMES, last.db, { limit: 2 })).nextCursor,
+    null,
+  );
 });
 
 // ── The adapter ─────────────────────────────────────────────────────────
@@ -743,6 +1149,7 @@ test("Hermes adapter: a handoff is one chat completion, Royal's rules as the sys
   assert.equal(messages[0].role, "system");
   assert.match(messages[0].content, /Handoff id: h-1\./);
   assert.match(messages[0].content, /Your reference: task-9\./);
+  assert.equal(messages[1].role, "user");
   assert.equal(messages[1].content, "<call>\nOwner call: oc-1\n</call>");
 
   const down = hermesAssistant(

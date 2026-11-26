@@ -640,11 +640,14 @@ export class VoiceAgentSession {
     const audio = Buffer.from(base64MuLaw, "base64");
     const speech = isSpeech(audio);
     if (this.holding) {
-      // On hold her silence is not sent: the carrier plays what it is given
-      // in order, so it would hold the music up. If she speaks, the music
-      // queued ahead of her is dropped and picks up again once she stops.
-      if (!speech) return false;
-      this.clearHoldAudio();
+      // On hold, Live's background silence is not sent: the carrier plays
+      // what it is given in order, so it would hold the music up. If she
+      // speaks, the music queued ahead of her is dropped, and everything she
+      // sends until shortly after her last word goes through — the pauses
+      // inside what she says are part of it. The music picks up after that.
+      const midTurn = this.now() < this.speechEndsAt + HOLD_LEAD_MS;
+      if (!speech && !midTurn) return false;
+      if (speech) this.clearHoldAudio();
     }
     for (let offset = 0; offset < audio.length; offset += FRAME_BYTES) {
       this.deps.carrier.send(
@@ -910,7 +913,8 @@ export class VoiceAgentSession {
     }
     const now = this.now();
     if (now >= this.speechEndsAt + HOLD_LEAD_MS) {
-      let queued = Math.max(this.holdQueuedUntil, now);
+      // After anything of hers still queued at the carrier.
+      let queued = Math.max(this.holdQueuedUntil, this.playbackEndsAt, now);
       while (queued - now < HOLD_BUFFER_MS) {
         if (this.holdPosition + FRAME_BYTES > audio.length) {
           this.holdPosition = 0;

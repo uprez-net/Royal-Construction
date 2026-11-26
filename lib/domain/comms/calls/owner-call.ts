@@ -3,8 +3,8 @@ import {
   CallStatus,
   CommsDirection,
   OutboxEventKind,
+  OwnerCallHandoffStatus,
   OwnerCallStatus,
-  type OwnerCallHandoffStatus,
   Prisma,
   type CallFlowStep,
 } from "@prisma/client";
@@ -35,6 +35,7 @@ import {
 } from "./agent-events";
 import { placeStaffCall, readCall, requireCallKey } from "./outbound";
 import {
+  claimHandoffForCallback,
   handoffForCallback,
   readHandoffForOwnerCall,
   reopenHandoffForFailedCallback,
@@ -115,6 +116,8 @@ export const OWNER_CALL_REFUSALS = {
     "Placing this call was interrupted and the carrier never confirmed it, so it may have rung. Check the carrier's call log; it won't be rung again.",
   notScheduled:
     "This call has already rung (or was cancelled), so it can no longer be cancelled.",
+  keyForOtherHandoff:
+    "This idempotency_key was already used for a different call. Use a new key for each callback you schedule, including a replacement for one that didn't reach the owner.",
 } as const;
 
 export type RequestOwnerCallInput = {
@@ -318,7 +321,9 @@ export async function readOwnerCall(
 
 /**
  * The admin's list: everything still to ring (soonest first), then the most
- * recent that have rung, failed or been cancelled.
+ * recent that have rung, failed or been cancelled — and, however old, every
+ * call whose handoff never reached Hermes, so the hub's "not passed to
+ * Hermes" count always has rows behind it.
  */
 export async function listOwnerCalls(
   principal: DomainPrincipal,
@@ -327,10 +332,11 @@ export async function listOwnerCalls(
 ): Promise<{
   readonly pending: readonly OwnerCallSummary[];
   readonly recent: readonly OwnerCallSummary[];
+  readonly handoffFailed: readonly OwnerCallSummary[];
 }> {
   requireAdminPrincipal(principal);
   const open = [OwnerCallStatus.SCHEDULED, OwnerCallStatus.PLACING];
-  const [pending, recent] = await Promise.all([
+  const [pending, recent, handoffFailed] = await Promise.all([
     db.ownerCall.findMany({
       orderBy: { callAt: "asc" },
       select: SUMMARY_SELECT,
@@ -343,8 +349,18 @@ export async function listOwnerCalls(
       take: Math.min(Math.max(input.recentLimit ?? 50, 1), 200),
       where: { status: { notIn: open } },
     }),
+    db.ownerCall.findMany({
+      orderBy: { createdAt: "asc" },
+      select: SUMMARY_SELECT,
+      take: 200,
+      where: { handoff: { is: { status: OwnerCallHandoffStatus.FAILED } } },
+    }),
   ]);
-  return { pending: pending.map(toSummary), recent: recent.map(toSummary) };
+  return {
+    handoffFailed: handoffFailed.map(toSummary),
+    pending: pending.map(toSummary),
+    recent: recent.map(toSummary),
+  };
 }
 
 /** How many owner calls are still to ring, and how many failed today. Admin. */
@@ -596,18 +612,48 @@ export async function requestOwnerCall(
   const briefing = cleanBriefing(input);
   const callAt = cleanCallAt(input.callAt, now);
 
-  const existing = await db.ownerCall.findUnique({
-    select: { id: true },
-    where: { idempotencyKey },
-  });
-  if (existing) {
+  const handoffId = input.handoffId?.trim() || null;
+  /**
+   * The call this key already made, as a replay. For a callback the key must
+   * have been used for this same handoff: a key from another call (or from a
+   * callback that failed and was unlinked) would otherwise answer "already
+   * scheduled" and leave this handoff unresolved.
+   */
+  const replayOf = async (
+    found: {
+      readonly id: string;
+      readonly fromHandoffId: string | null;
+    } | null,
+  ): Promise<RequestOwnerCallResult | null> => {
+    if (!found) return null;
+    if (handoffId && found.fromHandoffId !== handoffId) {
+      throw new DomainValidationError(
+        OWNER_CALL_REFUSALS.keyForOtherHandoff,
+        "idempotencyKey",
+      );
+    }
     return {
       alreadyRequested: true,
-      ownerCall: await summaryById(db, existing.id),
+      ownerCall: await summaryById(db, found.id),
     };
-  }
+  };
+  const byKey = () =>
+    db.ownerCall.findUnique({
+      select: { fromHandoffId: true, id: true },
+      where: { idempotencyKey },
+    });
+  /** The callback another request already scheduled for this handoff. */
+  const byHandoff = async () =>
+    handoffId
+      ? db.ownerCall.findUnique({
+          select: { id: true },
+          where: { fromHandoffId: handoffId },
+        })
+      : null;
 
-  const handoffId = input.handoffId?.trim() || null;
+  const replay = await replayOf(await byKey());
+  if (replay) return replay;
+
   if (handoffId) {
     const { existingCallbackId } = await handoffForCallback(db, handoffId);
     if (existingCallbackId) {
@@ -625,15 +671,16 @@ export async function requestOwnerCall(
     const blocker = await ownerCallBlocker(db, now);
     if (blocker) {
       // A copy of this request may have landed (and be ringing) since the
-      // key was read: that copy is the busy call, so answer with it.
-      const landed = await db.ownerCall.findUnique({
-        select: { id: true },
-        where: { idempotencyKey },
-      });
-      if (landed) {
+      // key was read — or, for a callback, another request for the same
+      // handoff: that copy is the busy call, so answer with it. A call for
+      // anything else keeps the refusal.
+      const landed = await replayOf(await byKey());
+      if (landed) return landed;
+      const sibling = await byHandoff();
+      if (sibling) {
         return {
           alreadyRequested: true,
-          ownerCall: await summaryById(db, landed.id),
+          ownerCall: await summaryById(db, sibling.id),
         };
       }
       throw new DomainTransitionError(blocker);
@@ -643,7 +690,15 @@ export async function requestOwnerCall(
   const source = principal.kind === "system" ? principal.reason : "app";
   let ownerCallId: string;
   try {
-    ownerCallId = await db.$transaction(async (tx) => {
+    const made = await db.$transaction(async (tx) => {
+      if (handoffId) {
+        // The check that holds, under the handoff's lock: resolved without a
+        // callback, or given one, since the first look.
+        const claim = await claimHandoffForCallback(tx, handoffId);
+        if (claim.existingCallbackId) {
+          return { id: claim.existingCallbackId, replay: true };
+        }
+      }
       const created = await tx.ownerCall.create({
         data: {
           ...briefing,
@@ -683,27 +738,26 @@ export async function requestOwnerCall(
             : AGENT_CALL_EVENT.ownerCallRequested,
         },
       );
-      return created.id;
+      return { id: created.id, replay: false };
     });
+    if (made.replay) {
+      return {
+        alreadyRequested: true,
+        ownerCall: await summaryById(db, made.id),
+      };
+    }
+    ownerCallId = made.id;
   } catch (error) {
     // Two copies of one request (or two callbacks for one handoff) at once:
-    // the first one won.
+    // the first one won — if it was for this handoff.
     if (!isUniqueViolation(error)) throw error;
-    const winner =
-      (await db.ownerCall.findUnique({
-        select: { id: true },
-        where: { idempotencyKey },
-      }))
-      ?? (handoffId
-        ? await db.ownerCall.findUnique({
-            select: { id: true },
-            where: { fromHandoffId: handoffId },
-          })
-        : null);
-    if (!winner) throw error;
+    const replayed = await replayOf(await byKey());
+    if (replayed) return replayed;
+    const sibling = await byHandoff();
+    if (!sibling) throw error;
     return {
       alreadyRequested: true,
-      ownerCall: await summaryById(db, winner.id),
+      ownerCall: await summaryById(db, sibling.id),
     };
   }
 
@@ -728,6 +782,11 @@ async function settle(
     readonly kind: (typeof AGENT_CALL_EVENT)[keyof typeof AGENT_CALL_EVENT];
     readonly at: Date;
     readonly reason: string;
+    /**
+     * A failure that definitely didn't ring: a callback's handoff goes back
+     * to Hermes. False when the carrier may have rung the owner.
+     */
+    readonly didNotRing?: boolean;
   },
 ): Promise<void> {
   await db.$transaction(async (tx) => {
@@ -743,7 +802,7 @@ async function settle(
       { ownerCallId },
       { at: event.at, detail: { reason: event.reason }, kind: event.kind },
     );
-    if (status === "FAILED") {
+    if (status === "FAILED" && event.didNotRing !== false) {
       await reopenHandoffForFailedCallback(tx, {
         now: event.at,
         ownerCallId,
@@ -784,9 +843,10 @@ export async function placeOwnerCall(
   });
   if (!request) return "skipped";
 
-  const fail = async (reason: string, error?: unknown) => {
+  const fail = async (reason: string, error?: unknown, didNotRing = true) => {
     await settle(db, ownerCallId, "FAILED", {
       at: new Date(),
+      didNotRing,
       kind: AGENT_CALL_EVENT.ownerCallFailed,
       reason,
     });
@@ -885,8 +945,37 @@ export async function placeOwnerCall(
       // The hourly backstop settles it (recoverStalePlacingOwnerCalls).
       throw error;
     }
-    return fail(error.message, error);
+    return fail(error.message, error, !(await mayHaveRung(db, ownerCallId)));
   }
+}
+
+/**
+ * Whether the carrier may have rung the owner for this call: it gave a call
+ * id and did not refuse, or it never confirmed either way. A callback that
+ * may have rung keeps its handoff until a person checks the carrier's log.
+ */
+async function mayHaveRung(
+  db: DomainDb,
+  ownerCallId: string,
+): Promise<boolean> {
+  const row = await db.ownerCall.findUnique({
+    select: {
+      call: {
+        select: {
+          needsReconciliation: true,
+          providerCallId: true,
+          status: true,
+        },
+      },
+    },
+    where: { id: ownerCallId },
+  });
+  const call = row?.call;
+  if (!call) return false;
+  return (
+    call.needsReconciliation
+    || (call.providerCallId !== null && call.status !== CallStatus.FAILED)
+  );
 }
 
 /**
@@ -980,7 +1069,13 @@ export async function recoverStalePlacingOwnerCalls(
         { callId: call?.id, ownerCallId: row.id },
         { at: now, detail: outcome.detail, kind: outcome.kind },
       );
-      if (outcome.kind === AGENT_CALL_EVENT.ownerCallFailed) {
+      // Only when the carrier confirmed it refused: an uncertain placement
+      // (no carrier id saved, or none confirmed) may have rung, and keeps its
+      // handoff linked until someone checks.
+      if (
+        outcome.kind === AGENT_CALL_EVENT.ownerCallFailed
+        && call?.status === CallStatus.FAILED
+      ) {
         await reopenHandoffForFailedCallback(tx, {
           now,
           ownerCallId: row.id,

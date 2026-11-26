@@ -244,6 +244,7 @@ export type OwnerCallHandoffDto = {
   status: OwnerCallHandoffStatusDto;
   readyAt: string | null;
   attempts: number;
+  revision: number;
   lastError: string | null;
   deliveredAt: string | null;
   hermesReply: string | null;

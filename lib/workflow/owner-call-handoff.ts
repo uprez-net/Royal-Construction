@@ -23,6 +23,8 @@ import prisma from "@/lib/prisma";
  *                     for the hourly backstop, outstanding and shown
  *   unavailable       Hermes isn't connected: stop; Hermes can still pull it
  *                     through list_owner_call_handoffs
+ *   reopened          overtaken while Hermes answered (a request noted late,
+ *                     a callback that didn't ring): sent again straight away
  */
 
 async function deliver(
@@ -67,9 +69,18 @@ const runDeliverOwnerCallHandoff = async (
     await sleep("1m");
     outcome = await deliver(handoffId, wait < 5);
   }
-  for (const delay of RETRY_AFTER) {
-    if (outcome !== "failed") return outcome;
-    await sleep(delay);
+  let retries = 0;
+  // Bounded: each pass is one try at Hermes or one reopening caught up with.
+  for (let pass = 0; pass < 8; pass += 1) {
+    // Reopened while it was going (a request noted late, a callback that
+    // didn't ring): what Hermes has is out of date, so send it again now.
+    if (outcome === "reopened") {
+      outcome = await deliver(handoffId, false);
+      continue;
+    }
+    if (outcome !== "failed" || retries >= RETRY_AFTER.length) break;
+    await sleep(RETRY_AFTER[retries]);
+    retries += 1;
     outcome = await deliver(handoffId, false);
   }
   return outcome;
