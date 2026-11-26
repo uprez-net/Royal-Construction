@@ -54,7 +54,7 @@ export type VoiceAgentStreamDeps = {
   readonly env?: Record<string, string | undefined>;
   /**
    * Hermes, for the owner's questions on a briefing call. Absent: built from
-   * HERMES_SERVER_MCP_* (null when that is not set).
+   * HERMES_SERVER_URL and HERMES_SERVER_TOKEN (null when they are not set).
    */
   readonly assistant?: OwnerAssistantPort | null;
   /**
