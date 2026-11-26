@@ -4,6 +4,7 @@ import {
   CommsDirection,
   OutboxEventKind,
   OwnerCallStatus,
+  type OwnerCallHandoffStatus,
   Prisma,
   type CallFlowStep,
 } from "@prisma/client";
@@ -33,6 +34,13 @@ import {
   type AgentCallEventRecord,
 } from "./agent-events";
 import { placeStaffCall, readCall, requireCallKey } from "./outbound";
+import {
+  handoffForCallback,
+  readHandoffForOwnerCall,
+  reopenHandoffForFailedCallback,
+  resolveHandoffByCallback,
+  type OwnerCallHandoffSummary,
+} from "./owner-call-handoff";
 import type { CallRecord } from "./records";
 import {
   ASK_HERMES_ANSWER_MAX_CHARS,
@@ -122,6 +130,11 @@ export type RequestOwnerCallInput = {
   readonly eventAt?: Date | null;
   /** When to ring. Absent, past or within half a minute: now. */
   readonly callAt?: Date | null;
+  /**
+   * The post-call handoff this is the callback for (owner-call-handoff.ts).
+   * One callback per handoff: a second request for it answers with the first.
+   */
+  readonly handoffId?: string | null;
   readonly now?: Date;
 };
 
@@ -162,6 +175,13 @@ export type OwnerCallSummary = {
   /** The owner line it rang, masked; null until it rang. */
   readonly to: string | null;
   readonly call: OwnerCallLeg | null;
+  /** The handoff this call is the callback for, if it is one. */
+  readonly fromHandoffId: string | null;
+  /** What this call left for Hermes once it ended, if anything yet. */
+  readonly handoff: {
+    readonly id: string;
+    readonly status: OwnerCallHandoffStatus;
+  } | null;
   readonly createdAt: Date;
 };
 
@@ -171,6 +191,8 @@ export type OwnerCallDetail = OwnerCallSummary & {
   /** The full call record (recordings and all), once it has rung. */
   readonly callRecord: CallRecord | null;
   readonly events: readonly AgentCallEventRecord[];
+  /** What the call left for Hermes, request by request. */
+  readonly handoffDetail: OwnerCallHandoffSummary | null;
 };
 
 export type RequestOwnerCallResult = {
@@ -199,6 +221,8 @@ const SUMMARY_SELECT = {
   createdAt: true,
   eventAt: true,
   failureReason: true,
+  fromHandoffId: true,
+  handoff: { select: { id: true, status: true } },
   id: true,
   placedAt: true,
   questionsAsked: true,
@@ -257,6 +281,8 @@ function toSummary(row: SummaryRow): OwnerCallSummary {
     createdAt: row.createdAt,
     eventAt: row.eventAt,
     failureReason: row.failureReason,
+    fromHandoffId: row.fromHandoffId ?? null,
+    handoff: row.handoff ?? null,
     id: row.id,
     placedAt: row.placedAt,
     questionsAsked: row.questionsAsked,
@@ -382,6 +408,9 @@ export async function readOwnerCallDetail(
     callRecord: row.call ? await readCall(db, { id: row.call.id }) : null,
     context: row.context,
     events,
+    handoffDetail: row.handoff
+      ? await readHandoffForOwnerCall(principal, { ownerCallId: row.id }, db)
+      : null,
   };
 }
 
@@ -578,6 +607,17 @@ export async function requestOwnerCall(
     };
   }
 
+  const handoffId = input.handoffId?.trim() || null;
+  if (handoffId) {
+    const { existingCallbackId } = await handoffForCallback(db, handoffId);
+    if (existingCallbackId) {
+      return {
+        alreadyRequested: true,
+        ownerCall: await summaryById(db, existingCallbackId),
+      };
+    }
+  }
+
   if (!(await readOwnerLine(db))) {
     throw new DomainTransitionError(OWNER_CALL_REFUSALS.noLine);
   }
@@ -608,12 +648,23 @@ export async function requestOwnerCall(
         data: {
           ...briefing,
           callAt: callAt ?? now,
+          fromHandoffId: handoffId,
           idempotencyKey,
           source,
           status: OwnerCallStatus.SCHEDULED,
         },
         select: { id: true },
       });
+      if (handoffId) {
+        // Scheduling the callback is what resolves the handoff; a failed
+        // ring reopens it (reopenHandoffForFailedCallback).
+        await resolveHandoffByCallback(tx, {
+          callAt: callAt ?? now,
+          callbackOwnerCallId: created.id,
+          handoffId,
+          now,
+        });
+      }
       await recordAgentCallEvent(
         tx,
         { ownerCallId: created.id },
@@ -623,6 +674,7 @@ export async function requestOwnerCall(
             by: describePrincipal(principal),
             callAt: (callAt ?? now).toISOString(),
             category: briefing.category,
+            ...(handoffId ? { handoffId } : {}),
             scheduled: callAt !== null,
             subject: briefing.subject,
           },
@@ -634,12 +686,20 @@ export async function requestOwnerCall(
       return created.id;
     });
   } catch (error) {
-    // Two copies of one request at once: the first one won.
+    // Two copies of one request (or two callbacks for one handoff) at once:
+    // the first one won.
     if (!isUniqueViolation(error)) throw error;
-    const winner = await db.ownerCall.findUnique({
-      select: { id: true },
-      where: { idempotencyKey },
-    });
+    const winner =
+      (await db.ownerCall.findUnique({
+        select: { id: true },
+        where: { idempotencyKey },
+      }))
+      ?? (handoffId
+        ? await db.ownerCall.findUnique({
+            select: { id: true },
+            where: { fromHandoffId: handoffId },
+          })
+        : null);
     if (!winner) throw error;
     return {
       alreadyRequested: true,
@@ -683,6 +743,13 @@ async function settle(
       { ownerCallId },
       { at: event.at, detail: { reason: event.reason }, kind: event.kind },
     );
+    if (status === "FAILED") {
+      await reopenHandoffForFailedCallback(tx, {
+        now: event.at,
+        ownerCallId,
+        reason: event.reason,
+      });
+    }
   });
 }
 
@@ -913,6 +980,13 @@ export async function recoverStalePlacingOwnerCalls(
         { callId: call?.id, ownerCallId: row.id },
         { at: now, detail: outcome.detail, kind: outcome.kind },
       );
+      if (outcome.kind === AGENT_CALL_EVENT.ownerCallFailed) {
+        await reopenHandoffForFailedCallback(tx, {
+          now,
+          ownerCallId: row.id,
+          reason: String(outcome.detail.reason ?? "it didn't ring"),
+        });
+      }
       return true;
     });
     if (settled && !call) rearm.push(row.id);

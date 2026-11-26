@@ -27,6 +27,8 @@ import type {
   AgentCallEventDto,
   OwnerCallDetailDto,
   OwnerCallDto,
+  OwnerCallHandoffDto,
+  OwnerCallHandoffStatusDto,
 } from "@/lib/leads/comms-types";
 import { formatSydneyStamp } from "@/lib/leads/whatsapp-format";
 
@@ -34,7 +36,10 @@ import { formatSydneyStamp } from "@/lib/leads/whatsapp-format";
 // What is still to ring (soonest first, with Cancel), then the most recent,
 // each opening onto its briefing, its transcript and recording, and every
 // event: when it was scheduled and placed, each lookup and question Mili
-// passed to Hermes with its answer, and how the call ended.
+// passed to Hermes with its answer, and how the call ended. Each call that
+// has ended shows what it left for Hermes (a call back, something to do) and
+// whether that reached Hermes: a handoff that failed to is outstanding, and
+// shown here until Hermes deals with it.
 
 const CATEGORY: Record<string, string> = {
   alert: "Alert",
@@ -73,6 +78,18 @@ function statusOf(call: OwnerCallDto): { label: string; tone: Tone } {
     }
   }
 }
+
+const HANDOFF: Record<
+  OwnerCallHandoffStatusDto,
+  { label: string; tone: Tone } | null
+> = {
+  DELIVERED: { label: "With Hermes", tone: "info" },
+  DELIVERING: { label: "Passing to Hermes", tone: "info" },
+  FAILED: { label: "Hermes not reached", tone: "danger" },
+  OPEN: null,
+  PENDING: { label: "For Hermes", tone: "warning" },
+  RESOLVED: { label: "Hermes dealt with it", tone: "success" },
+};
 
 function message(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
@@ -120,7 +137,7 @@ function describeEvent(event: AgentCallEventDto): {
         body: d.answered
           ? `${asked.length ? `“${asked.join(" ")}” → ` : ""}${text("answer") ?? ""}`
           : `${asked.length ? `“${asked.join(" ")}” · ` : ""}not answered (${text("failure") ?? "failed"})`,
-        title: `${name === "ask_hermes" ? "Asked Hermes" : `Looked up ${name}`}${ms}`,
+        title: `${name === "ask_hermes" ? `Asked Hermes${d.held ? " (owner held)" : ""}` : name === "hand_to_hermes" ? "Passed to Hermes" : `Looked up ${name}`}${ms}`,
       };
     }
     case "desk.end_call":
@@ -129,6 +146,24 @@ function describeEvent(event: AgentCallEventDto): {
       return { body: text("reason"), title: "Desk asked to transfer" };
     case "desk.failed":
       return { body: text("error"), title: "Call desk didn't answer" };
+    case "handoff.noted":
+      return {
+        body: `${text("request") ?? ""}${d.callBack ? ` · call back${text("timing") ? ` (${text("timing")})` : ""}` : ""}${text("source") === "hold_failed" ? " · Hermes didn't answer while they held" : ""}`,
+        title: "Noted for Hermes",
+      };
+    case "handoff.ready":
+      return { body: null, title: "Handoff ready for Hermes" };
+    case "handoff.delivered":
+      return { body: text("reply"), title: "Handed to Hermes" };
+    case "handoff.failed":
+      return { body: text("reason"), title: "Couldn't reach Hermes" };
+    case "handoff.resolved":
+      return { body: text("resolution"), title: "Hermes dealt with it" };
+    case "handoff.reopened":
+      return {
+        body: text("reason"),
+        title: "Callback failed; handoff reopened",
+      };
     case "session.ended": {
       const seconds = typeof d.seconds === "number" ? `${d.seconds} s` : null;
       return {
@@ -145,6 +180,51 @@ function describeEvent(event: AgentCallEventDto): {
     default:
       return { body: null, title: event.kind };
   }
+}
+
+function HandoffSection({ handoff }: { handoff: OwnerCallHandoffDto }) {
+  const status = HANDOFF[handoff.status];
+  return (
+    <section className="space-y-1">
+      <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        For Hermes
+        {status ? (
+          <StatusPill tone={status.tone}>{status.label}</StatusPill>
+        ) : null}
+      </h3>
+      {handoff.requests.length ? (
+        <ol className="list-decimal space-y-0.5 pl-5 text-sm">
+          {handoff.requests.map((request, index) => (
+            <li key={index}>
+              {request.request}
+              <span className="text-muted-foreground">
+                {request.callBack
+                  ? ` · call back${request.timing ? ` (${request.timing})` : ""}`
+                  : ""}
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Nothing noted on the call; Hermes gets the transcript to check.
+        </p>
+      )}
+      {handoff.lastError ? (
+        <p className="text-sm text-destructive">
+          {handoff.lastError}
+          {handoff.attempts ? ` (${handoff.attempts} tries)` : ""}
+        </p>
+      ) : null}
+      {handoff.resolution ? (
+        <p className="text-sm text-muted-foreground">{handoff.resolution}</p>
+      ) : handoff.hermesReply ? (
+        <p className="text-sm text-muted-foreground">
+          Hermes: {handoff.hermesReply}
+        </p>
+      ) : null}
+    </section>
+  );
 }
 
 function AgentCallDetail({
@@ -208,6 +288,9 @@ function AgentCallDetail({
             </p>
           ) : null}
         </section>
+        {detail.handoffDetail ? (
+          <HandoffSection handoff={detail.handoffDetail} />
+        ) : null}
         {detail.callRecord ? (
           <section className="flex flex-col gap-2">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -267,6 +350,7 @@ function AgentCallRow({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const status = statusOf(call);
+  const handoff = call.handoff ? HANDOFF[call.handoff.status] : null;
   const leg = call.call;
 
   async function cancel() {
@@ -313,6 +397,7 @@ function AgentCallRow({
               {call.questionsAsked
                 ? ` · ${call.questionsAsked} question${call.questionsAsked === 1 ? "" : "s"} to Hermes`
                 : ""}
+              {call.fromHandoffId ? " · callback" : ""}
             </span>
             {call.failureReason ? (
               <span className="block text-xs text-destructive">
@@ -321,6 +406,9 @@ function AgentCallRow({
             ) : null}
           </span>
         </button>
+        {handoff ? (
+          <StatusPill tone={handoff.tone}>{handoff.label}</StatusPill>
+        ) : null}
         <StatusPill tone={status.tone}>{status.label}</StatusPill>
         {call.status === "SCHEDULED" ? (
           <Button

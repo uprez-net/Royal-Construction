@@ -1,8 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
+import { startHandoffDeliveries } from "@/lib/comms/owner-call-handoffs";
 import { armOwnerCallTimers } from "@/lib/comms/owner-call-timers";
 import { recoverStalePlacingOwnerCalls } from "@/lib/domain/comms/calls/owner-call";
+import { handoffsToDeliver } from "@/lib/domain/comms/calls/owner-call-handoff";
 import { systemPrincipal } from "@/lib/domain/principal";
 import { withCronReporting } from "@/lib/observability/cron";
 import prisma from "@/lib/prisma";
@@ -16,6 +18,13 @@ import prisma from "@/lib/prisma";
  * is harmless: only one can claim the call. A call left mid-placement (its
  * claim still PLACING) is settled first, so one sent back to SCHEDULED is
  * armed in the same run.
+ *
+ * It is the backstop for post-call handoffs to Hermes too
+ * (lib/domain/comms/calls/owner-call-handoff.ts): a placed call that ended
+ * without its handoff being marked ready is marked, and every handoff whose
+ * delivery run was lost, cut off or failed is started again, until the
+ * domain's attempt limit. One that never gets through stays FAILED: shown
+ * under Admin → Agent calls and listed for Hermes.
  *
  * Not a per-minute poll of due calls: that would keep the database awake
  * around the clock. This runs at :15, beside the approval-expiry cron, so it
@@ -58,7 +67,18 @@ async function handle(request: Request) {
     prisma,
   );
   if (armed) console.info(`[owner-calls] armed ${armed} timer(s)`);
-  return NextResponse.json({ armed });
+  const handoffs = await handoffsToDeliver(
+    systemPrincipal("cron:owner-calls"),
+    {},
+    prisma,
+  );
+  const delivering = await startHandoffDeliveries(handoffs);
+  if (delivering) {
+    console.info(
+      `[owner-calls] started delivering ${delivering} handoff(s) to Hermes`,
+    );
+  }
+  return NextResponse.json({ armed, handoffs: delivering });
 }
 
 export const GET = withCronReporting("/api/cron/owner-calls", handle);

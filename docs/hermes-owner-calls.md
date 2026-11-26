@@ -3,8 +3,10 @@
 Hermes is the business owner's personal assistant. It runs on its own server.
 It can ask Mili, Royal's voice agent, to **ring the owner's own phone and
 brief them by voice**, now or at a scheduled time. If the owner asks
-something the briefing doesn't cover, Mili passes the question back to
-Hermes on the call and reads out the answer. Every call is recorded,
+something the briefing doesn't cover, Mili offers them the choice: **hold**
+(with music) while she asks Hermes, or **a call back** with the details.
+When the call ends, Royal sends Hermes a **post-call handoff** with what the
+owner asked for, and Hermes schedules the callback. Every call is recorded,
 transcribed and logged, and the office sees all of it under
 **Admin → Agent calls**.
 
@@ -16,7 +18,12 @@ Hermes ── Eve MCP (/eve/v1/mcp) + X-Hermes-Secret ──▶ schedule_owner_c
                                                        ▼ rings the owner line
       owner answers ──▶ flow.ts: connectAgent (recorded, up to 15 min) ──▶ Mili
                                                        │ "let me check that"
-Hermes API server ◀── /v1/chat/completions ── call desk: ask_hermes
+         "hold, or a call back?" ──┬── hold: music ── call desk: ask_hermes
+                                   │       ──▶ Hermes /v1/chat/completions
+                                   └── call back: hand_to_hermes (noted now)
+      call ends ──▶ OwnerCallHandoff: PENDING ──▶ workflow ──▶ Hermes
+                                   /v1/chat/completions (the handoff)
+Hermes ── schedule_owner_call(handoff_id) ──▶ the callback; handoff RESOLVED
 Hermes ── get_owner_call ──▶ status, answered?, transcript, recording saved?
 ```
 
@@ -58,10 +65,13 @@ orchestrator calls these tools directly, without delegating:
 
 | Tool                  | What it does |
 | --------------------- | ------------ |
-| `schedule_owner_call` | Rings now, or at `call_at`. Takes `idempotency_key`, `category`, `subject`, `agenda`, `context`, `reference`, `event_at` and `call_at`. The same key never rings twice. |
-| `get_owner_call`      | Where a call stands: `scheduled`, `placing`, `placed`, `canceled` or `failed` (with `failure_reason`). Once placed, it also gives the call's status, whether the owner answered, how long it ran, the transcript, and whether the recording was saved. |
+| `schedule_owner_call` | Rings now, or at `call_at`. Takes `idempotency_key`, `category`, `subject`, `agenda`, `context`, `reference`, `event_at`, `call_at` and, for a callback, `handoff_id`. The same key never rings twice, and a handoff gets one callback. |
+| `get_owner_call`      | Where a call stands: `scheduled`, `placing`, `placed`, `canceled` or `failed` (with `failure_reason`). Once placed, it also gives the call's status, whether the owner answered, how long it ran, the transcript, whether the recording was saved, and its `handoff`. |
 | `cancel_owner_call`   | Cancels a call before it rings. Refused once it has rung. |
 | `list_owner_calls`    | The calls still to ring, then the most recent ones. |
+| `list_owner_call_handoffs` | The post-call handoffs still outstanding, oldest first, including ones Royal could not deliver. |
+| `get_owner_call_handoff` | One handoff: the call, whether the owner picked up, each request, the transcript, and where it stands. |
+| `resolve_owner_call_handoff` | Marks a handoff dealt with when no callback is needed, with one line saying how. |
 
 Limits:
 
@@ -134,9 +144,11 @@ POST <HERMES_SERVER_MCP_URL>/v1/chat/completions
 
 The briefing goes in the system message, marked as data rather than
 instructions, and Hermes is told to answer only, not to act. Royal reads
-`choices[0].message.content`. Hermes should answer within about 20 seconds,
-in two or three short sentences of plain text. These all reach the owner as
-"I couldn't check that just now":
+`choices[0].message.content`. The owner is holding, with music, so Hermes
+should answer quickly, in two or three short sentences of plain text. Royal
+waits up to 45 seconds for the response, and Mili waits 50 seconds at most.
+These all become "Hermes will call you back with that", with the question
+noted on the handoff:
 
 - a response that isn't a chat completion
 - an empty answer
@@ -146,13 +158,84 @@ in two or three short sentences of plain text. These all reach the owner as
 A call can ask up to eight questions. Failures are reported to Sentry as
 `vendor: hermes`.
 
+## Hold, or a call back
+
+A question only Hermes can answer can take a while, so Mili never asks
+straight away. She says: *"I'll need to check that with Hermes, which can
+take a minute. Would you like to hold, or shall I have Hermes call you back
+with the details?"* (Without Hermes connected she offers the call back
+only.)
+
+- **Hold.** She says "one moment", and the call desk runs `ask_hermes`. Music
+  plays from the moment her words have finished until the answer is back
+  (`lib/comms/voice-agent/session.ts`). Her silence isn't sent while it
+  plays, and if she speaks, the music queued ahead of her is dropped with
+  the carrier's `clear` event. The owner holds for up to 50 seconds. If
+  Hermes fails or is slower than that, she tells them Hermes will call back,
+  and the question is noted as a callback request (`source: hold_failed`).
+  If that can't be noted either, she says so and promises nothing.
+- **A call back.** She confirms Hermes will call back. She never suggests a
+  time, and repeats one only if the owner gave it. The desk runs
+  `hand_to_hermes`, which writes the request to the call's handoff at once,
+  so it outlives a session that dies mid-call. Something the owner asks to
+  have *done* (book, send, remind) is noted the same way, without
+  `call_back`.
+
+The music is 30 seconds of James Scott's *Don't Jazz Me Rag* (1921). It
+comes from a public-domain piano recording on Wikimedia Commons, and the
+piece is out of copyright in Australia as well. It's stored as 8 kHz μ-law
+in `assets/voice-agent/hold-music.ulaw`, and `next.config.ts` ships it with
+the voice-agent route. `lib/comms/voice-agent/hold-music.ts` has the ffmpeg
+line that made it. If it can't be read, the owner holds in silence, and that
+is reported.
+
+## The post-call handoff
+
+When an owner call ends, Royal passes Hermes what it left
+(`lib/domain/comms/calls/owner-call-handoff.ts`):
+
+1. **The call ends.** Mili's report or the carrier's last status, whichever
+   lands first, marks the call's `OwnerCallHandoff` `PENDING`. There is one
+   handoff per owner call, so a repeated event does nothing. Unanswered
+   calls get one too, so Hermes knows the briefing wasn't given.
+2. **Delivery.** A workflow (`lib/workflow/owner-call-handoff.ts`) sends one
+   chat completion to Hermes's API server. The system message holds Royal's
+   rules and the handoff id. The user message holds the call as data: its
+   outcome, each request (with `call_back` and the owner's own timing
+   words), and the transcript. An answered call with no transcript yet waits
+   up to 5 minutes for the recording's, then goes without and says so. The
+   handoff is claimed `PENDING → DELIVERING`, so two runs never both send
+   it. Hermes may take up to 3 minutes to reply. A 2xx chat completion makes
+   it `DELIVERED`, and the reply is kept.
+3. **Hermes deals with it.** For a callback, Hermes calls
+   `schedule_owner_call` with `handoff_id` once it has the answer. That
+   resolves the handoff in the same transaction. Hermes then reads the call
+   back with `get_owner_call`. A second request for the same handoff returns
+   the first callback, so a handoff Hermes received twice still rings once.
+   If nothing needs a callback, Hermes calls `resolve_owner_call_handoff`.
+   If the request or the timing is unclear, Hermes asks the owner on its own
+   channels. Royal never decides a callback time.
+4. **Failures stay outstanding.** A failed delivery is `FAILED`, with the
+   reason, reported as `vendor: hermes`, operation `handoff`. The workflow
+   retries after 1, 5 and 15 minutes. After that, the hourly
+   `/api/cron/owner-calls` backstop retries it, up to 12 tries in all. It
+   also re-starts a run that was lost, and marks a call that ended with
+   neither end event recorded. Without `HERMES_SERVER_MCP_URL`, delivery
+   stops at once and the handoff waits for Hermes to pull it with
+   `list_owner_call_handoffs`. A callback that fails to ring (missed, no
+   owner line, the carrier refused) reopens its handoff and unlinks it, so
+   Hermes can schedule another. The admin hub shows *"N not passed to
+   Hermes"*, and each call under Agent calls shows its handoff.
+
 ## The event log
 
 Each step is stored as an `AgentCallEvent`:
 
 - scheduled, placed, waiting, failed or cancelled
 - each lookup and question to Hermes, with its arguments, its answer and how
-  long it took
+  long it took (and whether the owner held for it)
+- each request noted for Hermes, and the handoff: ready, delivered, failed,
+  resolved, or reopened by a failed callback
 - the desk ending the call
 - how Mili's session ended
 
@@ -175,4 +258,6 @@ to every call Mili takes, inbound ones included.
 | Mili's setup for the call | `lib/comms/voice-agent/caller.ts` |
 | Hermes's tools | `agent/tools/owner_calls.ts`, `agent/lib/owner-calls.ts`, `agent/lib/mcp-auth-policy.ts` |
 | The client to Hermes | `lib/hermes/assistant.ts`, `lib/hermes/config.ts` |
+| Post-call handoff | `lib/domain/comms/calls/owner-call-handoff.ts`, `lib/workflow/owner-call-handoff.ts`, `lib/comms/owner-call-handoffs.ts` |
+| Hold music | `lib/comms/voice-agent/hold-music.ts`, `assets/voice-agent/hold-music.ulaw` |
 | Admin page | `app/(main)/admin/agent-calls/page.tsx`, `components/admin/agent-calls-panel.tsx` |

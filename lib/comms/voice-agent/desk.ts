@@ -66,6 +66,12 @@ const LOOKUP_INPUT = z.discriminatedUnion("name", [
     name: z.literal("ask_hermes"),
     question: z.string().trim().min(1).max(ASK_HERMES_QUESTION_MAX_CHARS),
   }),
+  z.object({
+    call_back: z.boolean(),
+    name: z.literal("hand_to_hermes"),
+    request: z.string().trim().min(1).max(ASK_HERMES_QUESTION_MAX_CHARS),
+    timing: z.string().trim().min(1).max(80).optional(),
+  }),
 ]);
 
 /** A desk tool call → a lookup request, or null when it is not one. */

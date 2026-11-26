@@ -50,7 +50,19 @@ export type VoiceLookupRequest =
    * the owner (calls/owner-call.ts). No class may run it here; it is offered
    * and answered only by the owner call's own setup.
    */
-  | { readonly name: "ask_hermes"; readonly question: string };
+  | { readonly name: "ask_hermes"; readonly question: string }
+  /**
+   * Not a read either: something the owner asked for on a briefing call — a
+   * call back with the details, or a thing to do — noted for Hermes to pick
+   * up once the call ends (calls/owner-call-handoff.ts). Owner calls only.
+   */
+  | {
+      readonly name: "hand_to_hermes";
+      readonly request: string;
+      readonly call_back: boolean;
+      /** When they want the call back, in their own words, if they said. */
+      readonly timing?: string;
+    };
 
 export type VoiceLookupName = VoiceLookupRequest["name"];
 
@@ -223,7 +235,7 @@ export async function runVoiceLookup(
       "That lookup is not available to this caller.",
     );
   }
-  if (request.name === "ask_hermes") {
+  if (request.name === "ask_hermes" || request.name === "hand_to_hermes") {
     // Unreachable (no class may run it), and narrows what follows.
     throw new DomainAuthorizationError(
       "That lookup is not available to this caller.",

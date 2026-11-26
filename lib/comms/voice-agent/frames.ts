@@ -83,6 +83,21 @@ export function parseCarrierFrame(
   }
 }
 
+/**
+ * Drop the audio the carrier has queued but not yet played: hold music stops
+ * the moment Mili speaks again. Both carriers take a "clear" event.
+ */
+export function carrierClearFrame(
+  dialect: CommsProviderName,
+  streamId: string | null,
+): string {
+  return JSON.stringify(
+    dialect === "twilio"
+      ? { event: "clear", streamSid: streamId }
+      : { event: "clear" },
+  );
+}
+
 /** One frame of Mili's audio (base64 μ-law) for the carrier to play. */
 export function carrierMediaFrame(
   dialect: CommsProviderName,

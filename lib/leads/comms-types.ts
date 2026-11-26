@@ -212,6 +212,9 @@ export type OwnerCallDto = {
   questionsAsked: number;
   to: string | null;
   createdAt: string;
+  /** The post-call handoff this call is the callback for. */
+  fromHandoffId: string | null;
+  handoff: { id: string; status: OwnerCallHandoffStatusDto } | null;
   call: {
     callId: string;
     status: CallStatusDto;
@@ -227,6 +230,35 @@ export type OwnerCallDto = {
   } | null;
 };
 
+export type OwnerCallHandoffStatusDto =
+  | "OPEN"
+  | "PENDING"
+  | "DELIVERING"
+  | "DELIVERED"
+  | "RESOLVED"
+  | "FAILED";
+
+/** What an owner call left for Hermes (owner-call-handoff.ts). */
+export type OwnerCallHandoffDto = {
+  id: string;
+  status: OwnerCallHandoffStatusDto;
+  readyAt: string | null;
+  attempts: number;
+  lastError: string | null;
+  deliveredAt: string | null;
+  hermesReply: string | null;
+  resolvedAt: string | null;
+  resolution: string | null;
+  callbackOwnerCallId: string | null;
+  requests: {
+    request: string;
+    callBack: boolean;
+    timing: string | null;
+    source: string;
+    at: string;
+  }[];
+};
+
 export type AgentCallEventDto = {
   id: string;
   kind: string;
@@ -239,6 +271,7 @@ export type OwnerCallDetailDto = OwnerCallDto & {
   context: string;
   callRecord: CallDto | null;
   events: AgentCallEventDto[];
+  handoffDetail: OwnerCallHandoffDto | null;
 };
 
 export type PlaceCallResultDto = { call: CallDto; alreadyPlaced: boolean };

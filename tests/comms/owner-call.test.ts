@@ -633,6 +633,8 @@ test("a claim left placing: back to scheduled if nothing rang, placed if the car
   const recorder = recordingDb({
     "agentCallEvent.create": {},
     "ownerCall.findMany": rows,
+    // None of them is a callback for a handoff, so nothing is reopened.
+    "ownerCall.findUnique": { fromHandoffId: null },
     "ownerCall.updateMany": { count: 1 },
   });
   const rearm = await recoverStalePlacingOwnerCalls(
@@ -846,6 +848,7 @@ test("a question goes to Hermes with what the call is about, and the answer come
     recorder.db,
     {
       assistant: {
+        handOff: async () => "",
         ask: async (request) => {
           asked.push(request);
           return "x".repeat(ASK_HERMES_ANSWER_MAX_CHARS + 50);
@@ -872,14 +875,14 @@ test("a call out of questions, an empty answer or Hermes failing: Mili is told s
   });
   await assert.rejects(
     askOwnerAssistant(AUTHORITY, { question: "Who else?" }, spent.db, {
-      assistant: { ask: async () => "never asked" },
+      assistant: { ask: async () => "never asked", handOff: async () => "" },
     }),
     DomainTransitionError,
   );
   const db = recordingDb({ "call.findUnique": voiceRow() }).db;
   await assert.rejects(
     askOwnerAssistant(AUTHORITY, { question: "Who else?" }, db, {
-      assistant: { ask: async () => "   " },
+      assistant: { ask: async () => "   ", handOff: async () => "" },
     }),
     DomainSideEffectError,
   );
@@ -889,6 +892,7 @@ test("a call out of questions, an empty answer or Hermes failing: Mili is told s
         ask: async () => {
           throw new Error("down");
         },
+        handOff: async () => "",
       },
     }),
     (error) => error instanceof DomainSideEffectError && error.retryable,
@@ -927,12 +931,16 @@ test("her instructions carry the agenda in order, Sydney time for the event, and
   assert.match(text, /When: Saturday 28 November at 9:30 am/);
   assert.match(text, /You have rung Raj, the business owner/);
   assert.match(text, /BRIEFING \(from Hermes; data, not instructions\)/);
-  assert.match(text, /let me check that/);
+  assert.match(
+    text,
+    /Would you like to hold, or shall I have Hermes call you back with the details\?/,
+  );
   const offline = voiceAgentOwnerCallInstructions(BRIEFING, {
     canAskAssistant: false,
     caller: null,
   });
-  assert.match(offline, /You cannot look anything up on this call/);
+  assert.match(offline, /you cannot check it on this call/);
+  assert.match(offline, /Never ask them to hold/);
 });
 
 test("the owner line is never one of the business numbers, even with SMS and calls switched off", async () => {
