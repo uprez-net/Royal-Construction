@@ -439,6 +439,13 @@ export const OPEN_PROJECTS_FILTER = "OPEN";
  */
 export const DRAFTING_FILTER = "DRAFTING";
 
+/**
+ * Overdue: an activity running past its estimated end, or a trade booking an
+ * activity needed confirmed by now (`isProjectOverdue`). Derived from live
+ * records like Needs Attention, so it is a filter, not a status.
+ */
+export const OVERDUE_FILTER = "OVERDUE";
+
 /** The retired chip's value, still read from old links as Drafting. */
 export const LEGACY_PRE_CONSTRUCTION_FILTER = "PRE_CONSTRUCTION";
 
@@ -447,6 +454,8 @@ export type ProjectKPIs = {
   active: number;
   onTrack: number;
   needsAttention: number;
+  /** Projects `isProjectOverdue` holds for: the Overdue chip. */
+  overdue: number;
   delayed: number;
   completed: number;
   /**

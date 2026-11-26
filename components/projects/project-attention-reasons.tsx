@@ -50,7 +50,7 @@ const CHIP: Record<
   },
   DEPENDENCY: {
     icon: HardHat,
-    text: (n) => `${n} unbooked ${n === 1 ? "trade" : "trades"}`,
+    text: (n) => `${n} ${n === 1 ? "booking" : "bookings"} overdue`,
   },
 };
 

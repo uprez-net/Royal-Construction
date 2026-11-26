@@ -1,10 +1,38 @@
-import { MilestoneStatus, TradieScheduleStatus } from "@prisma/client";
+import {
+  MilestoneStatus,
+  type ProjectStatus,
+  TradieScheduleStatus,
+} from "@prisma/client";
+import { differenceInCalendarDays } from "date-fns";
 
+import { INACTIVE_SCHEDULE_STATUSES } from "../tradies/lifecycle";
 import { bookingTrade, sameTrade } from "../tradies/request-rules";
+import { isProjectBuilding } from "./milestone-schedule";
+
+// When an activity's tradie bookings are overdue.
+//
+// A tradie is booked BEFORE the activity starts: the booking has to be
+// confirmed by the day the work is meant to begin. So an activity's bookings
+// fall overdue on its start day, not on its estimated end (that is the
+// activity itself being overdue, `openOverdueDays`):
+//
+//   - an activity under way (ACTIVE) has started, so its bookings are due now,
+//     whatever the project's status says;
+//   - a pending activity on a job being built is due on its planned start day
+//     (`targetDate`), the day itself included. A job still in drafting or
+//     compliance is left out, for the reason `openOverdueDays` gives: its
+//     planned dates run from a start date nobody has reached yet.
+//
+// Once due, every trade the activity requires needs a CONFIRMED booking on
+// this activity, and a tradie booked on it but not yet confirmed is overdue as
+// well. One rule for the Milestones tab, the project's Alerts card, Needs
+// Attention and the Projects list's Overdue filter.
 
 type DependentMilestone = {
   id: string;
   status: MilestoneStatus;
+  /** Planned start. */
+  targetDate: Date | string;
   requiredTradeTypes?: readonly { label: string }[];
 };
 type Booking = {
@@ -15,25 +43,94 @@ type Booking = {
   tradie: { trade: string };
 };
 
+/** One trade on one activity whose booking is overdue. */
+export type BookingGap = {
+  readonly trade: string;
+  /**
+   * A tradie is booked for it on this activity but has not confirmed: still
+   * pending, waiting on a quote, an answer, an approval or a final
+   * confirmation. False when nobody live is booked for it at all.
+   */
+  readonly unconfirmed: boolean;
+};
+
 /**
- * The trades an active activity still has no confirmed booking for. Each
- * required trade needs its own; a booking elsewhere on the job, or one
- * awaiting approval/confirmation, does not cover this activity.
+ * Whether an activity's bookings must be confirmed by `today`: under way, or
+ * pending on a job being built with its planned start day arrived.
+ *
+ * `today` is compared by calendar day in the process's time zone; a server
+ * caller moves both dates onto Sydney's wall clock first.
  */
-export function missingMilestoneTrades(
+export function bookingsDue(
+  milestone: Pick<DependentMilestone, "status" | "targetDate">,
+  today: Date,
+  projectStatus: ProjectStatus,
+): boolean {
+  if (milestone.status === MilestoneStatus.ACTIVE) return true;
+  return (
+    milestone.status === MilestoneStatus.PENDING
+    && isProjectBuilding(projectStatus)
+    && differenceInCalendarDays(new Date(milestone.targetDate), today) <= 0
+  );
+}
+
+/** Not yet confirmed, and not over: the tradie may still say yes. */
+function awaitingConfirmation(status: TradieScheduleStatus): boolean {
+  return (
+    status !== TradieScheduleStatus.CONFIRMED
+    && !INACTIVE_SCHEDULE_STATUSES.includes(status)
+  );
+}
+
+/**
+ * The trades whose booking on this activity is overdue, required trades first.
+ *
+ * Each required trade needs its own confirmed booking; a booking elsewhere on
+ * the job, or one awaiting approval or confirmation, does not cover this
+ * activity. A tradie booked here for a trade the activity does not list is
+ * overdue too while unconfirmed, unless another tradie in that trade has
+ * confirmed. Empty until the activity's bookings are due (`bookingsDue`).
+ */
+export function overdueMilestoneBookings(
   milestone: DependentMilestone,
   bookings: readonly Booking[],
-): string[] {
-  if (milestone.status !== MilestoneStatus.ACTIVE) return [];
-  return (milestone.requiredTradeTypes ?? [])
-    .map((trade) => trade.label)
-    .filter(
-      (label) =>
-        !bookings.some(
-          (booking) =>
-            booking.milestoneId === milestone.id
-            && booking.status === TradieScheduleStatus.CONFIRMED
-            && sameTrade(bookingTrade(booking), label),
-        ),
+  today: Date,
+  projectStatus: ProjectStatus,
+): BookingGap[] {
+  if (!bookingsDue(milestone, today, projectStatus)) return [];
+  const own = bookings.filter(
+    (booking) => booking.milestoneId === milestone.id,
+  );
+  const confirmed = (trade: string) =>
+    own.some(
+      (booking) =>
+        booking.status === TradieScheduleStatus.CONFIRMED
+        && sameTrade(bookingTrade(booking), trade),
     );
+  const pending = own.filter((booking) => awaitingConfirmation(booking.status));
+
+  const gaps: BookingGap[] = (milestone.requiredTradeTypes ?? [])
+    .map((trade) => trade.label)
+    .filter((trade) => !confirmed(trade))
+    .map((trade) => ({
+      trade,
+      unconfirmed: pending.some((booking) =>
+        sameTrade(bookingTrade(booking), trade),
+      ),
+    }));
+  for (const booking of pending) {
+    const trade = bookingTrade(booking);
+    if (confirmed(trade) || gaps.some((gap) => sameTrade(gap.trade, trade))) {
+      continue;
+    }
+    gaps.push({ trade, unconfirmed: true });
+  }
+  return gaps;
+}
+
+/** "No confirmed Plumbing booking" / "Plumbing booked, not confirmed". */
+export function bookingGapLabel(gap: BookingGap): string {
+  return gap.unconfirmed
+    ? `${gap.trade} booked, not confirmed`
+    : `No confirmed ${gap.trade} booking`;
 }

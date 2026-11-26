@@ -42,7 +42,10 @@ import type { UserPrincipal } from "@/lib/domain/principal";
 
 import { MilestoneActionGroup } from "./milestone-action-button";
 import { MilestoneNotes } from "./milestone-notes";
-import { missingMilestoneTrades } from "@/lib/domain/projects/tradie-dependencies";
+import {
+  bookingGapLabel,
+  overdueMilestoneBookings,
+} from "@/lib/domain/projects/tradie-dependencies";
 import { milestoneEndDate } from "@/lib/domain/projects/milestone-schedule";
 import { bookingTrade } from "@/lib/domain/tradies/request-rules";
 import { storedImageProps } from "@/lib/files/file-href";
@@ -219,9 +222,14 @@ export function MilestoneCard({
   const children = milestone.childrenMilestones;
   const hasChildren = children.length > 0;
   const isNotRequired = milestone.status === MilestoneStatus.NOT_REQUIRED;
-  const missingTrades = missingMilestoneTrades(
+  // Under way, or due to start on a job being built, without a confirmed
+  // booking for a trade it needs (or with a tradie booked who has not
+  // confirmed): the project's Alerts card and the Overdue filter say the same.
+  const bookingGaps = overdueMilestoneBookings(
     milestone,
     project.tradieSchedules,
+    new Date(),
+    project.status,
   );
   const runningOverdueDays = openOverdueDays(
     milestone,
@@ -394,14 +402,14 @@ export function MilestoneCard({
             </div>
           ) : null}
 
-          {missingTrades.map((missingTrade) => (
+          {bookingGaps.map((gap) => (
             <p
-              key={missingTrade}
+              key={gap.trade}
               role="status"
               className="mt-2 flex items-center gap-1.5 text-xs font-medium text-warning-ink"
             >
               <CircleAlert className="size-3.5" aria-hidden="true" />
-              No confirmed {missingTrade} booking for this activity
+              {bookingGapLabel(gap)} for this activity
             </p>
           ))}
 

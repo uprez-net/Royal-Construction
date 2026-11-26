@@ -4,6 +4,7 @@ import { certifierEngagementInclude } from "@/types/compliance";
 import {
   DRAFTING_FILTER,
   OPEN_PROJECTS_FILTER,
+  OVERDUE_FILTER,
   type ProjectDetail,
   type ProjectKPIs,
   type ProjectWithStats,
@@ -33,6 +34,7 @@ import {
   needingAttention,
   readProjectAttention,
 } from "./attention";
+import { isProjectOverdue } from "./overdue";
 import { readProjectDetailRow } from "./detail-read";
 import {
   hideDetailProjectFinancials,
@@ -78,6 +80,8 @@ export type ProjectListQuery = {
    *     The enum value is no longer written to a project (issue #452), so as a
    *     filter it means the derived set, not the stored column; old links to
    *     `?status=NEEDS_ATTENTION` keep working and now show the right jobs.
+   *   - `OVERDUE_FILTER`       — an activity past its end, or a trade booking
+   *     overdue (`isProjectOverdue`).
    *
    * Absent means every project, completed included.
    */
@@ -85,6 +89,7 @@ export type ProjectListQuery = {
     | ProjectStatus
     | typeof OPEN_PROJECTS_FILTER
     | typeof DRAFTING_FILTER
+    | typeof OVERDUE_FILTER
     | null;
   page?: number;
   limit?: number;
@@ -367,7 +372,7 @@ function buildProjectWhere(
   principal: DomainPrincipal,
   query: ProjectListQuery | undefined,
   scope: ProjectListScope,
-  attentionIds: readonly string[] | null,
+  derivedIds: readonly string[] | null,
 ): Prisma.ProjectWhereInput {
   const search = normalizeSearch(query?.search);
   const filters: Prisma.ProjectWhereInput[] = [];
@@ -376,8 +381,11 @@ function buildProjectWhere(
     filters.push({ status: { not: ProjectStatus.COMPLETED } });
   } else if (query?.status === DRAFTING_FILTER) {
     filters.push(draftingProjectWhere);
-  } else if (query?.status === ProjectStatus.NEEDS_ATTENTION) {
-    filters.push({ id: { in: [...(attentionIds ?? [])] } });
+  } else if (
+    query?.status === ProjectStatus.NEEDS_ATTENTION
+    || query?.status === OVERDUE_FILTER
+  ) {
+    filters.push({ id: { in: [...(derivedIds ?? [])] } });
   } else if (query?.status) {
     filters.push({ status: query.status });
   }
@@ -487,20 +495,29 @@ export async function listProjects(
 ): Promise<PaginatedProjectsResult> {
   const page = safePage(query?.page);
   const limit = safeLimit(query?.limit, defaultPageSize, 100);
-  // Needs Attention is derived from live records, so the filter first finds
-  // which projects have a condition, and the listing then pages, searches,
-  // sorts and counts within them like any other filter.
-  const attentionIds =
+  // Needs Attention and Overdue are derived from live records, so the filter
+  // first finds which projects qualify, and the listing then pages, searches,
+  // sorts and counts within them like any other filter. Overdue reads only
+  // the projects that could be (`overdueCandidateWhere`).
+  const derivedIds =
     query?.status === ProjectStatus.NEEDS_ATTENTION
       ? needingAttention(await readProjectAttention(principal, db)).map(
           (project) => project.projectId,
         )
-      : null;
+      : query?.status === OVERDUE_FILTER
+        ? (
+            await readProjectAttention(principal, db, {
+              overdueCandidates: true,
+            })
+          )
+            .filter(isProjectOverdue)
+            .map((project) => project.projectId)
+        : null;
   const where = buildProjectWhere(
     principal,
     query,
     options.scope ?? "read",
-    attentionIds,
+    derivedIds,
   );
   // Sorting by budget or spend would hand the ordering of the money to a caller
   // who may not see it, one comparison at a time.
@@ -750,6 +767,7 @@ const EMPTY_KPIS: ProjectKPIs = {
   active: 0,
   onTrack: 0,
   needsAttention: 0,
+  overdue: 0,
   delayed: 0,
   completed: 0,
   drafting: 0,
@@ -794,6 +812,7 @@ export async function getProjectKPIs(
     // Derived, like the filter it counts for: the stored status is no longer
     // written (issue #452).
     needsAttention: needingAttention(attention).length,
+    overdue: attention.filter(isProjectOverdue).length,
     delayed: countOf(ProjectStatus.DELAYED),
     completed: countOf(ProjectStatus.COMPLETED),
     drafting,

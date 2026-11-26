@@ -3,6 +3,7 @@ import {
   DRAFTING_FILTER,
   LEGACY_PRE_CONSTRUCTION_FILTER,
   OPEN_PROJECTS_FILTER,
+  OVERDUE_FILTER,
 } from "@/types/project";
 import type {
   ProjectListQuery,
@@ -35,7 +36,11 @@ export type ProjectsListParamChanges = Partial<
 >;
 
 /** A chip's value. Null is "All": every project that is not completed. */
-export type ProjectStatusFilter = ProjectStatus | typeof DRAFTING_FILTER | null;
+export type ProjectStatusFilter =
+  | ProjectStatus
+  | typeof DRAFTING_FILTER
+  | typeof OVERDUE_FILTER
+  | null;
 
 export type ProjectsListParams = {
   readonly status: ProjectStatusFilter;
@@ -94,6 +99,7 @@ const DEFAULT_SORT: ProjectSort = "name";
 const STATUS_VALUES: readonly string[] = [
   ...Object.values(ProjectStatus),
   DRAFTING_FILTER,
+  OVERDUE_FILTER,
 ];
 
 // An unknown status or sort is dropped rather than sent to the API, which
