@@ -23,10 +23,11 @@ import type { AgentOutcome } from "../../ports/comms";
 export const VOICE_AGENT_NAME = "Mili";
 
 /**
- * A conversation longer than this is ended. Her audio runs inside one Vercel
- * Function invocation (app/api/comms/voice-agent/[provider]/route.ts, whose
- * maxDuration is 300 s), so this stays well inside it: a function stopped by
- * the platform mid-sentence would leave the caller in silence.
+ * An inbound conversation longer than this is ended. Her audio runs inside
+ * one Vercel Function invocation (app/api/comms/voice-agent/[provider]/
+ * route.ts), whose maxDuration sits above the longest call she takes — an
+ * owner call, OWNER_CALL_MAX_SECONDS — so this is well inside it: a function
+ * stopped by the platform mid-sentence would leave the caller in silence.
  */
 export const VOICE_AGENT_MAX_SECONDS = 270;
 
@@ -148,7 +149,7 @@ export function voiceSilenceCheck(
 }
 
 /** The transcript kept on the call, at most. Longer ones keep their start. */
-export const VOICE_AGENT_TRANSCRIPT_MAX_CHARS = 20_000;
+export const VOICE_AGENT_TRANSCRIPT_MAX_CHARS = 60_000;
 
 export type VoiceAgentTurn = {
   readonly speaker: "caller" | "agent";

@@ -1,3 +1,5 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+
 import type { Role } from "@prisma/client";
 import type { AuthFn } from "eve/channels/auth";
 import { ForbiddenError, withAuthChallenges } from "eve/channels/auth";
@@ -201,6 +203,39 @@ export interface McpAuthDependencies {
     clerkUserId: string,
   ) => Promise<McpAuthPrincipal | null>;
   readonly isEnabled: () => boolean;
+  /**
+   * HERMES_MCP_SECRET: the secret only Hermes (the owner's assistant, on its
+   * own server) sends, in HERMES_SECRET_HEADER, beside its Clerk token. Null:
+   * no caller is ever Hermes.
+   */
+  readonly hermesSecret?: () => string | null;
+}
+
+/** Where Hermes sends HERMES_MCP_SECRET on every MCP request. */
+export const HERMES_SECRET_HEADER = "x-hermes-secret";
+
+/**
+ * The session attribute that marks a caller as Hermes, so the owner-call
+ * tools (agent/tools/owner_calls.ts) resolve for it and for nobody else.
+ * Auth attributes are strings.
+ */
+export const HERMES_ATTRIBUTE = "hermes";
+
+function digest(value: string): Buffer {
+  return createHash("sha256").update(value, "utf8").digest();
+}
+
+/**
+ * Does this request carry Hermes's secret? Constant-time over digests, so
+ * neither the length nor a prefix leaks. Absent or unset is simply "no".
+ */
+export function carriesHermesSecret(
+  request: Request,
+  secret: string | null | undefined,
+): boolean {
+  const sent = request.headers.get(HERMES_SECRET_HEADER)?.trim();
+  if (!secret || !sent) return false;
+  return timingSafeEqual(digest(sent), digest(secret));
 }
 
 export function createMcpUserAuth(deps: McpAuthDependencies): AuthFn<Request> {
@@ -229,8 +264,15 @@ export function createMcpUserAuth(deps: McpAuthDependencies): AuthFn<Request> {
         });
       }
 
+      // Hermes signs in as an office user like anyone else; the secret only
+      // adds the owner-call tools on top of that user's ordinary access. A
+      // wrong secret is not a refusal: the caller is just not Hermes.
+      const hermes = carriesHermesSecret(request, deps.hermesSecret?.());
       return {
-        attributes: { role: principal.role },
+        attributes: {
+          role: principal.role,
+          ...(hermes ? { [HERMES_ATTRIBUTE]: "true" } : {}),
+        },
         authenticator: "clerk",
         issuer: "clerk",
         principalId: principal.userId,

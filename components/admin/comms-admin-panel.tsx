@@ -20,6 +20,7 @@ import {
   UnknownCallsSection,
   UnmatchedTextsSection,
 } from "./comms-inbound-sections";
+import { OwnerLineCard } from "./owner-line-card";
 import { TeamPhonesCard } from "./team-phones-card";
 
 // Phone & SMS, for the office: what is set up, where each carrier must send
@@ -99,7 +100,7 @@ export function CommsAdminPanel() {
     <PageHeader
       headingLevel="h1"
       title="Phone & SMS"
-      description="Which phone provider is active, the team's phones for lead calls, texts and calls from numbers no lead has, and calls from the team."
+      description="Which phone provider is active, the team's phones for lead calls, the owner line Mili rings for Hermes, texts and calls from numbers no lead has, and calls from the team."
     />
   );
 
@@ -222,6 +223,13 @@ export function CommsAdminPanel() {
       </Card>
 
       <TeamPhonesCard officeMobile={status.staffForwardNumber} />
+
+      <OwnerLineCard
+        hermesAssistant={status.hermesAssistant}
+        hermesCalls={status.hermesCalls}
+        hermesEndpoint={status.hermesEndpoint}
+        voiceAgent={status.voiceAgent}
+      />
 
       <UnmatchedTextsSection
         messages={unmatched?.sms ?? []}

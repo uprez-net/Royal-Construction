@@ -10,6 +10,7 @@ import {
 } from "@/agent/lib/mcp-auth-policy";
 import { withVerbalApprovals } from "@/agent/lib/mcp-verbal-approvals";
 import { isAgentFeatureEnabled } from "@/agent/lib/session-identity";
+import { readHermesConfig } from "@/lib/hermes/config";
 import { describeApprovalTargets } from "@/lib/domain/agent/approval-targets";
 import { principalForClerkId } from "@/lib/domain/identity/users";
 
@@ -51,6 +52,8 @@ async function clerkUserIdFor(request: Request): Promise<string | null> {
 
 const auth = createMcpUserAuth({
   clerkUserIdFor,
+  // Read per request, so rotating the secret needs no rebuild.
+  hermesSecret: () => readHermesConfig().inboundSecret,
   isEnabled: isAgentFeatureEnabled,
   principalFor: (clerkUserId) => principalForClerkId(clerkUserId, prisma),
 });

@@ -14,6 +14,9 @@ import type {
   SmsMessageDto,
   SmsSendResultDto,
   SmsThreadDto,
+  OwnerCallDetailDto,
+  OwnerCallDto,
+  OwnerLineDto,
   TeamPhoneDto,
   UnmatchedCommsDto,
   WhatsAppCallDto,
@@ -223,6 +226,58 @@ export function removeTeamPhone(phoneId: string): Promise<unknown> {
     `/api/comms/team-phones/${encodeURIComponent(phoneId)}`,
     { method: "DELETE" },
     "Could not remove the phone.",
+  );
+}
+
+export function fetchOwnerLine(): Promise<{ ownerLine: OwnerLineDto | null }> {
+  return unwrap("/api/comms/owner-line", GET, "Could not load the owner line.");
+}
+
+export function saveOwnerLine(input: {
+  nickname: string;
+  number: string;
+}): Promise<{ ownerLine: OwnerLineDto }> {
+  return unwrap(
+    "/api/comms/owner-line",
+    { body: JSON.stringify(input), headers: JSON_HEADERS, method: "PUT" },
+    "Could not save the owner line.",
+  );
+}
+
+export function clearOwnerLine(): Promise<unknown> {
+  return unwrap(
+    "/api/comms/owner-line",
+    { method: "DELETE" },
+    "Could not clear the owner line.",
+  );
+}
+
+export function fetchAgentCalls(): Promise<{
+  pending: OwnerCallDto[];
+  recent: OwnerCallDto[];
+}> {
+  return unwrap(
+    "/api/comms/agent-calls",
+    GET,
+    "Could not load the agent calls.",
+  );
+}
+
+export function fetchAgentCall(
+  ownerCallId: string,
+): Promise<OwnerCallDetailDto> {
+  return unwrap(
+    `/api/comms/agent-calls/${encodeURIComponent(ownerCallId)}`,
+    GET,
+    "Could not load the agent call.",
+  );
+}
+
+export function cancelAgentCall(ownerCallId: string): Promise<OwnerCallDto> {
+  return unwrap(
+    `/api/comms/agent-calls/${encodeURIComponent(ownerCallId)}/cancel`,
+    { method: "POST" },
+    "Could not cancel the call.",
   );
 }
 

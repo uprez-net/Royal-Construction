@@ -19,7 +19,7 @@ import AdminHubSkeleton from "./loading";
 
 export const metadata: Metadata = {
   title: "Admin",
-  description: "Nine tools for the office.",
+  description: "Ten tools for the office.",
 };
 
 const TOOLS: {
@@ -85,6 +85,13 @@ const TOOLS: {
     description:
       "The active phone provider, its numbers, and texts and calls from unknown numbers.",
     href: "/admin/comms",
+  },
+  {
+    id: "agent-calls",
+    label: "Agent calls",
+    description:
+      "Calls Mili makes to the owner for Hermes: what is scheduled, and each call's transcript, recording and what she looked up.",
+    href: "/admin/agent-calls",
   },
 ];
 
@@ -156,7 +163,7 @@ async function AdminHub() {
       <PageHeader
         headingLevel="h1"
         title="Admin"
-        description="Nine tools for the office."
+        description="Ten tools for the office."
       />
       <AdminToolList statuses={statuses} />
     </div>

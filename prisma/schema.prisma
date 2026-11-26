@@ -613,6 +613,9 @@ enum OutboxEventKind {
   /// One message the office typed on a tradie's project email thread. Keyed
   /// per attempt, so a double click is one email and a second reply is another.
   TRADIE_THREAD_REPLY_SEND
+  /// Mili ringing the owner line with a briefing Hermes asked for. Keyed on
+  /// Hermes's idempotency key: a retried tool call rings the owner once.
+  OWNER_CALL_PLACE
 }
 
 enum AgentMemoryProvenance {
@@ -2815,6 +2818,9 @@ enum CallFlowStep {
 enum CallStaffTarget {
   BROWSER
   MOBILE
+  /// Mili takes the call herself once it is answered: a briefing call to the
+  /// owner line (lib/domain/comms/calls/owner-call.ts). Nobody else rings.
+  AGENT
 }
 
 enum CallAnsweredBy {
@@ -2909,6 +2915,93 @@ model CommsTeamPhone {
   updatedAt DateTime @updatedAt
 }
 
+/// The business owner's own phone: where Mili rings with a briefing that
+/// Hermes (the owner's assistant on its own server) asks for through
+/// place_owner_call. Admin → Phone & SMS. One row at most, id "owner".
+model CommsOwnerLine {
+  id        String   @id @default("owner")
+  /// Who answers it, as Mili greets them: "Raj".
+  nickname  String
+  e164      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Where a call Hermes asked for stands. SCHEDULED until it is due, PLACING
+/// while one worker rings it, then PLACED (the Call row says how it went),
+/// CANCELED before it rang, or FAILED (never rang, or the carrier never
+/// confirmed it; `failureReason` says which).
+enum OwnerCallStatus {
+  SCHEDULED
+  PLACING
+  PLACED
+  CANCELED
+  FAILED
+}
+
+/// A call Mili makes to the owner line because Hermes asked
+/// (lib/domain/comms/calls/owner-call.ts): what to tell them, and when.
+/// Created when Hermes asks; the Call row exists once it rings.
+model OwnerCall {
+  id             String           @id @default(uuid())
+  /// Hermes's key for the intent: the same key never rings twice.
+  idempotencyKey String           @unique
+  status         OwnerCallStatus  @default(SCHEDULED)
+  /// When it should ring. "Now" is the time it was asked for.
+  callAt         DateTime
+  placedAt       DateTime?
+  canceledAt     DateTime?
+  /// Who cancelled it: "hermes" or "user:<id>".
+  canceledBy     String?
+  failureReason  String?
+  callId         String?          @unique
+  call           Call?            @relation(fields: [callId], references: [id], onDelete: SetNull)
+  /// The channel that asked: "hermes".
+  source         String
+  /// project_brief, calendar_reminder, task_update, alert or other.
+  category       String
+  /// One line: what the call is about.
+  subject        String
+  /// The points Mili covers, in order.
+  agenda         String[]
+  /// The detail she answers follow-up questions from.
+  context        String
+  /// Hermes's own id for this (a task or calendar event), sent back with
+  /// every follow-up question so Hermes knows what it is about.
+  reference      String?
+  /// When the event the call is about starts, if it is about one.
+  eventAt        DateTime?
+  /// Follow-up questions Mili passed to Hermes on the call.
+  questionsAsked Int              @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  events         AgentCallEvent[]
+
+  @@index([status, callAt])
+  @@index([createdAt])
+}
+
+/// What happened on an agent call, in order: an owner call scheduled, placed
+/// or cancelled, and on any call Mili takes, every tool the call desk ran
+/// (a lookup, a question to Hermes, ending the call) with what came back.
+/// Written off the conversation's path (lib/comms/voice-agent/event-writer.ts)
+/// so storing one never delays what Mili says.
+model AgentCallEvent {
+  id          String     @id @default(uuid())
+  callId      String?
+  call        Call?      @relation(fields: [callId], references: [id], onDelete: Cascade)
+  ownerCallId String?
+  ownerCall   OwnerCall? @relation(fields: [ownerCallId], references: [id], onDelete: Cascade)
+  /// "owner_call.scheduled", "desk.lookup", "session.ended", …
+  kind        String
+  detail      Json?
+  occurredAt  DateTime
+  createdAt   DateTime   @default(now())
+
+  @@index([callId, occurredAt])
+  @@index([ownerCallId, occurredAt])
+}
+
 /// One phone call with a customer. `providerCallId` is the customer's leg.
 model Call {
   id                   String            @id @default(uuid())
@@ -2983,6 +3076,10 @@ model Call {
   recordings   CallRecording[]
   /// Who Mili took the caller to be, and what she was allowed to tell them.
   callerAccess CallerAccessEvent[]
+  /// A call to the owner line that Hermes asked for: what Mili was to say.
+  ownerCall    OwnerCall?
+  /// What the call desk did on the call, and what came back.
+  agentEvents  AgentCallEvent[]
 
   @@unique([provider, providerCallId])
   @@index([leadId, startedAt])

@@ -30,9 +30,9 @@ import {
   type VoicePort,
 } from "../../ports/comms";
 import {
+  attributionUserId,
   isOfficePrincipal,
   type DomainPrincipal,
-  type UserPrincipal,
 } from "../../principal";
 import { normaliseLeadPhone } from "../../leads/whatsapp/phone";
 import { SMS_REFUSALS } from "../sms/policy";
@@ -89,6 +89,8 @@ export const CALL_REFUSALS = {
     "This phone provider can't ring a browser. Call via a phone instead.",
   noMobile:
     "No phone is set up to take calls. An admin can add the team's phones under Admin → Phone & SMS; until then, take the call in the browser.",
+  noAgent:
+    "Mili isn't switched on in this runtime, so she can't make the call. Check COMMS_AGENT_ENABLED and COMMS_AGENT_SECRET.",
 } as const;
 
 export function callOutboxKey(leadId: number, idempotencyKey: string) {
@@ -203,8 +205,8 @@ export function placedDetail(placed: PlacedCall): string {
 }
 
 /**
- * One outbound call, however it was asked for: a lead's Call button or the
- * project dialer. Everything after "who is being rung" is one rule — the
+ * One outbound call, however it was asked for: a lead's Call button, the
+ * project dialer, or Hermes asking Mili to brief the owner (owner-call.ts). Everything after "who is being rung" is one rule — the
  * replay check, the outbox claim, the carrier call and what an ambiguous
  * answer means — so it is written once, here.
  *
@@ -218,7 +220,8 @@ export type StaffCallPlan = {
   readonly kind: OutboxEventKind;
   /** Extra fields for the outbox payload; provider and target are added. */
   readonly payload: Record<string, string | number | null>;
-  readonly target: "browser" | "mobile";
+  /** `agent`: Mili takes the call herself once it is answered. */
+  readonly target: "browser" | "mobile" | "agent";
   readonly phoneId: string | null;
   readonly now: Date;
   readonly resolveTo: () => string;
@@ -233,10 +236,16 @@ export type StaffCallPlan = {
   };
   /** The history line, written in the transaction that confirms the call. */
   readonly history: (tx: DomainDb, placed: PlacedCall) => Promise<void>;
+  /**
+   * Anything that must exist before the phone rings, written in the
+   * transaction that creates (or re-opens) the Call row: Mili's briefing for
+   * an owner call, which her session reads the moment it is answered.
+   */
+  readonly prepare?: (tx: DomainDb, callId: string) => Promise<void>;
 };
 
 export async function placeStaffCall(
-  principal: UserPrincipal,
+  principal: DomainPrincipal,
   plan: StaffCallPlan,
   db: TransactionalDomainDb,
   ports: {
@@ -275,6 +284,9 @@ export async function placeStaffCall(
   }
   if (plan.target === "browser" && !channel.browserCalling) {
     throw new DomainTransitionError(CALL_REFUSALS.noBrowser);
+  }
+  if (plan.target === "agent" && !channel.voiceAgent) {
+    throw new DomainSideEffectError(CALL_REFUSALS.noAgent, "voice", false);
   }
   const staffPhone =
     plan.target === "mobile"
@@ -326,7 +338,9 @@ export async function placeStaffCall(
       staffTarget:
         plan.target === "mobile"
           ? CallStaffTarget.MOBILE
-          : CallStaffTarget.BROWSER,
+          : plan.target === "agent"
+            ? CallStaffTarget.AGENT
+            : CallStaffTarget.BROWSER,
       startedAt: now,
       status: CallStatus.QUEUED,
     };
@@ -337,7 +351,7 @@ export async function placeStaffCall(
         direction: CommsDirection.OUTBOUND,
         idempotencyKey: outboxKey,
         provider: providerColumn(voice.provider),
-        staffUserId: principal.userId,
+        staffUserId: attributionUserId(principal),
       },
       select: { id: true },
       // Only reachable after a definite refusal: nothing rang. The link is
@@ -345,6 +359,7 @@ export async function placeStaffCall(
       update: { ...plan.link, ...fields },
       where: { idempotencyKey: outboxKey },
     });
+    await plan.prepare?.(tx, call.id);
     return { callId: call.id, claimed, replay: false as const };
   });
   if (prepared.replay) {

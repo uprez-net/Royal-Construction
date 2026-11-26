@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 
-import type { DeskDecision } from "@/lib/comms/voice-agent/desk";
+import type { DeskDecision, DeskMode } from "@/lib/comms/voice-agent/desk";
 import type { LiveClientEvent } from "@/lib/comms/voice-agent/live";
 import {
   VoiceAgentSession,
@@ -68,6 +68,7 @@ export function token(
 export type Decide = (
   turns: readonly VoiceAgentTurn[],
   lookups: readonly VoiceLookupDefinition[],
+  mode?: DeskMode,
 ) => Promise<DeskDecision>;
 
 export function harness(
@@ -83,6 +84,7 @@ export function harness(
   const reports: VoiceAgentReportBody[] = [];
   const asked: VoiceAgentTurn[][] = [];
   const offered: (readonly VoiceLookupDefinition[])[] = [];
+  const modes: (DeskMode | undefined)[] = [];
   const timers: { fn: () => void; ms: number; live: boolean }[] = [];
   const state = {
     carrierClosed: false,
@@ -102,10 +104,11 @@ export function harness(
     clearTimer: (handle) => {
       (handle as { live: boolean }).live = false;
     },
-    decide: async (turns, lookups) => {
+    decide: async (turns, lookups, mode) => {
       asked.push([...turns]);
       offered.push(lookups);
-      return decide(turns, lookups);
+      modes.push(mode);
+      return decide(turns, lookups, mode);
     },
     dialect,
     log: quiet,
@@ -159,6 +162,7 @@ export function harness(
     fire,
     fireLast,
     modelOut,
+    modes,
     offered,
     reports,
     session,

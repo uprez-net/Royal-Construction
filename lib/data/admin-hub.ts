@@ -5,6 +5,7 @@ import { currentPrincipal } from "@/lib/data/current-principal";
 import { getTradeTypes } from "@/lib/data/trade-types";
 import { fetchApprovalKPI } from "@/lib/data/tradie-approvals";
 import { getXeroConnectionStatus } from "@/lib/data/xero-connection";
+import { countOwnerCalls } from "@/lib/domain/comms/calls/owner-call";
 import { readMilestoneTemplate } from "@/lib/domain/projects/templates";
 import { commsChannel, readCommsConfig } from "@/lib/comms/config";
 import {
@@ -33,7 +34,8 @@ export type AdminHubTool =
   | "xero"
   | "whatsapp"
   | "whatsapp-bridge"
-  | "phone-sms";
+  | "phone-sms"
+  | "agent-calls";
 
 /**
  * `tone` set: a status pill. `tone` null: plain text, as a count reads.
@@ -155,6 +157,21 @@ function phoneSmsStatus(): Promise<AdminHubStatus | null> {
   });
 }
 
+function agentCallsStatus(): Promise<AdminHubStatus | null> {
+  return statusOf("agent-calls", async () => {
+    const { failedToday, pending } = await countOwnerCalls(
+      await currentPrincipal(),
+      prisma,
+    );
+    if (failedToday > 0) {
+      return { label: `${failedToday} failed today`, tone: "warning" };
+    }
+    return pending > 0
+      ? { label: `${pending} scheduled`, tone: null }
+      : { label: "None scheduled", tone: null };
+  });
+}
+
 /**
  * Every hub status, loaded in parallel. Offer content has no cheap, meaningful
  * status, so it is always null and its row shows "—".
@@ -169,6 +186,7 @@ export async function getAdminHubStatuses(): Promise<AdminHubStatuses> {
     whatsapp,
     whatsappBridge,
     phoneSms,
+    agentCalls,
   ] = await Promise.all([
     approvalsStatus(),
     teamStatus(),
@@ -178,6 +196,7 @@ export async function getAdminHubStatuses(): Promise<AdminHubStatuses> {
     whatsappStatus(),
     whatsappBridgeStatus(),
     phoneSmsStatus(),
+    agentCallsStatus(),
   ]);
   return {
     approvals,
@@ -189,5 +208,6 @@ export async function getAdminHubStatuses(): Promise<AdminHubStatuses> {
     whatsapp,
     "whatsapp-bridge": whatsappBridge,
     "phone-sms": phoneSms,
+    "agent-calls": agentCalls,
   };
 }
