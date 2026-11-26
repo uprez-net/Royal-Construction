@@ -20,6 +20,7 @@ import {
   placeOwnerCall,
   readOwnerCall,
   readOwnerCallForVoice,
+  recoverStalePlacingOwnerCalls,
   requestOwnerCall,
 } from "@/lib/domain/comms/calls/owner-call";
 import {
@@ -198,19 +199,27 @@ const ports = (overrides: Partial<CommsChannel> = {}, v = voice()) => ({
 test("now: the owner line rings as a call Mili takes, the call linked before it rings", async () => {
   const placed: unknown[] = [];
   const recorder = recordingDb(script());
+  // Whether the briefing was linked to the call row when the carrier was asked.
+  let linkedBeforeRinging = false;
   const result = await requestOwnerCall(
     HERMES,
     INPUT,
     recorder.transactionalDb,
     ports(
       {},
-      voice((request) => placed.push(request)),
+      voice((request) => {
+        placed.push(request);
+        linkedBeforeRinging = recorder.calls.some(
+          (c) =>
+            c.operation === "ownerCall.update"
+            && JSON.stringify(c.args).includes('"callId":"call-1"'),
+        );
+      }),
     ),
   );
   assert.equal(result.alreadyRequested, false);
   assert.equal((placed[0] as { to: string }).to, OWNER);
 
-  const ops = recorder.operations();
   const created = recorder.calls.find((c) => c.operation === "ownerCall.create")
     ?.args as { data: Record<string, unknown> };
   assert.equal(created.data.status, "SCHEDULED");
@@ -231,14 +240,15 @@ test("now: the owner line rings as a call Mili takes, the call linked before it 
   );
 
   // Linked to the call row in the transaction that creates it, before the
-  // carrier is asked to ring, so Mili's session finds the briefing.
-  const linkAt = ops.findIndex(
-    (op, i) =>
-      op === "ownerCall.update"
-      && JSON.stringify(recorder.calls[i].args).includes('"callId":"call-1"'),
+  // carrier is asked to ring, so Mili's session finds the briefing; and the
+  // limits checked again behind the placement lock in that transaction.
+  assert.ok(linkedBeforeRinging, "the briefing is linked before it rings");
+  const ops = recorder.operations();
+  assert.ok(ops.indexOf("$.executeRaw") > ops.indexOf("call.upsert"));
+  assert.ok(
+    ops.lastIndexOf("call.count") > ops.indexOf("$.executeRaw"),
+    "the limits are read again under the lock",
   );
-  assert.ok(linkAt > ops.indexOf("call.upsert"));
-  assert.ok(linkAt < ops.indexOf("call.update"));
   const events = recorder.calls
     .filter((c) => c.operation === "agentCallEvent.create")
     .map((c) => (c.args as { data: { kind: string } }).data.kind);
@@ -316,6 +326,30 @@ test("now, with Mili already on a call or the hourly cap reached: refused before
       && /in the last hour/.test(error.message),
   );
   assert.deepEqual(capped.writes(), []);
+});
+
+test("now, refused as busy because a copy of this request has just landed: answers with that copy", async () => {
+  let keyReads = 0;
+  const recorder = recordingDb(
+    script({
+      "call.count": 1,
+      "ownerCall.findUnique": (args: unknown) => {
+        if (!(args as Where).where.idempotencyKey) {
+          return ownerCallRow({ status: "PLACED" });
+        }
+        return keyReads++ === 0 ? null : { id: "oc-1" };
+      },
+    }),
+  );
+  const result = await requestOwnerCall(
+    HERMES,
+    INPUT,
+    recorder.transactionalDb,
+    ports(),
+  );
+  assert.equal(result.alreadyRequested, true);
+  assert.equal(result.ownerCall.status, "PLACED");
+  assert.deepEqual(recorder.writes(), []);
 });
 
 test("a retried request answers with the request it made, without writing or ringing", async () => {
@@ -503,6 +537,134 @@ test("Mili busy at the call's time: it goes back to scheduled for the next try",
   const back = recorder.calls.find((c) => c.operation === "ownerCall.update")
     ?.args as { data: { status: string } };
   assert.equal(back.data.status, "SCHEDULED");
+});
+
+test("Mili found free, then busy under the placement lock (another call reserved first): deferred, nothing rings", async () => {
+  let rang = false;
+  let counts = 0;
+  const recorder = recordingDb(
+    script({
+      // The first look (live, last hour) finds her free; the look under the
+      // lock finds the call that won the race.
+      "call.count": () => (counts++ < 2 ? 0 : 1),
+      "ownerCall.findUnique": { callAt: LATER, category: "project_brief" },
+    }),
+  );
+  const outcome = await placeOwnerCall(
+    systemPrincipal("workflow:owner-call"),
+    { now: LATER, ownerCallId: "oc-1" },
+    recorder.transactionalDb,
+    ports(
+      {},
+      voice(() => {
+        rang = true;
+      }),
+    ),
+  );
+  assert.equal(outcome, "deferred");
+  assert.equal(rang, false);
+  const where = recorder.calls.filter((c) => c.operation === "call.count")[2]
+    ?.args as { where: { id?: unknown } };
+  assert.deepEqual(
+    where.where.id,
+    { not: "call-1" },
+    "its own row is not counted",
+  );
+  const back = recorder.calls.find(
+    (c) =>
+      c.operation === "ownerCall.update"
+      && JSON.stringify(c.args).includes('"SCHEDULED"'),
+  );
+  assert.ok(back, "it goes back to scheduled");
+});
+
+test("the owner line has become a business number by the time it is due: failed, never rung", async () => {
+  let rang = false;
+  const recorder = recordingDb(
+    script({
+      "ownerCall.findUnique": { callAt: LATER, category: "project_brief" },
+    }),
+  );
+  const outcome = await placeOwnerCall(
+    systemPrincipal("workflow:owner-call"),
+    { now: LATER, ownerCallId: "oc-1" },
+    recorder.transactionalDb,
+    ports(
+      { numbers: [{ e164: OWNER, label: "New line", provider: "twilio" }] },
+      voice(() => {
+        rang = true;
+      }),
+    ),
+  );
+  assert.equal(outcome, "failed");
+  assert.equal(rang, false);
+  const failed = recorder.calls.find((c) => c.operation === "ownerCall.update")
+    ?.args as { data: { failureReason: string } };
+  assert.equal(failed.data.failureReason, OWNER_CALL_REFUSALS.businessNumber);
+});
+
+test("a claim left placing: back to scheduled if nothing rang, placed if the carrier took it, else failed as uncertain", async () => {
+  const STALE = new Date(NOW.getTime() - 60 * 60_000);
+  const rows = [
+    { call: null, id: "oc-none", updatedAt: STALE },
+    {
+      call: {
+        id: "call-rang",
+        providerCallId: "CA9",
+        providerErrorTitle: null,
+        startedAt: STALE,
+        status: "COMPLETED",
+      },
+      id: "oc-rang",
+      updatedAt: STALE,
+    },
+    {
+      call: {
+        id: "call-unsure",
+        providerCallId: null,
+        providerErrorTitle: null,
+        startedAt: STALE,
+        status: "QUEUED",
+      },
+      id: "oc-unsure",
+      updatedAt: STALE,
+    },
+  ];
+  const recorder = recordingDb({
+    "agentCallEvent.create": {},
+    "ownerCall.findMany": rows,
+    "ownerCall.updateMany": { count: 1 },
+  });
+  const rearm = await recoverStalePlacingOwnerCalls(
+    systemPrincipal("cron:owner-calls"),
+    { now: NOW },
+    recorder.transactionalDb,
+  );
+  assert.deepEqual(rearm, ["oc-none"]);
+  const find = recorder.calls[0].args as {
+    where: { status: string; updatedAt: { lt: Date } };
+  };
+  assert.equal(find.where.status, "PLACING");
+  assert.ok(find.where.updatedAt.lt < NOW);
+  const statuses = recorder.calls
+    .filter((c) => c.operation === "ownerCall.updateMany")
+    .map((c) => {
+      const args = c.args as {
+        data: { status: string; failureReason?: string };
+        where: { id: string; status: string };
+      };
+      assert.equal(args.where.status, "PLACING", "only a claim still placing");
+      return [args.where.id, args.data.status, args.data.failureReason ?? null];
+    });
+  assert.deepEqual(statuses, [
+    ["oc-none", "SCHEDULED", null],
+    ["oc-rang", "PLACED", null],
+    ["oc-unsure", "FAILED", OWNER_CALL_REFUSALS.uncertain],
+  ]);
+  assert.ok(
+    !recorder.operations().some((op) => op.startsWith("outbox")),
+    "nothing is rung again",
+  );
 });
 
 test("more than half an hour late, whatever held it up: dropped as missed, never rung late", async () => {
@@ -773,14 +935,14 @@ test("her instructions carry the agenda in order, Sydney time for the event, and
   assert.match(offline, /You cannot look anything up on this call/);
 });
 
-test("the owner line is never one of the business numbers", async () => {
+test("the owner line is never one of the business numbers, even with SMS and calls switched off", async () => {
   const recorder = recordingDb();
   await assert.rejects(
     setOwnerLine(
       adminPrincipal(),
       { nickname: "Raj", number: BUSINESS },
       recorder.db,
-      { channel: channel() },
+      { businessNumbers: channel().numbers },
     ),
     (error) =>
       error instanceof DomainValidationError && error.field === "number",
@@ -790,9 +952,7 @@ test("the owner line is never one of the business numbers", async () => {
       siteManagerPrincipal(),
       { nickname: "Raj", number: OWNER },
       recorder.db,
-      {
-        channel: channel(),
-      },
+      { businessNumbers: channel().numbers },
     ),
     DomainAuthorizationError,
   );
@@ -809,7 +969,7 @@ test("the owner line is never one of the business numbers", async () => {
     adminPrincipal(),
     { nickname: "  Raj  ", number: "0411 111 111" },
     saved.db,
-    { channel: channel() },
+    { businessNumbers: channel().numbers },
   );
   assert.equal(line.e164, OWNER);
   const args = saved.calls[0].args as {

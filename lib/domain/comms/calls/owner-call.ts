@@ -24,7 +24,7 @@ import {
   type DomainPrincipal,
 } from "../../principal";
 import type { VoiceCallAuthority } from "../callers/identity";
-import { readOwnerLine } from "../owner-line";
+import { isBusinessNumber, readOwnerLine } from "../owner-line";
 import { maskNumber } from "../shared";
 import {
   AGENT_CALL_EVENT,
@@ -87,6 +87,13 @@ export const OWNER_CALL_LIMITS = {
 const NOW_WINDOW_MS = 30_000;
 /** A call to the owner not settled after this long no longer blocks the next. */
 const STALE_LIVE_CALL_MS = 20 * 60 * 1000;
+/**
+ * A claim still PLACING after this long was abandoned mid-placement (a
+ * database failure, a function cut off): placing never takes this long.
+ */
+const STALE_PLACING_MS = 15 * 60 * 1000;
+/** Held while a placement checks the limits and reserves its call row. */
+const PLACE_LOCK_KEY = "owner-call:place";
 
 export const OWNER_CALL_REFUSALS = {
   noLine:
@@ -94,6 +101,10 @@ export const OWNER_CALL_REFUSALS = {
   busy: "Mili is already on a call to the owner. Try again once it has finished, or schedule it with call_at.",
   tooMany: `Mili has rung the owner ${OWNER_CALL_LIMITS.perHour} times in the last hour. Try again later, or put the rest in one call.`,
   missed: `Mili couldn't ring within ${OWNER_CALL_LIMITS.missedAfterMinutes} minutes of the scheduled time (she was busy or the hourly limit was reached), so the call was dropped.`,
+  businessNumber:
+    "The owner line is now one of the business numbers, so Mili won't ring it. An admin can change it under Admin → Phone & SMS.",
+  uncertain:
+    "Placing this call was interrupted and the carrier never confirmed it, so it may have rung. Check the carrier's call log; it won't be rung again.",
   notScheduled:
     "This call has already rung (or was cancelled), so it can no longer be cancelled.",
 } as const;
@@ -480,10 +491,13 @@ function cleanCallAt(raw: Date | null | undefined, now: Date): Date | null {
 async function ownerCallBlocker(
   db: DomainDb,
   now: Date,
+  /** The call row this placement has just reserved, not counted against it. */
+  exceptCallId?: string,
 ): Promise<string | null> {
   const owned = {
     direction: CommsDirection.OUTBOUND,
     staffTarget: CallStaffTarget.AGENT,
+    ...(exceptCallId ? { id: { not: exceptCallId } } : {}),
   };
   const [live, lastHour] = await Promise.all([
     db.call.count({
@@ -512,6 +526,13 @@ async function ownerCallBlocker(
   if (lastHour >= OWNER_CALL_LIMITS.perHour) return OWNER_CALL_REFUSALS.tooMany;
   return null;
 }
+
+/**
+ * The limits failed when checked again inside the transaction that reserves
+ * the call row (placeOwnerCall's `prepare`). Thrown to roll that transaction
+ * back, so nothing of the attempt is kept.
+ */
+class OwnerCallHeldError extends DomainTransitionError {}
 
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -562,7 +583,21 @@ export async function requestOwnerCall(
   }
   if (!callAt) {
     const blocker = await ownerCallBlocker(db, now);
-    if (blocker) throw new DomainTransitionError(blocker);
+    if (blocker) {
+      // A copy of this request may have landed (and be ringing) since the
+      // key was read: that copy is the busy call, so answer with it.
+      const landed = await db.ownerCall.findUnique({
+        select: { id: true },
+        where: { idempotencyKey },
+      });
+      if (landed) {
+        return {
+          alreadyRequested: true,
+          ownerCall: await summaryById(db, landed.id),
+        };
+      }
+      throw new DomainTransitionError(blocker);
+    }
   }
 
   const source = principal.kind === "system" ? principal.reason : "app";
@@ -696,6 +731,10 @@ export async function placeOwnerCall(
 
   const line = await readOwnerLine(db);
   if (!line) return fail(OWNER_CALL_REFUSALS.noLine);
+  // The business numbers may have changed since the line was saved.
+  if (isBusinessNumber(line.e164, ports.channel?.numbers ?? [])) {
+    return fail(OWNER_CALL_REFUSALS.businessNumber);
+  }
 
   // Too late to be worth ringing, whatever held it up (Mili busy, a timer
   // that was lost and re-armed by the hourly backstop).
@@ -704,16 +743,19 @@ export async function placeOwnerCall(
     return fail(OWNER_CALL_REFUSALS.missed);
   }
 
-  const blocker = await ownerCallBlocker(db, now);
-  if (blocker) {
+  const holdUp = async (blocker: string) => {
     if (options.throwOnFailure) return fail(blocker);
     await settle(db, ownerCallId, "SCHEDULED", {
       at: now,
       kind: AGENT_CALL_EVENT.ownerCallDeferred,
       reason: blocker,
     });
-    return "deferred";
-  }
+    return "deferred" as const;
+  };
+
+  // A first look that writes nothing; the check that holds is in `prepare`.
+  const blocker = await ownerCallBlocker(db, now);
+  if (blocker) return holdUp(blocker);
 
   try {
     const placed = await placeStaffCall(
@@ -734,6 +776,13 @@ export async function placeOwnerCall(
         },
         phoneId: null,
         prepare: async (tx, callId) => {
+          // The limits again, behind one lock and in the transaction that
+          // reserves this call row: two calls due in the same minute cannot
+          // both find Mili free. Committed (lock released) before the
+          // carrier is asked.
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${PLACE_LOCK_KEY}, 0))`;
+          const held = await ownerCallBlocker(tx, now, callId);
+          if (held) throw new OwnerCallHeldError(held);
           // Before the phone rings: Mili's session finds the briefing by it.
           await tx.ownerCall.update({
             data: { callId },
@@ -763,12 +812,112 @@ export async function placeOwnerCall(
     });
     return "placed";
   } catch (error) {
+    if (error instanceof OwnerCallHeldError) return holdUp(error.message);
     if (!isDomainError(error)) {
       // Unexpected: the claim stays PLACING, so nothing re-rings it blindly.
+      // The hourly backstop settles it (recoverStalePlacingOwnerCalls).
       throw error;
     }
     return fail(error.message, error);
   }
+}
+
+/**
+ * Settle claims left PLACING by a placement that stopped part way (a
+ * database failure, a function cut off). The call row is linked in the
+ * transaction that reserves it, before the carrier is asked, so:
+ *
+ *   no call linked           nothing was committed and nothing rang: back to
+ *                            SCHEDULED, for its timer to ring it or drop it
+ *                            as missed
+ *   the carrier gave an id   it rang: PLACED
+ *   the call row failed      FAILED, with the carrier's reason
+ *   anything else            it may have rung: FAILED as uncertain, and
+ *                            never rung again
+ *
+ * Returns the ids sent back to SCHEDULED, for their timers to be armed.
+ */
+export async function recoverStalePlacingOwnerCalls(
+  principal: DomainPrincipal,
+  input: { readonly now?: Date },
+  db: TransactionalDomainDb,
+): Promise<readonly string[]> {
+  requireAdminPrincipal(principal);
+  const now = input.now ?? new Date();
+  const stale = await db.ownerCall.findMany({
+    orderBy: { updatedAt: "asc" },
+    select: {
+      call: {
+        select: {
+          id: true,
+          providerCallId: true,
+          providerErrorTitle: true,
+          startedAt: true,
+          status: true,
+        },
+      },
+      id: true,
+      updatedAt: true,
+    },
+    take: 50,
+    where: {
+      status: OwnerCallStatus.PLACING,
+      updatedAt: { lt: new Date(now.getTime() - STALE_PLACING_MS) },
+    },
+  });
+  const rearm: string[] = [];
+  for (const row of stale) {
+    const call = row.call;
+    // Only the same stale claim: a placement that moved on since is left be.
+    const where = {
+      id: row.id,
+      status: OwnerCallStatus.PLACING,
+      updatedAt: row.updatedAt,
+    };
+    let outcome: {
+      readonly data: Prisma.OwnerCallUpdateManyMutationInput;
+      readonly kind: (typeof AGENT_CALL_EVENT)[keyof typeof AGENT_CALL_EVENT];
+      readonly detail: Record<string, unknown>;
+    };
+    if (!call) {
+      outcome = {
+        data: { status: OwnerCallStatus.SCHEDULED },
+        detail: { reason: "Placing was interrupted before it rang." },
+        kind: AGENT_CALL_EVENT.ownerCallDeferred,
+      };
+    } else if (call.providerCallId && call.status !== CallStatus.FAILED) {
+      outcome = {
+        data: { placedAt: call.startedAt, status: OwnerCallStatus.PLACED },
+        detail: { callId: call.id, recovered: true },
+        kind: AGENT_CALL_EVENT.ownerCallPlaced,
+      };
+    } else {
+      const reason =
+        call.status === CallStatus.FAILED
+          ? (call.providerErrorTitle ?? "The carrier refused the call.")
+          : OWNER_CALL_REFUSALS.uncertain;
+      outcome = {
+        data: { failureReason: reason, status: OwnerCallStatus.FAILED },
+        detail: { reason },
+        kind: AGENT_CALL_EVENT.ownerCallFailed,
+      };
+    }
+    const settled = await db.$transaction(async (tx) => {
+      const moved = await tx.ownerCall.updateMany({
+        data: outcome.data,
+        where,
+      });
+      if (moved.count === 0) return false;
+      await recordAgentCallEvent(
+        tx,
+        { callId: call?.id, ownerCallId: row.id },
+        { at: now, detail: outcome.detail, kind: outcome.kind },
+      );
+      return true;
+    });
+    if (settled && !call) rearm.push(row.id);
+  }
+  return rearm;
 }
 
 /**

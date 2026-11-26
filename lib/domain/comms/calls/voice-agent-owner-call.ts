@@ -89,6 +89,10 @@ export function ownerCallGreetingCue(briefing: OwnerCallVoiceBriefing): string {
 export const OWNER_CALL_WRAP_UP_CUE =
   "Time is nearly up. Finish the point you are on, say anything left on the agenda in one sentence, tell them the rest is with Hermes, and say goodbye.";
 
+/** A lookup that could not be run: nobody to put the owner through to. */
+export const OWNER_CALL_LOOKUP_FAILED_CUE =
+  "That couldn't be checked just now. Tell the owner you couldn't check it at the moment and that Hermes will have it for them, then carry on with the briefing.";
+
 export const OWNER_CALL_SILENCE_FOLLOW_UP_CUE =
   "The owner has gone quiet. Check briefly that they are still there and whether they want you to carry on. One short sentence.";
 

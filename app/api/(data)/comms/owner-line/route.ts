@@ -60,7 +60,7 @@ export async function PUT(request: NextRequest) {
     const principal = await signedInUserPrincipal();
     if (!principal) return unauthorizedResponse();
     const line = await setOwnerLine(principal, parsed.data, prisma, {
-      channel: commsRuntimeFromEnv().channel,
+      businessNumbers: commsRuntimeFromEnv().config.numbers,
     });
     return successResponse({ ownerLine: dto(line) });
   } catch (error) {

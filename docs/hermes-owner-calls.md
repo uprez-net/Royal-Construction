@@ -35,7 +35,8 @@ Hermes ── get_owner_call ──▶ status, answered?, transcript, recording 
    owner-call tools. Anyone else signed in through the same channel never
    sees them.
 3. **Royal → Hermes** (optional, for follow-up questions). Set
-   `HERMES_SERVER_MCP_URL` (https) and `HERMES_SERVER_MCP_TOKEN`. If the tool
+   `HERMES_SERVER_MCP_URL` (https, or http://localhost for local development;
+   no username or password in it) and `HERMES_SERVER_MCP_TOKEN`. If the tool
    isn't called `ask`, also set `HERMES_SERVER_MCP_TOOL`. Without these, Mili
    answers from the briefing only and says Hermes will follow up.
 4. **Mili** must be on: `COMMS_AGENT_ENABLED`, `COMMS_AGENT_SECRET` and

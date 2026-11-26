@@ -63,9 +63,20 @@ export function readHermesConfig(env: Env = process.env): HermesConfig {
     } catch {
       problems.push("HERMES_SERVER_MCP_URL is not a URL.");
     }
-    if (url && url.protocol !== "https:" && url.hostname !== "localhost") {
+    // https only; plain http only to localhost, for running Hermes locally.
+    if (
+      url
+      && url.protocol !== "https:"
+      && !(url.protocol === "http:" && url.hostname === "localhost")
+    ) {
       problems.push(
-        "HERMES_SERVER_MCP_URL must be https: the token and the owner's questions travel on it.",
+        "HERMES_SERVER_MCP_URL must be https (or http://localhost for local development): the token and the owner's questions travel on it.",
+      );
+      url = null;
+    }
+    if (url && (url.username || url.password)) {
+      problems.push(
+        "HERMES_SERVER_MCP_URL must not carry a username or password; put the credential in HERMES_SERVER_MCP_TOKEN.",
       );
       url = null;
     }

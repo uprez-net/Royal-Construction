@@ -150,9 +150,12 @@ function describeEvent(event: AgentCallEventDto): {
 function AgentCallDetail({
   ownerCallId,
   onChanged,
+  version,
 }: {
   ownerCallId: string;
   onChanged: () => void;
+  /** Bumped each time the list loads, so an open call reloads with it. */
+  version: number;
 }) {
   const [detail, setDetail] = useState<OwnerCallDetailDto | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -169,7 +172,7 @@ function AgentCallDetail({
   useEffect(() => {
     const first = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(first);
-  }, [load]);
+  }, [load, version]);
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!detail) {
@@ -212,10 +215,8 @@ function AgentCallDetail({
             </h3>
             <CallRecordings
               call={detail.callRecord}
-              onRetried={() => {
-                void load();
-                onChanged();
-              }}
+              // The list reloading bumps `version`, which reloads this too.
+              onRetried={onChanged}
               openTranscripts
             />
           </section>
@@ -257,9 +258,11 @@ function AgentCallDetail({
 function AgentCallRow({
   call,
   onChanged,
+  version,
 }: {
   call: OwnerCallDto;
   onChanged: () => void;
+  version: number;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -339,7 +342,11 @@ function AgentCallRow({
       </div>
       {open ? (
         <div className="mt-3 pl-7">
-          <AgentCallDetail ownerCallId={call.id} onChanged={onChanged} />
+          <AgentCallDetail
+            ownerCallId={call.id}
+            onChanged={onChanged}
+            version={version}
+          />
         </div>
       ) : null}
     </li>
@@ -352,12 +359,14 @@ function Section({
   empty,
   calls,
   onChanged,
+  version,
 }: {
   title: string;
   icon: React.ReactNode;
   empty: string;
   calls: OwnerCallDto[];
   onChanged: () => void;
+  version: number;
 }) {
   return (
     <Card>
@@ -376,7 +385,12 @@ function Section({
         ) : (
           <ul>
             {calls.map((call) => (
-              <AgentCallRow key={call.id} call={call} onChanged={onChanged} />
+              <AgentCallRow
+                key={call.id}
+                call={call}
+                onChanged={onChanged}
+                version={version}
+              />
             ))}
           </ul>
         )}
@@ -392,11 +406,13 @@ export function AgentCallsPanel() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [version, setVersion] = useState(0);
 
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
       setLists(await fetchAgentCalls());
+      setVersion((value) => value + 1);
       setError(null);
     } catch (loadError) {
       setError(message(loadError, "Could not load the agent calls."));
@@ -447,6 +463,7 @@ export function AgentCallsPanel() {
             empty="Nothing scheduled. Hermes schedules calls through the operations agent."
             calls={lists.pending}
             onChanged={() => void load()}
+            version={version}
           />
           <Section
             title="Recent"
@@ -454,6 +471,7 @@ export function AgentCallsPanel() {
             empty="No calls yet."
             calls={lists.recent}
             onChanged={() => void load()}
+            version={version}
           />
         </>
       ) : null}

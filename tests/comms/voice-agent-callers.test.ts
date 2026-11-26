@@ -210,6 +210,30 @@ test("a lookup that fails, or that the caller was never offered, is 'could not c
   );
 });
 
+test("a lookup that fails on a call with its own failure cue (the owner call) says that cue, with no transfer offered", async () => {
+  const cue = "Couldn't check that; Hermes will have it.";
+  const h = await started(
+    async () => ({ action: "lookup", request: STATUS }),
+    async () => ({
+      ...adminSetup(async () => {
+        throw new Error("down");
+      }),
+      cues: {
+        lookupFailed: cue,
+        silenceFollowUp: "Still there?",
+        silenceGoodbye: "Goodbye.",
+        wrapUp: "Wrap up.",
+      },
+    }),
+  );
+  h.session.handleModelEvent({
+    delegationId: "item_1",
+    type: "session.delegation.created",
+  });
+  await h.tick();
+  assert.equal((h.modelOut.at(-1) as { content: string }).content, cue);
+});
+
 test("a lookup that failed is tried again when the desk asks again; an answered one is not", async () => {
   let attempts = 0;
   const h = await started(

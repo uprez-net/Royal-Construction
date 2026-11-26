@@ -2,7 +2,7 @@ import type { CommsOwnerLine } from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import { DomainAuthorizationError, DomainValidationError } from "../errors";
-import type { CommsChannel } from "../ports/comms";
+import type { CommsBusinessNumber } from "../ports/comms";
 import { requireAdminPrincipal, type DomainPrincipal } from "../principal";
 import { normaliseLeadPhone } from "../leads/whatsapp/phone";
 import { canSeeTeamPhones } from "./team-phones";
@@ -45,14 +45,22 @@ function validNickname(raw: string): string {
   return nickname;
 }
 
+type BusinessNumbers = readonly Pick<CommsBusinessNumber, "e164">[];
+
 /**
  * Never one of Royal's own business numbers: Mili would ring the office line,
- * and on an inbound call she would answer herself.
+ * and on an inbound call she would answer herself. Checked when the line is
+ * saved and again when a call is placed, since the business numbers can
+ * change after the line was set.
  */
-function validNumber(
-  raw: string,
-  channel: Pick<CommsChannel, "numbers"> | null,
-): string {
+export function isBusinessNumber(
+  e164: string,
+  businessNumbers: BusinessNumbers,
+): boolean {
+  return businessNumbers.some((number) => number.e164 === e164);
+}
+
+function validNumber(raw: string, businessNumbers: BusinessNumbers): string {
   const phone = normaliseLeadPhone(raw);
   if (!phone.usable || !phone.e164) {
     throw new DomainValidationError(
@@ -62,7 +70,7 @@ function validNumber(
       "number",
     );
   }
-  if (channel?.numbers.some((number) => number.e164 === phone.e164)) {
+  if (isBusinessNumber(phone.e164, businessNumbers)) {
     throw new DomainValidationError(
       "That's one of the business numbers. Use the owner's own phone, so Mili doesn't ring the office line.",
       "number",
@@ -102,11 +110,15 @@ export async function setOwnerLine(
   principal: DomainPrincipal,
   input: { readonly nickname: string; readonly number: string },
   db: DomainDb,
-  context: { readonly channel: Pick<CommsChannel, "numbers"> | null },
+  /**
+   * Every configured business number, whether or not SMS or calls are on
+   * right now: a line saved while they are off must still not be one.
+   */
+  context: { readonly businessNumbers: BusinessNumbers },
 ): Promise<OwnerLineRecord> {
   requireAdminPrincipal(principal);
   const nickname = validNickname(input.nickname);
-  const e164 = validNumber(input.number, context.channel);
+  const e164 = validNumber(input.number, context.businessNumbers);
   // An upsert on a fixed id: a double-clicked Save writes the same row twice.
   const row = await db.commsOwnerLine.upsert({
     create: { e164, id: OWNER_LINE_ID, nickname },

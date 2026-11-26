@@ -93,6 +93,8 @@ export type VoiceCallerSetup = {
    */
   readonly desk?: DeskMode;
   readonly cues?: {
+    /** A lookup that could not be run; absent, VOICE_LOOKUP_FAILED_CUE. */
+    readonly lookupFailed?: string;
     readonly wrapUp: string;
     readonly silenceFollowUp: string;
     readonly silenceGoodbye: string;
@@ -780,7 +782,7 @@ export class VoiceAgentSession {
   }> {
     const failed = (failure: string) => ({
       answered: false,
-      cue: VOICE_LOOKUP_FAILED_CUE,
+      cue: this.setup.cues?.lookupFailed ?? VOICE_LOOKUP_FAILED_CUE,
       failure,
       text: null,
     });
@@ -1009,8 +1011,12 @@ export class VoiceAgentSession {
         { callId: claims.callId, providerCallId: claims.callControlId },
         { at: new Date(this.now()), detail, kind },
       );
-    } catch {
+    } catch (error) {
       // A broken sink loses the log, never the call.
+      this.log.warn(
+        `[voice-agent] could not keep the ${kind} event.`,
+        error instanceof Error ? error.message : error,
+      );
     }
   }
 

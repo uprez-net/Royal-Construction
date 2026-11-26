@@ -8,6 +8,7 @@ import {
 } from "@/lib/domain/comms/calls/owner-call";
 import {
   ASK_HERMES_DEFINITION,
+  OWNER_CALL_LOOKUP_FAILED_CUE,
   OWNER_CALL_SILENCE_FOLLOW_UP_CUE,
   OWNER_CALL_SILENCE_GOODBYE_CUE,
   OWNER_CALL_WRAP_UP_CUE,
@@ -149,6 +150,7 @@ export function voiceCallerPreparer(
     return {
       callerClass: "owner",
       cues: {
+        lookupFailed: OWNER_CALL_LOOKUP_FAILED_CUE,
         silenceFollowUp: OWNER_CALL_SILENCE_FOLLOW_UP_CUE,
         silenceGoodbye: OWNER_CALL_SILENCE_GOODBYE_CUE,
         wrapUp: OWNER_CALL_WRAP_UP_CUE,

@@ -32,6 +32,25 @@ test("config: a short inbound secret or an http Hermes server is refused", () =>
   assert.equal(ok.server?.askTool, "ask");
 });
 
+test("config: only https, or http to localhost, and never a credential in the URL", () => {
+  const server = (url: string) =>
+    readHermesConfig({
+      HERMES_SERVER_MCP_TOKEN: "t",
+      HERMES_SERVER_MCP_URL: url,
+    }).server;
+  for (const refused of [
+    "ws://localhost/mcp",
+    "ftp://localhost/mcp",
+    "file://localhost/mcp",
+    "https://user:pass@hermes.example/mcp",
+    "https://user@hermes.example/mcp",
+  ]) {
+    assert.equal(server(refused), null, refused);
+  }
+  assert.ok(server("http://localhost:8080/mcp"));
+  assert.ok(server("https://hermes.example/mcp"));
+});
+
 // ── Mili → Hermes ───────────────────────────────────────────────────────
 
 test("one question: initialize, initialized, then tools/call with the question, the context and the reference", async () => {
