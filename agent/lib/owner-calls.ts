@@ -15,6 +15,14 @@ import {
   requestOwnerCall,
   type OwnerCallSummary,
 } from "@/lib/domain/comms/calls/owner-call";
+import {
+  listOwnerCallHandoffs,
+  OWNER_CALL_HANDOFF_LIMITS,
+  readOwnerCallHandoff,
+  resolveOwnerCallHandoff,
+  type OwnerCallHandoffDetail,
+  type OwnerCallHandoffSummary,
+} from "@/lib/domain/comms/calls/owner-call-handoff";
 import { OWNER_CALL_CATEGORIES } from "@/lib/domain/comms/calls/voice-agent-owner-call";
 import { isDomainError } from "@/lib/domain/errors";
 import { systemPrincipal } from "@/lib/domain/principal";
@@ -77,6 +85,13 @@ export function ownerCallForHermes(ownerCall: OwnerCallSummary) {
     canceled_at: iso(ownerCall.canceledAt),
     category: ownerCall.category,
     failure_reason: ownerCall.failureReason,
+    from_handoff_id: ownerCall.fromHandoffId,
+    handoff: ownerCall.handoff
+      ? {
+          handoff_id: ownerCall.handoff.id,
+          status: ownerCall.handoff.status.toLowerCase(),
+        }
+      : null,
     owner_call_id: ownerCall.id,
     placed_at: iso(ownerCall.placedAt),
     questions_asked: ownerCall.questionsAsked,
@@ -84,6 +99,44 @@ export function ownerCallForHermes(ownerCall: OwnerCallSummary) {
     status: ownerCall.status.toLowerCase(),
     subject: ownerCall.subject,
     to: ownerCall.to,
+  };
+}
+
+/** A post-call handoff, as Hermes reads it. */
+export function handoffForHermes(
+  handoff: OwnerCallHandoffSummary | OwnerCallHandoffDetail,
+) {
+  const iso = (date: Date | null) => (date ? date.toISOString() : null);
+  return {
+    attempts: handoff.attempts,
+    call: handoff.call
+      ? {
+          answered: handoff.call.answered,
+          call_id: handoff.call.callId,
+          duration_seconds: handoff.call.durationSeconds,
+          status: handoff.call.status.toLowerCase(),
+        }
+      : null,
+    callback_owner_call_id: handoff.callbackOwnerCallId,
+    delivered_at: iso(handoff.deliveredAt),
+    handoff_id: handoff.id,
+    revision: handoff.revision,
+    last_error: handoff.lastError,
+    owner_call_id: handoff.ownerCallId,
+    ready_at: iso(handoff.readyAt),
+    reference: handoff.reference,
+    requests: handoff.requests.map((request) => ({
+      call_back: request.callBack,
+      noted_at: request.at.toISOString(),
+      request: request.request,
+      source: request.source,
+      timing: request.timing,
+    })),
+    resolution: handoff.resolution,
+    resolved_at: iso(handoff.resolvedAt),
+    status: handoff.status.toLowerCase(),
+    subject: handoff.subject,
+    ...("transcript" in handoff ? { transcript: handoff.transcript } : {}),
   };
 }
 
@@ -161,6 +214,32 @@ export const scheduleOwnerCallInput = z.object({
     .describe(
       "Your own id for the task or event. It comes back with every follow-up question Mili passes to you.",
     ),
+  handoff_id: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe(
+      "When this is the callback for a post-call handoff, its handoff_id, once the call it came from has ended. Scheduling it resolves the handoff; one callback per handoff, so asking again returns the one already scheduled. Use a new idempotency_key for each callback, including a replacement for one that didn't reach the owner.",
+    ),
+});
+
+export const handoffIdInput = z.object({
+  handoff_id: z
+    .string()
+    .min(1)
+    .max(100)
+    .describe("The handoff_id from the post-call handoff Royal sent you."),
+});
+
+export const resolveHandoffInput = handoffIdInput.extend({
+  resolution: z
+    .string()
+    .trim()
+    .min(1)
+    .max(OWNER_CALL_HANDOFF_LIMITS.resolutionMaxChars)
+    .describe("One line: how it was dealt with, without a callback."),
 });
 
 export const ownerCallIdInput = z.object({
@@ -190,6 +269,7 @@ export async function scheduleOwnerCall(
             category: input.category,
             context: input.context,
             eventAt: input.event_at ? new Date(input.event_at) : null,
+            handoffId: input.handoff_id ?? null,
             idempotencyKey: input.idempotency_key,
             reference: input.reference ?? null,
             subject: input.subject,
@@ -207,6 +287,7 @@ export async function scheduleOwnerCall(
     inputSummary: {
       callAt: input.call_at ?? null,
       category: input.category,
+      handoffId: input.handoff_id ?? null,
       idempotencyKey: input.idempotency_key,
       subject: input.subject,
     } satisfies Prisma.InputJsonValue,
@@ -278,5 +359,78 @@ export async function listScheduledOwnerCalls(
       pending: lists.pending.map(ownerCallForHermes),
       recent: lists.recent.map(ownerCallForHermes),
     };
+  });
+}
+
+export const listHandoffsInput = z.object({
+  cursor: z
+    .string()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe(
+      "next_cursor from the previous page; leave it out for the first.",
+    ),
+});
+
+export async function listHandoffs(
+  input: z.infer<typeof listHandoffsInput>,
+  ctx: ToolContext,
+): Promise<OwnerCallResult> {
+  await requireHermes(ctx);
+  return refusalsAsResults(async () => {
+    const page = await listOwnerCallHandoffs(HERMES_PRINCIPAL, agentDb, {
+      cursor: input.cursor ?? null,
+    });
+    return {
+      next_cursor: page.nextCursor,
+      outstanding: page.handoffs.map(handoffForHermes),
+    };
+  });
+}
+
+export async function getHandoff(
+  input: z.infer<typeof handoffIdInput>,
+  ctx: ToolContext,
+): Promise<OwnerCallResult> {
+  await requireHermes(ctx);
+  return refusalsAsResults(async () =>
+    handoffForHermes(
+      await readOwnerCallHandoff(
+        HERMES_PRINCIPAL,
+        { handoffId: input.handoff_id },
+        agentDb,
+      ),
+    ),
+  );
+}
+
+export async function resolveHandoff(
+  input: z.infer<typeof resolveHandoffInput>,
+  ctx: ToolContext,
+): Promise<OwnerCallResult> {
+  const actor = await requireHermes(ctx);
+  return runAuditedAgentOperation({
+    action: "owner_call_handoff.resolve",
+    ctx,
+    execute: () =>
+      refusalsAsResults(async () =>
+        handoffForHermes(
+          await resolveOwnerCallHandoff(
+            HERMES_PRINCIPAL,
+            { handoffId: input.handoff_id, resolution: input.resolution },
+            agentDb,
+          ),
+        ),
+      ),
+    inputSummary: {
+      handoffId: input.handoff_id,
+      resolution: input.resolution,
+    },
+    outputSchema: resultSchema,
+    ownerUserId: actor.id,
+    targetId: input.handoff_id,
+    targetType: "ownerCallHandoff",
+    transactional: false,
   });
 }

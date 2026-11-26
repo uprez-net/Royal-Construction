@@ -2,6 +2,7 @@ import {
   CallAnsweredBy,
   CallFlowStep,
   CallRecordingKind,
+  CallStaffTarget,
   CallStatus,
   CommsDirection,
   type Prisma,
@@ -35,6 +36,7 @@ import {
   type CallForFlow,
   type FlowDecision,
 } from "./flow";
+import { markOwnerCallEnded } from "./owner-call-handoff";
 import { VOICE_AGENT_NAME } from "./voice-agent";
 import {
   callStatusAdvances,
@@ -81,6 +83,11 @@ export type CallEventOutcome = {
   readonly instructions: readonly CallInstruction[] | null;
   /** A recording newly on record, to be copied into storage. */
   readonly recordingId: string | null;
+  /**
+   * An owner call's handoff this event made ready (owner-call-handoff.ts),
+   * for the adapter to start delivering to Hermes after commit.
+   */
+  readonly handoffId?: string | null;
 };
 
 const CALL_FOR_EVENT = {
@@ -251,6 +258,17 @@ async function applyDecision(
   });
 }
 
+/** A call Mili placed herself: only an owner call is (owner-call.ts). */
+function isMiliOutboundCall(call: {
+  readonly direction: CommsDirection;
+  readonly staffTarget: CallStaffTarget | null;
+}): boolean {
+  return (
+    call.direction === CommsDirection.OUTBOUND
+    && call.staffTarget === CallStaffTarget.AGENT
+  );
+}
+
 export async function applyCallEvent(
   principal: DomainPrincipal,
   event: CallEvent,
@@ -367,6 +385,11 @@ export async function applyCallEvent(
           },
           where: { id: call.id },
         });
+        // The owner call is over: what it left for Hermes is ready to go.
+        const handoffId =
+          terminal && isMiliOutboundCall(call)
+            ? await markOwnerCallEnded(tx, { callId: call.id, now })
+            : null;
         if (terminal && call.leadId !== null) {
           const ended = describeEnd(
             call,
@@ -406,6 +429,7 @@ export async function applyCallEvent(
         }
         return {
           callId: call.id,
+          handoffId,
           instructions: null,
           outcome: "applied" as const,
           recordingId: null,
@@ -543,8 +567,14 @@ export async function applyCallEvent(
             ? { answeredBy: null, connectedAt: null }
             : {}),
         });
+        // Mili is done with the owner: her call is ending (an owner call is
+        // never passed on), so its handoff is ready, transcript and all.
+        const handoffId = isMiliOutboundCall(call)
+          ? await markOwnerCallEnded(tx, { callId: call.id, now })
+          : null;
         return {
           callId: call.id,
+          handoffId,
           instructions: decision.instructions,
           outcome: "applied" as const,
           recordingId: null,

@@ -41,6 +41,12 @@ const nextConfig: NextConfig = {
   // carries an optional web-worker path whose `import(mod)` Turbopack cannot
   // resolve; Node loads the package as it is, so it stays external too.
   serverExternalPackages: ["docusign-esign", "mpg123-decoder", "ws"],
+  // The hold music an owner hears while waiting on Hermes is read from disk
+  // at runtime (lib/comms/voice-agent/hold-music.ts), which the tracer cannot
+  // see, so it is shipped with Mili's stream route by name.
+  outputFileTracingIncludes: {
+    "/api/comms/voice-agent/*": ["./assets/voice-agent/**/*"],
+  },
   typescript: {
     // `next build` runs the project-local `tsc` itself, which is the same work
     // `pnpm typecheck` does -- ~18s cold, ~8s warm. CI runs that check in its

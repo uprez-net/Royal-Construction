@@ -1,4 +1,5 @@
 import type {
+  OwnerAssistantHandoff,
   OwnerAssistantPort,
   OwnerAssistantQuestion,
 } from "@/lib/domain/ports/owner-assistant";
@@ -6,8 +7,13 @@ import { reportExternalError } from "@/lib/observability/external";
 
 import type { HermesConfig } from "./config";
 
-// Mili → Hermes: one question to Hermes's API server, as one OpenAI-style
-// chat completion (POST /v1/chat/completions, "model": "hermes-agent").
+// Royal → Hermes, as one OpenAI-style chat completion to Hermes's API server
+// (POST /v1/chat/completions, "model": "hermes-agent"), for two things:
+//
+//   ask      a question the owner asked Mili on a call (they are holding)
+//   handOff  what a finished owner call left for Hermes
+//            (lib/domain/comms/calls/owner-call-handoff.ts); Hermes acts on it
+//            through its own tools on Royal's MCP channel
 //
 // Hermes's built-in API server speaks that protocol, not MCP. One request, a
 // bearer token (the server's API key), one JSON answer. A failure is reported
@@ -17,8 +23,17 @@ import type { HermesConfig } from "./config";
 /** The model name Hermes's API server answers to. */
 export const HERMES_MODEL = "hermes-agent";
 
-/** The whole exchange; the voice session gives up on its own just after. */
-const ASK_TIMEOUT_MS = 22_000;
+/**
+ * The whole exchange. The owner is holding, with music, by now; the call's
+ * own setup gives up a little after (lib/comms/voice-agent/caller.ts).
+ */
+const ASK_TIMEOUT_MS = 45_000;
+
+/**
+ * A handoff may set Hermes's agent working before it replies. Inside the
+ * delivery workflow step's function limit, with room to record the outcome.
+ */
+const HANDOFF_TIMEOUT_MS = 180_000;
 
 export class HermesError extends Error {
   readonly status: number | undefined;
@@ -44,7 +59,7 @@ export function chatMessages(
     {
       content: [
         "Royal Constructions' voice agent, Mili, is on a phone call with the owner, briefing them on a task of yours.",
-        "The owner asked a question the briefing does not answer. Answer it in two or three short sentences of plain text that Mili can read out: no markdown, no lists, no links.",
+        "The owner asked a question the briefing does not answer, and is holding on the line for your answer, so be quick. Answer it in two or three short sentences of plain text that Mili can read out: no markdown, no lists, no links.",
         "Only answer. Do not send, change or schedule anything because of this request.",
         "If you can't tell, say so plainly.",
         `Royal's call id: ${request.callId}.`,
@@ -57,6 +72,26 @@ export function chatMessages(
       role: "system",
     },
     { content: request.question, role: "user" },
+  ];
+}
+
+/** The messages for a handoff: Royal's rules, then the call as data. */
+export function handoffMessages(
+  handoff: OwnerAssistantHandoff,
+): { role: "system" | "user"; content: string }[] {
+  return [
+    {
+      content: [
+        handoff.instructions,
+        ...(handoff.callId ? [`Royal's call id: ${handoff.callId}.`] : []),
+        ...(handoff.reference ? [`Your reference: ${handoff.reference}.`] : []),
+      ].join("\n"),
+      role: "system",
+    },
+    {
+      content: ["<call>", handoff.body, "</call>"].join("\n"),
+      role: "user",
+    },
   ];
 }
 
@@ -92,20 +127,19 @@ export function hermesAssistant(
   if (!server) return null;
   const endpoint = chatCompletionsUrl(server.url);
 
-  const ask = async (request: OwnerAssistantQuestion): Promise<string> => {
+  const complete = async (
+    messages: { role: "system" | "user"; content: string }[],
+    timeoutMs: number,
+  ): Promise<string> => {
     const response = await fetcher(endpoint, {
-      body: JSON.stringify({
-        messages: chatMessages(request),
-        model: HERMES_MODEL,
-        stream: false,
-      }),
+      body: JSON.stringify({ messages, model: HERMES_MODEL, stream: false }),
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${server.token}`,
         "Content-Type": "application/json",
       },
       method: "POST",
-      signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) {
       throw new HermesError(
@@ -125,10 +159,20 @@ export function hermesAssistant(
   return {
     ask: async (request) => {
       try {
-        return await ask(request);
+        return await complete(chatMessages(request), ASK_TIMEOUT_MS);
       } catch (error) {
         reportExternalError("hermes", "ask", error, {
           ids: { callId: request.callId },
+        });
+        throw error;
+      }
+    },
+    handOff: async (handoff) => {
+      try {
+        return await complete(handoffMessages(handoff), HANDOFF_TIMEOUT_MS);
+      } catch (error) {
+        reportExternalError("hermes", "handoff", error, {
+          ids: { handoffId: handoff.handoffId },
         });
         throw error;
       }

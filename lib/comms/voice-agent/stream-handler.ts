@@ -10,10 +10,12 @@ import { CommsError, type CommsProviderName } from "@/lib/domain/ports/comms";
 
 import type { CommsRuntime } from "../factory";
 import { providerFromPath } from "../factory";
+import { startHandoffDeliveries } from "../owner-call-handoffs";
 import { COMMS_WEBHOOK_PRINCIPAL } from "../webhook-handler";
 import { voiceCallerPreparer } from "./caller";
 import { decideCallMove } from "./desk";
 import { voiceAgentEventWriter } from "./event-writer";
+import { loadHoldMusic } from "./hold-music";
 import { gatewayEmbedding } from "@/lib/embedding-port";
 import { hermesAssistant } from "@/lib/hermes/assistant";
 import { readHermesConfig } from "@/lib/hermes/config";
@@ -65,6 +67,13 @@ export type VoiceAgentStreamDeps = {
    * on, on a dead database connection, and the transcript was lost (#605).
    */
   readonly keepAlive?: (promise: Promise<unknown>) => void;
+  /** The music an owner holds to. Absent: hold-music.ts. */
+  readonly holdMusic?: () => Promise<Uint8Array | null>;
+  /**
+   * Start passing an owner call's handoff to Hermes, once Mili's report made
+   * it ready. Absent: the delivery workflow (lib/comms/owner-call-handoffs.ts).
+   */
+  readonly onHandoffReady?: (handoffIds: readonly string[]) => Promise<unknown>;
 };
 
 function text(status: number, body: string) {
@@ -76,7 +85,7 @@ function text(status: number, body: string) {
 
 /** Mili is done: record what was said and move the live call on. */
 export async function recordVoiceAgentOutcome(
-  deps: Pick<VoiceAgentStreamDeps, "runtime" | "db" | "log">,
+  deps: Pick<VoiceAgentStreamDeps, "runtime" | "db" | "log" | "onHandoffReady">,
   report: VoiceAgentReportBody,
 ): Promise<void> {
   const log = deps.log ?? console;
@@ -92,6 +101,20 @@ export async function recordVoiceAgentOutcome(
     deps.db,
     { channel: deps.runtime.channel, provider: report.provider },
   );
+  if (outcome.handoffId) {
+    // An owner call is over: pass what it left to Hermes. Never in the way of
+    // the call itself; a start that fails is the hourly backstop's.
+    try {
+      await (deps.onHandoffReady ?? startHandoffDeliveries)([
+        outcome.handoffId,
+      ]);
+    } catch (error) {
+      log.error(
+        "[voice-agent] could not start passing the call's handoff to Hermes; the hourly backstop will.",
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
   if (!outcome.instructions?.length) {
     log.info(`[voice-agent] ${report.outcome}: ${outcome.outcome}.`);
     return;
@@ -162,6 +185,8 @@ export async function handleVoiceAgentStream(
         db: deps.db,
         disclosure: config.voiceAgent.disclosure,
         embedding: gatewayEmbedding,
+        holdMusic: deps.holdMusic ?? loadHoldMusic,
+        onHandoffReopened: deps.onHandoffReady ?? startHandoffDeliveries,
       }),
       openModel: () =>
         open(

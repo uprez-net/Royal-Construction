@@ -12,7 +12,8 @@ import {
 
 /**
  * The calls Mili makes to the owner for Hermes (Admin → Agent calls): what is
- * still to ring, then the most recent. ADMIN only.
+ * still to ring, then the most recent, and every call whose handoff never
+ * reached Hermes. ADMIN only.
  */
 export async function GET() {
   // Per request, never prerendered: the list is live.

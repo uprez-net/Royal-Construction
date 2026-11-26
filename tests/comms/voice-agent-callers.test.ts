@@ -325,7 +325,7 @@ for (const who of [
       },
     });
     const prepare = voiceCallerPreparer({
-      db: recorder.db,
+      db: recorder.transactionalDb,
       disclosure: true,
       now: () => CALLER_NOW,
     });
@@ -370,7 +370,7 @@ test("with disclosure switched off, every caller is message taking and nothing i
     const recorder = callerDb(who);
     const h = await started(
       undefined,
-      voiceCallerPreparer({ db: recorder.db, disclosure: false }),
+      voiceCallerPreparer({ db: recorder.transactionalDb, disclosure: false }),
     );
     assert.equal(liveInstructions(h), MESSAGE_ONLY_SETUP.instructions);
     // The one read is whether this is Mili's own briefing call to the owner

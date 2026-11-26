@@ -2,6 +2,7 @@ import { waitUntil } from "@vercel/functions";
 import { start } from "workflow/api";
 
 import { commsRuntimeFromEnv } from "@/lib/comms/factory";
+import { startHandoffDeliveries } from "@/lib/comms/owner-call-handoffs";
 import { handleCommsWebhook } from "@/lib/comms/webhook-handler";
 import prisma from "@/lib/prisma";
 import { storeCallRecordings } from "@/lib/workflow/call-recording";
@@ -13,7 +14,8 @@ import { storeCallRecordings } from "@/lib/workflow/call-recording";
  * and authenticates on its own — the carrier's signature over the exact URL
  * and raw body. Everything lives in lib/comms/webhook-handler.ts (transport)
  * and lib/domain/comms (what a text or a call event means); this file only
- * supplies the database, the configuration and the recording workflow.
+ * supplies the database, the configuration, the recording workflow and the
+ * one that passes a finished owner call's handoff to Hermes.
  * docs/comms-runbook.md lists the URL to give each carrier.
  *
  * No `runtime`/`dynamic` export: Cache Components rejects them.
@@ -29,6 +31,7 @@ export async function POST(
 ): Promise<Response> {
   return handleCommsWebhook(request, await ctx.params, {
     db: prisma,
+    onHandoffReady: (handoffIds) => startHandoffDeliveries(handoffIds),
     onRecordingRecorded: async (recordingIds) => {
       await start(storeCallRecordings, [[...recordingIds]]);
     },

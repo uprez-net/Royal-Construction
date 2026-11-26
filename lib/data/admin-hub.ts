@@ -6,6 +6,7 @@ import { getTradeTypes } from "@/lib/data/trade-types";
 import { fetchApprovalKPI } from "@/lib/data/tradie-approvals";
 import { getXeroConnectionStatus } from "@/lib/data/xero-connection";
 import { countOwnerCalls } from "@/lib/domain/comms/calls/owner-call";
+import { countOwnerCallHandoffs } from "@/lib/domain/comms/calls/owner-call-handoff";
 import { readMilestoneTemplate } from "@/lib/domain/projects/templates";
 import { commsChannel, readCommsConfig } from "@/lib/comms/config";
 import {
@@ -159,10 +160,19 @@ function phoneSmsStatus(): Promise<AdminHubStatus | null> {
 
 function agentCallsStatus(): Promise<AdminHubStatus | null> {
   return statusOf("agent-calls", async () => {
-    const { failedToday, pending } = await countOwnerCalls(
-      await currentPrincipal(),
-      prisma,
-    );
+    const principal = await currentPrincipal();
+    const [{ failedToday, pending }, handoffs] = await Promise.all([
+      countOwnerCalls(principal, prisma),
+      countOwnerCallHandoffs(principal, prisma),
+    ]);
+    // A request the owner made that never reached Hermes outranks the rest:
+    // nobody else would notice it.
+    if (handoffs.failed > 0) {
+      return {
+        label: `${handoffs.failed} not passed to Hermes`,
+        tone: "warning",
+      };
+    }
     if (failedToday > 0) {
       return { label: `${failedToday} failed today`, tone: "warning" };
     }

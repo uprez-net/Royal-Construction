@@ -28,7 +28,11 @@ import {
 import type { AgentOutcome, CommsProviderName } from "@/lib/domain/ports/comms";
 
 import type { DeskDecision, DeskMode } from "./desk";
-import { carrierMediaFrame, parseCarrierFrame } from "./frames";
+import {
+  carrierClearFrame,
+  carrierMediaFrame,
+  parseCarrierFrame,
+} from "./frames";
 import type { LiveClientEvent, LiveConnection, LiveServerEvent } from "./live";
 import { VOICE_AGENT_MODEL } from "./settings";
 import { verifyStreamToken, type StreamTokenClaims } from "./token";
@@ -45,6 +49,9 @@ import { verifyStreamToken, type StreamTokenClaims } from "./token";
 //   → after each thing she says (or a Live delegation) the desk is asked
 //   → desk: a lookup (admins only), whose answer Mili then reads out, or
 //     end_call / transfer_to_team; caller hangs up, time, or a failure
+//   → a lookup the caller holds for (a question to Hermes on an owner call):
+//     hold music plays until the answer is back, and stops the moment Mili
+//     speaks
 //   → the caller silent after she has finished: she follows up, and after
 //     enough unanswered follow-ups says goodbye and the call ends (when and
 //     what is the domain's voiceSilenceCheck; the timers are here)
@@ -71,6 +78,27 @@ export type VoiceAgentReportBody = {
 };
 
 /**
+ * What a lookup can hand back instead of plain text: the exact cue for Mili,
+ * for a result that is not "here is the answer" (a request noted for later,
+ * a fallback when the answer never came).
+ */
+export type VoiceLookupReply = {
+  readonly cue: string;
+  /** What came back, for the call's event log. */
+  readonly text: string | null;
+  /** False: it may be asked again; true: it is done for this call. */
+  readonly answered: boolean;
+  readonly failure?: string | null;
+};
+
+/** Music for a caller holding on a lookup: 8 kHz μ-law, looped. */
+export type VoiceHoldMusic = {
+  readonly audio: Uint8Array;
+  /** The lookups the caller holds for. */
+  readonly lookups: readonly string[];
+};
+
+/**
  * What Mili is given about this caller, decided once before her session
  * starts (lib/domain/comms/callers/access.ts). A resolver that fails or is
  * slow leaves her with MESSAGE_ONLY_SETUP: message taking, no briefing, no
@@ -85,7 +113,11 @@ export type VoiceCallerSetup = {
   /** The desk's lookup tools for this caller. */
   readonly lookups: readonly VoiceLookupDefinition[];
   /** Runs one lookup for this caller and resolves to what Mili may say. */
-  readonly lookup: ((request: VoiceLookupRequest) => Promise<string>) | null;
+  readonly lookup:
+    | ((request: VoiceLookupRequest) => Promise<string | VoiceLookupReply>)
+    | null;
+  /** Music while the caller holds on a slow lookup. Absent: silence. */
+  readonly hold?: VoiceHoldMusic | null;
   /**
    * A briefing call Mili placed to the owner (owner-call.ts): the desk
    * offers no transfer, and her wrap-up and silence words are the owner
@@ -203,6 +235,11 @@ export const SILENCE_GOODBYE_TIMEOUT_MS =
 /** After Mili's last word, before hanging up or transferring. */
 const PLAYBACK_TAIL_MS = 600;
 const MAX_PLAYBACK_WAIT_MS = 15_000;
+/** Hold music starts this long after Mili's "one moment" has played. */
+export const HOLD_LEAD_MS = 400;
+/** Hold music is kept this far ahead of the carrier, and topped up this often. */
+const HOLD_BUFFER_MS = 600;
+const HOLD_TICK_MS = 200;
 
 /** The first frame on the Live socket: who Mili is and how she sounds. */
 export function voiceAgentLiveStart(
@@ -310,6 +347,14 @@ export class VoiceAgentSession {
   private silence: VoiceSilenceState = voiceSilenceStart(0);
   /** Ends a silent caller's call if Mili never says her goodbye. */
   private silenceGoodbyeTimer: unknown = null;
+  /** Hold music: playing, where in the loop, and how far ahead it is queued. */
+  private holding = false;
+  /** Which hold the pump timer belongs to: an old hold's timer stops. */
+  private holdRun = 0;
+  private holdPosition = 0;
+  private holdQueuedUntil = 0;
+  /** Music is queued at the carrier that a "clear" would drop. */
+  private holdQueued = false;
   /** When the transcript was last kept on the call, and how long it was. */
   private checkpointedAt = Number.NEGATIVE_INFINITY;
   private checkpointedLength = 0;
@@ -593,6 +638,17 @@ export class VoiceAgentSession {
   /** Queue her audio at the carrier; true when it was speech. */
   private playToCaller(base64MuLaw: string): boolean {
     const audio = Buffer.from(base64MuLaw, "base64");
+    const speech = isSpeech(audio);
+    if (this.holding) {
+      // On hold, Live's background silence is not sent: the carrier plays
+      // what it is given in order, so it would hold the music up. If she
+      // speaks, the music queued ahead of her is dropped, and everything she
+      // sends until shortly after her last word goes through — the pauses
+      // inside what she says are part of it. The music picks up after that.
+      const midTurn = this.now() < this.speechEndsAt + HOLD_LEAD_MS;
+      if (!speech && !midTurn) return false;
+      if (speech) this.clearHoldAudio();
+    }
     for (let offset = 0; offset < audio.length; offset += FRAME_BYTES) {
       this.deps.carrier.send(
         carrierMediaFrame(
@@ -605,7 +661,6 @@ export class VoiceAgentSession {
     this.playbackEndsAt =
       Math.max(this.playbackEndsAt, this.now())
       + audio.length / PHONE_BYTES_PER_MS;
-    const speech = isSpeech(audio);
     if (speech) {
       this.speechEndsAt = this.playbackEndsAt;
       this.stats.firstWordsAt ??= this.now();
@@ -715,7 +770,10 @@ export class VoiceAgentSession {
       } else {
         this.stats.lookups += 1;
         const startedAt = this.now();
+        const held = this.holdsFor(decision.request.name);
+        if (held) this.startHold();
         const ran = await this.runLookup(decision.request);
+        this.stopHold();
         lookup = { answered: ran.answered, cue: ran.cue, key };
         const { name, ...args } = decision.request;
         this.emit(AGENT_CALL_EVENT.deskLookup, {
@@ -724,6 +782,7 @@ export class VoiceAgentSession {
           args,
           delegated: delegationId !== null,
           failure: ran.failure,
+          ...(held ? { held: true } : {}),
           ms: this.now() - startedAt,
           name,
         });
@@ -798,6 +857,14 @@ export class VoiceAgentSession {
         this.log.warn(`[voice-agent] lookup ${request.name} timed out.`);
         return failed("timeout");
       }
+      if (typeof text !== "string") {
+        return {
+          answered: text.answered,
+          cue: text.cue,
+          failure: text.failure ?? null,
+          text: text.text,
+        };
+      }
       return {
         answered: true,
         cue: voiceLookupResultCue(text),
@@ -810,6 +877,83 @@ export class VoiceAgentSession {
       this.log.warn(`[voice-agent] lookup ${request.name} failed (${name}).`);
       return failed(name);
     }
+  }
+
+  // ── Hold music ───────────────────────────────────────────────────────
+
+  private holdsFor(name: string): boolean {
+    return Boolean(this.setup.hold?.lookups.includes(name));
+  }
+
+  /**
+   * The caller is holding on a lookup: play the music once her "one moment"
+   * has finished, a little ahead of the carrier, until stopHold. The silence
+   * watcher already waits while the desk is busy, so nobody is asked "are
+   * you still there?" mid-hold.
+   */
+  private startHold(): void {
+    const hold = this.setup.hold;
+    if (!hold || hold.audio.length < FRAME_BYTES || this.holding) return;
+    this.holding = true;
+    this.holdRun += 1;
+    this.holdQueuedUntil = 0;
+    this.pumpHold(this.holdRun);
+  }
+
+  private pumpHold(run: number): void {
+    const audio = this.setup.hold?.audio;
+    if (
+      !this.holding
+      || run !== this.holdRun
+      || this.finished
+      || this.ending
+      || !audio
+    ) {
+      return;
+    }
+    const now = this.now();
+    if (now >= this.speechEndsAt + HOLD_LEAD_MS) {
+      // After anything of hers still queued at the carrier.
+      let queued = Math.max(this.holdQueuedUntil, this.playbackEndsAt, now);
+      while (queued - now < HOLD_BUFFER_MS) {
+        if (this.holdPosition + FRAME_BYTES > audio.length) {
+          this.holdPosition = 0;
+        }
+        const frame = audio.subarray(
+          this.holdPosition,
+          this.holdPosition + FRAME_BYTES,
+        );
+        this.holdPosition += FRAME_BYTES;
+        this.deps.carrier.send(
+          carrierMediaFrame(
+            this.deps.dialect,
+            this.streamId,
+            Buffer.from(frame).toString("base64"),
+          ),
+        );
+        queued += FRAME_BYTES / PHONE_BYTES_PER_MS;
+        this.holdQueued = true;
+      }
+      this.holdQueuedUntil = queued;
+    }
+    this.after(HOLD_TICK_MS, () => this.pumpHold(run));
+  }
+
+  /** Drop the music queued at the carrier, so what comes next plays at once. */
+  private clearHoldAudio(): void {
+    if (this.holdQueued) {
+      this.deps.carrier.send(
+        carrierClearFrame(this.deps.dialect, this.streamId),
+      );
+      this.holdQueued = false;
+    }
+    this.holdQueuedUntil = 0;
+  }
+
+  private stopHold(): void {
+    if (!this.holding) return;
+    this.holding = false;
+    this.clearHoldAudio();
   }
 
   // ── A silent caller ──────────────────────────────────────────────────

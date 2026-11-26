@@ -45,12 +45,15 @@ function resolve(ctx: unknown) {
   return events["turn.started"]({}, ctx);
 }
 
-test("a Hermes turn is offered the four owner-call tools; anyone else, none", () => {
+test("a Hermes turn is offered the owner-call and handoff tools; anyone else, none", () => {
   const hermes = resolve(sessionWith({ hermes: "true", role: "ADMIN" }));
   assert.deepEqual(Object.keys(hermes as object).sort(), [
     "cancel_owner_call",
     "get_owner_call",
+    "get_owner_call_handoff",
+    "list_owner_call_handoffs",
     "list_owner_calls",
+    "resolve_owner_call_handoff",
     "schedule_owner_call",
   ]);
   for (const ctx of [

@@ -30,6 +30,13 @@ export const AGENT_CALL_EVENT = {
   deskTransfer: "desk.transfer",
   deskFailed: "desk.failed",
   sessionEnded: "session.ended",
+  // What the call left for Hermes (owner-call-handoff.ts).
+  handoffNoted: "handoff.noted",
+  handoffReady: "handoff.ready",
+  handoffDelivered: "handoff.delivered",
+  handoffFailed: "handoff.failed",
+  handoffResolved: "handoff.resolved",
+  handoffReopened: "handoff.reopened",
 } as const;
 
 export type AgentCallEventKind =

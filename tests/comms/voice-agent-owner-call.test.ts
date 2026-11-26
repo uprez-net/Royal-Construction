@@ -3,13 +3,15 @@ import { test } from "vitest";
 
 import { voiceCallerPreparer } from "@/lib/comms/voice-agent/caller";
 import { TURN_QUIET_MS } from "@/lib/comms/voice-agent/session";
-import {
-  VOICE_AGENT_WRAP_UP_SECONDS,
-  voiceLookupResultCue,
-} from "@/lib/domain/comms/calls/voice-agent";
+import { VOICE_AGENT_WRAP_UP_SECONDS } from "@/lib/domain/comms/calls/voice-agent";
 import {
   ASK_HERMES_TIMEOUT_MS,
+  OWNER_CALL_HAND_FAILED_CUE,
+  OWNER_CALL_HOLD_FAILED_CUE,
+  OWNER_CALL_HOLD_LOST_CUE,
   OWNER_CALL_WRAP_UP_CUE,
+  ownerCallHandedCue,
+  ownerCallHermesAnswerCue,
 } from "@/lib/domain/comms/calls/voice-agent-owner-call";
 import type { OwnerAssistantQuestion } from "@/lib/domain/ports/owner-assistant";
 
@@ -28,12 +30,17 @@ const CLAIMS = {
   provider: "telnyx" as const,
 };
 
-function ownerDb() {
+function ownerDb(extra: Record<string, unknown> = {}) {
   return recordingDb({
+    "ownerCallHandoff.findUnique": { id: "h-1", status: "OPEN" },
+    "ownerCallHandoffRequest.count": 0,
+    "ownerCallHandoffRequest.findUnique": null,
+    ...extra,
     "call.findUnique": {
       contactName: "Raj",
       direction: "OUTBOUND",
       ownerCall: {
+        id: "oc-1",
         agenda: ["Framing finished on Tuesday"],
         category: "project_brief",
         context: "Smith St, Kellyville. Next inspection 2 Dec at 9:30.",
@@ -47,7 +54,7 @@ function ownerDb() {
   });
 }
 
-test("a briefing call starts Mili with the owner call's opening, a no-transfer desk and ask_hermes", async () => {
+test("a briefing call starts Mili with the owner call's opening, a no-transfer desk, ask_hermes and hand_to_hermes", async () => {
   const asked: OwnerAssistantQuestion[] = [];
   const recorder = ownerDb();
   const setup = await voiceCallerPreparer({
@@ -56,8 +63,9 @@ test("a briefing call starts Mili with the owner call's opening, a no-transfer d
         asked.push(question);
         return "The inspection is at 9:30 on Tuesday.";
       },
+      handOff: async () => "",
     },
-    db: recorder.db,
+    db: recorder.transactionalDb,
     disclosure: false,
   })(CLAIMS);
   assert.equal(setup.callerClass, "owner");
@@ -69,31 +77,47 @@ test("a briefing call starts Mili with the owner call's opening, a no-transfer d
   assert.deepEqual(setup.desk, { canAskAssistant: true, kind: "owner_call" });
   assert.deepEqual(
     setup.lookups.map((lookup) => lookup.name),
-    ["ask_hermes"],
+    ["ask_hermes", "hand_to_hermes"],
+  );
+  // She offers the owner the choice before asking Hermes anything.
+  assert.match(
+    setup.instructions,
+    /Would you like to hold, or shall I have Hermes call you back/,
   );
   assert.ok(setup.lookup);
   const answer = await setup.lookup({
     name: "ask_hermes",
     question: "When's the inspection?",
   });
-  assert.equal(answer, "The inspection is at 9:30 on Tuesday.");
+  assert.deepEqual(answer, {
+    answered: true,
+    cue: ownerCallHermesAnswerCue("The inspection is at 9:30 on Tuesday."),
+    text: "The inspection is at 9:30 on Tuesday.",
+  });
   assert.equal(asked[0].reference, "task-9");
 });
 
-test("without Hermes connected, Mili has the briefing and nothing to look up", async () => {
+test("without Hermes connected, Mili has the briefing and can only note a call back", async () => {
   const setup = await voiceCallerPreparer({
-    db: ownerDb().db,
+    db: ownerDb().transactionalDb,
     disclosure: false,
   })(CLAIMS);
-  assert.deepEqual(setup.lookups, []);
-  assert.equal(setup.lookup, null);
-  assert.match(setup.instructions, /You cannot look anything up on this call/);
+  assert.deepEqual(
+    setup.lookups.map((lookup) => lookup.name),
+    ["hand_to_hermes"],
+  );
+  assert.equal(setup.hold, null);
+  assert.match(setup.instructions, /you cannot check it on this call/);
+  assert.match(setup.instructions, /Never ask them to hold/);
 });
 
 test("on the call: the desk is told it is an owner call, Hermes gets its longer wait, and the wrap-up is the owner call's", async () => {
   const setup = await voiceCallerPreparer({
-    assistant: { ask: async () => "Dev and the certifier." },
-    db: ownerDb().db,
+    assistant: {
+      ask: async () => "Dev and the certifier.",
+      handOff: async () => "",
+    },
+    db: ownerDb().transactionalDb,
     disclosure: false,
   })(CLAIMS);
   const h = await started(
@@ -120,7 +144,7 @@ test("on the call: the desk is told it is an owner call, Hermes gets its longer 
   assert.ok(h.timers.some((timer) => timer.ms === ASK_HERMES_TIMEOUT_MS));
   await h.tick();
   assert.deepEqual(h.modelOut.at(-1), {
-    content: voiceLookupResultCue("Dev and the certifier."),
+    content: ownerCallHermesAnswerCue("Dev and the certifier."),
     delegation_id: null,
     type: "session.commentary.append",
   });
@@ -131,4 +155,97 @@ test("on the call: the desk is told it is an owner call, Hermes gets its longer 
     delegation_id: null,
     type: "session.instructions.append",
   });
+});
+
+test("holding: hold music comes with ask_hermes; Hermes failing becomes a call back, noted as one", async () => {
+  const recorder = ownerDb();
+  const setup = await voiceCallerPreparer({
+    assistant: {
+      ask: async () => {
+        throw new Error("down");
+      },
+      handOff: async () => "",
+    },
+    db: recorder.transactionalDb,
+    disclosure: false,
+    holdMusic: async () => new Uint8Array(1_600),
+  })(CLAIMS);
+  assert.deepEqual(setup.hold?.lookups, ["ask_hermes"]);
+  const reply = await setup.lookup!({
+    name: "ask_hermes",
+    question: "Who else is coming?",
+  });
+  assert.deepEqual(reply, {
+    answered: true,
+    cue: OWNER_CALL_HOLD_FAILED_CUE,
+    failure: "DomainSideEffectError",
+    text: "noted for a call back (handoff h-1)",
+  });
+  const noted = recorder.calls.find(
+    (c) => c.operation === "ownerCallHandoffRequest.create",
+  )?.args as { data: Record<string, unknown> };
+  assert.equal(noted.data.request, "Who else is coming?");
+  assert.equal(noted.data.callBack, true);
+  assert.equal(noted.data.source, "hold_failed");
+});
+
+test("holding: if the call back can't be noted either, Mili promises nothing", async () => {
+  const setup = await voiceCallerPreparer({
+    assistant: {
+      ask: async () => {
+        throw new Error("down");
+      },
+      handOff: async () => "",
+    },
+    db: ownerDb({
+      "ownerCallHandoffRequest.create": () => {
+        throw new Error("database down");
+      },
+    }).transactionalDb,
+    disclosure: false,
+  })(CLAIMS);
+  const reply = await setup.lookup!({
+    name: "ask_hermes",
+    question: "Who else is coming?",
+  });
+  assert.equal((reply as { cue: string }).cue, OWNER_CALL_HOLD_LOST_CUE);
+  assert.equal((reply as { answered: boolean }).answered, false);
+});
+
+test("a call back the owner asks for is noted for Hermes, and Mili confirms only that", async () => {
+  const recorder = ownerDb();
+  const setup = await voiceCallerPreparer({
+    db: recorder.transactionalDb,
+    disclosure: false,
+  })(CLAIMS);
+  const reply = await setup.lookup!({
+    call_back: true,
+    name: "hand_to_hermes",
+    request: "Find the past two building bookings and call back with them.",
+  });
+  assert.deepEqual(reply, {
+    answered: true,
+    cue: ownerCallHandedCue({ callBack: true, timing: null }),
+    text: "noted (handoff h-1)",
+  });
+  assert.doesNotMatch(
+    ownerCallHandedCue({ callBack: true, timing: null }),
+    /at the time they gave/,
+  );
+
+  const broken = await voiceCallerPreparer({
+    db: ownerDb({
+      "ownerCallHandoffRequest.create": () => {
+        throw new Error("database down");
+      },
+    }).transactionalDb,
+    disclosure: false,
+  })(CLAIMS);
+  const failed = await broken.lookup!({
+    call_back: false,
+    name: "hand_to_hermes",
+    request: "Book the plumber",
+  });
+  assert.equal((failed as { cue: string }).cue, OWNER_CALL_HAND_FAILED_CUE);
+  assert.equal((failed as { answered: boolean }).answered, false);
 });

@@ -59,6 +59,11 @@ export type CommsWebhookDeps = {
     recordingIds: readonly string[],
   ) => Promise<void>;
   /**
+   * Start passing an owner call's handoff to Hermes, after commit, once the
+   * call's last status made it ready (lib/comms/owner-call-handoffs.ts).
+   */
+  readonly onHandoffReady?: (handoffIds: readonly string[]) => Promise<unknown>;
+  /**
    * Load Mili's stream route in the background (voiceAgentWarmUrl). Must not
    * delay the carrier's answer, and must never fail the webhook.
    */
@@ -159,6 +164,7 @@ export async function handleCommsWebhook(
     trigger: parsed.pending ? "continuation" : null,
   };
   const recordingIds: string[] = [];
+  const handoffIds: string[] = [];
   const outcomes: string[] = [];
 
   try {
@@ -231,6 +237,7 @@ export async function handleCommsWebhook(
             });
           }
           if (result.recordingId) recordingIds.push(result.recordingId);
+          if (result.handoffId) handoffIds.push(result.handoffId);
         }
       }
     }
@@ -256,6 +263,16 @@ export async function handleCommsWebhook(
     } catch (error) {
       log.warn(
         "[comms-webhook] Could not start copying a recording; the daily sweep will.",
+        error,
+      );
+    }
+  }
+  if (handoffIds.length > 0 && deps.onHandoffReady) {
+    try {
+      await deps.onHandoffReady(handoffIds);
+    } catch (error) {
+      log.warn(
+        "[comms-webhook] Could not start passing an owner call's handoff to Hermes; the hourly backstop will.",
         error,
       );
     }

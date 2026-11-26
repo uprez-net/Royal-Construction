@@ -10,6 +10,26 @@
  */
 export type OwnerAssistantPort = {
   readonly ask: (request: OwnerAssistantQuestion) => Promise<string>;
+  /**
+   * Pass Hermes what an owner call left for it once the call has ended
+   * (calls/owner-call-handoff.ts). Resolves to Hermes's reply once it has
+   * taken it; throws when it did not. Hermes acts on it through its own tools
+   * on Royal's MCP channel, not through this reply.
+   */
+  readonly handOff: (handoff: OwnerAssistantHandoff) => Promise<string>;
+};
+
+export type OwnerAssistantHandoff = {
+  /** Royal's OwnerCallHandoff.id: Hermes names it back on every tool call. */
+  readonly handoffId: string;
+  /** Royal's Call.id, for Hermes's logs. */
+  readonly callId: string | null;
+  /** Hermes's own id for the task the call was about, when it gave one. */
+  readonly reference: string | null;
+  /** What Hermes is asked to do with it: Royal's rules, as text. */
+  readonly instructions: string;
+  /** The call and what the owner asked for on it: data, not instructions. */
+  readonly body: string;
 };
 
 export type OwnerAssistantQuestion = {

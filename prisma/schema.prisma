@@ -2943,42 +2943,125 @@ enum OwnerCallStatus {
 /// (lib/domain/comms/calls/owner-call.ts): what to tell them, and when.
 /// Created when Hermes asks; the Call row exists once it rings.
 model OwnerCall {
-  id             String           @id @default(uuid())
+  id              String            @id @default(uuid())
   /// Hermes's key for the intent: the same key never rings twice.
-  idempotencyKey String           @unique
-  status         OwnerCallStatus  @default(SCHEDULED)
+  idempotencyKey  String            @unique
+  status          OwnerCallStatus   @default(SCHEDULED)
   /// When it should ring. "Now" is the time it was asked for.
-  callAt         DateTime
-  placedAt       DateTime?
-  canceledAt     DateTime?
+  callAt          DateTime
+  placedAt        DateTime?
+  canceledAt      DateTime?
   /// Who cancelled it: "hermes" or "user:<id>".
-  canceledBy     String?
-  failureReason  String?
-  callId         String?          @unique
-  call           Call?            @relation(fields: [callId], references: [id], onDelete: SetNull)
+  canceledBy      String?
+  failureReason   String?
+  callId          String?           @unique
+  call            Call?             @relation(fields: [callId], references: [id], onDelete: SetNull)
   /// The channel that asked: "hermes".
-  source         String
+  source          String
   /// project_brief, calendar_reminder, task_update, alert or other.
-  category       String
+  category        String
   /// One line: what the call is about.
-  subject        String
+  subject         String
   /// The points Mili covers, in order.
-  agenda         String[]
+  agenda          String[]
   /// The detail she answers follow-up questions from.
-  context        String
+  context         String
   /// Hermes's own id for this (a task or calendar event), sent back with
   /// every follow-up question so Hermes knows what it is about.
-  reference      String?
+  reference       String?
   /// When the event the call is about starts, if it is about one.
-  eventAt        DateTime?
+  eventAt         DateTime?
   /// Follow-up questions Mili passed to Hermes on the call.
-  questionsAsked Int              @default(0)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  events         AgentCallEvent[]
+  questionsAsked  Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  events          AgentCallEvent[]
+  /// What this call left for Hermes once it ended (owner-call-handoff.ts).
+  handoff         OwnerCallHandoff? @relation("OwnerCallHandoffSource")
+  /// The handoff this call is the callback for: one callback per handoff.
+  fromHandoffId   String?           @unique
+  fromHandoff     OwnerCallHandoff? @relation("OwnerCallHandoffCallback", fields: [fromHandoffId], references: [id], onDelete: SetNull)
+  /// Leaves a post-call handoff for Hermes when it ends. False for calls made
+  /// before handoffs existed, so the backstop never hands those over late.
+  handoffEligible Boolean           @default(true)
 
   @@index([status, callAt])
   @@index([createdAt])
+}
+
+enum OwnerCallHandoffStatus {
+  /// The call is still on: requests are being noted.
+  OPEN
+  /// The call has ended: waiting to be passed to Hermes.
+  PENDING
+  /// Being passed to Hermes right now.
+  DELIVERING
+  /// Hermes took it; it has not yet said it is dealt with.
+  DELIVERED
+  /// Hermes scheduled the callback, or said there was nothing more to do.
+  RESOLVED
+  /// Passing it to Hermes failed. Still outstanding: retried, and shown.
+  FAILED
+}
+
+/// What an owner call left for Hermes once it ended: the call, what the owner
+/// asked for on it, and whether Hermes has dealt with it
+/// (lib/domain/comms/calls/owner-call-handoff.ts). One per owner call, so a
+/// repeated end-of-call event never makes a second.
+model OwnerCallHandoff {
+  id            String                    @id @default(uuid())
+  ownerCallId   String                    @unique
+  ownerCall     OwnerCall                 @relation("OwnerCallHandoffSource", fields: [ownerCallId], references: [id], onDelete: Cascade)
+  status        OwnerCallHandoffStatus    @default(OPEN)
+  /// When the call ended and the handoff became ready to pass on.
+  readyAt       DateTime?
+  /// Tries at passing it to Hermes since it was last made ready.
+  attempts      Int                       @default(0)
+  /// Bumped each time it is reopened (a new request after the call, a
+  /// callback that didn't ring), so Hermes can tell a reopened handoff from
+  /// the same delivery sent twice.
+  revision      Int                       @default(0)
+  /// The delivery attempt that holds it: a fresh id at every claim, so a
+  /// stale attempt can never write over the current one's result.
+  claimId       String?
+  lastAttemptAt DateTime?
+  lastError     String?
+  deliveredAt   DateTime?
+  /// Hermes's own reply when it took the handoff, bounded.
+  hermesReply   String?
+  resolvedAt    DateTime?
+  /// How Hermes dealt with it, in a line.
+  resolution    String?
+  requests      OwnerCallHandoffRequest[]
+  /// The callback Hermes scheduled from it.
+  callback      OwnerCall?                @relation("OwnerCallHandoffCallback")
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+
+  @@index([status, updatedAt])
+}
+
+/// One thing the owner asked for on a call, as the call desk heard it: a
+/// question to come back with, or something to do.
+model OwnerCallHandoffRequest {
+  id        String           @id @default(uuid())
+  handoffId String
+  handoff   OwnerCallHandoff @relation(fields: [handoffId], references: [id], onDelete: Cascade)
+  /// What they asked, in one or two sentences.
+  request   String
+  /// They want a call back with the answer.
+  callBack  Boolean
+  /// When they said, in their own words ("after three"), if they said.
+  timing    String?
+  /// "owner" (they asked for it) or "hold_failed" (they held, and Hermes
+  /// could not answer on the call).
+  source    String
+  /// The request, normalised: the same request noted twice is kept once.
+  dedupeKey String
+  createdAt DateTime         @default(now())
+
+  @@unique([handoffId, dedupeKey])
+  @@index([handoffId, createdAt])
 }
 
 /// What happened on an agent call, in order: an owner call scheduled, placed
