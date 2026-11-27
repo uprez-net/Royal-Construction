@@ -16,19 +16,24 @@ import {
   overdueLateness,
 } from "@/lib/domain/projects/overdue";
 import {
+  BOOKING_LOOKAHEAD_DAYS,
   bookingGapLabel,
   bookingsDue,
   overdueMilestoneBookings,
 } from "@/lib/domain/projects/tradie-dependencies";
 
 // A tradie is booked before the activity starts, so an activity's bookings are
-// overdue from its start day: under way, or pending on a job being built with
-// its planned start arrived, without a confirmed booking for each trade it
-// needs, or with a tradie booked who has not confirmed.
+// overdue from two weeks before its start day: under way, or pending on a job
+// being built with its planned start within `BOOKING_LOOKAHEAD_DAYS`, without
+// a confirmed booking for each trade it needs, or with a tradie booked who has
+// not confirmed.
 
 const TODAY = new Date(2026, 10, 26, 9);
 const yesterday = new Date(2026, 10, 25);
 const tomorrow = new Date(2026, 10, 27);
+// The last planned start inside the lookahead, and the first outside it.
+const lastDueStart = new Date(2026, 10, 26 + BOOKING_LOOKAHEAD_DAYS);
+const firstLaterStart = new Date(2026, 10, 27 + BOOKING_LOOKAHEAD_DAYS);
 
 const trades = (gaps: { trade: string }[]) => gaps.map((gap) => gap.trade);
 
@@ -127,7 +132,11 @@ describe("overdueMilestoneBookings", () => {
     assert.equal(gaps([tiler, tiler], { requiredTradeTypes: [] }).length, 1);
   });
 
-  test("a pending activity is due on its planned start day on a job being built", () => {
+  test("the lookahead is two weeks", () => {
+    assert.equal(BOOKING_LOOKAHEAD_DAYS, 14);
+  });
+
+  test("a pending activity is due from two weeks before its planned start on a job being built", () => {
     const pending = { status: MS.PENDING };
     assert.deepEqual(trades(gaps([], { ...pending, targetDate: yesterday })), [
       "Plumbing",
@@ -137,7 +146,15 @@ describe("overdueMilestoneBookings", () => {
       trades(gaps([], { ...pending, targetDate: new Date(2026, 10, 26) })),
       ["Plumbing"],
     );
-    assert.deepEqual(gaps([], { ...pending, targetDate: tomorrow }), []);
+    // Upcoming, within two weeks: the booking needs confirming now.
+    assert.deepEqual(trades(gaps([], { ...pending, targetDate: tomorrow })), [
+      "Plumbing",
+    ]);
+    assert.deepEqual(
+      trades(gaps([], { ...pending, targetDate: lastDueStart })),
+      ["Plumbing"],
+    );
+    assert.deepEqual(gaps([], { ...pending, targetDate: firstLaterStart }), []);
     // Drafting or compliance: the planned dates are not real yet.
     for (const status of [
       PS.DRAFT,
@@ -238,8 +255,17 @@ describe("Overdue on the Projects list", () => {
         unconfirmed: booking.unconfirmed,
         started: booking.started,
         daysLate: booking.daysLate,
+        daysToStart: booking.daysToStart,
       })),
-      [{ trade: "Carpentry", unconfirmed: false, started: false, daysLate: 3 }],
+      [
+        {
+          trade: "Carpentry",
+          unconfirmed: false,
+          started: false,
+          daysLate: 3,
+          daysToStart: 0,
+        },
+      ],
     );
     assert.ok(isProjectOverdue(attention));
     assert.equal(overdueLateness(attention), 3);
@@ -268,13 +294,44 @@ describe("Overdue on the Projects list", () => {
     );
     assert.equal(attention.overdueBookings[0]?.unconfirmed, true);
     assert.equal(attention.overdueBookings[0]?.daysLate, 0);
+    assert.equal(attention.overdueBookings[0]?.daysToStart, 0);
     assert.equal(
       attention.conditions[0]?.label,
       "Carpentry booked, not confirmed for Framing, which starts today",
     );
   });
 
-  test("a confirmed booking, or a start still to come, is not overdue", () => {
+  test("an upcoming activity within two weeks without a confirmed booking is overdue", () => {
+    const attention = assessProjectAttention(
+      source({
+        milestones: [
+          activity({ targetDate: sydneyDay(26 + BOOKING_LOOKAHEAD_DAYS) }),
+          activity({ id: "m2", name: "Roofing", targetDate: sydneyDay(30) }),
+        ],
+      }),
+      NOW,
+    );
+    assert.ok(isProjectOverdue(attention));
+    assert.equal(overdueLateness(attention), 0);
+    // Soonest start first.
+    assert.deepEqual(
+      attention.overdueBookings.map((booking) => [
+        booking.name,
+        booking.daysLate,
+        booking.daysToStart,
+      ]),
+      [
+        ["Roofing", 0, 4],
+        ["Framing", 0, BOOKING_LOOKAHEAD_DAYS],
+      ],
+    );
+    assert.deepEqual(attention.conditions[0]?.details, [
+      "No confirmed Carpentry booking for Roofing, due to start 30 Nov",
+      "No confirmed Carpentry booking for Framing, due to start 10 Dec",
+    ]);
+  });
+
+  test("a confirmed booking, or a start more than two weeks away, is not overdue", () => {
     const confirmed = assessProjectAttention(
       source({
         milestones: [activity()],
@@ -291,7 +348,11 @@ describe("Overdue on the Projects list", () => {
     );
     assert.ok(!isProjectOverdue(confirmed));
     const later = assessProjectAttention(
-      source({ milestones: [activity({ targetDate: sydneyDay(27) })] }),
+      source({
+        milestones: [
+          activity({ targetDate: sydneyDay(27 + BOOKING_LOOKAHEAD_DAYS) }),
+        ],
+      }),
       NOW,
     );
     assert.ok(!isProjectOverdue(later));
@@ -323,7 +384,7 @@ describe("Overdue on the Projects list", () => {
     assert.equal(overdueLateness(attention), attention.overdue[0]?.daysOverdue);
   });
 
-  test("the candidate query is a superset: an activity under way, or a pending one starting before now + 1 day", () => {
+  test("the candidate query is a superset: an activity under way, or a pending one starting within the lookahead", () => {
     const where = overdueCandidateWhere(NOW);
     assert.deepEqual(where.OR?.[0], {
       milestones: { some: { status: "ACTIVE" } },
@@ -333,7 +394,8 @@ describe("Overdue on the Projects list", () => {
     };
     // The latest start that can be due today in Sydney is earlier than this.
     assert.ok(
-      pending.milestones.some.targetDate.lt.getTime() > sydneyDay(27).getTime(),
+      pending.milestones.some.targetDate.lt.getTime()
+        > sydneyDay(27 + BOOKING_LOOKAHEAD_DAYS).getTime(),
     );
   });
 });

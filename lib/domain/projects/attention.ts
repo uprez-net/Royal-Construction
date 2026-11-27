@@ -32,6 +32,7 @@ import {
   STARTED_MILESTONE_STATUSES,
 } from "./milestone-schedule";
 import {
+  BOOKING_LOOKAHEAD_DAYS,
   bookingGapLabel,
   overdueMilestoneBookings,
 } from "./tradie-dependencies";
@@ -67,7 +68,8 @@ import { formatVariationNumber } from "./variation-rules";
 //   - booking overdue        `overdueMilestoneBookings` — the project page's
 //                            "No confirmed … booking" alert: an activity under
 //                            way, or one on a job being built whose planned
-//                            start day has come, without a confirmed booking
+//                            start is two weeks away or closer
+//                            (`BOOKING_LOOKAHEAD_DAYS`), without a confirmed booking
 //                            for each trade it needs, or with a tradie booked
 //                            who has not confirmed
 //
@@ -144,9 +146,15 @@ export type OverdueBooking = {
   /**
    * Whole calendar days since the booking was owed, in Sydney: the day an
    * activity under way started, else its planned start. 0 on the day itself,
-   * never negative.
+   * and 0 while the start is still to come; never negative.
    */
   readonly daysLate: number;
+  /**
+   * Whole calendar days until the planned start, in Sydney, for an activity
+   * not yet under way whose start is within `BOOKING_LOOKAHEAD_DAYS`. 0 on the
+   * day itself, once it has passed, and for an activity under way.
+   */
+  readonly daysToStart: number;
 };
 
 export type ProjectAttention = {
@@ -163,7 +171,7 @@ export type ProjectAttention = {
   readonly conditions: AttentionCondition[];
   /** Most overdue first. Empty when nothing is overdue. */
   readonly overdue: OverdueActivity[];
-  /** Latest first. Empty when every booking due is confirmed. */
+  /** Latest first, then soonest to start. Empty when every booking due is confirmed. */
   readonly overdueBookings: OverdueBooking[];
 };
 
@@ -492,14 +500,19 @@ export function assessProjectAttention(
         started,
         plannedStart: milestone.targetDate.toISOString(),
         daysLate: Math.max(0, differenceInCalendarDays(today, owedFrom)),
+        daysToStart: started
+          ? 0
+          : Math.max(0, differenceInCalendarDays(plannedStart, today)),
       }));
     })
-    .sort((a, b) => b.daysLate - a.daysLate);
+    .sort((a, b) => b.daysLate - a.daysLate || a.daysToStart - b.daysToStart);
   if (overdueBookings.length > 0) {
     const thisYear = today.getFullYear();
     const when = (booking: OverdueBooking) => {
       if (booking.started) return "which has started";
-      if (booking.daysLate === 0) return "which starts today";
+      if (booking.daysLate === 0 && booking.daysToStart === 0) {
+        return "which starts today";
+      }
       const day = toZonedTime(new Date(booking.plannedStart), SYDNEY_TZ);
       return `due to start ${format(day, day.getFullYear() === thisYear ? "d MMM" : "d MMM yyyy")}`;
     };
@@ -643,8 +656,9 @@ export async function readProjectAttention(
  *
  * Wider than the rule on purpose, never narrower: both ways to be overdue
  * need an activity under way, or a pending one on a job being built whose
- * planned start is no later than today in Sydney, which is always before
- * now + 1 day. `assessProjectAttention` then decides.
+ * planned start is no later than `BOOKING_LOOKAHEAD_DAYS` after today in
+ * Sydney, which is always before now + that + 1 day. `assessProjectAttention`
+ * then decides.
  */
 export function overdueCandidateWhere(now: Date): Prisma.ProjectWhereInput {
   return {
@@ -653,7 +667,10 @@ export function overdueCandidateWhere(now: Date): Prisma.ProjectWhereInput {
       {
         status: { in: [...BUILDING_PROJECT_STATUSES] },
         milestones: {
-          some: { status: "PENDING", targetDate: { lt: addDays(now, 1) } },
+          some: {
+            status: "PENDING",
+            targetDate: { lt: addDays(now, BOOKING_LOOKAHEAD_DAYS + 1) },
+          },
         },
       },
     ],

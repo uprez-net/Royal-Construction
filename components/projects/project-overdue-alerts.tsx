@@ -34,10 +34,10 @@ import { formatStatus } from "./project-status";
  *
  *
  * A trade booking is overdue here too: an activity under way, or one due to
- * start, without a confirmed booking for each trade it needs or with a tradie
- * booked who has not confirmed (`overdueMilestoneBookings`). A booking has to
- * be in place before the work starts, so it is late from the start day, not
- * the end. The same projects as the list's Overdue chip (`isProjectOverdue`).
+ * start within two weeks, without a confirmed booking for each trade it needs
+ * or with a tradie booked who has not confirmed (`overdueMilestoneBookings`).
+ * A booking has to be in place well before the work starts, so it shows from
+ * two weeks ahead of the start day (`BOOKING_LOOKAHEAD_DAYS`), not the end. The same projects as the list's Overdue chip (`isProjectOverdue`).
  *
  * Silent when nothing is overdue, like the project page's own Alerts card: an
  * empty panel on every quiet morning trains people to stop looking at it.
@@ -77,9 +77,11 @@ function bookingItem(booking: OverdueBooking): OverdueItem {
         : `starts ${formatSydneyDate(new Date(booking.plannedStart))}`
     }`,
     late:
-      booking.daysLate === 0
-        ? "booking due today"
-        : `booking ${days(booking.daysLate)} overdue`,
+      booking.daysToStart > 0
+        ? `starts in ${days(booking.daysToStart)}`
+        : booking.daysLate === 0
+          ? "booking due today"
+          : `booking ${days(booking.daysLate)} overdue`,
   };
 }
 
