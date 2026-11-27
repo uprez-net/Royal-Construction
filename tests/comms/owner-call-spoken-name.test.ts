@@ -61,3 +61,26 @@ test("nothing Mili or her desk is told to say names Hermes", () => {
   assert.doesNotMatch(spoken, /hermes/i);
   assert.match(spoken, /Agent Factory/);
 });
+
+test("a briefing scheduled before the rename, or a hold answer, never says Hermes aloud", () => {
+  const instructions = voiceAgentOwnerCallInstructions(
+    {
+      agenda: ["Hermes found the certifier's reply"],
+      callId: "c",
+      category: "other",
+      context: "Hermes asked for this call because of the Smith St inspection.",
+      eventAt: null,
+      ownerName: "Raj",
+      reference: null,
+      subject: "Update from Hermes",
+    },
+    { canAskAssistant: true, caller: null },
+  );
+  const spoken = instructions.replace(/\b(ask_hermes|hand_to_hermes)\b/g, "");
+  assert.doesNotMatch(spoken, /hermes/i);
+  assert.match(spoken, /Agent Factory found the certifier's reply/);
+  assert.doesNotMatch(
+    ownerCallHermesAnswerCue("Hermes says the inspection is on Tuesday."),
+    /hermes says/i,
+  );
+});

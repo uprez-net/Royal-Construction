@@ -298,6 +298,23 @@ When an owner call ends, Royal passes Hermes what it left
      Inbound callers keep 8 s and two follow-ups. The silence clock restarts
      whenever the audio level says the caller spoke, so a machine or line noise
      can hold it open; that is why answering machine detection is still wanted.
+   - **Closes are re-checked under the handoff's lock.** Every automatic close
+     (nothing asked, voicemail, silent callback) takes the same row lock a late
+     note takes and re-counts the requests first; one saved in the meantime wins
+     and the handoff is delivered as it is. A recording transcript that is still
+     pending is waited for (within the same 5 minutes) even when a live one
+     exists, and a recording with no speaker labels at all cannot show who spoke,
+     so it never closes a call. A delivery whose claim a reopening voided before
+     the send sends nothing, and the check after delivery leaves a delivery
+     newer than 8 minutes alone.
+   - **Voicemail evidence is strict.** "Voicemail", "mailbox", "leave a message",
+     "record your message", "at/after the tone/beep" and "trying to reach" count;
+     "not available" alone does not, since a person says it too.
+   - **No endless callbacks.** After 4 replacement callbacks for one handoff
+     (voicemail, no answer or silence each time) the source handoff is `FAILED`
+     with a note and is not reopened again.
+   - **The RESULT line** counts only at the very end of the reply, so a marker
+     quoted mid-sentence is not a verdict.
    - **Two transcripts.** The voice model's live transcript can drop a short
      reply or mishear one ("10 minutes" came out as "tomorrow" on a real
      call), while the recording's speech-to-text got both right. When both

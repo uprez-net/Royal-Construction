@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   CallStaffTarget,
   CallStatus,
+  CallTranscriptStatus,
   CommsDirection,
   OwnerCallHandoffStatus,
   OwnerCallStatus,
@@ -91,6 +92,18 @@ const DELIVERED_UNACTED_MS = 45 * 60 * 1000;
  * lost transcript than a silent owner, so it is still sent, with a note.
  */
 const EMPTY_CALL_MAX_SECONDS = 45;
+
+/**
+ * The workflow checks a handoff this long after delivering it; one delivered
+ * more recently than this (a fresher revision overtook the sleeping check) is
+ * left alone.
+ */
+const VERIFY_MIN_AGE_MS = 8 * 60 * 1000;
+
+/** Replacement callbacks tried for one handoff before it needs a person. */
+const MAX_REPLACEMENT_CALLBACKS = 4;
+const REPLACEMENTS_EXHAUSTED_NOTE =
+  "The owner did not get the callback after several tries (voicemail, no answer or silence). It needs a person.";
 
 const NOTHING_ASKED_RESOLUTION =
   "Nothing was asked: the owner said nothing on this short call, so nothing was sent.";
@@ -499,9 +512,34 @@ export async function reopenHandoffForFailedCallback(
       input.now,
       `The callback Agent Factory scheduled (owner call ${input.ownerCallId}) didn't reach the owner: ${input.reason}`,
     ),
-    select: { ownerCallId: true },
+    select: { ownerCallId: true, revision: true },
     where: { id: handoffId },
   });
+  // The owner keeps not getting the callback (voicemail, no answer, silence):
+  // stop here and say so, rather than ringing them in a chain for ever.
+  if ((handoff.revision ?? 0) > MAX_REPLACEMENT_CALLBACKS) {
+    await db.ownerCallHandoff.updateMany({
+      data: {
+        attempts: OWNER_CALL_HANDOFF_LIMITS.maxAttempts,
+        lastError: REPLACEMENTS_EXHAUSTED_NOTE,
+        status: OwnerCallHandoffStatus.FAILED,
+      },
+      where: { id: handoffId },
+    });
+    await recordAgentCallEvent(
+      db,
+      { ownerCallId: handoff.ownerCallId },
+      {
+        at: input.now,
+        detail: {
+          callbackOwnerCallId: input.ownerCallId,
+          reason: REPLACEMENTS_EXHAUSTED_NOTE,
+        },
+        kind: AGENT_CALL_EVENT.handoffFailed,
+      },
+    );
+    return null;
+  }
   await recordAgentCallEvent(
     db,
     { ownerCallId: handoff.ownerCallId },
@@ -535,7 +573,7 @@ const HANDOFF_SELECT = {
           id: true,
           recordings: {
             orderBy: { createdAt: "asc" },
-            select: { transcript: true },
+            select: { transcript: true, transcriptStatus: true },
           },
           startedAt: true,
           status: true,
@@ -614,6 +652,11 @@ function transcriptOf(row: HandoffRow): string | null {
   return live ?? recorded;
 }
 
+/** Does any line start with a speaker label ("Mili:", "Caller:")? */
+function speakerLabelled(transcript: string): boolean {
+  return /^[^\n:]{1,40}:\s*\S/m.test(transcript);
+}
+
 /** Is there a line in the transcript from anyone but Mili? */
 function callerSpoke(transcript: string): boolean {
   return new RegExp(`^(?!${VOICE_AGENT_NAME}:)[^\\n:]{1,40}:\\s*\\S`, "m").test(
@@ -641,15 +684,22 @@ function ownerSaidNothing(row: {
     !row.requests.length
     && Boolean(live)
     && !callerSpoke(live as string)
+    // A recording whose speech-to-text has no speaker labels at all (the
+    // split failed and it came back as plain prose) cannot show who spoke.
+    && !(recorded && !speakerLabelled(recorded))
     // The recording's speech-to-text is labelled too: a voicemail greeting or
     // a reply the live transcript lost shows up there as a caller line.
     && !(recorded && callerSpoke(recorded))
   );
 }
 
-/** What a carrier's voicemail says first, and a person unavailable says. */
+/**
+ * What a carrier's voicemail says first. Deliberately not "not available" or
+ * "unavailable" on their own: a person who answers "I'm not available right
+ * now" is not a machine, and must not trigger a replacement call.
+ */
 const VOICEMAIL_PHRASES =
-  /voice ?mail|mailbox|leave (?:a|your) message|record your message|(?:at|after) the (?:tone|beep)|not available|unavailable|trying to reach/i;
+  /voice ?mail|mailbox|leave (?:a|your) message|record your message|(?:at|after) the (?:tone|beep)|trying to reach/i;
 
 /**
  * Did a machine answer? A voicemail greeting is one of the first two lines
@@ -685,13 +735,14 @@ function answeredByVoicemail(row: {
 export type HandoffResult = "scheduled" | "resolved" | "needs_owner" | "cannot";
 
 export function handoffResult(reply: string): HandoffResult | null {
-  let last: HandoffResult | null = null;
-  for (const found of reply.matchAll(
-    /RESULT:\s*(scheduled|resolved|needs_owner|cannot)\b/gi,
-  )) {
-    last = found[1].toLowerCase() as HandoffResult;
-  }
-  return last;
+  // At the very end only (its own last line, or the end of a one-paragraph
+  // reply), optionally with a trailing "(...)": a marker quoted in the middle
+  // of a sentence ("I haven't reached RESULT: cannot yet") is not a verdict.
+  const found =
+    /(?:^|\s)RESULT:\s*(scheduled|resolved|needs_owner|cannot)\s*(?:\([^)]*\))?\s*[.!]?\s*$/i.exec(
+      reply.trim(),
+    );
+  return found ? (found[1].toLowerCase() as HandoffResult) : null;
 }
 
 function toSummary(row: HandoffRow): OwnerCallHandoffSummary {
@@ -1117,9 +1168,18 @@ export async function deliverOwnerCallHandoff(
 
   const transcript = transcriptOf(row);
   const call = row.ownerCall.call;
+  // The recording's speech-to-text is the more accurate transcript and can
+  // reveal what the live one lost, so a pending one is waited for too (within
+  // the same deadline), not only a missing transcript.
+  const recordingPending = Boolean(
+    call?.recordings.some(
+      (recording) =>
+        recording.transcriptStatus === CallTranscriptStatus.PENDING,
+    ),
+  );
   if (
     input.waitForTranscript
-    && !transcript
+    && (!transcript || recordingPending)
     && call
     && answered(call)
     && row.readyAt
@@ -1151,6 +1211,14 @@ export async function deliverOwnerCallHandoff(
         ? VOICEMAIL_RESOLUTION
         : SILENT_CALLBACK_RESOLUTION;
     const reopened = await db.$transaction(async (tx) => {
+      // Under the same row lock a late note takes: a request saved after the
+      // read above is seen here, and nothing is closed over it.
+      await lockHandoff(tx, row.id);
+      if (
+        await tx.ownerCallHandoffRequest.count({ where: { handoffId: row.id } })
+      ) {
+        return "noted" as const;
+      }
       const closed = await tx.ownerCallHandoff.updateMany({
         data: {
           resolution,
@@ -1190,6 +1258,8 @@ export async function deliverOwnerCallHandoff(
       return sourceId;
     });
     if (reopened === undefined) return "skipped";
+    // A request landed meanwhile: deliver this handoff as it is.
+    if (reopened === "noted") return "reopened";
     // A reopened handoff is PENDING: start its delivery now rather than
     // leaving it for the hourly backstop.
     if (reopened) await ports.startDelivery?.(reopened).catch(() => undefined);
@@ -1204,6 +1274,12 @@ export async function deliverOwnerCallHandoff(
     && ownerSaidNothing(row)
   ) {
     const closed = await db.$transaction(async (tx) => {
+      await lockHandoff(tx, row.id);
+      if (
+        await tx.ownerCallHandoffRequest.count({ where: { handoffId: row.id } })
+      ) {
+        return "noted" as const;
+      }
       const moved = await tx.ownerCallHandoff.updateMany({
         data: {
           resolution: NOTHING_ASKED_RESOLUTION,
@@ -1234,6 +1310,7 @@ export async function deliverOwnerCallHandoff(
       );
       return true;
     });
+    if (closed === "noted") return "reopened";
     return closed ? "nothing_asked" : "skipped";
   }
 
@@ -1302,6 +1379,10 @@ export async function deliverOwnerCallHandoff(
       select,
       where: { id: row.id },
     })) ?? row;
+  // A late note or a failed callback reopened it between the claim and this
+  // read: the claim is void, so send nothing with it. A reopened handoff is
+  // delivered again under its own claim.
+  if (current.revision !== row.revision) return "reopened";
   const handoff: OwnerAssistantHandoff = {
     body: ownerCallHandoffBody(current, transcriptOf(current)),
     callId: call?.id ?? null,
@@ -1475,6 +1556,7 @@ export async function verifyHandoffActed(
   const now = input.now ?? new Date();
   const row = await db.ownerCallHandoff.findUnique({
     select: {
+      deliveredAt: true,
       id: true,
       ownerCall: { select: { id: true } },
       revision: true,
@@ -1485,6 +1567,12 @@ export async function verifyHandoffActed(
   if (!row) return "skipped";
   if (row.status === OwnerCallHandoffStatus.RESOLVED) return "acted";
   if (row.status !== OwnerCallHandoffStatus.DELIVERED) return "skipped";
+  if (
+    row.deliveredAt
+    && now.getTime() - row.deliveredAt.getTime() < VERIFY_MIN_AGE_MS
+  ) {
+    return "skipped";
+  }
   if (input.final) {
     return (await failUnacted(db, row, now)) ? "failed" : "skipped";
   }

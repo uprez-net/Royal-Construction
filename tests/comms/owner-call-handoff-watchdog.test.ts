@@ -139,6 +139,7 @@ test("delivery: needs_owner or cannot is FAILED at once, never retried, and flag
     const recorder = recordingDb({
       "ownerCallHandoff.findUnique": row(),
       "ownerCallHandoff.updateMany": { count: 1 },
+      "ownerCallHandoffRequest.count": 0,
     });
     const outcome = await deliver(
       recorder,
@@ -162,6 +163,7 @@ test("delivery: scheduled, resolved, or no marker stays DELIVERED", async () => 
     const recorder = recordingDb({
       "ownerCallHandoff.findUnique": row(),
       "ownerCallHandoff.updateMany": { count: 1 },
+      "ownerCallHandoffRequest.count": 0,
     });
     assert.equal(await deliver(recorder, assistant(reply)), "delivered");
     assert.deepEqual(eventKinds(recorder.calls), ["handoff.delivered"]);
@@ -179,6 +181,7 @@ test("delivery: a short call where the owner said nothing is closed, and Hermes 
       },
     ),
     "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
   });
   assert.equal(
     await deliver(recorder, assistant("never sent", sent)),
@@ -243,6 +246,7 @@ test("delivery: an empty-looking call is still sent when something suggests it w
     const recorder = recordingDb({
       "ownerCallHandoff.findUnique": row(handoff, call),
       "ownerCallHandoff.updateMany": { count: 1 },
+      "ownerCallHandoffRequest.count": 0,
     });
     assert.equal(
       await deliver(recorder, assistant("ok", sent)),
@@ -313,6 +317,7 @@ test("verify: still DELIVERED — the first check reopens it as a new revision, 
   const first = recordingDb({
     "ownerCallHandoff.findUnique": delivered,
     "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
   });
   assert.equal(
     await verifyHandoffActed(
@@ -332,6 +337,7 @@ test("verify: still DELIVERED — the first check reopens it as a new revision, 
   const final = recordingDb({
     "ownerCallHandoff.findUnique": delivered,
     "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
   });
   assert.equal(
     await verifyHandoffActed(
@@ -404,6 +410,7 @@ test("delivery: when the live and recorded transcripts differ, Hermes gets both,
       },
     ),
     "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
   });
   assert.equal(await deliver(recorder, assistant("ok", sent)), "delivered");
   const body = sent[0];
@@ -445,6 +452,7 @@ test("voicemail: a callback it answered reopens the handoff it came from, closes
     "ownerCallHandoff.findUnique": callbackRow(),
     "ownerCallHandoff.update": { ownerCallId: "oc-src" },
     "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
   });
   const outcome = await deliverOwnerCallHandoff(
     WORKFLOW,
@@ -490,6 +498,7 @@ test("voicemail: a first briefing that hit it is still sent, with a note, so Her
   const recorder = recordingDb({
     "ownerCallHandoff.findUnique": first,
     "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
   });
   assert.equal(await deliver(recorder, assistant("ok", sent)), "delivered");
   assert.match(sent[0], /answered by voicemail/);
@@ -514,6 +523,7 @@ test("voicemail: Mili's own words never count, and a callback a person answered 
   const recorder = recordingDb({
     "ownerCallHandoff.findUnique": spoken,
     "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
   });
   assert.equal(await deliver(recorder, assistant("ok", sent)), "delivered");
   assert.doesNotMatch(sent[0], /answered by voicemail/);
@@ -534,6 +544,7 @@ test("silent callback: one the owner picked up and said nothing on reopens the h
     "ownerCallHandoff.findUnique": silent,
     "ownerCallHandoff.update": { ownerCallId: "oc-src" },
     "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
   });
   const outcome = await deliverOwnerCallHandoff(
     WORKFLOW,
@@ -570,7 +581,187 @@ test("silent callback: a callback where the owner did speak is delivered as usua
   const recorder = recordingDb({
     "ownerCallHandoff.findUnique": spoke,
     "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
   });
   assert.equal(await deliver(recorder, assistant("ok", sent)), "delivered");
   assert.equal(sent.length, 1);
+});
+
+// ── Review fixes (Sol) ──────────────────────────────────────────────────
+
+test("a request saved while a close was being decided wins: nothing is closed over it", async () => {
+  const silentShort = row(
+    { requests: [] },
+    {
+      agentTranscript: "Mili: Hi Raj, it's Mili. Have you got a minute?",
+      durationSeconds: 30,
+    },
+  );
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": silentShort,
+    "ownerCallHandoff.updateMany": { count: 1 },
+    // The call desk noted a request after the read above.
+    "ownerCallHandoffRequest.count": 1,
+  });
+  const sent: string[] = [];
+  assert.equal(await deliver(recorder, assistant("ok", sent)), "reopened");
+  assert.deepEqual(sent, []);
+  assert.deepEqual(writes(recorder.calls), []);
+
+  const unheard = recordingDb({
+    "ownerCall.findUnique": { fromHandoffId: "h-src" },
+    "ownerCallHandoff.findUnique": callbackRow(),
+    "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 1,
+  });
+  assert.equal(await deliver(unheard, assistant("ok", sent)), "reopened");
+  assert.deepEqual(writes(unheard.calls), []);
+  assert.deepEqual(ops(unheard.calls, "ownerCallHandoff.update"), []);
+});
+
+test("delivery: a recording transcript still pending is waited for, even when a live transcript exists", async () => {
+  const pending = row(
+    { requests: [] },
+    {
+      agentTranscript: "Mili: Hi Raj, it's Mili.",
+      durationSeconds: 25,
+      recordings: [{ transcript: null, transcriptStatus: "PENDING" }],
+    },
+  );
+  const recorder = recordingDb({ "ownerCallHandoff.findUnique": pending });
+  assert.equal(
+    await deliverOwnerCallHandoff(
+      WORKFLOW,
+      { handoffId: "h-1", now: NOW, waitForTranscript: true },
+      recorder.transactionalDb,
+      { assistant: assistant("ok") },
+    ),
+    "waiting",
+  );
+  assert.deepEqual(writes(recorder.calls), []);
+});
+
+test("delivery: a recording transcript with no speaker labels cannot close a call as empty", async () => {
+  const sent: string[] = [];
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": row(
+      { requests: [] },
+      {
+        agentTranscript: "Mili: Hi Raj, it's Mili. Have you got a minute?",
+        durationSeconds: 25,
+        recordings: [
+          {
+            transcript: "hi raj call me back with the invoice please",
+            transcriptStatus: "DONE",
+          },
+        ],
+      },
+    ),
+    "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
+  });
+  assert.equal(await deliver(recorder, assistant("ok", sent)), "delivered");
+  assert.equal(sent.length, 1);
+});
+
+test("delivery: reopened between the claim and the reread, it sends nothing with the void claim", async () => {
+  let reads = 0;
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": () => {
+      reads += 1;
+      return reads === 1 ? row() : row({ revision: 1 });
+    },
+    "ownerCallHandoff.updateMany": { count: 1 },
+  });
+  const sent: string[] = [];
+  assert.equal(await deliver(recorder, assistant("ok", sent)), "reopened");
+  assert.deepEqual(sent, []);
+});
+
+test("verify: a delivery newer than the check's own age is left alone", async () => {
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": {
+      deliveredAt: new Date(NOW.getTime() - 60_000),
+      id: "h-1",
+      ownerCall: { id: "oc-1" },
+      revision: 3,
+      status: "DELIVERED",
+    },
+  });
+  assert.equal(
+    await verifyHandoffActed(
+      WORKFLOW,
+      { final: true, handoffId: "h-1", now: NOW },
+      recorder.transactionalDb,
+    ),
+    "skipped",
+  );
+  assert.deepEqual(writes(recorder.calls), []);
+});
+
+test("an owner who keeps missing the callback is not rung in a chain: the source fails and says so", async () => {
+  const started: string[] = [];
+  const recorder = recordingDb({
+    "ownerCall.findUnique": { fromHandoffId: "h-src" },
+    "ownerCallHandoff.findUnique": callbackRow(),
+    "ownerCallHandoff.update": { ownerCallId: "oc-src", revision: 5 },
+    "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
+  });
+  await deliverOwnerCallHandoff(
+    WORKFLOW,
+    { handoffId: "h-1", now: NOW },
+    recorder.transactionalDb,
+    {
+      assistant: assistant("never"),
+      startDelivery: async (id) => {
+        started.push(id);
+      },
+    },
+  );
+  assert.deepEqual(started, []);
+  const failed = writes(recorder.calls).find(
+    (w) => w.data.status === "FAILED" && w.where.id === "h-src",
+  );
+  assert.ok(failed);
+  assert.equal(failed.data.attempts, OWNER_CALL_HANDOFF_LIMITS.maxAttempts);
+  assert.match(String(failed.data.lastError), /did not get the callback/);
+  assert.ok(eventKinds(recorder.calls).includes("handoff.failed"));
+});
+
+test("voicemail: a person saying they are not available is not a machine", async () => {
+  const sent: string[] = [];
+  const person = callbackRow();
+  const call = person.ownerCall.call as {
+    agentTranscript: string;
+    recordings: unknown[];
+  };
+  call.agentTranscript =
+    "Mili: Hi Raj.\nCaller: Sorry, I'm not available right now, can you call later?";
+  call.recordings = [];
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": person,
+    "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
+  });
+  assert.equal(await deliver(recorder, assistant("ok", sent)), "delivered");
+  assert.doesNotMatch(sent[0], /answered by voicemail/);
+});
+
+test("the RESULT marker: only a verdict at the very end counts, not one quoted mid-sentence", () => {
+  assert.equal(
+    handoffResult("I haven't reached RESULT: cannot yet. I'm still checking."),
+    null,
+  );
+  assert.equal(handoffResult("Scheduled it. RESULT: scheduled"), "scheduled");
+  assert.equal(
+    handoffResult(
+      "Done.\nRESULT: resolved (called resolve_owner_call_handoff)",
+    ),
+    "resolved",
+  );
+  assert.equal(
+    handoffResult("Need a time. RESULT: needs_owner."),
+    "needs_owner",
+  );
 });
