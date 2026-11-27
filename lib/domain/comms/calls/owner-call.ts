@@ -717,6 +717,9 @@ export async function requestOwnerCall(
           ...briefing,
           callAt: callAt ?? now,
           fromHandoffId: handoffId,
+          fromHandoffRevision: handoffId
+            ? (input.handoffRevision ?? null)
+            : null,
           idempotencyKey,
           source,
           status: OwnerCallStatus.SCHEDULED,
