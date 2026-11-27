@@ -47,7 +47,7 @@ export function readHermesConfig(env: Env = process.env): HermesConfig {
   let inboundSecret = value(env, "HERMES_MCP_SECRET");
   if (inboundSecret && inboundSecret.length < HERMES_SECRET_MIN_LENGTH) {
     problems.push(
-      `HERMES_MCP_SECRET must be at least ${HERMES_SECRET_MIN_LENGTH} random characters; Hermes can't place owner calls until it is.`,
+      `HERMES_MCP_SECRET must be at least ${HERMES_SECRET_MIN_LENGTH} random characters; Agent Factory can't place owner calls until it is.`,
     );
     inboundSecret = null;
   }
@@ -76,7 +76,7 @@ export function readHermesConfig(env: Env = process.env): HermesConfig {
       && token
     ) {
       problems.push(
-        "HERMES_SERVER_MCP_URL is plain http, so Hermes's key and the owner's questions travel unencrypted. Switch it to https once Hermes has a domain.",
+        "HERMES_SERVER_MCP_URL is plain http, so Agent Factory's key and the owner's questions travel unencrypted. Switch it to https once Agent Factory has a domain.",
       );
     }
     if (url && (url.username || url.password)) {
@@ -87,7 +87,7 @@ export function readHermesConfig(env: Env = process.env): HermesConfig {
     }
     if (url && !token) {
       problems.push(
-        "HERMES_SERVER_MCP_TOKEN is not set, so Mili can't ask Hermes anything.",
+        "HERMES_SERVER_MCP_TOKEN is not set, so Mili can't ask Agent Factory anything.",
       );
     }
     if (url && token) {

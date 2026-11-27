@@ -90,7 +90,7 @@ const TOOLS: {
     id: "agent-calls",
     label: "Agent calls",
     description:
-      "Calls Mili makes to the owner for Hermes: what is scheduled, and each call's transcript, recording and what she looked up.",
+      "Calls Mili makes to the owner for Agent Factory: what is scheduled, and each call's transcript, recording and what she looked up.",
     href: "/admin/agent-calls",
   },
 ];

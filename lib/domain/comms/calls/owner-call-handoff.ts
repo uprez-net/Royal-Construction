@@ -97,18 +97,18 @@ const NOTHING_ASKED_RESOLUTION =
 const UNACTED_REOPEN_NOTE =
   "You replied to this handoff but did not schedule a callback or resolve it. Do one of the two now, and end your reply with the RESULT line.";
 const UNACTED_FAILED_NOTE =
-  "Hermes took this handoff, but no callback was scheduled and it was never resolved. It needs a person.";
+  "Agent Factory took this handoff, but no callback was scheduled and it was never resolved. It needs a person.";
 
 export const OWNER_CALL_HANDOFF_REFUSALS = {
   notOwnerCall: "This is not an owner call.",
-  tooMany: `This call has already noted ${OWNER_CALL_HANDOFF_LIMITS.requestsPerCall} requests for Hermes.`,
+  tooMany: `This call has already noted ${OWNER_CALL_HANDOFF_LIMITS.requestsPerCall} requests for Agent Factory.`,
   stillOnCall:
     "That call is still going, so its handoff isn't ready. Wait for the post-call handoff Royal sends when the call ends (or until get_owner_call shows its handoff as pending), then schedule the callback with handoff_id.",
   resolvedWithoutCallback:
     "This handoff was already resolved without a callback, so none can be scheduled from it. Schedule the call without handoff_id if one is still wanted.",
-  cutOff: "A delivery to Hermes was cut off with no tries left.",
+  cutOff: "A delivery to Agent Factory was cut off with no tries left.",
   notConnected:
-    "Hermes isn't connected (HERMES_SERVER_MCP_URL and HERMES_SERVER_MCP_TOKEN), so the handoff couldn't be passed on. It stays outstanding for Hermes to pick up with list_owner_call_handoffs.",
+    "Agent Factory isn't connected (HERMES_SERVER_MCP_URL and HERMES_SERVER_MCP_TOKEN), so the handoff couldn't be passed on. It stays outstanding for Agent Factory to pick up with list_owner_call_handoffs.",
 } as const;
 
 export type OwnerCallHandoffRequestRecord = {
@@ -431,7 +431,7 @@ export async function markOwnerCallEnded(
     await db.ownerCallHandoff.updateMany({
       data: {
         readyAt: input.now,
-        resolution: `The owner didn't pick up this callback; handoff ${ownerCall.fromHandoffId} was reopened for Hermes instead.`,
+        resolution: `The owner didn't pick up this callback; handoff ${ownerCall.fromHandoffId} was reopened for Agent Factory instead.`,
         resolvedAt: input.now,
         status: OwnerCallHandoffStatus.RESOLVED,
       },
@@ -493,7 +493,7 @@ export async function reopenHandoffForFailedCallback(
   const handoff = await db.ownerCallHandoff.update({
     data: reopenData(
       input.now,
-      `The callback Hermes scheduled (owner call ${input.ownerCallId}) didn't reach the owner: ${input.reason}`,
+      `The callback Agent Factory scheduled (owner call ${input.ownerCallId}) didn't reach the owner: ${input.reason}`,
     ),
     select: { ownerCallId: true },
     where: { id: handoffId },
@@ -1165,7 +1165,7 @@ export async function deliverOwnerCallHandoff(
     // for the next try; a status the handoff moved to meanwhile (Hermes
     // resolved it mid-request) is left alone.
     const reason = bounded(
-      `Hermes didn't take the handoff: ${error instanceof Error ? error.message : "unknown error"}`,
+      `Agent Factory didn't take the handoff: ${error instanceof Error ? error.message : "unknown error"}`,
       600,
     );
     await db.$transaction(async (tx) => {
@@ -1224,7 +1224,7 @@ export async function deliverOwnerCallHandoff(
   // while answering is no longer DELIVERED, so this writes nothing for it.
   const result = handoffResult(reply);
   if (result === "needs_owner" || result === "cannot") {
-    const reason = bounded(`Hermes said ${result}: ${hermesReply}`, 600);
+    const reason = bounded(`Agent Factory said ${result}: ${hermesReply}`, 600);
     const flagged = await db.$transaction(async (tx) => {
       const moved = await tx.ownerCallHandoff.updateMany({
         data: {

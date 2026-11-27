@@ -1240,7 +1240,7 @@ export async function askOwnerAssistant(
   const assistant = ports.assistant ?? null;
   if (!assistant) {
     throw new DomainSideEffectError(
-      "Hermes isn't connected in this runtime.",
+      "Agent Factory isn't connected in this runtime.",
       "owner-assistant",
       false,
     );
@@ -1260,7 +1260,7 @@ export async function askOwnerAssistant(
   });
   if (counted.count === 0) {
     throw new DomainTransitionError(
-      "This call has already passed Hermes as many questions as it may.",
+      "This call has already passed Agent Factory as many questions as it may.",
     );
   }
   let answer: string;
@@ -1273,7 +1273,7 @@ export async function askOwnerAssistant(
     });
   } catch (error) {
     throw new DomainSideEffectError(
-      "Hermes didn't answer.",
+      "Agent Factory didn't answer.",
       "owner-assistant",
       true,
       { cause: error },
@@ -1282,7 +1282,7 @@ export async function askOwnerAssistant(
   const spoken = answer.replace(/\s+/g, " ").trim();
   if (!spoken) {
     throw new DomainSideEffectError(
-      "Hermes answered with nothing.",
+      "Agent Factory answered with nothing.",
       "owner-assistant",
       true,
     );
