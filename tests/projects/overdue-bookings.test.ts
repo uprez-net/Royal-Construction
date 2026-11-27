@@ -270,7 +270,7 @@ describe("Overdue on the Projects list", () => {
     assert.ok(isProjectOverdue(attention));
     assert.equal(overdueLateness(attention), 3);
     const [condition] = attention.conditions;
-    assert.equal(condition.kind, "DEPENDENCY");
+    assert.equal(condition.kind, "BOOKING_PENDING");
     assert.equal(
       condition.label,
       "No confirmed Carpentry booking for Framing, due to start 23 Nov",
@@ -295,6 +295,7 @@ describe("Overdue on the Projects list", () => {
     assert.equal(attention.overdueBookings[0]?.unconfirmed, true);
     assert.equal(attention.overdueBookings[0]?.daysLate, 0);
     assert.equal(attention.overdueBookings[0]?.daysToStart, 0);
+    assert.equal(attention.conditions[0]?.kind, "BOOKING_UNCONFIRMED");
     assert.equal(
       attention.conditions[0]?.label,
       "Carpentry booked, not confirmed for Framing, which starts today",
@@ -328,6 +329,43 @@ describe("Overdue on the Projects list", () => {
     assert.deepEqual(attention.conditions[0]?.details, [
       "No confirmed Carpentry booking for Roofing, due to start 30 Nov",
       "No confirmed Carpentry booking for Framing, due to start 10 Dec",
+    ]);
+  });
+
+  test("nobody booked and booked-but-unconfirmed are two conditions", () => {
+    const attention = assessProjectAttention(
+      source({
+        milestones: [
+          activity({
+            requiredTradeTypes: [{ label: "Carpentry" }, { label: "Plumbing" }],
+          }),
+          activity({ id: "m2", name: "Roofing", targetDate: sydneyDay(30) }),
+        ],
+        tradieSchedules: [
+          {
+            milestoneId: "m1",
+            status: "PENDING_RESPONSE",
+            trade: "Plumbing",
+            tradie: { trade: "Plumbing" },
+          },
+        ],
+      }),
+      NOW,
+    );
+    assert.deepEqual(
+      attention.conditions.map((c) => [c.kind, c.count, c.label]),
+      [
+        ["BOOKING_PENDING", 2, "2 tradie bookings pending: nobody booked"],
+        [
+          "BOOKING_UNCONFIRMED",
+          1,
+          "Plumbing booked, not confirmed for Framing, due to start 23 Nov",
+        ],
+      ],
+    );
+    assert.deepEqual(attention.conditions[0]?.details, [
+      "No confirmed Carpentry booking for Framing, due to start 23 Nov",
+      "No confirmed Carpentry booking for Roofing, due to start 30 Nov",
     ]);
   });
 

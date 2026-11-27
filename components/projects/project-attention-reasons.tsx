@@ -9,6 +9,7 @@ import {
   HardHat,
   Receipt,
   ShieldAlert,
+  UserX,
   type LucideIcon,
 } from "lucide-react";
 
@@ -48,11 +49,26 @@ const CHIP: Record<
     icon: FileWarning,
     text: (n) => `${n} missing ${n === 1 ? "document" : "documents"}`,
   },
-  DEPENDENCY: {
+  BOOKING_PENDING: {
+    icon: UserX,
+    text: (n) => `${n} tradie ${n === 1 ? "booking" : "bookings"} pending`,
+  },
+  BOOKING_UNCONFIRMED: {
     icon: HardHat,
-    text: (n) => `${n} ${n === 1 ? "booking" : "bookings"} overdue`,
+    text: (n) => `${n} tradie ${n === 1 ? "booking" : "bookings"} unconfirmed`,
   },
 };
+
+/**
+ * What the Overdue tab leaves out of its reasons: it is about work and trades
+ * running late, and a missing document or an open compliance alert is
+ * paperwork, so those chips only crowded the column there. Needs Attention
+ * still shows them.
+ */
+export const OVERDUE_TAB_HIDDEN_KINDS: readonly AttentionKind[] = [
+  "MISSING_DOCUMENT",
+  "COMPLIANCE_ALERT",
+];
 
 /**
  * One condition as a chip, with the precise wording in a tooltip.
@@ -138,16 +154,21 @@ function ConditionChip({ condition }: { condition: Condition }) {
  *
  * The conditions come from the server's attention read, so a resolved one is
  * simply not here on the next load. Renders nothing for a project with no
- * conditions, so it can sit on every row.
+ * conditions, so it can sit on every row. `hide` leaves some kinds out, for a
+ * tab that is only about part of the picture (`OVERDUE_TAB_HIDDEN_KINDS`).
  */
 export function ProjectAttentionReasons({
   attention,
   className,
+  hide = [],
 }: {
   attention: ProjectWithStats["attention"];
   className?: string;
+  hide?: readonly AttentionKind[];
 }) {
-  const conditions = attention?.conditions ?? [];
+  const conditions = (attention?.conditions ?? []).filter(
+    (condition) => !hide.includes(condition.kind),
+  );
   if (conditions.length === 0) return null;
 
   return (

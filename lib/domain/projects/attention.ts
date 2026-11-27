@@ -71,7 +71,11 @@ import { formatVariationNumber } from "./variation-rules";
 //                            start is two weeks away or closer
 //                            (`BOOKING_LOOKAHEAD_DAYS`), without a confirmed booking
 //                            for each trade it needs, or with a tradie booked
-//                            who has not confirmed
+//                            who has not confirmed. Two conditions, because
+//                            they are two different jobs: nobody booked
+//                            (`BOOKING_PENDING`) is finding a tradie, booked
+//                            but unconfirmed (`BOOKING_UNCONFIRMED`) is
+//                            chasing one
 //
 // **Drafting** is the stage before any of that work: no activity has started.
 // `hasWorkStarted` is the same test that freezes a project's start date, so the
@@ -89,7 +93,10 @@ export type AttentionKind =
   | "ISSUE"
   | "VARIATION"
   | "MISSING_DOCUMENT"
-  | "DEPENDENCY";
+  /** A trade an activity needs with nobody booked for it on that activity. */
+  | "BOOKING_PENDING"
+  /** A tradie booked on an activity who has not confirmed. */
+  | "BOOKING_UNCONFIRMED";
 
 export type AttentionCondition = {
   readonly kind: AttentionKind;
@@ -516,19 +523,37 @@ export function assessProjectAttention(
       const day = toZonedTime(new Date(booking.plannedStart), SYDNEY_TZ);
       return `due to start ${format(day, day.getFullYear() === thisYear ? "d MMM" : "d MMM yyyy")}`;
     };
-    const lines = overdueBookings.map(
-      (booking) =>
-        `${bookingGapLabel(booking)} for ${booking.name}, ${when(booking)}`,
-    );
-    conditions.push(
-      condition(
-        "DEPENDENCY",
-        lines,
-        (line) => line,
-        (count) =>
-          `${plural(count, "trade booking", "trade bookings")} overdue`,
-      ),
-    );
+    const lines = (unconfirmed: boolean) =>
+      overdueBookings
+        .filter((booking) => booking.unconfirmed === unconfirmed)
+        .map(
+          (booking) =>
+            `${bookingGapLabel(booking)} for ${booking.name}, ${when(booking)}`,
+        );
+    const pending = lines(false);
+    if (pending.length > 0) {
+      conditions.push(
+        condition(
+          "BOOKING_PENDING",
+          pending,
+          (line) => line,
+          (count) =>
+            `${plural(count, "tradie booking", "tradie bookings")} pending: nobody booked`,
+        ),
+      );
+    }
+    const unconfirmed = lines(true);
+    if (unconfirmed.length > 0) {
+      conditions.push(
+        condition(
+          "BOOKING_UNCONFIRMED",
+          unconfirmed,
+          (line) => line,
+          (count) =>
+            `${plural(count, "tradie booking", "tradie bookings")} not confirmed`,
+        ),
+      );
+    }
   }
 
   return {
