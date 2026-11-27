@@ -9,11 +9,11 @@ import {
   type TradieScheduleStatus,
   VariationStatus,
 } from "@prisma/client";
-import { addDays, differenceInCalendarDays, format } from "date-fns";
+import { differenceInCalendarDays, format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 
 import { COMPLIANCE_ALERT_COPY } from "@/constants/complianceAlerts";
-import { SYDNEY_TZ } from "@/lib/dates/sydney";
+import { SYDNEY_TZ, sydneyMidnightIn } from "@/lib/dates/sydney";
 import type {
   HbcfClaimDocument,
   ProjectSourceDocumentReference,
@@ -682,8 +682,11 @@ export async function readProjectAttention(
  * Wider than the rule on purpose, never narrower: both ways to be overdue
  * need an activity under way, or a pending one on a job being built whose
  * planned start is no later than `BOOKING_LOOKAHEAD_DAYS` after today in
- * Sydney, which is always before now + that + 1 day. `assessProjectAttention`
- * then decides.
+ * Sydney: before the Sydney midnight that begins the day after that, the same
+ * calendar boundary `bookingsDue` draws. A fixed `now` + N × 24 h is not that
+ * boundary: across the end of daylight saving a Sydney day is 25 hours, and
+ * just after midnight the offset fell an hour short of it.
+ * `assessProjectAttention` then decides.
  */
 export function overdueCandidateWhere(now: Date): Prisma.ProjectWhereInput {
   return {
@@ -694,7 +697,9 @@ export function overdueCandidateWhere(now: Date): Prisma.ProjectWhereInput {
         milestones: {
           some: {
             status: "PENDING",
-            targetDate: { lt: addDays(now, BOOKING_LOOKAHEAD_DAYS + 1) },
+            targetDate: {
+              lt: sydneyMidnightIn(BOOKING_LOOKAHEAD_DAYS + 1, now),
+            },
           },
         },
       },

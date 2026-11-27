@@ -430,10 +430,32 @@ describe("Overdue on the Projects list", () => {
     const pending = where.OR?.[1] as {
       milestones: { some: { targetDate: { lt: Date } } };
     };
-    // The latest start that can be due today in Sydney is earlier than this.
-    assert.ok(
-      pending.milestones.some.targetDate.lt.getTime()
-        > sydneyDay(27 + BOOKING_LOOKAHEAD_DAYS).getTime(),
+    // Exactly the Sydney midnight after the last day that can be due.
+    assert.equal(
+      pending.milestones.some.targetDate.lt.getTime(),
+      sydneyDay(27 + BOOKING_LOOKAHEAD_DAYS).getTime(),
+    );
+  });
+
+  test("the candidate cutoff is Sydney's calendar boundary across the end of daylight saving", () => {
+    // 12:30am AEDT on Thu 25 Mar 2027; daylight saving ends on Sun 4 Apr, so
+    // the next fifteen Sydney days are fifteen days and one hour long.
+    const justAfterMidnight = new Date("2027-03-24T13:30:00Z");
+    // 11:30pm AEST on Thu 8 Apr: the last hour of the last day due.
+    const lateOnLastDay = new Date("2027-04-08T13:30:00Z");
+    const where = overdueCandidateWhere(justAfterMidnight);
+    const pending = where.OR?.[1] as {
+      milestones: { some: { targetDate: { lt: Date } } };
+    };
+    assert.ok(pending.milestones.some.targetDate.lt > lateOnLastDay);
+    // The rule agrees that it is due.
+    const attention = assessProjectAttention(
+      source({ milestones: [activity({ targetDate: lateOnLastDay })] }),
+      justAfterMidnight,
+    );
+    assert.equal(
+      attention.overdueBookings[0]?.daysToStart,
+      BOOKING_LOOKAHEAD_DAYS,
     );
   });
 });
