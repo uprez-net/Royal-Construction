@@ -365,7 +365,9 @@ When an owner call ends, Royal passes Hermes what it left
   - being placed right now (`PLACING`): a timer has claimed it and Mili being
     busy can put it back, so Hermes is told to wait a minute and ask again, not
     to schedule a separate call;
-  - cancelled or failed: it is only unlinked;
+  - cancelled: it is only unlinked. One that failed and is still attached may
+    have rung (a failure that certainly did not ring is unlinked already), so it
+    is refused like one that has rung;
   - the handoff already resolved without a callback, or still on the call: no
     replacement.
   The same revision again, a callback with no recorded revision, or a request

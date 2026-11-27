@@ -124,7 +124,7 @@ export const OWNER_CALL_HANDOFF_REFUSALS = {
   resolvedWithoutCallback:
     "This handoff was already resolved without a callback, so none can be scheduled from it. Schedule the call without handoff_id if one is still wanted.",
   callbackAlreadyRang:
-    "The callback already scheduled for this handoff is for an earlier revision and has already rung. If another is wanted, schedule it without handoff_id, then resolve this handoff.",
+    "The callback already scheduled for this handoff is for an earlier revision and has rung, or may have (the carrier's answer was uncertain, so a person checks its log). If another is wanted, schedule it without handoff_id, then resolve this handoff.",
   callbackBeingPlaced:
     "The callback already scheduled for this handoff, for an earlier revision, is being placed right now and may still ring. Wait a minute and ask again: you will be told if it rang, and if it was held back it can then be replaced. Do not schedule a separate call yet.",
   cutOff: "A delivery to Agent Factory was cut off with no tries left.",
@@ -1092,10 +1092,11 @@ async function callbackCheck(
         OWNER_CALL_HANDOFF_REFUSALS.callbackBeingPlaced,
       );
     }
+    // (A FAILED one still attached is one that may have rung: a failure that
+    // definitely did not ring was already unlinked, and the handoff reopened.)
     if (
       callback.status === OwnerCallStatus.SCHEDULED
       || callback.status === OwnerCallStatus.CANCELED
-      || callback.status === OwnerCallStatus.FAILED
     ) {
       return { id: callback.id, kind: "replace" };
     }
@@ -1159,13 +1160,10 @@ export async function claimHandoffForCallback(
       where: { id: check.id, status: OwnerCallStatus.SCHEDULED },
     });
     if (cancelled.count === 0) {
-      // Already cancelled or failed: nothing to cancel, only to unlink.
+      // Already cancelled: nothing to cancel, only to unlink.
       const unlinked = await db.ownerCall.updateMany({
         data: { fromHandoffId: null },
-        where: {
-          id: check.id,
-          status: { in: [OwnerCallStatus.CANCELED, OwnerCallStatus.FAILED] },
-        },
+        where: { id: check.id, status: OwnerCallStatus.CANCELED },
       });
       // A timer claimed it between the check and the write: it may ring.
       if (unlinked.count === 0) {

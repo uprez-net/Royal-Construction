@@ -1296,7 +1296,7 @@ test("a callback for an older revision that has rung cannot be replaced; one bei
   });
   await assert.rejects(
     handoffForCallback(placed.db, "h-1", 1),
-    (error: Error) => /has already rung/.test(error.message),
+    (error: Error) => /has rung, or may have/.test(error.message),
   );
   // PLACING only means a timer claimed it: it can be put back to SCHEDULED
   // (Mili busy) and ring later, so Hermes must not be sent to schedule a
@@ -1322,8 +1322,15 @@ test("a callback for an older revision that has rung cannot be replaced; one bei
   assert.deepEqual(eventKinds(raced.calls), []);
 });
 
-test("a cancelled or failed callback for an older revision is replaced by unlinking it", async () => {
-  for (const status of ["CANCELED", "FAILED"]) {
+test("a cancelled callback for an older revision is replaced by unlinking it; a FAILED one still attached may have rung and is not", async () => {
+  const failed = recordingDb({
+    "ownerCallHandoff.findUnique": callbackFor({ status: "FAILED" }),
+  });
+  await assert.rejects(
+    handoffForCallback(failed.db, "h-1", 1),
+    (error: Error) => /rung, or may have/.test(error.message),
+  );
+  for (const status of ["CANCELED"]) {
     const recorder = recordingDb({
       "ownerCallHandoff.findUnique": callbackFor({ status }),
       "ownerCall.updateMany": (args: unknown) =>
