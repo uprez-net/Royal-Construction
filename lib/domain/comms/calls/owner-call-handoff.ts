@@ -123,6 +123,10 @@ export const OWNER_CALL_HANDOFF_REFUSALS = {
     "That call is still going, so its handoff isn't ready. Wait for the post-call handoff Royal sends when the call ends (or until get_owner_call shows its handoff as pending), then schedule the callback with handoff_id.",
   resolvedWithoutCallback:
     "This handoff was already resolved without a callback, so none can be scheduled from it. Schedule the call without handoff_id if one is still wanted.",
+  callbackAlreadyRang:
+    "The callback already scheduled for this handoff is for an earlier revision and has rung, or may have (the carrier's answer was uncertain, so a person checks its log). If another is wanted, schedule it without handoff_id, then resolve this handoff.",
+  callbackBeingPlaced:
+    "The callback already scheduled for this handoff, for an earlier revision, is being placed right now and may still ring. Wait a minute and ask again: you will be told if it rang, and if it was held back it can then be replaced. Do not schedule a separate call yet.",
   cutOff: "A delivery to Agent Factory was cut off with no tries left.",
   notConnected:
     "Agent Factory isn't connected (HERMES_SERVER_MCP_URL and HERMES_SERVER_MCP_TOKEN), so the handoff couldn't be passed on. It stays outstanding for Agent Factory to pick up with list_owner_call_handoffs.",
@@ -388,6 +392,16 @@ export async function noteOwnerCallRequest(
     // never be seen, so it goes again as a new revision. OPEN and PENDING
     // need nothing: a delivery reads the requests after it claims.
     const reopened = REOPENABLE.includes(handoff.status);
+    // Not yet sent (PENDING), but Hermes may already have read this revision:
+    // a note it has not seen must not leave the revision it holds current. A
+    // delivery claim does not pin the revision, and reads the requests after
+    // it claims, so this does not hold the delivery up.
+    if (handoff.status === OwnerCallHandoffStatus.PENDING) {
+      await tx.ownerCallHandoff.update({
+        data: { revision: { increment: 1 } },
+        where: { id: handoffId },
+      });
+    }
     if (reopened) {
       await tx.ownerCallHandoff.update({
         data: reopenData(
@@ -694,7 +708,7 @@ function miliPromised(transcript: string | null | undefined): boolean {
     .split(/\r?\n/)
     .filter((line) => line.startsWith(`${VOICE_AGENT_NAME}:`))
     .some((line) =>
-      /(?<![\'"“‘])\b(?:i(?:'ll| will| can)|we(?:'ll| will)|(?:agent factory|hermes|the team) will)\b(?:\s+\w+){0,3}?\s+(?:pass|call|ring|get back|let\b[^.\n]{0,25}\bknow|follow up|arrange|organi[sz]e|have\b[^.\n]{0,25}\b(?:call|ring|get back))/i.test(
+      /(?<![\'"“‘])\b(?:i(?:'ll| will| can)|we(?:'ll| will)|(?:agent factory|hermes|the team) will)\b(?:\s+(?!(?:not|never|unable|no)\b)\w+){0,6}?\s+(?:pass|call|ring|get back|let\b[^.\n]{0,25}\bknow|follow up|arrange|organi[sz]e|have\b[^.\n]{0,25}\b(?:call|ring|get back))/i.test(
         line,
       ),
     );
@@ -1014,31 +1028,86 @@ export async function resolveOwnerCallHandoff(
   return toSummary(after);
 }
 
+type CallbackCheck =
+  /** The callback already scheduled answers this request. */
+  | { readonly kind: "existing"; readonly id: string }
+  /** No callback yet, and none may be refused for. */
+  | { readonly kind: "free" }
+  /** A callback for an older revision that has not rung: replace it. */
+  | { readonly kind: "replace"; readonly id: string };
+
 async function callbackCheck(
   db: DomainDb,
   handoffId: string,
   expectedRevision?: number | null,
-): Promise<{ readonly existingCallbackId: string | null }> {
+): Promise<CallbackCheck> {
   const row = await db.ownerCallHandoff.findUnique({
     select: {
-      callback: { select: { id: true } },
+      callback: {
+        select: { fromHandoffRevision: true, id: true, status: true },
+      },
       revision: true,
       status: true,
     },
     where: { id: handoffId },
   });
   if (!row) throw new DomainNotFoundError("That handoff was not found.");
-  // One callback per handoff: a delivery Hermes received twice still rings
-  // once, so the callback already scheduled is the answer.
-  if (row.callback) return { existingCallbackId: row.callback.id };
-  // A turn that read revision 0 must not schedule against revision 1.
-  if (
-    expectedRevision !== undefined
-    && expectedRevision !== null
-    && row.revision !== expectedRevision
-  ) {
+  const expected = expectedRevision ?? undefined;
+  const callback = row.callback;
+  if (callback) {
+    const scheduledFor = callback.fromHandoffRevision ?? undefined;
+    // One callback per handoff: a delivery Hermes received twice still rings
+    // once, so the callback already scheduled is the answer. So is it when no
+    // revision was presented, or for a callback scheduled before the revision
+    // was kept.
+    if (
+      expected === undefined
+      || scheduledFor === undefined
+      || scheduledFor === expected
+    ) {
+      return { id: callback.id, kind: "existing" };
+    }
+    // Presenting a revision other than the handoff's current one: stale turn.
+    if (row.revision !== expected) {
+      throw new DomainTransitionError(
+        staleRevisionRefusal(row.revision, expected),
+      );
+    }
+    // The handoff was reopened (the owner changed or added a request) after
+    // this callback was booked for it. A handoff already closed without a
+    // callback, or still on the call, is not given one by replacing it.
+    if (row.status === OwnerCallHandoffStatus.OPEN) {
+      throw new DomainTransitionError(OWNER_CALL_HANDOFF_REFUSALS.stillOnCall);
+    }
+    if (row.status === OwnerCallHandoffStatus.RESOLVED) {
+      throw new DomainTransitionError(
+        OWNER_CALL_HANDOFF_REFUSALS.resolvedWithoutCallback,
+      );
+    }
+    // One that has not rung (still scheduled, or cancelled or failed) is
+    // replaced. One a timer is placing right now may still ring, so Hermes is
+    // told to ask again; one that has rung cannot be replaced.
+    if (callback.status === OwnerCallStatus.PLACING) {
+      throw new DomainTransitionError(
+        OWNER_CALL_HANDOFF_REFUSALS.callbackBeingPlaced,
+      );
+    }
+    // (A FAILED one still attached is one that may have rung: a failure that
+    // definitely did not ring was already unlinked, and the handoff reopened.)
+    if (
+      callback.status === OwnerCallStatus.SCHEDULED
+      || callback.status === OwnerCallStatus.CANCELED
+    ) {
+      return { id: callback.id, kind: "replace" };
+    }
     throw new DomainTransitionError(
-      staleRevisionRefusal(row.revision, expectedRevision),
+      OWNER_CALL_HANDOFF_REFUSALS.callbackAlreadyRang,
+    );
+  }
+  // A turn that read revision 0 must not schedule against revision 1.
+  if (expected !== undefined && row.revision !== expected) {
+    throw new DomainTransitionError(
+      staleRevisionRefusal(row.revision, expected),
     );
   }
   if (row.status === OwnerCallHandoffStatus.OPEN) {
@@ -1049,7 +1118,7 @@ async function callbackCheck(
       OWNER_CALL_HANDOFF_REFUSALS.resolvedWithoutCallback,
     );
   }
-  return { existingCallbackId: null };
+  return { kind: "free" };
 }
 
 /**
@@ -1057,12 +1126,13 @@ async function callbackCheck(
  * already scheduled from this handoff, or a refusal (still on the call,
  * resolved without one). The check that holds is claimHandoffForCallback.
  */
-export function handoffForCallback(
+export async function handoffForCallback(
   db: DomainDb,
   handoffId: string,
   expectedRevision?: number | null,
 ): Promise<{ readonly existingCallbackId: string | null }> {
-  return callbackCheck(db, handoffId, expectedRevision);
+  const check = await callbackCheck(db, handoffId, expectedRevision);
+  return { existingCallbackId: check.kind === "existing" ? check.id : null };
 }
 
 /**
@@ -1076,7 +1146,48 @@ export async function claimHandoffForCallback(
   expectedRevision?: number | null,
 ): Promise<{ readonly existingCallbackId: string | null }> {
   await lockHandoff(db, handoffId);
-  return callbackCheck(db, handoffId, expectedRevision);
+  const check = await callbackCheck(db, handoffId, expectedRevision);
+  if (check.kind === "replace") {
+    // Booked for an older revision and not yet rung: cancelled and unlinked in
+    // this transaction, so the callback created next is the handoff's one.
+    const cancelled = await db.ownerCall.updateMany({
+      data: {
+        canceledAt: new Date(),
+        canceledBy: "system:handoff-revision",
+        fromHandoffId: null,
+        status: OwnerCallStatus.CANCELED,
+      },
+      where: { id: check.id, status: OwnerCallStatus.SCHEDULED },
+    });
+    if (cancelled.count === 0) {
+      // Already cancelled: nothing to cancel, only to unlink.
+      const unlinked = await db.ownerCall.updateMany({
+        data: { fromHandoffId: null },
+        where: { id: check.id, status: OwnerCallStatus.CANCELED },
+      });
+      // A timer claimed it between the check and the write: it may ring.
+      if (unlinked.count === 0) {
+        throw new DomainTransitionError(
+          OWNER_CALL_HANDOFF_REFUSALS.callbackBeingPlaced,
+        );
+      }
+      return { existingCallbackId: null };
+    }
+    await recordAgentCallEvent(
+      db,
+      { ownerCallId: check.id },
+      {
+        at: new Date(),
+        detail: {
+          by: "system:handoff-revision",
+          reason:
+            "replaced: the handoff was reopened as a newer revision after this callback was booked",
+        },
+        kind: AGENT_CALL_EVENT.ownerCallCanceled,
+      },
+    );
+  }
+  return { existingCallbackId: check.kind === "existing" ? check.id : null };
 }
 
 /** The callback is scheduled: the handoff is resolved by it. In its transaction. */
@@ -1258,6 +1369,8 @@ export async function deliverOwnerCallHandoff(
     readonly assistant?: OwnerAssistantPort | null;
     /** Starts the delivery of a handoff reopened here (a callback that hit voicemail). */
     readonly startDelivery?: (handoffId: string) => Promise<void>;
+    /** Told which revision was actually sent, for the check that follows. */
+    readonly onDelivered?: (sent: { readonly revision: number }) => void;
   },
 ): Promise<DeliverOwnerCallHandoffOutcome> {
   requireAdminPrincipal(principal);
@@ -1453,7 +1566,6 @@ export async function deliverOwnerCallHandoff(
         where: {
           attempts: row.attempts,
           id: row.id,
-          revision: row.revision,
           status: row.status,
         },
       });
@@ -1485,10 +1597,14 @@ export async function deliverOwnerCallHandoff(
       lastAttemptAt: now,
       status: OwnerCallHandoffStatus.DELIVERING,
     },
+    // Not pinned to the revision: a note on a PENDING handoff bumps it, and the
+    // reread below sends whatever the revision now is.
+    // The claim observed is pinned too: a stale worker that read an old
+    // DELIVERING row cannot take over a fresh attempt's claim.
     where: {
       attempts: row.attempts,
+      claimId: row.claimId,
       id: row.id,
-      revision: row.revision,
       status: row.status,
     },
   });
@@ -1505,7 +1621,21 @@ export async function deliverOwnerCallHandoff(
   // A late note or a failed callback reopened it between the claim and this
   // read: the claim is void, so send nothing with it. A reopened handoff is
   // delivered again under its own claim.
-  if (current.revision !== row.revision) return "reopened";
+  // (A note on a PENDING handoff bumps the revision but leaves our claim intact,
+  // status DELIVERING: that one is sent, with the new request.)
+  if (
+    current.revision !== row.revision
+    && current.status !== OwnerCallHandoffStatus.DELIVERING
+  ) {
+    return "reopened";
+  }
+  // Another worker holds the claim now: it sends, not us.
+  if (
+    current.status === OwnerCallHandoffStatus.DELIVERING
+    && current.claimId !== claimId
+  ) {
+    return "skipped";
+  }
   const handoff: OwnerAssistantHandoff = {
     body: ownerCallHandoffBody(current, transcriptOf(current)),
     callId: call?.id ?? null,
@@ -1578,6 +1708,7 @@ export async function deliverOwnerCallHandoff(
   });
   // Overtaken while Hermes answered: reopened with something new to send.
   if (!kept) return "reopened";
+  ports.onDelivered?.({ revision: current.revision });
   // Hermes said it cannot go on: failed and outstanding, never retried (it
   // would only say the same), and shown to the office. A handoff it resolved
   // while answering is no longer DELIVERED, so this writes nothing for it.

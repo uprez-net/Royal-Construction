@@ -223,8 +223,29 @@ test("a request noted after the handoff went to Hermes reopens it as a new revis
       "handoff.reopened",
     ]);
   }
-  // Not yet gone: nothing to reopen.
-  for (const status of ["OPEN", "PENDING"]) {
+  // Not yet gone: nothing to reopen. A PENDING one still changes revision, so a
+  // turn that already read it cannot act as if it had seen this request.
+  {
+    const recorder = recordingDb({
+      "call.findUnique": VOICE_ROW,
+      "ownerCallHandoff.findUnique": { id: "h-1", status: "PENDING" },
+      "ownerCallHandoffRequest.count": 0,
+      "ownerCallHandoffRequest.findUnique": null,
+    });
+    const noted = await noteOwnerCallRequest(
+      AUTHORITY,
+      { callBack: true, request: "Call me back", source: "owner" },
+      recorder.transactionalDb,
+    );
+    assert.equal(noted.reopened, false);
+    const [bump] = ops(recorder.calls, "ownerCallHandoff.update");
+    assert.deepEqual(
+      (bump.args as { data: unknown }).data,
+      { revision: { increment: 1 } },
+      "only the revision moves; status, attempts and claim are left alone",
+    );
+  }
+  for (const status of ["OPEN"]) {
     const recorder = recordingDb({
       "call.findUnique": VOICE_ROW,
       "ownerCallHandoff.findUnique": { id: "h-1", status },
@@ -786,6 +807,76 @@ function summary(id: string, overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+test("the callback: it is saved with the revision of the handoff it was scheduled for", async () => {
+  const recorder = recordingDb({
+    "agentCallEvent.create": {},
+    "commsOwnerLine.findUnique": OWNER_LINE,
+    "ownerCall.create": { id: "oc-2" },
+    "ownerCall.findUnique": (args: unknown) => {
+      const where = (args as { where: Record<string, unknown> }).where;
+      return where.idempotencyKey ? null : summary("oc-2");
+    },
+    "ownerCallHandoff.findUnique": {
+      callback: null,
+      revision: 2,
+      status: "DELIVERED",
+    },
+    "ownerCallHandoff.update": { ownerCallId: "oc-1" },
+    "agentCallEvent.count": 0,
+  });
+  await requestOwnerCall(
+    HERMES,
+    { ...CALLBACK_INPUT, handoffRevision: 2 },
+    recorder.transactionalDb,
+  );
+  const created = ops(recorder.calls, "ownerCall.create")[0]?.args as {
+    data: Record<string, unknown>;
+  };
+  assert.equal(created.data.fromHandoffRevision, 2);
+});
+
+test("the callback: a key that already booked an older revision is refused for the newer one, and the same revision still replays", async () => {
+  const base = {
+    "agentCallEvent.create": {},
+    "commsOwnerLine.findUnique": OWNER_LINE,
+    "ownerCallHandoff.findUnique": {
+      callback: null,
+      revision: 1,
+      status: "DELIVERED",
+    },
+    "ownerCallHandoff.update": { ownerCallId: "oc-1" },
+    "agentCallEvent.count": 0,
+  };
+  const keyed = (revision: number) =>
+    recordingDb({
+      ...base,
+      "ownerCall.findUnique": (args: unknown) => {
+        const where = (args as { where: Record<string, unknown> }).where;
+        return where.idempotencyKey
+          ? {
+              fromHandoffId: "h-1",
+              fromHandoffRevision: revision,
+              id: "oc-old",
+            }
+          : summary("oc-old");
+      },
+    });
+  await assert.rejects(
+    requestOwnerCall(
+      HERMES,
+      { ...CALLBACK_INPUT, handoffRevision: 1 },
+      keyed(0).transactionalDb,
+    ),
+    (error: Error) => /earlier revision of this handoff/.test(error.message),
+  );
+  const result = await requestOwnerCall(
+    HERMES,
+    { ...CALLBACK_INPUT, handoffRevision: 1 },
+    keyed(1).transactionalDb,
+  );
+  assert.equal(result.alreadyRequested, true);
+});
 
 test("the callback: scheduled with the handoff's id it resolves the handoff in the same transaction", async () => {
   const recorder = recordingDb({
