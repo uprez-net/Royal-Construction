@@ -414,3 +414,107 @@ test("delivery: when the live and recorded transcripts differ, Hermes gets both,
   assert.match(body, /Live transcript \(what the voice model heard/);
   assert.match(body, /tomorrow or let's say five/);
 });
+
+// ── Voicemail (#645) ────────────────────────────────────────────────────
+
+const VOICEMAIL_RECORDING = [
+  {
+    transcript:
+      "Caller: The person you are trying to reach is not available. At the tone, please record your message.\nMili: Hi Raj, it's Mili. Have you got a minute?",
+  },
+];
+
+function callbackRow(overrides: Record<string, unknown> = {}) {
+  const base = row(
+    { requests: [], ...overrides },
+    {
+      agentTranscript: "Mili: Hi Raj, it's Mili. Have you got a minute?",
+      durationSeconds: 116,
+      recordings: VOICEMAIL_RECORDING,
+    },
+  );
+  (base.ownerCall as { fromHandoffId?: string | null }).fromHandoffId = "h-src";
+  return base;
+}
+
+test("voicemail: a callback it answered reopens the handoff it came from, closes its own, and starts the delivery", async () => {
+  const sent: string[] = [];
+  const started: string[] = [];
+  const recorder = recordingDb({
+    "ownerCall.findUnique": { fromHandoffId: "h-src" },
+    "ownerCallHandoff.findUnique": callbackRow(),
+    "ownerCallHandoff.update": { ownerCallId: "oc-src" },
+    "ownerCallHandoff.updateMany": { count: 1 },
+  });
+  const outcome = await deliverOwnerCallHandoff(
+    WORKFLOW,
+    { handoffId: "h-1", now: NOW },
+    recorder.transactionalDb,
+    {
+      assistant: assistant("never sent", sent),
+      startDelivery: async (id) => {
+        started.push(id);
+      },
+    },
+  );
+  assert.equal(outcome, "voicemail");
+  assert.deepEqual(sent, []);
+  assert.deepEqual(started, ["h-src"]);
+  const [closed] = writes(recorder.calls);
+  assert.equal(closed.data.status, "RESOLVED");
+  assert.match(String(closed.data.resolution), /voicemail/i);
+  // The callback is unlinked, and the source is PENDING again as a new revision.
+  const [unlink] = ops(recorder.calls, "ownerCall.update");
+  assert.deepEqual((unlink.args as { data: unknown }).data, {
+    fromHandoffId: null,
+  });
+  const [reopen] = ops(recorder.calls, "ownerCallHandoff.update");
+  const reopened = reopen.args as {
+    data: Record<string, unknown>;
+    where: Record<string, unknown>;
+  };
+  assert.equal(reopened.where.id, "h-src");
+  assert.equal(reopened.data.status, "PENDING");
+  assert.deepEqual(reopened.data.revision, { increment: 1 });
+  assert.match(String(reopened.data.lastError), /answered by voicemail/);
+  assert.deepEqual(eventKinds(recorder.calls), [
+    "handoff.reopened",
+    "handoff.resolved",
+  ]);
+});
+
+test("voicemail: a first briefing that hit it is still sent, with a note, so Hermes can try again", async () => {
+  const sent: string[] = [];
+  const first = callbackRow();
+  (first.ownerCall as { fromHandoffId?: string | null }).fromHandoffId = null;
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": first,
+    "ownerCallHandoff.updateMany": { count: 1 },
+  });
+  assert.equal(await deliver(recorder, assistant("ok", sent)), "delivered");
+  assert.match(sent[0], /answered by voicemail/);
+  assert.match(sent[0], /Decide whether to try again/);
+});
+
+test("voicemail: Mili's own words never count, and a callback a person answered is delivered as usual", async () => {
+  const sent: string[] = [];
+  const spoken = callbackRow();
+  const call = spoken.ownerCall.call as {
+    agentTranscript: string;
+    recordings: { transcript: string }[];
+  };
+  call.agentTranscript =
+    "Mili: Hi Raj. Sorry, I know you may not be available.\nCaller: Yeah, I've got a minute.";
+  call.recordings = [
+    {
+      transcript:
+        "Mili: Hi Raj. Sorry, I know you may not be available.\nCaller: Yeah, I've got a minute.",
+    },
+  ];
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": spoken,
+    "ownerCallHandoff.updateMany": { count: 1 },
+  });
+  assert.equal(await deliver(recorder, assistant("ok", sent)), "delivered");
+  assert.doesNotMatch(sent[0], /answered by voicemail/);
+});

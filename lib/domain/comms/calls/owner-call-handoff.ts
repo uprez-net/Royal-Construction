@@ -94,6 +94,8 @@ const EMPTY_CALL_MAX_SECONDS = 45;
 
 const NOTHING_ASKED_RESOLUTION =
   "Nothing was asked: the owner said nothing on this short call, so nothing was sent.";
+const VOICEMAIL_RESOLUTION =
+  "Answered by voicemail, so the owner did not hear this callback; the handoff it came from was reopened.";
 const UNACTED_REOPEN_NOTE =
   "You replied to this handoff but did not schedule a callback or resolve it. Do one of the two now, and end your reply with the RESULT line.";
 const UNACTED_FAILED_NOTE =
@@ -538,6 +540,7 @@ const HANDOFF_SELECT = {
         },
       },
       category: true,
+      fromHandoffId: true,
       id: true,
       reference: true,
       subject: true,
@@ -640,6 +643,40 @@ function ownerSaidNothing(row: {
     // a reply the live transcript lost shows up there as a caller line.
     && !(recorded && callerSpoke(recorded))
   );
+}
+
+/** What a carrier's voicemail says first, and a person unavailable says. */
+const VOICEMAIL_PHRASES =
+  /voice ?mail|mailbox|leave (?:a|your) message|record your message|(?:at|after) the (?:tone|beep)|not available|unavailable|trying to reach/i;
+
+/**
+ * Did a machine answer? A voicemail greeting is one of the first two lines
+ * from anyone but Mili, in the recording's transcript (the live one often
+ * misses it altogether, #643) or the live one. The carrier calls such a call
+ * answered, so nothing else says the owner never heard it (#645).
+ */
+function answeredByVoicemail(row: {
+  readonly ownerCall: {
+    readonly call: {
+      readonly agentTranscript: string | null;
+      readonly recordings: readonly { readonly transcript: string | null }[];
+    } | null;
+  };
+}): boolean {
+  const callerLines = new RegExp(
+    `^(?!${VOICE_AGENT_NAME}:)[^\\n:]{1,40}:\\s*\\S`,
+  );
+  for (const text of [
+    recordedTranscriptOf(row),
+    row.ownerCall.call?.agentTranscript,
+  ]) {
+    const lines = (text ?? "")
+      .split(/\r?\n/)
+      .filter((line) => callerLines.test(line))
+      .slice(0, 2);
+    if (lines.some((line) => VOICEMAIL_PHRASES.test(line))) return true;
+  }
+  return false;
 }
 
 /** The last RESULT marker in Hermes's reply, if it gave one. */
@@ -979,6 +1016,11 @@ export function ownerCallHandoffBody(
       ? `The owner ${answered(call) ? "picked up" : "didn't pick up"}. Call status: ${call.status.toLowerCase()}${call.durationSeconds !== null ? `, ${call.durationSeconds} seconds` : ""}.`
       : "The call never rang.",
     ...(row.lastError ? [`Note: ${row.lastError}`] : []),
+    ...(call && answered(call) && answeredByVoicemail(row as HandoffRow)
+      ? [
+          "Note: the call was answered by voicemail (a recorded greeting), so the owner did not hear it. Decide whether to try again.",
+        ]
+      : []),
     ...(call
     && answered(call)
     && (call.durationSeconds ?? 0) > EMPTY_CALL_MAX_SECONDS
@@ -1016,7 +1058,9 @@ export type DeliverOwnerCallHandoffOutcome =
   /** The owner asked for nothing on a short call: closed, nothing sent. */
   | "nothing_asked"
   /** Hermes took it but says it can't go on without the owner, or can't do it. */
-  | "needs_attention";
+  | "needs_attention"
+  /** A callback the owner's voicemail answered: the handoff it came from reopened. */
+  | "voicemail";
 
 /**
  * Pass one handoff to Hermes. The workflow's step, and the backstop's.
@@ -1032,7 +1076,11 @@ export async function deliverOwnerCallHandoff(
     readonly now?: Date;
   },
   db: TransactionalDomainDb,
-  ports: { readonly assistant?: OwnerAssistantPort | null },
+  ports: {
+    readonly assistant?: OwnerAssistantPort | null;
+    /** Starts the delivery of a handoff reopened here (a callback that hit voicemail). */
+    readonly startDelivery?: (handoffId: string) => Promise<void>;
+  },
 ): Promise<DeliverOwnerCallHandoffOutcome> {
   requireAdminPrincipal(principal);
   const L = OWNER_CALL_HANDOFF_LIMITS;
@@ -1077,6 +1125,59 @@ export async function deliverOwnerCallHandoff(
     return "waiting";
   }
 
+  // A callback the carrier's voicemail answered did not reach the owner: the
+  // handoff it came from goes back to Hermes, as for a missed callback, and
+  // this call's own handoff is closed with a pointer to it. A first briefing
+  // that hit voicemail still goes (with a note), so Hermes can try again.
+  if (
+    call
+    && answered(call)
+    && row.ownerCall.fromHandoffId
+    && row.requests.length === 0
+    && answeredByVoicemail(row)
+  ) {
+    const reopened = await db.$transaction(async (tx) => {
+      const closed = await tx.ownerCallHandoff.updateMany({
+        data: {
+          resolution: VOICEMAIL_RESOLUTION,
+          resolvedAt: now,
+          status: OwnerCallHandoffStatus.RESOLVED,
+        },
+        where: {
+          id: row.id,
+          revision: row.revision,
+          status: {
+            in: [
+              OwnerCallHandoffStatus.PENDING,
+              OwnerCallHandoffStatus.FAILED,
+              ...(staleDelivery ? [OwnerCallHandoffStatus.DELIVERING] : []),
+            ],
+          },
+        },
+      });
+      if (closed.count === 0) return undefined;
+      const sourceId = await reopenHandoffForFailedCallback(tx, {
+        now,
+        ownerCallId: row.ownerCall.id,
+        reason: "it was answered by voicemail, so the owner did not hear it",
+      });
+      await recordAgentCallEvent(
+        tx,
+        { ownerCallId: row.ownerCall.id },
+        {
+          at: now,
+          detail: { reopened: sourceId, resolution: VOICEMAIL_RESOLUTION },
+          kind: AGENT_CALL_EVENT.handoffResolved,
+        },
+      );
+      return sourceId;
+    });
+    if (reopened === undefined) return "skipped";
+    // A reopened handoff is PENDING: start its delivery now rather than
+    // leaving it for the hourly backstop.
+    if (reopened) await ports.startDelivery?.(reopened).catch(() => undefined);
+    return "voicemail";
+  }
   if (
     row.revision === 0
     && call

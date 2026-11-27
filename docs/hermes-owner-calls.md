@@ -272,6 +272,20 @@ When an owner call ends, Royal passes Hermes what it left
      one but Mili: a recording alone, which may have no speaker labels, never
      closes a call, and a voicemail greeting in the recording counts as a
      caller line. A reopened revision is always sent.
+   - **Voicemail (#645).** The carrier calls a call that voicemail picked up
+     "answered", so nothing else says the owner never heard it. If one of the
+     first two lines from anyone but Mili, in the recording's transcript (or
+     the live one), is a voicemail greeting ("not available", "leave a
+     message", "at the tone", "voicemail", "trying to reach"):
+     - **a callback** reopens the handoff it came from (a new revision, "it
+       was answered by voicemail, so the owner did not hear it"), starts its
+       delivery at once, and closes the callback's own handoff with a
+       pointer, exactly as for a missed callback;
+     - **a first briefing** is still sent to Hermes, with a note that it hit
+       voicemail, so Hermes can decide whether to try again.
+     Not done yet: hanging up as soon as a machine answers (Telnyx answering
+     machine detection on the dial). Today Mili still talks to the machine
+     until the call ends, and the check above runs afterwards.
    - **Two transcripts.** The voice model's live transcript can drop a short
      reply or mishear one ("10 minutes" came out as "tomorrow" on a real
      call), while the recording's speech-to-text got both right. When both

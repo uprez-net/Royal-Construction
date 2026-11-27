@@ -35,6 +35,8 @@ import prisma from "@/lib/prisma";
  *                     FAILED and reported, so a dropped request is never quiet
  *   needs_attention   Hermes ended with RESULT: needs_owner or cannot: FAILED
  *                     and reported at once
+ *   voicemail         a callback the owner's voicemail answered: the handoff it
+ *                     came from is reopened and delivered, this one closed
  */
 
 async function deliver(
@@ -48,7 +50,15 @@ async function deliver(
     systemPrincipal("workflow:owner-call-handoff"),
     { handoffId, waitForTranscript },
     prisma,
-    { assistant: hermesAssistant(readHermesConfig()) },
+    {
+      assistant: hermesAssistant(readHermesConfig()),
+      // Not imported at the top: that module imports this workflow.
+      startDelivery: async (id) => {
+        const { startHandoffDeliveries } =
+          await import("@/lib/comms/owner-call-handoffs");
+        await startHandoffDeliveries([id]);
+      },
+    },
   );
   if (outcome === "needs_attention") {
     console.error(
