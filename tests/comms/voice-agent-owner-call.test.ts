@@ -82,7 +82,7 @@ test("a briefing call starts Mili with the owner call's opening, a no-transfer d
   // She offers the owner the choice before asking Hermes anything.
   assert.match(
     setup.instructions,
-    /Would you like to hold, or shall I have Hermes call you back/,
+    /Would you like to hold, or shall I have Agent Factory call you back/,
   );
   assert.ok(setup.lookup);
   const answer = await setup.lookup({

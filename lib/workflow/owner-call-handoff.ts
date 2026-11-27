@@ -1,7 +1,10 @@
 import { reportWorkflowError } from "@/lib/workflow/report-failure";
 import { sleep } from "workflow";
 
-import { deliverOwnerCallHandoff } from "@/lib/domain/comms/calls/owner-call-handoff";
+import {
+  deliverOwnerCallHandoff,
+  verifyHandoffActed,
+} from "@/lib/domain/comms/calls/owner-call-handoff";
 import { systemPrincipal } from "@/lib/domain/principal";
 import { hermesAssistant } from "@/lib/hermes/assistant";
 import { readHermesConfig } from "@/lib/hermes/config";
@@ -25,6 +28,13 @@ import prisma from "@/lib/prisma";
  *                     through list_owner_call_handoffs
  *   reopened          overtaken while Hermes answered (a request noted late,
  *                     a callback that didn't ring): sent again straight away
+ *   delivered         only means Hermes answered 2xx. Ten minutes later the
+ *                     handoff is checked: still unresolved, it is reopened
+ *                     once (a new revision saying what was missed) and sent
+ *                     again; ten minutes after that, still unresolved, it is
+ *                     FAILED and reported, so a dropped request is never quiet
+ *   needs_attention   Hermes ended with RESULT: needs_owner or cannot: FAILED
+ *                     and reported at once
  */
 
 async function deliver(
@@ -34,16 +44,38 @@ async function deliver(
   "use step";
   // Built inside the step: nothing from the domain at module level, so the
   // workflow sandbox never loads it.
-  return deliverOwnerCallHandoff(
+  const outcome = await deliverOwnerCallHandoff(
     systemPrincipal("workflow:owner-call-handoff"),
     { handoffId, waitForTranscript },
     prisma,
     { assistant: hermesAssistant(readHermesConfig()) },
   );
+  if (outcome === "needs_attention") {
+    console.error(
+      `[owner-calls] handoff ${handoffId}: Hermes can't go on without the owner, or can't do it; it needs a person (Admin → Agent calls)`,
+    );
+  }
+  return outcome;
 }
 // Never retried by the runtime: the domain records every try, and Hermes
 // receiving one twice is what the claim is there to avoid.
 deliver.maxRetries = 0;
+
+async function verify(handoffId: string, final: boolean): Promise<string> {
+  "use step";
+  const verdict = await verifyHandoffActed(
+    systemPrincipal("workflow:owner-call-handoff"),
+    { final, handoffId },
+    prisma,
+  );
+  if (verdict === "failed") {
+    console.error(
+      `[owner-calls] handoff ${handoffId} was taken by Hermes but never acted on; it needs a person (Admin → Agent calls)`,
+    );
+  }
+  return verdict;
+}
+verify.maxRetries = 0;
 
 export const deliverOwnerCallHandoffRun = async (
   handoffId: string,
@@ -81,6 +113,15 @@ const runDeliverOwnerCallHandoff = async (
     if (outcome !== "failed" || retries >= RETRY_AFTER.length) break;
     await sleep(RETRY_AFTER[retries]);
     retries += 1;
+    outcome = await deliver(handoffId, false);
+  }
+  // Hermes took it. That is not the same as having done it: check, and give
+  // it one more go before calling it dropped.
+  for (let check = 0; outcome === "delivered" && check < 2; check += 1) {
+    await sleep("10m");
+    const verdict = await verify(handoffId, check === 1);
+    if (verdict === "failed") return "unacted";
+    if (verdict !== "reopened") break;
     outcome = await deliver(handoffId, false);
   }
   return outcome;

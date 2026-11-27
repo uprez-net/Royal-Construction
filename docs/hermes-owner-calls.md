@@ -235,8 +235,8 @@ When an owner call ends, Royal passes Hermes what it left
    owner line, the carrier refused, or it rang out unanswered) reopens its
    handoff and unlinks it, so Hermes can schedule another. A callback whose
    carrier answer was uncertain may have rung, so it stays linked until
-   someone checks the carrier's log. The admin hub shows *"N not passed to
-   Hermes"*. Agent calls lists those calls at the top, however old they
+   someone checks the carrier's log. The admin hub shows *"N need attention"*
+   (not passed on, or taken but never acted on). Agent calls lists those calls at the top, however old they
    are, and each call there shows its handoff.
 5. **Reopened, not replayed.** A handoff is reopened (back to `PENDING`, its
    `revision` bumped) when its callback didn't reach the owner, or when a
@@ -246,6 +246,41 @@ When an owner call ends, Royal passes Hermes what it left
    not to redo it. A higher revision is new, and Hermes is told to act on it.
    The same request noted again with a different callback choice or time
    keeps the latest. Notes on a handoff are admitted one at a time.
+6. **`DELIVERED` is not "done".** A 2xx reply only means Hermes answered, so
+   Royal checks what Hermes actually did.
+   - **The RESULT line.** Hermes ends its reply with `RESULT: scheduled`,
+     `RESULT: resolved`, `RESULT: needs_owner` or `RESULT: cannot` (the last
+     marker counts). `needs_owner` or `cannot` fails the handoff at once with
+     no automatic retry, since it would only say the same, and it is reported.
+     A reply with no marker is judged by the check below.
+   - **The check.** Ten minutes after delivery the workflow looks again. Still
+     unresolved, it reopens the handoff once (a new revision saying "you
+     replied but did not schedule a callback or resolve it") and delivers it
+     again. Ten minutes after that, still unresolved, it is `FAILED`, with no
+     automatic retry, and reported. The hourly backstop fails any `DELIVERED`
+     handoff 45 minutes old and unresolved, for a run that was lost. Every one
+     of these shows under Admin → Agent calls, and its `console.error` reaches
+     the office inbox.
+   - **A call where the owner said nothing.** An answered call of 45 seconds
+     or less with no noted request and no line from anyone but Mili in the
+     transcript is closed (`RESOLVED`, "nothing was asked") and Hermes is not
+     asked. A longer call like that is probably a lost transcript, not a
+     silent owner, so it is still sent, with a note telling Hermes not to
+     guess and to end with `RESULT: needs_owner`, which fails the handoff and
+     reports it so the office asks the owner. Only Mili's own labelled live
+     transcript decides this: a recording's speech-to-text may have no speaker
+     labels, so it never closes a call. A reopened revision is always sent.
+
+## What the owner hears
+
+The owner never hears the name Hermes. Everything Mili is given to say, and
+everything the call desk compares against what she said, calls the assistant
+"Agent Factory" (`lib/domain/comms/calls/voice-agent-owner-call.ts`;
+`tests/comms/owner-call-spoken-name.test.ts` fails if "Hermes" returns to it).
+Tool names (`ask_hermes`, `hand_to_hermes`) stay, since they are never spoken.
+Hermes is told not to write its own name in the subject, agenda or context,
+and so is Eve's `schedule_owner_call` tool description. If the owner gives two
+times ("tomorrow, or in five minutes"), Mili asks which they want.
 
 ## The event log
 

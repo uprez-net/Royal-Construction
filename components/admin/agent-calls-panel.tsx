@@ -84,12 +84,12 @@ const HANDOFF: Record<
   OwnerCallHandoffStatusDto,
   { label: string; tone: Tone } | null
 > = {
-  DELIVERED: { label: "With Hermes", tone: "info" },
-  DELIVERING: { label: "Passing to Hermes", tone: "info" },
-  FAILED: { label: "Hermes not reached", tone: "danger" },
+  DELIVERED: { label: "With Agent Factory", tone: "info" },
+  DELIVERING: { label: "Passing on", tone: "info" },
+  FAILED: { label: "Needs attention", tone: "danger" },
   OPEN: null,
-  PENDING: { label: "For Hermes", tone: "warning" },
-  RESOLVED: { label: "Hermes dealt with it", tone: "success" },
+  PENDING: { label: "For Agent Factory", tone: "warning" },
+  RESOLVED: { label: "Dealt with", tone: "success" },
 };
 
 function message(error: unknown, fallback: string): string {
@@ -549,7 +549,7 @@ export function AgentCallsPanel() {
         <>
           {lists.handoffFailed.length ? (
             <Section
-              title="Not passed to Hermes"
+              title="Needs attention"
               icon={
                 <AlertTriangle
                   className="size-4 text-destructive"

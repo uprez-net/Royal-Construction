@@ -165,11 +165,12 @@ function agentCallsStatus(): Promise<AdminHubStatus | null> {
       countOwnerCalls(principal, prisma),
       countOwnerCallHandoffs(principal, prisma),
     ]);
-    // A request the owner made that never reached Hermes outranks the rest:
+    // A request the owner made that was never passed on, or never acted on,
+    // outranks the rest:
     // nobody else would notice it.
     if (handoffs.failed > 0) {
       return {
-        label: `${handoffs.failed} not passed to Hermes`,
+        label: `${handoffs.failed} need${handoffs.failed === 1 ? "s" : ""} attention`,
         tone: "warning",
       };
     }
