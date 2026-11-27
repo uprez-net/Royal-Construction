@@ -24,7 +24,7 @@ import {
   type OwnerCallHandoffSummary,
 } from "@/lib/domain/comms/calls/owner-call-handoff";
 import { OWNER_CALL_CATEGORIES } from "@/lib/domain/comms/calls/voice-agent-owner-call";
-import { isDomainError } from "@/lib/domain/errors";
+import { DomainValidationError, isDomainError } from "@/lib/domain/errors";
 import { systemPrincipal } from "@/lib/domain/principal";
 
 // The owner-call tools for Hermes, the owner's assistant on its own server.
@@ -167,6 +167,14 @@ async function refusalsAsResults(
   }
 }
 
+const handoffRevision = z
+  .number()
+  .int()
+  .min(0)
+  .describe(
+    "The revision from the post-call handoff you are acting on. If Royal says it was reopened as a newer revision, read it again and act on that one.",
+  );
+
 export const scheduleOwnerCallInput = z.object({
   idempotency_key: z
     .string()
@@ -221,7 +229,12 @@ export const scheduleOwnerCallInput = z.object({
     .max(100)
     .optional()
     .describe(
-      "When this is the callback for a post-call handoff, its handoff_id, once the call it came from has ended. Scheduling it resolves the handoff; one callback per handoff, so asking again returns the one already scheduled. Use a new idempotency_key for each callback, including a replacement for one that didn't reach the owner.",
+      "When this is the callback for a post-call handoff, its handoff_id, once the call it came from has ended. Scheduling it resolves the handoff; one callback per handoff, so asking again returns the one already scheduled. Use a new idempotency_key for each callback, including a replacement for one that didn't reach the owner. Pass handoff_revision with it.",
+    ),
+  handoff_revision: handoffRevision
+    .optional()
+    .describe(
+      "Required with handoff_id: the revision from the post-call handoff you are acting on. If Royal says it was reopened as a newer revision, read it again and act on that one.",
     ),
 });
 
@@ -234,6 +247,7 @@ export const handoffIdInput = z.object({
 });
 
 export const resolveHandoffInput = handoffIdInput.extend({
+  handoff_revision: handoffRevision,
   resolution: z
     .string()
     .trim()
@@ -260,6 +274,12 @@ export async function scheduleOwnerCall(
     ctx,
     execute: () =>
       refusalsAsResults(async () => {
+        if (input.handoff_id && input.handoff_revision === undefined) {
+          throw new DomainValidationError(
+            "Pass handoff_revision (the revision from the post-call handoff) with handoff_id.",
+            "handoff_revision",
+          );
+        }
         const runtime = commsRuntimeFromEnv();
         const result = await requestOwnerCall(
           HERMES_PRINCIPAL,
@@ -270,6 +290,7 @@ export async function scheduleOwnerCall(
             context: input.context,
             eventAt: input.event_at ? new Date(input.event_at) : null,
             handoffId: input.handoff_id ?? null,
+            handoffRevision: input.handoff_revision ?? null,
             idempotencyKey: input.idempotency_key,
             reference: input.reference ?? null,
             subject: input.subject,
@@ -418,7 +439,11 @@ export async function resolveHandoff(
         handoffForHermes(
           await resolveOwnerCallHandoff(
             HERMES_PRINCIPAL,
-            { handoffId: input.handoff_id, resolution: input.resolution },
+            {
+              expectedRevision: input.handoff_revision,
+              handoffId: input.handoff_id,
+              resolution: input.resolution,
+            },
             agentDb,
           ),
         ),

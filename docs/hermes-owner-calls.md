@@ -325,6 +325,28 @@ When an owner call ends, Royal passes Hermes what it left
      workflow waits 45 seconds after hangup before the first send so the
      recording's transcript has landed.
 
+## Acting on the right revision, and what a call left unrecorded
+
+- **Revision-bound tools (#646).** A handoff reopened as a newer revision while
+  Hermes was still working on an older delivery must not be closed by that
+  older turn. Each delivery names its revision, and `schedule_owner_call` (with
+  `handoff_id`) and `resolve_owner_call_handoff` take `handoff_revision`. Royal
+  refuses a stale one ("reopened as revision N, read it again with
+  `get_owner_call_handoff`") instead of closing or scheduling against it. The
+  resolve write is pinned to the revision, so a reopening between the check and
+  the write also refuses. `resolve_owner_call_handoff` requires it;
+  `schedule_owner_call` requires it when `handoff_id` is given. A callback
+  already scheduled for the handoff is still returned as before.
+- **Newest request first (#642).** The delivery lists a handoff's requests
+  newest first and says that, if they conflict (for example two times for the
+  same callback), the newest is what the owner settled on. Requests are not
+  merged at write time: two different callbacks noted close together are both
+  real.
+- **A promise with nothing recorded (#640).** If Mili told the owner she would
+  pass something on or call back but no request was noted (the call desk did not
+  fire), the delivery says so and tells Hermes to read the transcript and act.
+  Such a call is never closed as "nothing asked".
+
 ## What the owner hears
 
 The owner never hears the name Hermes. Everything Mili is given to say, and
