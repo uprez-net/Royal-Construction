@@ -303,17 +303,20 @@ When an owner call ends, Royal passes Hermes what it left
      note takes and re-counts the requests first; one saved in the meantime wins
      and the handoff is delivered as it is. A recording transcript that is still
      pending is waited for (within the same 5 minutes) even when a live one
-     exists, and a recording with no speaker labels at all cannot show who spoke,
-     so it never closes a call. A delivery whose claim a reopening voided before
-     the send sends nothing, and the check after delivery leaves a delivery
-     newer than 8 minutes alone.
+     exists, a recording with any unlabelled line cannot show who spoke, and one still
+     being transcribed means the silence is not known yet, so neither closes a
+     call. A handoff that already has a saved request is not held back for a
+     slow recording. A delivery whose claim a reopening voided before
+     the send sends nothing, and the check after delivery is bound to the revision it
+     was scheduled for and leaves a delivery newer than 8 minutes alone.
    - **Voicemail evidence is strict.** "Voicemail", "mailbox", "leave a message",
      "record your message", "at/after the tone/beep" and "trying to reach" count;
      "not available" alone does not, since a person says it too.
    - **No endless callbacks.** After 4 replacement callbacks for one handoff
-     (voicemail, no answer or silence each time) the source handoff is `FAILED`
-     with a note and is not reopened again.
-   - **The RESULT line** counts only at the very end of the reply, so a marker
+     (voicemail, no answer or silence each time; counted from the callbacks that
+     missed, not the handoff's revision) the source handoff is `FAILED` with a
+     note and is not reopened again.
+   - **The RESULT line** counts only as the reply's last line (markdown stripped), so a marker
      quoted mid-sentence is not a verdict.
    - **Two transcripts.** The voice model's live transcript can drop a short
      reply or mishear one ("10 minutes" came out as "tomorrow" on a real

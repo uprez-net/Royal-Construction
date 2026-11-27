@@ -3,6 +3,7 @@ import { sleep } from "workflow";
 
 import {
   deliverOwnerCallHandoff,
+  readOwnerCallHandoff,
   verifyHandoffActed,
 } from "@/lib/domain/comms/calls/owner-call-handoff";
 import { systemPrincipal } from "@/lib/domain/principal";
@@ -71,11 +72,28 @@ async function deliver(
 // receiving one twice is what the claim is there to avoid.
 deliver.maxRetries = 0;
 
-async function verify(handoffId: string, final: boolean): Promise<string> {
+/** The revision just delivered, so its check cannot touch a newer one. */
+async function revisionOf(handoffId: string): Promise<number> {
+  "use step";
+  return (
+    await readOwnerCallHandoff(
+      systemPrincipal("workflow:owner-call-handoff"),
+      { handoffId },
+      prisma,
+    )
+  ).revision;
+}
+revisionOf.maxRetries = 0;
+
+async function verify(
+  handoffId: string,
+  final: boolean,
+  expectedRevision: number,
+): Promise<string> {
   "use step";
   const verdict = await verifyHandoffActed(
     systemPrincipal("workflow:owner-call-handoff"),
-    { final, handoffId },
+    { expectedRevision, final, handoffId },
     prisma,
   );
   if (verdict === "failed") {
@@ -129,12 +147,16 @@ const runDeliverOwnerCallHandoff = async (
   }
   // Hermes took it. That is not the same as having done it: check, and give
   // it one more go before calling it dropped.
+  let expectedRevision =
+    outcome === "delivered" ? await revisionOf(handoffId) : 0;
   for (let check = 0; outcome === "delivered" && check < 2; check += 1) {
     await sleep("10m");
-    const verdict = await verify(handoffId, check === 1);
+    const verdict = await verify(handoffId, check === 1, expectedRevision);
     if (verdict === "failed") return "unacted";
     if (verdict !== "reopened") break;
     outcome = await deliver(handoffId, false);
+    // The reopening bumped the revision: the next check is for that one.
+    if (outcome === "delivered") expectedRevision = await revisionOf(handoffId);
   }
   return outcome;
 };

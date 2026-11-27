@@ -451,6 +451,7 @@ test("voicemail: a callback it answered reopens the handoff it came from, closes
     "ownerCall.findUnique": { fromHandoffId: "h-src" },
     "ownerCallHandoff.findUnique": callbackRow(),
     "ownerCallHandoff.update": { ownerCallId: "oc-src" },
+    "agentCallEvent.count": 0,
     "ownerCallHandoff.updateMany": { count: 1 },
     "ownerCallHandoffRequest.count": 0,
   });
@@ -486,6 +487,7 @@ test("voicemail: a callback it answered reopens the handoff it came from, closes
   assert.deepEqual(reopened.data.revision, { increment: 1 });
   assert.match(String(reopened.data.lastError), /answered by voicemail/);
   assert.deepEqual(eventKinds(recorder.calls), [
+    "handoff.callback_missed",
     "handoff.reopened",
     "handoff.resolved",
   ]);
@@ -543,6 +545,7 @@ test("silent callback: one the owner picked up and said nothing on reopens the h
     "ownerCall.findUnique": { fromHandoffId: "h-src" },
     "ownerCallHandoff.findUnique": silent,
     "ownerCallHandoff.update": { ownerCallId: "oc-src" },
+    "agentCallEvent.count": 0,
     "ownerCallHandoff.updateMany": { count: 1 },
     "ownerCallHandoffRequest.count": 0,
   });
@@ -704,7 +707,9 @@ test("an owner who keeps missing the callback is not rung in a chain: the source
   const recorder = recordingDb({
     "ownerCall.findUnique": { fromHandoffId: "h-src" },
     "ownerCallHandoff.findUnique": callbackRow(),
-    "ownerCallHandoff.update": { ownerCallId: "oc-src", revision: 5 },
+    "ownerCallHandoff.update": { ownerCallId: "oc-src" },
+    // Four callbacks have already missed for this handoff.
+    "agentCallEvent.count": 4,
     "ownerCallHandoff.updateMany": { count: 1 },
     "ownerCallHandoffRequest.count": 0,
   });
@@ -764,4 +769,126 @@ test("the RESULT marker: only a verdict at the very end counts, not one quoted m
     handoffResult("Need a time. RESULT: needs_owner."),
     "needs_owner",
   );
+});
+
+// ── Second review ───────────────────────────────────────────────────────
+
+test("a recording still pending means the owner's silence is not known: nothing is closed as empty", async () => {
+  const sent: string[] = [];
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": row(
+      { requests: [] },
+      {
+        agentTranscript: "Mili: Hi Raj, it's Mili. Have you got a minute?",
+        durationSeconds: 25,
+        recordings: [{ transcript: null, transcriptStatus: "PENDING" }],
+      },
+    ),
+    "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
+  });
+  // Past the wait: it goes to Hermes, not closed.
+  assert.equal(
+    await deliverOwnerCallHandoff(
+      WORKFLOW,
+      {
+        handoffId: "h-1",
+        now: new Date(NOW.getTime() + 10 * 60_000),
+        waitForTranscript: true,
+      },
+      recorder.transactionalDb,
+      { assistant: assistant("ok", sent) },
+    ),
+    "delivered",
+  );
+  assert.equal(sent.length, 1);
+});
+
+test("a handoff with a saved request is not held back by a slow recording", async () => {
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": row(
+      {},
+      { recordings: [{ transcript: null, transcriptStatus: "PENDING" }] },
+    ),
+    "ownerCallHandoff.updateMany": { count: 1 },
+  });
+  assert.equal(
+    await deliverOwnerCallHandoff(
+      WORKFLOW,
+      { handoffId: "h-1", now: NOW, waitForTranscript: true },
+      recorder.transactionalDb,
+      { assistant: assistant("ok") },
+    ),
+    "delivered",
+  );
+});
+
+test("a recording with only some lines labelled cannot show the owner said nothing", async () => {
+  const sent: string[] = [];
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": row(
+      { requests: [] },
+      {
+        agentTranscript: "Mili: Hi Raj, it's Mili. Have you got a minute?",
+        durationSeconds: 25,
+        recordings: [
+          {
+            transcript: "Mili: Hello\ncall me back about the invoice",
+            transcriptStatus: "DONE",
+          },
+        ],
+      },
+    ),
+    "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
+  });
+  assert.equal(await deliver(recorder, assistant("ok", sent)), "delivered");
+});
+
+test("voicemail: a person saying they were trying to reach you is not a machine", async () => {
+  const sent: string[] = [];
+  const person = callbackRow();
+  const call = person.ownerCall.call as {
+    agentTranscript: string;
+    recordings: unknown[];
+  };
+  call.agentTranscript =
+    "Mili: Hi Raj.\nCaller: I was trying to reach you earlier, what's up?";
+  call.recordings = [];
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": person,
+    "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
+  });
+  assert.equal(await deliver(recorder, assistant("ok", sent)), "delivered");
+  assert.doesNotMatch(sent[0], /answered by voicemail/);
+});
+
+test("the RESULT marker: markdown around it still counts, a quoted template does not", () => {
+  assert.equal(
+    handoffResult("Need the time.\n**RESULT: needs_owner**"),
+    "needs_owner",
+  );
+  assert.equal(handoffResult("The template uses RESULT: cannot."), null);
+});
+
+test("verify: a check scheduled for one revision leaves a newer one alone", async () => {
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": {
+      deliveredAt: new Date(NOW.getTime() - 20 * 60_000),
+      id: "h-1",
+      ownerCall: { id: "oc-1" },
+      revision: 2,
+      status: "DELIVERED",
+    },
+  });
+  assert.equal(
+    await verifyHandoffActed(
+      WORKFLOW,
+      { expectedRevision: 1, final: true, handoffId: "h-1", now: NOW },
+      recorder.transactionalDb,
+    ),
+    "skipped",
+  );
+  assert.deepEqual(writes(recorder.calls), []);
 });

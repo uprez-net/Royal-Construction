@@ -108,9 +108,9 @@ const REPLACEMENTS_EXHAUSTED_NOTE =
 const NOTHING_ASKED_RESOLUTION =
   "Nothing was asked: the owner said nothing on this short call, so nothing was sent.";
 const VOICEMAIL_RESOLUTION =
-  "Answered by voicemail, so the owner did not hear this callback; the handoff it came from was reopened.";
+  "Answered by voicemail, so the owner did not hear this callback; the handoff it came from was reopened (or flagged for the office after repeated tries).";
 const SILENT_CALLBACK_RESOLUTION =
-  "The owner said nothing on this callback, so its details were not given; the handoff it came from was reopened.";
+  "The owner said nothing on this callback, so its details were not given; the handoff it came from was reopened (or flagged for the office after repeated tries).";
 const UNACTED_REOPEN_NOTE =
   "You replied to this handoff but did not schedule a callback or resolve it. Do one of the two now, and end your reply with the RESULT line.";
 const UNACTED_FAILED_NOTE =
@@ -512,12 +512,29 @@ export async function reopenHandoffForFailedCallback(
       input.now,
       `The callback Agent Factory scheduled (owner call ${input.ownerCallId}) didn't reach the owner: ${input.reason}`,
     ),
-    select: { ownerCallId: true, revision: true },
+    select: { ownerCallId: true },
     where: { id: handoffId },
   });
   // The owner keeps not getting the callback (voicemail, no answer, silence):
-  // stop here and say so, rather than ringing them in a chain for ever.
-  if ((handoff.revision ?? 0) > MAX_REPLACEMENT_CALLBACKS) {
+  // stop here and say so, rather than ringing them in a chain for ever. Counted
+  // from the callbacks that missed, not the handoff's revision, which a late
+  // note or the delivery check bumps as well.
+  const missed = await db.agentCallEvent.count({
+    where: {
+      kind: AGENT_CALL_EVENT.handoffCallbackMissed,
+      ownerCallId: handoff.ownerCallId,
+    },
+  });
+  await recordAgentCallEvent(
+    db,
+    { ownerCallId: handoff.ownerCallId },
+    {
+      at: input.now,
+      detail: { callbackOwnerCallId: input.ownerCallId, reason: input.reason },
+      kind: AGENT_CALL_EVENT.handoffCallbackMissed,
+    },
+  );
+  if (missed >= MAX_REPLACEMENT_CALLBACKS) {
     await db.ownerCallHandoff.updateMany({
       data: {
         attempts: OWNER_CALL_HANDOFF_LIMITS.maxAttempts,
@@ -652,9 +669,11 @@ function transcriptOf(row: HandoffRow): string | null {
   return live ?? recorded;
 }
 
-/** Does any line start with a speaker label ("Mili:", "Caller:")? */
-function speakerLabelled(transcript: string): boolean {
-  return /^[^\n:]{1,40}:\s*\S/m.test(transcript);
+/** Is any non-empty line missing its speaker label ("Mili:", "Caller:")? */
+function hasUnlabelledLine(transcript: string): boolean {
+  return transcript
+    .split(/\r?\n/)
+    .some((line) => line.trim() !== "" && !/^[^\n:]{1,40}:\s*\S/.test(line));
 }
 
 /** Is there a line in the transcript from anyone but Mili? */
@@ -674,19 +693,28 @@ function ownerSaidNothing(row: {
   readonly ownerCall: {
     readonly call: {
       readonly agentTranscript: string | null;
-      readonly recordings: readonly { readonly transcript: string | null }[];
+      readonly recordings: readonly {
+        readonly transcript: string | null;
+        readonly transcriptStatus?: CallTranscriptStatus;
+      }[];
     } | null;
   };
 }): boolean {
   const live = row.ownerCall.call?.agentTranscript?.trim();
   const recorded = recordedTranscriptOf(row);
+  // A recording still being transcribed can show what the live transcript
+  // lost, so until it lands this is not known.
+  const pending = row.ownerCall.call?.recordings.some(
+    (recording) => recording.transcriptStatus === CallTranscriptStatus.PENDING,
+  );
   return (
     !row.requests.length
     && Boolean(live)
     && !callerSpoke(live as string)
-    // A recording whose speech-to-text has no speaker labels at all (the
-    // split failed and it came back as plain prose) cannot show who spoke.
-    && !(recorded && !speakerLabelled(recorded))
+    && !pending
+    // A recording with any line that has no speaker label (the split failed,
+    // wholly or in part) cannot show who spoke.
+    && !(recorded && hasUnlabelledLine(recorded))
     // The recording's speech-to-text is labelled too: a voicemail greeting or
     // a reply the live transcript lost shows up there as a caller line.
     && !(recorded && callerSpoke(recorded))
@@ -699,7 +727,7 @@ function ownerSaidNothing(row: {
  * now" is not a machine, and must not trigger a replacement call.
  */
 const VOICEMAIL_PHRASES =
-  /voice ?mail|mailbox|leave (?:a|your) message|record your message|(?:at|after) the (?:tone|beep)|trying to reach/i;
+  /voice ?mail|mailbox|leave (?:a|your) message|record your message|(?:at|after) the (?:tone|beep)|(?:person|number|subscriber|party|customer) you(?:'re| are| have)? (?:trying to reach|called|dialled|dialed)/i;
 
 /**
  * Did a machine answer? A voicemail greeting is one of the first two lines
@@ -735,12 +763,18 @@ function answeredByVoicemail(row: {
 export type HandoffResult = "scheduled" | "resolved" | "needs_owner" | "cannot";
 
 export function handoffResult(reply: string): HandoffResult | null {
-  // At the very end only (its own last line, or the end of a one-paragraph
-  // reply), optionally with a trailing "(...)": a marker quoted in the middle
-  // of a sentence ("I haven't reached RESULT: cannot yet") is not a verdict.
+  // The last non-blank line, markdown emphasis stripped. The marker is its own
+  // line, or follows a sentence end on it ("Done. RESULT: scheduled"); one
+  // quoted mid-sentence ("the template uses RESULT: cannot.") is not a verdict.
+  const last =
+    reply
+      .split(/\r?\n/)
+      .map((line) => line.replace(/[*`]/g, "").trim())
+      .filter(Boolean)
+      .pop() ?? "";
   const found =
-    /(?:^|\s)RESULT:\s*(scheduled|resolved|needs_owner|cannot)\s*(?:\([^)]*\))?\s*[.!]?\s*$/i.exec(
-      reply.trim(),
+    /^(?:.*[.!?)]\s+)?RESULT:\s*(scheduled|resolved|needs_owner|cannot)\s*(?:\([^)]*\))?\s*[.!]?$/i.exec(
+      last,
     );
   return found ? (found[1].toLowerCase() as HandoffResult) : null;
 }
@@ -1179,7 +1213,7 @@ export async function deliverOwnerCallHandoff(
   );
   if (
     input.waitForTranscript
-    && (!transcript || recordingPending)
+    && (!transcript || (recordingPending && row.requests.length === 0))
     && call
     && answered(call)
     && row.readyAt
@@ -1548,6 +1582,8 @@ export async function verifyHandoffActed(
   input: {
     readonly handoffId: string;
     readonly final: boolean;
+    /** The revision this check was scheduled for; a newer one is not its to touch. */
+    readonly expectedRevision?: number;
     readonly now?: Date;
   },
   db: TransactionalDomainDb,
@@ -1567,6 +1603,12 @@ export async function verifyHandoffActed(
   if (!row) return "skipped";
   if (row.status === OwnerCallHandoffStatus.RESOLVED) return "acted";
   if (row.status !== OwnerCallHandoffStatus.DELIVERED) return "skipped";
+  if (
+    input.expectedRevision !== undefined
+    && row.revision !== input.expectedRevision
+  ) {
+    return "skipped";
+  }
   if (
     row.deliveredAt
     && now.getTime() - row.deliveredAt.getTime() < VERIFY_MIN_AGE_MS

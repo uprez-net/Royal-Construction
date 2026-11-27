@@ -37,6 +37,8 @@ export const AGENT_CALL_EVENT = {
   handoffFailed: "handoff.failed",
   handoffResolved: "handoff.resolved",
   handoffReopened: "handoff.reopened",
+  // A callback Hermes scheduled for a handoff did not reach the owner.
+  handoffCallbackMissed: "handoff.callback_missed",
 } as const;
 
 export type AgentCallEventKind =

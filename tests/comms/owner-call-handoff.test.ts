@@ -798,6 +798,7 @@ test("the callback: scheduled with the handoff's id it resolves the handoff in t
     },
     "ownerCallHandoff.findUnique": { callback: null, status: "DELIVERED" },
     "ownerCallHandoff.update": { ownerCallId: "oc-1" },
+    "agentCallEvent.count": 0,
   });
   const result = await requestOwnerCall(
     HERMES,
@@ -930,6 +931,7 @@ test("the callback failing to ring reopens its handoff, unlinked so Hermes can s
     },
     "ownerCall.updateMany": { count: 1 },
     "ownerCallHandoff.update": { ownerCallId: "oc-1" },
+    "agentCallEvent.count": 0,
   });
   assert.equal(
     await placeOwnerCall(
@@ -959,6 +961,7 @@ test("the callback failing to ring reopens its handoff, unlinked so Hermes can s
   );
   assert.deepEqual(eventKinds(recorder.calls), [
     "owner_call.failed",
+    "handoff.callback_missed",
     "handoff.reopened",
   ]);
 });
@@ -1032,6 +1035,7 @@ test("a callback that rang out without reaching the owner reopens the handoff it
     },
     "ownerCallHandoff.findUnique": { id: "h-2", status: "OPEN" },
     "ownerCallHandoff.update": { ownerCallId: "oc-1" },
+    "agentCallEvent.count": 0,
   });
   assert.equal(
     await markOwnerCallEnded(recorder.db, { callId: "call-2", now: NOW }),
@@ -1049,7 +1053,10 @@ test("a callback that rang out without reaching the owner reopens the handoff it
   };
   assert.equal(own.data.status, "RESOLVED");
   assert.match(String(own.data.resolution), /handoff h-1 was reopened/);
-  assert.deepEqual(eventKinds(recorder.calls), ["handoff.reopened"]);
+  assert.deepEqual(eventKinds(recorder.calls), [
+    "handoff.callback_missed",
+    "handoff.reopened",
+  ]);
 });
 
 test("the backstop fails a claim cut off with no tries left, and only hands over eligible calls", async () => {
