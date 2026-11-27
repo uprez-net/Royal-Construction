@@ -203,8 +203,9 @@ When an owner call ends, Royal passes Hermes what it left
 2. **Delivery.** A workflow (`lib/workflow/owner-call-handoff.ts`) sends one
    chat completion to Hermes's API server. The system message holds Royal's
    rules and the handoff id. The user message holds the call as data: its
-   outcome, each request (with `call_back` and the owner's own timing
-   words), and the transcript. An answered call with no transcript yet waits
+   outcome, when it ended (UTC and Sydney time, so "in 10 minutes" has a
+   starting point), each request (with `call_back` and the owner's own
+   timing words), and the transcript. An answered call with no transcript yet waits
    up to 5 minutes for the recording's, then goes without and says so. The
    handoff is claimed `PENDING → DELIVERING` under a fresh claim id, and
    the result is written only while that claim still holds. So two runs
@@ -324,6 +325,18 @@ When an owner call ends, Royal passes Hermes what it left
      exist and differ, Hermes is given both, the recording first, and the
      workflow waits 45 seconds after hangup before the first send so the
      recording's transcript has landed.
+
+### Timing a callback, and what gets spoken
+
+The owner's words are relative ("in 10 to 15 minutes"), and Hermes knows only
+the time it is when the handoff reaches it, a minute or more after the call.
+So the body states when the call ended and the rules tell Hermes to count from
+that moment, to give `call_at` as an absolute time, and never to schedule
+earlier than asked (#652: a callback asked for in 10 to 15 minutes was
+scheduled 3 minutes after the call, because Hermes read the call's UTC times as
+Sydney times and decided the window had gone). The agenda and context Hermes
+writes are read aloud by Mili, so they must be short plain sentences, not ISO
+dates or "inclusive/exclusive" windows.
 
 ## Acting on the right revision, and what a call left unrecorded
 

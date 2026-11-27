@@ -727,6 +727,70 @@ test("the body: an unanswered call, nothing noted, and a question Hermes couldn'
   assert.match(held, /they held for this and you couldn't answer on the call/);
 });
 
+test("the body anchors a relative time to when the call ended, and the instructions say so (#652)", () => {
+  const row = handoffRow({
+    requests: [
+      {
+        callBack: true,
+        createdAt: NOW,
+        request: "Count the new leads",
+        source: "owner",
+        timing: "in 10 to 15 minutes",
+      },
+    ],
+  }) as unknown as Parameters<typeof ownerCallHandoffBody>[0];
+  const ended = new Date("2026-11-27T09:27:41.000Z");
+  const body = ownerCallHandoffBody(
+    {
+      ...row,
+      ownerCall: {
+        ...row.ownerCall,
+        call: { ...row.ownerCall.call!, endedAt: ended },
+      },
+    },
+    "…",
+  );
+  assert.match(
+    body,
+    /The call ended at 2026-11-27T09:27:41\.000Z \(Fri 27 Nov 2026, 8:27 pm AEDT\)\. A time the owner gave as "in 10 minutes" counts from then\./,
+  );
+  // No end time recorded: worked out from the answer and the length, or left
+  // out; never a start time passed off as the end.
+  const call = (patch: object) =>
+    ownerCallHandoffBody(
+      {
+        ...row,
+        ownerCall: {
+          ...row.ownerCall,
+          call: { ...row.ownerCall.call!, ...patch },
+        },
+      },
+      "…",
+    );
+  assert.match(
+    call({
+      answeredAt: new Date("2026-11-27T09:25:33.000Z"),
+      durationSeconds: 128,
+      endedAt: null,
+    }),
+    /The call ended at 2026-11-27T09:27:41\.000Z/,
+  );
+  assert.doesNotMatch(
+    call({ answeredAt: null, durationSeconds: null, endedAt: null }),
+    /The call ended/,
+  );
+  const text = ownerCallHandoffInstructions("h-1");
+  assert.match(
+    text,
+    /counting a time like "in 10 minutes" from when the call ended/,
+  );
+  assert.match(
+    text,
+    /Never schedule a callback earlier than the owner asked for/,
+  );
+  assert.match(text, /spoken aloud by Mili/);
+});
+
 // ── Hermes dealing with it ──────────────────────────────────────────────
 
 test("resolving: refused while the call is still on; recorded once; repeating it changes nothing", async () => {

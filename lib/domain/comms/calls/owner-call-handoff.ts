@@ -10,6 +10,7 @@ import {
   Prisma,
 } from "@prisma/client";
 
+import { formatSydneyDateTime } from "@/lib/dates/sydney";
 import type { DomainDb, TransactionalDomainDb } from "../../db";
 import {
   DomainNotFoundError,
@@ -1242,7 +1243,8 @@ export function ownerCallHandoffInstructions(
       ? `This handoff was reopened${why ? `: ${why}` : ""}. Act on it even if you dealt with an earlier revision; only skip what you already finished for an earlier revision and that still stands.`
       : "If you have already dealt with revision 0 of this handoff id, this is the same delivery sent again: do not do it again; just say so.",
     "Go through each request the owner made. Tell a question to look into apart from something to do.",
-    "- A request with call_back: yes wants you to find the answer, then have Mili ring the owner back with it. When you have it, call Royal's schedule_owner_call with handoff_id set to this id and the answer in the agenda and context, then read it back with get_owner_call to check it was scheduled. Ring when the owner said; if they gave no time, ring once you have the answer.",
+    '- A request with call_back: yes wants you to find the answer, then have Mili ring the owner back with it. When you have it, call Royal\'s schedule_owner_call with handoff_id set to this id and the answer in the agenda and context, then read it back with get_owner_call to check it was scheduled. Ring when the owner said, counting a time like "in 10 minutes" from when the call ended (given below), not from now; if they gave no time, ring once you have the answer. Give call_at as an absolute time with its offset. Never schedule a callback earlier than the owner asked for.',
+    '- The agenda and context you give schedule_owner_call are spoken aloud by Mili. Write them as short, plain sentences: no ISO dates, times with a time zone, or lists of facts; say "the last ten days", not the two instants.',
     "- Use a new idempotency_key for each callback you schedule, including a replacement for one that didn't reach the owner. Reuse a key only to retry the same schedule_owner_call that may not have gone through.",
     "- If what they want, or when they want it, is unclear, ask the owner through your own channels. Never guess a time, and never say a callback is scheduled unless schedule_owner_call returned it.",
     "- When everything is dealt with and no callback is needed, call resolve_owner_call_handoff with this id and one line saying how.",
@@ -1259,6 +1261,24 @@ export function ownerCallHandoffInstructions(
 
 function yesNo(value: boolean): string {
   return value ? "yes" : "no";
+}
+
+/**
+ * When the call ended, in UTC and Sydney time, so a relative time has an
+ * anchor. Null when it can't be told: a wrong end time would put "in 10
+ * minutes" early, which is the fault this line exists to prevent.
+ */
+function callEndedAt(call: {
+  readonly answeredAt: Date | null;
+  readonly durationSeconds: number | null;
+  readonly endedAt: Date | null;
+}): string | null {
+  const at =
+    call.endedAt
+    ?? (call.answeredAt && call.durationSeconds !== null
+      ? new Date(call.answeredAt.getTime() + call.durationSeconds * 1000)
+      : null);
+  return at ? `at ${at.toISOString()} (${formatSydneyDateTime(at)})` : null;
 }
 
 /** The call and what the owner asked for on it. Data, for Hermes to read. */
@@ -1293,6 +1313,11 @@ export function ownerCallHandoffBody(
     call
       ? `The owner ${answered(call) ? "picked up" : "didn't pick up"}. Call status: ${call.status.toLowerCase()}${call.durationSeconds !== null ? `, ${call.durationSeconds} seconds` : ""}.`
       : "The call never rang.",
+    ...(call && callEndedAt(call)
+      ? [
+          `The call ended ${callEndedAt(call)}. A time the owner gave as "in 10 minutes" counts from then.`,
+        ]
+      : []),
     ...(row.lastError ? [`Note: ${row.lastError}`] : []),
     ...(call && answered(call) && answeredByVoicemail(row as HandoffRow)
       ? [
