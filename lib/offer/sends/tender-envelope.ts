@@ -2,6 +2,7 @@ import { stalePriceTextRefusal } from "@/lib/domain/offers/stale-price-text";
 import { EnvelopeDocType, OfferStatus } from "@prisma/client";
 import { generatePDF } from "@/lib/pdf/generate-pdf";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { offerValidityIssue } from "@/lib/offer/offer-send-guards";
 import { buildTenderHtml } from "@/lib/offer/offer-tender-html";
 import {
   collectOfferSigners,
@@ -99,6 +100,13 @@ export async function sendTenderEnvelope(
       ok: false,
       error: `Complete the owner details before sending the Tender: ${ownerIssues.join(" ")}`,
     };
+  }
+
+  // Every document states how long the price holds, so a blank or past date
+  // must not reach the client (#534).
+  const validityIssue = offerValidityIssue(snapshot.job.validUntil);
+  if (validityIssue) {
+    return { ok: false, error: validityIssue };
   }
 
   const totalAreaSqm = getAreaBasisTotalSqm(

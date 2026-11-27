@@ -26,6 +26,7 @@ import { createGraphContext } from "@/lib/graph/client";
 import {
   canEmailOfferProposal,
   PROPOSAL_STAGE_PASSED_ERROR,
+  offerValidityIssue,
 } from "@/lib/offer/offer-send-guards";
 import {
   OfferProposalSendError,
@@ -156,6 +157,13 @@ export async function emailOfferProposal(
       ok: false,
       error: `Complete the owner details before sending: ${ownerIssues.join(" ")}`,
     };
+  }
+
+  // Every document states how long the price holds, so a blank or past date
+  // must not reach the client (#534).
+  const validityIssue = offerValidityIssue(snapshot.job.validUntil);
+  if (validityIssue) {
+    return { ok: false, error: validityIssue };
   }
 
   // Same gate as marking the offer sent: an extra switched on but not priceable

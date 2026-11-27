@@ -167,13 +167,24 @@ export function collectOfferSendBlockers({
       severity: "block",
     });
   }
+  // Every client document states how long the price holds, so a blank or past
+  // date blocks the send, as the server's own check does (#534).
+  if (expiryState === "none") {
+    blockers.push({
+      id: "validity-missing",
+      label:
+        "Set a validity date before sending (in Job setup, or in a new revision once the offer has been sent).",
+      stepId: "offer-step-job-setup",
+      severity: "block",
+    });
+  }
   if (expiryState === "expired") {
     blockers.push({
       id: "expired",
       label:
-        "This offer's validity date has passed — extend it before sending an expired fixed price.",
+        "This offer's validity date has passed — extend it before sending (in Job setup, or in a new revision once the offer has been sent).",
       stepId: "offer-step-job-setup",
-      severity: "warn",
+      severity: "block",
     });
   }
 
