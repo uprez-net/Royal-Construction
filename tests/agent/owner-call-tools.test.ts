@@ -72,3 +72,39 @@ test("each tool refuses a caller who is not Hermes before reading anything", asy
     NotHermesError,
   );
 });
+
+test("resolving a handoff needs the revision the turn read", async () => {
+  const { resolveHandoffInput, scheduleOwnerCallInput } =
+    await import("@/agent/lib/owner-calls");
+  assert.equal(
+    resolveHandoffInput.safeParse({ handoff_id: "h-1", resolution: "done" })
+      .success,
+    false,
+  );
+  assert.equal(
+    resolveHandoffInput.safeParse({
+      handoff_id: "h-1",
+      handoff_revision: 0,
+      resolution: "done",
+    }).success,
+    true,
+  );
+  // Scheduling accepts the revision (the tool refuses a handoff_id without it).
+  const base = {
+    category: "other",
+    idempotency_key: "k-1",
+    subject: "s",
+  };
+  assert.equal(
+    scheduleOwnerCallInput.safeParse({
+      ...base,
+      handoff_id: "h-1",
+      handoff_revision: 2,
+    }).success,
+    true,
+  );
+  assert.equal(
+    scheduleOwnerCallInput.safeParse({ ...base, handoff_revision: -1 }).success,
+    false,
+  );
+});

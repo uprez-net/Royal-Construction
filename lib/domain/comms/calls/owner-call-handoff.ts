@@ -128,6 +128,14 @@ export const OWNER_CALL_HANDOFF_REFUSALS = {
     "Agent Factory isn't connected (HERMES_SERVER_MCP_URL and HERMES_SERVER_MCP_TOKEN), so the handoff couldn't be passed on. It stays outstanding for Agent Factory to pick up with list_owner_call_handoffs.",
 } as const;
 
+/**
+ * An agent turn acting on one revision of a handoff after it was reopened as a
+ * newer one: refused, so a stale turn never closes work it has not read.
+ */
+export function staleRevisionRefusal(current: number, acting: number): string {
+  return `This handoff was reopened as revision ${current}, and you are acting on revision ${acting}. Read it again with get_owner_call_handoff and act on revision ${current}.`;
+}
+
 export type OwnerCallHandoffRequestRecord = {
   readonly request: string;
   readonly callBack: boolean;
@@ -329,7 +337,14 @@ export async function noteOwnerCallRequest(
       // call back or when: the latest is what Hermes gets.
       if (existing.callBack !== input.callBack || existing.timing !== timing) {
         await tx.ownerCallHandoffRequest.update({
-          data: { callBack: input.callBack, source: input.source, timing },
+          // Touched to now: a request the owner changed is the newest one, and
+          // is listed first.
+          data: {
+            callBack: input.callBack,
+            createdAt: now,
+            source: input.source,
+            timing,
+          },
           where: { id: existing.id },
         });
         change = "updated";
@@ -605,7 +620,7 @@ const HANDOFF_SELECT = {
   },
   readyAt: true,
   requests: {
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: {
       callBack: true,
       createdAt: true,
@@ -669,6 +684,22 @@ function transcriptOf(row: HandoffRow): string | null {
   return live ?? recorded;
 }
 
+/**
+ * Did Mili tell the owner she would pass something on or call back? On a call
+ * with nothing recorded this means a request was promised but never noted (the
+ * call desk did not fire, #640), so the call is not empty whatever else shows.
+ */
+function miliPromised(transcript: string | null | undefined): boolean {
+  return (transcript ?? "")
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith(`${VOICE_AGENT_NAME}:`))
+    .some((line) =>
+      /(?<![\'"“‘])\b(?:i(?:'ll| will| can)|we(?:'ll| will)|(?:agent factory|hermes|the team) will)\b(?:\s+\w+){0,3}?\s+(?:pass|call|ring|get back|let\b[^.\n]{0,25}\bknow|follow up|arrange|organi[sz]e|have\b[^.\n]{0,25}\b(?:call|ring|get back))/i.test(
+        line,
+      ),
+    );
+}
+
 /** Is any non-empty line missing its speaker label ("Mili:", "Caller:")? */
 function hasUnlabelledLine(transcript: string): boolean {
   return transcript
@@ -714,6 +745,8 @@ function ownerSaidNothing(
     !row.requests.length
     && (options.requireLive === false || Boolean(live))
     && !(live && callerSpoke(live))
+    && !miliPromised(live)
+    && !miliPromised(recorded)
     && !pending
     // A recording with any line that has no speaker label (the split failed,
     // wholly or in part) cannot show who spoke.
@@ -909,6 +942,8 @@ export async function resolveOwnerCallHandoff(
   input: {
     readonly handoffId: string;
     readonly resolution: string;
+    /** The revision the caller read; a newer one is refused, not closed. */
+    readonly expectedRevision?: number | null;
     readonly now?: Date;
   },
   db: TransactionalDomainDb,
@@ -929,6 +964,15 @@ export async function resolveOwnerCallHandoff(
   }
   const now = input.now ?? new Date();
   const current = await handoffRow(db, input.handoffId);
+  // A turn that read revision 0 must not close, or be told it closed, revision
+  // 1, which it has not read: it is told to read the handoff again. Checked
+  // before the "already resolved" shortcut, which would report a stale success.
+  const expected = input.expectedRevision ?? undefined;
+  if (expected !== undefined && current.revision !== expected) {
+    throw new DomainTransitionError(
+      staleRevisionRefusal(current.revision, expected),
+    );
+  }
   if (current.status === OwnerCallHandoffStatus.RESOLVED) {
     return toSummary(current);
   }
@@ -942,7 +986,11 @@ export async function resolveOwnerCallHandoff(
         resolvedAt: now,
         status: OwnerCallHandoffStatus.RESOLVED,
       },
-      where: { id: input.handoffId, status: { in: OUTSTANDING } },
+      where: {
+        id: input.handoffId,
+        status: { in: OUTSTANDING },
+        ...(expected !== undefined ? { revision: expected } : {}),
+      },
     });
     if (moved.count === 0) return;
     await recordAgentCallEvent(
@@ -955,21 +1003,44 @@ export async function resolveOwnerCallHandoff(
       },
     );
   });
-  return toSummary(await handoffRow(db, input.handoffId));
+  const after = await handoffRow(db, input.handoffId);
+  // Reopened (or closed as a newer revision) between the check and the write:
+  // nothing of ours was closed, so this turn is not told it was.
+  if (expected !== undefined && after.revision !== expected) {
+    throw new DomainTransitionError(
+      staleRevisionRefusal(after.revision, expected),
+    );
+  }
+  return toSummary(after);
 }
 
 async function callbackCheck(
   db: DomainDb,
   handoffId: string,
+  expectedRevision?: number | null,
 ): Promise<{ readonly existingCallbackId: string | null }> {
   const row = await db.ownerCallHandoff.findUnique({
-    select: { callback: { select: { id: true } }, status: true },
+    select: {
+      callback: { select: { id: true } },
+      revision: true,
+      status: true,
+    },
     where: { id: handoffId },
   });
   if (!row) throw new DomainNotFoundError("That handoff was not found.");
   // One callback per handoff: a delivery Hermes received twice still rings
   // once, so the callback already scheduled is the answer.
   if (row.callback) return { existingCallbackId: row.callback.id };
+  // A turn that read revision 0 must not schedule against revision 1.
+  if (
+    expectedRevision !== undefined
+    && expectedRevision !== null
+    && row.revision !== expectedRevision
+  ) {
+    throw new DomainTransitionError(
+      staleRevisionRefusal(row.revision, expectedRevision),
+    );
+  }
   if (row.status === OwnerCallHandoffStatus.OPEN) {
     throw new DomainTransitionError(OWNER_CALL_HANDOFF_REFUSALS.stillOnCall);
   }
@@ -989,8 +1060,9 @@ async function callbackCheck(
 export function handoffForCallback(
   db: DomainDb,
   handoffId: string,
+  expectedRevision?: number | null,
 ): Promise<{ readonly existingCallbackId: string | null }> {
-  return callbackCheck(db, handoffId);
+  return callbackCheck(db, handoffId, expectedRevision);
 }
 
 /**
@@ -1001,9 +1073,10 @@ export function handoffForCallback(
 export async function claimHandoffForCallback(
   db: DomainDb,
   handoffId: string,
+  expectedRevision?: number | null,
 ): Promise<{ readonly existingCallbackId: string | null }> {
   await lockHandoff(db, handoffId);
-  return callbackCheck(db, handoffId);
+  return callbackCheck(db, handoffId, expectedRevision);
 }
 
 /** The callback is scheduled: the handoff is resolved by it. In its transaction. */
@@ -1062,6 +1135,7 @@ export function ownerCallHandoffInstructions(
     "- Use a new idempotency_key for each callback you schedule, including a replacement for one that didn't reach the owner. Reuse a key only to retry the same schedule_owner_call that may not have gone through.",
     "- If what they want, or when they want it, is unclear, ask the owner through your own channels. Never guess a time, and never say a callback is scheduled unless schedule_owner_call returned it.",
     "- When everything is dealt with and no callback is needed, call resolve_owner_call_handoff with this id and one line saying how.",
+    `- Pass handoff_revision ${revision} (this delivery's revision) to schedule_owner_call and to resolve_owner_call_handoff. If Royal says the handoff was reopened as a newer revision, read it again with get_owner_call_handoff and act on that one: do not carry on with this delivery.`,
     "- If the owner didn't pick up, the briefing wasn't given: decide whether to try again.",
     "Reply in one or two sentences saying what you did. The last line of your reply must be exactly one of these, and Royal checks it against its own records:",
     "RESULT: scheduled (you called schedule_owner_call and it returned)",
@@ -1087,8 +1161,11 @@ export function ownerCallHandoffBody(
   transcript: string | null,
 ): string {
   const call = row.ownerCall.call;
+  // Newest first: several can be noted for one callback (the owner changed the
+  // time, or the call desk noted it again), and the latest is what stands.
+  const newestFirst = [...row.requests].reverse();
   const requests = row.requests.length
-    ? row.requests.map(
+    ? newestFirst.map(
         (r, i) =>
           `${i + 1}. ${r.request} (call_back: ${yesNo(r.callBack)}${r.timing ? `; when: ${r.timing}` : ""}${r.source === "hold_failed" ? "; they held for this and you couldn't answer on the call" : ""})`,
       )
@@ -1119,8 +1196,17 @@ export function ownerCallHandoffBody(
           `Note: the call ran ${call.durationSeconds} seconds but the transcript holds nothing the owner said, so their words were probably not transcribed. Do not guess what they wanted. End your reply with RESULT: needs_owner and say in the line before that the call's words were lost, so the office can ask them.`,
         ]
       : []),
+    ...(!row.requests.length
+    && (miliPromised(row.ownerCall.call?.agentTranscript)
+      || miliPromised(recordedTranscriptOf(row)))
+      ? [
+          "Note: Mili told the owner she would pass something on or call back, but no request was recorded. Read the transcript, act on what the owner asked, and say so in your reply.",
+        ]
+      : []),
     "",
-    "What the owner asked for:",
+    row.requests.length > 1
+      ? "What the owner asked for (newest first; if they conflict, for example two different times for the same callback, the newest is what the owner settled on):"
+      : "What the owner asked for:",
     ...requests,
     "",
     "Transcript:",

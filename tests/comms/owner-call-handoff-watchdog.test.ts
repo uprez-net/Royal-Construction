@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 
 import {
+  handoffForCallback,
+  resolveOwnerCallHandoff,
+  staleRevisionRefusal,
   deliverOwnerCallHandoff,
   failStaleDeliveredHandoffs,
   handoffResult,
@@ -924,4 +927,282 @@ test("the call's instructions give the two-times rule whether or not Agent Facto
       /give two options or the time is unclear/,
     );
   }
+});
+
+// ── Revisions (#646), newest first (#642), promised but unrecorded (#640) ──
+
+test("resolving: a turn that read revision 0 cannot close a handoff reopened as revision 1", async () => {
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": row({ revision: 1, status: "DELIVERED" }),
+    "ownerCallHandoff.updateMany": { count: 1 },
+  });
+  await assert.rejects(
+    resolveOwnerCallHandoff(
+      WORKFLOW,
+      { expectedRevision: 0, handoffId: "h-1", resolution: "done", now: NOW },
+      recorder.transactionalDb,
+    ),
+    (error: Error) => error.message === staleRevisionRefusal(1, 0),
+  );
+  assert.deepEqual(writes(recorder.calls), []);
+  assert.deepEqual(eventKinds(recorder.calls), []);
+});
+
+test("resolving: the revision it read is closed, and the write is pinned to it", async () => {
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": row({
+      resolution: "done",
+      revision: 1,
+      status: "RESOLVED",
+    }),
+    "ownerCallHandoff.updateMany": { count: 1 },
+  });
+  // Already resolved at the revision it read: returned as is.
+  const done = await resolveOwnerCallHandoff(
+    WORKFLOW,
+    { expectedRevision: 1, handoffId: "h-1", resolution: "done", now: NOW },
+    recorder.transactionalDb,
+  );
+  assert.equal(done.status, "RESOLVED");
+  // A stale turn is not told a newer revision's resolution is its own.
+  await assert.rejects(
+    resolveOwnerCallHandoff(
+      WORKFLOW,
+      { expectedRevision: 0, handoffId: "h-1", resolution: "done", now: NOW },
+      recorder.transactionalDb,
+    ),
+    (error: Error) => error.message === staleRevisionRefusal(1, 0),
+  );
+
+  const open = recordingDb({
+    "ownerCallHandoff.findUnique": row({ revision: 1, status: "DELIVERED" }),
+    "ownerCallHandoff.updateMany": { count: 1 },
+  });
+  await resolveOwnerCallHandoff(
+    WORKFLOW,
+    { expectedRevision: 1, handoffId: "h-1", resolution: "done", now: NOW },
+    open.transactionalDb,
+  );
+  const [write] = writes(open.calls);
+  assert.equal(write.where.revision, 1);
+  assert.equal(write.data.status, "RESOLVED");
+});
+
+test("resolving: reopened between the check and the write, nothing is closed and the turn is told", async () => {
+  let reads = 0;
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": () => {
+      reads += 1;
+      return reads === 1
+        ? row({ revision: 1, status: "DELIVERED" })
+        : row({ revision: 2, status: "PENDING" });
+    },
+    "ownerCallHandoff.updateMany": { count: 0 },
+  });
+  await assert.rejects(
+    resolveOwnerCallHandoff(
+      WORKFLOW,
+      { expectedRevision: 1, handoffId: "h-1", resolution: "done", now: NOW },
+      recorder.transactionalDb,
+    ),
+    (error: Error) => error.message === staleRevisionRefusal(2, 1),
+  );
+});
+
+test("the callback: scheduled against a stale revision is refused, an existing callback is still returned, no revision is not checked", async () => {
+  const stale = recordingDb({
+    "ownerCallHandoff.findUnique": {
+      callback: null,
+      revision: 1,
+      status: "DELIVERED",
+    },
+  });
+  await assert.rejects(
+    handoffForCallback(stale.db, "h-1", 0),
+    (error: Error) => error.message === staleRevisionRefusal(1, 0),
+  );
+  const existing = recordingDb({
+    "ownerCallHandoff.findUnique": {
+      callback: { id: "oc-9" },
+      revision: 1,
+      status: "RESOLVED",
+    },
+  });
+  assert.deepEqual(await handoffForCallback(existing.db, "h-1", 0), {
+    existingCallbackId: "oc-9",
+  });
+  const unchecked = recordingDb({
+    "ownerCallHandoff.findUnique": {
+      callback: null,
+      revision: 3,
+      status: "DELIVERED",
+    },
+  });
+  assert.deepEqual(await handoffForCallback(unchecked.db, "h-1"), {
+    existingCallbackId: null,
+  });
+});
+
+test("Hermes is told to pass the handoff's revision back", () => {
+  const text = ownerCallHandoffInstructions("h-1", { revision: 2, why: null });
+  assert.match(text, /handoff_revision 2/);
+  assert.match(text, /get_owner_call_handoff/);
+});
+
+test("the body lists requests newest first and says the newest stands when they conflict", () => {
+  const older = {
+    callBack: true,
+    createdAt: new Date(NOW.getTime() - 20_000),
+    request: "Call back tomorrow.",
+    source: "owner",
+    timing: "tomorrow",
+  };
+  const newer = {
+    callBack: true,
+    createdAt: NOW,
+    request: "Call back in five minutes.",
+    source: "owner",
+    timing: "in five minutes",
+  };
+  const both = row({ requests: [older, newer] });
+  const text = ownerCallHandoffBody(
+    both as never,
+    both.ownerCall.call.agentTranscript,
+  );
+  assert.ok(text.indexOf("1. Call back in five minutes") > 0);
+  assert.ok(
+    text.indexOf("2. Call back tomorrow") > text.indexOf("1. Call back"),
+  );
+  assert.match(text, /newest first; if they conflict/);
+  const single = row();
+  assert.doesNotMatch(
+    ownerCallHandoffBody(
+      single as never,
+      single.ownerCall.call.agentTranscript,
+    ),
+    /newest first/,
+  );
+});
+
+test("a promise Mili made with nothing recorded is flagged, and the call is not closed as empty", async () => {
+  const promised = row(
+    { requests: [] },
+    {
+      agentTranscript:
+        "Mili: Hi Raj, it's Mili. Have you got a minute?\nMili: Sure, I'll pass that on to Agent Factory.",
+      durationSeconds: 30,
+    },
+  );
+  const text = ownerCallHandoffBody(
+    promised as never,
+    promised.ownerCall.call.agentTranscript,
+  );
+  assert.match(text, /told the owner she would pass something on or call back/);
+
+  const sent: string[] = [];
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": promised,
+    "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoffRequest.count": 0,
+  });
+  assert.equal(await deliver(recorder, assistant("ok", sent)), "delivered");
+  assert.match(sent[0], /told the owner she would pass something on/);
+
+  // Nothing promised, nothing said: still closed.
+  const quiet = row(
+    { requests: [] },
+    {
+      agentTranscript: "Mili: Hi Raj, it's Mili. Have you got a minute?",
+      durationSeconds: 30,
+    },
+  );
+  assert.doesNotMatch(
+    ownerCallHandoffBody(quiet as never, quiet.ownerCall.call.agentTranscript),
+    /told the owner she would pass/,
+  );
+});
+
+test("a promise: Mili's own commitments count, a quoted third party and an ordinary answer do not", async () => {
+  const bodyFor = (milisLine: string) => {
+    const r = row(
+      { requests: [] },
+      {
+        agentTranscript: `Mili: Hi Raj.\nMili: ${milisLine}`,
+        durationSeconds: 30,
+      },
+    );
+    return ownerCallHandoffBody(r as never, r.ownerCall.call.agentTranscript);
+  };
+  const flagged = /told the owner she would pass something on or call back/;
+  for (const line of [
+    "I'll pass your invoice request to Agent Factory.",
+    "Sure, I'll have Agent Factory call you back with the details.",
+    "We will get back to you tomorrow.",
+  ]) {
+    assert.match(bodyFor(line), flagged, line);
+  }
+  for (const line of [
+    "The supplier said, 'I'll get back to you Friday'.",
+    "Your inspection is on Tuesday at 9:30.",
+  ]) {
+    assert.doesNotMatch(bodyFor(line), flagged, line);
+  }
+});
+
+test("a promise found only in the recording also warns, not just closes nothing", () => {
+  const r = row(
+    { requests: [] },
+    {
+      agentTranscript: "Mili: Hi Raj.",
+      durationSeconds: 30,
+      recordings: [
+        {
+          transcript:
+            "Mili: Hi Raj.\nCaller: call me back about the bookings\nMili: Of course, I'll call you back with them.",
+          transcriptStatus: "DONE",
+        },
+      ],
+    },
+  );
+  assert.match(
+    ownerCallHandoffBody(r as never, r.ownerCall.call.agentTranscript),
+    /told the owner she would pass something on or call back/,
+  );
+});
+
+test("a request the owner changed is touched to the newest, and requests tie-break deterministically", async () => {
+  // Pinned through the update the call desk's second note performs.
+  const { noteOwnerCallRequest } =
+    await import("@/lib/domain/comms/calls/owner-call-handoff");
+  const recorder = recordingDb({
+    "call.findUnique": {
+      direction: "OUTBOUND",
+      ownerCall: { id: "oc-1" },
+      providerCallId: "v3:abc",
+      staffTarget: "AGENT",
+    },
+    "ownerCallHandoff.createMany": { count: 0 },
+    "ownerCallHandoff.findUnique": { id: "h-1", status: "OPEN" },
+    "ownerCallHandoffRequest.findUnique": {
+      callBack: true,
+      id: "r-1",
+      timing: "tomorrow",
+    },
+  });
+  await noteOwnerCallRequest(
+    { callId: "call-1", kind: "voice-call", providerCallId: "v3:abc" },
+    {
+      callBack: true,
+      now: NOW,
+      request: "Call me back.",
+      source: "owner",
+      timing: "in five minutes",
+    },
+    recorder.transactionalDb,
+  );
+  const [update] = ops(recorder.calls, "ownerCallHandoffRequest.update");
+  assert.deepEqual(
+    (update.args as { data: { createdAt: Date } }).data.createdAt,
+    NOW,
+  );
 });

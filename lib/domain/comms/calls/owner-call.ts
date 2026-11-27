@@ -138,6 +138,11 @@ export type RequestOwnerCallInput = {
    * One callback per handoff: a second request for it answers with the first.
    */
   readonly handoffId?: string | null;
+  /**
+   * The revision of that handoff the caller read. A newer one is refused, so a
+   * turn that has not seen the reopened handoff cannot schedule against it.
+   */
+  readonly handoffRevision?: number | null;
   readonly now?: Date;
 };
 
@@ -655,7 +660,11 @@ export async function requestOwnerCall(
   if (replay) return replay;
 
   if (handoffId) {
-    const { existingCallbackId } = await handoffForCallback(db, handoffId);
+    const { existingCallbackId } = await handoffForCallback(
+      db,
+      handoffId,
+      input.handoffRevision,
+    );
     if (existingCallbackId) {
       return {
         alreadyRequested: true,
@@ -694,7 +703,11 @@ export async function requestOwnerCall(
       if (handoffId) {
         // The check that holds, under the handoff's lock: resolved without a
         // callback, or given one, since the first look.
-        const claim = await claimHandoffForCallback(tx, handoffId);
+        const claim = await claimHandoffForCallback(
+          tx,
+          handoffId,
+          input.handoffRevision,
+        );
         if (claim.existingCallbackId) {
           return { id: claim.existingCallbackId, replay: true };
         }
