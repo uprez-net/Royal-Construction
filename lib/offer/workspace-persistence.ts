@@ -89,6 +89,11 @@ export type TenderGateState = {
   readonly architecturalPlanUploaded: TenderGateArchitecturalPlanFile | null;
   // null = Q3 unanswered (only reachable once a plan is uploaded).
   readonly architecturalPlanDesignChanges: boolean | null;
+  // Not part of the access decision: the one Tender-document choice, kept here
+  // because this slice stays writable until the Tender is sent. When true the
+  // Tender prints "Above tender is subject to final engineering details and
+  // council requirements." among its Important Notes; when false it does not.
+  readonly subjectToSitePrices: boolean;
 };
 
 // Derived, not persisted — recomputed from the flags above so the cached
@@ -106,6 +111,7 @@ export const INITIAL_TENDER_GATE: TenderGateState = {
   architecturalPlanFeeCollected: false,
   architecturalPlanUploaded: null,
   architecturalPlanDesignChanges: null,
+  subjectToSitePrices: false,
 };
 
 export function deriveTenderGateStatus(
@@ -412,12 +418,14 @@ const tenderGateSchema = z
     architecturalPlanFeeCollected: z.boolean().default(false),
     architecturalPlanUploaded: tenderGateFileSchema.nullable().default(null),
     architecturalPlanDesignChanges: z.boolean().nullable().default(null),
+    subjectToSitePrices: z.boolean().default(false),
   })
   .default({
     needsArchitecturalPlan: null,
     architecturalPlanFeeCollected: false,
     architecturalPlanUploaded: null,
     architecturalPlanDesignChanges: null,
+    subjectToSitePrices: false,
   });
 
 // Pump Hire / Benching / Piles (lib/offer/extra-costs.ts). Rates are money, so

@@ -1090,6 +1090,10 @@ export function OfferWorkspaceScreen({
                         onGenerateTender={onGenerateTender}
                         onMarkTenderSigned={onMarkTenderSigned}
                         onPaymentScheduleChange={onPaymentScheduleChange}
+                        subjectToSitePrices={tenderGate.subjectToSitePrices}
+                        onSubjectToSitePricesChange={(checked) =>
+                          onTenderGateChange({ subjectToSitePrices: checked })
+                        }
                         onRecallTender={onRecallTender}
                         onSendTender={onSendTender}
                         tenderSending={tenderSending}

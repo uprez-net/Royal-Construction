@@ -85,6 +85,9 @@ export type OfferPrintTemplateInput = {
   // restamped with the date it happened to be viewed. Must be a Date —
   // formatDateDisplay parses strings as date-only local values.
   readonly preparedDate?: Date;
+  // Tender only: print the "subject to final engineering details and council
+  // requirements" note. Ticked on the Tender step; absent reads as unticked.
+  readonly subjectToSitePrices?: boolean;
 };
 
 export function buildOfferPrintTemplateData({

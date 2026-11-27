@@ -39,9 +39,11 @@ function render(draft: OfferDocumentDraft = INITIAL_OFFER_DRAFT): string {
       onPaymentScheduleChange: () => {},
       onRecallTender: () => {},
       onSendTender: () => {},
+      onSubjectToSitePricesChange: () => {},
       paymentSchedule: INITIAL_PAYMENT_SCHEDULE,
       signerStatuses: [],
       status: "tender_draft",
+      subjectToSitePrices: false,
     }),
   );
 }
