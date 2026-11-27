@@ -688,18 +688,21 @@ function callerSpoke(transcript: string): boolean {
  * Mili's live transcript nor the recording's holds a line from anyone but her.
  * Live must exist: a recording alone (it may be unlabelled) never decides it.
  */
-function ownerSaidNothing(row: {
-  readonly requests: readonly unknown[];
-  readonly ownerCall: {
-    readonly call: {
-      readonly agentTranscript: string | null;
-      readonly recordings: readonly {
-        readonly transcript: string | null;
-        readonly transcriptStatus?: CallTranscriptStatus;
-      }[];
-    } | null;
-  };
-}): boolean {
+function ownerSaidNothing(
+  row: {
+    readonly requests: readonly unknown[];
+    readonly ownerCall: {
+      readonly call: {
+        readonly agentTranscript: string | null;
+        readonly recordings: readonly {
+          readonly transcript: string | null;
+          readonly transcriptStatus?: CallTranscriptStatus;
+        }[];
+      } | null;
+    };
+  },
+  options: { readonly requireLive?: boolean } = {},
+): boolean {
   const live = row.ownerCall.call?.agentTranscript?.trim();
   const recorded = recordedTranscriptOf(row);
   // A recording still being transcribed can show what the live transcript
@@ -709,8 +712,8 @@ function ownerSaidNothing(row: {
   );
   return (
     !row.requests.length
-    && Boolean(live)
-    && !callerSpoke(live as string)
+    && (options.requireLive === false || Boolean(live))
+    && !(live && callerSpoke(live))
     && !pending
     // A recording with any line that has no speaker label (the split failed,
     // wholly or in part) cannot show who spoke.
@@ -1111,7 +1114,7 @@ export function ownerCallHandoffBody(
     ...(call
     && answered(call)
     && (call.durationSeconds ?? 0) > EMPTY_CALL_MAX_SECONDS
-    && ownerSaidNothing(row)
+    && ownerSaidNothing(row as HandoffRow, { requireLive: false })
       ? [
           `Note: the call ran ${call.durationSeconds} seconds but the transcript holds nothing the owner said, so their words were probably not transcribed. Do not guess what they wanted. End your reply with RESULT: needs_owner and say in the line before that the call's words were lost, so the office can ask them.`,
         ]

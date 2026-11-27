@@ -275,8 +275,8 @@ When an owner call ends, Royal passes Hermes what it left
    - **Voicemail (#645).** The carrier calls a call that voicemail picked up
      "answered", so nothing else says the owner never heard it. If one of the
      first two lines from anyone but Mili, in the recording's transcript (or
-     the live one), is a voicemail greeting ("not available", "leave a
-     message", "at the tone", "voicemail", "trying to reach"):
+     the live one), is a voicemail greeting ("leave a message", "at the
+     tone", "voicemail", "the person you are trying to reach"):
      - **a callback** reopens the handoff it came from (a new revision, "it
        was answered by voicemail, so the owner did not hear it"), starts its
        delivery at once, and closes the callback's own handoff with a

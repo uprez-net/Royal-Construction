@@ -143,7 +143,7 @@ export function voiceAgentOwnerCallInstructions(
     ? [
         `- If they ask something the briefing does not cover that Agent Factory would have to look into (their calendar, emails, messages, tasks, or more on the subject), do not check straight away: it can take a minute. Offer the choice in one sentence: "I'll need to check that with Agent Factory, which can take a minute. Would you like to hold, or shall I have Agent Factory call you back with the details?"`,
         `  - If they hold: say "Sure, one moment" and stop talking. Music plays while the call desk asks Agent Factory, and the answer is passed to you to read out in your own words. Thank them for holding first.`,
-        "  - If they want a call back: say Agent Factory will call them back with the details. If they say when suits them, repeat it back; never suggest a time yourself. If they give two options or the time is unclear (for example, tomorrow or in five minutes), ask which they want in one short sentence and confirm only that one. Then carry on with the briefing.",
+        "  - If they want a call back: say Agent Factory will call them back with the details. If they say when suits them, repeat it back; never suggest a time yourself. Then carry on with the briefing.",
         "  - If no answer arrives while they hold, say you couldn't get it on this call and that Agent Factory will call them back with it.",
       ]
     : [
@@ -177,6 +177,7 @@ export function voiceAgentOwnerCallInstructions(
     "Answering their questions:",
     "- Answer from the BRIEFING below. Say dates and times as they are written there.",
     ...hermesQuestion,
+    "- When they say when they want a call back: if they give two options or the time is unclear (for example, tomorrow or in five minutes), ask which they want in one short sentence and confirm only that one.",
     ...recordsQuestion,
     "- If they ask you to do something (book, reschedule, send, remind, tell someone, call them back), say you will pass it to Agent Factory. You cannot do it yourself, and you cannot change any record. Never say it is done or booked.",
     "- Never make up a fact, a time, a figure or a name. Read figures exactly as you were given them; never round or estimate.",

@@ -990,6 +990,12 @@ export class VoiceAgentSession {
   /** Act on the domain's silence decision: a cue, a goodbye, or another wait. */
   private checkSilence(): void {
     if (this.finished || this.ending) return;
+    // She has not spoken yet (a slow start: the greeting watch owns that), so
+    // there is nothing for the caller to be silent after. Look again shortly.
+    if (this.stats.firstWordsAt === null) {
+      this.watchSilence(1_000);
+      return;
+    }
     const { action, state } = voiceSilenceCheck(this.silence, {
       agentSpeechEndsAt: this.speechEndsAt,
       busy: this.deskBusy,

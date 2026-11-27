@@ -10,6 +10,7 @@ import {
   ownerCallHandoffInstructions,
   verifyHandoffActed,
 } from "@/lib/domain/comms/calls/owner-call-handoff";
+import { voiceAgentOwnerCallInstructions } from "@/lib/domain/comms/calls/voice-agent-owner-call";
 import type { OwnerAssistantPort } from "@/lib/domain/ports/owner-assistant";
 import { systemPrincipal } from "@/lib/domain/principal";
 
@@ -891,4 +892,36 @@ test("verify: a check scheduled for one revision leaves a newer one alone", asyn
     "skipped",
   );
   assert.deepEqual(writes(recorder.calls), []);
+});
+
+test("the body: a long answered call with no live transcript at all still warns that the words were lost", () => {
+  const long = row(
+    { requests: [] },
+    { agentTranscript: null, durationSeconds: 116 },
+  );
+  const text = ownerCallHandoffBody(long as never, null);
+  assert.match(text, /nothing the owner said/);
+  assert.match(text, /RESULT: needs_owner/);
+});
+
+test("the call's instructions give the two-times rule whether or not Agent Factory can be asked", () => {
+  const briefing = {
+    agenda: ["One"],
+    callId: "c",
+    category: "other" as const,
+    context: "ctx",
+    eventAt: null,
+    ownerName: "Raj",
+    reference: null,
+    subject: "s",
+  };
+  for (const canAskAssistant of [true, false]) {
+    assert.match(
+      voiceAgentOwnerCallInstructions(briefing, {
+        canAskAssistant,
+        caller: null,
+      }),
+      /give two options or the time is unclear/,
+    );
+  }
 });
