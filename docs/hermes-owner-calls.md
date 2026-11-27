@@ -267,9 +267,17 @@ When an owner call ends, Royal passes Hermes what it left
      asked. A longer call like that is probably a lost transcript, not a
      silent owner, so it is still sent, with a note telling Hermes not to
      guess and to end with `RESULT: needs_owner`, which fails the handoff and
-     reports it so the office asks the owner. Only Mili's own labelled live
-     transcript decides this: a recording's speech-to-text may have no speaker
-     labels, so it never closes a call. A reopened revision is always sent.
+     reports it so the office asks the owner. Mili's own labelled live
+     transcript must exist and, with the recording's (also labelled), show no
+     one but Mili: a recording alone, which may have no speaker labels, never
+     closes a call, and a voicemail greeting in the recording counts as a
+     caller line. A reopened revision is always sent.
+   - **Two transcripts.** The voice model's live transcript can drop a short
+     reply or mishear one ("10 minutes" came out as "tomorrow" on a real
+     call), while the recording's speech-to-text got both right. When both
+     exist and differ, Hermes is given both, the recording first, and the
+     workflow waits 45 seconds after hangup before the first send so the
+     recording's transcript has landed.
 
 ## What the owner hears
 

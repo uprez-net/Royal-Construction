@@ -215,6 +215,20 @@ test("delivery: an empty-looking call is still sent when something suggests it w
     ],
     ["the owner spoke", { requests: [] }, { durationSeconds: 30 }],
     [
+      "the recording shows the owner spoke even though the live transcript lost it",
+      { requests: [] },
+      {
+        ...silent,
+        durationSeconds: 30,
+        recordings: [
+          {
+            transcript:
+              "Mili: Hi Raj.\nCaller: Yeah, call me back in five minutes.",
+          },
+        ],
+      },
+    ],
+    [
       "only an unlabelled recording transcript exists",
       { requests: [] },
       {
@@ -371,4 +385,32 @@ test("backstop: a handoff taken long ago and still unresolved is failed and name
   assert.equal(where.status, "DELIVERED");
   assert.equal(where.resolvedAt, null);
   assert.deepEqual(eventKinds(recorder.calls), ["handoff.failed"]);
+});
+
+test("delivery: when the live and recorded transcripts differ, Hermes gets both, the recording first", async () => {
+  const sent: string[] = [];
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": row(
+      {},
+      {
+        agentTranscript:
+          "Mili: Hi Raj.\nCaller: give me a call back tomorrow or let's say five",
+        recordings: [
+          {
+            transcript:
+              "Mili: Hi Raj.\nCaller: Give me a call back in 10 minutes or let's say in 5 minutes.",
+          },
+        ],
+      },
+    ),
+    "ownerCallHandoff.updateMany": { count: 1 },
+  });
+  assert.equal(await deliver(recorder, assistant("ok", sent)), "delivered");
+  const body = sent[0];
+  assert.ok(
+    body.indexOf("Recording transcript") < body.indexOf("Live transcript"),
+  );
+  assert.match(body, /Recording transcript \(speech-to-text/);
+  assert.match(body, /Live transcript \(what the voice model heard/);
+  assert.match(body, /tomorrow or let's say five/);
 });

@@ -571,16 +571,42 @@ function answered(call: {
   return call.answeredBy !== null || call.answeredAt !== null;
 }
 
-function transcriptOf(row: HandoffRow): string | null {
-  const call = row.ownerCall.call;
-  if (!call) return null;
-  const live = call.agentTranscript?.trim();
-  if (live) return live;
-  const recorded = call.recordings
+/** What the carrier's recording was transcribed to, if it has been. */
+function recordedTranscriptOf(row: {
+  readonly ownerCall: {
+    readonly call: {
+      readonly recordings: readonly { readonly transcript: string | null }[];
+    } | null;
+  };
+}): string | null {
+  const recorded = (row.ownerCall.call?.recordings ?? [])
     .map((recording) => recording.transcript?.trim())
     .filter((text): text is string => Boolean(text))
     .join("\n");
   return recorded || null;
+}
+
+/**
+ * What was said. The voice model's own live transcript can drop a short reply
+ * or mishear one ("10 minutes" became "tomorrow" on a real call, #643), while
+ * the recording's speech-to-text got both right. When both exist and differ,
+ * Hermes is given both, the recording first.
+ */
+function transcriptOf(row: HandoffRow): string | null {
+  const call = row.ownerCall.call;
+  if (!call) return null;
+  const live = call.agentTranscript?.trim() || null;
+  const recorded = recordedTranscriptOf(row);
+  if (live && recorded && live !== recorded) {
+    return [
+      "Recording transcript (speech-to-text of the call's audio; usually the more accurate):",
+      recorded,
+      "",
+      "Live transcript (what the voice model heard; may miss or mishear words):",
+      live,
+    ].join("\n");
+  }
+  return live ?? recorded;
 }
 
 /** Is there a line in the transcript from anyone but Mili? */
@@ -591,18 +617,29 @@ function callerSpoke(transcript: string): boolean {
 }
 
 /**
- * The owner said nothing, as far as Royal can tell: nothing noted, and Mili's
- * own live transcript (the one with speaker labels) holds only her lines. A
- * recording's speech-to-text may have no labels, so it never decides this.
+ * The owner said nothing, as far as Royal can tell: nothing noted, and neither
+ * Mili's live transcript nor the recording's holds a line from anyone but her.
+ * Live must exist: a recording alone (it may be unlabelled) never decides it.
  */
 function ownerSaidNothing(row: {
   readonly requests: readonly unknown[];
   readonly ownerCall: {
-    readonly call: { readonly agentTranscript: string | null } | null;
+    readonly call: {
+      readonly agentTranscript: string | null;
+      readonly recordings: readonly { readonly transcript: string | null }[];
+    } | null;
   };
 }): boolean {
   const live = row.ownerCall.call?.agentTranscript?.trim();
-  return !row.requests.length && Boolean(live) && !callerSpoke(live as string);
+  const recorded = recordedTranscriptOf(row);
+  return (
+    !row.requests.length
+    && Boolean(live)
+    && !callerSpoke(live as string)
+    // The recording's speech-to-text is labelled too: a voicemail greeting or
+    // a reply the live transcript lost shows up there as a caller line.
+    && !(recorded && callerSpoke(recorded))
+  );
 }
 
 /** The last RESULT marker in Hermes's reply, if it gave one. */

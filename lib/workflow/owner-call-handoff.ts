@@ -94,7 +94,9 @@ const RETRY_AFTER = ["1m", "5m", "15m"] as const;
 const runDeliverOwnerCallHandoff = async (
   handoffId: string,
 ): Promise<string> => {
-  await sleep("20s");
+  // The recording's speech-to-text lands about 25 s after hangup, and it is
+  // the more accurate transcript, so give it time before the first send.
+  await sleep("45s");
   let outcome = await deliver(handoffId, true);
   // The last wait sends it without a transcript rather than waiting again.
   for (let wait = 0; outcome === "waiting" && wait < 6; wait += 1) {
