@@ -365,8 +365,18 @@ const commentary = (h: Awaited<ReturnType<typeof started>>, content: string) =>
     (e) => e.type === "session.commentary.append" && e.content === content,
   ).length;
 
+/** Mili has said her greeting: silence is counted from after it. */
+function greeted(h: Awaited<ReturnType<typeof started>>) {
+  h.session.handleModelEvent({
+    delta: Buffer.alloc(160, SPEECH).toString("base64"),
+    type: "session.output_audio.delta",
+  });
+  h.advance(100);
+}
+
 test("a silent caller is followed up, then told the team will get back to them, and the call ends", async () => {
   const h = await started();
+  greeted(h);
   for (let i = 1; i <= VOICE_AGENT_SILENCE_FOLLOW_UPS; i += 1) {
     h.advance(CALLER_SILENCE_MS);
     h.fire(CALLER_SILENCE_MS);
@@ -396,6 +406,7 @@ test("a silent caller is followed up, then told the team will get back to them, 
 
 test("the caller speaking puts the silence back to the start, follow-ups included", async () => {
   const h = await started();
+  greeted(h);
   h.advance(CALLER_SILENCE_MS);
   h.fire(CALLER_SILENCE_MS);
   assert.equal(commentary(h, VOICE_AGENT_SILENCE_FOLLOW_UP_CUE), 1);
@@ -461,6 +472,7 @@ test("no follow-up while Mili is still talking", async () => {
 
 test("a silent caller's call still ends if Mili never says goodbye", async () => {
   const h = await started();
+  greeted(h);
   for (let i = 0; i <= VOICE_AGENT_SILENCE_FOLLOW_UPS; i += 1) {
     h.advance(CALLER_SILENCE_MS);
     h.fire(CALLER_SILENCE_MS);
@@ -475,6 +487,7 @@ test("a silent caller's call still ends if Mili never says goodbye", async () =>
 
 test("a caller who answers the goodbye is not hung up on", async () => {
   const h = await started();
+  greeted(h);
   for (let i = 0; i <= VOICE_AGENT_SILENCE_FOLLOW_UPS; i += 1) {
     h.advance(CALLER_SILENCE_MS);
     h.fire(CALLER_SILENCE_MS);
@@ -507,4 +520,11 @@ test("a caller who answers the goodbye is not hung up on", async () => {
   h.fire(CALLER_SILENCE_MS);
   assert.equal(commentary(h, VOICE_AGENT_SILENCE_FOLLOW_UP_CUE), 3);
   assert.equal(commentary(h, VOICE_AGENT_SILENCE_GOODBYE_CUE), 1);
+});
+
+test("silence is not counted before Mili has said a word: a slow start gets no follow-up", async () => {
+  const h = await started();
+  h.advance(CALLER_SILENCE_MS * 3);
+  h.fire(CALLER_SILENCE_MS);
+  assert.equal(commentary(h, VOICE_AGENT_SILENCE_FOLLOW_UP_CUE), 0);
 });

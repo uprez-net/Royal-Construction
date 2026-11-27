@@ -1,4 +1,5 @@
 import {
+  OWNER_CALL_SILENCE_POLICY,
   voiceAgentGreetingCue,
   voiceAgentInstructions,
 } from "@/lib/domain/comms/calls/voice-agent";
@@ -266,6 +267,7 @@ export function voiceCallerPreparer(
         silenceGoodbye: OWNER_CALL_SILENCE_GOODBYE_CUE,
         wrapUp: OWNER_CALL_WRAP_UP_CUE,
       },
+      silence: OWNER_CALL_SILENCE_POLICY,
       desk: { canAskAssistant, kind: "owner_call" },
       greetingCue: ownerCallGreetingCue(briefing),
       instructions: voiceAgentOwnerCallInstructions(briefing, {

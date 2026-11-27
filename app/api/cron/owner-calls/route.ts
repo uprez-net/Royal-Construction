@@ -4,7 +4,10 @@ import { NextResponse } from "next/server";
 import { startHandoffDeliveries } from "@/lib/comms/owner-call-handoffs";
 import { armOwnerCallTimers } from "@/lib/comms/owner-call-timers";
 import { recoverStalePlacingOwnerCalls } from "@/lib/domain/comms/calls/owner-call";
-import { handoffsToDeliver } from "@/lib/domain/comms/calls/owner-call-handoff";
+import {
+  failStaleDeliveredHandoffs,
+  handoffsToDeliver,
+} from "@/lib/domain/comms/calls/owner-call-handoff";
 import { systemPrincipal } from "@/lib/domain/principal";
 import { withCronReporting } from "@/lib/observability/cron";
 import prisma from "@/lib/prisma";
@@ -24,7 +27,8 @@ import prisma from "@/lib/prisma";
  * without its handoff being marked ready is marked, and every handoff whose
  * delivery run was lost, cut off or failed is started again, until the
  * domain's attempt limit. One that never gets through stays FAILED: shown
- * under Admin → Agent calls and listed for Hermes.
+ * under Admin → Agent calls and listed for Hermes. One Hermes took but never
+ * resolved (45 minutes on) is FAILED the same way, and reported.
  *
  * Not a per-minute poll of due calls: that would keep the database awake
  * around the clock. This runs at :15, beside the approval-expiry cron, so it
@@ -67,6 +71,18 @@ async function handle(request: Request) {
     prisma,
   );
   if (armed) console.info(`[owner-calls] armed ${armed} timer(s)`);
+  // Taken by Hermes long ago and still unresolved, with no workflow left to
+  // check them: FAILED, and said loudly (the error reaches the office).
+  const unacted = await failStaleDeliveredHandoffs(
+    systemPrincipal("cron:owner-calls"),
+    {},
+    prisma,
+  );
+  if (unacted.length) {
+    console.error(
+      `[owner-calls] ${unacted.length} handoff(s) taken by Hermes were never acted on and need a person (Admin → Agent calls): ${unacted.join(", ")}`,
+    );
+  }
   const handoffs = await handoffsToDeliver(
     systemPrincipal("cron:owner-calls"),
     {},

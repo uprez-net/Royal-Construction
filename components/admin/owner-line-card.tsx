@@ -90,7 +90,9 @@ export function OwnerLineCard({
     try {
       await clearOwnerLine();
       setLine(null);
-      toast.success("Owner line cleared. Mili won't ring anyone for Hermes.");
+      toast.success(
+        "Owner line cleared. Mili won't ring anyone for Agent Factory.",
+      );
     } catch (clearError) {
       toast.error(message(clearError, "Could not clear the owner line."));
     } finally {
@@ -106,11 +108,11 @@ export function OwnerLineCard({
         <div>
           <h2 className="text-base font-semibold">Owner line</h2>
           <p className="text-sm text-muted-foreground">
-            The owner&apos;s own phone. Hermes, their personal assistant, can
-            ask Mili to ring it with a briefing: a project brief, a reminder
+            The owner&apos;s own phone. Agent Factory, their personal assistant,
+            can ask Mili to ring it with a briefing: a project brief, a reminder
             before a meeting, an alert. If the owner asks something the briefing
-            doesn&apos;t cover, Mili checks with Hermes on the call. These calls
-            only ever ring this number.
+            doesn&apos;t cover, Mili checks with Agent Factory on the call.
+            These calls only ever ring this number.
           </p>
         </div>
 
@@ -165,7 +167,9 @@ export function OwnerLineCard({
             </div>
           ) : (
             <div className="flex flex-col gap-2 rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-              <span>Not set. Hermes can&apos;t ask Mili to call anyone.</span>
+              <span>
+                Not set. Agent Factory can&apos;t ask Mili to call anyone.
+              </span>
               <Button type="button" size="sm" onClick={startEditing}>
                 Set owner line
               </Button>
@@ -226,7 +230,7 @@ export function OwnerLineCard({
 
         <ul className="space-y-1 text-sm text-muted-foreground">
           <li>
-            Hermes can place calls:{" "}
+            Agent Factory can place calls:{" "}
             <span className="font-medium text-foreground">
               {hermesCalls ? "yes" : "no"}
             </span>
@@ -238,7 +242,7 @@ export function OwnerLineCard({
             )}
           </li>
           <li>
-            Mili can check with Hermes on the call:{" "}
+            Mili can check with Agent Factory on the call:{" "}
             <span className="font-medium text-foreground">
               {hermesAssistant ? "yes" : "no"}
             </span>
@@ -252,7 +256,7 @@ export function OwnerLineCard({
           </li>
           {hermesCalls && hermesEndpoint ? (
             <li>
-              Hermes connects to the operations agent at{" "}
+              Agent Factory connects to the operations agent at{" "}
               <code className="break-all">{hermesEndpoint}</code>, sending{" "}
               <code>HERMES_MCP_SECRET</code> in the <code>X-Hermes-Secret</code>{" "}
               header. Its calls are under{" "}
@@ -264,12 +268,12 @@ export function OwnerLineCard({
           ) : null}
           {line && hermesCalls && !voiceAgent ? (
             <li className="text-warning-ink">
-              Mili is off, so a call Hermes asks for is refused.
+              Mili is off, so a call Agent Factory asks for is refused.
             </li>
           ) : null}
           {ready ? (
             <li className="text-success-ink">
-              Ready: Hermes can brief the owner by phone.
+              Ready: Agent Factory can brief the owner by phone.
             </li>
           ) : null}
         </ul>

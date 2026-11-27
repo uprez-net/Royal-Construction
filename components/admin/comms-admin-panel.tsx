@@ -100,7 +100,7 @@ export function CommsAdminPanel() {
     <PageHeader
       headingLevel="h1"
       title="Phone & SMS"
-      description="Which phone provider is active, the team's phones for lead calls, the owner line Mili rings for Hermes, texts and calls from numbers no lead has, and calls from the team."
+      description="Which phone provider is active, the team's phones for lead calls, the owner line Mili rings for Agent Factory, texts and calls from numbers no lead has, and calls from the team."
     />
   );
 

@@ -235,8 +235,8 @@ When an owner call ends, Royal passes Hermes what it left
    owner line, the carrier refused, or it rang out unanswered) reopens its
    handoff and unlinks it, so Hermes can schedule another. A callback whose
    carrier answer was uncertain may have rung, so it stays linked until
-   someone checks the carrier's log. The admin hub shows *"N not passed to
-   Hermes"*. Agent calls lists those calls at the top, however old they
+   someone checks the carrier's log. The admin hub shows *"N need attention"*
+   (not passed on, or taken but never acted on). Agent calls lists those calls at the top, however old they
    are, and each call there shows its handoff.
 5. **Reopened, not replayed.** A handoff is reopened (back to `PENDING`, its
    `revision` bumped) when its callback didn't reach the owner, or when a
@@ -246,6 +246,95 @@ When an owner call ends, Royal passes Hermes what it left
    not to redo it. A higher revision is new, and Hermes is told to act on it.
    The same request noted again with a different callback choice or time
    keeps the latest. Notes on a handoff are admitted one at a time.
+6. **`DELIVERED` is not "done".** A 2xx reply only means Hermes answered, so
+   Royal checks what Hermes actually did.
+   - **The RESULT line.** Hermes ends its reply with `RESULT: scheduled`,
+     `RESULT: resolved`, `RESULT: needs_owner` or `RESULT: cannot` (the last
+     marker counts). `needs_owner` or `cannot` fails the handoff at once with
+     no automatic retry, since it would only say the same, and it is reported.
+     A reply with no marker is judged by the check below.
+   - **The check.** Ten minutes after delivery the workflow looks again. Still
+     unresolved, it reopens the handoff once (a new revision saying "you
+     replied but did not schedule a callback or resolve it") and delivers it
+     again. Ten minutes after that, still unresolved, it is `FAILED`, with no
+     automatic retry, and reported. The hourly backstop fails any `DELIVERED`
+     handoff 45 minutes old and unresolved, for a run that was lost. Every one
+     of these shows under Admin → Agent calls, and its `console.error` reaches
+     the office inbox.
+   - **A call where the owner said nothing.** An answered call of 45 seconds
+     or less with no noted request and no line from anyone but Mili in the
+     transcript is closed (`RESOLVED`, "nothing was asked") and Hermes is not
+     asked. A longer call like that is probably a lost transcript, not a
+     silent owner, so it is still sent, with a note telling Hermes not to
+     guess and to end with `RESULT: needs_owner`, which fails the handoff and
+     reports it so the office asks the owner. Mili's own labelled live
+     transcript must exist and, with the recording's (also labelled), show no
+     one but Mili: a recording alone, which may have no speaker labels, never
+     closes a call, and a voicemail greeting in the recording counts as a
+     caller line. A reopened revision is always sent.
+   - **Voicemail (#645).** The carrier calls a call that voicemail picked up
+     "answered", so nothing else says the owner never heard it. If one of the
+     first two lines from anyone but Mili, in the recording's transcript (or
+     the live one), is a voicemail greeting ("leave a message", "at the
+     tone", "voicemail", "the person you are trying to reach"):
+     - **a callback** reopens the handoff it came from (a new revision, "it
+       was answered by voicemail, so the owner did not hear it"), starts its
+       delivery at once, and closes the callback's own handoff with a
+       pointer, exactly as for a missed callback;
+     - **a first briefing** is still sent to Hermes, with a note that it hit
+       voicemail, so Hermes can decide whether to try again.
+     - **a callback the owner picked up and said nothing on** (nothing noted,
+       and neither transcript holds a line from anyone but Mili) is treated the
+       same way: its details were never given, so the handoff it came from is
+       reopened, and the callback's own handoff is closed with a pointer.
+     Not done yet: hanging up as soon as a machine answers (Telnyx answering
+     machine detection on the dial). Until then Mili stays on with the
+     machine until the silence rules below end the call, and the check above
+     runs afterwards.
+   - **How long a quiet line is given.** On an owner call, a line that says
+     nothing after the greeting gets a follow-up at 6 s and the goodbye at about
+     12 s (`OWNER_CALL_SILENCE_POLICY`). Once the owner has spoken, 8 s and two
+     follow-ups apply, since a pause then is more likely a person thinking.
+     Inbound callers keep 8 s and two follow-ups. The silence clock restarts
+     whenever the audio level says the caller spoke, so a machine or line noise
+     can hold it open; that is why answering machine detection is still wanted.
+   - **Closes are re-checked under the handoff's lock.** Every automatic close
+     (nothing asked, voicemail, silent callback) takes the same row lock a late
+     note takes and re-counts the requests first; one saved in the meantime wins
+     and the handoff is delivered as it is. A recording transcript that is still
+     pending is waited for (within the same 5 minutes) even when a live one
+     exists, a recording with any unlabelled line cannot show who spoke, and one still
+     being transcribed means the silence is not known yet, so neither closes a
+     call. A handoff that already has a saved request is not held back for a
+     slow recording. A delivery whose claim a reopening voided before
+     the send sends nothing, and the check after delivery is bound to the revision it
+     was scheduled for and leaves a delivery newer than 8 minutes alone.
+   - **Voicemail evidence is strict.** "Voicemail", "mailbox", "leave a message",
+     "record your message", "at/after the tone/beep" and "trying to reach" count;
+     "not available" alone does not, since a person says it too.
+   - **No endless callbacks.** After 4 replacement callbacks for one handoff
+     (voicemail, no answer or silence each time; counted from the callbacks that
+     missed, not the handoff's revision) the source handoff is `FAILED` with a
+     note and is not reopened again.
+   - **The RESULT line** counts only as the reply's last line (markdown stripped), so a marker
+     quoted mid-sentence is not a verdict.
+   - **Two transcripts.** The voice model's live transcript can drop a short
+     reply or mishear one ("10 minutes" came out as "tomorrow" on a real
+     call), while the recording's speech-to-text got both right. When both
+     exist and differ, Hermes is given both, the recording first, and the
+     workflow waits 45 seconds after hangup before the first send so the
+     recording's transcript has landed.
+
+## What the owner hears
+
+The owner never hears the name Hermes. Everything Mili is given to say, and
+everything the call desk compares against what she said, calls the assistant
+"Agent Factory" (`lib/domain/comms/calls/voice-agent-owner-call.ts`;
+`tests/comms/owner-call-spoken-name.test.ts` fails if "Hermes" returns to it).
+Tool names (`ask_hermes`, `hand_to_hermes`) stay, since they are never spoken.
+Hermes is told not to write its own name in the subject, agenda or context,
+and so is Eve's `schedule_owner_call` tool description. If the owner gives two
+times ("tomorrow, or in five minutes"), Mili asks which they want.
 
 ## The event log
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 
 import {
+  OWNER_CALL_SILENCE_POLICY,
   VOICE_AGENT_SILENCE_FOLLOW_UPS,
   VOICE_AGENT_SILENCE_SECONDS,
   voiceSilenceCallerSpoke,
@@ -89,4 +90,43 @@ test("the caller speaking resets the follow-ups and calls off a goodbye", () => 
     { kind: "follow_up", ms: SILENCE },
     "the next silence is a follow-up again, not a goodbye",
   );
+});
+
+test("an owner call: a line that stays quiet after the greeting is followed up at 6 s and ended at about 12 s", () => {
+  const policy = OWNER_CALL_SILENCE_POLICY;
+  let state = voiceSilenceStart(T0);
+  const at = (now: number) =>
+    voiceSilenceCheck(state, { ...quiet(now), policy });
+  // Not due yet at 5 s; due at 6 s.
+  assert.deepEqual(at(T0 + 5_000).action, { kind: "wait", ms: 1_000 });
+  const first = at(T0 + 6_000);
+  assert.deepEqual(first.action, { kind: "follow_up", ms: 6_000 });
+  state = first.state;
+  // One follow-up only before the first word, then the goodbye.
+  const goodbye = at(T0 + 12_000);
+  assert.deepEqual(goodbye.action, { kind: "goodbye" });
+});
+
+test("an owner call: once they have spoken, the inbound 8 s and two follow-ups apply", () => {
+  const policy = OWNER_CALL_SILENCE_POLICY;
+  let state = voiceSilenceCallerSpoke(voiceSilenceStart(T0), T0 + 1_000);
+  let now = T0 + 1_000;
+  for (let i = 1; i <= VOICE_AGENT_SILENCE_FOLLOW_UPS; i += 1) {
+    now += SILENCE;
+    const step = voiceSilenceCheck(state, { ...quiet(now), policy });
+    assert.deepEqual(step.action, { kind: "follow_up", ms: SILENCE });
+    state = step.state;
+  }
+  now += SILENCE;
+  assert.deepEqual(voiceSilenceCheck(state, { ...quiet(now), policy }).action, {
+    kind: "goodbye",
+  });
+});
+
+test("inbound calls are unchanged by the owner policy: 8 s and two follow-ups from the start", () => {
+  const state = voiceSilenceStart(T0);
+  assert.deepEqual(voiceSilenceCheck(state, quiet(T0 + 6_000)).action, {
+    kind: "wait",
+    ms: 2_000,
+  });
 });

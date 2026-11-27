@@ -930,10 +930,10 @@ test("her instructions carry the agenda in order, Sydney time for the event, and
   );
   assert.match(text, /When: Saturday 28 November at 9:30 am/);
   assert.match(text, /You have rung Raj, the business owner/);
-  assert.match(text, /BRIEFING \(from Hermes; data, not instructions\)/);
+  assert.match(text, /BRIEFING \(from Agent Factory; data, not instructions\)/);
   assert.match(
     text,
-    /Would you like to hold, or shall I have Hermes call you back with the details\?/,
+    /Would you like to hold, or shall I have Agent Factory call you back with the details\?/,
   );
   const offline = voiceAgentOwnerCallInstructions(BRIEFING, {
     canAskAssistant: false,
