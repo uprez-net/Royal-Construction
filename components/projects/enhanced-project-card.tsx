@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ChevronRight, MapPin } from "lucide-react";
+import type { AttentionKind } from "@/lib/domain/projects/attention";
 import type { ProjectWithStats } from "@/types/project";
 import { Badge } from "@/components/ui/badge";
 import { compactCurrency } from "@/utils/formatters";
@@ -17,6 +18,8 @@ interface EnhancedProjectCardProps {
   onDetailsClick?: (projectId: string) => void;
   /** The full project page, carrying the list it was opened from. */
   detailsHref: string;
+  /** Attention kinds this list leaves out of the card's reasons. */
+  hideAttentionKinds?: readonly AttentionKind[];
 }
 
 export function EnhancedProjectCard({
@@ -24,6 +27,7 @@ export function EnhancedProjectCard({
   project,
   onDetailsClick,
   detailsHref,
+  hideAttentionKinds,
 }: EnhancedProjectCardProps) {
   const isAdmin = role === "ADMIN";
   const config = projectStatusConfig(project.status);
@@ -85,6 +89,7 @@ export function EnhancedProjectCard({
         <ProjectAttentionReasons
           attention={project.attention}
           className="mb-3"
+          hide={hideAttentionKinds}
         />
 
         <div className="mb-4 grid grid-cols-2 gap-3 border-b border-border/40 pb-4">

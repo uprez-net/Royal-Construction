@@ -1,7 +1,10 @@
 import { reportWorkflowError } from "@/lib/workflow/report-failure";
 import { sleep } from "workflow";
 
-import { deliverOwnerCallHandoff } from "@/lib/domain/comms/calls/owner-call-handoff";
+import {
+  deliverOwnerCallHandoff,
+  verifyHandoffActed,
+} from "@/lib/domain/comms/calls/owner-call-handoff";
 import { systemPrincipal } from "@/lib/domain/principal";
 import { hermesAssistant } from "@/lib/hermes/assistant";
 import { readHermesConfig } from "@/lib/hermes/config";
@@ -25,25 +28,75 @@ import prisma from "@/lib/prisma";
  *                     through list_owner_call_handoffs
  *   reopened          overtaken while Hermes answered (a request noted late,
  *                     a callback that didn't ring): sent again straight away
+ *   delivered         only means Hermes answered 2xx. Ten minutes later the
+ *                     handoff is checked: still unresolved, it is reopened
+ *                     once (a new revision saying what was missed) and sent
+ *                     again; ten minutes after that, still unresolved, it is
+ *                     FAILED and reported, so a dropped request is never quiet
+ *   needs_attention   Hermes ended with RESULT: needs_owner or cannot: FAILED
+ *                     and reported at once
+ *   voicemail         a callback the owner's voicemail answered: the handoff it
+ *                     came from is reopened and delivered, this one closed
  */
+
+/** What one delivery step did, and the revision Hermes was actually given. */
+type Delivery = { outcome: string; revision: number | null };
 
 async function deliver(
   handoffId: string,
   waitForTranscript: boolean,
-): Promise<string> {
+): Promise<Delivery> {
   "use step";
+  let revision: number | null = null;
   // Built inside the step: nothing from the domain at module level, so the
   // workflow sandbox never loads it.
-  return deliverOwnerCallHandoff(
+  const outcome = await deliverOwnerCallHandoff(
     systemPrincipal("workflow:owner-call-handoff"),
     { handoffId, waitForTranscript },
     prisma,
-    { assistant: hermesAssistant(readHermesConfig()) },
+    {
+      assistant: hermesAssistant(readHermesConfig()),
+      onDelivered: (sent) => {
+        revision = sent.revision;
+      },
+      // Not imported at the top: that module imports this workflow.
+      startDelivery: async (id) => {
+        const { startHandoffDeliveries } =
+          await import("@/lib/comms/owner-call-handoffs");
+        await startHandoffDeliveries([id]);
+      },
+    },
   );
+  if (outcome === "needs_attention") {
+    console.error(
+      `[owner-calls] handoff ${handoffId}: Hermes can't go on without the owner, or can't do it; it needs a person (Admin → Agent calls)`,
+    );
+  }
+  return { outcome, revision };
 }
 // Never retried by the runtime: the domain records every try, and Hermes
 // receiving one twice is what the claim is there to avoid.
 deliver.maxRetries = 0;
+
+async function verify(
+  handoffId: string,
+  final: boolean,
+  expectedRevision: number,
+): Promise<string> {
+  "use step";
+  const verdict = await verifyHandoffActed(
+    systemPrincipal("workflow:owner-call-handoff"),
+    { expectedRevision, final, handoffId },
+    prisma,
+  );
+  if (verdict === "failed") {
+    console.error(
+      `[owner-calls] handoff ${handoffId} was taken by Hermes but never acted on; it needs a person (Admin → Agent calls)`,
+    );
+  }
+  return verdict;
+}
+verify.maxRetries = 0;
 
 export const deliverOwnerCallHandoffRun = async (
   handoffId: string,
@@ -62,26 +115,42 @@ const RETRY_AFTER = ["1m", "5m", "15m"] as const;
 const runDeliverOwnerCallHandoff = async (
   handoffId: string,
 ): Promise<string> => {
-  await sleep("20s");
-  let outcome = await deliver(handoffId, true);
+  // The recording's speech-to-text lands about 25 s after hangup, and it is
+  // the more accurate transcript, so give it time before the first send.
+  await sleep("45s");
+  let result = await deliver(handoffId, true);
   // The last wait sends it without a transcript rather than waiting again.
-  for (let wait = 0; outcome === "waiting" && wait < 6; wait += 1) {
+  for (let wait = 0; result.outcome === "waiting" && wait < 6; wait += 1) {
     await sleep("1m");
-    outcome = await deliver(handoffId, wait < 5);
+    result = await deliver(handoffId, wait < 5);
   }
   let retries = 0;
   // Bounded: each pass is one try at Hermes or one reopening caught up with.
   for (let pass = 0; pass < 8; pass += 1) {
     // Reopened while it was going (a request noted late, a callback that
     // didn't ring): what Hermes has is out of date, so send it again now.
-    if (outcome === "reopened") {
-      outcome = await deliver(handoffId, false);
+    if (result.outcome === "reopened") {
+      result = await deliver(handoffId, false);
       continue;
     }
-    if (outcome !== "failed" || retries >= RETRY_AFTER.length) break;
+    if (result.outcome !== "failed" || retries >= RETRY_AFTER.length) break;
     await sleep(RETRY_AFTER[retries]);
     retries += 1;
-    outcome = await deliver(handoffId, false);
+    result = await deliver(handoffId, false);
   }
-  return outcome;
+  // Hermes took it. That is not the same as having done it: check, and give
+  // it one more go before calling it dropped. Each check is for the revision
+  // the delivery before it actually sent, so it cannot touch a newer one.
+  for (
+    let check = 0;
+    result.outcome === "delivered" && result.revision !== null && check < 2;
+    check += 1
+  ) {
+    await sleep("10m");
+    const verdict = await verify(handoffId, check === 1, result.revision);
+    if (verdict === "failed") return "unacted";
+    if (verdict !== "reopened") break;
+    result = await deliver(handoffId, false);
+  }
+  return result.outcome;
 };

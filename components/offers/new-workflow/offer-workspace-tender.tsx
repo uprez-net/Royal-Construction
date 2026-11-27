@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import type { LifecycleAction } from "@/lib/offer/lifecycle-busy";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   getPaymentScheduleTotalPct,
   type OfferPaymentScheduleRow,
@@ -53,6 +54,9 @@ type TenderPanelProps = {
   readonly onPaymentScheduleChange: (
     rows: readonly OfferPaymentScheduleRow[],
   ) => void;
+  // Prints the engineering/council note in the Tender's Important Notes.
+  readonly subjectToSitePrices: boolean;
+  readonly onSubjectToSitePricesChange: (checked: boolean) => void;
   readonly onGenerateTender: () => void;
   readonly onSendTender: () => void;
   readonly tenderSending?: boolean;
@@ -73,6 +77,8 @@ export function TenderPanel({
   exclusions,
   paymentSchedule,
   onPaymentScheduleChange,
+  subjectToSitePrices,
+  onSubjectToSitePricesChange,
   onGenerateTender,
   onSendTender,
   tenderSending = false,
@@ -126,6 +132,25 @@ export function TenderPanel({
             isSent={isSent}
             isSigned={isSigned}
           />
+
+          <label className="flex items-start gap-2.5 rounded-lg border border-border/70 bg-muted/20 p-3 text-sm text-foreground">
+            <Checkbox
+              checked={subjectToSitePrices}
+              disabled={isSent || isSigned || isDeclined}
+              onCheckedChange={(checked) =>
+                onSubjectToSitePricesChange(checked === true)
+              }
+              className="mt-0.5"
+            />
+            <span className="grid gap-0.5">
+              <span className="font-medium">Subject to site prices</span>
+              <span className="text-xs text-muted-foreground">
+                Adds &ldquo;Above tender is subject to final engineering details
+                and council requirements.&rdquo; to the Tender&apos;s Important
+                Notes.
+              </span>
+            </span>
+          </label>
 
           {hasTender ? (
             <TenderPreview

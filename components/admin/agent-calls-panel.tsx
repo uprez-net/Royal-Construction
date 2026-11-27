@@ -84,12 +84,12 @@ const HANDOFF: Record<
   OwnerCallHandoffStatusDto,
   { label: string; tone: Tone } | null
 > = {
-  DELIVERED: { label: "With Hermes", tone: "info" },
-  DELIVERING: { label: "Passing to Hermes", tone: "info" },
-  FAILED: { label: "Hermes not reached", tone: "danger" },
+  DELIVERED: { label: "With Agent Factory", tone: "info" },
+  DELIVERING: { label: "Passing on", tone: "info" },
+  FAILED: { label: "Needs attention", tone: "danger" },
   OPEN: null,
-  PENDING: { label: "For Hermes", tone: "warning" },
-  RESOLVED: { label: "Hermes dealt with it", tone: "success" },
+  PENDING: { label: "For Agent Factory", tone: "warning" },
+  RESOLVED: { label: "Dealt with", tone: "success" },
 };
 
 function message(error: unknown, fallback: string): string {
@@ -138,7 +138,7 @@ function describeEvent(event: AgentCallEventDto): {
         body: d.answered
           ? `${asked.length ? `“${asked.join(" ")}” → ` : ""}${text("answer") ?? ""}`
           : `${asked.length ? `“${asked.join(" ")}” · ` : ""}not answered (${text("failure") ?? "failed"})`,
-        title: `${name === "ask_hermes" ? `Asked Hermes${d.held ? " (owner held)" : ""}` : name === "hand_to_hermes" ? "Passed to Hermes" : `Looked up ${name}`}${ms}`,
+        title: `${name === "ask_hermes" ? `Asked Agent Factory${d.held ? " (owner held)" : ""}` : name === "hand_to_hermes" ? "Passed to Agent Factory" : `Looked up ${name}`}${ms}`,
       };
     }
     case "desk.end_call":
@@ -149,17 +149,17 @@ function describeEvent(event: AgentCallEventDto): {
       return { body: text("error"), title: "Call desk didn't answer" };
     case "handoff.noted":
       return {
-        body: `${text("request") ?? ""}${d.callBack ? ` · call back${text("timing") ? ` (${text("timing")})` : ""}` : ""}${text("source") === "hold_failed" ? " · Hermes didn't answer while they held" : ""}`,
-        title: "Noted for Hermes",
+        body: `${text("request") ?? ""}${d.callBack ? ` · call back${text("timing") ? ` (${text("timing")})` : ""}` : ""}${text("source") === "hold_failed" ? " · Agent Factory didn't answer while they held" : ""}`,
+        title: "Noted for Agent Factory",
       };
     case "handoff.ready":
-      return { body: null, title: "Handoff ready for Hermes" };
+      return { body: null, title: "Handoff ready for Agent Factory" };
     case "handoff.delivered":
-      return { body: text("reply"), title: "Handed to Hermes" };
+      return { body: text("reply"), title: "Handed to Agent Factory" };
     case "handoff.failed":
-      return { body: text("reason"), title: "Couldn't reach Hermes" };
+      return { body: text("reason"), title: "Couldn't reach Agent Factory" };
     case "handoff.resolved":
-      return { body: text("resolution"), title: "Hermes dealt with it" };
+      return { body: text("resolution"), title: "Agent Factory dealt with it" };
     case "handoff.reopened":
       return {
         body: text("reason"),
@@ -188,7 +188,7 @@ function HandoffSection({ handoff }: { handoff: OwnerCallHandoffDto }) {
   return (
     <section className="space-y-1">
       <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        For Hermes
+        For Agent Factory
         {status ? (
           <StatusPill tone={status.tone}>{status.label}</StatusPill>
         ) : null}
@@ -208,7 +208,7 @@ function HandoffSection({ handoff }: { handoff: OwnerCallHandoffDto }) {
         </ol>
       ) : (
         <p className="text-sm text-muted-foreground">
-          Nothing noted on the call; Hermes gets the transcript to check.
+          Nothing noted on the call; Agent Factory gets the transcript to check.
         </p>
       )}
       {handoff.lastError ? (
@@ -221,7 +221,7 @@ function HandoffSection({ handoff }: { handoff: OwnerCallHandoffDto }) {
         <p className="text-sm text-muted-foreground">{handoff.resolution}</p>
       ) : handoff.hermesReply ? (
         <p className="text-sm text-muted-foreground">
-          Hermes: {handoff.hermesReply}
+          Agent Factory: {handoff.hermesReply}
         </p>
       ) : null}
     </section>
@@ -396,7 +396,7 @@ function AgentCallRow({
                 ? ` · ${callDuration(leg.durationSeconds)}`
                 : ""}
               {call.questionsAsked
-                ? ` · ${call.questionsAsked} question${call.questionsAsked === 1 ? "" : "s"} to Hermes`
+                ? ` · ${call.questionsAsked} question${call.questionsAsked === 1 ? "" : "s"} to Agent Factory`
                 : ""}
               {call.fromHandoffId ? " · callback" : ""}
             </span>
@@ -521,7 +521,7 @@ export function AgentCallsPanel() {
       <PageHeader
         headingLevel="h1"
         title="Agent calls"
-        description="Calls Mili makes to the owner because Hermes asked: what is scheduled, and each call's transcript, recording and what she looked up."
+        description="Calls Mili makes to the owner because Agent Factory asked: what is scheduled, and each call's transcript, recording and what she looked up."
         actions={
           <Button
             type="button"
@@ -549,7 +549,7 @@ export function AgentCallsPanel() {
         <>
           {lists.handoffFailed.length ? (
             <Section
-              title="Not passed to Hermes"
+              title="Needs attention"
               icon={
                 <AlertTriangle
                   className="size-4 text-destructive"
@@ -565,7 +565,7 @@ export function AgentCallsPanel() {
           <Section
             title="Pending"
             icon={<CalendarClock className="size-4" aria-hidden="true" />}
-            empty="Nothing scheduled. Hermes schedules calls through the operations agent."
+            empty="Nothing scheduled. Agent Factory schedules calls through the operations agent."
             calls={lists.pending}
             onChanged={() => void load()}
             version={version}

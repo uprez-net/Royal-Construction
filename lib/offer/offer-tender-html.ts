@@ -503,7 +503,7 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
       schedulePage(items, index === 0, foot()),
     ),
     contractTermsPage(data, contractTermsSectionNo, depositPercent, foot()),
-    exclusionsPage(data, foot()),
+    exclusionsPage(data, input.subjectToSitePrices === true, foot()),
     ...acceptanceChunks.map((rows, index) =>
       acceptancePage(
         job,
@@ -1026,9 +1026,10 @@ function contractTermsPage(
 // label-only; that gap is visible here rather than hidden, which is the point.
 function exclusionsPage(
   data: ReturnType<typeof buildOfferPrintTemplateData>,
+  subjectToSitePrices: boolean,
   foot: string,
 ): string {
-  const notes = importantNotes();
+  const notes = importantNotes(subjectToSitePrices);
   const excludes = data.exclusionRows
     .map(
       (row) =>
@@ -1045,12 +1046,18 @@ function exclusionsPage(
 }
 
 // The "Important Notes" half of the section heading. The source carries these as
-// bulleted notes beneath the exclusions, not as a block of bold prose.
-function importantNotes(): readonly string[] {
+// bulleted notes beneath the exclusions, not as a block of bold prose. The
+// engineering/council note prints only when "Subject to site prices" is ticked
+// on the Tender step.
+function importantNotes(subjectToSitePrices: boolean): readonly string[] {
   return [
     "This Tender is the final fixed-price offer for the works described above and, on acceptance by both parties, forms the basis of a Master Builders Association (MBA) fixed-price home building contract. It supersedes any earlier negotiation proposal.",
     "The Tender Price is fixed and includes GST for the full scope described, subject only to written variations.",
-    "Above tender is subject to final engineering details and council requirements.",
+    ...(subjectToSitePrices
+      ? [
+          "Above tender is subject to final engineering details and council requirements.",
+        ]
+      : []),
   ];
 }
 

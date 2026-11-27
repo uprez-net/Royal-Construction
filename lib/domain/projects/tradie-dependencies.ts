@@ -12,14 +12,17 @@ import { isProjectBuilding } from "./milestone-schedule";
 // When an activity's tradie bookings are overdue.
 //
 // A tradie is booked BEFORE the activity starts: the booking has to be
-// confirmed by the day the work is meant to begin. So an activity's bookings
-// fall overdue on its start day, not on its estimated end (that is the
-// activity itself being overdue, `openOverdueDays`):
+// confirmed well ahead of the day the work is meant to begin, because a trade
+// chased on the morning it is needed is a trade that does not turn up. So an
+// activity's bookings fall due `BOOKING_LOOKAHEAD_DAYS` before its start day,
+// not on its estimated end (that is the activity itself being overdue,
+// `openOverdueDays`):
 //
 //   - an activity under way (ACTIVE) has started, so its bookings are due now,
 //     whatever the project's status says;
-//   - a pending activity on a job being built is due on its planned start day
-//     (`targetDate`), the day itself included. A job still in drafting or
+//   - a pending activity on a job being built is due once its planned start
+//     day (`targetDate`) is `BOOKING_LOOKAHEAD_DAYS` away or closer, and stays
+//     due through the start day and after it. A job still in drafting or
 //     compliance is left out, for the reason `openOverdueDays` gives: its
 //     planned dates run from a start date nobody has reached yet.
 //
@@ -27,6 +30,13 @@ import { isProjectBuilding } from "./milestone-schedule";
 // this activity, and a tradie booked on it but not yet confirmed is overdue as
 // well. One rule for the Milestones tab, the project's Alerts card, Needs
 // Attention and the Projects list's Overdue filter.
+
+/**
+ * How far ahead of an activity's planned start its bookings must be confirmed:
+ * two weeks, so a missing or unconfirmed trade shows up while there is still
+ * time to find one.
+ */
+export const BOOKING_LOOKAHEAD_DAYS = 14;
 
 type DependentMilestone = {
   id: string;
@@ -56,7 +66,8 @@ export type BookingGap = {
 
 /**
  * Whether an activity's bookings must be confirmed by `today`: under way, or
- * pending on a job being built with its planned start day arrived.
+ * pending on a job being built with its planned start day no more than
+ * `BOOKING_LOOKAHEAD_DAYS` away (or already past).
  *
  * `today` is compared by calendar day in the process's time zone; a server
  * caller moves both dates onto Sydney's wall clock first.
@@ -70,7 +81,8 @@ export function bookingsDue(
   return (
     milestone.status === MilestoneStatus.PENDING
     && isProjectBuilding(projectStatus)
-    && differenceInCalendarDays(new Date(milestone.targetDate), today) <= 0
+    && differenceInCalendarDays(new Date(milestone.targetDate), today)
+      <= BOOKING_LOOKAHEAD_DAYS
   );
 }
 

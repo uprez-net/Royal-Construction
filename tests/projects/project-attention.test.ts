@@ -496,7 +496,7 @@ describe("Needs Attention", () => {
     const notYetDue = project({
       milestones: [milestone({ requiredTradeTypes: [needsPlumber] })],
     });
-    assert.ok(!kinds(notYetDue).includes("DEPENDENCY"));
+    assert.ok(!kinds(notYetDue).includes("BOOKING_PENDING"));
 
     const underWay = project({
       milestones: [
@@ -515,7 +515,7 @@ describe("Needs Attention", () => {
         },
       ],
     });
-    assert.ok(kinds(underWay).includes("DEPENDENCY"));
+    assert.ok(kinds(underWay).includes("BOOKING_UNCONFIRMED"));
 
     const confirmed = project({
       ...underWay,
@@ -528,7 +528,8 @@ describe("Needs Attention", () => {
         },
       ],
     });
-    assert.ok(!kinds(confirmed).includes("DEPENDENCY"));
+    assert.ok(!kinds(confirmed).includes("BOOKING_UNCONFIRMED"));
+    assert.ok(!kinds(confirmed).includes("BOOKING_PENDING"));
   });
 
   test("most overdue first", () => {

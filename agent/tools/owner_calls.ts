@@ -45,8 +45,9 @@ export default defineDynamic({
               description: [
                 "Have Mili, Royal Constructions' voice assistant, ring the business owner's own phone and brief them by voice: now, or at call_at.",
                 "Mili opens with the category, covers the agenda in order, and answers follow-up questions from the context; a question the context does not answer is passed back to Hermes on the call. The call is recorded and transcribed.",
+                "The owner hears the subject, agenda and context in Mili's words, so never write the name Hermes in them: call the assistant Agent Factory.",
                 "Only one call to the owner runs at a time; a scheduled call that finds Mili busy waits for her, for up to 30 minutes. Returns owner_call_id; retrying with the same idempotency_key never rings twice.",
-                "For the callback a post-call handoff asks for, pass its handoff_id: that resolves the handoff, and a handoff gets one callback. Read it back with get_owner_call to check it was scheduled.",
+                "For the callback a post-call handoff asks for, pass its handoff_id and handoff_revision: that resolves the handoff, and a handoff gets one callback. Read it back with get_owner_call to check it was scheduled.",
                 "Call this tool directly. Do not delegate it.",
               ].join(" "),
               inputSchema: scheduleOwnerCallInput,
@@ -88,7 +89,7 @@ export default defineDynamic({
             }),
             resolve_owner_call_handoff: defineTool({
               description:
-                "Mark a post-call handoff dealt with when no callback is needed: answered another way, done, or the owner said never mind. For a callback, use schedule_owner_call with handoff_id instead.",
+                "Mark a post-call handoff dealt with when no callback is needed: answered another way, done, or the owner said never mind. Pass the handoff_revision you are acting on: if the handoff was reopened as a newer revision, this is refused and you must read it again. For a callback, use schedule_owner_call with handoff_id instead.",
               inputSchema: resolveHandoffInput,
               label: { start: () => "Resolving a post-call handoff" },
               execute: (input, toolCtx) => resolveHandoff(input, toolCtx),

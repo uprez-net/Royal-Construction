@@ -43,5 +43,6 @@ export function buildProposalInput(
     paymentSchedule: snapshot.paymentSchedule,
     priceAdjustmentLabel: snapshot.priceAdjustmentLabel,
     standardPriceIncGst,
+    subjectToSitePrices: snapshot.tenderGate.subjectToSitePrices,
   };
 }

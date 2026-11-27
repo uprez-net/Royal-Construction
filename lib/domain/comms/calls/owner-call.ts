@@ -116,6 +116,8 @@ export const OWNER_CALL_REFUSALS = {
     "Placing this call was interrupted and the carrier never confirmed it, so it may have rung. Check the carrier's call log; it won't be rung again.",
   notScheduled:
     "This call has already rung (or was cancelled), so it can no longer be cancelled.",
+  keyForOtherRevision:
+    "That idempotency_key already scheduled a callback for an earlier revision of this handoff. Use a new key for this revision.",
   keyForOtherHandoff:
     "This idempotency_key was already used for a different call. Use a new key for each callback you schedule, including a replacement for one that didn't reach the owner.",
 } as const;
@@ -138,6 +140,11 @@ export type RequestOwnerCallInput = {
    * One callback per handoff: a second request for it answers with the first.
    */
   readonly handoffId?: string | null;
+  /**
+   * The revision of that handoff the caller read. A newer one is refused, so a
+   * turn that has not seen the reopened handoff cannot schedule against it.
+   */
+  readonly handoffRevision?: number | null;
   readonly now?: Date;
 };
 
@@ -623,6 +630,7 @@ export async function requestOwnerCall(
     found: {
       readonly id: string;
       readonly fromHandoffId: string | null;
+      readonly fromHandoffRevision: number | null;
     } | null,
   ): Promise<RequestOwnerCallResult | null> => {
     if (!found) return null;
@@ -632,30 +640,56 @@ export async function requestOwnerCall(
         "idempotencyKey",
       );
     }
+    // The same key for a newer revision is a new intent, not a replay: the
+    // callback it made answers the older request.
+    if (handoffId && !sameRevision(found.fromHandoffRevision)) {
+      throw new DomainValidationError(
+        OWNER_CALL_REFUSALS.keyForOtherRevision,
+        "idempotencyKey",
+      );
+    }
     return {
       alreadyRequested: true,
       ownerCall: await summaryById(db, found.id),
     };
   };
+  /**
+   * Whether a callback booked for this revision answers the request: always
+   * when no revision was presented or it predates the revision being kept.
+   */
+  const sameRevision = (scheduledFor: number | null | undefined) =>
+    input.handoffRevision === undefined
+    || input.handoffRevision === null
+    || scheduledFor === undefined
+    || scheduledFor === null
+    || scheduledFor === input.handoffRevision;
   const byKey = () =>
     db.ownerCall.findUnique({
-      select: { fromHandoffId: true, id: true },
+      select: { fromHandoffId: true, fromHandoffRevision: true, id: true },
       where: { idempotencyKey },
     });
-  /** The callback another request already scheduled for this handoff. */
-  const byHandoff = async () =>
-    handoffId
-      ? db.ownerCall.findUnique({
-          select: { id: true },
-          where: { fromHandoffId: handoffId },
-        })
-      : null;
+  /**
+   * The callback another request already scheduled for this handoff, if it
+   * answers this request's revision (a booking for an older one does not).
+   */
+  const byHandoff = async () => {
+    if (!handoffId) return null;
+    const found = await db.ownerCall.findUnique({
+      select: { fromHandoffRevision: true, id: true },
+      where: { fromHandoffId: handoffId },
+    });
+    return found && sameRevision(found.fromHandoffRevision) ? found : null;
+  };
 
   const replay = await replayOf(await byKey());
   if (replay) return replay;
 
   if (handoffId) {
-    const { existingCallbackId } = await handoffForCallback(db, handoffId);
+    const { existingCallbackId } = await handoffForCallback(
+      db,
+      handoffId,
+      input.handoffRevision,
+    );
     if (existingCallbackId) {
       return {
         alreadyRequested: true,
@@ -694,7 +728,11 @@ export async function requestOwnerCall(
       if (handoffId) {
         // The check that holds, under the handoff's lock: resolved without a
         // callback, or given one, since the first look.
-        const claim = await claimHandoffForCallback(tx, handoffId);
+        const claim = await claimHandoffForCallback(
+          tx,
+          handoffId,
+          input.handoffRevision,
+        );
         if (claim.existingCallbackId) {
           return { id: claim.existingCallbackId, replay: true };
         }
@@ -704,6 +742,9 @@ export async function requestOwnerCall(
           ...briefing,
           callAt: callAt ?? now,
           fromHandoffId: handoffId,
+          fromHandoffRevision: handoffId
+            ? (input.handoffRevision ?? null)
+            : null,
           idempotencyKey,
           source,
           status: OwnerCallStatus.SCHEDULED,
@@ -1240,7 +1281,7 @@ export async function askOwnerAssistant(
   const assistant = ports.assistant ?? null;
   if (!assistant) {
     throw new DomainSideEffectError(
-      "Hermes isn't connected in this runtime.",
+      "Agent Factory isn't connected in this runtime.",
       "owner-assistant",
       false,
     );
@@ -1260,7 +1301,7 @@ export async function askOwnerAssistant(
   });
   if (counted.count === 0) {
     throw new DomainTransitionError(
-      "This call has already passed Hermes as many questions as it may.",
+      "This call has already passed Agent Factory as many questions as it may.",
     );
   }
   let answer: string;
@@ -1273,7 +1314,7 @@ export async function askOwnerAssistant(
     });
   } catch (error) {
     throw new DomainSideEffectError(
-      "Hermes didn't answer.",
+      "Agent Factory didn't answer.",
       "owner-assistant",
       true,
       { cause: error },
@@ -1282,7 +1323,7 @@ export async function askOwnerAssistant(
   const spoken = answer.replace(/\s+/g, " ").trim();
   if (!spoken) {
     throw new DomainSideEffectError(
-      "Hermes answered with nothing.",
+      "Agent Factory answered with nothing.",
       "owner-assistant",
       true,
     );

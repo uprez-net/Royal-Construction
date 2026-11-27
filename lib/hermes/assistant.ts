@@ -116,7 +116,7 @@ export function completionText(body: unknown): string {
       .join("\n")
       .trim();
   }
-  throw new HermesError("Hermes answered without a chat completion.");
+  throw new HermesError("Agent Factory answered without a chat completion.");
 }
 
 export function hermesAssistant(
@@ -143,7 +143,7 @@ export function hermesAssistant(
     });
     if (!response.ok) {
       throw new HermesError(
-        `Hermes answered ${response.status} to a chat completion.`,
+        `Agent Factory answered ${response.status} to a chat completion.`,
         response.status,
       );
     }
@@ -151,7 +151,9 @@ export function hermesAssistant(
     try {
       body = await response.json();
     } catch {
-      throw new HermesError("Hermes answered with something that is not JSON.");
+      throw new HermesError(
+        "Agent Factory answered with something that is not JSON.",
+      );
     }
     return completionText(body);
   };

@@ -37,7 +37,10 @@ import {
 } from "@/types/project";
 import { compareAsc, isBefore } from "date-fns";
 import { EnhancedProjectCard } from "./enhanced-project-card";
-import { ProjectAttentionReasons } from "./project-attention-reasons";
+import {
+  OVERDUE_TAB_HIDDEN_KINDS,
+  ProjectAttentionReasons,
+} from "./project-attention-reasons";
 import { ProjectFilters } from "./project-filters";
 import { ProjectOverdueAlerts } from "./project-overdue-alerts";
 import { ProjectToolbar } from "./project-toolbar";
@@ -170,6 +173,9 @@ function ProjectsWorkspace({
   // The derived chips say why each row is on them.
   const showAttentionColumn =
     list.status === "NEEDS_ATTENTION" || list.status === OVERDUE_FILTER;
+  // The Overdue tab's reasons are about work running late, not paperwork.
+  const hiddenAttentionKinds =
+    list.status === OVERDUE_FILTER ? OVERDUE_TAB_HIDDEN_KINDS : undefined;
 
   const visibleProjects = useMemo(() => {
     return projectsInStore.map((project) => {
@@ -505,6 +511,7 @@ function ProjectsWorkspace({
                 searchParams.toString(),
               )}
               onDetailsClick={() => openQuickView(project, role === "ADMIN")}
+              hideAttentionKinds={hiddenAttentionKinds}
             />
           ))}
         </div>
@@ -607,6 +614,7 @@ function ProjectsWorkspace({
                       <ProjectAttentionReasons
                         key={`attention-${project.id}`}
                         attention={project.attention}
+                        hide={hiddenAttentionKinds}
                       />,
                     ]
                   : []),
