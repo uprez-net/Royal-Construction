@@ -1212,16 +1212,23 @@ test("a request the owner changed is touched to the newest, and requests tie-bre
 
 test("delivery: a note that landed on the PENDING handoff before the claim is sent, as the new revision", async () => {
   let reads = 0;
+  let claimId: unknown = null;
   const sent: string[] = [];
   const instructions: string[] = [];
   const recorder = recordingDb({
     "ownerCallHandoff.findUnique": () => {
       reads += 1;
       // The first read, then the reread after the claim: a note bumped the
-      // revision and the claim is still ours (DELIVERING).
-      return reads === 1 ? row() : row({ revision: 1, status: "DELIVERING" });
+      // revision and the claim is still ours (DELIVERING, our claim id).
+      return reads === 1
+        ? row()
+        : row({ claimId, revision: 1, status: "DELIVERING" });
     },
-    "ownerCallHandoff.updateMany": { count: 1 },
+    "ownerCallHandoff.updateMany": (args: unknown) => {
+      const data = (args as { data: { claimId?: unknown } }).data;
+      if (data.claimId) claimId = data.claimId;
+      return { count: 1 };
+    },
   });
   const port: OwnerAssistantPort = {
     ask: async () => "",
@@ -1283,26 +1290,149 @@ test("a callback booked for an older revision that has not rung is replaced when
   assert.deepEqual(eventKinds(recorder.calls), ["owner_call.canceled"]);
 });
 
-test("a callback that has already rung for an older revision cannot be replaced, and Hermes is told", async () => {
-  for (const status of ["PLACING", "PLACED"]) {
-    const recorder = recordingDb({
-      "ownerCallHandoff.findUnique": callbackFor({ status }),
-    });
-    await assert.rejects(
-      handoffForCallback(recorder.db, "h-1", 1),
-      (error: Error) => /has already rung/.test(error.message),
-    );
-  }
-  // It started ringing between the check and the cancel.
+test("a callback for an older revision that has rung cannot be replaced; one being placed is a retry, not a refusal to separate", async () => {
+  const placed = recordingDb({
+    "ownerCallHandoff.findUnique": callbackFor({ status: "PLACED" }),
+  });
+  await assert.rejects(
+    handoffForCallback(placed.db, "h-1", 1),
+    (error: Error) => /has already rung/.test(error.message),
+  );
+  // PLACING only means a timer claimed it: it can be put back to SCHEDULED
+  // (Mili busy) and ring later, so Hermes must not be sent to schedule a
+  // separate call yet.
+  const placing = recordingDb({
+    "ownerCallHandoff.findUnique": callbackFor({ status: "PLACING" }),
+  });
+  await assert.rejects(
+    handoffForCallback(placing.db, "h-1", 1),
+    (error: Error) =>
+      /being placed right now/.test(error.message)
+      && /Do not schedule a separate call/.test(error.message),
+  );
+  // It was claimed between the check and the cancel: the same retry.
   const raced = recordingDb({
     "ownerCallHandoff.findUnique": callbackFor(),
     "ownerCall.updateMany": { count: 0 },
   });
   await assert.rejects(
     claimHandoffForCallback(raced.transactionalDb, "h-1", 1),
-    (error: Error) => /has already rung/.test(error.message),
+    (error: Error) => /being placed right now/.test(error.message),
   );
   assert.deepEqual(eventKinds(raced.calls), []);
+});
+
+test("a cancelled or failed callback for an older revision is replaced by unlinking it", async () => {
+  for (const status of ["CANCELED", "FAILED"]) {
+    const recorder = recordingDb({
+      "ownerCallHandoff.findUnique": callbackFor({ status }),
+      "ownerCall.updateMany": (args: unknown) =>
+        (args as { data: { status?: string } }).data.status
+          ? { count: 0 }
+          : { count: 1 },
+    });
+    assert.deepEqual(
+      await claimHandoffForCallback(recorder.transactionalDb, "h-1", 1),
+      { existingCallbackId: null },
+    );
+    const unlink = ops(recorder.calls, "ownerCall.updateMany")[1].args as {
+      data: Record<string, unknown>;
+    };
+    assert.deepEqual(unlink.data, { fromHandoffId: null });
+  }
+});
+
+test("a handoff already resolved without a callback, or still on the call, is not given one by replacing", async () => {
+  for (const [status, message] of [
+    ["RESOLVED", /already resolved without a callback/],
+    ["OPEN", /still going/],
+  ] as const) {
+    const recorder = recordingDb({
+      "ownerCallHandoff.findUnique": callbackFor({}, { status }),
+    });
+    await assert.rejects(
+      handoffForCallback(recorder.db, "h-1", 1),
+      (error: Error) => message.test(error.message),
+    );
+  }
+});
+
+test("a delivery: a stale worker cannot take over a fresh attempt's claim, nor send under another worker's", async () => {
+  // The claim pins the claim id it observed.
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": row({
+      claimId: "claim-seen",
+      status: "FAILED",
+    }),
+    "ownerCallHandoff.updateMany": { count: 0 },
+  });
+  assert.equal(await deliver(recorder, assistant("never")), "skipped");
+  const [claim] = writes(recorder.calls);
+  assert.equal(claim.where.claimId, "claim-seen");
+
+  // The reread shows another worker's claim: ours was taken over, nothing sent.
+  let reads = 0;
+  const sent: string[] = [];
+  const other = recordingDb({
+    "ownerCallHandoff.findUnique": () => {
+      reads += 1;
+      return reads === 1
+        ? row()
+        : row({ claimId: "someone-else", status: "DELIVERING" });
+    },
+    "ownerCallHandoff.updateMany": { count: 1 },
+  });
+  assert.equal(await deliver(other, assistant("never", sent)), "skipped");
+  assert.deepEqual(sent, []);
+});
+
+test("a delivery reports the revision it actually sent", async () => {
+  let reads = 0;
+  let claimId: unknown = null;
+  let sentRevision: number | null = null;
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": () => {
+      reads += 1;
+      return reads === 1
+        ? row()
+        : row({ claimId, revision: 3, status: "DELIVERING" });
+    },
+    "ownerCallHandoff.updateMany": (args: unknown) => {
+      const data = (args as { data: { claimId?: unknown } }).data;
+      if (data.claimId) claimId = data.claimId;
+      return { count: 1 };
+    },
+  });
+  const outcome = await deliverOwnerCallHandoff(
+    WORKFLOW,
+    { handoffId: "h-1", now: NOW },
+    recorder.transactionalDb,
+    {
+      assistant: assistant("ok"),
+      onDelivered: (sent) => {
+        sentRevision = sent.revision;
+      },
+    },
+  );
+  assert.equal(outcome, "delivered");
+  assert.equal(sentRevision, 3);
+});
+
+test('a promise: a refusal like "I will not be able to call you back" is not a promise', () => {
+  const bodyFor = (milisLine: string) => {
+    const r = row(
+      { requests: [] },
+      {
+        agentTranscript: `Mili: Hi Raj.\nMili: ${milisLine}`,
+        durationSeconds: 30,
+      },
+    );
+    return ownerCallHandoffBody(r as never, r.ownerCall.call.agentTranscript);
+  };
+  const flagged = /told the owner she would pass something on or call back/;
+  assert.doesNotMatch(bodyFor("I will not be able to call you back."), flagged);
+  assert.doesNotMatch(bodyFor("I can't call you back today."), flagged);
+  assert.match(bodyFor("I'll ask the team to call you back."), flagged);
 });
 
 test("an existing callback still answers the same revision, a legacy callback and a request with no revision", async () => {

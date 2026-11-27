@@ -362,8 +362,22 @@ When an owner call ends, Royal passes Hermes what it left
     the new one becomes the handoff's callback;
   - already ringing or rung: Hermes is told so, and may schedule one without
     `handoff_id` and then resolve the handoff.
+  - being placed right now (`PLACING`): a timer has claimed it and Mili being
+    busy can put it back, so Hermes is told to wait a minute and ask again, not
+    to schedule a separate call;
+  - cancelled or failed: it is only unlinked;
+  - the handoff already resolved without a callback, or still on the call: no
+    replacement.
   The same revision again, a callback with no recorded revision, or a request
-  with no revision still get the existing callback, as before.
+  with no revision still get the existing callback, as before. A
+  `idempotency_key` that already booked an older revision is refused for the
+  newer one (use a new key), and the "busy" and unique-conflict recoveries only
+  answer with a callback that fits the revision presented.
+- **One sender per claim.** The delivery claim also pins the claim id it
+  observed, so a stale worker that read an old `DELIVERING` row cannot take over
+  a fresh attempt, and the reread before sending must still show our claim. The
+  workflow's check after delivery is for the revision the delivery step actually
+  sent.
 
 ## What the owner hears
 

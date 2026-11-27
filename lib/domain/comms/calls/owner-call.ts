@@ -116,6 +116,8 @@ export const OWNER_CALL_REFUSALS = {
     "Placing this call was interrupted and the carrier never confirmed it, so it may have rung. Check the carrier's call log; it won't be rung again.",
   notScheduled:
     "This call has already rung (or was cancelled), so it can no longer be cancelled.",
+  keyForOtherRevision:
+    "That idempotency_key already scheduled a callback for an earlier revision of this handoff. Use a new key for this revision.",
   keyForOtherHandoff:
     "This idempotency_key was already used for a different call. Use a new key for each callback you schedule, including a replacement for one that didn't reach the owner.",
 } as const;
@@ -628,6 +630,7 @@ export async function requestOwnerCall(
     found: {
       readonly id: string;
       readonly fromHandoffId: string | null;
+      readonly fromHandoffRevision: number | null;
     } | null,
   ): Promise<RequestOwnerCallResult | null> => {
     if (!found) return null;
@@ -637,24 +640,46 @@ export async function requestOwnerCall(
         "idempotencyKey",
       );
     }
+    // The same key for a newer revision is a new intent, not a replay: the
+    // callback it made answers the older request.
+    if (handoffId && !sameRevision(found.fromHandoffRevision)) {
+      throw new DomainValidationError(
+        OWNER_CALL_REFUSALS.keyForOtherRevision,
+        "idempotencyKey",
+      );
+    }
     return {
       alreadyRequested: true,
       ownerCall: await summaryById(db, found.id),
     };
   };
+  /**
+   * Whether a callback booked for this revision answers the request: always
+   * when no revision was presented or it predates the revision being kept.
+   */
+  const sameRevision = (scheduledFor: number | null | undefined) =>
+    input.handoffRevision === undefined
+    || input.handoffRevision === null
+    || scheduledFor === undefined
+    || scheduledFor === null
+    || scheduledFor === input.handoffRevision;
   const byKey = () =>
     db.ownerCall.findUnique({
-      select: { fromHandoffId: true, id: true },
+      select: { fromHandoffId: true, fromHandoffRevision: true, id: true },
       where: { idempotencyKey },
     });
-  /** The callback another request already scheduled for this handoff. */
-  const byHandoff = async () =>
-    handoffId
-      ? db.ownerCall.findUnique({
-          select: { id: true },
-          where: { fromHandoffId: handoffId },
-        })
-      : null;
+  /**
+   * The callback another request already scheduled for this handoff, if it
+   * answers this request's revision (a booking for an older one does not).
+   */
+  const byHandoff = async () => {
+    if (!handoffId) return null;
+    const found = await db.ownerCall.findUnique({
+      select: { fromHandoffRevision: true, id: true },
+      where: { fromHandoffId: handoffId },
+    });
+    return found && sameRevision(found.fromHandoffRevision) ? found : null;
+  };
 
   const replay = await replayOf(await byKey());
   if (replay) return replay;
