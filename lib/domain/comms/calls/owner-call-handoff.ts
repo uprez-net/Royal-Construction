@@ -96,6 +96,8 @@ const NOTHING_ASKED_RESOLUTION =
   "Nothing was asked: the owner said nothing on this short call, so nothing was sent.";
 const VOICEMAIL_RESOLUTION =
   "Answered by voicemail, so the owner did not hear this callback; the handoff it came from was reopened.";
+const SILENT_CALLBACK_RESOLUTION =
+  "The owner said nothing on this callback, so its details were not given; the handoff it came from was reopened.";
 const UNACTED_REOPEN_NOTE =
   "You replied to this handoff but did not schedule a callback or resolve it. Do one of the two now, and end your reply with the RESULT line.";
 const UNACTED_FAILED_NOTE =
@@ -1060,7 +1062,9 @@ export type DeliverOwnerCallHandoffOutcome =
   /** Hermes took it but says it can't go on without the owner, or can't do it. */
   | "needs_attention"
   /** A callback the owner's voicemail answered: the handoff it came from reopened. */
-  | "voicemail";
+  | "voicemail"
+  /** A callback the owner picked up and said nothing on: same. */
+  | "silent_callback";
 
 /**
  * Pass one handoff to Hermes. The workflow's step, and the backstop's.
@@ -1125,21 +1129,31 @@ export async function deliverOwnerCallHandoff(
     return "waiting";
   }
 
-  // A callback the carrier's voicemail answered did not reach the owner: the
-  // handoff it came from goes back to Hermes, as for a missed callback, and
-  // this call's own handoff is closed with a pointer to it. A first briefing
-  // that hit voicemail still goes (with a note), so Hermes can try again.
-  if (
+  // A callback the carrier's voicemail answered, or one the owner picked up
+  // and said nothing on, did not give the owner its details: the handoff it
+  // came from goes back to Hermes, as for a missed callback, and this call's
+  // own handoff is closed with a pointer to it. A first briefing that hit
+  // voicemail still goes (with a note), so Hermes can try again.
+  const unheardCallback =
     call
     && answered(call)
     && row.ownerCall.fromHandoffId
     && row.requests.length === 0
-    && answeredByVoicemail(row)
-  ) {
+      ? answeredByVoicemail(row)
+        ? "voicemail"
+        : ownerSaidNothing(row)
+          ? "silent"
+          : null
+      : null;
+  if (unheardCallback) {
+    const resolution =
+      unheardCallback === "voicemail"
+        ? VOICEMAIL_RESOLUTION
+        : SILENT_CALLBACK_RESOLUTION;
     const reopened = await db.$transaction(async (tx) => {
       const closed = await tx.ownerCallHandoff.updateMany({
         data: {
-          resolution: VOICEMAIL_RESOLUTION,
+          resolution,
           resolvedAt: now,
           status: OwnerCallHandoffStatus.RESOLVED,
         },
@@ -1159,14 +1173,17 @@ export async function deliverOwnerCallHandoff(
       const sourceId = await reopenHandoffForFailedCallback(tx, {
         now,
         ownerCallId: row.ownerCall.id,
-        reason: "it was answered by voicemail, so the owner did not hear it",
+        reason:
+          unheardCallback === "voicemail"
+            ? "it was answered by voicemail, so the owner did not hear it"
+            : "the owner said nothing on it, so its details were not given",
       });
       await recordAgentCallEvent(
         tx,
         { ownerCallId: row.ownerCall.id },
         {
           at: now,
-          detail: { reopened: sourceId, resolution: VOICEMAIL_RESOLUTION },
+          detail: { reopened: sourceId, resolution },
           kind: AGENT_CALL_EVENT.handoffResolved,
         },
       );
@@ -1176,7 +1193,7 @@ export async function deliverOwnerCallHandoff(
     // A reopened handoff is PENDING: start its delivery now rather than
     // leaving it for the hourly backstop.
     if (reopened) await ports.startDelivery?.(reopened).catch(() => undefined);
-    return "voicemail";
+    return unheardCallback === "voicemail" ? "voicemail" : "silent_callback";
   }
   if (
     row.revision === 0

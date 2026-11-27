@@ -518,3 +518,59 @@ test("voicemail: Mili's own words never count, and a callback a person answered 
   assert.equal(await deliver(recorder, assistant("ok", sent)), "delivered");
   assert.doesNotMatch(sent[0], /answered by voicemail/);
 });
+
+test("silent callback: one the owner picked up and said nothing on reopens the handoff it came from", async () => {
+  const sent: string[] = [];
+  const started: string[] = [];
+  const silent = callbackRow();
+  const call = silent.ownerCall.call as {
+    recordings: unknown[];
+    durationSeconds: number;
+  };
+  call.recordings = [];
+  call.durationSeconds = 20;
+  const recorder = recordingDb({
+    "ownerCall.findUnique": { fromHandoffId: "h-src" },
+    "ownerCallHandoff.findUnique": silent,
+    "ownerCallHandoff.update": { ownerCallId: "oc-src" },
+    "ownerCallHandoff.updateMany": { count: 1 },
+  });
+  const outcome = await deliverOwnerCallHandoff(
+    WORKFLOW,
+    { handoffId: "h-1", now: NOW },
+    recorder.transactionalDb,
+    {
+      assistant: assistant("never sent", sent),
+      startDelivery: async (id) => {
+        started.push(id);
+      },
+    },
+  );
+  assert.equal(outcome, "silent_callback");
+  assert.deepEqual(sent, []);
+  assert.deepEqual(started, ["h-src"]);
+  const [closed] = writes(recorder.calls);
+  assert.match(String(closed.data.resolution), /said nothing on this callback/);
+  const [reopen] = ops(recorder.calls, "ownerCallHandoff.update");
+  assert.match(
+    String((reopen.args as { data: { lastError: string } }).data.lastError),
+    /said nothing on it/,
+  );
+});
+
+test("silent callback: a callback where the owner did speak is delivered as usual", async () => {
+  const sent: string[] = [];
+  const spoke = callbackRow();
+  const call = spoke.ownerCall.call as {
+    agentTranscript: string;
+    recordings: unknown[];
+  };
+  call.agentTranscript = "Mili: Hi Raj.\nCaller: Yes, go ahead.";
+  call.recordings = [];
+  const recorder = recordingDb({
+    "ownerCallHandoff.findUnique": spoke,
+    "ownerCallHandoff.updateMany": { count: 1 },
+  });
+  assert.equal(await deliver(recorder, assistant("ok", sent)), "delivered");
+  assert.equal(sent.length, 1);
+});

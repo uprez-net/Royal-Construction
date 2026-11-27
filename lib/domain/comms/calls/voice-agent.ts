@@ -68,6 +68,51 @@ export const VOICE_AGENT_SILENCE_OUTCOME: AgentOutcome = "completed";
 
 const SILENCE_MS = VOICE_AGENT_SILENCE_SECONDS * 1000;
 
+/**
+ * How long a silent caller is given. `silenceMs` and `followUps` apply once
+ * the caller has spoken. Before their first word, `firstSilenceMs` and
+ * `firstFollowUps` apply if set: a person answers in a couple of seconds, so
+ * a line that stays quiet after the greeting (a voicemail, a phone put down)
+ * need not be waited on for as long as a caller who has gone quiet mid-talk.
+ */
+export type VoiceSilencePolicy = {
+  readonly silenceMs: number;
+  readonly followUps: number;
+  readonly firstSilenceMs?: number;
+  readonly firstFollowUps?: number;
+};
+
+/** Inbound callers: 8 s, two follow-ups, whether or not they have spoken. */
+export const DEFAULT_VOICE_SILENCE_POLICY: VoiceSilencePolicy = {
+  followUps: VOICE_AGENT_SILENCE_FOLLOW_UPS,
+  silenceMs: SILENCE_MS,
+};
+
+/**
+ * The owner Mili rang: 6 s of quiet after the greeting and one follow-up
+ * (about 12 s) before the goodbye, then 8 s and two follow-ups once they are
+ * talking, since a pause there is more likely a person thinking.
+ */
+export const OWNER_CALL_SILENCE_POLICY: VoiceSilencePolicy = {
+  firstFollowUps: 1,
+  firstSilenceMs: 6_000,
+  followUps: VOICE_AGENT_SILENCE_FOLLOW_UPS,
+  silenceMs: SILENCE_MS,
+};
+
+/** The silence and follow-ups that apply to this call right now. */
+export function voiceSilenceLimits(
+  state: Pick<VoiceSilenceState, "callerSpokeAt">,
+  policy: VoiceSilencePolicy = DEFAULT_VOICE_SILENCE_POLICY,
+): { readonly ms: number; readonly followUps: number } {
+  return state.callerSpokeAt === 0 && policy.firstSilenceMs !== undefined
+    ? {
+        followUps: policy.firstFollowUps ?? policy.followUps,
+        ms: policy.firstSilenceMs,
+      }
+    : { followUps: policy.followUps, ms: policy.silenceMs };
+}
+
 /** Where a call stands on caller silence. Times are ms on the session clock. */
 export type VoiceSilenceState = {
   /** When the caller last spoke (0: not yet). */
@@ -126,19 +171,22 @@ export function voiceSilenceCheck(
     readonly agentSpeechEndsAt: number;
     /** The call desk (or a lookup) is still working. */
     readonly busy: boolean;
+    /** Absent: DEFAULT_VOICE_SILENCE_POLICY. */
+    readonly policy?: VoiceSilencePolicy;
   },
 ): { readonly state: VoiceSilenceState; readonly action: VoiceSilenceAction } {
+  const limits = voiceSilenceLimits(state, input.policy);
   if (state.saidGoodbye) return { action: { kind: "none" }, state };
-  if (input.busy) return { action: { kind: "wait", ms: SILENCE_MS }, state };
+  if (input.busy) return { action: { kind: "wait", ms: limits.ms }, state };
   const due =
     Math.max(input.agentSpeechEndsAt, state.callerSpokeAt, state.cuedAt)
-    + SILENCE_MS;
+    + limits.ms;
   if (input.now < due) {
     return { action: { kind: "wait", ms: due - input.now }, state };
   }
-  if (state.followUps < VOICE_AGENT_SILENCE_FOLLOW_UPS) {
+  if (state.followUps < limits.followUps) {
     return {
-      action: { kind: "follow_up", ms: SILENCE_MS },
+      action: { kind: "follow_up", ms: limits.ms },
       state: { ...state, cuedAt: input.now, followUps: state.followUps + 1 },
     };
   }

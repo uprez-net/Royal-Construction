@@ -13,8 +13,10 @@ import {
   voiceLookupResultCue,
   voiceSilenceCallerSpoke,
   voiceSilenceCheck,
+  voiceSilenceLimits,
   voiceSilenceStart,
   type VoiceAgentTurn,
+  type VoiceSilencePolicy,
   type VoiceSilenceState,
 } from "@/lib/domain/comms/calls/voice-agent";
 import type {
@@ -124,6 +126,8 @@ export type VoiceCallerSetup = {
    * call's. Absent: an inbound call.
    */
   readonly desk?: DeskMode;
+  /** How long a silent caller is given; absent, the inbound policy. */
+  readonly silence?: VoiceSilencePolicy;
   readonly cues?: {
     /** A lookup that could not be run; absent, VOICE_LOOKUP_FAILED_CUE. */
     readonly lookupFailed?: string;
@@ -590,7 +594,9 @@ export class VoiceAgentSession {
         });
         this.silence = voiceSilenceStart(this.now());
         this.stats.startedAt = this.now();
-        this.watchSilence(CALLER_SILENCE_MS);
+        this.watchSilence(
+          voiceSilenceLimits(this.silence, this.setup.silence).ms,
+        );
         this.watchGreeting();
         this.checkpointEvery(CHECKPOINT_INTERVAL_MS);
         return;
@@ -988,6 +994,7 @@ export class VoiceAgentSession {
       agentSpeechEndsAt: this.speechEndsAt,
       busy: this.deskBusy,
       now: this.now(),
+      policy: this.setup.silence,
     });
     this.silence = state;
     switch (action.kind) {

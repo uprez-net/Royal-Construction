@@ -3,7 +3,10 @@ import { test } from "vitest";
 
 import { voiceCallerPreparer } from "@/lib/comms/voice-agent/caller";
 import { TURN_QUIET_MS } from "@/lib/comms/voice-agent/session";
-import { VOICE_AGENT_WRAP_UP_SECONDS } from "@/lib/domain/comms/calls/voice-agent";
+import {
+  OWNER_CALL_SILENCE_POLICY,
+  VOICE_AGENT_WRAP_UP_SECONDS,
+} from "@/lib/domain/comms/calls/voice-agent";
 import {
   ASK_HERMES_TIMEOUT_MS,
   OWNER_CALL_HAND_FAILED_CUE,
@@ -75,6 +78,7 @@ test("a briefing call starts Mili with the owner call's opening, a no-transfer d
   );
   assert.match(setup.instructions, /Smith St, Kellyville/);
   assert.deepEqual(setup.desk, { canAskAssistant: true, kind: "owner_call" });
+  assert.equal(setup.silence, OWNER_CALL_SILENCE_POLICY);
   assert.deepEqual(
     setup.lookups.map((lookup) => lookup.name),
     ["ask_hermes", "hand_to_hermes"],

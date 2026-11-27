@@ -283,9 +283,21 @@ When an owner call ends, Royal passes Hermes what it left
        pointer, exactly as for a missed callback;
      - **a first briefing** is still sent to Hermes, with a note that it hit
        voicemail, so Hermes can decide whether to try again.
+     - **a callback the owner picked up and said nothing on** (nothing noted,
+       and neither transcript holds a line from anyone but Mili) is treated the
+       same way: its details were never given, so the handoff it came from is
+       reopened, and the callback's own handoff is closed with a pointer.
      Not done yet: hanging up as soon as a machine answers (Telnyx answering
-     machine detection on the dial). Today Mili still talks to the machine
-     until the call ends, and the check above runs afterwards.
+     machine detection on the dial). Until then Mili stays on with the
+     machine until the silence rules below end the call, and the check above
+     runs afterwards.
+   - **How long a quiet line is given.** On an owner call, a line that says
+     nothing after the greeting gets a follow-up at 6 s and the goodbye at about
+     12 s (`OWNER_CALL_SILENCE_POLICY`). Once the owner has spoken, 8 s and two
+     follow-ups apply, since a pause then is more likely a person thinking.
+     Inbound callers keep 8 s and two follow-ups. The silence clock restarts
+     whenever the audio level says the caller spoke, so a machine or line noise
+     can hold it open; that is why answering machine detection is still wanted.
    - **Two transcripts.** The voice model's live transcript can drop a short
      reply or mishear one ("10 minutes" came out as "tomorrow" on a real
      call), while the recording's speech-to-text got both right. When both
