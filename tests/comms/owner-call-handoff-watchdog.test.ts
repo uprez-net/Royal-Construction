@@ -957,13 +957,22 @@ test("resolving: the revision it read is closed, and the write is pinned to it",
     }),
     "ownerCallHandoff.updateMany": { count: 1 },
   });
-  // Already resolved: returned as is, whichever revision was read.
+  // Already resolved at the revision it read: returned as is.
   const done = await resolveOwnerCallHandoff(
     WORKFLOW,
-    { expectedRevision: 0, handoffId: "h-1", resolution: "done", now: NOW },
+    { expectedRevision: 1, handoffId: "h-1", resolution: "done", now: NOW },
     recorder.transactionalDb,
   );
   assert.equal(done.status, "RESOLVED");
+  // A stale turn is not told a newer revision's resolution is its own.
+  await assert.rejects(
+    resolveOwnerCallHandoff(
+      WORKFLOW,
+      { expectedRevision: 0, handoffId: "h-1", resolution: "done", now: NOW },
+      recorder.transactionalDb,
+    ),
+    (error: Error) => error.message === staleRevisionRefusal(1, 0),
+  );
 
   const open = recordingDb({
     "ownerCallHandoff.findUnique": row({ revision: 1, status: "DELIVERED" }),
@@ -1110,5 +1119,90 @@ test("a promise Mili made with nothing recorded is flagged, and the call is not 
   assert.doesNotMatch(
     ownerCallHandoffBody(quiet as never, quiet.ownerCall.call.agentTranscript),
     /told the owner she would pass/,
+  );
+});
+
+test("a promise: Mili's own commitments count, a quoted third party and an ordinary answer do not", async () => {
+  const bodyFor = (milisLine: string) => {
+    const r = row(
+      { requests: [] },
+      {
+        agentTranscript: `Mili: Hi Raj.\nMili: ${milisLine}`,
+        durationSeconds: 30,
+      },
+    );
+    return ownerCallHandoffBody(r as never, r.ownerCall.call.agentTranscript);
+  };
+  const flagged = /told the owner she would pass something on or call back/;
+  for (const line of [
+    "I'll pass your invoice request to Agent Factory.",
+    "Sure, I'll have Agent Factory call you back with the details.",
+    "We will get back to you tomorrow.",
+  ]) {
+    assert.match(bodyFor(line), flagged, line);
+  }
+  for (const line of [
+    "The supplier said, 'I'll get back to you Friday'.",
+    "Your inspection is on Tuesday at 9:30.",
+  ]) {
+    assert.doesNotMatch(bodyFor(line), flagged, line);
+  }
+});
+
+test("a promise found only in the recording also warns, not just closes nothing", () => {
+  const r = row(
+    { requests: [] },
+    {
+      agentTranscript: "Mili: Hi Raj.",
+      durationSeconds: 30,
+      recordings: [
+        {
+          transcript:
+            "Mili: Hi Raj.\nCaller: call me back about the bookings\nMili: Of course, I'll call you back with them.",
+          transcriptStatus: "DONE",
+        },
+      ],
+    },
+  );
+  assert.match(
+    ownerCallHandoffBody(r as never, r.ownerCall.call.agentTranscript),
+    /told the owner she would pass something on or call back/,
+  );
+});
+
+test("a request the owner changed is touched to the newest, and requests tie-break deterministically", async () => {
+  // Pinned through the update the call desk's second note performs.
+  const { noteOwnerCallRequest } =
+    await import("@/lib/domain/comms/calls/owner-call-handoff");
+  const recorder = recordingDb({
+    "call.findUnique": {
+      direction: "OUTBOUND",
+      ownerCall: { id: "oc-1" },
+      providerCallId: "v3:abc",
+      staffTarget: "AGENT",
+    },
+    "ownerCallHandoff.createMany": { count: 0 },
+    "ownerCallHandoff.findUnique": { id: "h-1", status: "OPEN" },
+    "ownerCallHandoffRequest.findUnique": {
+      callBack: true,
+      id: "r-1",
+      timing: "tomorrow",
+    },
+  });
+  await noteOwnerCallRequest(
+    { callId: "call-1", kind: "voice-call", providerCallId: "v3:abc" },
+    {
+      callBack: true,
+      now: NOW,
+      request: "Call me back.",
+      source: "owner",
+      timing: "in five minutes",
+    },
+    recorder.transactionalDb,
+  );
+  const [update] = ops(recorder.calls, "ownerCallHandoffRequest.update");
+  assert.deepEqual(
+    (update.args as { data: { createdAt: Date } }).data.createdAt,
+    NOW,
   );
 });

@@ -337,7 +337,14 @@ export async function noteOwnerCallRequest(
       // call back or when: the latest is what Hermes gets.
       if (existing.callBack !== input.callBack || existing.timing !== timing) {
         await tx.ownerCallHandoffRequest.update({
-          data: { callBack: input.callBack, source: input.source, timing },
+          // Touched to now: a request the owner changed is the newest one, and
+          // is listed first.
+          data: {
+            callBack: input.callBack,
+            createdAt: now,
+            source: input.source,
+            timing,
+          },
           where: { id: existing.id },
         });
         change = "updated";
@@ -613,7 +620,7 @@ const HANDOFF_SELECT = {
   },
   readyAt: true,
   requests: {
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: {
       callBack: true,
       createdAt: true,
@@ -687,7 +694,7 @@ function miliPromised(transcript: string | null | undefined): boolean {
     .split(/\r?\n/)
     .filter((line) => line.startsWith(`${VOICE_AGENT_NAME}:`))
     .some((line) =>
-      /\b(?:pass(?:ed|ing)? (?:that|it|this|those)\b[^.\n]{0,20}\b(?:on|along|to)\b|let (?:agent factory|hermes|them|the team)\b[^.\n]{0,15}\bknow\b|call(?:ing)? you back|ring you back|get back to you)/i.test(
+      /(?<![\'"“‘])\b(?:i(?:'ll| will| can)|we(?:'ll| will)|(?:agent factory|hermes|the team) will)\b(?:\s+\w+){0,3}?\s+(?:pass|call|ring|get back|let\b[^.\n]{0,25}\bknow|follow up|arrange|organi[sz]e|have\b[^.\n]{0,25}\b(?:call|ring|get back))/i.test(
         line,
       ),
     );
@@ -957,19 +964,20 @@ export async function resolveOwnerCallHandoff(
   }
   const now = input.now ?? new Date();
   const current = await handoffRow(db, input.handoffId);
-  if (current.status === OwnerCallHandoffStatus.RESOLVED) {
-    return toSummary(current);
-  }
-  if (current.status === OwnerCallHandoffStatus.OPEN) {
-    throw new DomainTransitionError(OWNER_CALL_HANDOFF_REFUSALS.stillOnCall);
-  }
-  // A turn that read revision 0 must not close revision 1, which it has not
-  // read: it is told to read the handoff again.
+  // A turn that read revision 0 must not close, or be told it closed, revision
+  // 1, which it has not read: it is told to read the handoff again. Checked
+  // before the "already resolved" shortcut, which would report a stale success.
   const expected = input.expectedRevision ?? undefined;
   if (expected !== undefined && current.revision !== expected) {
     throw new DomainTransitionError(
       staleRevisionRefusal(current.revision, expected),
     );
+  }
+  if (current.status === OwnerCallHandoffStatus.RESOLVED) {
+    return toSummary(current);
+  }
+  if (current.status === OwnerCallHandoffStatus.OPEN) {
+    throw new DomainTransitionError(OWNER_CALL_HANDOFF_REFUSALS.stillOnCall);
   }
   await db.$transaction(async (tx) => {
     const moved = await tx.ownerCallHandoff.updateMany({
@@ -996,12 +1004,9 @@ export async function resolveOwnerCallHandoff(
     );
   });
   const after = await handoffRow(db, input.handoffId);
-  // Reopened between the check and the write: nothing was closed.
-  if (
-    expected !== undefined
-    && after.status !== OwnerCallHandoffStatus.RESOLVED
-    && after.revision !== expected
-  ) {
+  // Reopened (or closed as a newer revision) between the check and the write:
+  // nothing of ours was closed, so this turn is not told it was.
+  if (expected !== undefined && after.revision !== expected) {
     throw new DomainTransitionError(
       staleRevisionRefusal(after.revision, expected),
     );
@@ -1192,7 +1197,8 @@ export function ownerCallHandoffBody(
         ]
       : []),
     ...(!row.requests.length
-    && miliPromised(row.ownerCall.call?.agentTranscript)
+    && (miliPromised(row.ownerCall.call?.agentTranscript)
+      || miliPromised(recordedTranscriptOf(row)))
       ? [
           "Note: Mili told the owner she would pass something on or call back, but no request was recorded. Read the transcript, act on what the owner asked, and say so in your reply.",
         ]
